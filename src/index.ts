@@ -6,6 +6,7 @@ export * from './analysis/index.js';
 export * from './config/index.js';
 export * from './rendering/index.js';
 export * from './strategy/index.js';
+export * from './extensibility/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
@@ -20,6 +21,8 @@ export { DrawingEngine } from './rendering/drawing-engine.js';
 export { StrategyEngine } from './strategy/strategy-engine.js';
 export { BacktestEngine } from './strategy/backtest-engine.js';
 export { AlertSystem } from './strategy/alert-system.js';
+export { PluginRegistry } from './extensibility/plugin-registry.js';
+export { PluginManager } from './extensibility/plugin-manager.js';
 
 import { parse as parseSource } from './language/parser/index.js';
 import { compile as compileSource } from './language/compiler/index.js';

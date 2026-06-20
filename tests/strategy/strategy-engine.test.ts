@@ -1,7 +1,6 @@
 import {
   StrategyEngine,
   resetOrderIdCounter,
-  DEFAULT_STRATEGY_CONFIG,
 } from '../../src/strategy/strategy-engine.js';
 
 describe('StrategyEngine', () => {

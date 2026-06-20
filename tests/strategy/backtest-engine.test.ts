@@ -49,7 +49,7 @@ describe('BacktestEngine', () => {
       const engine = new BacktestEngine({ initialCapital: 10000 });
       const bars = createBars(100);
 
-      const result = engine.run(bars, (eng, bar, index) => {
+      const result = engine.run(bars, (eng, _bar, index) => {
         if (index === 0) {
           eng.entry('Long', 'long', 1);
         }
@@ -67,7 +67,7 @@ describe('BacktestEngine', () => {
       const engine = new BacktestEngine({ initialCapital: 10000 });
       const bars = createBars(10);
 
-      const result = engine.run(bars, (eng, bar, index) => {
+      const result = engine.run(bars, (eng, _bar, index) => {
         if (index === 0) {
           eng.entry('Long', 'long', 1);
         }
@@ -87,12 +87,10 @@ describe('BacktestEngine', () => {
       });
 
       const bars = createBars(20);
-      let tradeCount = 0;
 
-      const result = engine.run(bars, (eng, bar, index) => {
+      const result = engine.run(bars, (eng, _bar, index) => {
         if (index === 0) {
           eng.entry('Long', 'long', 1);
-          tradeCount++;
         }
       });
 
@@ -106,7 +104,7 @@ describe('BacktestEngine', () => {
       const engine2 = new BacktestEngine({ initialCapital: 10000 });
       const bars = createBars(50);
 
-      const strategyFn = (eng: StrategyEngine, bar: Bar, index: number) => {
+      const strategyFn = (eng: StrategyEngine, _bar: Bar, index: number) => {
         if (index === 0) eng.entry('Long', 'long', 1);
         if (index === 25) eng.exit('Exit');
       };
@@ -126,7 +124,7 @@ describe('BacktestEngine', () => {
       const engine = new BacktestEngine({ initialCapital: 10000 });
       const bars = createBars(100);
 
-      const result = engine.run(bars, (eng, bar, index) => {
+      const result = engine.run(bars, (eng, _bar, index) => {
         if (index === 0) eng.entry('Long', 'long', 1);
         if (index === 50) eng.exit('Exit');
       });

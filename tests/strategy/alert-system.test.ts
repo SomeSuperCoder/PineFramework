@@ -61,7 +61,7 @@ describe('AlertSystem', () => {
     it('should trigger alert with custom destination', () => {
       const system = new AlertSystem();
 
-      const id = system.alert('Webhook alert', 'webhook', {
+      system.alert('Webhook alert', 'webhook', {
         webhookUrl: 'https://example.com',
       });
 
