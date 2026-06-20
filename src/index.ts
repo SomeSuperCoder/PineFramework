@@ -4,6 +4,7 @@ export * from './language/index.js';
 export * from './data/index.js';
 export * from './analysis/index.js';
 export * from './config/index.js';
+export * from './rendering/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
@@ -13,6 +14,8 @@ export { RequestSystem } from './data/request-system.js';
 export { TAEngine } from './analysis/ta-engine.js';
 export { InputSystem } from './config/input-system.js';
 export { ConfigManager } from './config/config-manager.js';
+export { PlotEngine } from './rendering/plot-engine.js';
+export { DrawingEngine } from './rendering/drawing-engine.js';
 
 import { parse as parseSource } from './language/parser/index.js';
 import { compile as compileSource } from './language/compiler/index.js';
