@@ -3,6 +3,7 @@ export const VERSION = '0.1.0';
 export * from './language/index.js';
 export * from './data/index.js';
 export * from './analysis/index.js';
+export * from './config/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
@@ -10,6 +11,8 @@ export { ExecutionEngine } from './language/runtime/execution-engine.js';
 export { DataEngine } from './data/data-engine.js';
 export { RequestSystem } from './data/request-system.js';
 export { TAEngine } from './analysis/ta-engine.js';
+export { InputSystem } from './config/input-system.js';
+export { ConfigManager } from './config/config-manager.js';
 
 import { parse as parseSource } from './language/parser/index.js';
 import { compile as compileSource } from './language/compiler/index.js';
