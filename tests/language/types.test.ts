@@ -13,7 +13,15 @@ import {
   primitiveType,
   typeFromAnnotation,
 } from '../../src/language/types/pine-types.js';
-import { NA, isNa, na, naOr, pineTruthy, isValidNumber, propagateNa } from '../../src/language/types/na.js';
+import {
+  NA,
+  isNa,
+  na,
+  naOr,
+  pineTruthy,
+  isValidNumber,
+  propagateNa,
+} from '../../src/language/types/na.js';
 import {
   coerce,
   coerceBinaryOperands,

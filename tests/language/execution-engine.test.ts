@@ -340,10 +340,14 @@ describe('ExecutionEngine', () => {
       const result = compile(ast);
       const engine = new ExecutionEngine(result);
 
-      const result1 = engine.executeRealtimeBar(createBarContext({ close: createSeries('close', [100]) }));
+      const result1 = engine.executeRealtimeBar(
+        createBarContext({ close: createSeries('close', [100]) }),
+      );
       expect(result1.success).toBe(true);
 
-      const result2 = engine.executeRealtimeBar(createBarContext({ close: createSeries('close', [105]) }));
+      const result2 = engine.executeRealtimeBar(
+        createBarContext({ close: createSeries('close', [105]) }),
+      );
       expect(result2.success).toBe(true);
     });
   });

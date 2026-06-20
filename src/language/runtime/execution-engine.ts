@@ -239,23 +239,29 @@ export class ExecutionEngine {
       return (str as string).length;
     });
 
-    this.builtins.set('str.substring', (str: PineValue, start: PineValue, length?: PineValue): PineValue => {
-      if (isNa(str) || isNa(start)) return NA;
-      const s = str as string;
-      const st = start as number;
-      const len = length === undefined || isNa(length) ? s.length : (length as number);
-      return s.substring(st, st + len);
-    });
+    this.builtins.set(
+      'str.substring',
+      (str: PineValue, start: PineValue, length?: PineValue): PineValue => {
+        if (isNa(str) || isNa(start)) return NA;
+        const s = str as string;
+        const st = start as number;
+        const len = length === undefined || isNa(length) ? s.length : (length as number);
+        return s.substring(st, st + len);
+      },
+    );
 
     this.builtins.set('str.contains', (str: PineValue, substring: PineValue): PineValue => {
       if (isNa(str) || isNa(substring)) return NA;
       return (str as string).includes(substring as string);
     });
 
-    this.builtins.set('str.replace', (str: PineValue, from: PineValue, to: PineValue): PineValue => {
-      if (isNa(str) || isNa(from) || isNa(to)) return NA;
-      return (str as string).replace(from as string, to as string);
-    });
+    this.builtins.set(
+      'str.replace',
+      (str: PineValue, from: PineValue, to: PineValue): PineValue => {
+        if (isNa(str) || isNa(from) || isNa(to)) return NA;
+        return (str as string).replace(from as string, to as string);
+      },
+    );
 
     this.builtins.set('str.split', (str: PineValue, separator: PineValue): PineValue => {
       if (isNa(str) || isNa(separator)) return NA;
@@ -318,13 +324,23 @@ export class ExecutionEngine {
       return new Date(timestamp as number).getSeconds();
     });
 
-    this.builtins.set('timestamp', (year: PineValue, month: PineValue, day: PineValue, hour: PineValue, minute: PineValue, second: PineValue): PineValue => {
-      if (isNa(year) || isNa(month) || isNa(day)) return NA;
-      const h = isNa(hour) ? 0 : (hour as number);
-      const m = isNa(minute) ? 0 : (minute as number);
-      const s = isNa(second) ? 0 : (second as number);
-      return new Date(year as number, (month as number) - 1, day as number, h, m, s).getTime();
-    });
+    this.builtins.set(
+      'timestamp',
+      (
+        year: PineValue,
+        month: PineValue,
+        day: PineValue,
+        hour: PineValue,
+        minute: PineValue,
+        second: PineValue,
+      ): PineValue => {
+        if (isNa(year) || isNa(month) || isNa(day)) return NA;
+        const h = isNa(hour) ? 0 : (hour as number);
+        const m = isNa(minute) ? 0 : (minute as number);
+        const s = isNa(second) ? 0 : (second as number);
+        return new Date(year as number, (month as number) - 1, day as number, h, m, s).getTime();
+      },
+    );
 
     this.builtins.set('plot', (value: PineValue, title?: PineValue): PineValue => {
       if (!isNa(value) && title !== undefined && !isNa(title)) {

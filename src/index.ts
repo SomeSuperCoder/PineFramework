@@ -1,14 +1,21 @@
 export const VERSION = '0.1.0';
 
 export * from './language/index.js';
+export * from './data/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
 export { ExecutionEngine } from './language/runtime/execution-engine.js';
+export { DataEngine } from './data/data-engine.js';
+export { RequestSystem } from './data/request-system.js';
 
 import { parse as parseSource } from './language/parser/index.js';
 import { compile as compileSource } from './language/compiler/index.js';
 import { ExecutionEngine as ExecutionEngineImpl } from './language/runtime/execution-engine.js';
+import { DataEngine as DataEngineImpl } from './data/data-engine.js';
+import { RequestSystem as RequestSystemImpl } from './data/request-system.js';
+import type { Bar } from './data/bar.js';
+import { createSeries } from './language/runtime/series.js';
 
 export function parseAndCompile(source: string) {
   const { ast } = parseSource(source);
@@ -22,4 +29,32 @@ export function executeScript(
   const result = parseAndCompile(source);
   const engine = new ExecutionEngineImpl(result);
   return engine.executeBars(bars);
+}
+
+export function createDataEngine(
+  options?: import('./data/data-engine.js').DataEngineOptions,
+): DataEngineImpl {
+  return new DataEngineImpl(options);
+}
+
+export function createRequestSystem(
+  dataEngine: DataEngineImpl,
+  maxCacheAge?: number,
+): RequestSystemImpl {
+  return new RequestSystemImpl(dataEngine, maxCacheAge);
+}
+
+export function barsToContext(
+  bars: Bar[],
+): import('./language/runtime/execution-engine.js').ExecutionContext[] {
+  return bars.map((bar, index) => ({
+    barIndex: index,
+    barCount: bars.length,
+    timestamp: bar.timestamp,
+    open: createSeries('open', [bar.open]),
+    high: createSeries('high', [bar.high]),
+    low: createSeries('low', [bar.low]),
+    close: createSeries('close', [bar.close]),
+    volume: createSeries('volume', [bar.volume]),
+  }));
 }

@@ -96,36 +96,36 @@ This implementation plan outlines the step-by-step development of a production-g
   - Test string and time functions against Pine reference
   - Ask the user if questions arise.
 
-- [ ] 6. Implement data layer
-  - [ ] 6.1 Create data engine for OHLCV data
+- [x] 6. Implement data layer
+  - [x] 6.1 Create data engine for OHLCV data
     - Design efficient storage for millions of candles
     - Implement caching layer (LRU/LFU) for performance
     - Build data gap handling and interpolation
     - Add data validation on ingestion
     - _Requirements: 5.4, 10.1, 10.4_
 
-  - [ ] 6.2 Implement request system for multi-symbol data
+  - [x] 6.2 Implement request system for multi-symbol data
     - Build `request.security()` implementation
     - Create data alignment across different timeframes
     - Implement lookahead bias prevention
     - Add realtime update propagation
     - _Requirements: 5.1, 5.2, 5.3, 5.5_
 
-  - [ ] 6.3 Create data access APIs
+  - [x] 6.3 Create data access APIs
     - Design unified API for historical and realtime data
     - Implement data streaming for realtime updates
     - Build data subscription management
     - Add data source abstraction for external providers
     - _Requirements: 5.6, 5.7, 10.3_
   
-  - [ ]* 6.4 Write unit tests for data engine
+  - [x]* 6.4 Write unit tests for data engine
     - Test OHLCV data storage and retrieval
     - Validate caching performance and hit rates
     - Test data gap handling and interpolation
     - Verify data validation on ingestion
     - _Requirements: 5.4, 10.4_
   
-  - [ ]* 6.5 Write unit tests for request system
+  - [x]* 6.5 Write unit tests for request system
     - Test `request.security()` with various symbols and timeframes
     - Validate data alignment across different timeframes
     - Test lookahead bias prevention
