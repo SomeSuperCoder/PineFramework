@@ -1,0 +1,174 @@
+import type { Bar } from '../data/bar.js';
+import { StrategyEngine, type StrategyConfig, type StrategyMetrics, type Trade, type FilledOrder } from './strategy-engine.js';
+
+export interface BacktestResult {
+  metrics: StrategyMetrics;
+  trades: Trade[];
+  filledOrders: FilledOrder[];
+  equityCurve: number[];
+  drawdownCurve: number[];
+  positions: Array<{
+    barIndex: number;
+    direction: string;
+    quantity: number;
+    avgPrice: number;
+    pnl: number;
+  }>;
+}
+
+export interface BacktestConfig extends StrategyConfig {
+  startDate?: number;
+  endDate?: number;
+}
+
+export class BacktestEngine {
+  private config: BacktestConfig;
+
+  constructor(config: Partial<BacktestConfig> = {}) {
+    this.config = {
+      initialCapital: 10000,
+      commission: 0,
+      slippage: 0,
+      commissionType: 'percent',
+      slippageType: 'ticks',
+      defaultQty: 1,
+      pyramiding: 0,
+      calcOnOrderFills: true,
+      calcOnEveryTick: false,
+      processOrdersOnClose: false,
+      maxBarsBack: 0,
+      ...config,
+    };
+  }
+
+  run(
+    bars: Bar[],
+    strategyFn: (engine: StrategyEngine, bar: Bar, index: number) => void,
+  ): BacktestResult {
+    const engine = new StrategyEngine(this.config);
+    const equityCurve: number[] = [];
+    const drawdownCurve: number[] = [];
+    const positions: Array<{
+      barIndex: number;
+      direction: string;
+      quantity: number;
+      avgPrice: number;
+      pnl: number;
+    }> = [];
+
+    let filteredBars = bars;
+
+    if (this.config.startDate !== undefined) {
+      filteredBars = filteredBars.filter((b) => b.timestamp >= this.config.startDate!);
+    }
+    if (this.config.endDate !== undefined) {
+      filteredBars = filteredBars.filter((b) => b.timestamp <= this.config.endDate!);
+    }
+
+    for (let i = 0; i < filteredBars.length; i++) {
+      const bar = filteredBars[i]!;
+
+      engine.updateBar(
+        i,
+        bar.timestamp,
+        bar.open,
+        bar.high,
+        bar.low,
+        bar.close,
+        bar.volume,
+      );
+
+      strategyFn(engine, bar, i);
+
+      const position = engine.getPosition();
+      positions.push({
+        barIndex: i,
+        direction: position.direction,
+        quantity: position.quantity,
+        avgPrice: position.avgPrice,
+        pnl: position.pnl,
+      });
+
+      equityCurve.push(engine.getEquity());
+      drawdownCurve.push(engine.getMaxDrawdown());
+    }
+
+    return {
+      metrics: engine.getMetrics(),
+      trades: engine.getTrades(),
+      filledOrders: engine.getFilledOrders(),
+      equityCurve,
+      drawdownCurve,
+      positions,
+    };
+  }
+
+  runWithOHLCV(
+    bars: Bar[],
+    strategyFn: (engine: StrategyEngine, bar: Bar, index: number) => void,
+  ): BacktestResult {
+    return this.run(bars, strategyFn);
+  }
+
+  static compareResults(result1: BacktestResult, result2: BacktestResult): {
+    metricsMatch: boolean;
+    tradeCountMatch: boolean;
+    pnlDifference: number;
+    maxDrawdownDifference: number;
+  } {
+    const metricsMatch =
+      Math.abs(result1.metrics.totalPnl - result2.metrics.totalPnl) < 0.01 &&
+      Math.abs(result1.metrics.maxDrawdown - result2.metrics.maxDrawdown) < 0.01 &&
+      Math.abs(result1.metrics.winRate - result2.metrics.winRate) < 0.01;
+
+    return {
+      metricsMatch,
+      tradeCountMatch: result1.metrics.totalTrades === result2.metrics.totalTrades,
+      pnlDifference: Math.abs(result1.metrics.totalPnl - result2.metrics.totalPnl),
+      maxDrawdownDifference: Math.abs(result1.metrics.maxDrawdown - result2.metrics.maxDrawdown),
+    };
+  }
+
+  static generateReport(result: BacktestResult): string {
+    const lines: string[] = [];
+    const m = result.metrics;
+
+    lines.push('=== Strategy Backtest Report ===');
+    lines.push('');
+    lines.push(`Total Trades: ${m.totalTrades}`);
+    lines.push(`Winning Trades: ${m.winningTrades}`);
+    lines.push(`Losing Trades: ${m.losingTrades}`);
+    lines.push(`Win Rate: ${m.winRate.toFixed(2)}%`);
+    lines.push('');
+    lines.push(`Total PnL: $${m.totalPnl.toFixed(2)}`);
+    lines.push(`Total PnL %: ${m.totalPnlPercent.toFixed(2)}%`);
+    lines.push(`Profit Factor: ${m.profitFactor.toFixed(2)}`);
+    lines.push('');
+    lines.push(`Max Drawdown: $${m.maxDrawdown.toFixed(2)}`);
+    lines.push(`Max Drawdown %: ${m.maxDrawdownPercent.toFixed(2)}%`);
+    lines.push('');
+    lines.push(`Sharpe Ratio: ${m.sharpeRatio.toFixed(2)}`);
+    lines.push(`Sortino Ratio: ${m.sortinoRatio.toFixed(2)}`);
+    lines.push('');
+    lines.push(`Average Win: $${m.averageWin.toFixed(2)}`);
+    lines.push(`Average Loss: $${m.averageLoss.toFixed(2)}`);
+    lines.push(`Largest Win: $${m.largestWin.toFixed(2)}`);
+    lines.push(`Largest Loss: $${m.largestLoss.toFixed(2)}`);
+    lines.push('');
+    lines.push(`Total Commission: $${m.commission.toFixed(2)}`);
+    lines.push(`Average Trade Duration: ${m.averageTradeDuration.toFixed(1)} bars`);
+    lines.push('');
+
+    if (result.trades.length > 0) {
+      lines.push('=== Trade List ===');
+      for (const trade of result.trades) {
+        const pnlStr = trade.pnl >= 0 ? `+$${trade.pnl.toFixed(2)}` : `-$${Math.abs(trade.pnl).toFixed(2)}`;
+        lines.push(
+          `#${trade.id} ${trade.direction} ${trade.quantity} @ $${trade.entryPrice.toFixed(2)} -> $${trade.exitPrice.toFixed(2)} | PnL: ${pnlStr}`,
+        );
+      }
+    }
+
+    return lines.join('\n');
+  }
+}

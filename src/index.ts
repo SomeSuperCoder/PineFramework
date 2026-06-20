@@ -5,6 +5,7 @@ export * from './data/index.js';
 export * from './analysis/index.js';
 export * from './config/index.js';
 export * from './rendering/index.js';
+export * from './strategy/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
@@ -16,6 +17,9 @@ export { InputSystem } from './config/input-system.js';
 export { ConfigManager } from './config/config-manager.js';
 export { PlotEngine } from './rendering/plot-engine.js';
 export { DrawingEngine } from './rendering/drawing-engine.js';
+export { StrategyEngine } from './strategy/strategy-engine.js';
+export { BacktestEngine } from './strategy/backtest-engine.js';
+export { AlertSystem } from './strategy/alert-system.js';
 
 import { parse as parseSource } from './language/parser/index.js';
 import { compile as compileSource } from './language/compiler/index.js';
