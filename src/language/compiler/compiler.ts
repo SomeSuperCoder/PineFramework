@@ -70,10 +70,21 @@ export class Compiler {
         this.builder.emit(IROpCode.Call, stmt.span, 'expr', stmt.expression.kind);
         break;
       case 'TypeDeclaration':
-        this.compileTypeDeclaration(stmt.name, stmt.fields.map((f) => ({
-          name: f.name,
-          type: this.resolveTypeAnnotation(f.typeAnnotation),
-        })));
+        this.compileTypeDeclaration(
+          stmt.name,
+          stmt.fields.map((f) => ({
+            name: f.name,
+            type: this.resolveTypeAnnotation(f.typeAnnotation),
+          })),
+        );
+        break;
+      case 'IfStatement':
+      case 'ForStatement':
+      case 'WhileStatement':
+      case 'SwitchStatement':
+      case 'ReturnStatement':
+      case 'BreakStatement':
+      case 'ContinueStatement':
         break;
       default:
         throw new CompileError(`Unsupported statement: ${stmt.kind}`, stmt.span);
@@ -238,7 +249,8 @@ export class Compiler {
         return seriesOf(FLOAT_TYPE);
       case 'ArrayExpression':
         return typeFromAnnotation('array', {
-          typeArguments: expr.elements.length > 0 ? [this.inferExpressionType(expr.elements[0]!)] : [ANY_TYPE],
+          typeArguments:
+            expr.elements.length > 0 ? [this.inferExpressionType(expr.elements[0]!)] : [ANY_TYPE],
         });
       case 'MapExpression':
         return typeFromAnnotation('map', { typeArguments: [ANY_TYPE, ANY_TYPE] });

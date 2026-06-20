@@ -35,13 +35,13 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add `na` (not available) value handling
     - _Requirements: 2.1, 2.2, 2.3, 2.6_
   
-  - [ ]* 2.4 Write unit tests for parser and compiler
+  - [x] 2.4 Write unit tests for parser and compiler
     - Test parsing of all Pine Script language constructs
     - Validate compiler type checking and error reporting
     - Test edge cases in syntax and semantics
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
   
-  - [ ]* 2.5 Write unit tests for type system
+  - [x] 2.5 Write unit tests for type system
     - Test type coercion rules following Pine semantics
     - Validate Series type behavior and indexing
     - Test `na` value handling and propagation
@@ -55,35 +55,35 @@ This implementation plan outlines the step-by-step development of a production-g
   - Ask the user if questions arise.
 
 - [ ] 4. Implement execution layer
-  - [ ] 4.1 Create execution engine core
+  - [x] 4.1 Create execution engine core
     - Implement bar-by-bar execution model
     - Build series state management across executions
     - Create variable scope management system
     - Implement Pine's series indexing behavior (`close[1]`, etc.)
     - _Requirements: 3.1, 3.2, 3.6, 3.7_
 
-  - [ ] 4.2 Implement realtime execution with rollback
+  - [x] 4.2 Implement realtime execution with rollback
     - Build state checkpointing for rollback capability
     - Implement re-execution on new bar data
     - Create error handling and recovery mechanisms
     - Add performance monitoring for execution timing
     - _Requirements: 3.3, 3.4, 3.5, 10.2_
 
-  - [ ] 4.3 Implement string and time functions
+  - [x] 4.3 Implement string and time functions
     - Build string manipulation functions (concatenation, formatting, parsing)
     - Implement time operations (timestamp conversion, timezone handling)
     - Add `str.format()` with TradingView-compatible formatting
     - Create session and trading time calculations
     - _Requirements: 13.1, 13.2, 13.4, 13.6_
   
-  - [ ]* 4.4 Write unit tests for execution engine
+  - [x]* 4.4 Write unit tests for execution engine
     - Test bar-by-bar execution with simple Pine scripts
     - Validate series state management across executions
     - Test variable scope and lifetime management
     - Verify error handling and recovery mechanisms
     - _Requirements: 3.1, 3.2, 3.4, 3.6_
   
-  - [ ]* 4.5 Write unit tests for string and time functions
+  - [x] 4.5 Write unit tests for string and time functions
     - Test string operations match Pine behavior
     - Validate time calculations and conversions
     - Test `str.format()` with various templates

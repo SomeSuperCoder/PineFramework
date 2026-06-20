@@ -43,7 +43,9 @@ export function getCommonType(left: PineType, right: PineType): PineType {
     return left.isSeries || right.isSeries ? withSeries(leftBase) : leftBase;
   }
 
-  throw new CompileError(`Cannot find common type between ${left.toString()} and ${right.toString()}`);
+  throw new CompileError(
+    `Cannot find common type between ${left.toString()} and ${right.toString()}`,
+  );
 }
 
 export function coerce(value: PineValue, targetType: PineType, span?: SourceSpan): CoercionResult {

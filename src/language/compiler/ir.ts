@@ -98,10 +98,18 @@ export function createIRBuilder(): IRBuilder {
   };
 }
 
-export function compileExpression(_expr: ExpressionNode, _builder: IRBuilder, _scope: ScopeFrame): PineType {
+export function compileExpression(
+  _expr: ExpressionNode,
+  _builder: IRBuilder,
+  _scope: ScopeFrame,
+): PineType {
   throw new Error('Not implemented');
 }
 
-export function compileStatement(_stmt: StatementNode, _builder: IRBuilder, _scope: ScopeFrame): void {
+export function compileStatement(
+  _stmt: StatementNode,
+  _builder: IRBuilder,
+  _scope: ScopeFrame,
+): void {
   throw new Error('Not implemented');
 }

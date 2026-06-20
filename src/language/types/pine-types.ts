@@ -207,12 +207,15 @@ export function primitiveType(name: PinePrimitiveKind): PrimitiveType {
   }
 }
 
-export function typeFromAnnotation(name: string, options: {
-  isSeries?: boolean;
-  isArray?: boolean;
-  isMap?: boolean;
-  typeArguments?: PineType[];
-}): PineType {
+export function typeFromAnnotation(
+  name: string,
+  options: {
+    isSeries?: boolean;
+    isArray?: boolean;
+    isMap?: boolean;
+    typeArguments?: PineType[];
+  },
+): PineType {
   let base: PineType;
 
   switch (name) {

@@ -306,7 +306,7 @@ export class Parser {
 
       const end = elseBranch?.length
         ? elseBranch[elseBranch.length - 1]!.span.end
-        : thenBranch[thenBranch.length - 1]?.span.end ?? condition.span.end;
+        : (thenBranch[thenBranch.length - 1]?.span.end ?? condition.span.end);
 
       return {
         kind: 'IfStatement',
@@ -331,7 +331,7 @@ export class Parser {
 
     const end = elseBranch?.length
       ? elseBranch[elseBranch.length - 1]!.span.end
-      : thenBranch[thenBranch.length - 1]?.span.end ?? condition.span.end;
+      : (thenBranch[thenBranch.length - 1]?.span.end ?? condition.span.end);
 
     return {
       kind: 'IfStatement',
@@ -439,10 +439,9 @@ export class Parser {
       }
     }
 
-    const end =
-      defaultCase?.length
-        ? defaultCase[defaultCase.length - 1]!.span.end
-        : cases[cases.length - 1]?.span.end ?? expression.span.end;
+    const end = defaultCase?.length
+      ? defaultCase[defaultCase.length - 1]!.span.end
+      : (cases[cases.length - 1]?.span.end ?? expression.span.end);
 
     return {
       kind: 'SwitchStatement',
@@ -607,7 +606,9 @@ export class Parser {
   private parseComparison(): ExpressionNode {
     let expr = this.parseTerm();
 
-    while (this.match(TokenType.Greater, TokenType.GreaterEqual, TokenType.Less, TokenType.LessEqual)) {
+    while (
+      this.match(TokenType.Greater, TokenType.GreaterEqual, TokenType.Less, TokenType.LessEqual)
+    ) {
       const operator = this.previous().lexeme;
       const right = this.parseTerm();
       expr = this.makeBinary(expr, operator, right);
@@ -799,7 +800,10 @@ export class Parser {
     throw this.error(`Unexpected token: ${this.peek().lexeme || this.peek().type}`);
   }
 
-  private parseFunctionExpression(name: string | undefined, start: SourceSpan['start']): FunctionExpressionNode {
+  private parseFunctionExpression(
+    name: string | undefined,
+    start: SourceSpan['start'],
+  ): FunctionExpressionNode {
     this.consume(TokenType.Arrow, 'Expected "=>" in function expression');
     const parameters: ParameterNode[] = [];
 
@@ -1003,7 +1007,11 @@ export class Parser {
     throw this.error('Expected property name after "."');
   }
 
-  private makeBinary(left: ExpressionNode, operator: string, right: ExpressionNode): BinaryExpressionNode {
+  private makeBinary(
+    left: ExpressionNode,
+    operator: string,
+    right: ExpressionNode,
+  ): BinaryExpressionNode {
     return {
       kind: 'BinaryExpression',
       span: spanBetween(left.span.start, right.span.end),
