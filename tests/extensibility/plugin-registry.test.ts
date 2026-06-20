@@ -1,12 +1,10 @@
 import {
   PluginRegistry,
-  DEFAULT_REGISTRY_CONFIG,
 } from '../../src/extensibility/plugin-registry.js';
-import type { Plugin, FunctionPlugin, PluginMetadata } from '../../src/extensibility/plugin-types.js';
+import type { Plugin, FunctionPlugin } from '../../src/extensibility/plugin-types.js';
 import {
   createFunctionPlugin,
   createTypePlugin,
-  createRendererPlugin,
 } from '../../src/extensibility/plugin-manager.js';
 
 function createTestPlugin(name: string, version: string = '1.0.0'): Plugin {

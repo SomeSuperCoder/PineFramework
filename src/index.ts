@@ -7,6 +7,7 @@ export * from './config/index.js';
 export * from './rendering/index.js';
 export * from './strategy/index.js';
 export * from './extensibility/index.js';
+export * from './performance/index.js';
 
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
