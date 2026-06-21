@@ -91,17 +91,23 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 ### Requirement 6: Plotting and Visualization
 
-**User Story:** As a chart analyst, I want to visualize indicators and strategies, so that I can interpret market data.
+**User Story:** As a chart analyst, I want to visualize indicators and strategies on a realtime candle chart, so that I can interpret market data.
 
 #### Acceptance Criteria
 
 1. THE Plot_Engine SHALL render plots identical or visually close to TradingView
-2. WHEN plot() is called, THE Plot_Engine SHALL draw lines with specified styles
-3. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes at specified locations
-4. WHEN plotchar() is called, THE Plot_Engine SHALL render characters at specified locations
-5. WHEN plotarrow() is called, THE Plot_Engine SHALL render arrows with specified directions
-6. THE Plot_Engine SHALL support all Pine plot styling options (color, linewidth, transparency)
-7. THE Plot_Engine SHALL handle overlapping plots with proper z-ordering
+2. WHEN plot() is called, THE Plot_Engine SHALL draw series with specified styles (line, stepline, histogram, columns, area, areabr, circles, cross)
+3. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes/icons (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown) at specified locations (abovebar, belowbar, top, bottom, absolute)
+4. WHEN plotchar() is called, THE Plot_Engine SHALL render characters/symbols at specified locations
+5. WHEN plotarrow() is called, THE Plot_Engine SHALL render directional arrows with specified colors (colorup, colordown)
+6. WHEN hline() is called, THE Plot_Engine SHALL render horizontal lines at specified price levels with linestyle options (solid, dotted, dashed)
+7. WHEN bgcolor() is called, THE Plot_Engine SHALL color the chart background with specified colors
+8. WHEN barcolor() is called, THE Plot_Engine SHALL color chart candles/bars with specified colors
+9. WHEN fill() is called, THE Plot_Engine SHALL render filled area between two plots or hlines
+10. THE Plot_Engine SHALL support all Pine plot styling options (color, linewidth, transparency, offset, editable, show_last, display)
+11. THE Plot_Engine SHALL handle overlapping plots with proper z-ordering
+12. THE Plot_Engine SHALL support size enums (tiny, small, normal, large, huge, auto)
+13. THE Plot_Engine SHALL support all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
 
 ### Requirement 7: Drawing Objects
 
@@ -109,27 +115,37 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 #### Acceptance Criteria
 
-1. THE Drawing_Engine SHALL render line objects with TradingView-like appearance
-2. THE Drawing_Engine SHALL render box objects with fill and border options
-3. THE Drawing_Engine SHALL render label objects with text formatting
-4. THE Drawing_Engine SHALL render table objects with rows and columns
-5. THE Drawing_Engine SHALL render linefill objects between two lines
-6. THE Drawing_Engine SHALL render polyline objects with multiple points
-7. THE Drawing_Engine SHALL support all Pine drawing styling and positioning options
+1. THE Drawing_Engine SHALL render line objects (line.new, line.copy, line.delete, line.set_*, line.get_*) with TradingView-like appearance and styling (color, style, width, extend, xloc)
+2. THE Drawing_Engine SHALL render box objects (box.new, box.copy, box.delete, box.set_*, box.get_*) with fill and border options (bgcolor, border_color, border_style, border_width, text, text_color, text_size, text_halign, text_valign)
+3. THE Drawing_Engine SHALL render label objects (label.new, label.copy, label.delete, label.set_*, label.get_*) with text formatting (color, style, textcolor, size, textalign, tooltip, xloc, yloc)
+4. THE Drawing_Engine SHALL render table objects (table.new, table.cell, table.clear, table.delete, table.merge_cells, table.cell_set_*) with rows and columns (position, bgcolor, frame_color, frame_width, border_color, border_width)
+5. THE Drawing_Engine SHALL render linefill objects (linefill.new, linefill.delete, linefill.set_color, linefill.get_line1, linefill.get_line2) between two lines
+6. THE Drawing_Engine SHALL render polyline objects (polyline.new, polyline.delete) with multiple points (curved, closed, xloc, line_color, fill_color, line_style, line_width)
+7. THE Drawing_Engine SHALL support chart.point objects (chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time, chart.point.copy) for coordinate positioning
+8. THE Drawing_Engine SHALL support all Pine drawing styling and positioning options
+9. THE Drawing_Engine SHALL enforce max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
+10. THE Drawing_Engine SHALL support all xloc modes (bar_index, bar_time)
+11. THE Drawing_Engine SHALL support all yloc modes (price, abovebar, belowbar)
+12. THE Drawing_Engine SHALL support all extend modes (none, left, right, both)
 
 ### Requirement 8: Strategy Execution
 
-**User Story:** As a strategy developer, I want to backtest trading strategies, so that I can evaluate performance.
+**User Story:** As a strategy developer, I want to backtest trading strategies and visualize order markers on the chart, so that I can evaluate performance.
 
 #### Acceptance Criteria
 
 1. THE Strategy_Engine SHALL execute Pine strategy code with order management
-2. WHEN strategy.entry() is called, THE Strategy_Engine SHALL create orders
-3. WHEN strategy.exit() is called, THE Strategy_Engine SHALL manage position exits
-4. THE Strategy_Engine SHALL calculate performance metrics (profit, drawdown, Sharpe ratio)
-5. THE Strategy_Engine SHALL handle order fills with configurable slippage and commission
-6. THE Strategy_Engine SHALL support all Pine strategy functions and parameters
-7. THE Strategy_Engine SHALL provide backtesting reports with trade-by-trade analysis
+2. WHEN strategy.entry() is called, THE Strategy_Engine SHALL create orders and display entry markers on chart
+3. WHEN strategy.order() is called, THE Strategy_Engine SHALL create orders and display order markers on chart
+4. WHEN strategy.exit() is called, THE Strategy_Engine SHALL manage position exits and display exit markers on chart
+5. WHEN strategy.close() is called, THE Strategy_Engine SHALL display closing markers on chart
+6. WHEN strategy.close_all() is called, THE Strategy_Engine SHALL display closing markers on chart
+7. WHEN strategy.cancel() is called, THE Strategy_Engine SHALL update displayed orders on chart
+8. WHEN strategy.cancel_all() is called, THE Strategy_Engine SHALL update displayed orders on chart
+9. THE Strategy_Engine SHALL calculate performance metrics (profit, drawdown, Sharpe ratio)
+10. THE Strategy_Engine SHALL handle order fills with configurable slippage and commission
+11. THE Strategy_Engine SHALL support all Pine strategy functions and parameters
+12. THE Strategy_Engine SHALL provide backtesting reports with trade-by-trade analysis
 
 ### Requirement 9: Extensibility and Plugin Architecture
 
@@ -203,17 +219,19 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 ### Requirement 14: Alert System
 
-**User Story:** As a trader, I want to receive alerts based on Pine Script conditions, so that I can be notified of trading opportunities.
+**User Story:** As a trader, I want to receive alerts based on Pine Script conditions and see alert conditions in the UI, so that I can be notified of trading opportunities.
 
 #### Acceptance Criteria
 
 1. THE Alert_System SHALL evaluate Pine alert conditions on each bar
-2. WHEN alert condition is true, THE Alert_System SHALL trigger notifications
-3. THE Alert_System SHALL support Pine's alert() function with all parameters
-4. THE Alert_System SHALL format alert messages with Pine's template syntax
+2. WHEN alert() is called, THE Alert_System SHALL trigger notifications with specified frequency (once_per_bar, once_per_bar_close, all)
+3. WHEN alertcondition() is called, THE Alert_System SHALL create alert conditions visible in the UI
+4. THE Alert_System SHALL format alert messages with Pine's template syntax ({{close}}, {{open}}, {{high}}, {{low}}, {{time}}, {{interval}})
 5. THE Alert_System SHALL prevent duplicate alerts within configurable time windows
-6. THE Alert_System SHALL support multiple alert destinations (email, webhook, etc.)
+6. THE Alert_System SHALL support multiple alert destinations (email, webhook, popup, etc.)
 7. THE Alert_System SHALL log all alert events for auditing
+8. THE Alert_System SHALL display alertcondition() in the indicator settings UI
+9. THE Alert_System SHALL support alert message templates with variable substitution
 
 ### Requirement 15: Color System and Formatting
 
@@ -228,3 +246,41 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE System SHALL implement Pine's conditional color expressions
 6. THE System SHALL support Pine's gradient and palette functions
 7. THE System SHALL render colors consistently across different display systems
+
+### Requirement 16: Script Declaration and Configuration
+
+**User Story:** As a Pine Script developer, I want to declare my script type with configuration parameters, so that the engine knows how to render and execute my code.
+
+#### Acceptance Criteria
+
+1. WHEN indicator() is called, THE System SHALL configure script as an indicator with overlay, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count parameters
+2. WHEN strategy() is called, THE System SHALL configure script as a strategy with order management and visualization parameters
+3. WHEN library() is called, THE System SHALL configure script as a reusable library
+4. THE System SHALL support all indicator() parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
+5. THE System SHALL support all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
+6. THE System SHALL validate script type compatibility with available functions
+
+### Requirement 17: Frontend Web Application
+
+**User Story:** As a trader, I want a web-based frontend with a realtime candle chart and an interactive code editor, so that I can write Pine Script code and visualize the results instantly.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL display a realtime candlestick chart with OHLCV data
+2. THE Frontend SHALL provide a button that opens a popup code editor
+3. THE Frontend SHALL allow users to enter Pine Script v6 code in the editor
+4. WHEN the editor is closed, THE Frontend SHALL compile and render the script on the chart
+5. IF compilation errors occur, THE Frontend SHALL log errors in an error console/panel
+6. IF runtime errors occur, THE Frontend SHALL log errors in an error console/panel
+7. THE Frontend SHALL display error messages with line numbers and descriptions
+8. THE Frontend SHALL update the chart in realtime as new data arrives
+9. THE Frontend SHALL support zooming and panning on the chart
+10. THE Frontend SHALL display chart legend with indicator names and values
+11. THE Frontend SHALL provide timeframe and symbol selection controls
+12. THE Frontend SHALL use WebSocket or similar for realtime data streaming
+13. THE Frontend SHALL render all Pine Script visual outputs on the chart (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
+14. THE Frontend SHALL support multiple concurrent indicators on the same chart
+15. THE Frontend SHALL provide smooth rendering performance with large datasets
+16. THE Frontend SHALL support syntax highlighting in the code editor
+17. THE Frontend SHALL provide auto-completion for Pine Script keywords and functions
+18. THE Frontend SHALL save and load user scripts

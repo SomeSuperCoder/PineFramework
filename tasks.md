@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation plan outlines the step-by-step development of a production-grade Pine Script v6 Engine using TypeScript. The engine will parse, execute, and render Pine Script v6 programs with TradingView-like semantics, featuring a six-layer architecture with plugin-based extensibility. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
+This implementation plan outlines the step-by-step development of a production-grade Pine Script v6 Engine using TypeScript. The engine will parse, execute, and render Pine Script v6 programs with TradingView-like semantics, featuring a seven-layer architecture with plugin-based extensibility and a web-based frontend for interactive development. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
 
 ## Tasks
 
@@ -210,90 +210,126 @@ This implementation plan outlines the step-by-step development of a production-g
     - Verify gradient and palette functions
     - _Requirements: 15.1, 15.2, 15.4, 15.6_
 
-- [x] 10. Implement rendering layer (Plot Engine)
-  - [x] 10.1 Create plot rendering system
-    - Implement `plot()` for line plots with styles
-    - Build `plotshape()` for shape markers
+- [ ] 10. Implement rendering layer (Plot Engine)
+  - [ ] 10.1 Create plot rendering system
+    - Implement `plot()` for line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross)
+    - Build `plotshape()` for shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown)
     - Create `plotchar()` for character markers
     - Implement `plotarrow()` for directional arrows
-    - _Requirements: 6.2, 6.3, 6.4, 6.5_
+    - Build `hline()` for horizontal lines at price levels
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [x] 10.2 Implement drawing objects engine
-    - Build `line.new()` for line objects
-    - Implement `box.new()` for box objects with fill
-    - Create `label.new()` for text labels
-    - Build `table.new()` for data tables
+  - [ ] 10.2 Implement background and bar coloring
+    - Build `bgcolor()` for chart background coloring
+    - Implement `barcolor()` for candle/bar coloring
+    - Create `fill()` for area between plots or hlines
+    - _Requirements: 6.7, 6.8, 6.9_
+
+  - [ ] 10.3 Implement drawing objects engine
+    - Build `line.new()`, `line.copy()`, `line.delete()`, `line.set_*()`, `line.get_*()` for line objects
+    - Implement `box.new()`, `box.copy()`, `box.delete()`, `box.set_*()`, `box.get_*()` for box objects
+    - Create `label.new()`, `label.copy()`, `label.delete()`, `label.set_*()`, `label.get_*()` for label objects
+    - Build `table.new()`, `table.cell()`, `table.clear()`, `table.delete()`, `table.merge_cells()`, `table.cell_set_*()` for table objects
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [x] 10.3 Create advanced rendering features
-    - Implement `linefill.new()` for area between lines
-    - Build `polyline.new()` for multi-point lines
+  - [ ] 10.4 Create advanced drawing features
+    - Implement `linefill.new()`, `linefill.delete()`, `linefill.set_color()`, `linefill.get_line1()`, `linefill.get_line2()` for line fills
+    - Build `polyline.new()`, `polyline.delete()` for multi-point lines
+    - Create `chart.point` objects (chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time, chart.point.copy)
     - Add styling options (fill, border, text formatting)
     - Create visual element hierarchy and z-ordering
-    - _Requirements: 7.5, 7.6, 7.7, 6.7_
+    - _Requirements: 7.5, 7.6, 7.7, 7.8_
 
-  - [x]* 10.4 Write unit tests for plot rendering
+  - [ ] 10.5 Implement drawing object management
+    - Enforce max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
+    - Support all xloc modes (bar_index, bar_time)
+    - Support all yloc modes (price, abovebar, belowbar)
+    - Support all extend modes (none, left, right, both)
+    - _Requirements: 7.9, 7.10, 7.11, 7.12_
+
+  - [ ]* 10.6 Write unit tests for plot rendering
     - Test `plot()` with various line styles and options
     - Validate `plotshape()` positioning and rendering
     - Test `plotchar()` character rendering
     - Verify `plotarrow()` directional rendering
-    - _Requirements: 6.2, 6.3, 6.4, 6.5_
+    - Test `hline()` horizontal line rendering
+    - _Requirements: 6.2, 6.3, 6.4, 6.5, 6.6_
 
-  - [x]* 10.5 Write unit tests for drawing objects
+  - [ ]* 10.7 Write unit tests for background and bar coloring
+    - Test `bgcolor()` background coloring
+    - Validate `barcolor()` bar coloring
+    - Test `fill()` between plots and hlines
+    - _Requirements: 6.7, 6.8, 6.9_
+
+  - [ ]* 10.8 Write unit tests for drawing objects
     - Test `line.new()` with various styling options
     - Validate `box.new()` fill and border rendering
     - Test `label.new()` text formatting and positioning
     - Verify `table.new()` data table rendering
-    - _Requirements: 7.1, 7.2, 7.3, 7.4_
+    - Test `linefill.new()` between lines
+    - Verify `polyline.new()` multi-point lines
+    - Test `chart.point` objects for positioning
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
 
-- [x] 11. Checkpoint - Input and rendering layer validation
+- [ ] 11. Checkpoint - Input and rendering layer validation
   - Ensure input system validates all Pine input types correctly
   - Verify rendering matches TradingView visual fidelity
   - Test color system and formatting functions
   - Ask the user if questions arise.
 
-- [x] 12. Implement strategy layer
-  - [x] 12.1 Create strategy execution engine
-    - Implement `strategy.entry()` and `strategy.exit()`
+- [ ] 12. Implement strategy layer
+  - [ ] 12.1 Create strategy execution engine with visual markers
+    - Implement `strategy.entry()` with entry markers on chart
+    - Build `strategy.order()` with order markers on chart
+    - Create `strategy.exit()` with exit markers on chart
+    - Implement `strategy.close()` with closing markers on chart
+    - Build `strategy.close_all()` with closing markers on chart
+    - Create `strategy.cancel()` to update displayed orders
+    - Implement `strategy.cancel_all()` to update displayed orders
     - Build order management and position tracking
     - Create commission and slippage modeling
     - Implement performance metrics calculation
-    - _Requirements: 8.1, 8.2, 8.3, 8.5_
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10_
 
-  - [x] 12.2 Build backtesting system
+  - [ ] 12.2 Build backtesting system
     - Create historical order execution simulation
     - Implement trade-by-trade analysis
     - Build performance reporting (profit, drawdown, Sharpe ratio)
     - Add strategy optimization capabilities
-    - _Requirements: 8.4, 8.6, 8.7_
+    - _Requirements: 8.11, 8.12_
 
-  - [x] 12.3 Implement alert system
-    - Build alert condition evaluation on each bar
-    - Implement alert message formatting with template syntax
-    - Create duplicate prevention with configurable windows
-    - Add multiple alert destinations (email, webhook, etc.)
-    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+  - [ ] 12.3 Implement alert system
+    - Build `alert()` function with message and frequency parameters
+    - Implement `alertcondition()` for UI-visible alert conditions
+    - Create alert message formatting with template syntax
+    - Build duplicate prevention with configurable windows
+    - Add multiple alert destinations (email, webhook, popup, etc.)
+    - Display alertcondition() in indicator settings UI
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 14.9_
 
-  - [x]* 12.4 Write unit tests for strategy engine
-    - Test `strategy.entry()` and `strategy.exit()` order creation
+  - [ ]* 12.4 Write unit tests for strategy engine
+    - Test `strategy.entry()`, `strategy.order()`, `strategy.exit()` order creation and markers
+    - Validate `strategy.close()`, `strategy.close_all()` closing markers
+    - Test `strategy.cancel()`, `strategy.cancel_all()` order updates
     - Validate position tracking and management
     - Test commission and slippage modeling
     - Verify performance metrics calculation
-    - _Requirements: 8.1, 8.2, 8.3, 8.5_
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10_
 
-  - [x]* 12.5 Write unit tests for backtesting system
+  - [ ]* 12.5 Write unit tests for backtesting system
     - Test historical order execution simulation
     - Validate trade-by-trade analysis accuracy
     - Test performance reporting calculations
     - Verify strategy optimization capabilities
-    - _Requirements: 8.4, 8.6, 8.7_
+    - _Requirements: 8.11, 8.12_
 
-  - [x]* 12.6 Write unit tests for alert system
-    - Test alert condition evaluation on each bar
-    - Validate alert message formatting with templates
+  - [ ]* 12.6 Write unit tests for alert system
+    - Test `alert()` with various message and frequency parameters
+    - Validate `alertcondition()` creation and UI display
+    - Test alert message formatting with templates
     - Test duplicate prevention with time windows
     - Verify alert destination integration
-    - _Requirements: 14.1, 14.2, 14.3, 14.4_
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 14.9_
 
 - [x] 13. Implement extensibility layer (Plugin Architecture)
   - [x] 13.1 Create plugin registry system
@@ -423,6 +459,87 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate extensibility with sample plugins
   - Ask the user if questions arise.
 
+- [ ] 20. Implement Script Declaration System
+  - [ ] 20.1 Create script declaration parser
+    - Implement `indicator()` declaration with all parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
+    - Build `strategy()` declaration with all parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
+    - Create `library()` declaration
+    - Add script type validation and compatibility checking
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+
+  - [ ]* 20.2 Write unit tests for script declarations
+    - Test `indicator()` with various parameter combinations
+    - Validate `strategy()` with all configuration options
+    - Test `library()` declaration
+    - Verify script type compatibility checking
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
+
+- [ ] 21. Implement Frontend Web Application
+  - [ ] 21.1 Create frontend application shell
+    - Set up React/Vue project with TypeScript
+    - Configure build system (Vite/Webpack)
+    - Set up routing and state management (Redux/Pinia)
+    - Create responsive layout with chart and editor panels
+    - _Requirements: 17.1, 17.8, 17.9, 17.10, 17.11_
+
+  - [ ] 21.2 Implement code editor component
+    - Integrate Monaco Editor or CodeMirror
+    - Add Pine Script syntax highlighting
+    - Implement auto-completion for Pine Script keywords and functions
+    - Create popup/modal editor that opens on button click
+    - Build save/load script functionality
+    - _Requirements: 17.2, 17.3, 17.16, 17.17, 17.18_
+
+  - [ ] 21.3 Implement chart component
+    - Integrate Lightweight Charts or TradingView Charting Library
+    - Build realtime candlestick chart with OHLCV data
+    - Implement zoom/pan functionality
+    - Add timeframe and symbol selection controls
+    - Create chart legend with indicator names and values
+    - _Requirements: 17.1, 17.8, 17.9, 17.10, 17.11, 17.12_
+
+  - [ ] 21.4 Implement error console component
+    - Build real-time error logging panel
+    - Display error messages with line numbers and descriptions
+    - Handle compilation errors from Pine Script engine
+    - Handle runtime errors from Pine Script execution
+    - _Requirements: 17.5, 17.6, 17.7_
+
+  - [ ] 21.5 Integrate Pine Script engine with frontend
+    - Connect code editor to Pine Script compilation pipeline
+    - Render Pine Script visual outputs on chart (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
+    - Support multiple concurrent indicators on same chart
+    - Implement smooth rendering performance with large datasets
+    - _Requirements: 17.4, 17.13, 17.14, 17.15_
+
+  - [ ] 21.6 Implement WebSocket connection for realtime data
+    - Set up WebSocket client for data streaming
+    - Handle realtime chart updates
+    - Implement reconnection logic
+    - Add data buffering for smooth updates
+    - _Requirements: 17.8, 17.12_
+
+  - [ ]* 21.7 Write unit tests for frontend components
+    - Test code editor rendering and syntax highlighting
+    - Validate chart component with sample data
+    - Test error console display and formatting
+    - Verify WebSocket connection handling
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7_
+
+  - [ ]* 21.8 Write end-to-end tests for frontend
+    - Test complete user workflow (open editor, write code, render on chart)
+    - Validate error handling and logging
+    - Test realtime chart updates
+    - Verify save/load script functionality
+    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.18_
+
+- [ ] 22. Checkpoint - Frontend validation
+  - Ensure frontend displays realtime candle chart correctly
+  - Verify code editor opens as popup and allows Pine Script entry
+  - Test compile and render on editor close
+  - Validate error logging for compilation and runtime errors
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -445,8 +562,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 5, "tasks": ["7.1", "7.2", "7.3"] },
     { "id": 6, "tasks": ["9.1", "9.2", "9.3"] },
     { "id": 7, "tasks": ["7.4", "7.5", "9.4", "9.5"] },
-    { "id": 8, "tasks": ["10.1", "10.2", "10.3"] },
-    { "id": 9, "tasks": ["10.4", "10.5"] },
+    { "id": 8, "tasks": ["10.1", "10.2", "10.3", "10.4", "10.5"] },
+    { "id": 9, "tasks": ["10.6", "10.7", "10.8"] },
     { "id": 10, "tasks": ["12.1", "12.2", "12.3"] },
     { "id": 11, "tasks": ["12.4", "12.5", "12.6"] },
     { "id": 12, "tasks": ["13.1", "13.2", "13.3"] },
@@ -455,7 +572,12 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 15, "tasks": ["15.4"] },
     { "id": 16, "tasks": ["16.1", "16.2", "16.3"] },
     { "id": 17, "tasks": ["18.1", "18.2", "18.3"] },
-    { "id": 18, "tasks": ["18.4"] }
+    { "id": 18, "tasks": ["18.4"] },
+    { "id": 19, "tasks": ["20.1"] },
+    { "id": 20, "tasks": ["20.2"] },
+    { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6"] },
+    { "id": 22, "tasks": ["21.7", "21.8"] },
+    { "id": 23, "tasks": ["22"] }
   ]
 }
 ```

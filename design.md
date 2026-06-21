@@ -27,39 +27,44 @@ Key insights from Pine Script v6 and TradingView architecture research:
 ### System Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Pine Script v6 Engine                     │
-├─────────────────────────────────────────────────────────────┤
-│  Layer 1: Language Processing                               │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │  Parser  │→│Compiler  │→│ AST Walker   │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-│                                                             │
-│  Layer 2: Execution Engine                                  │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │  Runtime │→│Type Sys  │→│  State Mgmt  │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-│                                                             │
-│  Layer 3: Data & Analysis                                   │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │ Data Eng │→│ TA Engine │→│  Request Sys │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-│                                                             │
-│  Layer 4: Rendering                                         │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │ Plot Eng │→│Draw Eng  │→│  Renderer    │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-│                                                             │
-│  Layer 5: Strategy & Extensibility                         │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │Strat Eng │→│Plugin Reg│→│  Alert Sys   │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-│                                                             │
-│  Layer 6: Input & Configuration                            │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐              │
-│    │Input Sys │→│Config    │→│ Color Sys    │              │
-│    └──────────┘ └──────────┘ └──────────────┘              │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Pine Script v6 Engine                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Layer 1: Language Processing                                               │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
+│    │  Parser  │→│Compiler  │→│ AST Walker   │                              │
+│    └──────────┘ └──────────┘ └──────────────┘                              │
+│                                                                             │
+│  Layer 2: Execution Engine                                                  │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
+│    │  Runtime │→│Type Sys  │→│  State Mgmt  │                              │
+│    └──────────┘ └──────────┘ └──────────────┘                              │
+│                                                                             │
+│  Layer 3: Data & Analysis                                                   │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
+│    │ Data Eng │→│ TA Engine │→│  Request Sys │                              │
+│    └──────────┘ └──────────┘ └──────────────┘                              │
+│                                                                             │
+│  Layer 4: Rendering                                                         │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
+│    │ Plot Eng │→│Draw Eng  │→│  Renderer    │→│ Chart Engine │             │
+│    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
+│                                                                             │
+│  Layer 5: Strategy & Extensibility                                         │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
+│    │Strat Eng │→│Plugin Reg│→│  Alert Sys   │                              │
+│    └──────────┘ └──────────┘ └──────────────┘                              │
+│                                                                             │
+│  Layer 6: Input & Configuration                                            │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
+│    │Input Sys │→│Config    │→│ Color Sys    │                              │
+│    └──────────┘ └──────────┘ └──────────────┘                              │
+│                                                                             │
+│  Layer 7: Frontend                                                          │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
+│    │ Web App  │→│Code Editor│→│  Chart UI    │→│ Error Console│             │
+│    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Specifications
@@ -146,41 +151,64 @@ Key insights from Pine Script v6 and TradingView architecture research:
 
 #### 8. Plot Engine
 - **Responsibility**: Render TradingView-like plots and visualizations
-- **Plot Types**:
-  - `plot()`: Line plots with styles
-  - `plotshape()`: Shape markers
-  - `plotchar()`: Character markers
-  - `plotarrow()`: Directional arrows
+- **Plot Functions**:
+  - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross)
+  - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown)
+  - `plotchar()`: Character markers with custom characters
+  - `plotarrow()`: Directional arrows with colorup/colordown
+  - `hline()`: Horizontal lines at price levels with linestyle (solid, dotted, dashed)
+- **Background & Bar Coloring**:
+  - `bgcolor()`: Color chart background with specified colors
+  - `barcolor()`: Color chart candles/bars with specified colors
+  - `fill()`: Fill area between two plots or hlines
 - **Key Features**:
-  - Style support (color, linewidth, transparency)
+  - Style support (color, linewidth, transparency, offset, editable, show_last, display)
   - Z-ordering for overlapping plots
   - Visual fidelity matching TradingView
   - Performance optimization for rendering
+  - Support for all plot.style_* enums
+  - Support for size enums (tiny, small, normal, large, huge, auto)
+  - Support for location enums (abovebar, belowbar, top, bottom, absolute)
+  - Support for all Pine plot parameters
 
 #### 9. Drawing Engine
 - **Responsibility**: Render drawing objects on charts
 - **Object Types**:
-  - `line.new()`: Line objects
-  - `box.new()`: Box objects with fill
-  - `label.new()`: Text labels
-  - `table.new()`: Data tables
-  - `linefill.new()`: Area between lines
-  - `polyline.new()`: Multi-point lines
+  - `line.new()`: Line objects with styling (color, style, width, extend, xloc)
+  - `box.new()`: Box objects with fill and border options (bgcolor, border_color, border_style, border_width, text, text_color, text_size, text_halign, text_valign)
+  - `label.new()`: Text labels with formatting (color, style, textcolor, size, textalign, tooltip, xloc, yloc)
+  - `table.new()`: Data tables with rows and columns (position, bgcolor, frame_color, frame_width, border_color, border_width)
+  - `linefill.new()`: Area between two lines with fill color
+  - `polyline.new()`: Multi-point lines with curve and fill options (curved, closed, xloc, line_color, fill_color, line_style, line_width)
+  - `chart.point`: Coordinate objects for positioning (chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time)
 - **Key Features**:
+  - All copy, delete, set_*, get_* methods for each object type
   - Styling options (fill, border, text formatting)
-  - Positioning and anchoring
+  - Positioning and anchoring (xloc: bar_index, bar_time; yloc: price, abovebar, belowbar)
+  - Extend modes (none, left, right, both)
   - Update/delete operations
   - Memory management for large numbers of objects
+  - Enforcement of max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
+  - Support for all Pine drawing styling and positioning options
 
 #### 10. Strategy Engine
-- **Responsibility**: Execute and backtest trading strategies
+- **Responsibility**: Execute and backtest trading strategies with visual markers
+- **Visual Markers**:
+  - `strategy.entry()`: Entry markers on chart
+  - `strategy.order()`: Order markers on chart
+  - `strategy.exit()`: Exit markers on chart
+  - `strategy.close()`: Closing markers on chart
+  - `strategy.close_all()`: Closing markers on chart
+  - `strategy.cancel()`: Update displayed orders
+  - `strategy.cancel_all()`: Update displayed orders
 - **Key Features**:
-  - Order management (`strategy.entry`, `strategy.exit`)
-  - Position tracking
+  - Order management and position tracking
   - Performance metrics calculation
   - Commission and slippage modeling
   - Backtesting reports
   - Real-time order execution simulation
+  - Visual representation of orders on chart
+  - Trade-by-trade analysis
 
 #### 11. Plugin Registry
 - **Responsibility**: Manage extensibility through plugins
@@ -198,12 +226,17 @@ Key insights from Pine Script v6 and TradingView architecture research:
 
 #### 12. Alert System
 - **Responsibility**: Evaluate alert conditions and trigger notifications
+- **Alert Functions**:
+  - `alert()`: Trigger notifications with message and frequency (once_per_bar, once_per_bar_close, all)
+  - `alertcondition()`: Create alert conditions visible in UI
 - **Key Features**:
   - Condition evaluation on each bar
-  - Message formatting with template syntax
+  - Message formatting with template syntax ({{close}}, {{open}}, {{high}}, {{low}}, {{time}}, {{interval}})
   - Duplicate prevention with configurable windows
-  - Multiple output destinations (email, webhook, etc.)
+  - Multiple output destinations (email, webhook, popup, etc.)
   - Alert logging and auditing
+  - Display alertcondition() in indicator settings UI
+  - Support for alert message templates with variable substitution
 
 #### 13. Input and Configuration System
 - **Responsibility**: Handle user inputs and script configuration
@@ -227,6 +260,40 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Conditional color expressions
   - Gradient and palette functions
   - Consistent rendering across displays
+
+#### 15. Script Declaration System
+- **Responsibility**: Handle script type declarations and configuration
+- **Script Types**:
+  - `indicator()`: Configure script as indicator with overlay, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count
+  - `strategy()`: Configure script as strategy with order management parameters
+  - `library()`: Configure script as reusable library
+- **Key Features**:
+  - Support for all indicator() parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
+  - Support for all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
+  - Script type validation and compatibility checking
+
+#### 16. Frontend Web Application
+- **Responsibility**: Provide interactive web-based interface for Pine Script development
+- **Key Components**:
+  - **Web Application**: Main application shell with routing and state management
+  - **Code Editor**: Monaco/CodeMirror-based editor with Pine Script syntax highlighting and auto-completion
+  - **Chart UI**: Interactive candlestick chart with zoom/pan, timeframe/symbol selection
+  - **Error Console**: Real-time error logging with line numbers and descriptions
+- **Key Features**:
+  - Realtime candlestick chart with OHLCV data
+  - Popup code editor for Pine Script entry
+  - Compile and render on editor close
+  - Error logging for compilation and runtime errors
+  - Realtime chart updates with WebSocket data streaming
+  - Zoom/pan on chart
+  - Chart legend with indicator names and values
+  - Timeframe and symbol selection controls
+  - Render all Pine Script visual outputs (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
+  - Multiple concurrent indicators on same chart
+  - Smooth rendering performance with large datasets
+  - Syntax highlighting for Pine Script
+  - Auto-completion for Pine Script keywords and functions
+  - Save and load user scripts
 
 ### Data Flow
 
@@ -338,36 +405,59 @@ Market Data → Strategy Engine → Order Generation → Position Management →
 ```
 Chart Canvas
 ├── Background Layer
+│   ├── bgcolor() renders
+│   └── Background colors
 ├── Plot Layer
-│   ├── Line Plots
-│   ├── Shape Plots
-│   ├── Character Plots
-│   └── Arrow Plots
+│   ├── Line Plots (plot.style_line, plot.style_stepline)
+│   ├── Histogram Plots (plot.style_histogram)
+│   ├── Column Plots (plot.style_columns)
+│   ├── Area Plots (plot.style_area, plot.style_areabr)
+│   ├── Circle Plots (plot.style_circles)
+│   ├── Cross Plots (plot.style_cross)
+│   ├── Shape Plots (plotshape)
+│   ├── Character Plots (plotchar)
+│   └── Arrow Plots (plotarrow)
+├── Fill Layer
+│   ├── fill() between plots
+│   └── fill() between hlines
 ├── Drawing Layer
-│   ├── Lines
-│   ├── Boxes
-│   ├── Labels
-│   ├── Tables
-│   ├── Line Fills
-│   └── Polylines
+│   ├── Lines (line.new)
+│   ├── Boxes (box.new)
+│   ├── Labels (label.new)
+│   ├── Tables (table.new)
+│   ├── Line Fills (linefill.new)
+│   └── Polylines (polyline.new)
 ├── Overlay Layer
-└── UI Layer
-    ├── Input Controls
-    ├── Legend
-    └── Tooltips
+│   ├── Hlines (hline)
+│   └── Strategy Markers (strategy.entry, strategy.exit, etc.)
+├── Bar Coloring Layer
+│   └── barcolor() renders
+├── UI Layer
+│   ├── Input Controls
+│   ├── Legend
+│   ├── Tooltips
+│   └── Alert Conditions (alertcondition)
+└── Frontend Layer
+    ├── Web Application Shell
+    ├── Code Editor (Popup)
+    ├── Chart Controls
+    └── Error Console
 ```
 
 #### 2. Rendering Pipeline
 ```
-Visual Data → Layout Calculation → Style Application → Canvas Drawing → Display Output
+Visual Data → Layout Calculation → Style Application → Z-Order Sorting → Canvas Drawing → Display Output
 ```
 
 #### 3. Performance Optimization
 - Batched rendering operations
-- Incremental updates
+- Incremental updates for realtime data
 - Caching of visual elements
 - GPU acceleration where available
 - Level-of-detail (LOD) rendering for large datasets
+- Object pooling for drawing objects
+- Viewport-based rendering (only render visible elements)
+- Throttled updates for smooth animation
 
 ### Plugin System Design
 
@@ -702,6 +792,44 @@ interface RendererPlugin {
 - Memory bounds checking
 - Safe mathematical operations
 
+### Frontend Architecture
+
+#### 1. Frontend Component Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Frontend Application                      │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │  Web App     │ │ Code Editor  │ │  Chart UI    │        │
+│  │  (React/Vue) │ │ (Monaco/CM)  │ │ (Lightweight │        │
+│  │              │ │              │ │  Charts)     │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
+│  │Error Console │ │State Manager │ │ WebSocket    │        │
+│  │              │ │ (Redux/Pinia)│ │ Client       │        │
+│  └──────────────┘ └──────────────┘ └──────────────┘        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 2. Frontend Data Flow
+```
+User Input (Code) → Code Editor → Pine Script Engine → Visual Output → Chart Renderer → Display
+                                        ↓
+                                   Error Handler → Error Console
+```
+
+#### 3. Frontend-Backend Communication
+- **WebSocket**: Realtime chart data streaming
+- **REST API**: Script compilation and execution requests
+- **Event System**: UI state synchronization
+
+#### 4. Frontend Features
+- **Code Editor**: Monaco Editor with Pine Script syntax highlighting, auto-completion, error markers
+- **Chart**: Lightweight Charts or TradingView Charting Library with candlestick rendering
+- **Error Console**: Real-time error display with source mapping
+- **State Management**: Redux/Pinia for application state
+- **Responsive Design**: Mobile and desktop support
+
 ### Deployment and Operations
 
 #### 1. Deployment Architecture
@@ -711,6 +839,12 @@ interface RendererPlugin {
 - Embedded database
 - Configuration management
 - Automatic updates
+
+**Web Application:**
+- Frontend: React/Vue SPA with Pine Script editor and chart
+- Backend: Node.js/Go server for script execution
+- WebSocket for realtime data streaming
+- Static file hosting for frontend assets
 
 **Server Deployment:**
 - REST API for script execution
