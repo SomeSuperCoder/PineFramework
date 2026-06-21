@@ -405,18 +405,24 @@ export class ExecutionEngine {
     this.builtins.set(
       'timestamp',
       (
-        year: PineValue,
-        month: PineValue,
-        day: PineValue,
-        hour: PineValue,
-        minute: PineValue,
-        second: PineValue,
+        yearOrDate: PineValue,
+        month?: PineValue,
+        day?: PineValue,
+        hour?: PineValue,
+        minute?: PineValue,
+        second?: PineValue,
       ): PineValue => {
-        if (isNa(year) || isNa(month) || isNa(day)) return NA;
-        const h = isNa(hour) ? 0 : (hour as number);
-        const m = isNa(minute) ? 0 : (minute as number);
-        const s = isNa(second) ? 0 : (second as number);
-        return new Date(year as number, (month as number) - 1, day as number, h, m, s).getTime();
+        if (typeof yearOrDate === 'string') {
+          const parsed = new Date(yearOrDate).getTime();
+          return isNaN(parsed) ? NA : parsed;
+        }
+        if (isNa(yearOrDate)) return NA;
+        const m = month !== undefined && !isNa(month) ? (month as number) - 1 : 0;
+        const d = day !== undefined && !isNa(day) ? (day as number) : 1;
+        const h = hour !== undefined && !isNa(hour) ? (hour as number) : 0;
+        const min = minute !== undefined && !isNa(minute) ? (minute as number) : 0;
+        const s = second !== undefined && !isNa(second) ? (second as number) : 0;
+        return new Date(yearOrDate as number, m, d, h, min, s).getTime();
       },
     );
 
@@ -498,6 +504,10 @@ export class ExecutionEngine {
 
     this.builtins.set('input.string', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
       return isNa(defaultVal) ? '' : defaultVal;
+    });
+
+    this.builtins.set('input.time', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      return isNa(defaultVal) ? 0 : defaultVal;
     });
 
     this.builtins.set('ta.crossover', (source: PineValue, compare: PineValue): PineValue => {
@@ -640,9 +650,15 @@ export class ExecutionEngine {
 
     this.builtins.set(
       'strategy.close',
-      (name?: PineValue): PineValue => {
+      (nameOrNamed?: PineValue): PineValue => {
         if (!this.strategyEngine) return NA;
-        const closeName = typeof name === 'string' ? name : 'close';
+        let closeName = 'close';
+        if (typeof nameOrNamed === 'string') {
+          closeName = nameOrNamed;
+        } else if (typeof nameOrNamed === 'object' && nameOrNamed !== null && !Array.isArray(nameOrNamed)) {
+          const na = nameOrNamed as unknown as Record<string, PineValue>;
+          if (typeof na.id === 'string') closeName = na.id;
+        }
         this.strategyEngine.close(closeName);
         return NA;
       },
@@ -1369,6 +1385,12 @@ export class ExecutionEngine {
         if (expr.property in strategyConstants) {
           return strategyConstants[expr.property]!;
         }
+        if (expr.property === 'position_size' && this.strategyEngine) {
+          return this.strategyEngine.getPosition().quantity;
+        }
+      }
+      if (objName === 'plot') {
+        return expr.property;
       }
 
       const binding = resolveVariable(scope, objName);
