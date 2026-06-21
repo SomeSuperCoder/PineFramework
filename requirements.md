@@ -17,6 +17,9 @@ This specification defines requirements for building a Pine Script v6 compatible
 - **Request_System**: Pine's mechanism for accessing multi-symbol and multi-timeframe data
 - **TA_Engine**: Technical analysis function implementation (moving averages, oscillators, etc.)
 - **Plugin_Registry**: Extensible system for adding new functions, types, and features
+- **Monorepo**: A single repository containing multiple packages (engine, frontend, backend) managed via pnpm workspaces
+- **Backend**: Node.js server that bridges the frontend and the Pine Script engine, serves OHLCV data, and manages WebSocket connections
+- **Bybit**: Cryptocurrency exchange providing real-time and historical OHLCV market data via REST and WebSocket APIs
 
 ## Requirements
 
@@ -266,21 +269,78 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 #### Acceptance Criteria
 
-1. THE Frontend SHALL display a realtime candlestick chart with OHLCV data
+1. THE Frontend SHALL display a realtime candlestick chart with OHLCV data fetched from the Backend
 2. THE Frontend SHALL provide a button that opens a popup code editor
 3. THE Frontend SHALL allow users to enter Pine Script v6 code in the editor
-4. WHEN the editor is closed, THE Frontend SHALL compile and render the script on the chart
+4. WHEN the editor is closed, THE Frontend SHALL send the script to the Backend for compilation and execution, then render the results on the chart
 5. IF compilation errors occur, THE Frontend SHALL log errors in an error console/panel
 6. IF runtime errors occur, THE Frontend SHALL log errors in an error console/panel
 7. THE Frontend SHALL display error messages with line numbers and descriptions
-8. THE Frontend SHALL update the chart in realtime as new data arrives
+8. THE Frontend SHALL update the chart in realtime as new data arrives via WebSocket
 9. THE Frontend SHALL support zooming and panning on the chart
 10. THE Frontend SHALL display chart legend with indicator names and values
 11. THE Frontend SHALL provide timeframe and symbol selection controls
-12. THE Frontend SHALL use WebSocket or similar for realtime data streaming
+12. THE Frontend SHALL use WebSocket for realtime data streaming from the Backend
 13. THE Frontend SHALL render all Pine Script visual outputs on the chart (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
 14. THE Frontend SHALL support multiple concurrent indicators on the same chart
 15. THE Frontend SHALL provide smooth rendering performance with large datasets
 16. THE Frontend SHALL support syntax highlighting in the code editor
 17. THE Frontend SHALL provide auto-completion for Pine Script keywords and functions
 18. THE Frontend SHALL save and load user scripts
+
+### Requirement 18: Monorepo Project Structure
+
+**User Story:** As a developer, I want a unified monorepo managed by pnpm workspaces, so that the engine, frontend, and backend are developed and built from a single repository with shared dependencies.
+
+#### Acceptance Criteria
+
+1. THE project SHALL use pnpm workspaces with a root `pnpm-workspace.yaml` declaring all packages
+2. THE root `package.json` SHALL define workspace-level scripts (`dev`, `build`, `test`, `lint`) that orchestrate all packages
+3. THE engine (`pine-framework`) SHALL be a workspace package exportable as a library
+4. THE frontend SHALL declare `pine-framework` as a workspace dependency (`"pine-framework": "workspace:*"`)
+5. THE backend SHALL declare `pine-framework` as a workspace dependency (`"pine-framework": "workspace:*"`)
+6. THE root `pnpm-lock.yaml` SHALL be the single lockfile for the entire project
+7. Running `pnpm install` at the root SHALL install all dependencies for all packages
+8. Running `pnpm dev` at the root SHALL start both frontend and backend concurrently
+9. Running `pnpm build` at the root SHALL build all packages in dependency order
+10. Running `pnpm test` at the root SHALL run tests across all packages
+11. Each package SHALL have its own `package.json` with package-specific scripts
+12. No nested `pnpm-lock.yaml` or `node_modules` SHALL exist in subdirectories
+
+### Requirement 19: Backend API Server
+
+**User Story:** As a trader, I want a backend server that serves real market data and executes Pine Script code, so that the frontend can display accurate charts and indicators.
+
+#### Acceptance Criteria
+
+1. THE Backend SHALL expose a REST API for OHLCV historical data retrieval (`GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000`)
+2. THE Backend SHALL expose a WebSocket endpoint (`/ws`) for realtime candle streaming
+3. THE Backend SHALL accept Pine Script code via `POST /api/execute`, compile and execute it using the `pine-framework` engine, and return plot/drawing results
+4. THE Backend SHALL manage Bybit API connections and relay market data to connected clients
+5. THE Backend SHALL handle multiple concurrent WebSocket clients
+6. THE Backend SHALL support symbol and interval subscription/unsubscription via WebSocket messages
+7. THE Backend SHALL cache recent OHLCV data to reduce Bybit API calls
+8. THE Backend SHALL run on port 8080 by default (configurable via environment variable)
+9. THE Backend SHALL be a workspace package within the monorepo
+10. THE Backend SHALL gracefully handle Bybit API rate limits and connection failures
+11. THE Backend SHALL log connection status and error events
+12. THE Backend SHALL validate all incoming request parameters
+
+### Requirement 20: Bybit Exchange Integration
+
+**User Story:** As a trader, I want real market data from Bybit, so that I can analyze actual cryptocurrency price action with Pine Script indicators.
+
+#### Acceptance Criteria
+
+1. THE Bybit_Integration SHALL fetch historical OHLCV data from Bybit REST API (`/v5/market/kline`)
+2. THE Bybit_Integration SHALL subscribe to realtime kline streams via Bybit WebSocket (`kline` topic)
+3. THE Bybit_Integration SHALL support all Bybit candle intervals (1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 1w, 1M)
+4. THE Bybit_Integration SHALL support all Bybit linear perpetual symbols (BTCUSDT, ETHUSDT, and others)
+5. THE Bybit_Integration SHALL normalize Bybit data format to the engine's internal OHLCV format
+6. THE Bybit_Integration SHALL handle Bybit WebSocket reconnection and heartbeat
+7. THE Bybit_Integration SHALL rate-limit REST API calls to comply with Bybit limits
+8. THE Bybit_Integration SHALL operate without API keys for public market data endpoints
+9. THE Bybit_Integration SHALL be implemented as part of the Backend package
+10. THE Bybit_Integration SHALL provide a data source adapter that implements the engine's `DataSource` interface
+19. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
+20. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation plan outlines the step-by-step development of a production-grade Pine Script v6 Engine using TypeScript. The engine will parse, execute, and render Pine Script v6 programs with TradingView-like semantics, featuring a seven-layer architecture with plugin-based extensibility and a web-based frontend for interactive development. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
+This implementation plan outlines the step-by-step development of a production-grade Pine Script v6 Engine using TypeScript. The engine will parse, execute, and render Pine Script v6 programs with TradingView-like semantics, featuring a seven-layer architecture with plugin-based extensibility, a web-based frontend for interactive development, a backend API server, and real Bybit market data integration. The entire system is organized as a pnpm monorepo. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
 
 ## Tasks
 
@@ -540,6 +540,186 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate error logging for compilation and runtime errors
   - Ask the user if questions arise.
 
+- [ ] 23. Restructure project as pnpm monorepo
+  - [ ] 23.1 Create root `pnpm-workspace.yaml`
+    - Declare workspace packages: `src` (engine), `frontend`, `backend`
+    - _Requirements: 18.1_
+  
+  - [ ] 23.2 Restructure root `package.json`
+    - Add workspace-level scripts: `dev`, `build`, `test`, `lint`, `typecheck`
+    - Add `concurrently` dev dependency for parallel dev servers
+    - Set `private: true` to prevent accidental publish
+    - _Requirements: 18.2, 18.8, 18.9, 18.10_
+  
+  - [ ] 23.3 Clean up frontend package
+    - Remove `frontend/pnpm-lock.yaml` (nested lockfile)
+    - Remove `frontend/pnpm-workspace.yaml` (not a real workspace config)
+    - Remove `frontend/node_modules/` (will be hoisted to root)
+    - Update `frontend/package.json` to add `"pine-framework": "workspace:*"` as dependency
+    - _Requirements: 18.3, 18.4, 18.12_
+  
+  - [ ] 23.4 Create backend package scaffold
+    - Create `backend/` directory with `package.json` (name: `pine-framework-backend`)
+    - Add `"pine-framework": "workspace:*"` as dependency
+    - Set up TypeScript config extending root
+    - _Requirements: 18.5, 18.9_
+  
+  - [ ] 23.5 Verify monorepo works
+    - Run `pnpm install` from root — all dependencies hoisted correctly
+    - Run `pnpm build` — engine builds first, then backend, then frontend
+    - Run `pnpm dev` — both frontend (3000) and backend (8080) start
+    - Run `pnpm test` — tests run across all packages
+    - _Requirements: 18.6, 18.7, 18.8, 18.9, 18.10_
+
+- [x] 24. Checkpoint - Monorepo validation
+  - Ensure single pnpm-lock.yaml at root
+  - Verify no nested node_modules or lockfiles
+  - Test workspace dependency linking
+  - Ask the user if questions arise.
+
+- [ ] 25. Implement Backend API Server
+  - [ ] 25.1 Set up Express server with TypeScript
+    - Create `backend/src/index.ts` entry point
+    - Configure Express with CORS, JSON body parsing
+    - Set up TypeScript compilation and dev script
+    - Add environment variable config (PORT, BYBIT_REST_URL, BYBIT_WS_URL)
+    - _Requirements: 19.1, 19.8, 19.9_
+  
+  - [ ] 25.2 Implement REST API endpoints
+    - `GET /api/ohlcv` — fetch historical kline data (symbol, interval, limit params)
+    - `POST /api/execute` — accept Pine Script code, execute via engine, return results
+    - `GET /api/symbols` — list available trading symbols from Bybit
+    - `GET /api/status` — server status and Bybit connection health
+    - _Requirements: 19.1, 19.3, 19.12_
+  
+  - [ ] 25.3 Implement WebSocket gateway
+    - Set up `ws` library on the Express server
+    - Handle client connection/disconnection lifecycle
+    - Process subscribe/unsubscribe messages for kline topics
+    - Broadcast realtime kline data to subscribed clients
+    - Handle multiple concurrent WebSocket clients
+    - _Requirements: 19.2, 19.5, 19.6_
+  
+  - [ ] 25.4 Integrate pine-framework engine for script execution
+    - Import `pine-framework` engine API in backend
+    - Parse Pine Script code via engine parser/compiler
+    - Execute script against provided OHLCV data
+    - Return plot data, drawing objects, and errors as JSON
+    - _Requirements: 19.3_
+  
+  - [ ] 25.5 Implement OHLCV data cache
+    - Create LRU cache for recent kline data per symbol+interval
+    - Serve cached data for REST requests when available
+    - Invalidate cache on new realtime data
+    - _Requirements: 19.7_
+  
+  - [ ] 25.6 Add request validation and error handling
+    - Validate all REST request parameters (symbol format, interval values, limit bounds)
+    - Return proper HTTP error codes and messages
+    - Handle engine execution errors gracefully
+    - _Requirements: 19.12, 19.10_
+  
+  - [ ] 25.7 Write tests for backend API
+    - Unit tests for REST endpoints with mock data
+    - Unit tests for WebSocket message handling
+    - Integration test for script execution pipeline
+    - _Requirements: 19.1, 19.2, 19.3_
+
+- [x] 26. Checkpoint - Backend validation
+  - Ensure REST API returns OHLCV data
+  - Verify WebSocket streams realtime candles
+  - Test Pine Script execution via POST /api/execute
+  - Validate error handling for invalid requests
+  - Ask the user if questions arise.
+
+- [ ] 27. Implement Bybit Exchange Integration
+  - [ ] 27.1 Create Bybit REST client
+    - Implement `fetchKline()` using Bybit V5 REST API (`/v5/market/kline`)
+    - Support all intervals: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 1w, 1M
+    - Support pagination for large historical data requests
+    - Normalize Bybit response to engine `Bar` interface
+    - _Requirements: 20.1, 20.3, 20.5_
+  
+  - [ ] 27.2 Create Bybit WebSocket client
+    - Connect to `wss://stream.bybit.com/v5/public/linear`
+    - Subscribe to kline topics (`kline.{interval}.{symbol}`)
+    - Parse incoming kline messages and normalize to engine format
+    - Handle WebSocket reconnection with exponential backoff
+    - Handle Bybit heartbeat/ping-pong
+    - _Requirements: 20.2, 20.6_
+  
+  - [ ] 27.3 Implement DataSource adapter
+    - Implement engine's `DataSource` interface for `request.security()` support
+    - Map Bybit symbols to engine data source identifiers
+    - Handle data alignment and gap detection
+    - _Requirements: 20.10_
+  
+  - [ ] 27.4 Implement rate limiting
+    - Track Bybit API call frequency (120 req/s for public endpoints)
+    - Queue excess requests and retry after delay
+    - Log rate limit warnings
+    - _Requirements: 20.7_
+  
+  - [ ] 27.5 Wire Bybit adapter into backend
+    - Inject Bybit adapter into backend API handlers
+    - Use Bybit data for OHLCV REST endpoint
+    - Stream Bybit WebSocket data through backend WS gateway
+    - _Requirements: 20.1, 20.2_
+  
+  - [ ] 27.6 Write tests for Bybit adapter
+    - Unit tests for REST client with mocked Bybit responses
+    - Unit tests for WebSocket client with simulated messages
+    - Integration test for data normalization
+    - Test reconnection logic
+    - _Requirements: 20.1, 20.2, 20.5_
+
+- [x] 28. Checkpoint - Bybit integration validation
+  - Ensure historical OHLCV data fetches from Bybit
+  - Verify realtime kline streaming works
+  - Test data normalization matches engine format
+  - Validate reconnection on disconnect
+  - Ask the user if questions arise.
+
+- [ ] 29. Update Frontend to Integrate with Backend
+  - [ ] 29.1 Update data fetching to use Backend REST API
+    - Replace mock data generation with `GET /api/ohlcv` calls
+    - Pass symbol, interval, and limit parameters
+    - Handle loading states and error responses
+    - _Requirements: 17.1, 17.12_
+  
+  - [ ] 29.2 Update WebSocket connection to Backend
+    - Connect to `ws://localhost:8080/ws` (Backend)
+    - Send subscribe/unsubscribe messages on symbol/interval change
+    - Handle incoming kline messages and update chart
+    - _Requirements: 17.8, 17.12_
+  
+  - [ ] 29.3 Send scripts to Backend for execution
+    - On editor close or Run button, POST script to `/api/execute`
+    - Render returned plot data, shapes, and drawings on chart
+    - Display compilation/runtime errors in error console
+    - _Requirements: 17.4, 17.5, 17.6, 17.7, 17.13_
+  
+  - [ ] 29.4 Update symbol/timeframe controls
+    - Fetch available symbols from `GET /api/symbols`
+    - Populate symbol and interval dropdowns dynamically
+    - _Requirements: 17.11_
+  
+  - [ ] 29.5 Write integration tests for frontend-backend
+    - Test end-to-end flow: select symbol → load data → write script → execute → render
+    - Test error display for compilation failures
+    - Test realtime chart updates
+    - _Requirements: 17.1, 17.4, 17.8_
+
+- [x] 30. Final Checkpoint - Full System Validation
+  - Start entire system: `pnpm dev` from root
+  - Select BTCUSDT, 1m interval — verify real candles load
+  - Write simple SMA indicator — verify it renders on chart
+  - Test error handling with invalid Pine Script
+  - Test realtime updates as new candles arrive
+  - Test zoom/pan on chart
+  - Verify all monorepo scripts work (build, test, lint)
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -548,6 +728,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Unit tests validate specific examples and edge cases
 - Integration tests verify component interactions
 - TypeScript is the implementation language as selected by the user
+- Tasks 23-30 implement the monorepo restructuring, backend server, Bybit integration, and frontend-backend wiring
 
 ## Task Dependency Graph
 
@@ -577,7 +758,21 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 20, "tasks": ["20.2"] },
     { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6"] },
     { "id": 22, "tasks": ["21.7", "21.8"] },
-    { "id": 23, "tasks": ["22"] }
+    { "id": 23, "tasks": ["22"] },
+    { "id": 24, "tasks": ["23.1", "23.2", "23.3", "23.4"] },
+    { "id": 25, "tasks": ["23.5"] },
+    { "id": 26, "tasks": ["24"] },
+    { "id": 27, "tasks": ["25.1", "25.2", "25.3"] },
+    { "id": 28, "tasks": ["25.4", "25.5", "25.6"] },
+    { "id": 29, "tasks": ["25.7"] },
+    { "id": 30, "tasks": ["26"] },
+    { "id": 31, "tasks": ["27.1", "27.2", "27.3"] },
+    { "id": 32, "tasks": ["27.4", "27.5"] },
+    { "id": 33, "tasks": ["27.6"] },
+    { "id": 34, "tasks": ["28"] },
+    { "id": 35, "tasks": ["29.1", "29.2", "29.3", "29.4"] },
+    { "id": 36, "tasks": ["29.5"] },
+    { "id": 37, "tasks": ["30"] }
   ]
 }
 ```

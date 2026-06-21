@@ -64,6 +64,20 @@ Key insights from Pine Script v6 and TradingView architecture research:
 │    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
 │    │ Web App  │→│Code Editor│→│  Chart UI    │→│ Error Console│             │
 │    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
+│                                                                             │
+│  Layer 8: Backend & Integration                                             │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
+│    │ API Srv  │→│WS Gateway│→│ Bybit Adapter│→│ Data Cache   │             │
+│    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Monorepo (pnpm workspaces)                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                         │
+│  │ pine-       │  │ frontend    │  │ backend     │                         │
+│  │ framework   │←─│ (React+Vite)│←─│ (Express+WS)│                         │
+│  │ (engine)    │  │             │  │             │                         │
+│  └─────────────┘  └─────────────┘  └─────────────┘                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -280,11 +294,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Chart UI**: Interactive candlestick chart with zoom/pan, timeframe/symbol selection
   - **Error Console**: Real-time error logging with line numbers and descriptions
 - **Key Features**:
-  - Realtime candlestick chart with OHLCV data
+  - Realtime candlestick chart with OHLCV data from Backend
   - Popup code editor for Pine Script entry
-  - Compile and render on editor close
+  - Sends script to Backend for compilation/execution, renders returned results
   - Error logging for compilation and runtime errors
-  - Realtime chart updates with WebSocket data streaming
+  - Realtime chart updates with WebSocket data streaming from Backend
   - Zoom/pan on chart
   - Chart legend with indicator names and values
   - Timeframe and symbol selection controls
@@ -294,32 +308,85 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Syntax highlighting for Pine Script
   - Auto-completion for Pine Script keywords and functions
   - Save and load user scripts
+  - Workspace package importing `pine-framework` directly
+
+#### 17. Backend API Server
+- **Responsibility**: Bridge frontend and engine, serve market data, manage connections
+- **Key Components**:
+  - **REST API Server**: Express/Fastify HTTP server on port 8080
+  - **WebSocket Gateway**: ws-based realtime data streaming
+  - **Script Executor**: Invokes `pine-framework` engine for compilation and execution
+  - **Data Cache**: In-memory LRU cache for recent OHLCV data
+- **API Endpoints**:
+  - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000` - Historical kline data
+  - `POST /api/execute` - Compile and execute Pine Script code
+  - `GET /api/symbols` - List available trading symbols
+  - `GET /api/status` - Server and connection status
+- **WebSocket Protocol**:
+  - Client sends: `{ type: "subscribe", topic: "kline.1m.BTCUSDT" }`
+  - Client sends: `{ type: "unsubscribe", topic: "kline.1m.BTCUSDT" }`
+  - Server sends: `{ type: "kline", data: { symbol, interval, open, high, low, close, volume, timestamp } }`
+  - Server sends: `{ type: "connected", data: { connectionId } }`
+  - Server sends: `{ type: "error", data: { message, code } }`
+- **Key Features**:
+  - Manages Bybit API connections (REST + WebSocket)
+  - Relays realtime market data to connected frontend clients
+  - Executes Pine Script via `pine-framework` engine API
+  - Caches OHLCV data to reduce API calls
+  - Handles multiple concurrent WebSocket clients
+  - Rate limiting for Bybit API compliance
+  - Graceful reconnection on Bybit disconnects
+
+#### 18. Bybit Data Adapter
+- **Responsibility**: Integrate with Bybit exchange for real market data
+- **Data Sources**:
+  - **REST API**: `GET /v5/market/kline` for historical OHLCV
+  - **WebSocket**: `wss://stream.bybit.com/v5/public/linear` for realtime kline streams
+- **Supported Intervals**: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 1w, 1M
+- **Supported Symbols**: BTCUSDT, ETHUSDT, and all linear perpetual contracts
+- **Key Features**:
+  - Normalizes Bybit data format to engine's `Bar` interface
+  - Handles WebSocket reconnection and heartbeat
+  - Rate-limits REST calls (Bybit: 120 requests/second for public endpoints)
+  - No API keys required for public market data
+  - Implements engine's `DataSource` interface for `request.security()` integration
+  - Handles data gap detection and backfill
+  - Symbol and interval subscription management
 
 ### Data Flow
 
 #### 1. Script Loading and Compilation Flow
 ```
-Pine Script Source → Parser → AST → Compiler → Type Checking → IR Generation → Executable
+Frontend (Code Editor) → POST /api/execute → Backend → Parser → AST → Compiler → Type Checking → IR Generation → Executable
 ```
 
 #### 2. Historical Execution Flow
 ```
-Data Engine → Bar Data → Execution Engine → Series State → TA Engine → Plot Engine → Visualization
+Bybit REST API → Backend (Data Cache) → Frontend (OHLCV) → Backend (Pine Engine) → Series State → TA Engine → Plot Engine → Frontend (Chart Render)
 ```
 
 #### 3. Realtime Execution Flow
 ```
-Realtime Data → Data Engine → Rollback → Execution Engine → Update State → Re-render → Visualization
+Bybit WebSocket → Backend (WS Gateway) → Frontend (WS Client) → Chart Update
+                                        → Backend (Pine Engine) → Re-render → Frontend (Overlay Update)
 ```
 
 #### 4. Request Processing Flow
 ```
-Script Request → Request System → Data Engine (Cached) → External Data Source → Alignment → Script
+Script Request → Backend → Pine Engine (request.security()) → Bybit Adapter → Bybit REST API → Data Alignment → Script
 ```
 
 #### 5. Strategy Execution Flow
 ```
-Market Data → Strategy Engine → Order Generation → Position Management → Performance Metrics → Reports
+Market Data → Backend → Strategy Engine → Order Generation → Position Management → Performance Metrics → Frontend (Reports)
+```
+
+#### 6. Monorepo Package Dependency Flow
+```
+pine-framework (engine library)
+    ↑ workspace dependency
+    ├── frontend (React + Vite) ── imports engine for type definitions
+    └── backend (Express + WS) ── imports engine for script execution
 ```
 
 ### Module Boundaries and Responsibilities
@@ -801,50 +868,106 @@ interface RendererPlugin {
 ├─────────────────────────────────────────────────────────────┤
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
 │  │  Web App     │ │ Code Editor  │ │  Chart UI    │        │
-│  │  (React/Vue) │ │ (Monaco/CM)  │ │ (Lightweight │        │
-│  │              │ │              │ │  Charts)     │        │
+│  │  (React)     │ │ (Textarea→   │ │ (Lightweight │        │
+│  │              │ │  Monaco)     │ │  Charts)     │        │
 │  └──────────────┘ └──────────────┘ └──────────────┘        │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
 │  │Error Console │ │State Manager │ │ WebSocket    │        │
-│  │              │ │ (Redux/Pinia)│ │ Client       │        │
+│  │              │ │ (React Hooks)│ │ Client       │        │
 │  └──────────────┘ └──────────────┘ └──────────────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 #### 2. Frontend Data Flow
 ```
-User Input (Code) → Code Editor → Pine Script Engine → Visual Output → Chart Renderer → Display
-                                        ↓
-                                   Error Handler → Error Console
+User Input (Code) → Code Editor → POST /api/execute → Backend (Pine Engine)
+                                    ↓
+                              Visual Output → Frontend (Chart Render) → Display
+                                    ↓
+                              Error Handler → Error Console
 ```
 
 #### 3. Frontend-Backend Communication
-- **WebSocket**: Realtime chart data streaming
-- **REST API**: Script compilation and execution requests
-- **Event System**: UI state synchronization
+- **REST API**: Script compilation/execution (`POST /api/execute`), historical data (`GET /api/ohlcv`), symbol list (`GET /api/symbols`)
+- **WebSocket**: Realtime kline streaming, subscription management
+- **Workspace Import**: Frontend imports `pine-framework` for type definitions and shared interfaces
 
 #### 4. Frontend Features
-- **Code Editor**: Monaco Editor with Pine Script syntax highlighting, auto-completion, error markers
-- **Chart**: Lightweight Charts or TradingView Charting Library with candlestick rendering
+- **Code Editor**: Textarea (MVP) → Monaco Editor with Pine Script syntax highlighting, auto-completion, error markers
+- **Chart**: Lightweight Charts with candlestick rendering, indicator overlays
 - **Error Console**: Real-time error display with source mapping
-- **State Management**: Redux/Pinia for application state
+- **State Management**: React useState/useRef hooks
 - **Responsive Design**: Mobile and desktop support
+
+### Monorepo Architecture
+
+#### 1. Package Structure
+```
+pine-framework/
+├── pnpm-workspace.yaml         # Declares workspace packages
+├── package.json                 # Root scripts (dev, build, test, lint)
+├── pnpm-lock.yaml              # Single lockfile for all packages
+├── tsconfig.json               # Base TypeScript config
+│
+├── src/                         # pine-framework engine library
+│   ├── package.json             # Name: "pine-framework"
+│   └── ...                      # Engine source code
+│
+├── frontend/                    # React frontend application
+│   ├── package.json             # Name: "pine-framework-frontend"
+│   ├── vite.config.ts
+│   └── src/
+│
+└── backend/                     # Express backend server
+    ├── package.json             # Name: "pine-framework-backend"
+    └── src/
+```
+
+#### 2. Workspace Configuration
+```yaml
+# pnpm-workspace.yaml
+packages:
+  - "src"        # engine library
+  - "frontend"   # React app
+  - "backend"    # Express server
+```
+
+#### 3. Dependency Graph
+```
+pine-framework (engine)
+    ↑ workspace:*
+    ├── frontend ── uses engine types + API
+    └── backend  ── uses engine for script execution + Bybit adapter
+```
+
+#### 4. Root Scripts
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
+    "build": "pnpm --filter pine-framework build && pnpm --filter pine-framework-backend build && pnpm --filter pine-framework-frontend build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
+```
 
 ### Deployment and Operations
 
 #### 1. Deployment Architecture
 
-**Standalone Application:**
-- Self-contained executable
-- Embedded database
-- Configuration management
-- Automatic updates
+**Monorepo Development:**
+- Single `pnpm install` at root installs all packages
+- `pnpm dev` starts backend (port 8080) and frontend (port 3000) concurrently
+- Frontend Vite proxy forwards `/api` and `/ws` to backend
+- Engine library consumed via workspace protocol
 
-**Web Application:**
-- Frontend: React/Vue SPA with Pine Script editor and chart
-- Backend: Node.js/Go server for script execution
-- WebSocket for realtime data streaming
-- Static file hosting for frontend assets
+**Production Deployment:**
+- `pnpm build` builds all packages in dependency order
+- Backend serves API endpoints on port 8080
+- Frontend static files served by backend or CDN
+- Docker container with Node.js runtime
 
 **Server Deployment:**
 - REST API for script execution
