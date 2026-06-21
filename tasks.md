@@ -577,22 +577,22 @@ This implementation plan outlines the step-by-step development of a production-g
   - Test workspace dependency linking
   - Ask the user if questions arise.
 
-- [ ] 25. Implement Backend API Server
-  - [ ] 25.1 Set up Express server with TypeScript
+- [x] 25. Implement Backend API Server
+  - [x] 25.1 Set up Express server with TypeScript
     - Create `backend/src/index.ts` entry point
     - Configure Express with CORS, JSON body parsing
     - Set up TypeScript compilation and dev script
     - Add environment variable config (PORT, BYBIT_REST_URL, BYBIT_WS_URL)
     - _Requirements: 19.1, 19.8, 19.9_
   
-  - [ ] 25.2 Implement REST API endpoints
+  - [x] 25.2 Implement REST API endpoints
     - `GET /api/ohlcv` — fetch historical kline data (symbol, interval, limit params)
     - `POST /api/execute` — accept Pine Script code, execute via engine, return results
     - `GET /api/symbols` — list available trading symbols from Bybit
     - `GET /api/status` — server status and Bybit connection health
     - _Requirements: 19.1, 19.3, 19.12_
   
-  - [ ] 25.3 Implement WebSocket gateway
+  - [x] 25.3 Implement WebSocket gateway
     - Set up `ws` library on the Express server
     - Handle client connection/disconnection lifecycle
     - Process subscribe/unsubscribe messages for kline topics
@@ -600,26 +600,26 @@ This implementation plan outlines the step-by-step development of a production-g
     - Handle multiple concurrent WebSocket clients
     - _Requirements: 19.2, 19.5, 19.6_
   
-  - [ ] 25.4 Integrate pine-framework engine for script execution
+  - [x] 25.4 Integrate pine-framework engine for script execution
     - Import `pine-framework` engine API in backend
     - Parse Pine Script code via engine parser/compiler
     - Execute script against provided OHLCV data
     - Return plot data, drawing objects, and errors as JSON
     - _Requirements: 19.3_
   
-  - [ ] 25.5 Implement OHLCV data cache
+  - [x] 25.5 Implement OHLCV data cache
     - Create LRU cache for recent kline data per symbol+interval
     - Serve cached data for REST requests when available
     - Invalidate cache on new realtime data
     - _Requirements: 19.7_
   
-  - [ ] 25.6 Add request validation and error handling
+  - [x] 25.6 Add request validation and error handling
     - Validate all REST request parameters (symbol format, interval values, limit bounds)
     - Return proper HTTP error codes and messages
     - Handle engine execution errors gracefully
     - _Requirements: 19.12, 19.10_
   
-  - [ ] 25.7 Write tests for backend API
+  - [x] 25.7 Write tests for backend API
     - Unit tests for REST endpoints with mock data
     - Unit tests for WebSocket message handling
     - Integration test for script execution pipeline
