@@ -680,31 +680,31 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate reconnection on disconnect
   - Ask the user if questions arise.
 
-- [ ] 29. Update Frontend to Integrate with Backend
-  - [ ] 29.1 Update data fetching to use Backend REST API
+- [x] 29. Update Frontend to Integrate with Backend
+  - [x] 29.1 Update data fetching to use Backend REST API
     - Replace mock data generation with `GET /api/ohlcv` calls
     - Pass symbol, interval, and limit parameters
     - Handle loading states and error responses
     - _Requirements: 17.1, 17.12_
   
-  - [ ] 29.2 Update WebSocket connection to Backend
+  - [x] 29.2 Update WebSocket connection to Backend
     - Connect to `ws://localhost:8080/ws` (Backend)
     - Send subscribe/unsubscribe messages on symbol/interval change
     - Handle incoming kline messages and update chart
     - _Requirements: 17.8, 17.12_
   
-  - [ ] 29.3 Send scripts to Backend for execution
+  - [x] 29.3 Send scripts to Backend for execution
     - On editor close or Run button, POST script to `/api/execute`
     - Render returned plot data, shapes, and drawings on chart
     - Display compilation/runtime errors in error console
     - _Requirements: 17.4, 17.5, 17.6, 17.7, 17.13_
   
-  - [ ] 29.4 Update symbol/timeframe controls
+  - [x] 29.4 Update symbol/timeframe controls
     - Fetch available symbols from `GET /api/symbols`
     - Populate symbol and interval dropdowns dynamically
     - _Requirements: 17.11_
   
-  - [ ] 29.5 Write integration tests for frontend-backend
+  - [x] 29.5 Write integration tests for frontend-backend
     - Test end-to-end flow: select symbol → load data → write script → execute → render
     - Test error display for compilation failures
     - Test realtime chart updates

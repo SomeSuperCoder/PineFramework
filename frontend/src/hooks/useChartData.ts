@@ -1,42 +1,48 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CandlestickData, ScriptResult, PineScriptError } from '../types';
 
-const MOCK_CANDLES: CandlestickData[] = generateMockData(1000);
-
-function generateMockData(count: number): CandlestickData[] {
-  const data: CandlestickData[] = [];
-  let price = 100;
-  const baseTime = Math.floor(Date.now() / 1000) - count * 60;
-
-  for (let i = 0; i < count; i++) {
-    const change = (Math.random() - 0.5) * 10;
-    const open = price;
-    const close = price + change;
-    const high = Math.max(open, close) + Math.random() * 5;
-    const low = Math.min(open, close) - Math.random() * 5;
-    const volume = Math.floor(Math.random() * 10000) + 1000;
-
-    data.push({
-      time: baseTime + i * 60,
-      open: Math.round(open * 100) / 100,
-      high: Math.round(high * 100) / 100,
-      low: Math.round(low * 100) / 100,
-      close: Math.round(close * 100) / 100,
-      volume,
-    });
-
-    price = close;
-  }
-
-  return data;
+interface ExecuteResponse {
+  success: boolean;
+  error?: string;
+  outputs: Record<string, (number | string | boolean | null)[]>;
 }
 
 export function useChartData() {
-  const [candles, setCandles] = useState<CandlestickData[]>(MOCK_CANDLES);
+  const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [scriptResult, setScriptResult] = useState<ScriptResult | null>(null);
   const [errors, setErrors] = useState<PineScriptError[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
+  const subscribedTopicRef = useRef<string | null>(null);
+
+  const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data: ${response.statusText}`);
+      }
+      const json = await response.json();
+      const data: CandlestickData[] = json.data.map((bar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }) => ({
+        time: Math.floor(bar.timestamp / 1000),
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume,
+      }));
+      setCandles(data);
+    } catch (err) {
+      console.error('Failed to fetch OHLCV:', err);
+      setErrors((prev) => [...prev, {
+        type: 'error',
+        message: `Failed to load chart data: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const connectWebSocket = useCallback(() => {
     try {
@@ -44,102 +50,116 @@ export function useChartData() {
 
       ws.onopen = () => {
         setIsConnected(true);
-        console.log('WebSocket connected');
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'candle') {
+          if (data.type === 'kline' && data.data) {
+            const k = data.data;
+            const candle: CandlestickData = {
+              time: Math.floor(k.timestamp / 1000),
+              open: k.open,
+              high: k.high,
+              low: k.low,
+              close: k.close,
+              volume: k.volume,
+            };
             setCandles((prev) => {
               const newCandles = [...prev];
-              const lastCandle = newCandles[newCandles.length - 1];
-              if (lastCandle && lastCandle.time === data.candle.time) {
-                newCandles[newCandles.length - 1] = data.candle;
+              const last = newCandles[newCandles.length - 1];
+              if (last && last.time === candle.time) {
+                newCandles[newCandles.length - 1] = candle;
               } else {
-                newCandles.push(data.candle);
-                if (newCandles.length > 1000) {
-                  newCandles.shift();
-                }
+                newCandles.push(candle);
+                if (newCandles.length > 1000) newCandles.shift();
               }
               return newCandles;
             });
-          } else if (data.type === 'result') {
-            setScriptResult(data.result);
-          } else if (data.type === 'error') {
-            setErrors((prev) => [...prev, data.error]);
           }
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', e);
+        } catch {
+          // ignore parse errors
         }
       };
 
       ws.onclose = () => {
         setIsConnected(false);
-        console.log('WebSocket disconnected');
+        setTimeout(connectWebSocket, 3000);
       };
 
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+      ws.onerror = () => {
         setIsConnected(false);
       };
 
       wsRef.current = ws;
-    } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
+    } catch {
+      // retry
     }
   }, []);
 
-  const disconnectWebSocket = useCallback(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
+  const subscribe = useCallback((symbol: string, interval: string) => {
+    const topic = `kline.${interval}.${symbol}`;
+    if (subscribedTopicRef.current === topic) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (subscribedTopicRef.current) {
+        wsRef.current.send(JSON.stringify({ type: 'unsubscribe', topic: subscribedTopicRef.current }));
+      }
+      wsRef.current.send(JSON.stringify({ type: 'subscribe', topic }));
+      subscribedTopicRef.current = topic;
     }
   }, []);
 
   useEffect(() => {
     connectWebSocket();
     return () => {
-      disconnectWebSocket();
+      wsRef.current?.close();
     };
-  }, [connectWebSocket, disconnectWebSocket]);
+  }, [connectWebSocket]);
 
-  const executeScript = useCallback(async (code: string) => {
+  const executeScript = useCallback(async (code: string, symbol: string, interval: string) => {
     setErrors([]);
     try {
+      const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
+      if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
+      const ohlcvJson = await ohlcvResponse.json();
+
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, candles }),
+        body: JSON.stringify({ source: code, bars: ohlcvJson.data }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
+      const result: ExecuteResponse = await response.json();
+
+      if (!result.success || result.error) {
         setErrors([{
           type: 'error',
-          message: errorData.message || 'Failed to execute script',
-          line: errorData.line,
-          column: errorData.column,
+          message: result.error || 'Execution failed',
         }]);
         return;
       }
 
-      const result = await response.json();
-      setScriptResult(result);
+      const plotData: import('../types').PlotData[] = [];
+      for (const [key, values] of Object.entries(result.outputs)) {
+        plotData.push({
+          type: 'line',
+          data: values
+            .map((v, i) => ({
+              time: Math.floor(ohlcvJson.data[i]?.timestamp / 1000 || 0),
+              value: typeof v === 'number' ? v : 0,
+            }))
+            .filter((d) => d.value !== 0),
+          title: key,
+        });
+      }
+
+      setScriptResult({ plots: plotData, shapes: [], lines: [], boxes: [], labels: [] });
     } catch (error) {
       setErrors([{
         type: 'error',
         message: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }]);
     }
-  }, [candles]);
-
-  const addError = useCallback((error: PineScriptError) => {
-    setErrors((prev) => [...prev, error]);
-  }, []);
-
-  const clearErrors = useCallback(() => {
-    setErrors([]);
   }, []);
 
   return {
@@ -147,8 +167,10 @@ export function useChartData() {
     scriptResult,
     errors,
     isConnected,
+    isLoading,
     executeScript,
-    addError,
-    clearErrors,
+    fetchOHLCV,
+    subscribe,
+    setErrors,
   };
 }
