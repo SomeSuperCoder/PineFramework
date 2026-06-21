@@ -1,6 +1,4 @@
-import { useState, useRef } from 'react';
-import Editor from '@monaco-editor/react';
-import type { OnMount } from '@monaco-editor/react';
+import { useState, useRef, useEffect } from 'react';
 
 interface CodeEditorProps {
   isOpen: boolean;
@@ -28,18 +26,40 @@ plotshape(closePrice < sma20, "Sell Signal", shape.triangledown, location.aboveb
 
 export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
   const [code, setCode] = useState(DEFAULT_CODE);
-  const editorRef = useRef<any>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const handleEditorDidMount: OnMount = (editor) => {
-    editorRef.current = editor;
+  useEffect(() => {
+    if (isOpen && textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  }, [isOpen]);
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      onExecute(code);
-    });
-  };
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        onExecute(code);
+      }
+    };
 
-  const handleExecute = () => {
-    onExecute(code);
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, code, onExecute]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const textarea = e.currentTarget;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const newCode = code.substring(0, start) + '  ' + code.substring(end);
+      setCode(newCode);
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + 2;
+      }, 0);
+    }
   };
 
   const handleSave = () => {
@@ -63,32 +83,34 @@ export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
           <div className="editor-actions">
             <button onClick={handleLoad}>Load</button>
             <button onClick={handleSave}>Save</button>
-            <button className="primary" onClick={handleExecute}>Run (Ctrl+Enter)</button>
+            <button className="primary" onClick={() => onExecute(code)}>Run (Ctrl+Enter)</button>
             <button onClick={onClose}>Close</button>
           </div>
         </div>
         <div className="editor-content">
-          <Editor
-            height="100%"
-            defaultLanguage="plaintext"
-            theme="vs-dark"
+          <textarea
+            ref={textareaRef}
             value={code}
-            onChange={(value) => setCode(value || '')}
-            onMount={handleEditorDidMount}
-            options={{
-              minimap: { enabled: false },
-              fontSize: 14,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              wordWrap: 'on',
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={handleKeyDown}
+            style={{
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#1e1e1e',
+              color: '#d4d4d4',
+              border: 'none',
+              padding: '16px',
+              fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
+              fontSize: '14px',
+              lineHeight: '1.5',
+              resize: 'none',
+              outline: 'none',
               tabSize: 2,
             }}
+            spellCheck={false}
           />
         </div>
       </div>
     </div>
   );
 }
-
-declare const monaco: any;
