@@ -8,7 +8,9 @@ describe('ObjectPool', () => {
       initialSize: 5,
       maxSize: 10,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     expect(pool.size).toBe(5);
@@ -20,7 +22,9 @@ describe('ObjectPool', () => {
       initialSize: 5,
       maxSize: 10,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     const item = pool.acquire();
@@ -33,7 +37,9 @@ describe('ObjectPool', () => {
       initialSize: 5,
       maxSize: 10,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     const item = pool.acquire();
@@ -46,7 +52,9 @@ describe('ObjectPool', () => {
       initialSize: 1,
       maxSize: 10,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     pool.acquire();
@@ -61,7 +69,9 @@ describe('ObjectPool', () => {
       initialSize: 1,
       maxSize: 1,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     pool.acquire();
@@ -73,7 +83,9 @@ describe('ObjectPool', () => {
       initialSize: 5,
       maxSize: 10,
       factory: () => ({ value: 0 }),
-      reset: (item) => { item.value = 0; },
+      reset: (item) => {
+        item.value = 0;
+      },
     });
 
     const item = pool.acquire();
@@ -160,7 +172,9 @@ describe('LRUCache', () => {
 
     cache.set('key1', 100);
 
-    const entry = (cache as unknown as { cache: Map<string, { lastAccessed: number }> }).cache.get('key1');
+    const entry = (cache as unknown as { cache: Map<string, { lastAccessed: number }> }).cache.get(
+      'key1',
+    );
     if (entry) {
       entry.lastAccessed = Date.now() - 100;
     }

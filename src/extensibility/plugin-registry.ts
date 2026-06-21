@@ -1,8 +1,4 @@
-import type {
-  Plugin,
-  PluginMetadata,
-  PluginType,
-} from './plugin-types.js';
+import type { Plugin, PluginMetadata, PluginType } from './plugin-types.js';
 
 export interface PluginRegistryConfig {
   maxPlugins: number;
@@ -173,7 +169,9 @@ export class PluginRegistry {
 
     for (const dep of metadata.dependencies) {
       if (!this.plugins.has(dep)) {
-        throw new Error(`Plugin '${metadata.name}' requires dependency '${dep}' which is not registered`);
+        throw new Error(
+          `Plugin '${metadata.name}' requires dependency '${dep}' which is not registered`,
+        );
       }
     }
   }

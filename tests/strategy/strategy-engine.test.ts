@@ -1,7 +1,4 @@
-import {
-  StrategyEngine,
-  resetOrderIdCounter,
-} from '../../src/strategy/strategy-engine.js';
+import { StrategyEngine, resetOrderIdCounter } from '../../src/strategy/strategy-engine.js';
 
 describe('StrategyEngine', () => {
   beforeEach(() => {
@@ -366,6 +363,120 @@ describe('StrategyEngine', () => {
       expect(engine.getPosition().direction).toBe('flat');
       expect(engine.getTrades()).toEqual([]);
       expect(engine.getFilledOrders()).toEqual([]);
+    });
+  });
+
+  describe('order', () => {
+    it('should create an order with marker', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      const order = engine.order('Buy', 'long', 1);
+
+      expect(order).toBeDefined();
+      expect(order!.action).toBe('buy');
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(1);
+      expect(markers[0]!.type).toBe('order');
+      expect(markers[0]!.name).toBe('Buy');
+    });
+
+    it('should create a market order at current price', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.order('Buy', 'long', 1);
+
+      expect(engine.getPosition().direction).toBe('long');
+      expect(engine.getPosition().avgPrice).toBe(102);
+    });
+  });
+
+  describe('closeAll', () => {
+    it('should close entire position', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 3);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.closeAll();
+
+      expect(engine.getPosition().direction).toBe('flat');
+      expect(engine.getPosition().quantity).toBe(0);
+    });
+  });
+
+  describe('markers', () => {
+    it('should track entry markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(1);
+      expect(markers[0]!.type).toBe('entry');
+      expect(markers[0]!.direction).toBe('long');
+      expect(markers[0]!.action).toBe('buy');
+      expect(markers[0]!.color).toBe('#00FF00');
+    });
+
+    it('should track exit markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.exit('Exit');
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(2);
+      expect(markers[1]!.type).toBe('exit');
+    });
+
+    it('should track close markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.close();
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(2);
+      expect(markers[1]!.type).toBe('close');
+    });
+
+    it('should track cancel markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      const order = engine.entry('Long', 'long', 1, 0, undefined, 98);
+
+      engine.cancel(order!.id);
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(2);
+      expect(markers[1]!.type).toBe('cancel');
+    });
+
+    it('should track cancel_all markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long1', 'long', 1, 0, undefined, 98);
+      engine.entry('Long2', 'long', 1, 0, undefined, 96);
+
+      engine.cancelAll();
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(4);
+      expect(markers[2]!.type).toBe('cancel_all');
+      expect(markers[3]!.type).toBe('cancel_all');
     });
   });
 });

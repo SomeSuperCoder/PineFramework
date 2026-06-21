@@ -2,6 +2,7 @@ import type { PineValue } from '../language/types/na.js';
 import { isNa } from '../language/types/na.js';
 
 export type AlertDestination = 'email' | 'webhook' | 'log' | 'popup' | 'sms';
+export type AlertFrequency = 'once_per_bar' | 'once_per_bar_close' | 'all';
 
 export interface AlertCondition {
   id: string;
@@ -13,6 +14,7 @@ export interface AlertCondition {
   email?: string;
   oncePerBar: boolean;
   oncePerBarClose: boolean;
+  frequency: AlertFrequency;
 }
 
 export interface AlertEvent {
@@ -51,6 +53,16 @@ export function resetAlertIdCounter(): void {
   alertIdCounter = 0;
 }
 
+export interface AlertBarData {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  time: number;
+  interval: string;
+}
+
 export class AlertSystem {
   private config: AlertConfig;
   private conditions: Map<string, AlertCondition>;
@@ -59,6 +71,7 @@ export class AlertSystem {
   private lastBarIndex: Map<string, number>;
   private currentBarIndex: number;
   private currentTime: number;
+  private currentBarData: AlertBarData | null;
 
   constructor(config: Partial<AlertConfig> = {}) {
     this.config = { ...DEFAULT_ALERT_CONFIG, ...config };
@@ -68,6 +81,7 @@ export class AlertSystem {
     this.lastBarIndex = new Map();
     this.currentBarIndex = 0;
     this.currentTime = 0;
+    this.currentBarData = null;
   }
 
   alertcondition(
@@ -78,11 +92,19 @@ export class AlertSystem {
     options: {
       oncePerBar?: boolean;
       oncePerBarClose?: boolean;
+      frequency?: AlertFrequency;
       webhookUrl?: string;
       email?: string;
     } = {},
   ): string {
     const id = generateAlertId();
+    const frequency =
+      options.frequency ??
+      (options.oncePerBarClose
+        ? 'once_per_bar_close'
+        : options.oncePerBar
+          ? 'once_per_bar'
+          : 'all');
 
     const alertCondition: AlertCondition = {
       id,
@@ -92,8 +114,9 @@ export class AlertSystem {
       destination,
       webhookUrl: options.webhookUrl,
       email: options.email,
-      oncePerBar: options.oncePerBar ?? false,
-      oncePerBarClose: options.oncePerBarClose ?? false,
+      oncePerBar: options.oncePerBar ?? frequency === 'once_per_bar',
+      oncePerBarClose: options.oncePerBarClose ?? frequency === 'once_per_bar_close',
+      frequency,
     };
 
     this.conditions.set(id, alertCondition);
@@ -113,7 +136,7 @@ export class AlertSystem {
     const event: AlertEvent = {
       id,
       conditionId: '',
-      message,
+      message: this.formatMessage(message),
       timestamp: this.currentTime,
       barIndex: this.currentBarIndex,
       timeframe: '1D',
@@ -126,9 +149,12 @@ export class AlertSystem {
     return id;
   }
 
-  updateBar(barIndex: number, timestamp: number): void {
+  updateBar(barIndex: number, timestamp: number, barData?: AlertBarData): void {
     this.currentBarIndex = barIndex;
     this.currentTime = timestamp;
+    if (barData) {
+      this.currentBarData = barData;
+    }
     this.evaluateConditions();
   }
 
@@ -197,10 +223,27 @@ export class AlertSystem {
   }
 
   private formatMessage(template: string): string {
-    return template
-      .replace('{time}', new Date(this.currentTime).toISOString())
-      .replace('{bar_index}', String(this.currentBarIndex))
-      .replace('{timestamp}', String(this.currentTime));
+    let result = template;
+
+    if (this.currentBarData) {
+      result = result
+        .replace(/\{\{open\}\}/g, String(this.currentBarData.open))
+        .replace(/\{\{high\}\}/g, String(this.currentBarData.high))
+        .replace(/\{\{low\}\}/g, String(this.currentBarData.low))
+        .replace(/\{\{close\}\}/g, String(this.currentBarData.close))
+        .replace(/\{\{volume\}\}/g, String(this.currentBarData.volume))
+        .replace(/\{\{time\}\}/g, new Date(this.currentBarData.time).toISOString())
+        .replace(/\{\{interval\}\}/g, this.currentBarData.interval);
+    }
+
+    result = result
+      .replace(/\{\{bar_index\}\}/g, String(this.currentBarIndex))
+      .replace(/\{\{timestamp\}\}/g, String(this.currentTime))
+      .replace(/\{time\}/g, new Date(this.currentTime).toISOString())
+      .replace(/\{bar_index\}/g, String(this.currentBarIndex))
+      .replace(/\{timestamp\}/g, String(this.currentTime));
+
+    return result;
   }
 
   private logEvent(event: AlertEvent): void {

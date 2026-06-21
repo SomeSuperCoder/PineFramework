@@ -19,15 +19,8 @@ export type {
   Plugin,
 } from './plugin-types.js';
 
-export {
-  PluginRegistry,
-  DEFAULT_REGISTRY_CONFIG,
-} from './plugin-registry.js';
-export type {
-  PluginRegistryConfig,
-  PluginDependency,
-  PluginEntry,
-} from './plugin-registry.js';
+export { PluginRegistry, DEFAULT_REGISTRY_CONFIG } from './plugin-registry.js';
+export type { PluginRegistryConfig, PluginDependency, PluginEntry } from './plugin-registry.js';
 
 export {
   PluginManager,

@@ -1,11 +1,6 @@
-import {
-  PluginRegistry,
-} from '../../src/extensibility/plugin-registry.js';
+import { PluginRegistry } from '../../src/extensibility/plugin-registry.js';
 import type { Plugin, FunctionPlugin } from '../../src/extensibility/plugin-types.js';
-import {
-  createFunctionPlugin,
-  createTypePlugin,
-} from '../../src/extensibility/plugin-manager.js';
+import { createFunctionPlugin, createTypePlugin } from '../../src/extensibility/plugin-manager.js';
 
 function createTestPlugin(name: string, version: string = '1.0.0'): Plugin {
   return createFunctionPlugin(
@@ -19,7 +14,13 @@ function createTestPlugin(name: string, version: string = '1.0.0'): Plugin {
 
 function createTestPluginWithDeps(name: string, deps: string[]): Plugin {
   return createFunctionPlugin(
-    { name, version: '1.0.0', description: `Test plugin ${name}`, author: 'test', dependencies: deps },
+    {
+      name,
+      version: '1.0.0',
+      description: `Test plugin ${name}`,
+      author: 'test',
+      dependencies: deps,
+    },
     'test',
     `${name}Func`,
     { params: [], returnType: 'float', description: 'Test function' },

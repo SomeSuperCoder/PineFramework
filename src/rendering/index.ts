@@ -1,4 +1,4 @@
-export { PlotEngine, resetPlotIdCounter } from './plot-engine.js';
+export { PlotEngine, resetPlotIdCounter, ChartPointFactory } from './plot-engine.js';
 export type { PlotOutput } from './plot-engine.js';
 export { DrawingEngine, resetDrawingIdCounter } from './drawing-engine.js';
 export type {
@@ -25,12 +25,23 @@ export type {
   TextVerticalAlignment,
   TablePosition,
   Size,
+  HlineStyle,
+  ChartPoint,
+  ChartPointLocation,
   PlotOptions,
   PlotShapeOptions,
   PlotCharOptions,
   PlotArrowOptions,
+  HlineOptions,
+  BgcolorOptions,
+  BarcolorOptions,
+  FillOptions,
   PlotDescriptor,
   ShapeDescriptor,
   CharDescriptor,
   ArrowDescriptor,
+  HlineDescriptor,
+  BgcolorDescriptor,
+  BarcolorDescriptor,
+  FillDescriptor,
 } from './rendering-types.js';

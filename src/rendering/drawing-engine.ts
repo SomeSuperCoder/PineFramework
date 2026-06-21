@@ -150,6 +150,20 @@ export interface DrawingOutput {
   polylines: Map<string, PolylineObject>;
 }
 
+export interface DrawingLimits {
+  maxLines: number;
+  maxLabels: number;
+  maxBoxes: number;
+  maxPolylines: number;
+}
+
+const DEFAULT_LIMITS: DrawingLimits = {
+  maxLines: 500,
+  maxLabels: 500,
+  maxBoxes: 500,
+  maxPolylines: 500,
+};
+
 export class DrawingEngine {
   private lines: Map<string, LineObject>;
   private boxes: Map<string, BoxObject>;
@@ -157,14 +171,16 @@ export class DrawingEngine {
   private tables: Map<string, TableObject>;
   private linefills: Map<string, LinefillObject>;
   private polylines: Map<string, PolylineObject>;
+  private limits: DrawingLimits;
 
-  constructor() {
+  constructor(limits: Partial<DrawingLimits> = {}) {
     this.lines = new Map();
     this.boxes = new Map();
     this.labels = new Map();
     this.tables = new Map();
     this.linefills = new Map();
     this.polylines = new Map();
+    this.limits = { ...DEFAULT_LIMITS, ...limits };
   }
 
   lineNew(
@@ -181,9 +197,15 @@ export class DrawingEngine {
       editable?: boolean;
       fillgaps?: boolean;
     } = {},
-  ): LineObject {
+  ): LineObject | undefined {
+    if (this.lines.size >= this.limits.maxLines) {
+      const firstKey = this.lines.keys().next().value;
+      if (firstKey) this.lines.delete(firstKey);
+    }
+
     const id = generateDrawingId();
-    const color = options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
+    const color =
+      options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
 
     const line: LineObject = {
       id,
@@ -204,19 +226,104 @@ export class DrawingEngine {
     return line;
   }
 
-  lineSetLine(
-    lineId: string,
-    x1: PineValue,
-    y1: PineValue,
-    x2: PineValue,
-    y2: PineValue,
-  ): void {
+  lineCopy(lineId: string): LineObject | undefined {
+    const original = this.lines.get(lineId);
+    if (!original) return undefined;
+
+    const id = generateDrawingId();
+    const copy: LineObject = { ...original, id };
+    this.lines.set(id, copy);
+    return copy;
+  }
+
+  lineGetPoints(lineId: string): { x1: number; y1: number; x2: number; y2: number } | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return { x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2 };
+  }
+
+  lineGetColor(lineId: string): PineColor | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return { ...line.color };
+  }
+
+  lineGetWidth(lineId: string): number | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return line.width;
+  }
+
+  lineGetStyle(lineId: string): LineStyle | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return line.style;
+  }
+
+  lineGetExtend(lineId: string): ExtendDirection | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return line.extend;
+  }
+
+  lineGetEditable(lineId: string): boolean | undefined {
+    const line = this.lines.get(lineId);
+    if (!line) return undefined;
+    return line.editable;
+  }
+
+  lineSetLine(lineId: string, x1: PineValue, y1: PineValue, x2: PineValue, y2: PineValue): void {
     const line = this.lines.get(lineId);
     if (!line) return;
     if (!isNaOrNull(x1)) line.x1 = x1 as number;
     if (!isNaOrNull(y1)) line.y1 = y1 as number;
     if (!isNaOrNull(x2)) line.x2 = x2 as number;
     if (!isNaOrNull(y2)) line.y2 = y2 as number;
+  }
+
+  lineSetX1(lineId: string, x: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(x)) line.x1 = x as number;
+  }
+
+  lineSetY1(lineId: string, y: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(y)) line.y1 = y as number;
+  }
+
+  lineSetX2(lineId: string, x: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(x)) line.x2 = x as number;
+  }
+
+  lineSetY2(lineId: string, y: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(y)) line.y2 = y as number;
+  }
+
+  lineSetColor(lineId: string, color: ColorInput): void {
+    const line = this.lines.get(lineId);
+    if (line) line.color = parseColor(color);
+  }
+
+  lineSetWidth(lineId: string, width: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(width)) line.width = width as number;
+  }
+
+  lineSetStyle(lineId: string, style: LineStyle): void {
+    const line = this.lines.get(lineId);
+    if (line) line.style = style;
+  }
+
+  lineSetExtend(lineId: string, extend: ExtendDirection): void {
+    const line = this.lines.get(lineId);
+    if (line) line.extend = extend;
+  }
+
+  lineSetEditable(lineId: string, editable: PineValue): void {
+    const line = this.lines.get(lineId);
+    if (line && !isNaOrNull(editable)) line.editable = editable as boolean;
   }
 
   lineDelete(lineId: string): void {
@@ -246,11 +353,23 @@ export class DrawingEngine {
       text_wrap?: boolean;
       text_font_family?: string;
     } = {},
-  ): BoxObject {
+  ): BoxObject | undefined {
+    if (this.boxes.size >= this.limits.maxBoxes) {
+      const firstKey = this.boxes.keys().next().value;
+      if (firstKey) this.boxes.delete(firstKey);
+    }
+
     const id = generateDrawingId();
-    const borderColor = options.border_color !== undefined ? parseColor(options.border_color) : { r: 0, g: 0, b: 0, a: 255 };
-    const bgcolor = options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 0 };
-    const textColor = options.text_color !== undefined ? parseColor(options.text_color) : { r: 0, g: 0, b: 0, a: 255 };
+    const borderColor =
+      options.border_color !== undefined
+        ? parseColor(options.border_color)
+        : { r: 0, g: 0, b: 0, a: 255 };
+    const bgcolor =
+      options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 0 };
+    const textColor =
+      options.text_color !== undefined
+        ? parseColor(options.text_color)
+        : { r: 0, g: 0, b: 0, a: 255 };
 
     const box: BoxObject = {
       id,
@@ -280,6 +399,111 @@ export class DrawingEngine {
     return box;
   }
 
+  boxCopy(boxId: string): BoxObject | undefined {
+    const original = this.boxes.get(boxId);
+    if (!original) return undefined;
+
+    const id = generateDrawingId();
+    const copy: BoxObject = { ...original, id };
+    this.boxes.set(id, copy);
+    return copy;
+  }
+
+  boxGetLeft(boxId: string): number | undefined {
+    const box = this.boxes.get(boxId);
+    return box?.left;
+  }
+
+  boxGetTop(boxId: string): number | undefined {
+    const box = this.boxes.get(boxId);
+    return box?.top;
+  }
+
+  boxGetRight(boxId: string): number | undefined {
+    const box = this.boxes.get(boxId);
+    return box?.right;
+  }
+
+  boxGetBottom(boxId: string): number | undefined {
+    const box = this.boxes.get(boxId);
+    return box?.bottom;
+  }
+
+  boxGetBgColor(boxId: string): PineColor | undefined {
+    const box = this.boxes.get(boxId);
+    return box ? { ...box.bgcolor } : undefined;
+  }
+
+  boxGetBorderColor(boxId: string): PineColor | undefined {
+    const box = this.boxes.get(boxId);
+    return box ? { ...box.border_color } : undefined;
+  }
+
+  boxSetLeft(boxId: string, left: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(left)) box.left = left as number;
+  }
+
+  boxSetTop(boxId: string, top: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(top)) box.top = top as number;
+  }
+
+  boxSetRight(boxId: string, right: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(right)) box.right = right as number;
+  }
+
+  boxSetBottom(boxId: string, bottom: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(bottom)) box.bottom = bottom as number;
+  }
+
+  boxSetBgColor(boxId: string, color: ColorInput): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.bgcolor = parseColor(color);
+  }
+
+  boxSetBorderColor(boxId: string, color: ColorInput): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.border_color = parseColor(color);
+  }
+
+  boxSetBorderWidth(boxId: string, width: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(width)) box.border_width = width as number;
+  }
+
+  boxSetBorderStyle(boxId: string, style: LineStyle): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.border_style = style;
+  }
+
+  boxSetText(boxId: string, text: PineValue): void {
+    const box = this.boxes.get(boxId);
+    if (box && !isNaOrNull(text)) box.text = String(text);
+  }
+
+  boxSetTextColor(boxId: string, color: ColorInput): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.text_color = parseColor(color);
+  }
+
+  boxSetTextSize(boxId: string, size: Size): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.text_size = size;
+  }
+
+  boxSetTextHalign(boxId: string, halign: TextHorizontalAlignment): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.text_halign = halign;
+  }
+
+  boxSetTextValign(boxId: string, valign: TextVerticalAlignment): void {
+    const box = this.boxes.get(boxId);
+    if (box) box.text_valign = valign;
+  }
+
   boxDelete(boxId: string): void {
     this.boxes.delete(boxId);
   }
@@ -298,10 +522,19 @@ export class DrawingEngine {
       tooltip?: string;
       text_font_family?: string;
     } = {},
-  ): LabelObject {
+  ): LabelObject | undefined {
+    if (this.labels.size >= this.limits.maxLabels) {
+      const firstKey = this.labels.keys().next().value;
+      if (firstKey) this.labels.delete(firstKey);
+    }
+
     const id = generateDrawingId();
-    const color = options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
-    const textcolor = options.textcolor !== undefined ? parseColor(options.textcolor) : { r: 255, g: 255, b: 255, a: 255 };
+    const color =
+      options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
+    const textcolor =
+      options.textcolor !== undefined
+        ? parseColor(options.textcolor)
+        : { r: 255, g: 255, b: 255, a: 255 };
 
     const label: LabelObject = {
       id,
@@ -322,19 +555,78 @@ export class DrawingEngine {
     return label;
   }
 
-  labelSetXY(labelId: string, x: PineValue, y: PineValue): void {
+  labelCopy(labelId: string): LabelObject | undefined {
+    const original = this.labels.get(labelId);
+    if (!original) return undefined;
+
+    const id = generateDrawingId();
+    const copy: LabelObject = { ...original, id };
+    this.labels.set(id, copy);
+    return copy;
+  }
+
+  labelGetText(labelId: string): string | undefined {
     const label = this.labels.get(labelId);
-    if (!label) return;
-    if (!isNaOrNull(x)) label.x = x as number;
-    if (!isNaOrNull(y)) label.y = y as number;
+    return label?.text;
+  }
+
+  labelGetColor(labelId: string): PineColor | undefined {
+    const label = this.labels.get(labelId);
+    return label ? { ...label.color } : undefined;
+  }
+
+  labelGetTextColor(labelId: string): PineColor | undefined {
+    const label = this.labels.get(labelId);
+    return label ? { ...label.textcolor } : undefined;
+  }
+
+  labelGetSize(labelId: string): Size | undefined {
+    const label = this.labels.get(labelId);
+    return label?.size;
   }
 
   labelSetText(labelId: string, text: PineValue, textcolor?: PineValue, size?: PineValue): void {
     const label = this.labels.get(labelId);
     if (!label) return;
     if (!isNaOrNull(text)) label.text = String(text);
-    if (textcolor !== undefined && !isNaOrNull(textcolor)) label.textcolor = parseColor(textcolor as ColorInput);
+    if (textcolor !== undefined && !isNaOrNull(textcolor))
+      label.textcolor = parseColor(textcolor as ColorInput);
     if (size !== undefined && !isNaOrNull(size)) label.size = size as Size;
+  }
+
+  labelSetX(labelId: string, x: PineValue): void {
+    const label = this.labels.get(labelId);
+    if (label && !isNaOrNull(x)) label.x = x as number;
+  }
+
+  labelSetY(labelId: string, y: PineValue): void {
+    const label = this.labels.get(labelId);
+    if (label && !isNaOrNull(y)) label.y = y as number;
+  }
+
+  labelSetColor(labelId: string, color: ColorInput): void {
+    const label = this.labels.get(labelId);
+    if (label) label.color = parseColor(color);
+  }
+
+  labelSetTextSize(labelId: string, size: Size): void {
+    const label = this.labels.get(labelId);
+    if (label) label.size = size;
+  }
+
+  labelSetStyle(labelId: string, style: LabelStyle): void {
+    const label = this.labels.get(labelId);
+    if (label) label.style = style;
+  }
+
+  labelSetTextAlign(labelId: string, textalign: TextHorizontalAlignment): void {
+    const label = this.labels.get(labelId);
+    if (label) label.textalign = textalign;
+  }
+
+  labelSetTooltip(labelId: string, tooltip: PineValue): void {
+    const label = this.labels.get(labelId);
+    if (label && !isNaOrNull(tooltip)) label.tooltip = String(tooltip);
   }
 
   labelDelete(labelId: string): void {
@@ -354,9 +646,16 @@ export class DrawingEngine {
     } = {},
   ): TableObject {
     const id = generateDrawingId();
-    const bgcolor = options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 255 };
-    const borderColor = options.border_color !== undefined ? parseColor(options.border_color) : { r: 0, g: 0, b: 0, a: 255 };
-    const frameColor = options.frame_color !== undefined ? parseColor(options.frame_color) : { r: 0, g: 0, b: 0, a: 255 };
+    const bgcolor =
+      options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 255 };
+    const borderColor =
+      options.border_color !== undefined
+        ? parseColor(options.border_color)
+        : { r: 0, g: 0, b: 0, a: 255 };
+    const frameColor =
+      options.frame_color !== undefined
+        ? parseColor(options.frame_color)
+        : { r: 0, g: 0, b: 0, a: 255 };
 
     const table: TableObject = {
       id,
@@ -373,6 +672,34 @@ export class DrawingEngine {
 
     this.tables.set(id, table);
     return table;
+  }
+
+  tableClear(tableId: string): void {
+    const table = this.tables.get(tableId);
+    if (table) table.cells.clear();
+  }
+
+  tableMergeCells(
+    tableId: string,
+    startColumn: PineValue,
+    startRow: PineValue,
+    endColumn: PineValue,
+    endRow: PineValue,
+  ): void {
+    const table = this.tables.get(tableId);
+    if (!table) return;
+
+    const sc = toNumber(startColumn, 0);
+    const sr = toNumber(startRow, 0);
+    const ec = toNumber(endColumn, 0);
+    const er = toNumber(endRow, 0);
+
+    for (let c = sc; c <= ec; c++) {
+      for (let r = sr; r <= er; r++) {
+        const key = `${c},${r}`;
+        table.cells.delete(key);
+      }
+    }
   }
 
   tableCellSet(
@@ -395,8 +722,12 @@ export class DrawingEngine {
     const col = toNumber(column, 0);
     const r = toNumber(row, 0);
     const key = `${col},${r}`;
-    const textColor = options.text_color !== undefined ? parseColor(options.text_color) : { r: 255, g: 255, b: 255, a: 255 };
-    const bgcolor = options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 255 };
+    const textColor =
+      options.text_color !== undefined
+        ? parseColor(options.text_color)
+        : { r: 255, g: 255, b: 255, a: 255 };
+    const bgcolor =
+      options.bgcolor !== undefined ? parseColor(options.bgcolor) : { r: 0, g: 0, b: 0, a: 255 };
 
     table.cells.set(key, {
       text: toString(text),
@@ -426,7 +757,8 @@ export class DrawingEngine {
     if (!line1 || !line2) return undefined;
 
     const id = generateDrawingId();
-    const color = options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 255, a: 100 };
+    const color =
+      options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 255, a: 100 };
 
     const linefill: LinefillObject = {
       id,
@@ -453,9 +785,15 @@ export class DrawingEngine {
       style?: LineStyle;
       join?: boolean;
     } = {},
-  ): PolylineObject {
+  ): PolylineObject | undefined {
+    if (this.polylines.size >= this.limits.maxPolylines) {
+      const firstKey = this.polylines.keys().next().value;
+      if (firstKey) this.polylines.delete(firstKey);
+    }
+
     const id = generateDrawingId();
-    const color = options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
+    const color =
+      options.color !== undefined ? parseColor(options.color) : { r: 0, g: 0, b: 0, a: 255 };
 
     const parsedPoints: PolylinePoint[] = [];
     if (Array.isArray(points)) {
@@ -485,6 +823,21 @@ export class DrawingEngine {
 
   polylineDelete(polylineId: string): void {
     this.polylines.delete(polylineId);
+  }
+
+  linefillGetLine1(linefillId: string): LineObject | undefined {
+    const linefill = this.linefills.get(linefillId);
+    return linefill?.line1;
+  }
+
+  linefillGetLine2(linefillId: string): LineObject | undefined {
+    const linefill = this.linefills.get(linefillId);
+    return linefill?.line2;
+  }
+
+  linefillSetColor(linefillId: string, color: ColorInput): void {
+    const linefill = this.linefills.get(linefillId);
+    if (linefill) linefill.color = parseColor(color);
   }
 
   getOutput(): DrawingOutput {

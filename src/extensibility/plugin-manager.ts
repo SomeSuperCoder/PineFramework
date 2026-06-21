@@ -1,4 +1,11 @@
-import type { Plugin, PluginMetadata, FunctionPlugin, TypePlugin, RendererPlugin, DataSourcePlugin } from './plugin-types.js';
+import type {
+  Plugin,
+  PluginMetadata,
+  FunctionPlugin,
+  TypePlugin,
+  RendererPlugin,
+  DataSourcePlugin,
+} from './plugin-types.js';
 import { PluginRegistry, type PluginRegistryConfig } from './plugin-registry.js';
 
 export class PluginManager {

@@ -18,7 +18,7 @@ describe('Property-Based Tests', () => {
         const a = Math.random() * 100 - 50;
         const b = Math.random() * 100 - 50;
         const c = Math.random() * 100 - 50;
-        expect((a + b) + c).toBeCloseTo(a + (b + c), 10);
+        expect(a + b + c).toBeCloseTo(a + (b + c), 10);
       }
     });
 
@@ -140,7 +140,8 @@ describe('Property-Based Tests', () => {
       for (let i = 0; i < 100; i++) {
         const grossProfit = Math.random() * 1000;
         const grossLoss = Math.random() * 1000;
-        const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
+        const profitFactor =
+          grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0;
         expect(profitFactor).toBeGreaterThanOrEqual(0);
       }
     });

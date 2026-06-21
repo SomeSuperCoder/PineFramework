@@ -1,6 +1,14 @@
 import type { PineColor, ColorInput } from '../config/color-system.js';
 
-export type PlotStyle = 'line' | 'area' | 'columns' | 'circles' | 'cross' | 'histogram';
+export type PlotStyle =
+  | 'line'
+  | 'area'
+  | 'columns'
+  | 'circles'
+  | 'cross'
+  | 'histogram'
+  | 'stepline'
+  | 'areabr';
 
 export type ShapeStyle =
   | 'cross'
@@ -54,9 +62,96 @@ export type TextHorizontalAlignment = 'left' | 'center' | 'right';
 
 export type TextVerticalAlignment = 'top' | 'middle' | 'bottom';
 
-export type TablePosition = 'top_left' | 'top_center' | 'top_right' | 'middle_left' | 'middle_center' | 'middle_right' | 'bottom_left' | 'bottom_center' | 'bottom_right';
+export type TablePosition =
+  | 'top_left'
+  | 'top_center'
+  | 'top_right'
+  | 'middle_left'
+  | 'middle_center'
+  | 'middle_right'
+  | 'bottom_left'
+  | 'bottom_center'
+  | 'bottom_right';
 
 export type Size = 'auto' | 'tiny' | 'small' | 'normal' | 'large' | 'huge';
+
+export type HlineStyle = 'solid' | 'dotted' | 'dashed';
+
+export type ChartPointLocation = 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom' | 'absolute';
+
+export interface ChartPoint {
+  barIndex: number;
+  price: number;
+}
+
+export interface HlineOptions {
+  title?: string;
+  color?: ColorInput;
+  linewidth?: number;
+  linestyle?: HlineStyle;
+  editable?: boolean;
+  display?: number;
+}
+
+export interface HlineDescriptor {
+  id: string;
+  title: string;
+  price: number;
+  color: PineColor;
+  linewidth: number;
+  linestyle: HlineStyle;
+  editable: boolean;
+  display: number;
+}
+
+export interface BgcolorOptions {
+  color?: ColorInput;
+  offset?: number;
+  editable?: boolean;
+  fillgaps?: boolean;
+}
+
+export interface BgcolorDescriptor {
+  id: string;
+  title: string;
+  color: PineColor;
+  offset: number;
+  editable: boolean;
+  fillgaps: boolean;
+  barColors: (PineColor | null)[];
+}
+
+export interface BarcolorOptions {
+  color?: ColorInput;
+  offset?: number;
+  editable?: boolean;
+}
+
+export interface BarcolorDescriptor {
+  id: string;
+  title: string;
+  color: PineColor;
+  offset: number;
+  editable: boolean;
+  barColors: (PineColor | null)[];
+}
+
+export interface FillOptions {
+  color?: ColorInput;
+  title?: string;
+  editable?: boolean;
+  fillgaps?: boolean;
+}
+
+export interface FillDescriptor {
+  id: string;
+  title: string;
+  plot1Title: string;
+  plot2Title: string;
+  color: PineColor;
+  editable: boolean;
+  fillgaps: boolean;
+}
 
 export interface PlotOptions {
   title?: string;

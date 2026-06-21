@@ -80,10 +80,7 @@ export interface RendererPlugin extends PluginInterface {
   renderFunction: RenderFunction;
 }
 
-export type RenderFunction = (
-  data: PineValue[],
-  options: Record<string, PineValue>,
-) => PineValue;
+export type RenderFunction = (data: PineValue[], options: Record<string, PineValue>) => PineValue;
 
 export interface DataSourcePlugin extends PluginInterface {
   type: 'datasource';
@@ -106,9 +103,6 @@ export type DataSourceSubscribe = (
   callback: (data: PineValue) => void,
 ) => void;
 
-export type DataSourceUnsubscribe = (
-  symbol: string,
-  timeframe: string,
-) => void;
+export type DataSourceUnsubscribe = (symbol: string, timeframe: string) => void;
 
 export type Plugin = FunctionPlugin | TypePlugin | RendererPlugin | DataSourcePlugin;

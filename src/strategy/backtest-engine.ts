@@ -1,5 +1,11 @@
 import type { Bar } from '../data/bar.js';
-import { StrategyEngine, type StrategyConfig, type StrategyMetrics, type Trade, type FilledOrder } from './strategy-engine.js';
+import {
+  StrategyEngine,
+  type StrategyConfig,
+  type StrategyMetrics,
+  type Trade,
+  type FilledOrder,
+} from './strategy-engine.js';
 
 export interface BacktestResult {
   metrics: StrategyMetrics;
@@ -68,15 +74,7 @@ export class BacktestEngine {
     for (let i = 0; i < filteredBars.length; i++) {
       const bar = filteredBars[i]!;
 
-      engine.updateBar(
-        i,
-        bar.timestamp,
-        bar.open,
-        bar.high,
-        bar.low,
-        bar.close,
-        bar.volume,
-      );
+      engine.updateBar(i, bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume);
 
       strategyFn(engine, bar, i);
 
@@ -110,7 +108,10 @@ export class BacktestEngine {
     return this.run(bars, strategyFn);
   }
 
-  static compareResults(result1: BacktestResult, result2: BacktestResult): {
+  static compareResults(
+    result1: BacktestResult,
+    result2: BacktestResult,
+  ): {
     metricsMatch: boolean;
     tradeCountMatch: boolean;
     pnlDifference: number;
@@ -162,7 +163,8 @@ export class BacktestEngine {
     if (result.trades.length > 0) {
       lines.push('=== Trade List ===');
       for (const trade of result.trades) {
-        const pnlStr = trade.pnl >= 0 ? `+$${trade.pnl.toFixed(2)}` : `-$${Math.abs(trade.pnl).toFixed(2)}`;
+        const pnlStr =
+          trade.pnl >= 0 ? `+$${trade.pnl.toFixed(2)}` : `-$${Math.abs(trade.pnl).toFixed(2)}`;
         lines.push(
           `#${trade.id} ${trade.direction} ${trade.quantity} @ $${trade.entryPrice.toFixed(2)} -> $${trade.exitPrice.toFixed(2)} | PnL: ${pnlStr}`,
         );

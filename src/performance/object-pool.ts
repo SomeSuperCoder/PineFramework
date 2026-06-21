@@ -73,9 +73,10 @@ export class ObjectPool<T> {
       totalAcquired: this.totalAcquired,
       totalReleased: this.totalReleased,
       poolSize: this.pool.length,
-      utilization: this.totalAcquired > 0
-        ? ((this.totalAcquired - this.totalReleased) / this.totalAcquired) * 100
-        : 0,
+      utilization:
+        this.totalAcquired > 0
+          ? ((this.totalAcquired - this.totalReleased) / this.totalAcquired) * 100
+          : 0,
     };
   }
 
@@ -92,7 +93,9 @@ export class SeriesPool {
       initialSize,
       maxSize,
       factory: () => [],
-      reset: (arr: number[]) => { arr.length = 0; },
+      reset: (arr: number[]) => {
+        arr.length = 0;
+      },
     });
   }
 
@@ -117,7 +120,9 @@ export class MapPool<K, V> {
       initialSize,
       maxSize,
       factory: () => new Map(),
-      reset: (map) => { map.clear(); },
+      reset: (map) => {
+        map.clear();
+      },
     });
   }
 

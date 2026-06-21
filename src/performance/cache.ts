@@ -90,9 +90,7 @@ export class LRUCache<K, V> {
       size: this.cache.size,
       hits: this.hits,
       misses: this.misses,
-      hitRate: this.hits + this.misses > 0
-        ? (this.hits / (this.hits + this.misses)) * 100
-        : 0,
+      hitRate: this.hits + this.misses > 0 ? (this.hits / (this.hits + this.misses)) * 100 : 0,
     };
   }
 
@@ -152,9 +150,7 @@ export class TimeSeriesCache<V> {
       totalSize,
       totalHits,
       totalMisses,
-      hitRate: totalHits + totalMisses > 0
-        ? (totalHits / (totalHits + totalMisses)) * 100
-        : 0,
+      hitRate: totalHits + totalMisses > 0 ? (totalHits / (totalHits + totalMisses)) * 100 : 0,
     };
   }
 }

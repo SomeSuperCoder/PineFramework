@@ -1,4 +1,8 @@
-import { PlotEngine, resetPlotIdCounter } from '../../src/rendering/plot-engine.js';
+import {
+  PlotEngine,
+  resetPlotIdCounter,
+  ChartPointFactory,
+} from '../../src/rendering/plot-engine.js';
 
 describe('PlotEngine', () => {
   let engine: PlotEngine;
@@ -467,6 +471,169 @@ describe('PlotEngine', () => {
       const output = engine.getOutput();
       const shape = output.shapes.get('shape_0')!;
       expect(shape.barIndex).toEqual([10]);
+    });
+  });
+
+  describe('hline', () => {
+    it('should create a horizontal line with default options', () => {
+      engine.hline(100);
+
+      const output = engine.getOutput();
+      expect(output.hlines.size).toBe(1);
+      const hline = output.hlines.get('hline_0')!;
+      expect(hline).toBeDefined();
+      expect(hline.price).toBe(100);
+      expect(hline.linestyle).toBe('solid');
+      expect(hline.linewidth).toBe(1);
+      expect(hline.editable).toBe(true);
+    });
+
+    it('should create a horizontal line with custom options', () => {
+      engine.hline(200, {
+        title: 'Resistance',
+        color: '#FF0000',
+        linewidth: 2,
+        linestyle: 'dashed',
+        editable: false,
+      });
+
+      const output = engine.getOutput();
+      const hline = output.hlines.get('Resistance')!;
+      expect(hline.price).toBe(200);
+      expect(hline.color.r).toBe(255);
+      expect(hline.linewidth).toBe(2);
+      expect(hline.linestyle).toBe('dashed');
+      expect(hline.editable).toBe(false);
+    });
+
+    it('should handle na values', () => {
+      engine.hline(null);
+
+      const output = engine.getOutput();
+      const hline = output.hlines.get('hline_0')!;
+      expect(hline.price).toBe(0);
+    });
+  });
+
+  describe('bgcolor', () => {
+    it('should set background color', () => {
+      engine.bgcolor('#FF0000');
+
+      const output = engine.getOutput();
+      expect(output.bgcolor).toBeDefined();
+      expect(output.bgcolor!.color.r).toBe(255);
+      expect(output.bgcolor!.color.g).toBe(0);
+      expect(output.bgcolor!.color.b).toBe(0);
+    });
+
+    it('should update background color on multiple calls', () => {
+      engine.bgcolor('#FF0000');
+      engine.bgcolor('#00FF00');
+
+      const output = engine.getOutput();
+      expect(output.bgcolor!.color.r).toBe(0);
+      expect(output.bgcolor!.color.g).toBe(255);
+      expect(output.bgcolor!.color.b).toBe(0);
+      expect(output.bgcolor!.barColors.length).toBe(2);
+    });
+  });
+
+  describe('barcolor', () => {
+    it('should set bar color', () => {
+      engine.barcolor('#0000FF');
+
+      const output = engine.getOutput();
+      expect(output.barcolor).toBeDefined();
+      expect(output.barcolor!.color.r).toBe(0);
+      expect(output.barcolor!.color.g).toBe(0);
+      expect(output.barcolor!.color.b).toBe(255);
+    });
+
+    it('should update bar color on multiple calls', () => {
+      engine.barcolor('#FF0000');
+      engine.barcolor('#00FF00');
+
+      const output = engine.getOutput();
+      expect(output.barcolor!.color.r).toBe(0);
+      expect(output.barcolor!.color.g).toBe(255);
+      expect(output.barcolor!.color.b).toBe(0);
+    });
+  });
+
+  describe('fill', () => {
+    it('should create a fill between two plots', () => {
+      engine.setBarIndex(0);
+      engine.plot(100, { title: 'Upper' });
+      engine.plot(50, { title: 'Lower' });
+      engine.fill('Upper', 'Lower');
+
+      const output = engine.getOutput();
+      expect(output.fills.size).toBe(1);
+      const fill = output.fills.get('fill_Upper_Lower')!;
+      expect(fill).toBeDefined();
+      expect(fill.plot1Title).toBe('Upper');
+      expect(fill.plot2Title).toBe('Lower');
+    });
+
+    it('should create a fill with custom color', () => {
+      engine.setBarIndex(0);
+      engine.plot(100, { title: 'A' });
+      engine.plot(50, { title: 'B' });
+      engine.fill('A', 'B', { color: '#FF0000' });
+
+      const output = engine.getOutput();
+      const fill = output.fills.get('fill_A_B')!;
+      expect(fill.color.r).toBe(255);
+      expect(fill.color.g).toBe(0);
+      expect(fill.color.b).toBe(0);
+    });
+
+    it('should create a fill with custom title', () => {
+      engine.setBarIndex(0);
+      engine.plot(100, { title: 'X' });
+      engine.plot(50, { title: 'Y' });
+      engine.fill('X', 'Y', { title: 'My Fill' });
+
+      const output = engine.getOutput();
+      expect(output.fills.has('My Fill')).toBe(true);
+    });
+  });
+
+  describe('ChartPointFactory', () => {
+    it('should create a chart point with new()', () => {
+      const point = ChartPointFactory.new(10, 150);
+      expect(point.barIndex).toBe(10);
+      expect(point.price).toBe(150);
+    });
+
+    it('should create a chart point with now()', () => {
+      const point = ChartPointFactory.now(200);
+      expect(point.price).toBe(200);
+    });
+
+    it('should create a chart point with fromIndex()', () => {
+      const point = ChartPointFactory.fromIndex(5, 100);
+      expect(point.barIndex).toBe(5);
+      expect(point.price).toBe(100);
+    });
+
+    it('should create a chart point with fromTime()', () => {
+      const point = ChartPointFactory.fromTime(60000, 150);
+      expect(point.barIndex).toBe(1);
+      expect(point.price).toBe(150);
+    });
+
+    it('should copy a chart point', () => {
+      const original = { barIndex: 10, price: 150 };
+      const copy = ChartPointFactory.copy(original);
+      expect(copy).toEqual(original);
+      expect(copy).not.toBe(original);
+    });
+
+    it('should handle na values', () => {
+      const point = ChartPointFactory.new(null, null);
+      expect(point.barIndex).toBe(0);
+      expect(point.price).toBe(0);
     });
   });
 });

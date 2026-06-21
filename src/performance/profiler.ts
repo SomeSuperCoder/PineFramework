@@ -75,7 +75,11 @@ export class Profiler {
     }
   }
 
-  async measureAsync<T>(name: string, fn: () => Promise<T>, metadata?: Record<string, unknown>): Promise<T> {
+  async measureAsync<T>(
+    name: string,
+    fn: () => Promise<T>,
+    metadata?: Record<string, unknown>,
+  ): Promise<T> {
     this.start(name, metadata);
     try {
       return await fn();

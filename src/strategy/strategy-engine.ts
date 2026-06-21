@@ -104,6 +104,19 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   maxBarsBack: 0,
 };
 
+export interface StrategyMarker {
+  type: 'entry' | 'exit' | 'order' | 'close' | 'close_all' | 'cancel' | 'cancel_all';
+  orderId: string;
+  name: string;
+  direction: OrderDirection;
+  action: OrderAction;
+  quantity: number;
+  price: number;
+  barIndex: number;
+  timestamp: number;
+  color: string;
+}
+
 let orderIdCounter = 0;
 
 function generateOrderId(): string {
@@ -120,6 +133,7 @@ export class StrategyEngine {
   private pendingOrders: Order[];
   private filledOrders: FilledOrder[];
   private trades: Trade[];
+  private markers: StrategyMarker[];
   private equity: number;
   private peakEquity: number;
   private maxDrawdown: number;
@@ -143,6 +157,7 @@ export class StrategyEngine {
     this.pendingOrders = [];
     this.filledOrders = [];
     this.trades = [];
+    this.markers = [];
     this.equity = this.config.initialCapital;
     this.peakEquity = this.equity;
     this.maxDrawdown = 0;
@@ -159,7 +174,8 @@ export class StrategyEngine {
     stopPrice?: number,
     limitPrice?: number,
   ): Order | undefined {
-    const orderType: OrderType = stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+    const orderType: OrderType =
+      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -192,6 +208,73 @@ export class StrategyEngine {
       this.pendingOrders.push(order);
     }
 
+    this.markers.push({
+      type: 'entry',
+      orderId: order.id,
+      name,
+      direction,
+      action: order.action,
+      quantity,
+      price,
+      barIndex: this.barIndex,
+      timestamp: this.timestamp,
+      color: direction === 'long' ? '#00FF00' : '#FF0000',
+    });
+
+    return order;
+  }
+
+  order(
+    name: string,
+    direction: OrderDirection,
+    quantity: number = this.config.defaultQty,
+    price: number = 0,
+    stopPrice?: number,
+    limitPrice?: number,
+  ): Order | undefined {
+    const orderType: OrderType =
+      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+
+    if (orderType === 'market' && price === 0) {
+      price = this.currentPrice;
+    }
+
+    const order: Order = {
+      id: generateOrderId(),
+      symbol: '',
+      direction,
+      action: direction === 'long' ? 'buy' : 'sell',
+      type: orderType,
+      quantity,
+      price,
+      stopPrice,
+      limitPrice,
+      entryName: name,
+      timestamp: this.timestamp,
+      barIndex: this.barIndex,
+      slippage: this.config.slippage,
+      commission: this.config.commission,
+    };
+
+    if (orderType === 'market') {
+      this.fillOrder(order, price);
+    } else {
+      this.pendingOrders.push(order);
+    }
+
+    this.markers.push({
+      type: 'order',
+      orderId: order.id,
+      name,
+      direction,
+      action: order.action,
+      quantity,
+      price,
+      barIndex: this.barIndex,
+      timestamp: this.timestamp,
+      color: '#FFFF00',
+    });
+
     return order;
   }
 
@@ -206,7 +289,8 @@ export class StrategyEngine {
       return undefined;
     }
 
-    const orderType: OrderType = stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+    const orderType: OrderType =
+      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -235,24 +319,109 @@ export class StrategyEngine {
       this.pendingOrders.push(order);
     }
 
+    this.markers.push({
+      type: 'exit',
+      orderId: order.id,
+      name,
+      direction: order.direction,
+      action: order.action,
+      quantity: order.quantity,
+      price,
+      barIndex: this.barIndex,
+      timestamp: this.timestamp,
+      color: order.direction === 'long' ? '#FF6600' : '#FF6600',
+    });
+
     return order;
   }
 
   close(name: string = 'close'): Order | undefined {
-    return this.exit(name, this.position.quantity);
+    if (this.position.direction === 'flat' || this.position.quantity === 0) {
+      return undefined;
+    }
+
+    const price = this.currentPrice;
+    const order: Order = {
+      id: generateOrderId(),
+      symbol: this.position.symbol,
+      direction: this.position.direction === 'long' ? 'long' : 'short',
+      action: this.position.direction === 'long' ? 'sell' : 'buy',
+      type: 'market',
+      quantity: this.position.quantity,
+      price,
+      entryName: name,
+      timestamp: this.timestamp,
+      barIndex: this.barIndex,
+      slippage: this.config.slippage,
+      commission: this.config.commission,
+    };
+
+    this.fillOrder(order, price);
+
+    this.markers.push({
+      type: 'close',
+      orderId: order.id,
+      name,
+      direction: order.direction,
+      action: order.action,
+      quantity: order.quantity,
+      price,
+      barIndex: this.barIndex,
+      timestamp: this.timestamp,
+      color: '#FF0000',
+    });
+
+    return order;
+  }
+
+  closeAll(name: string = 'close_all'): Order | undefined {
+    return this.close(name);
   }
 
   cancel(orderId: string): boolean {
     const index = this.pendingOrders.findIndex((o) => o.id === orderId);
     if (index >= 0) {
+      const order = this.pendingOrders[index]!;
       this.pendingOrders.splice(index, 1);
+
+      this.markers.push({
+        type: 'cancel',
+        orderId: order.id,
+        name: order.entryName,
+        direction: order.direction,
+        action: order.action,
+        quantity: order.quantity,
+        price: order.price,
+        barIndex: this.barIndex,
+        timestamp: this.timestamp,
+        color: '#999999',
+      });
+
       return true;
     }
     return false;
   }
 
   cancelAll(): void {
+    for (const order of this.pendingOrders) {
+      this.markers.push({
+        type: 'cancel_all',
+        orderId: order.id,
+        name: order.entryName,
+        direction: order.direction,
+        action: order.action,
+        quantity: order.quantity,
+        price: order.price,
+        barIndex: this.barIndex,
+        timestamp: this.timestamp,
+        color: '#999999',
+      });
+    }
     this.pendingOrders = [];
+  }
+
+  getMarkers(): StrategyMarker[] {
+    return [...this.markers];
   }
 
   private canOpenPosition(direction: OrderDirection, _quantity: number): boolean {
@@ -356,9 +525,10 @@ export class StrategyEngine {
     exitName: string,
   ): void {
     const closeQuantity = Math.min(quantity, this.position.quantity);
-    const pnl = this.position.direction === 'long'
-      ? (price - this.position.avgPrice) * closeQuantity
-      : (this.position.avgPrice - price) * closeQuantity;
+    const pnl =
+      this.position.direction === 'long'
+        ? (price - this.position.avgPrice) * closeQuantity
+        : (this.position.avgPrice - price) * closeQuantity;
 
     const trade: Trade = {
       id: `trade_${this.trades.length + 1}`,
@@ -372,9 +542,12 @@ export class StrategyEngine {
       exitBarIndex: this.barIndex,
       quantity: closeQuantity,
       pnl: pnl - commission,
-      pnlPercent: this.position.avgPrice > 0
-        ? ((price - this.position.avgPrice) / this.position.avgPrice) * 100 * (this.position.direction === 'long' ? 1 : -1)
-        : 0,
+      pnlPercent:
+        this.position.avgPrice > 0
+          ? ((price - this.position.avgPrice) / this.position.avgPrice) *
+            100 *
+            (this.position.direction === 'long' ? 1 : -1)
+          : 0,
       commission,
       entryName: '',
       exitName,
@@ -434,17 +607,19 @@ export class StrategyEngine {
 
     this.pendingOrders = this.pendingOrders.filter((order) => {
       if (order.type === 'limit') {
-        const limitHit = order.action === 'buy'
-          ? low <= (order.limitPrice ?? order.price)
-          : high >= (order.limitPrice ?? order.price);
+        const limitHit =
+          order.action === 'buy'
+            ? low <= (order.limitPrice ?? order.price)
+            : high >= (order.limitPrice ?? order.price);
         if (limitHit) {
           ordersToFill.push(order);
           return false;
         }
       } else if (order.type === 'stop') {
-        const stopHit = order.action === 'buy'
-          ? high >= (order.stopPrice ?? order.price)
-          : low <= (order.stopPrice ?? order.price);
+        const stopHit =
+          order.action === 'buy'
+            ? high >= (order.stopPrice ?? order.price)
+            : low <= (order.stopPrice ?? order.price);
         if (stopHit) {
           ordersToFill.push(order);
           return false;
@@ -454,9 +629,10 @@ export class StrategyEngine {
     });
 
     for (const order of ordersToFill) {
-      const fillPrice = order.type === 'limit'
-        ? (order.limitPrice ?? order.price)
-        : (order.stopPrice ?? order.price);
+      const fillPrice =
+        order.type === 'limit'
+          ? (order.limitPrice ?? order.price)
+          : (order.stopPrice ?? order.price);
       this.fillOrder(order, fillPrice);
     }
   }
@@ -464,13 +640,17 @@ export class StrategyEngine {
   private updatePositionPnL(currentPrice: number): void {
     if (this.position.direction === 'flat') return;
 
-    this.position.pnl = this.position.direction === 'long'
-      ? (currentPrice - this.position.avgPrice) * this.position.quantity
-      : (this.position.avgPrice - currentPrice) * this.position.quantity;
+    this.position.pnl =
+      this.position.direction === 'long'
+        ? (currentPrice - this.position.avgPrice) * this.position.quantity
+        : (this.position.avgPrice - currentPrice) * this.position.quantity;
 
-    this.position.pnlPercent = this.position.avgPrice > 0
-      ? ((currentPrice - this.position.avgPrice) / this.position.avgPrice) * 100 * (this.position.direction === 'long' ? 1 : -1)
-      : 0;
+    this.position.pnlPercent =
+      this.position.avgPrice > 0
+        ? ((currentPrice - this.position.avgPrice) / this.position.avgPrice) *
+          100 *
+          (this.position.direction === 'long' ? 1 : -1)
+        : 0;
 
     const totalEquity = this.equity + this.position.pnl;
     if (totalEquity > this.peakEquity) {
@@ -527,14 +707,20 @@ export class StrategyEngine {
 
     const returns = trades.map((t) => t.pnlPercent / 100);
     const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
-    const stdReturn = returns.length > 1
-      ? Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1))
-      : 0;
+    const stdReturn =
+      returns.length > 1
+        ? Math.sqrt(
+            returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1),
+          )
+        : 0;
 
     const downsideReturns = returns.filter((r) => r < 0);
-    const downsideDev = downsideReturns.length > 1
-      ? Math.sqrt(downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length)
-      : 0;
+    const downsideDev =
+      downsideReturns.length > 1
+        ? Math.sqrt(
+            downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length,
+          )
+        : 0;
 
     return {
       totalTrades: trades.length,
@@ -543,22 +729,20 @@ export class StrategyEngine {
       winRate: trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0,
       profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0,
       totalPnl,
-      totalPnlPercent: this.config.initialCapital > 0
-        ? (totalPnl / this.config.initialCapital) * 100
-        : 0,
+      totalPnlPercent:
+        this.config.initialCapital > 0 ? (totalPnl / this.config.initialCapital) * 100 : 0,
       maxDrawdown: this.maxDrawdown,
-      maxDrawdownPercent: this.peakEquity > 0
-        ? (this.maxDrawdown / this.peakEquity) * 100
-        : 0,
+      maxDrawdownPercent: this.peakEquity > 0 ? (this.maxDrawdown / this.peakEquity) * 100 : 0,
       sharpeRatio: stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(252) : 0,
       sortinoRatio: downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(252) : 0,
       averageWin: avgWin,
       averageLoss: avgLoss,
       largestWin: winningTrades.length > 0 ? Math.max(...winningTrades.map((t) => t.pnl)) : 0,
       largestLoss: losingTrades.length > 0 ? Math.min(...losingTrades.map((t) => t.pnl)) : 0,
-      averageTradeDuration: trades.length > 0
-        ? trades.reduce((sum, t) => sum + (t.exitBarIndex - t.entryBarIndex), 0) / trades.length
-        : 0,
+      averageTradeDuration:
+        trades.length > 0
+          ? trades.reduce((sum, t) => sum + (t.exitBarIndex - t.entryBarIndex), 0) / trades.length
+          : 0,
       commission: totalCommission,
     };
   }
@@ -579,6 +763,7 @@ export class StrategyEngine {
     this.pendingOrders = [];
     this.filledOrders = [];
     this.trades = [];
+    this.markers = [];
     this.equity = this.config.initialCapital;
     this.peakEquity = this.equity;
     this.maxDrawdown = 0;

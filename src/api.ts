@@ -1,6 +1,10 @@
 import { parse, type ParseResult } from './language/parser/index.js';
 import { compile, type CompileResult } from './language/compiler/index.js';
-import { ExecutionEngine, type ExecutionContext, type ExecutionResult } from './language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+  type ExecutionResult,
+} from './language/runtime/execution-engine.js';
 import { createSeries } from './language/runtime/series.js';
 import { DataEngine, type DataEngineOptions } from './data/data-engine.js';
 import { RequestSystem } from './data/request-system.js';
@@ -128,7 +132,10 @@ export function createBars(
   return bars;
 }
 
-export function executePineScript(source: string, bars: Bar[]): {
+export function executePineScript(
+  source: string,
+  bars: Bar[],
+): {
   success: boolean;
   error?: string;
   outputs: Map<string, import('./language/runtime/series.js').Series>;

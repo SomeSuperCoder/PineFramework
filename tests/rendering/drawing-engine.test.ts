@@ -92,9 +92,12 @@ describe('DrawingEngine', () => {
 
   describe('lineSetLine', () => {
     it('should update line coordinates', () => {
-      const line = engine.lineNew(0, 100, 10, 200);
+      const line = engine.lineNew(0, 100, 10, 200)!;
 
-      engine.lineSetLine(line.id, 5, 150, 15, 250);
+      engine.lineSetX1(line.id, 5);
+      engine.lineSetY1(line.id, 150);
+      engine.lineSetX2(line.id, 15);
+      engine.lineSetY2(line.id, 250);
 
       expect(line.x1).toBe(5);
       expect(line.y1).toBe(150);
@@ -103,9 +106,12 @@ describe('DrawingEngine', () => {
     });
 
     it('should not update with na values', () => {
-      const line = engine.lineNew(0, 100, 10, 200);
+      const line = engine.lineNew(0, 100, 10, 200)!;
 
-      engine.lineSetLine(line.id, null, null, null, null);
+      engine.lineSetX1(line.id, null);
+      engine.lineSetY1(line.id, null);
+      engine.lineSetX2(line.id, null);
+      engine.lineSetY2(line.id, null);
 
       expect(line.x1).toBe(0);
       expect(line.y1).toBe(100);
@@ -315,18 +321,20 @@ describe('DrawingEngine', () => {
 
   describe('labelSetXY', () => {
     it('should update label coordinates', () => {
-      const label = engine.labelNew(5, 150, 'Move');
+      const label = engine.labelNew(5, 150, 'Move')!;
 
-      engine.labelSetXY(label.id, 10, 200);
+      engine.labelSetX(label.id, 10);
+      engine.labelSetY(label.id, 200);
 
       expect(label.x).toBe(10);
       expect(label.y).toBe(200);
     });
 
     it('should not update with na values', () => {
-      const label = engine.labelNew(5, 150, 'Keep');
+      const label = engine.labelNew(5, 150, 'Keep')!;
 
-      engine.labelSetXY(label.id, null, null);
+      engine.labelSetX(label.id, null);
+      engine.labelSetY(label.id, null);
 
       expect(label.x).toBe(5);
       expect(label.y).toBe(150);
@@ -335,7 +343,7 @@ describe('DrawingEngine', () => {
 
   describe('labelSetText', () => {
     it('should update label text', () => {
-      const label = engine.labelNew(5, 150, 'Old');
+      const label = engine.labelNew(5, 150, 'Old')!;
 
       engine.labelSetText(label.id, 'New');
 
@@ -343,19 +351,19 @@ describe('DrawingEngine', () => {
     });
 
     it('should update label textcolor', () => {
-      const label = engine.labelNew(5, 150, 'Color');
+      const label = engine.labelNew(5, 150, 'Color')!;
 
-      engine.labelSetText(label.id, 'Color', '#FF0000');
+      engine.labelSetColor(label.id, '#FF0000');
 
-      expect(label.textcolor.r).toBe(255);
-      expect(label.textcolor.g).toBe(0);
-      expect(label.textcolor.b).toBe(0);
+      expect(label.color.r).toBe(255);
+      expect(label.color.g).toBe(0);
+      expect(label.color.b).toBe(0);
     });
 
     it('should update label size', () => {
-      const label = engine.labelNew(5, 150, 'Size');
+      const label = engine.labelNew(5, 150, 'Size')!;
 
-      engine.labelSetText(label.id, 'Size', undefined, 'large');
+      engine.labelSetTextSize(label.id, 'large');
 
       expect(label.size).toBe('large');
     });
@@ -693,7 +701,7 @@ describe('DrawingEngine', () => {
       engine.tableNew('top_right', 2, 2);
       const line1 = engine.lineNew(0, 100, 10, 200);
       const line2 = engine.lineNew(0, 150, 10, 250);
-      engine.linefillNew(line1.id, line2.id);
+      engine.linefillNew(line1!.id, line2!.id);
       engine.polylineNew([
         [0, 100],
         [5, 150],
@@ -708,6 +716,231 @@ describe('DrawingEngine', () => {
       expect(output.tables.size).toBe(0);
       expect(output.linefills.size).toBe(0);
       expect(output.polylines.size).toBe(0);
+    });
+  });
+
+  describe('lineCopy', () => {
+    it('should copy a line', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { color: '#FF0000', width: 3 })!;
+      const copy = engine.lineCopy(line.id);
+
+      expect(copy).toBeDefined();
+      expect(copy!.id).not.toBe(line.id);
+      expect(copy!.x1).toBe(0);
+      expect(copy!.y1).toBe(100);
+      expect(copy!.x2).toBe(10);
+      expect(copy!.y2).toBe(200);
+      expect(copy!.color.r).toBe(255);
+      expect(copy!.width).toBe(3);
+    });
+
+    it('should return undefined for invalid id', () => {
+      expect(engine.lineCopy('invalid')).toBeUndefined();
+    });
+  });
+
+  describe('line get methods', () => {
+    it('should get line points', () => {
+      const line = engine.lineNew(0, 100, 10, 200)!;
+      const points = engine.lineGetPoints(line.id);
+      expect(points).toEqual({ x1: 0, y1: 100, x2: 10, y2: 200 });
+    });
+
+    it('should get line color', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { color: '#FF0000' })!;
+      const color = engine.lineGetColor(line.id);
+      expect(color!.r).toBe(255);
+    });
+
+    it('should get line width', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { width: 5 })!;
+      expect(engine.lineGetWidth(line.id)).toBe(5);
+    });
+
+    it('should get line style', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { style: 'dashed' })!;
+      expect(engine.lineGetStyle(line.id)).toBe('dashed');
+    });
+
+    it('should get line extend', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { extend: 'both' })!;
+      expect(engine.lineGetExtend(line.id)).toBe('both');
+    });
+
+    it('should get line editable', () => {
+      const line = engine.lineNew(0, 100, 10, 200, { editable: false })!;
+      expect(engine.lineGetEditable(line.id)).toBe(false);
+    });
+  });
+
+  describe('boxCopy', () => {
+    it('should copy a box', () => {
+      const box = engine.boxNew(0, 200, 10, 100, { bgcolor: '#FF0000', text: 'Test' })!;
+      const copy = engine.boxCopy(box.id);
+
+      expect(copy).toBeDefined();
+      expect(copy!.id).not.toBe(box.id);
+      expect(copy!.left).toBe(0);
+      expect(copy!.top).toBe(200);
+      expect(copy!.text).toBe('Test');
+    });
+
+    it('should return undefined for invalid id', () => {
+      expect(engine.boxCopy('invalid')).toBeUndefined();
+    });
+  });
+
+  describe('box get/set methods', () => {
+    it('should get and set box properties', () => {
+      const box = engine.boxNew(0, 200, 10, 100)!;
+
+      engine.boxSetLeft(box.id, 5);
+      engine.boxSetTop(box.id, 250);
+      engine.boxSetRight(box.id, 15);
+      engine.boxSetBottom(box.id, 50);
+
+      expect(engine.boxGetLeft(box.id)).toBe(5);
+      expect(engine.boxGetTop(box.id)).toBe(250);
+      expect(engine.boxGetRight(box.id)).toBe(15);
+      expect(engine.boxGetBottom(box.id)).toBe(50);
+    });
+  });
+
+  describe('labelCopy', () => {
+    it('should copy a label', () => {
+      const label = engine.labelNew(5, 150, 'Hello', { style: 'label_up' })!;
+      const copy = engine.labelCopy(label.id);
+
+      expect(copy).toBeDefined();
+      expect(copy!.id).not.toBe(label.id);
+      expect(copy!.x).toBe(5);
+      expect(copy!.y).toBe(150);
+      expect(copy!.text).toBe('Hello');
+      expect(copy!.style).toBe('label_up');
+    });
+
+    it('should return undefined for invalid id', () => {
+      expect(engine.labelCopy('invalid')).toBeUndefined();
+    });
+  });
+
+  describe('label get methods', () => {
+    it('should get label text', () => {
+      const label = engine.labelNew(5, 150, 'Test')!;
+      expect(engine.labelGetText(label.id)).toBe('Test');
+    });
+
+    it('should get label color', () => {
+      const label = engine.labelNew(5, 150, 'Test', { color: '#FF0000' })!;
+      const color = engine.labelGetColor(label.id);
+      expect(color!.r).toBe(255);
+    });
+
+    it('should get label size', () => {
+      const label = engine.labelNew(5, 150, 'Test', { size: 'large' })!;
+      expect(engine.labelGetSize(label.id)).toBe('large');
+    });
+  });
+
+  describe('linefill get/set methods', () => {
+    it('should get linefill lines', () => {
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
+      const linefill = engine.linefillNew(line1.id, line2.id)!;
+
+      expect(engine.linefillGetLine1(linefill.id)).toBe(line1);
+      expect(engine.linefillGetLine2(linefill.id)).toBe(line2);
+    });
+
+    it('should set linefill color', () => {
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
+      const linefill = engine.linefillNew(line1.id, line2.id)!;
+
+      engine.linefillSetColor(linefill.id, '#FF0000');
+      expect(linefill.color.r).toBe(255);
+    });
+  });
+
+  describe('drawing limits', () => {
+    it('should enforce max lines limit', () => {
+      const limitedEngine = new DrawingEngine({ maxLines: 3 });
+
+      limitedEngine.lineNew(0, 100, 10, 200);
+      limitedEngine.lineNew(0, 100, 10, 200);
+      limitedEngine.lineNew(0, 100, 10, 200);
+      limitedEngine.lineNew(0, 100, 10, 200);
+
+      const output = limitedEngine.getOutput();
+      expect(output.lines.size).toBe(3);
+    });
+
+    it('should enforce max labels limit', () => {
+      const limitedEngine = new DrawingEngine({ maxLabels: 2 });
+
+      limitedEngine.labelNew(0, 100, 'A');
+      limitedEngine.labelNew(0, 100, 'B');
+      limitedEngine.labelNew(0, 100, 'C');
+
+      const output = limitedEngine.getOutput();
+      expect(output.labels.size).toBe(2);
+    });
+
+    it('should enforce max boxes limit', () => {
+      const limitedEngine = new DrawingEngine({ maxBoxes: 2 });
+
+      limitedEngine.boxNew(0, 100, 10, 50);
+      limitedEngine.boxNew(0, 100, 10, 50);
+      limitedEngine.boxNew(0, 100, 10, 50);
+
+      const output = limitedEngine.getOutput();
+      expect(output.boxes.size).toBe(2);
+    });
+
+    it('should enforce max polylines limit', () => {
+      const limitedEngine = new DrawingEngine({ maxPolylines: 2 });
+
+      limitedEngine.polylineNew([
+        [0, 100],
+        [5, 150],
+      ]);
+      limitedEngine.polylineNew([
+        [0, 100],
+        [5, 150],
+      ]);
+      limitedEngine.polylineNew([
+        [0, 100],
+        [5, 150],
+      ]);
+
+      const output = limitedEngine.getOutput();
+      expect(output.polylines.size).toBe(2);
+    });
+  });
+
+  describe('tableClear', () => {
+    it('should clear all cells in a table', () => {
+      const table = engine.tableNew('top_right', 2, 2);
+      engine.tableCellSet(table.id, 0, 0, 'A');
+      engine.tableCellSet(table.id, 1, 1, 'B');
+
+      engine.tableClear(table.id);
+
+      expect(table.cells.size).toBe(0);
+    });
+  });
+
+  describe('tableMergeCells', () => {
+    it('should merge cells in a table', () => {
+      const table = engine.tableNew('top_right', 3, 3);
+      engine.tableCellSet(table.id, 0, 0, 'A');
+      engine.tableCellSet(table.id, 1, 0, 'B');
+      engine.tableCellSet(table.id, 0, 1, 'C');
+      engine.tableCellSet(table.id, 1, 1, 'D');
+
+      engine.tableMergeCells(table.id, 0, 0, 1, 1);
+
+      expect(table.cells.size).toBe(0);
     });
   });
 });
