@@ -182,7 +182,11 @@ export class StrategyEngine {
     }
 
     if (!this.canOpenPosition(direction, quantity)) {
-      return undefined;
+      if (this.position.direction !== 'flat' && this.position.direction !== direction) {
+        this.close(`${name}_reverse`);
+      } else {
+        return undefined;
+      }
     }
 
     const order: Order = {
