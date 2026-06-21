@@ -112,25 +112,54 @@ This specification defines requirements for building a Pine Script v6 compatible
 #### Acceptance Criteria
 
 1. THE Plot_Engine SHALL render plots identical or visually close to TradingView
-2. WHEN plot() is called, THE Plot_Engine SHALL draw series with specified styles (line, stepline, histogram, columns, area, areabr, circles, cross)
-3. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes/icons (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown) at specified locations (abovebar, belowbar, top, bottom, absolute)
-4. WHEN plotchar() is called, THE Plot_Engine SHALL render characters/symbols at specified locations
-5. WHEN plotarrow() is called, THE Plot_Engine SHALL render directional arrows with specified colors (colorup, colordown)
-6. WHEN hline() is called, THE Plot_Engine SHALL render horizontal lines at specified price levels with linestyle options (solid, dotted, dashed)
-7. WHEN bgcolor() is called, THE Plot_Engine SHALL color the chart background with specified colors
-8. WHEN barcolor() is called, THE Plot_Engine SHALL color chart candles/bars with specified colors
-9. WHEN fill() is called, THE Plot_Engine SHALL render filled area between two plots or hlines
-10. THE Plot_Engine SHALL support all Pine plot styling options (color, linewidth, transparency, offset, editable, show_last, display)
-11. THE Plot_Engine SHALL handle overlapping plots with proper z-ordering
-12. THE Plot_Engine SHALL support size enums (tiny, small, normal, large, huge, auto)
-13. THE Plot_Engine SHALL support all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
-14. THE Plot_Engine SHALL auto-detect plot titles from variable names when no explicit title is provided
-15. THE Plot_Engine SHALL support named arguments for plot options (color, linewidth, title)
-16. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes as chart markers drawn directly on the Canvas at the correct bar position and price level
-17. THE Plot_Engine SHALL filter null values from plot data before rendering to prevent chart errors
-18. WHEN fill() is called, THE Plot_Engine SHALL render fill as an area series between two plot references with configurable colors
-19. THE Plot_Engine SHALL support color, shape, and location namespace syntax (e.g., color.blue, shape.triangleup, location.abovebar)
-20. THE Plot_Engine SHALL support the fill() builtin accepting named argument `color` for fill color specification
+2. THE Plot_Engine SHALL support all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
+3. THE Plot_Engine SHALL support all size enums (tiny, small, normal, large, huge, auto)
+4. THE Plot_Engine SHALL support all location enums (abovebar, belowbar, top, bottom, absolute)
+5. THE Plot_Engine SHALL filter null values from plot data before rendering to prevent chart errors
+6. THE Plot_Engine SHALL auto-detect plot titles from variable names when no explicit title is provided
+7. THE Plot_Engine SHALL support named arguments for all plot functions
+8. THE Plot_Engine SHALL support color, shape, and location namespace syntax (e.g., color.blue, shape.triangleup, location.abovebar)
+
+**plot() — Display a series on the chart:**
+9. WHEN plot(series, title, color, linewidth, style, trackprice, histbase, offset, join, editable, show_last, display) is called, THE Plot_Engine SHALL render the series with the specified parameters
+10. THE Plot_Engine SHALL support style parameter values: line, stepline, histogram, columns, area, areabr, circles, cross
+11. THE Plot_Engine SHALL support trackprice parameter to display a horizontal price line at the last value
+12. THE Plot_Engine SHALL support histbase parameter to set the baseline for histogram and columns styles
+13. THE Plot_Engine SHALL support offset parameter to shift the plot horizontally by a number of bars
+14. THE Plot_Engine SHALL support join parameter to connect circles and cross style points with lines
+
+**plotshape() — Display shapes/icons on bars:**
+15. WHEN plotshape(series, title, style, location, color, offset, text, textcolor, editable, size, show_last, display) is called, THE Plot_Engine SHALL render shape markers at the specified locations
+16. THE Plot_Engine SHALL support style values: shape.arrowup, shape.arrowdown, shape.circle, shape.square, shape.diamond, shape.triangleup, shape.triangledown, shape.cross, shape.xcross, shape.flag, shape.labelup, shape.labeldown
+17. THE Plot_Engine SHALL position shapes at abovebar (above high), belowbar (below low), top, bottom, or absolute price levels
+18. THE Plot_Engine SHALL render text labels alongside shapes when the text parameter is provided
+
+**plotchar() — Display characters on bars:**
+19. WHEN plotchar(series, title, char, location, color, offset, text, textcolor, editable, size, show_last, display) is called, THE Plot_Engine SHALL render characters at the specified locations
+20. THE Plot_Engine SHALL render the char parameter as a text glyph at the computed bar/price position
+21. THE Plot_Engine SHALL support unicode characters and custom symbols in the char parameter
+
+**plotarrow() — Display directional arrows:**
+22. WHEN plotarrow(series, title, colorup, colordown, offset, minheight, maxheight, editable, show_last, display) is called, THE Plot_Engine SHALL render directional arrows
+23. THE Plot_Engine SHALL render upward arrows (colorup) for positive series values and downward arrows (colordown) for negative values
+24. THE Plot_Engine SHALL scale arrow height between minheight and maxheight based on series magnitude
+
+**hline() — Create horizontal lines:**
+25. WHEN hline(price, title, color, linestyle, linewidth, editable, display) is called, THE Plot_Engine SHALL render a horizontal line at the specified price level across the full visible chart width
+26. THE Plot_Engine SHALL support linestyle values: solid, dotted, dashed
+
+**bgcolor() — Color chart background:**
+27. WHEN bgcolor(color, offset, editable, show_last, title, display) is called, THE Plot_Engine SHALL color the chart background for bars where the color condition is truthy
+28. THE Plot_Engine SHALL support conditional coloring where different bars have different background colors
+
+**barcolor() — Color chart candles/bars:**
+29. WHEN barcolor(color, offset, editable, show_last, title, display) is called, THE Plot_Engine SHALL override candle body colors for bars where the color condition is truthy
+30. THE Plot_Engine SHALL color both the candle body and wick when barcolor is applied
+
+**fill() — Fill area between plots or hlines:**
+31. WHEN fill(plot1, plot2, color, title, editable, fillgaps) is called, THE Plot_Engine SHALL render a filled area between two plot series or hlines
+32. THE Plot_Engine SHALL support the fillgaps parameter to control whether gaps in data are filled or skipped
+33. THE Plot_Engine SHALL render fills as semi-transparent polygons with the specified color
 
 ### Requirement 7: Drawing Objects
 
@@ -138,18 +167,80 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 #### Acceptance Criteria
 
-1. THE Drawing_Engine SHALL render line objects (line.new, line.copy, line.delete, line.set_*, line.get_*) with TradingView-like appearance and styling (color, style, width, extend, xloc)
-2. THE Drawing_Engine SHALL render box objects (box.new, box.copy, box.delete, box.set_*, box.get_*) with fill and border options (bgcolor, border_color, border_style, border_width, text, text_color, text_size, text_halign, text_valign)
-3. THE Drawing_Engine SHALL render label objects (label.new, label.copy, label.delete, label.set_*, label.get_*) with text formatting (color, style, textcolor, size, textalign, tooltip, xloc, yloc)
-4. THE Drawing_Engine SHALL render table objects (table.new, table.cell, table.clear, table.delete, table.merge_cells, table.cell_set_*) with rows and columns (position, bgcolor, frame_color, frame_width, border_color, border_width)
-5. THE Drawing_Engine SHALL render linefill objects (linefill.new, linefill.delete, linefill.set_color, linefill.get_line1, linefill.get_line2) between two lines
-6. THE Drawing_Engine SHALL render polyline objects (polyline.new, polyline.delete) with multiple points (curved, closed, xloc, line_color, fill_color, line_style, line_width)
-7. THE Drawing_Engine SHALL support chart.point objects (chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time, chart.point.copy) for coordinate positioning
-8. THE Drawing_Engine SHALL support all Pine drawing styling and positioning options
-9. THE Drawing_Engine SHALL enforce max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
-10. THE Drawing_Engine SHALL support all xloc modes (bar_index, bar_time)
-11. THE Drawing_Engine SHALL support all yloc modes (price, abovebar, belowbar)
-12. THE Drawing_Engine SHALL support all extend modes (none, left, right, both)
+**label — Text labels on the chart:**
+1. THE Drawing_Engine SHALL support label.new(x, y, text, xloc, yloc, color, style, textcolor, size, textalign, tooltip) to create text labels
+2. THE Drawing_Engine SHALL support label.copy(id) to duplicate an existing label
+3. THE Drawing_Engine SHALL support label.delete(id) to remove a label
+4. THE Drawing_Engine SHALL support label.set_x(id, x), label.set_y(id, y), label.set_xy(id, x, y) to reposition labels
+5. THE Drawing_Engine SHALL support label.set_text(id, text) to change label text
+6. THE Drawing_Engine SHALL support label.set_color(id, color) to change label background color
+7. THE Drawing_Engine SHALL support label.set_textcolor(id, color) to change label text color
+8. THE Drawing_Engine SHALL support label.set_size(id, size) to change label size
+9. THE Drawing_Engine SHALL support label.set_style(id, style) to change label style (label.style_none, label.style_label_up, label.style_label_down, label.style_label_left, label.style_label_right, label.style_label_center, label.style_label_lower_left, label.style_label_lower_right, label.style_label_upper_left, label.style_label_upper_right, label.style_square, label.style_diamond, label.style_circle, label.style_cross)
+10. THE Drawing_Engine SHALL support label.set_tooltip(id, tooltip) to change tooltip text
+11. THE Drawing_Engine SHALL support label.set_textalign(id, align) to change text alignment
+12. THE Drawing_Engine SHALL support label.set_xloc(id, xloc) to change x positioning mode (bar_index, bar_time)
+13. THE Drawing_Engine SHALL support label.set_yloc(id, yloc) to change y positioning mode (price, abovebar, belowbar)
+14. THE Drawing_Engine SHALL support label.get_x(id), label.get_y(id), label.get_text(id) to read label properties
+
+**line — Drawing lines on the chart:**
+15. THE Drawing_Engine SHALL support line.new(x1, y1, x2, y2, xloc, extend, color, style, width) to create lines
+16. THE Drawing_Engine SHALL support line.copy(id) to duplicate an existing line
+17. THE Drawing_Engine SHALL support line.delete(id) to remove a line
+18. THE Drawing_Engine SHALL support line.set_x1(id, x), line.set_x2(id, x), line.set_y1(id, y), line.set_y2(id, y) to change individual coordinates
+19. THE Drawing_Engine SHALL support line.set_xy1(id, x, y), line.set_xy2(id, x, y) to change point coordinates
+20. THE Drawing_Engine SHALL support line.set_color(id, color), line.set_style(id, style), line.set_width(id, width) to change line appearance
+21. THE Drawing_Engine SHALL support line.set_extend(id, extend) to change extension mode (none, left, right, both)
+22. THE Drawing_Engine SHALL support line.set_xloc(id, xloc) to change coordinate system
+23. THE Drawing_Engine SHALL support line.get_x1(id), line.get_x2(id), line.get_y1(id), line.get_y2(id) to read coordinates
+24. THE Drawing_Engine SHALL support line.get_price(id, x) to get the line's price value at a specific bar
+
+**box — Rectangles on the chart:**
+25. THE Drawing_Engine SHALL support box.new(left, top, right, bottom, border_color, border_width, border_style, extend, xloc, bgcolor, text, text_color, text_size, text_halign, text_valign, text_wrap, text_font_family) to create rectangles
+26. THE Drawing_Engine SHALL support box.copy(id) to duplicate an existing box
+27. THE Drawing_Engine SHALL support box.delete(id) to remove a box
+28. THE Drawing_Engine SHALL support box.set_left(id, left), box.set_top(id, top), box.set_right(id, right), box.set_bottom(id, bottom) to change edges
+29. THE Drawing_Engine SHALL support box.set_lefttop(id, left, top), box.set_rightbottom(id, right, bottom) to change corner positions
+30. THE Drawing_Engine SHALL support box.set_bgcolor(id, color), box.set_border_color(id, color), box.set_border_width(id, width), box.set_border_style(id, style) to change appearance
+31. THE Drawing_Engine SHALL support box.set_text(id, text), box.set_text_color(id, color), box.set_text_size(id, size), box.set_text_halign(id, align), box.set_text_valign(id, align) to change text properties
+32. THE Drawing_Engine SHALL support box.set_extend(id, extend) to change extension mode
+33. THE Drawing_Engine SHALL support box.get_left(id), box.get_top(id), box.get_right(id), box.get_bottom(id) to read coordinates
+
+**polyline — Multi-point lines (Pine v6):**
+34. THE Drawing_Engine SHALL support polyline.new(points, curved, closed, xloc, line_color, fill_color, line_style, line_width) to create polylines/polygons
+35. THE Drawing_Engine SHALL support polyline.delete(id) to remove a polyline
+36. THE Drawing_Engine SHALL render curved polylines using bezier interpolation when curved=true
+37. THE Drawing_Engine SHALL close the path when closed=true, creating a polygon
+
+**linefill — Fill between two lines:**
+38. THE Drawing_Engine SHALL support linefill.new(line1, line2, color) to create a filled area between two line objects
+39. THE Drawing_Engine SHALL support linefill.delete(id) to remove a linefill
+40. THE Drawing_Engine SHALL support linefill.set_color(id, color) to change fill color
+41. THE Drawing_Engine SHALL support linefill.get_line1(id), linefill.get_line2(id) to get the referenced lines
+
+**table — Floating data tables:**
+42. THE Drawing_Engine SHALL support table.new(position, columns, rows, bgcolor, frame_color, frame_width, border_color, border_width) to create floating tables
+43. THE Drawing_Engine SHALL support table.cell(id, column, row, text, width, height, text_color, text_size, bgcolor, tooltip, text_halign, text_valign) to create or update cells
+44. THE Drawing_Engine SHALL support table.clear(id) to clear all cells
+45. THE Drawing_Engine SHALL support table.delete(id) to remove a table
+46. THE Drawing_Engine SHALL support table.merge_cells(id, start_column, start_row, end_column, end_row) to merge cell ranges
+47. THE Drawing_Engine SHALL support table.cell_set_text(id, column, row, text), table.cell_set_bgcolor(id, column, row, color), table.cell_set_text_color(id, column, row, color), table.cell_set_text_size(id, column, row, size), table.cell_set_width(id, column, row, width), table.cell_set_height(id, column, row, height), table.cell_set_tooltip(id, column, row, tooltip), table.cell_set_text_halign(id, column, row, align), table.cell_set_text_valign(id, column, row, align) for individual cell property updates
+48. THE Drawing_Engine SHALL render tables as overlay elements positioned at top, middle, or bottom of the chart in left, center, or right positions
+
+**chart.point — Coordinate positioning objects:**
+49. THE Drawing_Engine SHALL support chart.point.new(x, y) to create coordinate points
+50. THE Drawing_Engine SHALL support chart.point.now() to create a point at the current bar
+51. THE Drawing_Engine SHALL support chart.point.from_index(bar_index) to create a point from a bar index
+52. THE Drawing_Engine SHALL support chart.point.from_time(timestamp) to create a point from a timestamp
+53. THE Drawing_Engine SHALL support chart.point.copy(point) to duplicate a point
+
+**Drawing object management:**
+54. THE Drawing_Engine SHALL enforce max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
+55. THE Drawing_Engine SHALL support all xloc modes (bar_index, bar_time)
+56. THE Drawing_Engine SHALL support all yloc modes (price, abovebar, belowbar)
+57. THE Drawing_Engine SHALL support all extend modes (none, left, right, both)
+58. THE Drawing_Engine SHALL render all drawing objects on the canvas at the correct bar index and price level positions
+59. THE Drawing_Engine SHALL update drawing object positions when the chart is zoomed or panned
 
 ### Requirement 8: Strategy Execution
 
@@ -260,14 +351,25 @@ This specification defines requirements for building a Pine Script v6 compatible
 #### Acceptance Criteria
 
 1. THE Alert_System SHALL evaluate Pine alert conditions on each bar
-2. WHEN alert() is called, THE Alert_System SHALL trigger notifications with specified frequency (once_per_bar, once_per_bar_close, all)
-3. WHEN alertcondition() is called, THE Alert_System SHALL create alert conditions visible in the UI
+2. WHEN alert() is called, THE Alert_System SHALL trigger notifications with the specified frequency
+3. WHEN alertcondition() is called, THE Alert_System SHALL create named alert conditions visible in the UI
 4. THE Alert_System SHALL format alert messages with Pine's template syntax ({{close}}, {{open}}, {{high}}, {{low}}, {{time}}, {{interval}})
 5. THE Alert_System SHALL prevent duplicate alerts within configurable time windows
 6. THE Alert_System SHALL support multiple alert destinations (email, webhook, popup, etc.)
 7. THE Alert_System SHALL log all alert events for auditing
 8. THE Alert_System SHALL display alertcondition() in the indicator settings UI
-9. THE Alert_System SHALL support alert message templates with variable substitution
+
+**alert() — Trigger immediate alerts:**
+9. WHEN alert(message, alert_freq) is called, THE Alert_System SHALL trigger an alert with the specified message text
+10. THE Alert_System SHALL support alert_freq values: alert.freq_once_per_bar, alert.freq_once_per_bar_close, alert.freq_all, alert.freq_max_per_bar
+11. THE Alert_System SHALL support template variables in message: {{plot_0}}, {{plot_1}}, {{plot_2}}, etc. for referencing plot values
+12. THE Alert_System SHALL support template variables: {{close}}, {{open}}, {{high}}, {{low}}, {{volume}}, {{time}}, {{interval}}
+13. THE Alert_System SHALL render alert markers on the chart at the bar where the alert triggered
+
+**alertcondition() — Create alert conditions for UI:**
+14. WHEN alertcondition(condition, title, message) is called, THE Alert_System SHALL register a named alert condition
+15. THE Alert_System SHALL render alert condition names in the indicator's alert settings panel
+16. THE Alert_System SHALL support multiple alertcondition() calls per script, each with a unique title
 
 ### Requirement 15: Color System and Formatting
 

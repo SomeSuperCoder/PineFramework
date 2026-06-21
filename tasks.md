@@ -598,6 +598,87 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test zoom/pan interaction handling
     - _Requirements: 21.1-21.97_
 
+  - [ ] 21.16 Implement CharRenderer for plotchar()
+    - Render text characters/glyphs at (barIndex, price) positions on canvas
+    - Support unicode characters and custom symbols in the char parameter
+    - Position characters at abovebar, belowbar, top, bottom, or absolute price levels
+    - Apply configurable color, size, and offset
+    - _Requirements: 6.19, 6.20, 6.21_
+
+  - [ ] 21.17 Implement ArrowRenderer for plotarrow()
+    - Render directional arrows with colorup for positive series values
+    - Render colordown for negative series values
+    - Scale arrow height between minheight and maxheight based on series magnitude
+    - Draw arrow shaft and head as vector paths
+    - _Requirements: 6.22, 6.23, 6.24_
+
+  - [ ] 21.18 Implement BarColorRenderer for barcolor()
+    - Override candle body and wick colors for bars where barcolor condition is truthy
+    - Render both candle body and wick with the specified color
+    - Apply bar color overrides after standard candlestick rendering
+    - _Requirements: 6.29, 6.30_
+
+  - [ ] 21.19 Implement BackgroundRenderer for bgcolor()
+    - Color chart background for bars where bgcolor condition is truthy
+    - Support conditional coloring where different bars have different background colors
+    - Render as vertical strips behind all other chart elements
+    - _Requirements: 6.27, 6.28_
+
+  - [ ] 21.20 Implement LabelRenderer
+    - Render text labels as styled rectangles with text at (barIndex, price) positions
+    - Support all label styles (label_up, label_down, label_left, label_right, label_center, square, diamond, circle, cross)
+    - Render label background color with configurable border and text color
+    - Support text alignment (left, center, right) and font size
+    - Support xloc (bar_index, bar_time) and yloc (price, abovebar, belowbar) positioning
+    - Update label positions when chart is zoomed or panned
+    - _Requirements: 7.1-7.14_
+
+  - [ ] 21.21 Implement DrawingLineRenderer
+    - Render drawing lines between two points with configurable color, style, width
+    - Support solid, dotted, dashed line styles
+    - Support extend modes (none, left, right, both) extending lines beyond endpoints
+    - Support xloc (bar_index, bar_time) positioning
+    - Update line positions when chart is zoomed or panned
+    - _Requirements: 7.15-7.24_
+
+  - [ ] 21.22 Implement BoxRenderer
+    - Render rectangles with configurable border color, width, style, and background color
+    - Support text inside boxes with configurable color, size, halign, valign, wrap
+    - Support extend modes for horizontal extension
+    - Support xloc (bar_index, bar_time) positioning
+    - Update box positions when chart is zoomed or panned
+    - _Requirements: 7.25-7.33_
+
+  - [ ] 21.23 Implement PolylineRenderer
+    - Render multi-point lines connecting a series of points
+    - Support straight line connections between points
+    - Support curved connections using bezier interpolation when curved=true
+    - Support closed paths creating polygons with fill_color
+    - Support configurable line_color, line_style, line_width
+    - _Requirements: 7.34-7.37_
+
+  - [ ] 21.24 Implement LineFillRenderer
+    - Render filled areas between two line objects
+    - Compute fill polygon by connecting line1 and line2 endpoints
+    - Apply configurable fill color with alpha transparency
+    - Update fill area when referenced lines are repositioned
+    - _Requirements: 7.38-7.41_
+
+  - [ ] 21.25 Implement TableRenderer
+    - Render floating data tables as overlay elements on the canvas
+    - Support table positioning (top, middle, bottom × left, center, right)
+    - Render cells with configurable background color, text color, text size, width, height
+    - Support cell text with tooltip on hover
+    - Support merged cells via merge_cells
+    - Render table frame and border lines
+    - _Requirements: 7.42-7.48_
+
+  - [ ] 21.26 Implement AlertMarkerRenderer
+    - Render alert trigger markers on chart at the bar where alert fired
+    - Display alert message text as tooltip or label
+    - Apply distinct visual styling for alert markers (e.g., warning icon or colored marker)
+    - _Requirements: 14.13_
+
 - [ ] 22. Checkpoint - Canvas Charting Library validation
   - Ensure canvas renders candlesticks, volume, and plot lines correctly
   - Verify zoom (mouse wheel) and pan (drag) work smoothly
@@ -605,8 +686,25 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify shape markers render at correct positions (abovebar/belowbar)
   - Verify fill polygons render between plot lines
   - Verify strategy markers render with correct colors and directions
+  - Verify drawing objects (labels, lines, boxes, polylines, linefills, tables) render correctly on canvas
+  - Verify plotchar and plotarrow render at correct positions
+  - Verify bgcolor and barcolor apply correctly
+  - Verify alert markers render on triggered bars
   - Test resize handling maintains chart proportions
   - Ask the user if questions arise.
+
+- [ ] 22.1 Wire all drawing/alert builtins into execution engine
+  - Register label.new, label.copy, label.delete, label.set_*, label.get_* as builtins
+  - Register line.new, line.copy, line.delete, line.set_*, line.get_* as builtins
+  - Register box.new, box.copy, box.delete, box.set_*, box.get_* as builtins
+  - Register polyline.new, polyline.delete as builtins
+  - Register linefill.new, linefill.delete, linefill.set_color, linefill.get_line1, linefill.get_line2 as builtins
+  - Register table.new, table.cell, table.clear, table.delete, table.merge_cells, table.cell_set_* as builtins
+  - Register chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time, chart.point.copy as builtins
+  - Register alert() as builtin with alert.freq_* namespace values
+  - Register bgcolor() and barcolor() as builtins
+  - Wire DrawingEngine and AlertSystem methods to execution engine context
+  - _Requirements: 7.1-7.59, 14.9-14.16_
 
 - [x] 23. Restructure project as pnpm monorepo
   - [x] 23.1 Create root `pnpm-workspace.yaml`
@@ -1071,6 +1169,9 @@ This implementation plan outlines the step-by-step development of a production-g
 - Tasks 23-30 implement the monorepo restructuring, backend server, Bybit integration, and frontend-backend wiring
 - Tasks 31-41 implement enhancements: named args, real TA functions, plotshape markers, fill rendering, strategy integration, execution edge case fixes, frontend improvements, backend hardening, and complex integration tests
 - Task 21 (canvas charting library) replaces the previous lightweight-charts integration with a custom HTML5 Canvas rendering engine for full control over shapes, fills, markers, and all visual elements
+- Tasks 21.16-21.26 implement canvas renderers for all Pine visual output functions: plotchar, plotarrow, bgcolor, barcolor, labels, drawing lines, boxes, polylines, linefills, tables, and alert markers
+- Task 22.1 wires all drawing/alert builtins (label.*, line.*, box.*, polyline.*, linefill.*, table.*, chart.point.*, alert) into the execution engine
+- Requirements 6 and 7 comprehensively specify all plotting and drawing function parameters for canvas implementation
 
 ## Task Dependency Graph
 
@@ -1098,8 +1199,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 18, "tasks": ["18.4"] },
     { "id": 19, "tasks": ["20.1"] },
     { "id": 20, "tasks": ["20.2"] },
-    { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6", "21.7", "21.8", "21.9", "21.10", "21.11", "21.12", "21.13", "21.14"] },
-    { "id": 22, "tasks": ["21.15"] },
+    { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6", "21.7", "21.8", "21.9", "21.10", "21.11", "21.12", "21.13", "21.14", "21.16", "21.17", "21.18", "21.19", "21.20", "21.21", "21.22", "21.23", "21.24", "21.25", "21.26"] },
+    { "id": 22, "tasks": ["21.15", "22", "22.1"] },
     { "id": 23, "tasks": ["22"] },
     { "id": 24, "tasks": ["23.1", "23.2", "23.3", "23.4"] },
     { "id": 25, "tasks": ["23.5"] },

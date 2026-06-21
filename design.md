@@ -200,13 +200,45 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 9. Drawing Engine
 - **Responsibility**: Render drawing objects on charts
 - **Object Types**:
-  - `line.new()`: Line objects with styling (color, style, width, extend, xloc)
-  - `box.new()`: Box objects with fill and border options (bgcolor, border_color, border_style, border_width, text, text_color, text_size, text_halign, text_valign)
-  - `label.new()`: Text labels with formatting (color, style, textcolor, size, textalign, tooltip, xloc, yloc)
-  - `table.new()`: Data tables with rows and columns (position, bgcolor, frame_color, frame_width, border_color, border_width)
-  - `linefill.new()`: Area between two lines with fill color
-  - `polyline.new()`: Multi-point lines with curve and fill options (curved, closed, xloc, line_color, fill_color, line_style, line_width)
-  - `chart.point`: Coordinate objects for positioning (chart.point.new, chart.point.now, chart.point.from_index, chart.point.from_time)
+  - **label** — Text labels on the chart:
+    - `label.new(x, y, text, xloc, yloc, color, style, textcolor, size, textalign, tooltip)`
+    - `label.copy(id)` to duplicate
+    - `label.delete(id)` to remove
+    - `label.set_x/set_y/set_xy(id, ...)` to reposition
+    - `label.set_text/set_color/set_textcolor/set_size/set_style/set_tooltip/set_textalign/set_xloc/set_yloc(id, ...)`
+    - `label.get_x/get_y/get_text(id)` to read properties
+  - **line** — Drawing lines on the chart:
+    - `line.new(x1, y1, x2, y2, xloc, extend, color, style, width)`
+    - `line.copy(id)` to duplicate
+    - `line.delete(id)` to remove
+    - `line.set_x1/set_x2/set_y1/set_y2/set_xy1/set_xy2(id, ...)`
+    - `line.set_color/set_style/set_width/set_extend/set_xloc(id, ...)`
+    - `line.get_x1/get_x2/get_y1/get_y2/get_price(id, x)` to read coordinates
+  - **box** — Rectangles on the chart:
+    - `box.new(left, top, right, bottom, border_color, border_width, border_style, extend, xloc, bgcolor, text, text_color, text_size, text_halign, text_valign, text_wrap, text_font_family)`
+    - `box.copy(id)` to duplicate
+    - `box.delete(id)` to remove
+    - `box.set_left/set_top/set_right/set_bottom/set_lefttop/set_rightbottom(id, ...)`
+    - `box.set_bgcolor/set_border_color/set_border_width/set_border_style/set_extend(id, ...)`
+    - `box.set_text/set_text_color/set_text_size/set_text_halign/set_text_valign(id, ...)`
+    - `box.get_left/get_top/get_right/get_bottom(id)` to read coordinates
+  - **polyline** — Multi-point lines (Pine v6):
+    - `polyline.new(points, curved, closed, xloc, line_color, fill_color, line_style, line_width)`
+    - `polyline.delete(id)` to remove
+  - **linefill** — Fill between two lines:
+    - `linefill.new(line1, line2, color)`
+    - `linefill.delete(id)` to remove
+    - `linefill.set_color(id, color)` to change fill color
+    - `linefill.get_line1(id)` / `linefill.get_line2(id)` to get referenced lines
+  - **table** — Floating data tables:
+    - `table.new(position, columns, rows, bgcolor, frame_color, frame_width, border_color, border_width)`
+    - `table.cell(id, column, row, text, width, height, text_color, text_size, bgcolor, tooltip, text_halign, text_valign)`
+    - `table.clear(id)` to clear cells
+    - `table.delete(id)` to remove
+    - `table.merge_cells(id, start_column, start_row, end_column, end_row)`
+    - `table.cell_set_text/set_bgcolor/set_text_color/set_text_size/set_width/set_height/set_tooltip/set_text_halign/set_text_valign(id, column, row, ...)`
+  - **chart.point** — Coordinate positioning objects:
+    - `chart.point.new(x, y)`, `chart.point.now()`, `chart.point.from_index(bar_index)`, `chart.point.from_time(timestamp)`, `chart.point.copy(point)`
 - **Key Features**:
   - All copy, delete, set_*, get_* methods for each object type
   - Styling options (fill, border, text formatting)
@@ -215,7 +247,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Update/delete operations
   - Memory management for large numbers of objects
   - Enforcement of max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
-  - Support for all Pine drawing styling and positioning options
+  - Canvas rendering of all objects at correct bar index and price level positions
+  - Object position updates when chart is zoomed or panned
 
 #### 8a. Canvas Charting Library
 - **Responsibility**: Render all chart elements on an HTML5 Canvas with full programmatic control over every pixel
@@ -232,13 +265,22 @@ Key insights from Pine Script v6 and TradingView architecture research:
   │   ├── LineRenderer (line, stepline, dotted, dashed styles)
   │   ├── AreaRenderer (fill between plots)
   │   ├── MarkerRenderer (shape markers: arrows, circles, squares, diamonds)
-  │   ├── StrategyMarkerRenderer (entry/exit/close markers)
+  │   ├── CharRenderer (text characters on bars)
+  │   ├── ArrowRenderer (directional arrows for plotarrow)
   │   ├── HLineRenderer (horizontal lines)
+  │   ├── BarColorRenderer (bar color overrides)
+  │   ├── BackgroundRenderer (background color fills)
   │   ├── DrawingLineRenderer (drawing lines)
+  │   ├── BoxRenderer (drawing boxes/rectangles)
+  │   ├── LabelRenderer (drawing labels with text)
+  │   ├── TableRenderer (floating data tables)
+  │   ├── PolylineRenderer (multi-point lines)
+  │   ├── LineFillRenderer (fill between two lines)
+  │   ├── StrategyMarkerRenderer (entry/exit/close markers)
+  │   ├── AlertMarkerRenderer (alert trigger markers)
   │   ├── GridRenderer (price/time grid lines)
   │   ├── AxisRenderer (price scale labels, time scale labels)
-  │   ├── CrosshairRenderer (crosshair + tooltip)
-  │   └── BackgroundRenderer (background color)
+  │   └── CrosshairRenderer (crosshair + tooltip)
   └── InteractionHandler (mouse/touch events for zoom, pan, hover)
   ```
 - **Key Features**:
@@ -272,12 +314,21 @@ Key insights from Pine Script v6 and TradingView architecture research:
   5. Candlesticks
   6. Bar color overrides (barcolor)
   7. Horizontal lines (hline)
-  8. Line plots
-  9. Shape markers
-  10. Strategy markers
-  11. Drawing lines
-  12. Axes (price scale, time scale)
-  13. Crosshair + tooltip
+  8. Line plots (line, stepline, circles, cross, histogram, columns)
+  9. Area plots (area, areabr)
+  10. Drawing lines (line.new objects)
+  11. Boxes (box.new objects)
+  12. Polylines (polyline.new objects)
+  13. Linefills (linefill.new objects)
+  14. Shape markers (plotshape)
+  15. Character markers (plotchar)
+  16. Directional arrows (plotarrow)
+  17. Drawing labels (label.new objects)
+  18. Strategy markers (entry/exit/close)
+  19. Alert markers (alert trigger points)
+  20. Axes (price scale, time scale)
+  21. Crosshair + tooltip
+  22. Tables (floating data tables, rendered as overlay)
 
 #### 10. Strategy Engine
 - **Responsibility**: Execute and backtest trading strategies with visual markers
@@ -322,16 +373,24 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 12. Alert System
 - **Responsibility**: Evaluate alert conditions and trigger notifications
 - **Alert Functions**:
-  - `alert()`: Trigger notifications with message and frequency (once_per_bar, once_per_bar_close, all)
-  - `alertcondition()`: Create alert conditions visible in UI
+  - `alert(message, alert_freq)`: Trigger notifications with the specified message and frequency
+  - `alertcondition(condition, title, message)`: Create named alert conditions visible in UI
+- **Alert Frequencies**:
+  - `alert.freq_once_per_bar`: Trigger once per bar (first occurrence)
+  - `alert.freq_once_per_bar_close`: Trigger once on bar close
+  - `alert.freq_all`: Trigger on every condition true
+  - `alert.freq_max_per_bar`: Trigger maximum once per bar
+- **Message Templates**:
+  - Template variables: `{{plot_0}}`, `{{plot_1}}`, `{{plot_2}}`, etc. for referencing plot values
+  - Bar data: `{{close}}`, `{{open}}`, `{{high}}`, `{{low}}`, `{{volume}}`, `{{time}}`, `{{interval}}`
 - **Key Features**:
   - Condition evaluation on each bar
-  - Message formatting with template syntax ({{close}}, {{open}}, {{high}}, {{low}}, {{time}}, {{interval}})
+  - Message formatting with template syntax
   - Duplicate prevention with configurable windows
   - Multiple output destinations (email, webhook, popup, etc.)
   - Alert logging and auditing
   - Display alertcondition() in indicator settings UI
-  - Support for alert message templates with variable substitution
+  - Alert markers rendered on chart at trigger bar
 
 #### 13. Input and Configuration System
 - **Responsibility**: Handle user inputs and script configuration
