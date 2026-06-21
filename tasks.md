@@ -540,31 +540,31 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate error logging for compilation and runtime errors
   - Ask the user if questions arise.
 
-- [ ] 23. Restructure project as pnpm monorepo
-  - [ ] 23.1 Create root `pnpm-workspace.yaml`
+- [x] 23. Restructure project as pnpm monorepo
+  - [x] 23.1 Create root `pnpm-workspace.yaml`
     - Declare workspace packages: `src` (engine), `frontend`, `backend`
     - _Requirements: 18.1_
   
-  - [ ] 23.2 Restructure root `package.json`
+  - [x] 23.2 Restructure root `package.json`
     - Add workspace-level scripts: `dev`, `build`, `test`, `lint`, `typecheck`
     - Add `concurrently` dev dependency for parallel dev servers
     - Set `private: true` to prevent accidental publish
     - _Requirements: 18.2, 18.8, 18.9, 18.10_
   
-  - [ ] 23.3 Clean up frontend package
+  - [x] 23.3 Clean up frontend package
     - Remove `frontend/pnpm-lock.yaml` (nested lockfile)
     - Remove `frontend/pnpm-workspace.yaml` (not a real workspace config)
     - Remove `frontend/node_modules/` (will be hoisted to root)
     - Update `frontend/package.json` to add `"pine-framework": "workspace:*"` as dependency
     - _Requirements: 18.3, 18.4, 18.12_
   
-  - [ ] 23.4 Create backend package scaffold
+  - [x] 23.4 Create backend package scaffold
     - Create `backend/` directory with `package.json` (name: `pine-framework-backend`)
     - Add `"pine-framework": "workspace:*"` as dependency
     - Set up TypeScript config extending root
     - _Requirements: 18.5, 18.9_
   
-  - [ ] 23.5 Verify monorepo works
+  - [x] 23.5 Verify monorepo works
     - Run `pnpm install` from root — all dependencies hoisted correctly
     - Run `pnpm build` — engine builds first, then backend, then frontend
     - Run `pnpm dev` — both frontend (3000) and backend (8080) start
