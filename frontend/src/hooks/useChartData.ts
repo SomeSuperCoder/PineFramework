@@ -132,6 +132,11 @@ export function useChartData() {
         body: JSON.stringify({ source: code, bars: ohlcvJson.data }),
       });
 
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.slice(0, 200)}`);
+      }
+
       const result: ExecuteResponse = await response.json();
 
       if (!result.success || result.error) {
