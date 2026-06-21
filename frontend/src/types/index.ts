@@ -28,6 +28,7 @@ export interface ShapeData {
   price: number;
   color?: string;
   text?: string;
+  location?: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom';
 }
 
 export interface LineData {

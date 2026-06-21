@@ -138,6 +138,29 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
       }
     });
 
+    if (scriptResult.shapes && scriptResult.shapes.length > 0) {
+      const markerSeries = seriesRefs.current.values().next().value;
+      if (markerSeries) {
+        const shapeMap: Record<string, string> = {
+          triangleup: 'arrowUp',
+          triangledown: 'arrowDown',
+          circle: 'circle',
+          square: 'square',
+          diamond: 'circle',
+          arrowup: 'arrowUp',
+          arrowdown: 'arrowDown',
+        };
+        const markers = scriptResult.shapes.map((s) => ({
+          time: s.time as unknown as import('lightweight-charts').Time,
+          position: (s.location === 'belowbar' ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
+          shape: (shapeMap[s.type] || 'circle') as import('lightweight-charts').SeriesMarkerShape,
+          color: s.color || '#2196f3',
+          text: s.text || undefined,
+        }));
+        markerSeries.setMarkers(markers);
+      }
+    }
+
     if (scriptResult.lines) {
       scriptResult.lines.forEach((line, index) => {
         const series = chartRef.current?.addLineSeries({

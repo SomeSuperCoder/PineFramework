@@ -34,10 +34,19 @@ executeRouter.post('/execute', async (req, res) => {
       }
     }
 
+    const shapes = (result.shapes || []).map((s) => ({
+      style: s.style,
+      location: s.location,
+      color: s.color,
+      time: s.time,
+      text: s.text,
+    }));
+
     res.json({
       success: result.success,
       error: result.error,
       outputs,
+      shapes,
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

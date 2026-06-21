@@ -54,10 +54,19 @@ export interface ExecutionContext {
   volume: Series;
 }
 
+export interface ShapeEntry {
+  style: string;
+  location: string;
+  color: string;
+  time: number;
+  text: string;
+}
+
 export interface ExecutionResult {
   success: boolean;
   error?: string;
   outputs: Map<string, Series>;
+  shapes: ShapeEntry[];
 }
 
 export interface ExecutionMetrics {
@@ -71,6 +80,7 @@ export interface ExecutionMetrics {
 interface ExecutionSnapshot {
   scope: RuntimeScope;
   outputs: Map<string, Series>;
+  shapes: ShapeEntry[];
   barIndex: number;
 }
 
@@ -81,10 +91,12 @@ export class ExecutionEngine {
   private functions: Map<string, FunctionExpressionNode>;
   private builtins: Map<string, (...args: PineValue[]) => PineValue>;
   private outputs: Map<string, Series>;
+  private shapes: ShapeEntry[];
   private snapshots: ExecutionSnapshot[];
   private metrics: ExecutionMetrics;
   private executionTimes: number[];
   private maxSnapshots: number;
+  private currentTimestamp: number = 0;
 
   constructor(compileResult: CompileResult) {
     this.compiledScript = compileResult.ir;
@@ -93,6 +105,7 @@ export class ExecutionEngine {
     this.functions = new Map();
     this.builtins = new Map();
     this.outputs = new Map();
+    this.shapes = [];
     this.snapshots = [];
     this.executionTimes = [];
     this.maxSnapshots = 10;
@@ -382,13 +395,21 @@ export class ExecutionEngine {
       return NA;
     });
 
-    this.builtins.set('plotshape', (value: PineValue, title?: PineValue, _style?: PineValue, _location?: PineValue, _color?: PineValue, _offset?: PineValue, _text?: PineValue, _textcolor?: PineValue, _editable?: PineValue, _size?: PineValue, _display?: PineValue): PineValue => {
-      const seriesName = typeof title === 'string' ? title : 'plotshape';
-      if (!this.outputs.has(seriesName)) {
-        this.outputs.set(seriesName, createSeries(seriesName));
-      }
+    this.builtins.set('plotshape', (value: PineValue, _title?: PineValue, style?: PineValue, location?: PineValue, color?: PineValue, _offset?: PineValue, text?: PineValue, _textcolor?: PineValue, _editable?: PineValue, _size?: PineValue, _display?: PineValue): PineValue => {
       const isTrue = value === true || value === 1;
-      this.outputs.get(seriesName)!.push(isTrue ? 1 : 0);
+      if (isTrue) {
+        const styleStr = typeof style === 'string' ? style : 'circle';
+        const locationStr = typeof location === 'string' ? location : 'abovebar';
+        const colorStr = typeof color === 'string' ? color : '#2196f3';
+        const textStr = typeof text === 'string' ? text : '';
+        this.shapes.push({
+          style: styleStr,
+          location: locationStr,
+          color: colorStr,
+          time: this.currentTimestamp,
+          text: textStr,
+        });
+      }
       return NA;
     });
   }
@@ -403,6 +424,7 @@ export class ExecutionEngine {
     const snapshot: ExecutionSnapshot = {
       scope: cloneRuntimeScope(this.globalScope),
       outputs: this.cloneOutputs(),
+      shapes: [...this.shapes],
       barIndex: this.metrics.totalBars,
     };
     this.snapshots.push(snapshot);
@@ -422,6 +444,7 @@ export class ExecutionEngine {
     const snapshot = this.snapshots[snapshotIndex]!;
     this.globalScope = snapshot.scope;
     this.outputs = snapshot.outputs;
+    this.shapes = snapshot.shapes;
     this.snapshots = this.snapshots.slice(0, snapshotIndex);
     return true;
   }
@@ -443,6 +466,7 @@ export class ExecutionEngine {
 
   executeBar(context: ExecutionContext): ExecutionResult {
     const startTime = performance.now();
+    this.currentTimestamp = context.timestamp;
 
     try {
       this.createSnapshot();
@@ -458,6 +482,7 @@ export class ExecutionEngine {
       return {
         success: true,
         outputs: this.outputs,
+        shapes: this.shapes,
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -468,12 +493,13 @@ export class ExecutionEngine {
         success: false,
         error: error instanceof Error ? error.message : String(error),
         outputs: this.outputs,
+        shapes: this.shapes,
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);

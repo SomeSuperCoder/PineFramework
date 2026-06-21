@@ -5,6 +5,7 @@ interface ExecuteResponse {
   success: boolean;
   error?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
+  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string }>;
 }
 
 export function useChartData() {
@@ -177,7 +178,16 @@ export function useChartData() {
         });
       }
 
-      setScriptResult({ plots: plotData, shapes: [], lines: [], boxes: [], labels: [] });
+      const shapeData: import('../types').ShapeData[] = (result.shapes || []).map((s) => ({
+        type: s.style as import('../types').ShapeData['type'],
+        time: Math.floor(s.time / 1000),
+        price: 0,
+        color: s.color,
+        text: s.text,
+        location: s.location as import('../types').ShapeData['location'],
+      }));
+
+      setScriptResult({ plots: plotData, shapes: shapeData, lines: [], boxes: [], labels: [] });
     } catch (error) {
       setErrors([{
         type: 'error',
