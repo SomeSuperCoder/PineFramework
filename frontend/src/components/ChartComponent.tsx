@@ -138,26 +138,56 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
       }
     });
 
+    // Merge shapes and strategy markers into a single markers array
+    const allMarkers: Array<{
+      time: import('lightweight-charts').Time;
+      position: import('lightweight-charts').SeriesMarkerPosition;
+      shape: import('lightweight-charts').SeriesMarkerShape;
+      color: string;
+      text?: string;
+    }> = [];
+
     if (scriptResult.shapes && scriptResult.shapes.length > 0) {
-      const markerSeries = seriesRefs.current.values().next().value;
-      if (markerSeries) {
-        const shapeMap: Record<string, string> = {
-          triangleup: 'arrowUp',
-          triangledown: 'arrowDown',
-          circle: 'circle',
-          square: 'square',
-          diamond: 'circle',
-          arrowup: 'arrowUp',
-          arrowdown: 'arrowDown',
-        };
-        const markers = scriptResult.shapes.map((s) => ({
+      const shapeMap: Record<string, string> = {
+        triangleup: 'arrowUp',
+        triangledown: 'arrowDown',
+        circle: 'circle',
+        square: 'square',
+        diamond: 'circle',
+        arrowup: 'arrowUp',
+        arrowdown: 'arrowDown',
+      };
+      for (const s of scriptResult.shapes) {
+        allMarkers.push({
           time: s.time as unknown as import('lightweight-charts').Time,
           position: (s.location === 'belowbar' ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
           shape: (shapeMap[s.type] || 'circle') as import('lightweight-charts').SeriesMarkerShape,
           color: s.color || '#2196f3',
           text: s.text || undefined,
-        }));
-        markerSeries.setMarkers(markers);
+        });
+      }
+    }
+
+    if (scriptResult.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
+      for (const m of scriptResult.strategyMarkers) {
+        if (m.type === 'cancel' || m.type === 'cancel_all') continue;
+        const isLong = m.direction === 'long';
+        const isEntry = m.type === 'entry';
+        allMarkers.push({
+          time: Math.floor(m.timestamp / 1000) as unknown as import('lightweight-charts').Time,
+          position: (isEntry ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
+          shape: ((isLong ? 'arrowUp' : 'arrowDown')) as import('lightweight-charts').SeriesMarkerShape,
+          color: m.color || (isLong ? '#4caf50' : '#e91e63'),
+          text: m.name || undefined,
+        });
+      }
+    }
+
+    if (allMarkers.length > 0) {
+      const markerSeries = seriesRefs.current.values().next().value;
+      if (markerSeries) {
+        allMarkers.sort((a, b) => (a.time as number) - (b.time as number));
+        markerSeries.setMarkers(allMarkers);
       }
     }
 

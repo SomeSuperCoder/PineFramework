@@ -48,12 +48,25 @@ executeRouter.post('/execute', async (req, res) => {
       color: f.color,
     }));
 
+    const strategyMarkers = (result.strategyMarkers || []).map((m) => ({
+      type: m.type,
+      name: m.name,
+      direction: m.direction,
+      action: m.action,
+      quantity: m.quantity,
+      price: m.price,
+      barIndex: m.barIndex,
+      timestamp: m.timestamp,
+      color: m.color,
+    }));
+
     res.json({
       success: result.success,
       error: result.error,
       outputs,
       shapes,
       fills,
+      strategyMarkers,
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

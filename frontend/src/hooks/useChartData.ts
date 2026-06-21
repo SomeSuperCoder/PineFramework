@@ -7,6 +7,17 @@ interface ExecuteResponse {
   outputs: Record<string, (number | string | boolean | null)[]>;
   shapes?: Array<{ style: string; location: string; color: string; time: number; text: string }>;
   fills?: Array<{ from: string; to: string; color: string }>;
+  strategyMarkers?: Array<{
+    type: string;
+    name: string;
+    direction: string;
+    action: string;
+    quantity: number;
+    price: number;
+    barIndex: number;
+    timestamp: number;
+    color: string;
+  }>;
 }
 
 export function useChartData() {
@@ -206,6 +217,17 @@ export function useChartData() {
         boxes: [],
         labels: [],
         fills: (result.fills || []).map((f) => ({ from: f.from, to: f.to, color: f.color })),
+        strategyMarkers: (result.strategyMarkers || []).map((m) => ({
+          type: m.type,
+          name: m.name,
+          direction: m.direction,
+          action: m.action,
+          quantity: m.quantity,
+          price: m.price,
+          barIndex: m.barIndex,
+          timestamp: m.timestamp,
+          color: m.color,
+        })),
       });
     } catch (error) {
       setErrors([{

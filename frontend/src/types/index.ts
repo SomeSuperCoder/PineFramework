@@ -71,4 +71,17 @@ export interface ScriptResult {
     to: string;
     color: string;
   }>;
+  strategyMarkers?: StrategyMarkerData[];
+}
+
+export interface StrategyMarkerData {
+  type: string;
+  name: string;
+  direction: string;
+  action: string;
+  quantity: number;
+  price: number;
+  barIndex: number;
+  timestamp: number;
+  color: string;
 }

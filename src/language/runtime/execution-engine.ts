@@ -34,6 +34,7 @@ import { FLOAT_TYPE, INT_TYPE } from '../types/pine-types.js';
 import {
   StrategyEngine,
   type OrderDirection,
+  type StrategyMarker,
 } from '../../strategy/strategy-engine.js';
 import {
   parseStrategyDeclaration,
@@ -76,6 +77,19 @@ export interface ExecutionResult {
   outputs: Map<string, Series>;
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
+  strategyMarkers: StrategyMarkerEntry[];
+}
+
+export interface StrategyMarkerEntry {
+  type: string;
+  name: string;
+  direction: string;
+  action: string;
+  quantity: number;
+  price: number;
+  barIndex: number;
+  timestamp: number;
+  color: string;
 }
 
 export interface ExecutionMetrics {
@@ -762,6 +776,7 @@ export class ExecutionEngine {
         outputs: this.outputs,
         shapes: this.shapes,
         fills: this.fills,
+        strategyMarkers: this.getStrategyMarkers(),
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -774,12 +789,13 @@ export class ExecutionEngine {
         outputs: this.outputs,
         shapes: this.shapes,
         fills: this.fills,
+        strategyMarkers: this.getStrategyMarkers(),
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers() };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
@@ -828,6 +844,21 @@ export class ExecutionEngine {
 
   getStrategyEngine(): StrategyEngine | null {
     return this.strategyEngine;
+  }
+
+  private getStrategyMarkers(): StrategyMarkerEntry[] {
+    if (!this.strategyEngine) return [];
+    return this.strategyEngine.getMarkers().map((m: StrategyMarker) => ({
+      type: m.type,
+      name: m.name,
+      direction: m.direction,
+      action: m.action,
+      quantity: m.quantity,
+      price: m.price,
+      barIndex: m.barIndex,
+      timestamp: m.timestamp,
+      color: m.color,
+    }));
   }
 
   private executeStatement(

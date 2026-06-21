@@ -141,6 +141,7 @@ export function executePineScript(
   outputs: Map<string, import('./language/runtime/series.js').Series>;
   shapes: import('./language/runtime/execution-engine.js').ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
+  strategyMarkers: import('./language/runtime/execution-engine.js').StrategyMarkerEntry[];
   metrics: import('./language/runtime/execution-engine.js').ExecutionMetrics;
 } {
   const result = parse(source);
@@ -155,6 +156,7 @@ export function executePineScript(
     outputs: execResult.outputs,
     shapes: execResult.shapes,
     fills: execResult.fills,
+    strategyMarkers: execResult.strategyMarkers,
     metrics: engine.getMetrics(),
   };
 }
