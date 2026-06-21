@@ -42,11 +42,18 @@ executeRouter.post('/execute', async (req, res) => {
       text: s.text,
     }));
 
+    const fills = (result.fills || []).map((f) => ({
+      from: f.from,
+      to: f.to,
+      color: f.color,
+    }));
+
     res.json({
       success: result.success,
       error: result.error,
       outputs,
       shapes,
+      fills,
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

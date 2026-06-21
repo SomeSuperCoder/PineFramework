@@ -161,6 +161,53 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
       }
     }
 
+    if (scriptResult.fills && scriptResult.fills.length > 0) {
+      const plotMap = new Map<string, Map<number, number>>();
+      scriptResult.plots.forEach((plot) => {
+        const tsMap = new Map<number, number>();
+        plot.data.forEach((d) => {
+          if (d.value !== null) tsMap.set(d.time, d.value);
+        });
+        plotMap.set(plot.title || '', tsMap);
+      });
+      scriptResult.fills.forEach((fill, index) => {
+        const fromData = plotMap.get(fill.from);
+        const toData = plotMap.get(fill.to);
+        if (fromData && toData) {
+          const allTimes = new Set([...fromData.keys(), ...toData.keys()]);
+          const fillData = [...allTimes]
+            .sort((a, b) => a - b)
+            .map((time) => {
+              const v1 = fromData.get(time);
+              const v2 = toData.get(time);
+              if (v1 !== undefined && v2 !== undefined) {
+                return {
+                  time: time as unknown as import('lightweight-charts').Time,
+                  value: Math.max(v1, v2),
+                };
+              }
+              return null;
+            })
+            .filter((d): d is { time: import('lightweight-charts').Time; value: number } => d !== null);
+          if (fillData.length > 0) {
+            const areaSeries = chartRef.current?.addAreaSeries({
+              lineColor: fill.color,
+              topColor: fill.color,
+              bottomColor: 'transparent',
+              lineWidth: 1,
+              priceLineVisible: false,
+              lastValueVisible: false,
+              title: `Fill ${index + 1}`,
+            });
+            if (areaSeries) {
+              areaSeries.setData(fillData);
+              seriesRefs.current.set(`fill_${index}`, areaSeries as any);
+            }
+          }
+        }
+      });
+    }
+
     if (scriptResult.lines) {
       scriptResult.lines.forEach((line, index) => {
         const series = chartRef.current?.addLineSeries({

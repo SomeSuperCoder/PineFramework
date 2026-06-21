@@ -6,6 +6,7 @@ interface ExecuteResponse {
   error?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
   shapes?: Array<{ style: string; location: string; color: string; time: number; text: string }>;
+  fills?: Array<{ from: string; to: string; color: string }>;
 }
 
 export function useChartData() {
@@ -152,7 +153,17 @@ export function useChartData() {
       const plotData: import('../types').PlotData[] = [];
       let colorIndex = 0;
       for (const [key, values] of Object.entries(result.outputs)) {
-        const color = COLORS[colorIndex % COLORS.length];
+        let title = key;
+        let plotColor: string | undefined;
+        let lineWidth: number | undefined;
+        const colorMatch = key.match(/__color:([^_]+)/);
+        const lwMatch = key.match(/__lw:(\d+)/);
+        if (colorMatch) plotColor = colorMatch[1];
+        if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
+        title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
+        if (!plotColor) {
+          plotColor = COLORS[colorIndex % COLORS.length];
+        }
         colorIndex++;
         plotData.push({
           type: 'line',
@@ -173,8 +184,9 @@ export function useChartData() {
               return { time: Math.floor(ts / 1000), value: numValue };
             })
             .filter((d): d is { time: number; value: number | null } => d !== null),
-          color,
-          title: key,
+          color: plotColor,
+          lineWidth,
+          title,
         });
       }
 
@@ -187,7 +199,14 @@ export function useChartData() {
         location: s.location as import('../types').ShapeData['location'],
       }));
 
-      setScriptResult({ plots: plotData, shapes: shapeData, lines: [], boxes: [], labels: [] });
+      setScriptResult({
+        plots: plotData,
+        shapes: shapeData,
+        lines: [],
+        boxes: [],
+        labels: [],
+        fills: (result.fills || []).map((f) => ({ from: f.from, to: f.to, color: f.color })),
+      });
     } catch (error) {
       setErrors([{
         type: 'error',
