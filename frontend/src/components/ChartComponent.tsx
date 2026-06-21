@@ -87,7 +87,9 @@ export function ChartComponent({ data, scriptResult }: ChartComponentProps) {
   useEffect(() => {
     if (!candlestickRef.current || !volumeRef.current) return;
 
-    const candleData = data.map((d) => ({
+    const validData = data.filter((d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
+
+    const candleData = validData.map((d) => ({
       time: d.time as unknown as import('lightweight-charts').Time,
       open: d.open,
       high: d.high,
@@ -95,7 +97,7 @@ export function ChartComponent({ data, scriptResult }: ChartComponentProps) {
       close: d.close,
     }));
 
-    const volumeData = data.map((d) => ({
+    const volumeData = validData.map((d) => ({
       time: d.time as unknown as import('lightweight-charts').Time,
       value: d.volume,
       color: d.close >= d.open ? 'rgba(76, 175, 80, 0.5)' : 'rgba(233, 69, 96, 0.5)',

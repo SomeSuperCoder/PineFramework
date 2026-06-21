@@ -36,15 +36,18 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
 
         if (msg.topic && msg.topic.startsWith('kline.') && msg.data) {
           const d = msg.data;
-          const bar: Bar = {
-            timestamp: parseInt(d.start || d.timestamp || '0', 10),
-            open: parseFloat(d.open || '0'),
-            high: parseFloat(d.high || '0'),
-            low: parseFloat(d.low || '0'),
-            close: parseFloat(d.close || '0'),
-            volume: parseFloat(d.volume || '0'),
-          };
+          const timestamp = parseInt(d.start || d.timestamp || '0', 10);
+          const open = parseFloat(d.open || '0');
+          const high = parseFloat(d.high || '0');
+          const low = parseFloat(d.low || '0');
+          const close = parseFloat(d.close || '0');
+          const volume = parseFloat(d.volume || '0');
 
+          if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
+            return;
+          }
+
+          const bar: Bar = { timestamp, open, high, low, close, volume };
           const symbol = d.symbol || '';
           const interval = d.interval || '';
           if (symbol && interval) {

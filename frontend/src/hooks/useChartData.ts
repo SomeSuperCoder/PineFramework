@@ -31,7 +31,8 @@ export function useChartData() {
         low: bar.low,
         close: bar.close,
         volume: bar.volume,
-      }));
+      })).filter((d: CandlestickData) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
+      data.sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
       setCandles(data);
     } catch (err) {
       console.error('Failed to fetch OHLCV:', err);
@@ -57,8 +58,10 @@ export function useChartData() {
           const data = JSON.parse(event.data);
           if (data.type === 'kline' && data.data) {
             const k = data.data;
+            const time = Math.floor(k.timestamp / 1000);
+            if (!time || time <= 0) return;
             const candle: CandlestickData = {
-              time: Math.floor(k.timestamp / 1000),
+              time,
               open: k.open,
               high: k.high,
               low: k.low,
