@@ -128,6 +128,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Implements Pine's series indexing (`close[1]`, etc.)
   - Variable scope management
   - Error recovery with rollback
+  - Returns shapes (plotshape markers), fills (area between plots), and strategyMarkers as part of execution result
+  - Supports named arguments forwarding to built-in functions
+  - Auto-detects plot titles from variable names when no explicit title is provided
+  - Maintains var/varip variable state across bars without resetting on re-declaration
+  - Supports inclusive for-loop iteration (`for i = 0 to end` includes the `end` value)
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -148,11 +153,15 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Oscillators: `rsi`, `macd`, `stoch`, etc.
   - Indicators: `bb`, `atr`, `adx`, etc.
   - Mathematical: `highest`, `lowest`, `correlation`, etc.
+  - Crossover/Crossunder: `ta.crossover`, `ta.crossunder` with proper state tracking
 - **Key Features**:
   - Numerical precision matching TradingView
   - Lookback window management
   - Optimized calculations for large datasets
   - Parameter validation and defaults
+  - Real ta.sma() using circular buffer with configurable lookback, returning NA until sufficient data
+  - Real ta.ema() using exponential moving average formula (prev * (1-k) + source * k)
+  - ta.crossover() and ta.crossunder() with internal state tracking for proper detection
 
 #### 7. Request System
 - **Responsibility**: Handle multi-symbol and multi-timeframe data access
@@ -166,15 +175,15 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 8. Plot Engine
 - **Responsibility**: Render TradingView-like plots and visualizations
 - **Plot Functions**:
-  - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross)
-  - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown)
+  - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross) — supports named arguments for color, linewidth, title; auto-detects title from variable names
+  - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown) — rendered as chart markers via Lightweight Charts marker API instead of line series
   - `plotchar()`: Character markers with custom characters
   - `plotarrow()`: Directional arrows with colorup/colordown
   - `hline()`: Horizontal lines at price levels with linestyle (solid, dotted, dashed)
 - **Background & Bar Coloring**:
   - `bgcolor()`: Color chart background with specified colors
   - `barcolor()`: Color chart candles/bars with specified colors
-  - `fill()`: Fill area between two plots or hlines
+  - `fill()`: Fill area between two plots or hlines — rendered as area series with configurable colors, accepts named `color` argument
 - **Key Features**:
   - Style support (color, linewidth, transparency, offset, editable, show_last, display)
   - Z-ordering for overlapping plots
@@ -184,6 +193,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Support for size enums (tiny, small, normal, large, huge, auto)
   - Support for location enums (abovebar, belowbar, top, bottom, absolute)
   - Support for all Pine plot parameters
+  - Auto-detection of plot titles from variable names
+  - Named arguments support for all plot functions
+  - Null value filtering before rendering to prevent chart errors
+  - Color, shape, and location namespace syntax support
 
 #### 9. Drawing Engine
 - **Responsibility**: Render drawing objects on charts
@@ -208,11 +221,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 10. Strategy Engine
 - **Responsibility**: Execute and backtest trading strategies with visual markers
 - **Visual Markers**:
-  - `strategy.entry()`: Entry markers on chart
+  - `strategy.entry()`: Entry markers on chart — reverses position on opposite direction like TradingView
   - `strategy.order()`: Order markers on chart
-  - `strategy.exit()`: Exit markers on chart
-  - `strategy.close()`: Closing markers on chart
-  - `strategy.close_all()`: Closing markers on chart
+  - `strategy.exit()`: Exit markers on chart with optional comment text
+  - `strategy.close()`: Closing markers on chart — supports named arguments (id, comment)
+  - `strategy.close_all()`: Closing markers on chart for all open positions
   - `strategy.cancel()`: Update displayed orders
   - `strategy.cancel_all()`: Update displayed orders
 - **Key Features**:
@@ -223,6 +236,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Real-time order execution simulation
   - Visual representation of orders on chart
   - Trade-by-trade analysis
+  - Market order fills deferred to next bar's open for realistic backtesting
+  - Position reversal on opposite direction entry
+  - Exit markers rendered with comment text
+  - Strategy markers returned as part of execution result
+  - strategy.position_size builtin for querying current position quantity
+  - strategy.commission.percent commission type support
+  - getConfig() method for accessing strategy configuration
 
 #### 11. Plugin Registry
 - **Responsibility**: Manage extensibility through plugins
@@ -258,6 +278,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `input.int()`, `input.float()`, `input.bool()`, `input.string()`
   - `input.color()`, `input.symbol()`, `input.timeframe()`
   - `input.source()`, `input.session()`
+  - `input.time()` for timestamp-type inputs with default values
 - **Key Features**:
   - Default value handling
   - Constraint validation
@@ -274,6 +295,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Conditional color expressions
   - Gradient and palette functions
   - Consistent rendering across displays
+  - color.new(color, transp) builtin for creating colors with specified transparency
+  - Color namespace syntax (color.blue, color.red, color.green, etc.) resolving to hex values
 
 #### 15. Script Declaration System
 - **Responsibility**: Handle script type declarations and configuration
@@ -309,6 +332,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Auto-completion for Pine Script keywords and functions
   - Save and load user scripts
   - Workspace package importing `pine-framework` directly
+  - Renders shapes as chart markers (arrowUp, arrowDown, circle, square) using Lightweight Charts marker API
+  - Renders strategy entry/exit/close markers with directional arrows and color coding
+  - Renders fill() as area series between plot references
+  - Auto-focuses chart to new symbol's price range on pair switch
+  - Filters invalid data points (time=0, non-finite values) before rendering
+  - Auto-assigns distinct colors to plot lines when not explicitly specified
+  - Parses plot metadata (color, linewidth) from output keys
 
 #### 17. Backend API Server
 - **Responsibility**: Bridge frontend and engine, serve market data, manage connections
@@ -319,7 +349,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Data Cache**: In-memory LRU cache for recent OHLCV data
 - **API Endpoints**:
   - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000` - Historical kline data
-  - `POST /api/execute` - Compile and execute Pine Script code
+  - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers)
   - `GET /api/symbols` - List available trading symbols
   - `GET /api/status` - Server and connection status
 - **WebSocket Protocol**:
@@ -336,6 +366,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Handles multiple concurrent WebSocket clients
   - Rate limiting for Bybit API compliance
   - Graceful reconnection on Bybit disconnects
+  - Accepts JSON request bodies up to 5MB
+  - Returns shapes, fills, and strategyMarkers in execute response
+  - Handles non-JSON server responses gracefully
+  - Validates WebSocket kline data before forwarding to clients
 
 #### 18. Bybit Data Adapter
 - **Responsibility**: Integrate with Bybit exchange for real market data
@@ -362,7 +396,7 @@ Frontend (Code Editor) → POST /api/execute → Backend → Parser → AST → 
 
 #### 2. Historical Execution Flow
 ```
-Bybit REST API → Backend (Data Cache) → Frontend (OHLCV) → Backend (Pine Engine) → Series State → TA Engine → Plot Engine → Frontend (Chart Render)
+Bybit REST API → Backend (Data Cache) → Frontend (OHLCV) → Backend (Pine Engine) → Series State → TA Engine → Plot Engine + Shape Engine + Fill Engine + Strategy Engine → Backend (outputs, shapes, fills, strategyMarkers) → Frontend (Chart Render)
 ```
 
 #### 3. Realtime Execution Flow
@@ -378,7 +412,7 @@ Script Request → Backend → Pine Engine (request.security()) → Bybit Adapte
 
 #### 5. Strategy Execution Flow
 ```
-Market Data → Backend → Strategy Engine → Order Generation → Position Management → Performance Metrics → Frontend (Reports)
+Market Data → Backend → Strategy Engine → Order Generation (deferred to next bar open) → Position Management (reversal on opposite direction) → Performance Metrics → Strategy Markers → Backend (shapes, fills, strategyMarkers) → Frontend (Chart Render with markers, fills, shapes)
 ```
 
 #### 6. Monorepo Package Dependency Flow
@@ -481,11 +515,11 @@ Chart Canvas
 │   ├── Area Plots (plot.style_area, plot.style_areabr)
 │   ├── Circle Plots (plot.style_circles)
 │   ├── Cross Plots (plot.style_cross)
-│   ├── Shape Plots (plotshape)
+│   ├── Shape Markers (plotshape → Lightweight Charts markers: arrowUp, arrowDown, circle, square)
 │   ├── Character Plots (plotchar)
 │   └── Arrow Plots (plotarrow)
 ├── Fill Layer
-│   ├── fill() between plots
+│   ├── fill() between plots (rendered as area series)
 │   └── fill() between hlines
 ├── Drawing Layer
 │   ├── Lines (line.new)
@@ -496,7 +530,7 @@ Chart Canvas
 │   └── Polylines (polyline.new)
 ├── Overlay Layer
 │   ├── Hlines (hline)
-│   └── Strategy Markers (strategy.entry, strategy.exit, etc.)
+│   └── Strategy Markers (strategy.entry, strategy.exit, strategy.close → Lightweight Charts markers with directional arrows)
 ├── Bar Coloring Layer
 │   └── barcolor() renders
 ├── UI Layer

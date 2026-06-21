@@ -720,6 +720,274 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify all monorepo scripts work (build, test, lint)
   - Ask the user if questions arise.
 
+- [x] 31. Enhance Parser for Named Arguments and Namespace Tokens
+  - [x] 31.1 Add named arguments support to function call parsing
+    - Parse `identifier = expression` as named arguments in function calls
+    - Support `colorType = expression` and `stringType = expression` as named argument names
+    - Forward named arguments as a Record to built-in functions
+    - _Requirements: 1.8_
+  
+  - [x] 31.2 Extend identifier recognition for namespace tokens
+    - Support color, shape, location, strategy, indicator, library token types as valid identifiers in member expressions
+    - Allow `color.blue`, `shape.triangleup`, `location.abovebar` etc. to resolve correctly
+    - _Requirements: 1.9_
+  
+  - [x]* 31.3 Write tests for named arguments and namespace tokens
+    - Test named arguments with various function signatures
+    - Test color/shape/location namespace syntax in scripts
+    - _Requirements: 1.8, 1.9_
+
+- [x] 32. Enhance TA Engine with Real Implementations
+  - [x] 32.1 Implement real ta.sma() with circular buffer
+    - Replace stub with buffer-based SMA calculation
+    - Return NA until sufficient data points accumulated
+    - Support configurable lookback window
+    - _Requirements: 4.7_
+  
+  - [x] 32.2 Implement real ta.ema() with exponential formula
+    - Replace stub with proper EMA calculation using prev * (1-k) + source * k
+    - Initialize on first value and track state across bars
+    - _Requirements: 4.8_
+  
+  - [x] 32.3 Implement proper ta.crossover() and ta.crossunder()
+    - Add internal state tracking (crossCallIndex, crossPrevValues)
+    - Detect when source crosses above (crossover) or below (crossunder) compare
+    - Return false on first call, then track previous values
+    - _Requirements: 4.9, 4.10_
+  
+  - [x]* 32.4 Write tests for real TA implementations
+    - Test ta.sma() with various lengths and data sequences
+    - Test ta.ema() convergence behavior
+    - Test ta.crossover() and ta.crossunder() detection
+    - _Requirements: 4.7, 4.8, 4.9, 4.10_
+
+- [x] 33. Enhance Plot Engine with Markers, Fills, and Auto-Detection
+  - [x] 33.1 Render plotshape() as chart markers
+    - Replace line series rendering with Lightweight Charts marker API
+    - Map Pine shape names to Lightweight Charts marker shapes
+    - Support abovebar/belowbar positioning
+    - _Requirements: 6.16_
+  
+  - [x] 33.2 Implement fill() as area series rendering
+    - Render fill() between two plot references as area series
+    - Support named `color` argument for fill color
+    - Merge plot data from both references for area rendering
+    - _Requirements: 6.18, 6.20_
+  
+  - [x] 33.3 Auto-detect plot titles from variable names
+    - When no explicit title is provided to plot(), use the first argument's variable name
+    - Parse variable name from Identifier expression nodes
+    - _Requirements: 6.14_
+  
+  - [x] 33.4 Add named arguments support to plot and other functions
+    - Support `color`, `linewidth`, `title` as named arguments
+    - Encode color and linewidth in output key metadata
+    - _Requirements: 6.15_
+  
+  - [x] 33.5 Add color, shape, and location namespace builtins
+    - Implement `color.blue`, `color.red`, `color.green` etc. resolving to hex values
+    - Implement `shape.triangleup`, `shape.circle` etc. returning string identifiers
+    - Implement `location.abovebar`, `location.belowbar` etc. returning string identifiers
+    - Add `color.new(color, transp)` builtin for transparency support
+    - Add `alertcondition()` builtin (no-op)
+    - _Requirements: 6.19, 15.8, 15.9_
+  
+  - [x]* 33.6 Write tests for plot enhancements
+    - Test plotshape() marker rendering with various shapes
+    - Test fill() area rendering between plots
+    - Test auto-detection of plot titles
+    - Test named arguments in plot calls
+    - Test color/shape/location namespace resolution
+    - _Requirements: 6.14, 6.15, 6.16, 6.18, 6.19, 6.20_
+
+- [x] 34. Enhance Strategy Engine with Full Integration
+  - [x] 34.1 Implement position reversal on opposite direction entry
+    - When strategy.entry() is called with opposite direction, close existing position first
+    - Then open new position in the requested direction
+    - _Requirements: 8.13_
+  
+  - [x] 34.2 Defer market order fills to next bar open
+    - All orders (market, limit) go to pendingOrders queue
+    - Market orders are filled at the next bar's open price via fillPendingMarketOrders()
+    - _Requirements: 8.14_
+  
+  - [x] 34.3 Add exit markers with comments
+    - Render exit markers with optional comment text on chart
+    - Pass comment through to marker entries
+    - _Requirements: 8.15_
+  
+  - [x] 34.4 Wire strategy markers through execution result
+    - Return strategyMarkers as part of ExecutionResult
+    - Map StrategyEngine markers to StrategyMarkerEntry format
+    - _Requirements: 8.16_
+  
+  - [x] 34.5 Add strategy.position_size builtin
+    - Return current position quantity from strategy engine
+    - _Requirements: 8.17_
+  
+  - [x] 34.6 Add strategy.commission.percent support
+    - Support percent-based commission type in strategy configuration
+    - _Requirements: 8.18_
+  
+  - [x] 34.7 Add strategy.close() with named arguments
+    - Support `id` and `comment` as named arguments
+    - _Requirements: 8.19_
+  
+  - [x] 34.8 Add strategy.close_all() builtin
+    - Close all open positions at once
+    - _Requirements: 8.20_
+  
+  - [x]* 34.9 Write tests for strategy enhancements
+    - Test position reversal on opposite direction entry
+    - Test market order fill deferral to next bar
+    - Test exit markers with comments
+    - Test strategyMarkers in execution result
+    - Test strategy.position_size builtin
+    - Test strategy.close() with named arguments
+    - _Requirements: 8.13, 8.14, 8.15, 8.16, 8.17, 8.18, 8.19, 8.20_
+
+- [x] 35. Wire Shapes, Fills, and Strategy Markers Through Full Stack
+  - [x] 35.1 Add shapes, fills, strategyMarkers to engine API
+    - Update executePineScript() return type to include shapes, fills, strategyMarkers
+    - _Requirements: 3.8, 3.9, 3.10_
+  
+  - [x] 35.2 Return shapes, fills, strategyMarkers from backend
+    - Update POST /api/execute response to include shapes, fills, strategyMarkers
+    - Map engine types to API response format
+    - _Requirements: 19.14_
+  
+  - [x] 35.3 Render shapes as markers in frontend
+    - Parse shape data from execute response
+    - Render as Lightweight Charts markers with correct shapes and colors
+    - _Requirements: 17.19_
+  
+  - [x] 35.4 Render strategy markers in frontend
+    - Parse strategyMarkers from execute response
+    - Render entry/exit/close markers with directional arrows
+    - Color code by direction (green for long entry, red for short entry, etc.)
+    - _Requirements: 17.20_
+  
+  - [x] 35.5 Render fills in frontend
+    - Parse fill data from execute response
+    - Render as area series between plot references
+    - _Requirements: 17.21_
+  
+  - [x]* 35.6 Write tests for full stack integration
+    - Test shapes flow from engine to frontend rendering
+    - Test strategy markers flow from engine to frontend rendering
+    - Test fills flow from engine to frontend rendering
+    - _Requirements: 3.8, 3.9, 3.10, 17.19, 17.20, 17.21_
+
+- [x] 36. Fix Execution Engine Edge Cases
+  - [x] 36.1 Fix var/varip variable persistence across bars
+    - When re-declaring a var variable, preserve existing series state instead of resetting
+    - Check for existing binding before creating new one
+    - _Requirements: 3.13_
+  
+  - [x] 36.2 Fix for-loop inclusive iteration
+    - Change `for i = start; i < end` to `for i = start; i <= end` to match Pine semantics
+    - _Requirements: 3.14_
+  
+  - [x] 36.3 Fix pushBarValues for empty series
+    - Guard against pushing to empty series in var/varip pushBarValues
+    - _Requirements: 3.13_
+  
+  - [x]* 36.4 Write tests for execution edge cases
+    - Test var persistence across multiple bar executions
+    - Test for-loop inclusive iteration
+    - Test pushBarValues with empty series
+    - _Requirements: 3.13, 3.14_
+
+- [x] 37. Enhance Input and Time Functions
+  - [x] 37.1 Add input.time() builtin
+    - Support timestamp-type inputs with default values
+    - Handle named arguments for input configuration
+    - _Requirements: 12.8_
+  
+  - [x] 37.2 Enhance timestamp() with string format support
+    - Accept date string as first argument (e.g., "2024-01-15")
+    - Support optional parameters (month, day, hour, minute, second default to 0)
+    - _Requirements: 13.8, 13.9_
+  
+  - [x] 37.3 Fix str.format() with mixed argument types
+    - Filter out non-primitive arguments (objects, functions) from format substitution
+    - _Requirements: 13.4_
+  
+  - [x]* 37.4 Write tests for input and time enhancements
+    - Test input.time() with various default values
+    - Test timestamp() with string format
+    - Test timestamp() with optional parameters
+    - Test str.format() with mixed argument types
+    - _Requirements: 12.8, 13.8, 13.9, 13.4_
+
+- [x] 38. Enhance Frontend Chart Rendering
+  - [x] 38.1 Auto-focus chart to new symbol's price range
+    - Call fitContent() on time scale when symbol or timeframe changes
+    - Add dataVersion state to trigger re-render on symbol switch
+    - _Requirements: 17.22_
+  
+  - [x] 38.2 Filter invalid data points
+    - Filter out candles with time=0 or non-finite OHLC values
+    - Filter out null plot values before passing to lightweight-charts
+    - _Requirements: 17.23_
+  
+  - [x] 38.3 Auto-assign distinct colors to plot lines
+    - When plot color is not specified, cycle through a predefined color palette
+    - Parse color and linewidth from output key metadata
+    - _Requirements: 17.24, 17.25_
+  
+  - [x] 38.4 Handle non-JSON server responses
+    - Check response.ok before parsing JSON
+    - Show server error status and text on non-200 responses
+    - _Requirements: 19.15_
+  
+  - [x]* 38.5 Write tests for frontend enhancements
+    - Test chart auto-focus on symbol switch
+    - Test data filtering for invalid points
+    - Test auto-assignment of plot colors
+    - _Requirements: 17.22, 17.23, 17.24, 17.25_
+
+- [x] 39. Enhance Backend Data Handling
+  - [x] 39.1 Increase JSON body limit to 5MB
+    - Configure express.json() with `{ limit: '5mb' }` for large script executions
+    - _Requirements: 19.13_
+  
+  - [x] 39.2 Validate WebSocket kline data
+    - Check timestamp is valid and OHLC values are finite before forwarding
+    - _Requirements: 19.16_
+  
+  - [x]* 39.3 Write tests for backend enhancements
+    - Test large JSON body acceptance
+    - Test WebSocket data validation with invalid data
+    - _Requirements: 19.13, 19.16_
+
+- [x] 40. Add Complex Script Integration Tests
+  - [x] 40.1 Create complex script integration test suite
+    - Add 25 integration tests covering: candle size classifier, streak counter, manual SMA, price position, trend detection, math chains, volume signal, complex conditions, multi-plot, range classification, rolling max, signal cooldown, percent change, OHLC score, trailing stop, range ratio, cumulative sum, breakout detection, weighted close, volatility index, state machine, max drawdown, bar color, combined signal, performance test
+    - _Requirements: 11.8_
+  
+  - [x] 40.2 Update strategy engine tests for market order fill deferral
+    - Add `engine.updateBar()` calls after entry/exit orders to trigger fill at next bar open
+    - Update expected fill prices to match next bar's open
+    - _Requirements: 11.9_
+  
+  - [x]* 40.3 Write additional edge case tests
+    - Test scripts with no plot calls
+    - Test scripts with only strategy functions
+    - Test scripts mixing indicators and strategies
+    - _Requirements: 11.8, 11.9_
+
+- [x] 41. Checkpoint - Full Feature Validation
+  - Verify named arguments work in function calls
+  - Verify ta.sma(), ta.ema(), ta.crossover(), ta.crossunder() produce correct results
+  - Verify plotshape renders as markers on chart
+  - Verify fill renders as area series
+  - Verify strategy entry reversal works correctly
+  - Verify market orders fill at next bar open
+  - Verify shapes, fills, strategyMarkers render on chart
+  - Verify 25 integration tests pass
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -729,6 +997,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Integration tests verify component interactions
 - TypeScript is the implementation language as selected by the user
 - Tasks 23-30 implement the monorepo restructuring, backend server, Bybit integration, and frontend-backend wiring
+- Tasks 31-41 implement enhancements: named args, real TA functions, plotshape markers, fill rendering, strategy integration, execution edge case fixes, frontend improvements, backend hardening, and complex integration tests
 
 ## Task Dependency Graph
 
@@ -772,7 +1041,28 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 34, "tasks": ["28"] },
     { "id": 35, "tasks": ["29.1", "29.2", "29.3", "29.4"] },
     { "id": 36, "tasks": ["29.5"] },
-    { "id": 37, "tasks": ["30"] }
+    { "id": 37, "tasks": ["30"] },
+    { "id": 38, "tasks": ["31.1", "31.2"] },
+    { "id": 39, "tasks": ["31.3"] },
+    { "id": 40, "tasks": ["32.1", "32.2", "32.3"] },
+    { "id": 41, "tasks": ["32.4"] },
+    { "id": 42, "tasks": ["33.1", "33.2", "33.3", "33.4", "33.5"] },
+    { "id": 43, "tasks": ["33.6"] },
+    { "id": 44, "tasks": ["34.1", "34.2", "34.3", "34.4", "34.5", "34.6", "34.7", "34.8"] },
+    { "id": 45, "tasks": ["34.9"] },
+    { "id": 46, "tasks": ["35.1", "35.2", "35.3", "35.4", "35.5"] },
+    { "id": 47, "tasks": ["35.6"] },
+    { "id": 48, "tasks": ["36.1", "36.2", "36.3"] },
+    { "id": 49, "tasks": ["36.4"] },
+    { "id": 50, "tasks": ["37.1", "37.2", "37.3"] },
+    { "id": 51, "tasks": ["37.4"] },
+    { "id": 52, "tasks": ["38.1", "38.2", "38.3", "38.4"] },
+    { "id": 53, "tasks": ["38.5"] },
+    { "id": 54, "tasks": ["39.1", "39.2"] },
+    { "id": 55, "tasks": ["39.3"] },
+    { "id": 56, "tasks": ["40.1", "40.2"] },
+    { "id": 57, "tasks": ["40.3"] },
+    { "id": 58, "tasks": ["41"] }
   ]
 }
 ```

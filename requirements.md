@@ -36,6 +36,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. WHERE different Pine Script versions exist, THE Parser SHALL detect version declarations
 6. THE AST SHALL preserve all semantic information needed for execution
 7. FOR ALL valid Pine Script programs, parsing then compilation SHALL produce an executable representation
+8. THE Parser SHALL support named arguments in function calls (identified by `identifier = expression`, `colorType = expression`, or `stringType = expression`)
+9. THE Parser SHALL support color, shape, location, strategy, indicator, and library token types as valid identifiers in member expressions
 
 ### Requirement 2: Pine Type System
 
@@ -64,6 +66,13 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE Execution_Engine SHALL support Pine's script re-execution on each new bar
 6. THE Execution_Engine SHALL maintain variable scope across script execution
 7. THE Execution_Engine SHALL implement Pine's series indexing behavior (close[1], etc.)
+8. THE Execution_Engine SHALL return shapes, fills, and strategyMarkers as part of the execution result
+9. THE Execution_Engine SHALL track and manage shapes (plotshape markers) across bar execution
+10. THE Execution_Engine SHALL track and manage fills (filled areas between plots) across bar execution
+11. THE Execution_Engine SHALL support named arguments forwarding to built-in functions
+12. THE Execution_Engine SHALL auto-detect plot titles from variable names when no title is provided
+13. THE Execution_Engine SHALL maintain var and varip variable state across bars without resetting on re-declaration
+14. THE Execution_Engine SHALL support inclusive for-loop iteration (`for i = 0 to end` includes the `end` value)
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -77,6 +86,10 @@ This specification defines requirements for building a Pine Script v6 compatible
 4. WHERE functions have configurable parameters, THE TA_Engine SHALL accept parameter customization
 5. THE TA_Engine SHALL optimize calculations for performance with large datasets
 6. FOR ALL ta.* functions, output SHALL match TradingView results within acceptable tolerance
+7. THE TA_Engine SHALL implement ta.sma() using a circular buffer with configurable lookback window, returning NA until sufficient data is accumulated
+8. THE TA_Engine SHALL implement ta.ema() using the exponential moving average formula (prev * (1-k) + source * k) with proper initialization
+9. THE TA_Engine SHALL implement ta.crossover() with internal state tracking to detect when source crosses above compare
+10. THE TA_Engine SHALL implement ta.crossunder() with internal state tracking to detect when source crosses below compare
 
 ### Requirement 5: Multi-Symbol and Multi-Timeframe Data Access
 
@@ -111,6 +124,13 @@ This specification defines requirements for building a Pine Script v6 compatible
 11. THE Plot_Engine SHALL handle overlapping plots with proper z-ordering
 12. THE Plot_Engine SHALL support size enums (tiny, small, normal, large, huge, auto)
 13. THE Plot_Engine SHALL support all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
+14. THE Plot_Engine SHALL auto-detect plot titles from variable names when no explicit title is provided
+15. THE Plot_Engine SHALL support named arguments for plot options (color, linewidth, title)
+16. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes as chart markers using the Lightweight Charts marker API instead of line series
+17. THE Plot_Engine SHALL filter null values from plot data before rendering to prevent chart errors
+18. WHEN fill() is called, THE Plot_Engine SHALL render fill as an area series between two plot references with configurable colors
+19. THE Plot_Engine SHALL support color, shape, and location namespace syntax (e.g., color.blue, shape.triangleup, location.abovebar)
+20. THE Plot_Engine SHALL support the fill() builtin accepting named argument `color` for fill color specification
 
 ### Requirement 7: Drawing Objects
 
@@ -149,6 +169,14 @@ This specification defines requirements for building a Pine Script v6 compatible
 10. THE Strategy_Engine SHALL handle order fills with configurable slippage and commission
 11. THE Strategy_Engine SHALL support all Pine strategy functions and parameters
 12. THE Strategy_Engine SHALL provide backtesting reports with trade-by-trade analysis
+13. WHEN strategy.entry() is called with an opposite direction to current position, THE Strategy_Engine SHALL reverse the position (close existing and open new in opposite direction)
+14. THE Strategy_Engine SHALL defer market order fills to the next bar's open price for realistic backtesting
+15. THE Strategy_Engine SHALL render exit markers with optional comment text on the chart
+16. THE Strategy_Engine SHALL return strategy markers (entry, exit, close, order) as part of the execution result
+17. THE Strategy_Engine SHALL support strategy.position_size builtin to query current position quantity
+18. THE Strategy_Engine SHALL support strategy.commission.percent commission type
+19. THE Strategy_Engine SHALL support strategy.close() with named arguments (id, comment)
+20. THE Strategy_Engine SHALL support strategy.close_all() to close all open positions at once
 
 ### Requirement 9: Extensibility and Plugin Architecture
 
@@ -191,6 +219,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE Test_Framework SHALL include compatibility tests against TradingView output samples
 6. THE Test_Framework SHALL test edge cases and error conditions
 7. THE Test_Framework SHALL provide test coverage reporting
+8. THE Test_Framework SHALL include complex script integration tests covering if/else chains, var persistence, for-loop accumulation, ternary expressions, math function chains, multi-plot outputs, and combined features
+9. THE Test_Framework SHALL validate strategy engine behavior including market order fill deferral, position reversal, and marker generation
 
 ### Requirement 12: Input and Configuration System
 
@@ -205,6 +235,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE Input_System SHALL persist input values across script executions
 6. THE Input_System SHALL support input tooltips and descriptions
 7. THE Input_System SHALL handle input changes during realtime execution
+8. THE Input_System SHALL support input.time() for timestamp-type inputs with default values
 
 ### Requirement 13: String and Time Functions
 
@@ -219,6 +250,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE System SHALL handle time series alignment with different timezones
 6. THE System SHALL support Pine's session and trading time calculations
 7. THE System SHALL implement string-to-number and number-to-string conversions
+8. THE System SHALL support timestamp() accepting either individual date components (year, month, day, hour, minute, second) or a date string
+9. WHEN timestamp() is called with optional parameters, THE System SHALL default missing hour, minute, and second values to zero
 
 ### Requirement 14: Alert System
 
@@ -249,6 +282,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE System SHALL implement Pine's conditional color expressions
 6. THE System SHALL support Pine's gradient and palette functions
 7. THE System SHALL render colors consistently across different display systems
+8. THE Color_System SHALL support color.new(color, transp) builtin for creating colors with specified transparency
+9. THE Color_System SHALL support color namespace syntax (color.blue, color.red, color.green, etc.) resolving to hex color values
 
 ### Requirement 16: Script Declaration and Configuration
 
@@ -287,6 +322,13 @@ This specification defines requirements for building a Pine Script v6 compatible
 16. THE Frontend SHALL support syntax highlighting in the code editor
 17. THE Frontend SHALL provide auto-completion for Pine Script keywords and functions
 18. THE Frontend SHALL save and load user scripts
+19. THE Frontend SHALL render shapes as chart markers (arrowUp, arrowDown, circle, square) using Lightweight Charts marker API
+20. THE Frontend SHALL render strategy entry/exit/close markers on the chart with directional arrows and color coding
+21. THE Frontend SHALL render fill() as area series between plot references
+22. THE Frontend SHALL auto-focus chart to new symbol's price range on pair switch
+23. THE Frontend SHALL filter out invalid data points (time=0, non-finite values) before rendering
+24. THE Frontend SHALL auto-assign distinct colors to plot lines when not explicitly specified
+25. THE Frontend SHALL parse plot metadata (color, linewidth) from output keys
 
 ### Requirement 18: Monorepo Project Structure
 
@@ -325,6 +367,10 @@ This specification defines requirements for building a Pine Script v6 compatible
 10. THE Backend SHALL gracefully handle Bybit API rate limits and connection failures
 11. THE Backend SHALL log connection status and error events
 12. THE Backend SHALL validate all incoming request parameters
+13. THE Backend SHALL accept JSON request bodies up to 5MB in size
+14. THE Backend SHALL return shapes, fills, and strategyMarkers in the POST /api/execute response
+15. THE Backend SHALL handle non-JSON server responses gracefully without crashing
+16. THE Backend SHALL validate WebSocket kline data before forwarding to clients (reject invalid timestamps, non-finite OHLC values)
 
 ### Requirement 20: Bybit Exchange Integration
 
