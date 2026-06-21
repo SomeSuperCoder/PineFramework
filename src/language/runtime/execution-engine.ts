@@ -352,6 +352,16 @@ export class ExecutionEngine {
       }
       return NA;
     });
+
+    this.builtins.set('plotshape', (value: PineValue, title?: PineValue, _style?: PineValue, _location?: PineValue, _color?: PineValue, _offset?: PineValue, _text?: PineValue, _textcolor?: PineValue, _editable?: PineValue, _size?: PineValue, _display?: PineValue): PineValue => {
+      const seriesName = typeof title === 'string' ? title : 'plotshape';
+      if (!this.outputs.has(seriesName)) {
+        this.outputs.set(seriesName, createSeries(seriesName));
+      }
+      const isTrue = value === true || value === 1;
+      this.outputs.get(seriesName)!.push(isTrue ? 1 : 0);
+      return NA;
+    });
   }
 
   private initializeGlobals(): void {
@@ -945,19 +955,23 @@ export class ExecutionEngine {
     scope: RuntimeScope,
     context: ExecutionContext,
   ): PineValue {
+    if (expr.object.kind === 'Identifier') {
+      const objName = expr.object.name;
+
+      if (objName === 'color' || objName === 'shape' || objName === 'location' || objName === 'text' || objName === 'linewidth' || objName === 'linecap' || objName === 'linejoin' || objName === 'textalign') {
+        return expr.property;
+      }
+
+      const binding = resolveVariable(scope, objName);
+      if (binding && expr.property === 'length') {
+        return binding.series.length;
+      }
+    }
+
     const obj = this.executeExpression(expr.object, scope, context);
 
     if (isNa(obj)) {
       return NA;
-    }
-
-    if (expr.object.kind === 'Identifier') {
-      const objName = expr.object.name;
-      const binding = resolveVariable(scope, objName);
-
-      if (binding && expr.property === 'length') {
-        return binding.series.length;
-      }
     }
 
     return NA;

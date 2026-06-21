@@ -703,7 +703,7 @@ export class Parser {
     const namedArguments: ArgumentNode[] = [];
 
     while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
-      if (this.check(TokenType.Identifier) && this.checkNext(TokenType.Assign)) {
+      if ((this.check(TokenType.Identifier) || this.check(TokenType.ColorType) || this.check(TokenType.StringType)) && this.checkNext(TokenType.Assign)) {
         namedArguments.push(this.parseNamedArgument());
       } else {
         args.push(this.parseExpression());
@@ -727,7 +727,16 @@ export class Parser {
 
   private parseNamedArgument(): ArgumentNode {
     const start = this.peek().span.start;
-    const name = this.consume(TokenType.Identifier, 'Expected argument name').lexeme;
+    let name: string;
+    if (this.match(TokenType.Identifier)) {
+      name = this.previous().lexeme;
+    } else if (this.match(TokenType.ColorType)) {
+      name = this.previous().lexeme;
+    } else if (this.match(TokenType.StringType)) {
+      name = this.previous().lexeme;
+    } else {
+      throw this.error('Expected argument name');
+    }
     this.consume(TokenType.Assign, 'Expected "=" after argument name');
     const value = this.parseExpression();
 
@@ -777,7 +786,7 @@ export class Parser {
         value: token.value as string,
       } as ColorLiteralNode;
     }
-    if (this.match(TokenType.Identifier)) {
+    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType)) {
       const token = this.previous();
 
       if (this.check(TokenType.Arrow)) {
