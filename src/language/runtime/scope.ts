@@ -56,8 +56,10 @@ export function resolveVariable(scope: RuntimeScope, name: string): VariableBind
 export function pushBarValues(scope: RuntimeScope): void {
   for (const binding of scope.variables.values()) {
     if (binding.isVar || binding.isVarip) {
-      const lastValue = binding.series.last();
-      binding.series.push(lastValue);
+      if (binding.series.length > 0) {
+        const lastValue = binding.series.last();
+        binding.series.push(lastValue);
+      }
     }
   }
 }

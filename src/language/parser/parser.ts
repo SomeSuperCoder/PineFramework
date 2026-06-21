@@ -506,7 +506,16 @@ export class Parser {
   private parseIndentedBlock(): StatementNode[] {
     const statements: StatementNode[] = [];
 
+    if (this.isAtEnd() || !this.isBlockContinuation()) {
+      return statements;
+    }
+
+    const blockColumn = this.peek().span.start.column;
+
     while (!this.isAtEnd() && this.isBlockContinuation()) {
+      if (statements.length > 0 && this.peek().span.start.column < blockColumn) {
+        break;
+      }
       statements.push(this.parseStatement());
     }
 

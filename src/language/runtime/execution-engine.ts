@@ -343,11 +343,11 @@ export class ExecutionEngine {
     );
 
     this.builtins.set('plot', (value: PineValue, title?: PineValue): PineValue => {
-      if (!isNa(value) && title !== undefined && !isNa(title)) {
-        const seriesName = title as string;
-        if (!this.outputs.has(seriesName)) {
-          this.outputs.set(seriesName, createSeries(seriesName));
-        }
+      const seriesName = typeof title === 'string' ? title : 'plot';
+      if (!this.outputs.has(seriesName)) {
+        this.outputs.set(seriesName, createSeries(seriesName));
+      }
+      if (!isNa(value)) {
         this.outputs.get(seriesName)!.push(value);
       }
       return NA;
@@ -518,14 +518,32 @@ export class ExecutionEngine {
     scope: RuntimeScope,
     context: ExecutionContext,
   ): PineValue {
+    const existing = resolveVariable(scope, decl.name);
+
+    if (existing && (decl.isVar || decl.isVarip)) {
+      if (existing.series.length > 0) {
+        return existing.series.last();
+      }
+      let value: PineValue = NA;
+      if (decl.initializer) {
+        value = this.executeExpression(decl.initializer, scope, context);
+      }
+      existing.series.push(value);
+      return value;
+    }
+
     let value: PineValue = NA;
 
     if (decl.initializer) {
       value = this.executeExpression(decl.initializer, scope, context);
     }
 
-    const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip);
-    binding.series.push(value);
+    if (existing) {
+      existing.series.push(value);
+    } else {
+      const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip);
+      binding.series.push(value);
+    }
 
     return value;
   }
@@ -594,7 +612,7 @@ export class ExecutionEngine {
     const loopScope = createRuntimeScope(scope);
     declareVariable(loopScope, stmt.variable, INT_TYPE);
 
-    for (let i = start; i < end; i += step) {
+    for (let i = start; i <= end; i += step) {
       setVariableValue(loopScope, stmt.variable, i);
       for (const s of stmt.body) {
         this.executeStatement(s, loopScope, context);
