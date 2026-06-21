@@ -16,7 +16,7 @@ export interface PineScriptError {
 
 export interface PlotData {
   type: 'line' | 'area' | 'histogram' | 'columns' | 'circles' | 'cross';
-  data: Array<{ time: number; value: number }>;
+  data: Array<{ time: number; value: number | null }>;
   color?: string;
   lineWidth?: number;
   title?: string;

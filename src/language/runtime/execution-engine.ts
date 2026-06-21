@@ -109,17 +109,48 @@ export class ExecutionEngine {
     this.initializeGlobals();
   }
 
+  private smaBuffers: Map<string, number[]> = new Map();
+  private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
+
   private registerBuiltins(): void {
     this.builtins.set('ta.sma', (source: PineValue, length: PineValue): PineValue => {
       if (isNa(source) || isNa(length)) return NA;
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
-      return source as number;
+
+      const key = `sma_${len}`;
+      if (!this.smaBuffers.has(key)) {
+        this.smaBuffers.set(key, []);
+      }
+      const buf = this.smaBuffers.get(key)!;
+      buf.push(source as number);
+      if (buf.length > len) {
+        buf.shift();
+      }
+      if (buf.length < len) {
+        return NA;
+      }
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        sum += buf[i];
+      }
+      return sum / buf.length;
     });
 
     this.builtins.set('ta.ema', (source: PineValue, length: PineValue): PineValue => {
       if (isNa(source) || isNa(length)) return NA;
-      return source as number;
+      const len = Math.trunc(length as number);
+      if (len <= 0) return NA;
+
+      const key = `ema_${len}`;
+      const k = 2 / (len + 1);
+      if (!this.emaState.has(key)) {
+        this.emaState.set(key, { prev: source as number, initialized: false });
+        return source as number;
+      }
+      const state = this.emaState.get(key)!;
+      state.prev = (source as number) * k + state.prev * (1 - k);
+      return state.prev;
     });
 
     this.builtins.set('math.max', (...args: PineValue[]): PineValue => {
@@ -347,9 +378,7 @@ export class ExecutionEngine {
       if (!this.outputs.has(seriesName)) {
         this.outputs.set(seriesName, createSeries(seriesName));
       }
-      if (!isNa(value)) {
-        this.outputs.get(seriesName)!.push(value);
-      }
+      this.outputs.get(seriesName)!.push(isNa(value) ? null : value);
       return NA;
     });
 

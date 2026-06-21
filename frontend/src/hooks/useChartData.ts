@@ -147,16 +147,32 @@ export function useChartData() {
         return;
       }
 
+      const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
       const plotData: import('../types').PlotData[] = [];
+      let colorIndex = 0;
       for (const [key, values] of Object.entries(result.outputs)) {
+        const color = COLORS[colorIndex % COLORS.length];
+        colorIndex++;
         plotData.push({
           type: 'line',
           data: values
-            .map((v, i) => ({
-              time: Math.floor(ohlcvJson.data[i]?.timestamp / 1000 || 0),
-              value: typeof v === 'number' ? v : 0,
-            }))
-            .filter((d) => d.value !== 0),
+            .map((v, i) => {
+              const ts = ohlcvJson.data[i]?.timestamp;
+              if (ts === undefined) return null;
+              let numValue: number | null;
+              if (v === null || v === undefined) {
+                numValue = null;
+              } else if (typeof v === 'boolean') {
+                numValue = v ? 1 : 0;
+              } else if (typeof v === 'number') {
+                numValue = v;
+              } else {
+                numValue = null;
+              }
+              return { time: Math.floor(ts / 1000), value: numValue };
+            })
+            .filter((d): d is { time: number; value: number | null } => d !== null),
+          color,
           title: key,
         });
       }
