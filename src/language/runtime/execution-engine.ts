@@ -435,12 +435,17 @@ export class ExecutionEngine {
         if (namedArgs) {
           if (typeof namedArgs.color === 'string') color = namedArgs.color;
           if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
+          if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
         }
       } else if (typeof titleOrNamed === 'object' && titleOrNamed !== null && !Array.isArray(titleOrNamed)) {
         const na = titleOrNamed as unknown as Record<string, PineValue>;
         if (typeof na.title === 'string') seriesName = na.title;
         if (typeof na.color === 'string') color = na.color;
         if (typeof na.linewidth === 'number') linewidth = na.linewidth;
+      } else if (namedArgs) {
+        if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
+        if (typeof namedArgs.color === 'string') color = namedArgs.color;
+        if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
       }
       const metaParts = [seriesName];
       if (color) metaParts.push(`__color:${color}`);
@@ -1289,6 +1294,18 @@ export class ExecutionEngine {
         namedArgs[na.name] = this.executeExpression(na.value, scope, context);
       }
 
+      if (funcName === 'plot' && !namedArgs.title) {
+        const hasPositionalTitle = expr.arguments.length > 1 && (
+          expr.arguments[1]!.kind === 'StringLiteral'
+        );
+        if (!hasPositionalTitle && expr.arguments.length > 0) {
+          const firstArg = expr.arguments[0];
+          if (firstArg.kind === 'Identifier') {
+            namedArgs.title = firstArg.name;
+          }
+        }
+      }
+
       if (this.builtins.has(funcName)) {
         const builtin = this.builtins.get(funcName);
         if (builtin) {
@@ -1382,12 +1399,18 @@ export class ExecutionEngine {
           fixed: 'fixed',
           currency: 'currency',
         };
+        if (expr.property === 'commission') {
+          return '__strategy.commission__';
+        }
         if (expr.property in strategyConstants) {
           return strategyConstants[expr.property]!;
         }
         if (expr.property === 'position_size' && this.strategyEngine) {
           return this.strategyEngine.getPosition().quantity;
         }
+      }
+      if (objName === '__strategy.commission__') {
+        return expr.property;
       }
       if (objName === 'plot') {
         return expr.property;
