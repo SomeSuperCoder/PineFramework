@@ -84,4 +84,5 @@ export interface StrategyMarkerData {
   barIndex: number;
   timestamp: number;
   color: string;
+  comment?: string;
 }

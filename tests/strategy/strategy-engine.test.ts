@@ -34,6 +34,9 @@ describe('StrategyEngine', () => {
 
       expect(order).toBeDefined();
       expect(order!.action).toBe('buy');
+
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       expect(engine.getPosition().direction).toBe('long');
       expect(engine.getPosition().quantity).toBe(1);
     });
@@ -46,6 +49,9 @@ describe('StrategyEngine', () => {
 
       expect(order).toBeDefined();
       expect(order!.action).toBe('sell');
+
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       expect(engine.getPosition().direction).toBe('short');
       expect(engine.getPosition().quantity).toBe(1);
     });
@@ -56,7 +62,9 @@ describe('StrategyEngine', () => {
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
       engine.entry('Long', 'long', 1);
 
-      expect(engine.getPosition().avgPrice).toBe(102);
+      engine.updateBar(1, 1001, 103, 105, 100, 103, 1000);
+
+      expect(engine.getPosition().avgPrice).toBe(103);
     });
 
     it('should open with limit order', () => {
@@ -88,6 +96,9 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
       engine.entry('Long1', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       const order = engine.entry('Long2', 'long', 1);
 
       expect(order).toBeUndefined();
@@ -104,6 +115,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
       engine.exit('Exit');
 
+      engine.updateBar(2, 1002, 108, 110, 105, 109, 1000);
+
       expect(engine.getPosition().direction).toBe('flat');
       expect(engine.getPosition().quantity).toBe(0);
     });
@@ -117,6 +130,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 102, 110, 100, 98, 1000);
       engine.exit('Exit');
 
+      engine.updateBar(2, 1002, 98, 100, 95, 96, 1000);
+
       expect(engine.getPosition().direction).toBe('flat');
     });
 
@@ -128,6 +143,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
       engine.exit('Exit', 1);
+
+      engine.updateBar(2, 1002, 108, 110, 105, 109, 1000);
 
       expect(engine.getPosition().quantity).toBe(1);
       expect(engine.getPosition().direction).toBe('long');
@@ -150,6 +167,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
       engine.close();
+
+      engine.updateBar(2, 1002, 108, 110, 105, 109, 1000);
 
       expect(engine.getPosition().direction).toBe('flat');
       expect(engine.getPosition().quantity).toBe(0);
@@ -235,6 +254,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
       engine.exit('Exit');
 
+      engine.updateBar(2, 1002, 108, 110, 105, 109, 1000);
+
       const trades = engine.getTrades();
       expect(trades.length).toBe(1);
       expect(trades[0]!.direction).toBe('long');
@@ -251,6 +272,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 100, 110, 98, 110, 1000);
       engine.exit('Exit');
 
+      engine.updateBar(2, 1002, 110, 112, 108, 111, 1000);
+
       const trades = engine.getTrades();
       expect(trades[0]!.pnl).toBe(10);
     });
@@ -264,6 +287,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 100, 102, 90, 90, 1000);
       engine.exit('Exit');
 
+      engine.updateBar(2, 1002, 90, 95, 88, 91, 1000);
+
       const trades = engine.getTrades();
       expect(trades[0]!.pnl).toBe(10);
     });
@@ -276,6 +301,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
       engine.entry('Long', 'long', 1);
 
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       expect(engine.getEquity()).toBe(10000 - 1);
     });
 
@@ -284,6 +311,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
       engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
       const expectedCommission = 100 * 1 * 0.001;
       expect(engine.getEquity()).toBeCloseTo(10000 - expectedCommission);
@@ -297,6 +326,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
       engine.entry('Long', 'long', 1);
 
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       expect(engine.getPosition().avgPrice).toBe(103);
     });
 
@@ -305,6 +336,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
       engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
       expect(engine.getPosition().avgPrice).toBe(101);
     });
@@ -325,6 +358,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(3, 1003, 110, 105, 100, 102, 1000);
       engine.exit('Exit2');
+
+      engine.updateBar(4, 1004, 102, 105, 100, 103, 1000);
 
       const metrics = engine.getMetrics();
       expect(metrics.totalTrades).toBe(2);
@@ -388,6 +423,8 @@ describe('StrategyEngine', () => {
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
       engine.order('Buy', 'long', 1);
 
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
       expect(engine.getPosition().direction).toBe('long');
       expect(engine.getPosition().avgPrice).toBe(102);
     });
@@ -402,6 +439,8 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
       engine.closeAll();
+
+      engine.updateBar(2, 1002, 108, 110, 105, 109, 1000);
 
       expect(engine.getPosition().direction).toBe('flat');
       expect(engine.getPosition().quantity).toBe(0);

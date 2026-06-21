@@ -115,6 +115,7 @@ export interface StrategyMarker {
   barIndex: number;
   timestamp: number;
   color: string;
+  comment?: string;
 }
 
 let orderIdCounter = 0;
@@ -206,11 +207,7 @@ export class StrategyEngine {
       commission: this.config.commission,
     };
 
-    if (orderType === 'market') {
-      this.fillOrder(order, price);
-    } else {
-      this.pendingOrders.push(order);
-    }
+    this.pendingOrders.push(order);
 
     this.markers.push({
       type: 'entry',
@@ -260,11 +257,7 @@ export class StrategyEngine {
       commission: this.config.commission,
     };
 
-    if (orderType === 'market') {
-      this.fillOrder(order, price);
-    } else {
-      this.pendingOrders.push(order);
-    }
+    this.pendingOrders.push(order);
 
     this.markers.push({
       type: 'order',
@@ -339,7 +332,7 @@ export class StrategyEngine {
     return order;
   }
 
-  close(name: string = 'close'): Order | undefined {
+  close(name: string = 'close', comment?: string): Order | undefined {
     if (this.position.direction === 'flat' || this.position.quantity === 0) {
       return undefined;
     }
@@ -360,7 +353,7 @@ export class StrategyEngine {
       commission: this.config.commission,
     };
 
-    this.fillOrder(order, price);
+    this.pendingOrders.push(order);
 
     this.markers.push({
       type: 'close',
@@ -373,6 +366,7 @@ export class StrategyEngine {
       barIndex: this.barIndex,
       timestamp: this.timestamp,
       color: '#FF0000',
+      comment,
     });
 
     return order;
@@ -592,7 +586,7 @@ export class StrategyEngine {
   updateBar(
     barIndex: number,
     timestamp: number,
-    _open: number,
+    open: number,
     high: number,
     low: number,
     close: number,
@@ -602,8 +596,18 @@ export class StrategyEngine {
     this.timestamp = timestamp;
     this.currentPrice = close;
 
+    this.fillPendingMarketOrders(open);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
+  }
+
+  private fillPendingMarketOrders(open: number): void {
+    const marketOrders = this.pendingOrders.filter((o) => o.type === 'market');
+    this.pendingOrders = this.pendingOrders.filter((o) => o.type !== 'market');
+
+    for (const order of marketOrders) {
+      this.fillOrder(order, open);
+    }
   }
 
   private processPendingOrders(high: number, low: number): void {

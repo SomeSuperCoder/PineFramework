@@ -17,6 +17,7 @@ interface ExecuteResponse {
     barIndex: number;
     timestamp: number;
     color: string;
+    comment?: string;
   }>;
 }
 
@@ -227,6 +228,7 @@ export function useChartData() {
           barIndex: m.barIndex,
           timestamp: m.timestamp,
           color: m.color,
+          comment: m.comment,
         })),
       });
     } catch (error) {

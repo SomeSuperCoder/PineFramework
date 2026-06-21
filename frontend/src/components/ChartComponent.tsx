@@ -170,15 +170,15 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
 
     if (scriptResult.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
       for (const m of scriptResult.strategyMarkers) {
-        if (m.type === 'close' || m.type === 'cancel' || m.type === 'cancel_all') continue;
+        if (m.type === 'cancel' || m.type === 'cancel_all') continue;
         const isLong = m.direction === 'long';
         const isEntry = m.type === 'entry';
         allMarkers.push({
           time: Math.floor(m.timestamp / 1000) as unknown as import('lightweight-charts').Time,
           position: (isEntry ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
           shape: ((isLong ? 'arrowUp' : 'arrowDown')) as import('lightweight-charts').SeriesMarkerShape,
-          color: m.color || (isLong ? '#4caf50' : '#e91e63'),
-          text: m.name || undefined,
+          color: m.color || (isEntry ? (isLong ? '#4caf50' : '#e91e63') : (isLong ? '#f44336' : '#2196f3')),
+          text: m.comment || (isEntry ? m.name : '') || undefined,
         });
       }
     }

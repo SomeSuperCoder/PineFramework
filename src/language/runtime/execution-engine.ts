@@ -90,6 +90,7 @@ export interface StrategyMarkerEntry {
   barIndex: number;
   timestamp: number;
   color: string;
+  comment?: string;
 }
 
 export interface ExecutionMetrics {
@@ -483,35 +484,59 @@ export class ExecutionEngine {
       return NA;
     });
 
-    this.builtins.set('input.int', (defaultVal: PineValue, namedOrNamed?: PineValue): PineValue => {
-      if (typeof namedOrNamed === 'object' && namedOrNamed !== null && !Array.isArray(namedOrNamed)) {
-        const na = namedOrNamed as unknown as Record<string, PineValue>;
+    this.builtins.set('input.int', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? 0;
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
         if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'int', default: defaultVal });
       }
       return isNa(defaultVal) ? 0 : defaultVal;
     });
 
-    this.builtins.set('input.float', (defaultVal: PineValue, namedOrNamed?: PineValue): PineValue => {
-      if (typeof namedOrNamed === 'object' && namedOrNamed !== null && !Array.isArray(namedOrNamed)) {
-        const na = namedOrNamed as unknown as Record<string, PineValue>;
+    this.builtins.set('input.float', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? 0;
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
         if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'float', default: defaultVal });
       }
       return isNa(defaultVal) ? 0 : defaultVal;
     });
 
-    this.builtins.set('input.color', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
+    this.builtins.set('input.color', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? '#2196f3';
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
       return isNa(defaultVal) ? '#2196f3' : defaultVal;
     });
 
-    this.builtins.set('input.bool', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
+    this.builtins.set('input.bool', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? false;
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
       return isNa(defaultVal) ? false : defaultVal;
     });
 
-    this.builtins.set('input.string', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
+    this.builtins.set('input.string', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? '';
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
       return isNa(defaultVal) ? '' : defaultVal;
     });
 
-    this.builtins.set('input.time', (defaultVal: PineValue, _namedOrNamed?: PineValue): PineValue => {
+    this.builtins.set('input.time', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? 0;
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
       return isNa(defaultVal) ? 0 : defaultVal;
     });
 
@@ -658,13 +683,15 @@ export class ExecutionEngine {
       (nameOrNamed?: PineValue): PineValue => {
         if (!this.strategyEngine) return NA;
         let closeName = 'close';
+        let comment: string | undefined;
         if (typeof nameOrNamed === 'string') {
           closeName = nameOrNamed;
         } else if (typeof nameOrNamed === 'object' && nameOrNamed !== null && !Array.isArray(nameOrNamed)) {
           const na = nameOrNamed as unknown as Record<string, PineValue>;
           if (typeof na.id === 'string') closeName = na.id;
+          if (typeof na.comment === 'string') comment = na.comment;
         }
-        this.strategyEngine.close(closeName);
+        this.strategyEngine.close(closeName, comment);
         return NA;
       },
     );
@@ -879,6 +906,7 @@ export class ExecutionEngine {
       barIndex: m.barIndex,
       timestamp: m.timestamp,
       color: m.color,
+      comment: m.comment,
     }));
   }
 
