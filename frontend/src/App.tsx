@@ -20,6 +20,7 @@ function App() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [dataVersion, setDataVersion] = useState(0);
 
   const {
     candles,
@@ -34,6 +35,7 @@ function App() {
   } = useChartData();
 
   useEffect(() => {
+    setDataVersion((v) => v + 1);
     fetchOHLCV(symbol, timeframe);
     subscribe(symbol, timeframe);
   }, [symbol, timeframe, fetchOHLCV, subscribe]);
@@ -65,7 +67,7 @@ function App() {
       </header>
 
       <main className="main-content">
-        <ChartComponent data={candles} scriptResult={scriptResult} />
+        <ChartComponent data={candles} scriptResult={scriptResult} dataVersion={dataVersion} />
       </main>
 
       <ErrorConsole errors={errors} onClear={() => setErrors([])} />

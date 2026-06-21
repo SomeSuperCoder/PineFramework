@@ -5,9 +5,10 @@ import type { CandlestickData, ScriptResult } from '../types';
 interface ChartComponentProps {
   data: CandlestickData[];
   scriptResult: ScriptResult | null;
+  dataVersion: number;
 }
 
-export function ChartComponent({ data, scriptResult }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion }: ChartComponentProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -105,7 +106,8 @@ export function ChartComponent({ data, scriptResult }: ChartComponentProps) {
 
     candlestickRef.current.setData(candleData);
     volumeRef.current.setData(volumeData);
-  }, [data]);
+    chartRef.current?.timeScale().fitContent();
+  }, [data, dataVersion]);
 
   useEffect(() => {
     if (!chartRef.current || !scriptResult) return;
