@@ -127,10 +127,12 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
       });
 
       if (series) {
-        const lineData = plot.data.map((d) => ({
-          time: d.time as unknown as import('lightweight-charts').Time,
-          value: d.value,
-        }));
+        const lineData = plot.data
+          .filter((d): d is { time: number; value: number } => d.value !== null)
+          .map((d) => ({
+            time: d.time as unknown as import('lightweight-charts').Time,
+            value: d.value,
+          }));
         series.setData(lineData);
         seriesRefs.current.set(`plot_${index}`, series);
       }
