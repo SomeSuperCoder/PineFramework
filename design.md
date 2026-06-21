@@ -62,7 +62,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 │                                                                             │
 │  Layer 7: Frontend                                                          │
 │    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
-│    │ Web App  │→│Code Editor│→│  Chart UI    │→│ Error Console│             │
+│    │ Web App  │→│Code Editor│→│Canvas Chart  │→│ Error Console│             │
 │    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
 │                                                                             │
 │  Layer 8: Backend & Integration                                             │
@@ -173,29 +173,28 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Real-time update propagation
 
 #### 8. Plot Engine
-- **Responsibility**: Render TradingView-like plots and visualizations
+- **Responsibility**: Produce plot/shape/fill/marker data structures consumed by the Canvas Charting Library
 - **Plot Functions**:
   - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross) — supports named arguments for color, linewidth, title; auto-detects title from variable names
-  - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross, flag, labelup, labeldown) — rendered as chart markers via Lightweight Charts marker API instead of line series
+  - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross) — produces shape data with bar index, position, and color for canvas rendering
   - `plotchar()`: Character markers with custom characters
   - `plotarrow()`: Directional arrows with colorup/colordown
   - `hline()`: Horizontal lines at price levels with linestyle (solid, dotted, dashed)
 - **Background & Bar Coloring**:
   - `bgcolor()`: Color chart background with specified colors
   - `barcolor()`: Color chart candles/bars with specified colors
-  - `fill()`: Fill area between two plots or hlines — rendered as area series with configurable colors, accepts named `color` argument
+  - `fill()`: Fill area between two plots or hlines — produces fill polygon data for canvas rendering, accepts named `color` argument
 - **Key Features**:
   - Style support (color, linewidth, transparency, offset, editable, show_last, display)
   - Z-ordering for overlapping plots
   - Visual fidelity matching TradingView
-  - Performance optimization for rendering
   - Support for all plot.style_* enums
   - Support for size enums (tiny, small, normal, large, huge, auto)
   - Support for location enums (abovebar, belowbar, top, bottom, absolute)
   - Support for all Pine plot parameters
   - Auto-detection of plot titles from variable names
   - Named arguments support for all plot functions
-  - Null value filtering before rendering to prevent chart errors
+  - Null value filtering before rendering
   - Color, shape, and location namespace syntax support
 
 #### 9. Drawing Engine
@@ -217,6 +216,68 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Memory management for large numbers of objects
   - Enforcement of max_labels_count, max_lines_count, max_boxes_count, max_polylines_count limits
   - Support for all Pine drawing styling and positioning options
+
+#### 8a. Canvas Charting Library
+- **Responsibility**: Render all chart elements on an HTML5 Canvas with full programmatic control over every pixel
+- **Replaces**: Lightweight Charts third-party dependency
+- **Architecture**:
+  ```
+  PineChart (main orchestrator)
+  ├── CoordinateSystem (data-space ↔ pixel-space transforms)
+  ├── Viewport (visible range, zoom, pan state)
+  ├── LayoutManager (chart area, volume area, price scale, time scale regions)
+  ├── Renderers
+  │   ├── CandlestickRenderer (OHLCV bodies + wicks)
+  │   ├── VolumeRenderer (volume histogram bars)
+  │   ├── LineRenderer (line, stepline, dotted, dashed styles)
+  │   ├── AreaRenderer (fill between plots)
+  │   ├── MarkerRenderer (shape markers: arrows, circles, squares, diamonds)
+  │   ├── StrategyMarkerRenderer (entry/exit/close markers)
+  │   ├── HLineRenderer (horizontal lines)
+  │   ├── DrawingLineRenderer (drawing lines)
+  │   ├── GridRenderer (price/time grid lines)
+  │   ├── AxisRenderer (price scale labels, time scale labels)
+  │   ├── CrosshairRenderer (crosshair + tooltip)
+  │   └── BackgroundRenderer (background color)
+  └── InteractionHandler (mouse/touch events for zoom, pan, hover)
+  ```
+- **Key Features**:
+  - Coordinate transformation system mapping (barIndex, price) → (x, y) pixels
+  - DevicePixelRatio-aware rendering for HiDPI/Retina displays
+  - Double buffering via offscreen canvas to prevent flicker
+  - Dirty flag pattern: only redraw when state changes
+  - requestAnimationFrame-based render loop
+  - Batched canvas draw calls by style (color, lineWidth) to minimize state changes
+  - Path batching for line plots (single beginPath/stroke per style group)
+  - Viewport management with overscan buffer (only render visible bars)
+  - Configurable bar spacing (pixels per bar) for zoom
+  - Automatic price scale tick calculation
+  - Multiple price scales (main + volume)
+  - Momentum-based inertial scrolling
+  - ResizeObserver for responsive container handling
+  - Event system: onCrosshairMove, onVisibleRangeChange, onResize
+- **API**:
+  - `createChart(container, options)` → chart instance
+  - `chart.setCandles(data)`, `chart.setVolume(data)`
+  - `chart.addPlotSeries(name, options)` → series handle
+  - `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setHLines(hlines)`
+  - `chart.removeSeries(name)`
+  - `chart.timeScale()` → { fitContent(), scrollTo(), scrollToDate() }
+  - `chart.applyOptions(options)`, `chart.remove()`
+- **Rendering Layers** (back to front):
+  1. Background (bgcolor)
+  2. Grid lines
+  3. Volume bars
+  4. Fill areas (polygons between plots)
+  5. Candlesticks
+  6. Bar color overrides (barcolor)
+  7. Horizontal lines (hline)
+  8. Line plots
+  9. Shape markers
+  10. Strategy markers
+  11. Drawing lines
+  12. Axes (price scale, time scale)
+  13. Crosshair + tooltip
 
 #### 10. Strategy Engine
 - **Responsibility**: Execute and backtest trading strategies with visual markers
@@ -310,31 +371,32 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Script type validation and compatibility checking
 
 #### 16. Frontend Web Application
-- **Responsibility**: Provide interactive web-based interface for Pine Script development
+- **Responsibility**: Provide interactive web-based interface for Pine Script development using a custom canvas-based charting library
 - **Key Components**:
   - **Web Application**: Main application shell with routing and state management
   - **Code Editor**: Monaco/CodeMirror-based editor with Pine Script syntax highlighting and auto-completion
-  - **Chart UI**: Interactive candlestick chart with zoom/pan, timeframe/symbol selection
+  - **Canvas Chart**: Custom HTML5 Canvas charting library (see section 8a) rendering candlesticks, volume, plots, shapes, fills, strategy markers, crosshair
   - **Error Console**: Real-time error logging with line numbers and descriptions
 - **Key Features**:
-  - Realtime candlestick chart with OHLCV data from Backend
+  - Realtime candlestick chart rendered entirely on HTML5 Canvas
   - Popup code editor for Pine Script entry
-  - Sends script to Backend for compilation/execution, renders returned results
+  - Sends script to Backend for compilation/execution, renders returned results on canvas
   - Error logging for compilation and runtime errors
   - Realtime chart updates with WebSocket data streaming from Backend
-  - Zoom/pan on chart
+  - Zoom (mouse wheel, pinch) and pan (click-and-drag) on canvas
+  - Crosshair cursor with OHLCV and indicator value tooltip
   - Chart legend with indicator names and values
   - Timeframe and symbol selection controls
-  - Render all Pine Script visual outputs (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
+  - Render all Pine Script visual outputs on canvas (candlesticks, volume, plots, shapes, fills, strategy markers, hlines, drawing lines)
   - Multiple concurrent indicators on same chart
-  - Smooth rendering performance with large datasets
+  - Smooth 60fps rendering with requestAnimationFrame and dirty flag optimization
   - Syntax highlighting for Pine Script
   - Auto-completion for Pine Script keywords and functions
   - Save and load user scripts
   - Workspace package importing `pine-framework` directly
-  - Renders shapes as chart markers (arrowUp, arrowDown, circle, square) using Lightweight Charts marker API
+  - Renders shapes as canvas-drawn vector markers at correct bar/price positions
   - Renders strategy entry/exit/close markers with directional arrows and color coding
-  - Renders fill() as area series between plot references
+  - Renders fill() as filled polygons between plot lines
   - Auto-focuses chart to new symbol's price range on pair switch
   - Filters invalid data points (time=0, non-finite values) before rendering
   - Auto-assigns distinct colors to plot lines when not explicitly specified
@@ -504,57 +566,76 @@ pine-framework (engine library)
 
 #### 1. Visual Element Hierarchy
 ```
-Chart Canvas
-├── Background Layer
-│   ├── bgcolor() renders
-│   └── Background colors
-├── Plot Layer
-│   ├── Line Plots (plot.style_line, plot.style_stepline)
-│   ├── Histogram Plots (plot.style_histogram)
-│   ├── Column Plots (plot.style_columns)
-│   ├── Area Plots (plot.style_area, plot.style_areabr)
-│   ├── Circle Plots (plot.style_circles)
-│   ├── Cross Plots (plot.style_cross)
-│   ├── Shape Markers (plotshape → Lightweight Charts markers: arrowUp, arrowDown, circle, square)
-│   ├── Character Plots (plotchar)
-│   └── Arrow Plots (plotarrow)
-├── Fill Layer
-│   ├── fill() between plots (rendered as area series)
+HTML5 Canvas Element
+├── Background Layer (BackgroundRenderer)
+│   ├── bgcolor() solid color fill
+│   └── Background color
+├── Grid Layer (GridRenderer)
+│   ├── Horizontal grid lines at price scale ticks
+│   └── Vertical grid lines at time scale ticks
+├── Volume Layer (VolumeRenderer)
+│   └── Volume bars (bottom 20% of chart)
+├── Fill Layer (AreaRenderer)
+│   ├── fill() between two plots (filled polygon)
 │   └── fill() between hlines
-├── Drawing Layer
+├── Candlestick Layer (CandlestickRenderer)
+│   ├── Candle bodies (rectangles: open-close range)
+│   ├── Candle wicks (lines: high-low range)
+│   └── Bar color overrides (barcolor())
+├── HLine Layer (HLineRenderer)
+│   └── Horizontal lines at price levels
+├── Plot Layer (LineRenderer)
+│   ├── Line Plots (solid, dotted, dashed)
+│   ├── Stepline Plots
+│   ├── Histogram Plots (vertical lines from baseline)
+│   ├── Area Plots (filled below line)
+│   ├── Circle Plots (small circles at data points)
+│   └── Cross Plots (cross marks at data points)
+├── Shape Marker Layer (MarkerRenderer)
+│   ├── Arrow Up/Down (triangular pointers)
+│   ├── Triangle Up/Down
+│   ├── Circle, Square, Diamond
+│   ├── Cross, XCross
+│   └── Text labels alongside markers
+├── Strategy Marker Layer (StrategyMarkerRenderer)
+│   ├── Entry markers (long=green arrowUp, short=red arrowDown)
+│   ├── Exit markers (above bar, colored by direction)
+│   ├── Close markers (distinct from entry/exit)
+│   └── Text labels (entry name, comment)
+├── Drawing Layer (DrawingLineRenderer)
 │   ├── Lines (line.new)
 │   ├── Boxes (box.new)
 │   ├── Labels (label.new)
 │   ├── Tables (table.new)
 │   ├── Line Fills (linefill.new)
 │   └── Polylines (polyline.new)
-├── Overlay Layer
-│   ├── Hlines (hline)
-│   └── Strategy Markers (strategy.entry, strategy.exit, strategy.close → Lightweight Charts markers with directional arrows)
-├── Bar Coloring Layer
-│   └── barcolor() renders
-├── UI Layer
-│   ├── Input Controls
-│   ├── Legend
-│   ├── Tooltips
-│   └── Alert Conditions (alertcondition)
-└── Frontend Layer
-    ├── Web Application Shell
-    ├── Code Editor (Popup)
-    ├── Chart Controls
-    └── Error Console
+├── Axis Layer (AxisRenderer)
+│   ├── Price scale labels (right side)
+│   └── Time scale labels (bottom)
+└── Crosshair Layer (CrosshairRenderer)
+    ├── Vertical line through hovered bar
+    ├── Horizontal line at hovered price
+    ├── Price/time labels on axes
+    └── Data window tooltip (OHLCV + indicator values)
 ```
 
 #### 2. Rendering Pipeline
 ```
-Visual Data → Layout Calculation → Style Application → Z-Order Sorting → Canvas Drawing → Display Output
+Data Change / Interaction → Dirty Flag Set → requestAnimationFrame Callback
+  → Clear Canvas → Apply Coordinate Transforms → Render Layers in Order
+    → Background → Grid → Volume → Fills → Candles → HLines → Plots
+    → Shapes → Strategy Markers → Drawings → Axes → Crosshair
+  → Swap Buffers (double buffer) → Display
 ```
 
 #### 3. Performance Optimization
-- Batched rendering operations
-- Incremental updates for realtime data
-- Caching of visual elements
-- GPU acceleration where available
+- Double buffering via offscreen canvas to prevent flicker
+- Dirty flag pattern: only redraw when state changes
+- Batched canvas draw calls by style (color, lineWidth) to minimize state changes
+- Path batching for line plots (single beginPath/stroke per style group)
+- Viewport-based rendering with overscan buffer (only render visible bars)
+- requestAnimationFrame for vsync-aligned render cycles
+- DevicePixelRatio-aware rendering for HiDPI/Retina displays
 - Level-of-detail (LOD) rendering for large datasets
 - Object pooling for drawing objects
 - Viewport-based rendering (only render visible elements)
@@ -900,11 +981,11 @@ interface RendererPlugin {
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend Application                      │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
-│  │  Web App     │ │ Code Editor  │ │  Chart UI    │        │
-│  │  (React)     │ │ (Textarea→   │ │ (Lightweight │        │
-│  │              │ │  Monaco)     │ │  Charts)     │        │
-│  └──────────────┘ └──────────────┘ └──────────────┘        │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐ │
+│  │  Web App     │ │ Code Editor  │ │  Canvas Chart        │ │
+│  │  (React)     │ │ (Textarea→   │ │ (Custom HTML5 Canvas │ │
+│  │              │ │  Monaco)     │ │  Charting Library)   │ │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘ │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
 │  │Error Console │ │State Manager │ │ WebSocket    │        │
 │  │              │ │ (React Hooks)│ │ Client       │        │
@@ -916,7 +997,7 @@ interface RendererPlugin {
 ```
 User Input (Code) → Code Editor → POST /api/execute → Backend (Pine Engine)
                                     ↓
-                              Visual Output → Frontend (Chart Render) → Display
+                              Visual Output → PineChart.setData() → Canvas Render Loop → Display
                                     ↓
                               Error Handler → Error Console
 ```
@@ -928,7 +1009,7 @@ User Input (Code) → Code Editor → POST /api/execute → Backend (Pine Engine
 
 #### 4. Frontend Features
 - **Code Editor**: Textarea (MVP) → Monaco Editor with Pine Script syntax highlighting, auto-completion, error markers
-- **Chart**: Lightweight Charts with candlestick rendering, indicator overlays
+- **Chart**: Custom Canvas Charting Library (section 8a) with candlestick rendering, volume, indicator overlays, shapes, fills, strategy markers, crosshair, zoom/pan
 - **Error Console**: Real-time error display with source mapping
 - **State Management**: React useState/useRef hooks
 - **Responsive Design**: Mobile and desktop support

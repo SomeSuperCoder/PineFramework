@@ -474,70 +474,138 @@ This implementation plan outlines the step-by-step development of a production-g
     - Verify script type compatibility checking
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
 
-- [x] 21. Implement Frontend Web Application
-  - [x] 21.1 Create frontend application shell
-    - Set up React/Vue project with TypeScript
-    - Configure build system (Vite/Webpack)
-    - Set up routing and state management (Redux/Pinia)
-    - Create responsive layout with chart and editor panels
-    - _Requirements: 17.1, 17.8, 17.9, 17.10, 17.11_
+- [ ] 21. Build Canvas Charting Library
+  - [ ] 21.1 Create chart library core and coordinate system
+    - Create `frontend/src/chart/PineChart.ts` main orchestrator class
+    - Implement `CoordinateSystem` mapping (barIndex, price) ↔ (x, y) pixel space
+    - Implement `Viewport` state management (visible range, bar spacing, zoom level)
+    - Implement `LayoutManager` defining chart area, volume area, price scale, time scale regions
+    - Add devicePixelRatio-aware canvas scaling for HiDPI/Retina displays
+    - Add ResizeObserver for responsive container handling
+    - Add dirty flag pattern for lazy re-rendering
+    - _Requirements: 21.1, 21.2, 21.3, 21.5, 21.6, 21.10, 21.11, 21.72_
 
-  - [x] 21.2 Implement code editor component
-    - Integrate Monaco Editor or CodeMirror
-    - Add Pine Script syntax highlighting
-    - Implement auto-completion for Pine Script keywords and functions
-    - Create popup/modal editor that opens on button click
-    - Build save/load script functionality
-    - _Requirements: 17.2, 17.3, 17.16, 17.17, 17.18_
+  - [ ] 21.2 Implement CandlestickRenderer
+    - Render OHLCV candlesticks with body rectangles and wick lines
+    - Color bodies/wicks green (#4caf50) for bullish, red (#e94560) for bearish
+    - Support bar color overrides from barcolor() output
+    - Configurable body width as percentage of bar spacing (default 70%)
+    - _Requirements: 21.13, 21.14, 21.15, 21.16_
 
-  - [x] 21.3 Implement chart component
-    - Integrate Lightweight Charts or TradingView Charting Library
-    - Build realtime candlestick chart with OHLCV data
-    - Implement zoom/pan functionality
-    - Add timeframe and symbol selection controls
-    - Create chart legend with indicator names and values
-    - _Requirements: 17.1, 17.8, 17.9, 17.10, 17.11, 17.12_
+  - [ ] 21.3 Implement VolumeRenderer
+    - Render volume bars in dedicated bottom area (20% of chart height)
+    - Color bars semi-transparently matching candle direction
+    - Scale bar heights relative to maximum visible volume
+    - _Requirements: 21.17, 21.18, 21.19_
 
-  - [x] 21.4 Implement error console component
-    - Build real-time error logging panel
-    - Display error messages with line numbers and descriptions
-    - Handle compilation errors from Pine Script engine
-    - Handle runtime errors from Pine Script execution
-    - _Requirements: 17.5, 17.6, 17.7_
+  - [ ] 21.4 Implement LineRenderer for plots
+    - Render line plots as connected line segments between data points
+    - Support solid, dotted, dashed line styles with configurable width (1-4px)
+    - Implement stepline rendering (horizontal + vertical segments)
+    - Implement histogram rendering (vertical lines from baseline)
+    - Implement circle plots (small filled circles at data points)
+    - Implement cross plots (cross marks at data points)
+    - Filter null values, breaking lines at gaps
+    - Batch draw calls by style (single beginPath/stroke per style group)
+    - _Requirements: 21.20, 21.21, 21.22, 21.23, 21.24, 21.25, 21.26, 21.27, 21.28, 21.29_
 
-  - [x] 21.5 Integrate Pine Script engine with frontend
-    - Connect code editor to Pine Script compilation pipeline
-    - Render Pine Script visual outputs on chart (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
-    - Support multiple concurrent indicators on same chart
-    - Implement smooth rendering performance with large datasets
-    - _Requirements: 17.4, 17.13, 17.14, 17.15_
+  - [ ] 21.5 Implement AreaRenderer for fills
+    - Render fills as filled polygons between two line series
+    - Compute polygon by connecting upper line forward and lower line backward
+    - Apply configurable fill color with alpha transparency
+    - Clip fill polygons to visible chart area
+    - _Requirements: 21.37, 21.38, 21.39, 21.40_
 
-  - [x] 21.6 Implement WebSocket connection for realtime data
-    - Set up WebSocket client for data streaming
-    - Handle realtime chart updates
-    - Implement reconnection logic
-    - Add data buffering for smooth updates
-    - _Requirements: 17.8, 17.12_
+  - [ ] 21.6 Implement MarkerRenderer for shapes
+    - Render shape markers as vector-drawn icons at (barIndex, price) positions
+    - Implement shapes: arrowUp, arrowDown, triangleUp, triangleDown, circle, square, diamond, cross, xcross
+    - Draw arrow shapes as triangular pointers with stem
+    - Draw diamond as rotated square using four line segments
+    - Position markers abovebar/belowbar with configurable margin offset
+    - Support text labels alongside markers
+    - _Requirements: 21.30, 21.31, 21.32, 21.33, 21.34, 21.35, 21.36_
 
-  - [x]* 21.7 Write unit tests for frontend components
-    - Test code editor rendering and syntax highlighting
-    - Validate chart component with sample data
-    - Test error console display and formatting
-    - Verify WebSocket connection handling
-    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7_
+  - [ ] 21.7 Implement StrategyMarkerRenderer
+    - Render entry markers as colored arrows below bar (long=green arrowUp, short=red arrowDown)
+    - Render exit markers as colored arrows above bar
+    - Render close markers with distinct styling
+    - Support text labels showing entry name or comment
+    - Skip cancel/cancel_all type markers
+    - _Requirements: 21.41, 21.42, 21.43, 21.44, 21.45_
 
-  - [x]* 21.8 Write end-to-end tests for frontend
-    - Test complete user workflow (open editor, write code, render on chart)
-    - Validate error handling and logging
-    - Test realtime chart updates
-    - Verify save/load script functionality
-    - _Requirements: 17.1, 17.2, 17.3, 17.4, 17.5, 17.6, 17.7, 17.8, 17.18_
+  - [ ] 21.8 Implement HLineRenderer and DrawingLineRenderer
+    - Render horizontal lines across full visible width at price level
+    - Support solid, dotted, dashed line styles
+    - Render drawing lines between two or more points
+    - _Requirements: 21.46, 21.47, 21.48_
 
-- [x] 22. Checkpoint - Frontend validation
-  - Ensure frontend displays realtime candle chart correctly
-  - Verify code editor opens as popup and allows Pine Script entry
-  - Test compile and render on editor close
-  - Validate error logging for compilation and runtime errors
+  - [ ] 21.9 Implement GridRenderer and AxisRenderer
+    - Render horizontal grid lines at price scale tick intervals
+    - Render vertical grid lines at time scale major tick intervals
+    - Render price scale labels on right side with configurable precision
+    - Render time scale labels on bottom with adaptive formatting
+    - Calculate automatic tick spacing for both axes
+    - _Requirements: 21.53, 21.54, 21.55, 21.11, 21.12_
+
+  - [ ] 21.10 Implement CrosshairRenderer
+    - Render vertical line through hovered bar and horizontal line at hovered price
+    - Snap vertical line to nearest bar center
+    - Display price and time labels on axes at crosshair position
+    - Render data window tooltip showing OHLCV and indicator values
+    - _Requirements: 21.49, 21.50, 21.51, 21.52_
+
+  - [ ] 21.11 Implement InteractionHandler for zoom and pan
+    - Handle mouse wheel zoom centered on cursor position
+    - Handle pinch-to-zoom on touch devices
+    - Handle click-and-drag horizontal panning on chart area
+    - Handle mouse drag vertical zoom/pan on price scale area
+    - Implement momentum-based inertial scrolling
+    - Enforce min/max bar spacing limits (2px to 100px)
+    - _Requirements: 21.56, 21.57, 21.58, 21.59, 21.60, 21.61_
+
+  - [ ] 21.12 Implement PineChart API and event system
+    - Expose `createChart(container, options)` factory function
+    - Expose `chart.setCandles(data)`, `chart.setVolume(data)`
+    - Expose `chart.addPlotSeries(name, options)` returning series handle
+    - Expose `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setHLines(hlines)`
+    - Expose `chart.removeSeries(name)`
+    - Expose `chart.timeScale()` with fitContent(), scrollTo(), scrollToDate()
+    - Expose `chart.applyOptions(options)`, `chart.remove()`
+    - Emit events: onCrosshairMove, onVisibleRangeChange, onResize
+    - _Requirements: 21.82, 21.83, 21.84, 21.85, 21.86, 21.87, 21.88, 21.89, 21.90, 21.91, 21.92, 21.93, 21.94_
+
+  - [ ] 21.13 Implement double buffering and render loop
+    - Create offscreen canvas for double buffering
+    - Implement requestAnimationFrame-based render loop
+    - Only redraw when dirty flag is set
+    - _Requirements: 21.67, 21.71_
+
+  - [ ] 21.14 Implement theming and styling options
+    - Support configurable background color, text color, grid color, border colors
+    - Default dark theme (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+    - Support configurable font family and size for labels and tooltips
+    - _Requirements: 21.95, 21.96, 21.97_
+
+  - [ ]* 21.15 Write unit tests for canvas charting library
+    - Test coordinate system transforms (data space ↔ pixel space)
+    - Test viewport calculations (visible range, zoom level)
+    - Test layout manager region calculations
+    - Test candlestick rendering with known data
+    - Test line rendering with various styles
+    - Test marker positioning (abovebar/belowbar)
+    - Test fill polygon computation
+    - Test crosshair snapping to bar
+    - Test zoom/pan interaction handling
+    - _Requirements: 21.1-21.97_
+
+- [ ] 22. Checkpoint - Canvas Charting Library validation
+  - Ensure canvas renders candlesticks, volume, and plot lines correctly
+  - Verify zoom (mouse wheel) and pan (drag) work smoothly
+  - Test crosshair shows correct OHLCV values on hover
+  - Verify shape markers render at correct positions (abovebar/belowbar)
+  - Verify fill polygons render between plot lines
+  - Verify strategy markers render with correct colors and directions
+  - Test resize handling maintains chart proportions
   - Ask the user if questions arise.
 
 - [x] 23. Restructure project as pnpm monorepo
@@ -680,43 +748,47 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate reconnection on disconnect
   - Ask the user if questions arise.
 
-- [x] 29. Update Frontend to Integrate with Backend
-  - [x] 29.1 Update data fetching to use Backend REST API
+- [ ] 29. Update Frontend to Integrate with Backend
+  - [ ] 29.1 Update data fetching to use Backend REST API
     - Replace mock data generation with `GET /api/ohlcv` calls
     - Pass symbol, interval, and limit parameters
     - Handle loading states and error responses
     - _Requirements: 17.1, 17.12_
   
-  - [x] 29.2 Update WebSocket connection to Backend
+  - [ ] 29.2 Update WebSocket connection to Backend
     - Connect to `ws://localhost:8080/ws` (Backend)
     - Send subscribe/unsubscribe messages on symbol/interval change
-    - Handle incoming kline messages and update chart
+    - Handle incoming kline messages and update PineChart canvas
     - _Requirements: 17.8, 17.12_
   
-  - [x] 29.3 Send scripts to Backend for execution
+  - [ ] 29.3 Send scripts to Backend for execution
     - On editor close or Run button, POST script to `/api/execute`
-    - Render returned plot data, shapes, and drawings on chart
+    - Pass returned plot data, shapes, fills, strategyMarkers to PineChart API
     - Display compilation/runtime errors in error console
     - _Requirements: 17.4, 17.5, 17.6, 17.7, 17.13_
   
-  - [x] 29.4 Update symbol/timeframe controls
+  - [ ] 29.4 Update symbol/timeframe controls
     - Fetch available symbols from `GET /api/symbols`
     - Populate symbol and interval dropdowns dynamically
     - _Requirements: 17.11_
   
-  - [x] 29.5 Write integration tests for frontend-backend
-    - Test end-to-end flow: select symbol → load data → write script → execute → render
+  - [ ] 29.5 Write integration tests for frontend-backend
+    - Test end-to-end flow: select symbol → load data → write script → execute → render on canvas
     - Test error display for compilation failures
     - Test realtime chart updates
     - _Requirements: 17.1, 17.4, 17.8_
 
-- [x] 30. Final Checkpoint - Full System Validation
+- [ ] 30. Final Checkpoint - Full System Validation with Canvas Chart
   - Start entire system: `pnpm dev` from root
-  - Select BTCUSDT, 1m interval — verify real candles load
-  - Write simple SMA indicator — verify it renders on chart
+  - Select BTCUSDT, 1m interval — verify real candles render on canvas
+  - Write simple SMA indicator — verify line plot renders on canvas
+  - Write plotshape script — verify shape markers render on canvas
+  - Write fill script — verify fill polygon renders between plots
+  - Write strategy script — verify entry/exit markers render on canvas
+  - Test crosshair hover shows OHLCV + indicator values
+  - Test zoom (scroll wheel) and pan (drag) on canvas
   - Test error handling with invalid Pine Script
   - Test realtime updates as new candles arrive
-  - Test zoom/pan on chart
   - Verify all monorepo scripts work (build, test, lint)
   - Ask the user if questions arise.
 
@@ -762,16 +834,16 @@ This implementation plan outlines the step-by-step development of a production-g
     - _Requirements: 4.7, 4.8, 4.9, 4.10_
 
 - [x] 33. Enhance Plot Engine with Markers, Fills, and Auto-Detection
-  - [x] 33.1 Render plotshape() as chart markers
-    - Replace line series rendering with Lightweight Charts marker API
-    - Map Pine shape names to Lightweight Charts marker shapes
+  - [ ] 33.1 Render plotshape() as chart markers via canvas
+    - Produce shape data structures with bar index, position, and color for canvas rendering
+    - Map Pine shape names to vector-drawn shapes (arrows, circles, squares, diamonds)
     - Support abovebar/belowbar positioning
     - _Requirements: 6.16_
   
-  - [x] 33.2 Implement fill() as area series rendering
-    - Render fill() between two plot references as area series
+  - [ ] 33.2 Implement fill() as canvas polygon rendering
+    - Produce fill data structures with upper/lower plot references and color
     - Support named `color` argument for fill color
-    - Merge plot data from both references for area rendering
+    - Merge plot data from both references for polygon computation
     - _Requirements: 6.18, 6.20_
   
   - [x] 33.3 Auto-detect plot titles from variable names
@@ -784,7 +856,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Encode color and linewidth in output key metadata
     - _Requirements: 6.15_
   
-  - [x] 33.5 Add color, shape, and location namespace builtins
+  - [ ] 33.5 Add color, shape, and location namespace builtins
     - Implement `color.blue`, `color.red`, `color.green` etc. resolving to hex values
     - Implement `shape.triangleup`, `shape.circle` etc. returning string identifiers
     - Implement `location.abovebar`, `location.belowbar` etc. returning string identifiers
@@ -792,9 +864,9 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add `alertcondition()` builtin (no-op)
     - _Requirements: 6.19, 15.8, 15.9_
   
-  - [x]* 33.6 Write tests for plot enhancements
-    - Test plotshape() marker rendering with various shapes
-    - Test fill() area rendering between plots
+  - [ ]* 33.6 Write tests for plot enhancements
+    - Test plotshape() shape data generation with various shapes
+    - Test fill() data generation between plots
     - Test auto-detection of plot titles
     - Test named arguments in plot calls
     - Test color/shape/location namespace resolution
@@ -856,26 +928,26 @@ This implementation plan outlines the step-by-step development of a production-g
     - Map engine types to API response format
     - _Requirements: 19.14_
   
-  - [x] 35.3 Render shapes as markers in frontend
+  - [ ] 35.3 Render shapes as markers in frontend via PineChart
     - Parse shape data from execute response
-    - Render as Lightweight Charts markers with correct shapes and colors
+    - Pass to chart.setMarkers() for canvas-drawn vector markers at correct bar/price positions
     - _Requirements: 17.19_
   
-  - [x] 35.4 Render strategy markers in frontend
+  - [ ] 35.4 Render strategy markers in frontend via PineChart
     - Parse strategyMarkers from execute response
-    - Render entry/exit/close markers with directional arrows
+    - Pass to chart.setMarkers() for canvas-drawn directional arrows
     - Color code by direction (green for long entry, red for short entry, etc.)
     - _Requirements: 17.20_
   
-  - [x] 35.5 Render fills in frontend
+  - [ ] 35.5 Render fills in frontend via PineChart
     - Parse fill data from execute response
-    - Render as area series between plot references
+    - Pass to chart.setFills() for canvas-rendered filled polygons between plot lines
     - _Requirements: 17.21_
   
-  - [x]* 35.6 Write tests for full stack integration
-    - Test shapes flow from engine to frontend rendering
-    - Test strategy markers flow from engine to frontend rendering
-    - Test fills flow from engine to frontend rendering
+  - [ ]* 35.6 Write tests for full stack integration
+    - Test shapes flow from engine to canvas rendering
+    - Test strategy markers flow from engine to canvas rendering
+    - Test fills flow from engine to canvas rendering
     - _Requirements: 3.8, 3.9, 3.10, 17.19, 17.20, 17.21_
 
 - [x] 36. Fix Execution Engine Edge Cases
@@ -920,28 +992,28 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test str.format() with mixed argument types
     - _Requirements: 12.8, 13.8, 13.9, 13.4_
 
-- [x] 38. Enhance Frontend Chart Rendering
-  - [x] 38.1 Auto-focus chart to new symbol's price range
+- [ ] 38. Enhance Frontend Chart Rendering
+  - [ ] 38.1 Auto-focus chart to new symbol's price range
     - Call fitContent() on time scale when symbol or timeframe changes
     - Add dataVersion state to trigger re-render on symbol switch
     - _Requirements: 17.22_
   
-  - [x] 38.2 Filter invalid data points
+  - [ ] 38.2 Filter invalid data points
     - Filter out candles with time=0 or non-finite OHLC values
-    - Filter out null plot values before passing to lightweight-charts
+    - Filter out null plot values before passing to PineChart canvas renderer
     - _Requirements: 17.23_
   
-  - [x] 38.3 Auto-assign distinct colors to plot lines
+  - [ ] 38.3 Auto-assign distinct colors to plot lines
     - When plot color is not specified, cycle through a predefined color palette
     - Parse color and linewidth from output key metadata
     - _Requirements: 17.24, 17.25_
   
-  - [x] 38.4 Handle non-JSON server responses
+  - [ ] 38.4 Handle non-JSON server responses
     - Check response.ok before parsing JSON
     - Show server error status and text on non-200 responses
     - _Requirements: 19.15_
   
-  - [x]* 38.5 Write tests for frontend enhancements
+  - [ ]* 38.5 Write tests for frontend enhancements
     - Test chart auto-focus on symbol switch
     - Test data filtering for invalid points
     - Test auto-assignment of plot colors
@@ -977,14 +1049,14 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test scripts mixing indicators and strategies
     - _Requirements: 11.8, 11.9_
 
-- [x] 41. Checkpoint - Full Feature Validation
+- [ ] 41. Checkpoint - Full Feature Validation with Canvas Chart
   - Verify named arguments work in function calls
   - Verify ta.sma(), ta.ema(), ta.crossover(), ta.crossunder() produce correct results
-  - Verify plotshape renders as markers on chart
-  - Verify fill renders as area series
+  - Verify plotshape produces shape data for canvas rendering
+  - Verify fill produces fill data for canvas polygon rendering
   - Verify strategy entry reversal works correctly
   - Verify market orders fill at next bar open
-  - Verify shapes, fills, strategyMarkers render on chart
+  - Verify shapes, fills, strategyMarkers render correctly on canvas chart
   - Verify 25 integration tests pass
   - Ask the user if questions arise.
 
@@ -998,6 +1070,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - TypeScript is the implementation language as selected by the user
 - Tasks 23-30 implement the monorepo restructuring, backend server, Bybit integration, and frontend-backend wiring
 - Tasks 31-41 implement enhancements: named args, real TA functions, plotshape markers, fill rendering, strategy integration, execution edge case fixes, frontend improvements, backend hardening, and complex integration tests
+- Task 21 (canvas charting library) replaces the previous lightweight-charts integration with a custom HTML5 Canvas rendering engine for full control over shapes, fills, markers, and all visual elements
 
 ## Task Dependency Graph
 
@@ -1025,8 +1098,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 18, "tasks": ["18.4"] },
     { "id": 19, "tasks": ["20.1"] },
     { "id": 20, "tasks": ["20.2"] },
-    { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6"] },
-    { "id": 22, "tasks": ["21.7", "21.8"] },
+    { "id": 21, "tasks": ["21.1", "21.2", "21.3", "21.4", "21.5", "21.6", "21.7", "21.8", "21.9", "21.10", "21.11", "21.12", "21.13", "21.14"] },
+    { "id": 22, "tasks": ["21.15"] },
     { "id": 23, "tasks": ["22"] },
     { "id": 24, "tasks": ["23.1", "23.2", "23.3", "23.4"] },
     { "id": 25, "tasks": ["23.5"] },

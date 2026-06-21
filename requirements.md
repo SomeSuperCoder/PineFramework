@@ -126,7 +126,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 13. THE Plot_Engine SHALL support all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
 14. THE Plot_Engine SHALL auto-detect plot titles from variable names when no explicit title is provided
 15. THE Plot_Engine SHALL support named arguments for plot options (color, linewidth, title)
-16. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes as chart markers using the Lightweight Charts marker API instead of line series
+16. WHEN plotshape() is called, THE Plot_Engine SHALL render shapes as chart markers drawn directly on the Canvas at the correct bar position and price level
 17. THE Plot_Engine SHALL filter null values from plot data before rendering to prevent chart errors
 18. WHEN fill() is called, THE Plot_Engine SHALL render fill as an area series between two plot references with configurable colors
 19. THE Plot_Engine SHALL support color, shape, and location namespace syntax (e.g., color.blue, shape.triangleup, location.abovebar)
@@ -298,13 +298,13 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE System SHALL support all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
 6. THE System SHALL validate script type compatibility with available functions
 
-### Requirement 17: Frontend Web Application
+### Requirement 17: Frontend Web Application with Canvas Charting
 
-**User Story:** As a trader, I want a web-based frontend with a realtime candle chart and an interactive code editor, so that I can write Pine Script code and visualize the results instantly.
+**User Story:** As a trader, I want a web-based frontend with a custom canvas-rendered candle chart and an interactive code editor, so that I have full control over all visual elements including shapes, fills, and strategy markers.
 
 #### Acceptance Criteria
 
-1. THE Frontend SHALL display a realtime candlestick chart with OHLCV data fetched from the Backend
+1. THE Frontend SHALL display a realtime candlestick chart rendered on an HTML5 Canvas element with OHLCV data fetched from the Backend
 2. THE Frontend SHALL provide a button that opens a popup code editor
 3. THE Frontend SHALL allow users to enter Pine Script v6 code in the editor
 4. WHEN the editor is closed, THE Frontend SHALL send the script to the Backend for compilation and execution, then render the results on the chart
@@ -312,19 +312,19 @@ This specification defines requirements for building a Pine Script v6 compatible
 6. IF runtime errors occur, THE Frontend SHALL log errors in an error console/panel
 7. THE Frontend SHALL display error messages with line numbers and descriptions
 8. THE Frontend SHALL update the chart in realtime as new data arrives via WebSocket
-9. THE Frontend SHALL support zooming and panning on the chart
+9. THE Frontend SHALL support zooming (mouse wheel, pinch) and panning (click-and-drag) on the chart
 10. THE Frontend SHALL display chart legend with indicator names and values
 11. THE Frontend SHALL provide timeframe and symbol selection controls
 12. THE Frontend SHALL use WebSocket for realtime data streaming from the Backend
-13. THE Frontend SHALL render all Pine Script visual outputs on the chart (plots, shapes, labels, lines, boxes, tables, backgrounds, fills)
+13. THE Frontend SHALL render all Pine Script visual outputs on the canvas (candlesticks, volume, plots, shapes, fills, strategy markers, hlines, drawing lines)
 14. THE Frontend SHALL support multiple concurrent indicators on the same chart
-15. THE Frontend SHALL provide smooth rendering performance with large datasets
+15. THE Frontend SHALL provide smooth rendering performance with large datasets using requestAnimationFrame
 16. THE Frontend SHALL support syntax highlighting in the code editor
 17. THE Frontend SHALL provide auto-completion for Pine Script keywords and functions
 18. THE Frontend SHALL save and load user scripts
-19. THE Frontend SHALL render shapes as chart markers (arrowUp, arrowDown, circle, square) using Lightweight Charts marker API
+19. THE Frontend SHALL render shapes (arrows, circles, squares, diamonds, triangles) as canvas-drawn markers at correct bar index and price level positions
 20. THE Frontend SHALL render strategy entry/exit/close markers on the chart with directional arrows and color coding
-21. THE Frontend SHALL render fill() as area series between plot references
+21. THE Frontend SHALL render fill() as filled polygons between two plot lines with configurable colors and transparency
 22. THE Frontend SHALL auto-focus chart to new symbol's price range on pair switch
 23. THE Frontend SHALL filter out invalid data points (time=0, non-finite values) before rendering
 24. THE Frontend SHALL auto-assign distinct colors to plot lines when not explicitly specified
@@ -388,5 +388,162 @@ This specification defines requirements for building a Pine Script v6 compatible
 8. THE Bybit_Integration SHALL operate without API keys for public market data endpoints
 9. THE Bybit_Integration SHALL be implemented as part of the Backend package
 10. THE Bybit_Integration SHALL provide a data source adapter that implements the engine's `DataSource` interface
+
+### Requirement 21: Canvas Charting Library
+
+**User Story:** As a framework developer, I want a custom canvas-based charting library built into the project, so that we have full programmatic control over every pixel rendered on the chart — including candlesticks, volume, plots, shapes, fills, strategy markers, drawing objects, crosshair, axes, and grid — without depending on any third-party charting library.
+
+#### Acceptance Criteria
+
+**Core Canvas Rendering:**
+
+1. THE Chart_Library SHALL render all chart elements on an HTML5 Canvas 2D context
+2. THE Chart_Library SHALL use requestAnimationFrame for smooth, vsync-aligned rendering cycles
+3. THE Chart_Library SHALL support devicePixelRatio-aware rendering for crisp display on HiDPI/Retina screens
+4. THE Chart_Library SHALL implement a render loop that only redraws when state has changed (dirty flag pattern)
+
+**Coordinate System and Layout:**
+
+5. THE Chart_Library SHALL implement a coordinate transformation system mapping data space (bar index, price) to pixel space (x, y)
+6. THE Chart_Library SHALL support a configurable chart layout with separate regions: main chart area, volume area (bottom 20%), and price scale area (right side)
+7. THE Chart_Library SHALL implement a time scale (x-axis) that maps bar indices to pixel positions with configurable bar spacing (pixels per bar)
+8. THE Chart_Library SHALL implement a price scale (y-axis) that maps price values to pixel positions with automatic tick spacing calculation
+9. THE Chart_Library SHALL support multiple price scales (e.g., main price scale for candles, separate scale for volume)
+10. THE Chart_Library SHALL calculate price scale bounds dynamically from visible data with padding margins
+11. THE Chart_Library SHALL render price scale labels (price values) on the right side with configurable precision
+12. THE Chart_Library SHALL render time scale labels (date/time) on the bottom with adaptive formatting based on timeframe
+
+**Candlestick Rendering:**
+
+13. THE Chart_Library SHALL render OHLCV candlesticks with body rectangles (open-close range) and wick lines (high-low range)
+14. THE Chart_Library SHALL color candle bodies and wicks based on direction: green (#4caf50) for bullish (close >= open), red (#e94560) for bearish (close < open)
+15. THE Chart_Library SHALL support bar coloring overrides from barcolor() script output
+16. THE Chart_Library SHALL render candle body width as a percentage of bar spacing (default 70%)
+
+**Volume Rendering:**
+
+17. THE Chart_Library SHALL render volume bars in a dedicated bottom area (20% of chart height)
+18. THE Chart_Library SHALL color volume bars semi-transparently matching the candle direction (green for up, red for down)
+19. THE Chart_Library SHALL scale volume bar heights relative to the maximum volume in the visible range
+
+**Line Plot Rendering:**
+
+20. THE Chart_Library SHALL render line plots by drawing connected line segments between data points at their (barIndex, price) coordinates
+21. THE Chart_Library SHALL support configurable line properties: color, width (1-4px), and style (solid, dotted, dashed)
+22. THE Chart_Library SHALL implement dotted line style as a sequence of dots with configurable spacing
+23. THE Chart_Library SHALL implement dashed line style as a sequence of dashes with configurable length and gap
+24. THE Chart_Library SHALL support stepline rendering where each data point is drawn as a horizontal segment followed by a vertical segment
+25. THE Chart_Library SHALL render histogram bars as vertical lines from a baseline to the data value
+26. THE Chart_Library SHALL render area plots as filled polygons below the line with configurable fill color and transparency
+27. THE Chart_Library SHALL render circle plots as small filled circles at each data point
+28. THE Chart_Library SHALL render cross plots as small cross marks (+) at each data point
+29. THE Chart_Library SHALL filter null values, breaking the line at gaps rather than connecting through nulls
+
+**Shape Marker Rendering:**
+
+30. THE Chart_Library SHALL render shape markers as vector-drawn icons at computed (barIndex, price) positions on the canvas
+31. THE Chart_Library SHALL implement the following shapes: arrowUp, arrowDown, triangleUp, triangleDown, circle, square, diamond, cross, xcross
+32. THE Chart_Library SHALL draw arrow shapes as triangular pointers with a stem line
+33. THE Chart_Library SHALL draw diamond shapes as rotated squares using four line segments
+34. THE Chart_Library SHALL draw xcross shapes as two crossing diagonal lines
+35. THE Chart_Library SHALL position markers abovebar or belowbar based on the location parameter, offset from the candle high/low by a configurable margin
+36. THE Chart_Library SHALL support text labels rendered alongside shape markers
+
+**Fill Area Rendering:**
+
+37. THE Chart_Library SHALL render fills as filled polygons between two line series data sets
+38. THE Chart_Library SHALL compute the fill polygon by connecting the upper line forward and the lower line backward, forming a closed path
+39. THE Chart_Library SHALL apply configurable fill color with alpha transparency to the polygon
+40. THE Chart_Library SHALL clip fill polygons to the visible chart area to prevent rendering outside bounds
+
+**Strategy Marker Rendering:**
+
+41. THE Chart_Library SHALL render strategy entry markers as colored arrows below the bar (long=green arrowUp, short=red arrowDown)
+42. THE Chart_Library SHALL render strategy exit markers as colored arrows above the bar (long exit=red arrowDown, short exit=blue arrowUp)
+43. THE Chart_Library SHALL render strategy close markers with distinct styling from entry/exit markers
+44. THE Chart_Library SHALL support text labels on strategy markers showing the entry name or comment
+45. THE Chart_Library SHALL skip rendering cancel and cancel_all type markers
+
+**Horizontal Line Rendering (hline):**
+
+46. THE Chart_Library SHALL render horizontal lines across the full visible width at a specified price level
+47. THE Chart_Library SHALL support line styles: solid, dotted, dashed
+48. THE Chart_Library SHALL render hlines on a layer above candlesticks but below plot lines
+
+**Crosshair:**
+
+49. THE Chart_Library SHALL render a crosshair cursor following the mouse position with a vertical line through the hovered bar and a horizontal line at the hovered price
+50. THE Chart_Library SHALL display a data window tooltip showing OHLCV values and indicator values for the hovered bar
+51. THE Chart_Library SHALL snap the vertical crosshair line to the nearest bar center
+52. THE Chart_Library SHALL render price and time labels on the axes at the crosshair position
+
+**Grid:**
+
+53. THE Chart_Library SHALL render a grid of horizontal lines at price scale tick intervals
+54. THE Chart_Library SHALL render a grid of vertical lines at time scale major tick intervals
+55. THE Chart_Library SHALL use subtle, low-opacity colors for grid lines (e.g., #2a2a4e)
+
+**Interaction — Zoom and Pan:**
+
+56. THE Chart_Library SHALL support horizontal zoom via mouse scroll wheel, adjusting the bar spacing (pixels per bar) centered on the cursor position
+57. THE Chart_Library SHALL support horizontal zoom via pinch gesture on touch devices
+58. THE Chart_Library SHALL support horizontal panning via click-and-drag on the chart area
+59. THE Chart_Library SHALL support vertical zoom/pan on the price scale via mouse drag on the price scale area
+60. THE Chart_Library SHALL implement momentum-based inertial scrolling for smooth pan deceleration
+61. THE Chart_Library SHALL enforce minimum and maximum bar spacing limits (e.g., 2px to 100px per bar)
+
+**Viewport Management:**
+
+62. THE Chart_Library SHALL maintain a viewport state tracking the visible range (first visible bar index, bar count)
+63. THE Chart_Library SHALL only render bars that fall within the visible viewport plus a small overscan buffer on each side
+64. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
+65. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
+66. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
+
+**Performance:**
+
+67. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
+68. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
+69. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
+70. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
+71. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
+
+**Resize and Responsiveness:**
+
+72. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
+73. THE Chart_Library SHALL support configurable chart padding and margins
+74. THE Chart_Library SHALL automatically adjust layout when the container size changes
+
+**Data Binding:**
+
+75. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
+76. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
+77. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
+78. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
+79. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
+80. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
+81. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+
+**API Design:**
+
+82. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+83. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+84. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+85. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+86. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+87. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+88. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+89. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+90. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+91. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+92. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+93. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+94. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`
+
+**Styling and Theming:**
+
+95. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
+96. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+97. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
 19. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
 20. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
