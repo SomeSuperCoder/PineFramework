@@ -32,6 +32,14 @@ import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { NA, isNa, pineTruthy, type PineValue } from '../types/na.js';
 import { FLOAT_TYPE, INT_TYPE } from '../types/pine-types.js';
 import {
+  StrategyEngine,
+  type OrderDirection,
+} from '../../strategy/strategy-engine.js';
+import {
+  parseStrategyDeclaration,
+  getStrategyConfig,
+} from '../script-declarations.js';
+import {
   type RuntimeScope,
   createRuntimeScope,
   declareVariable,
@@ -122,6 +130,10 @@ export class ExecutionEngine {
 
     this.registerBuiltins();
     this.initializeGlobals();
+
+    if (this.sourceProgram.scriptKind === 'strategy') {
+      this.initializeStrategy();
+    }
   }
 
   private smaBuffers: Map<string, number[]> = new Map();
@@ -130,6 +142,7 @@ export class ExecutionEngine {
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossCallIndex: number = 0;
   private crossPrevValues: Array<{ src: number; cmp: number }> = [];
+  private strategyEngine: StrategyEngine | null = null;
 
   private registerBuiltins(): void {
     this.builtins.set('ta.sma', (source: PineValue, length: PineValue): PineValue => {
@@ -535,6 +548,136 @@ export class ExecutionEngine {
     }
   }
 
+  private initializeStrategy(): void {
+    const args: Record<string, unknown> = {};
+    for (const arg of this.sourceProgram.scriptArgs) {
+      if (arg.name) {
+        args[arg.name] = this.evaluateArgValue(arg.value);
+      }
+    }
+
+    const config = parseStrategyDeclaration(args);
+    const strategyConfig = getStrategyConfig(config);
+    if (strategyConfig) {
+      this.strategyEngine = new StrategyEngine(strategyConfig);
+    }
+    this.registerStrategyBuiltins();
+  }
+
+  private evaluateArgValue(expr: ExpressionNode): unknown {
+    switch (expr.kind) {
+      case 'NumberLiteral':
+        return expr.value;
+      case 'StringLiteral':
+        return expr.value;
+      case 'BooleanLiteral':
+        return expr.value;
+      case 'Identifier':
+        return expr.name;
+      case 'MemberExpression': {
+        const obj = this.evaluateArgValue(expr.object);
+        if (typeof obj === 'string') {
+          return `${obj}.${expr.property}`;
+        }
+        return expr.property;
+      }
+      default:
+        return undefined;
+    }
+  }
+
+  private registerStrategyBuiltins(): void {
+    this.builtins.set(
+      'strategy.entry',
+      (name: PineValue, directionOrQty: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+
+        let dir: OrderDirection;
+        let qty: number;
+        let pr: number;
+
+        if (typeof directionOrQty === 'string') {
+          dir = directionOrQty === 'short' ? 'short' : 'long';
+          qty = typeof quantity === 'number' ? quantity : this.strategyEngine.getConfig().defaultQty;
+          pr = typeof price === 'number' ? price : 0;
+        } else {
+          dir = 'long';
+          qty = typeof directionOrQty === 'number' ? directionOrQty : this.strategyEngine.getConfig().defaultQty;
+          pr = typeof quantity === 'number' ? quantity : 0;
+        }
+
+        const entryName = typeof name === 'string' ? name : 'entry';
+        this.strategyEngine.entry(entryName, dir, qty, pr);
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.exit',
+      (name: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+        const exitName = typeof name === 'string' ? name : 'exit';
+        const qty = typeof quantity === 'number' ? quantity : undefined;
+        const pr = typeof price === 'number' ? price : 0;
+        this.strategyEngine.exit(exitName, qty, pr);
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.close',
+      (name?: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+        const closeName = typeof name === 'string' ? name : 'close';
+        this.strategyEngine.close(closeName);
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.close_all',
+      (name?: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+        const closeName = typeof name === 'string' ? name : 'close_all';
+        this.strategyEngine.closeAll(closeName);
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.cancel',
+      (orderId: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+        if (typeof orderId === 'string') {
+          this.strategyEngine.cancel(orderId);
+        }
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.cancel_all',
+      (): PineValue => {
+        if (!this.strategyEngine) return NA;
+        this.strategyEngine.cancelAll();
+        return NA;
+      },
+    );
+
+    this.builtins.set(
+      'strategy.order',
+      (name: PineValue, direction: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+        if (!this.strategyEngine) return NA;
+        const orderName = typeof name === 'string' ? name : 'order';
+        const dir: OrderDirection = direction === 'short' ? 'short' : 'long';
+        const qty = typeof quantity === 'number' ? quantity : this.strategyEngine.getConfig().defaultQty;
+        const pr = typeof price === 'number' ? price : 0;
+        this.strategyEngine.order(orderName, dir, qty, pr);
+        return NA;
+      },
+    );
+  }
+
   createSnapshot(): void {
     const snapshot: ExecutionSnapshot = {
       scope: cloneRuntimeScope(this.globalScope),
@@ -589,6 +732,23 @@ export class ExecutionEngine {
     try {
       this.createSnapshot();
       pushBarValues(this.globalScope);
+
+      if (this.strategyEngine) {
+        const openVal = context.open.getRelative(0);
+        const highVal = context.high.getRelative(0);
+        const lowVal = context.low.getRelative(0);
+        const closeVal = context.close.getRelative(0);
+        const volVal = context.volume.getRelative(0);
+        this.strategyEngine.updateBar(
+          context.barIndex,
+          context.timestamp,
+          typeof openVal === 'number' ? openVal : 0,
+          typeof highVal === 'number' ? highVal : 0,
+          typeof lowVal === 'number' ? lowVal : 0,
+          typeof closeVal === 'number' ? closeVal : 0,
+          typeof volVal === 'number' ? volVal : 0,
+        );
+      }
 
       for (const stmt of this.sourceProgram.body) {
         this.executeStatement(stmt, this.globalScope, context);
@@ -664,6 +824,10 @@ export class ExecutionEngine {
 
   getAllOutputs(): Map<string, Series> {
     return this.outputs;
+  }
+
+  getStrategyEngine(): StrategyEngine | null {
+    return this.strategyEngine;
   }
 
   private executeStatement(
@@ -1162,6 +1326,18 @@ export class ExecutionEngine {
       }
       if (objName === 'text' || objName === 'linewidth' || objName === 'linecap' || objName === 'linejoin' || objName === 'textalign') {
         return expr.property;
+      }
+      if (objName === 'strategy') {
+        const strategyConstants: Record<string, PineValue> = {
+          long: 'long',
+          short: 'short',
+          percent_of_equity: 'percent_of_equity',
+          fixed: 'fixed',
+          currency: 'currency',
+        };
+        if (expr.property in strategyConstants) {
+          return strategyConstants[expr.property]!;
+        }
       }
 
       const binding = resolveVariable(scope, objName);

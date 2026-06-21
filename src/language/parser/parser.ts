@@ -786,7 +786,7 @@ export class Parser {
         value: token.value as string,
       } as ColorLiteralNode;
     }
-    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType)) {
+    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType) || this.match(TokenType.Strategy) || this.match(TokenType.Indicator) || this.match(TokenType.Library)) {
       const token = this.previous();
 
       if (this.check(TokenType.Arrow)) {

@@ -667,6 +667,10 @@ export class StrategyEngine {
     return { ...this.position };
   }
 
+  getConfig(): Readonly<StrategyConfig> {
+    return this.config;
+  }
+
   getEquity(): number {
     return this.equity;
   }
