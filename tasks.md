@@ -632,15 +632,15 @@ This implementation plan outlines the step-by-step development of a production-g
   - Validate error handling for invalid requests
   - Ask the user if questions arise.
 
-- [ ] 27. Implement Bybit Exchange Integration
-  - [ ] 27.1 Create Bybit REST client
+- [x] 27. Implement Bybit Exchange Integration
+  - [x] 27.1 Create Bybit REST client
     - Implement `fetchKline()` using Bybit V5 REST API (`/v5/market/kline`)
     - Support all intervals: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 1w, 1M
     - Support pagination for large historical data requests
     - Normalize Bybit response to engine `Bar` interface
     - _Requirements: 20.1, 20.3, 20.5_
   
-  - [ ] 27.2 Create Bybit WebSocket client
+  - [x] 27.2 Create Bybit WebSocket client
     - Connect to `wss://stream.bybit.com/v5/public/linear`
     - Subscribe to kline topics (`kline.{interval}.{symbol}`)
     - Parse incoming kline messages and normalize to engine format
@@ -648,25 +648,25 @@ This implementation plan outlines the step-by-step development of a production-g
     - Handle Bybit heartbeat/ping-pong
     - _Requirements: 20.2, 20.6_
   
-  - [ ] 27.3 Implement DataSource adapter
+  - [x] 27.3 Implement DataSource adapter
     - Implement engine's `DataSource` interface for `request.security()` support
     - Map Bybit symbols to engine data source identifiers
     - Handle data alignment and gap detection
     - _Requirements: 20.10_
   
-  - [ ] 27.4 Implement rate limiting
+  - [x] 27.4 Implement rate limiting
     - Track Bybit API call frequency (120 req/s for public endpoints)
     - Queue excess requests and retry after delay
     - Log rate limit warnings
     - _Requirements: 20.7_
   
-  - [ ] 27.5 Wire Bybit adapter into backend
+  - [x] 27.5 Wire Bybit adapter into backend
     - Inject Bybit adapter into backend API handlers
     - Use Bybit data for OHLCV REST endpoint
     - Stream Bybit WebSocket data through backend WS gateway
     - _Requirements: 20.1, 20.2_
   
-  - [ ] 27.6 Write tests for Bybit adapter
+  - [x] 27.6 Write tests for Bybit adapter
     - Unit tests for REST client with mocked Bybit responses
     - Unit tests for WebSocket client with simulated messages
     - Integration test for data normalization
