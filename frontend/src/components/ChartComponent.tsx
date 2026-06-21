@@ -170,7 +170,7 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
 
     if (scriptResult.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
       for (const m of scriptResult.strategyMarkers) {
-        if (m.type === 'cancel' || m.type === 'cancel_all') continue;
+        if (m.type === 'close' || m.type === 'cancel' || m.type === 'cancel_all') continue;
         const isLong = m.direction === 'long';
         const isEntry = m.type === 'entry';
         allMarkers.push({
