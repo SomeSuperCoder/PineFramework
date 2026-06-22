@@ -319,7 +319,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'exit',
       orderId: order.id,
-      name,
+      name: `Exit ${name}`,
       direction: order.direction,
       action: order.action,
       quantity: order.quantity,
@@ -358,7 +358,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'close',
       orderId: order.id,
-      name,
+      name: `Exit ${name}`,
       direction: order.direction,
       action: order.action,
       quantity: order.quantity,

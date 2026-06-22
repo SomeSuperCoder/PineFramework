@@ -469,11 +469,12 @@ describe('StrategyEngine', () => {
       engine.entry('Long', 'long', 1);
 
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
-      engine.exit('Exit');
+      engine.exit('Long');
 
       const markers = engine.getMarkers();
       expect(markers.length).toBe(2);
       expect(markers[1]!.type).toBe('exit');
+      expect(markers[1]!.name).toBe('Exit Long');
     });
 
     it('should track close markers', () => {
@@ -483,11 +484,12 @@ describe('StrategyEngine', () => {
       engine.entry('Long', 'long', 1);
 
       engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
-      engine.close();
+      engine.close('Long');
 
       const markers = engine.getMarkers();
       expect(markers.length).toBe(2);
       expect(markers[1]!.type).toBe('close');
+      expect(markers[1]!.name).toBe('Exit Long');
     });
 
     it('should track cancel markers', () => {
