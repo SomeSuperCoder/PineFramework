@@ -1288,6 +1288,215 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify all tests pass
   - Ask the user if questions arise.
 
+- [ ] 47. Implement Broker Simulator
+  - [ ] 47.1 Create Account model and state management
+    - Implement Account data model: { initial_capital, balance, equity, margin_used, free_margin }
+    - Track balance updates from P&L, commissions, deposits
+    - Compute equity = balance + unrealized P&L
+    - Compute free_margin = equity - margin_used
+    - _Requirements: 22.9, 22.44, 22.48_
+
+  - [ ] 47.2 Create Order Manager
+    - Implement order lifecycle: pending → accepted → filled/cancelled/expired
+    - Maintain active order book (pending orders, working orders, filled orders)
+    - Register OrderRequest events from strategy execution as PendingOrders
+    - Validate orders against account state (margin, pyramiding, position sizing)
+    - _Requirements: 22.13, 22.14_
+
+  - [ ] 47.3 Create Fill Engine
+    - Implement market order fills at next available price (bar open + slippage)
+    - Implement limit order fills when price crosses limit level
+    - Implement stop order fills when price breaches stop level (converted to market)
+    - Implement stop-limit fills: stop trigger → limit order
+    - Support intrabar resolution for more accurate fill prices
+    - _Requirements: 22.15, 22.51, 22.52, 22.53, 22.54_
+
+  - [ ] 47.4 Create Margin Tracker
+    - Compute initial and maintenance margin requirements
+    - Check margin sufficiency before allowing new positions
+    - Liquidate positions when equity falls below maintenance margin
+    - _Requirements: 22.18, 22.58_
+
+  - [ ] 47.5 Create Position Manager
+    - Track positions with direction, quantity, avg_entry_price
+    - Handle position opening, increasing, reducing, closing, reversal
+    - Enforce pyramiding limits (max entries in same direction)
+    - _Requirements: 22.19, 22.46_
+
+  - [ ] 47.6 Implement commission and slippage models
+    - Commission types: percent, cash per contract, cash per order
+    - Slippage modes: fixed ticks, fixed points, percentage
+    - Apply commission and slippage to fill prices and P&L
+    - _Requirements: 22.16, 22.17, 22.56, 22.57_
+
+  - [ ] 47.7 Implement trade size calculation
+    - Support fixed contracts, percentage of equity, fixed cash amount
+    - Calculate position size based on default_qty_type and default_qty_value
+    - _Requirements: 22.20, 22.59_
+
+- [ ] 48. Implement Backtest Orchestrator
+  - [ ] 48.1 Create bar processing loop
+    - Iterate bars chronologically over the historical date range
+    - For each bar: execute strategy → process orders → advance clock → check fills → update state → record equity point
+    - Align multi-timeframe data when needed via Request System
+    - _Requirements: 22.9, 22.10, 22.12_
+
+  - [ ] 48.2 Implement intrabar magnification (bar magnifier)
+    - Retrieve lower-resolution data series (e.g., 1m for daily bars)
+    - Iterate sub-bars within each main bar for fill evaluation
+    - Set fill prices to exact sub-bar price where conditions are met
+    - _Requirements: 22.11, 22.55_
+
+  - [ ] 48.3 Wire strategy.*() events to Broker Simulator
+    - Capture OrderRequest events emitted by strategy.entry/exit/close
+    - Pipe events into Order Manager for validation and registration
+    - _Requirements: 22.4_
+
+- [ ] 49. Implement Performance Metrics Calculator
+  - [ ] 49.1 Implement trade-level metrics
+    - Compute per-trade P&L (gross/net), return %, bars held
+    - Compute MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion)
+    - _Requirements: 22.25_
+
+  - [ ] 49.2 Implement portfolio-level metrics
+    - Net Profit, Gross Profit, Gross Loss, Profit Factor
+    - Win Rate, Average Trade, Average Winning/Losing Trade
+    - _Requirements: 22.21, 22.24_
+
+  - [ ] 49.3 Implement risk-adjusted metrics
+    - Sharpe Ratio (annualized, using daily equity returns)
+    - Sortino Ratio (downside deviation only)
+    - Max Drawdown and Max Drawdown Duration
+    - _Requirements: 22.22, 22.23_
+
+  - [ ] 49.4 Build equity curve and other time series
+    - Generate EquityPoint series from per-bar snapshots
+    - Generate monthly returns heatmap data
+    - Compute Buy & Hold return for comparison
+    - _Requirements: 22.26, 22.27_
+
+  - [ ] 49.5 Create BacktestResult data structure
+    - Assemble config, metrics, trades[], equity_curve[], orders[]
+    - Provide serialization for API responses
+    - _Requirements: 22.49, 22.50_
+
+- [ ] 50. Implement Backtest REST API
+  - [ ] 50.1 Create job queue and worker system
+    - Accept backtest jobs via POST /api/backtest
+    - Assign unique job_id and queue for processing
+    - Support concurrent backtest workers
+    - Track job status: queued → running → completed/failed
+    - _Requirements: 22.34, 22.40_
+
+  - [ ] 50.2 Implement status and result endpoints
+    - GET /api/backtest/{job_id} returns status and progress
+    - GET /api/backtest/{job_id}/result returns full BacktestResult
+    - _Requirements: 22.35, 22.36_
+
+  - [ ] 50.3 Add backtest progress reporting
+    - Report progress percentage during bar processing loop
+    - Support progress polling via status endpoint
+    - Optionally push progress via WebSocket
+    - _Requirements: 22.37_
+
+- [ ] 51. Implement Backtest Visualization
+  - [ ] 51.1 Overlay strategy entry/exit markers on price chart
+    - Use existing StrategyMarkerRenderer for entry/exit markers
+    - Show trade direction and comment text on markers
+    - _Requirements: 22.28_
+
+  - [ ] 51.2 Build equity curve and drawdown chart
+    - Render equity curve as line plot below main price chart
+    - Render drawdown as shaded area below equity curve
+    - _Requirements: 22.29_
+
+  - [ ] 51.3 Create trade list table
+    - Sortable table with per-trade statistics (entry/exit, P&L, return, bars, MAE/MFE)
+    - Click trade to highlight on chart
+    - _Requirements: 22.32_
+
+  - [ ] 51.4 Build backtest report export
+    - Export as PDF, HTML, and CSV formats
+    - Include metrics summary, trade list, equity curve
+    - _Requirements: 22.31_
+
+- [ ] 52. Create Backtest Configuration Panel
+  - [ ] 52.1 Build web UI for strategy settings
+    - Form for strategy inputs (fast_len, slow_len, etc.)
+    - Date range picker for backtest period
+    - Symbol and timeframe selectors
+    - _Requirements: 22.33_
+
+  - [ ] 52.2 Build broker emulator configuration UI
+    - Commission type/value, slippage, margin settings
+    - Default quantity type/value, pyramiding limit
+    - Initial capital input
+    - _Requirements: 22.33_
+
+  - [ ] 52.3 Add run/submit button with progress indicator
+    - Submit backtest job via POST /api/backtest
+    - Show progress bar during execution
+    - Display results on completion
+    - _Requirements: 22.37_
+
+- [ ] 53. Implement Data Source Integration for Backtesting
+  - [ ] 53.1 Add CSV data import
+    - Parse OHLCV data from CSV files
+    - Support configurable column mapping
+    - _Requirements: 22.5_
+
+  - [ ] 53.2 Add database data adapter
+    - Fetch historical data from PostgreSQL/MongoDB
+    - Support date-range queries with pagination
+    - _Requirements: 22.5_
+
+  - [ ] 53.3 Implement data alignment and gap handling
+    - Align multi-timeframe data for request.security() during backtest
+    - Forward-fill missing data and handle gaps
+    - _Requirements: 22.6, 22.7_
+
+- [x]* 54. Write unit tests for broker simulator
+  - Test order lifecycle (pending → accepted → filled/cancelled)
+  - Test market order fill at next bar open price
+  - Test limit order fill when low/high crosses limit
+  - Test stop order trigger and fill
+  - Test stop-limit order trigger and limit placement
+  - Test margin validation and liquidation
+  - Test pyramiding enforcement
+  - Test commission calculation (percent, per contract, per order)
+  - Test slippage calculation (ticks, points, percent)
+  - _Requirements: 22.13-22.20, 22.51-22.60_
+
+- [x]* 55. Write unit tests for performance metrics
+  - Test Net Profit, Gross Profit, Gross Loss, Profit Factor
+  - Test Win Rate, Average Trade calculations
+  - Test Sharpe Ratio and Sortino Ratio
+  - Test Max Drawdown and Max Drawdown Duration
+  - Test per-trade MAE/MFE computation
+  - _Requirements: 22.21-22.27_
+
+- [x]* 56. Write integration tests for backtest engine
+  - Run SMA crossover strategy backtest, verify metrics match expected values
+  - Test with commission and slippage enabled
+  - Test with pyramiding (multiple entries)
+  - Test with margin and liquidation scenarios
+  - Compare results to TradingView reference output within 0.1% tolerance
+  - _Requirements: 22.38, 22.39_
+
+- [x]* 57. Write performance tests for backtest engine
+  - Backtest with 1M bars, verify completion within 10 seconds
+  - Measure memory usage during large backtests
+  - Test concurrent backtest job processing
+  - _Requirements: 22.38_
+
+- [ ] 58. Checkpoint - Backtest Engine Validation
+  - Ensure Broker Simulator correctly fills orders and manages positions
+  - Verify performance metrics match TradingView within 0.1% tolerance
+  - Test REST API submit/status/result workflow end-to-end
+  - Verify backtest visualization renders correctly on chart
+  - Run 1M-bar performance test under 10 seconds
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -1302,6 +1511,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Tasks 21.16-21.26 implement canvas renderers for all Pine visual output functions: plotchar, plotarrow, bgcolor, barcolor, labels, drawing lines, boxes, polylines, linefills, tables, and alert markers
 - Task 22.1 wires all drawing/alert builtins (label.*, line.*, box.*, polyline.*, linefill.*, table.*, chart.point.*, alert) into the execution engine
 - Requirements 6 and 7 comprehensively specify all plotting and drawing function parameters for canvas implementation
+- Tasks 47-58 implement the full backtest engine: broker simulator (47), backtest orchestrator (48), performance metrics calculator (49), backtest REST API (50), backtest visualization (51), configuration panel (52), data source integration (53), and comprehensive tests (54-57)
 
 ## Task Dependency Graph
 
@@ -1374,7 +1584,16 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 63, "tasks": ["44"] },
     { "id": 64, "tasks": ["45.1", "45.2", "45.3", "45.4", "45.5", "45.6", "45.7"] },
     { "id": 65, "tasks": ["45.8"] },
-    { "id": 66, "tasks": ["46"] }
+    { "id": 66, "tasks": ["46"] },
+    { "id": 67, "tasks": ["47.1", "47.2", "47.3", "47.4", "47.5", "47.6", "47.7"] },
+    { "id": 68, "tasks": ["48.1", "48.2", "48.3"] },
+    { "id": 69, "tasks": ["49.1", "49.2", "49.3", "49.4", "49.5"] },
+    { "id": 70, "tasks": ["50.1", "50.2", "50.3"] },
+    { "id": 71, "tasks": ["51.1", "51.2", "51.3", "51.4"] },
+    { "id": 72, "tasks": ["52.1", "52.2", "52.3"] },
+    { "id": 73, "tasks": ["53.1", "53.2", "53.3"] },
+    { "id": 74, "tasks": ["54", "55", "56", "57"] },
+    { "id": 75, "tasks": ["58"] }
   ]
 }
 ```

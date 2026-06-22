@@ -677,3 +677,108 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 104. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
 105. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
+
+### Requirement 22: Strategy Backtest Engine
+
+**User Story:** As a strategy developer, I want a full backtest engine that simulates order lifecycle, broker conditions, and produces comprehensive performance analytics, so that I can evaluate and optimize trading strategies against historical data.
+
+#### Acceptance Criteria
+
+**FR-1: Pine Script Backtest Compatibility**
+
+1. THE Backtest_Engine SHALL parse and execute Pine Script v5/v6 strategy code using the existing execution runtime
+2. THE Backtest_Engine SHALL respect strategy-specific parameters: `initial_capital`, `default_qty_value`, `default_qty_type`, `currency`, `pyramiding`, `commission_type/value`, `slippage`, `margin_long/short`
+3. THE Backtest_Engine SHALL support multi-timeframe data via `request.security()` within backtest execution
+4. THE Backtest_Engine SHALL emit `OrderRequest` events from strategy.*() functions instead of placing orders directly
+
+**FR-2: Data Management for Backtesting**
+
+5. THE Backtest_Engine SHALL ingest OHLCV data from CSV, REST API, and database sources
+6. THE Backtest_Engine SHALL align timeframes (1m, 5m, 15m, 1h, 4h, 1D, 1W, 1M) for multi-timeframe strategies
+7. THE Backtest_Engine SHALL handle missing data with forward-fill and gap handling
+8. THE Backtest_Engine SHALL support user-configurable extended session data
+
+**FR-3: Backtesting Engine Core**
+
+9. THE Backtest_Engine SHALL process bars chronologically, executing strategy logic on each bar close
+10. THE Backtest_Engine SHALL maintain state for all active orders, positions, margin, and equity
+11. THE Backtest_Engine SHALL support intrabar order execution (bar magnifier) using lower-resolution data for sub-bar fills
+12. THE Backtest_Engine SHALL allow backtesting from a user-defined date range with start/end dates
+
+**FR-4: Order & Execution Simulation**
+
+13. THE Backtest_Engine SHALL support order types: market, limit, stop, stop-limit
+14. THE Backtest_Engine SHALL simulate order lifecycle: placement, acceptance, fill, expiry, cancellation
+15. THE Backtest_Engine SHALL implement fill logic based on bar OHLC (intrabar) or bar close (next bar)
+16. THE Backtest_Engine SHALL account for commission (per trade, per contract, percentage)
+17. THE Backtest_Engine SHALL implement slippage model: fixed ticks/percentage, limit-order slippage, market-order slippage
+18. THE Backtest_Engine SHALL support margin trading with initial and maintenance margin checks; liquidate positions when equity falls below maintenance margin
+19. THE Backtest_Engine SHALL support pyramiding with configurable maximum entries in same direction
+20. THE Backtest_Engine SHALL support trade size calculation: fixed contracts, percentage of equity, fixed cash amount
+
+**FR-5: Performance Metrics**
+
+21. THE Backtest_Engine SHALL compute Net Profit, Gross Profit, Gross Loss, Profit Factor
+22. THE Backtest_Engine SHALL compute Sharpe Ratio and Sortino Ratio (annualized, using daily equity returns)
+23. THE Backtest_Engine SHALL compute Max Drawdown (absolute and percentage) and Max Drawdown Duration
+24. THE Backtest_Engine SHALL compute Average Trade (net profit per trade), Win Rate (percent profitable), Average Bars in Trade
+25. THE Backtest_Engine SHALL provide per-trade statistics: entry/exit time, price, size, direction, P&L, percent return, bars held, MAE/MFE
+26. THE Backtest_Engine SHALL generate equity curve (time series of equity and drawdown)
+27. THE Backtest_Engine SHALL generate monthly returns heatmap
+
+**FR-6: Visualization & Reporting**
+
+28. THE Backtest_Engine SHALL overlay entry/exit markers on the price chart (using existing strategy marker rendering)
+29. THE Backtest_Engine SHALL display equity curve and drawdown chart below the main price chart
+30. THE Backtest_Engine SHALL provide an interactive results view with zoom, pan, and date range selection
+31. THE Backtest_Engine SHALL export backtest reports as PDF, HTML, and CSV
+32. THE Backtest_Engine SHALL provide a sortable trade list table with per-trade statistics
+
+**FR-7: User Interface / API**
+
+33. THE Backtest_Engine SHALL expose a Web-based configuration panel for strategy settings and broker emulator properties
+34. THE Backtest_Engine SHALL expose a REST API to submit backtest jobs: `POST /api/backtest`
+35. THE Backtest_Engine SHALL expose a REST API to query backtest job status: `GET /api/backtest/{job_id}`
+36. THE Backtest_Engine SHALL expose a REST API to retrieve backtest results: `GET /api/backtest/{job_id}/result`
+37. THE Backtest_Engine SHALL support real-time backtest progress with progress indicator via polling or WebSocket
+
+**Non-Functional Requirements**
+
+38. A single backtest on 1 million bars SHALL complete within 10 seconds (via JIT or transpilation to native code)
+39. Fill simulation SHALL match TradingView's documented fill assumptions within 0.1% tolerance
+40. THE Backtest_Engine SHALL support concurrent backtests via job queue
+41. THE Backtest_Engine SHALL implement plugin architecture for broker models, metrics, and data sources
+42. THE Backtest_Engine SHALL sandbox script execution to prevent malicious code
+
+**Data Models**
+
+43. THE Backtest_Engine SHALL implement `Bar` data model: { time, open, high, low, close, volume }
+44. THE Backtest_Engine SHALL implement `OrderRequest` model: { id, strategy_id, direction, qty, limit_price, stop_price, order_type, oca_group }
+45. THE Backtest_Engine SHALL implement `Order` model: { id, request, status (pending/filled/cancelled), fill_price, fill_time, commission }
+46. THE Backtest_Engine SHALL implement `Position` model: { symbol, direction, quantity, avg_entry_price, unrealized_pnl }
+47. THE Backtest_Engine SHALL implement `Trade` model: { entry_order, exit_order, pnl, return, duration, mae, mfe }
+48. THE Backtest_Engine SHALL implement `Account` model: { initial_capital, balance, equity, margin_used, free_margin }
+49. THE Backtest_Engine SHALL implement `EquityPoint` model: { time, equity, drawdown }
+50. THE Backtest_Engine SHALL implement `BacktestResult` model: { config, metrics, trades[], equity_curve[], orders[] }
+
+**Order Fill Logic**
+
+51. Market orders SHALL fill immediately at the next available price (next bar open plus slippage)
+52. Limit orders SHALL fill when price crosses the limit level (longs: low <= limit; shorts: high >= limit)
+53. Stop orders SHALL fill when price breaches the stop level (longs: high >= stop; shorts: low <= stop), converted to market after trigger
+54. Stop-limit orders SHALL trigger like stop orders, then be placed as limit orders
+55. Intrabar magnification SHALL resolve fill prices using lower-resolution bar data instead of bar OHLC only
+
+**Broker Emulator Properties**
+
+56. Commission SHALL be configurable via `commission_type` (percent, cash per contract, cash per order) and `commission_value`
+57. Slippage SHALL be configurable in ticks, points, or percent
+58. Margin SHALL be configurable via `initial_margin_rate` and `maintenance_margin_rate`; liquidation at `maintenance_margin_rate * position_value`
+59. Default quantity SHALL support `contracts`, `percent_of_equity`, and `cash` modes
+60. Currency SHALL be configurable for P&L denomination (e.g., USD)
+
+**REST API Specification**
+
+61. `POST /api/backtest` SHALL accept `{ script, symbol, timeframe, start_date, end_date, initial_capital, commission_type, commission_value, slippage, pyramiding, bar_magnifier, inputs }` and return `{ job_id }`
+62. `GET /api/backtest/{job_id}` SHALL return `{ status (running/completed/failed), progress (0-100), result_url }`
+63. `GET /api/backtest/{job_id}/result` SHALL return `{ metrics, equity_curve, trades, orders }`

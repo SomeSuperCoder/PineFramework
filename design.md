@@ -1220,6 +1220,224 @@ pine-framework (engine)
 - Performance optimization
 - Backup and recovery procedures
 
+### Backtest Engine Architecture
+
+#### 1. Overview
+The Backtest Engine extends the existing Strategy Engine to provide a complete historical simulation environment. It consumes Pine Script strategies, executes them over historical OHLCV data, simulates order lifecycle and broker conditions, and produces comprehensive performance analytics. It is designed as a layered system sitting above the existing execution runtime, data service, and broker simulator.
+
+#### 2. Backtest System Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    API Gateway + Job Queue                   │
+│  - Accepts backtest jobs via REST                            │
+│  - Manages job lifecycle (queued→running→completed→retrieved)│
+│  - Supports concurrent backtests                             │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+┌──────────────────────▼──────────────────────────────────────┐
+│                    Backtest Orchestrator                      │
+│  - Receives job (script + config + date range)               │
+│  - Fetches data from Data Service                            │
+│  - Invokes Pine Runtime for strategy signal generation       │
+│  - Runs Simulation Engine for order lifecycle                │
+│  - Calculates performance metrics                            │
+│  - Persists results (BacktestResult)                         │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+     ┌─────────────────┼─────────────────────┐
+     ▼                 ▼                     ▼
+┌──────────┐   ┌────────────────┐   ┌──────────────────┐
+│ Data     │   │ Pine Runtime   │   │ Broker Simulator  │
+│ Service  │   │ (Execution     │   │ (Order Manager,   │
+│ (existing)│   │  Engine)      │   │  Fill Engine,     │
+│          │   │                │   │  Margin Tracker)  │
+└──────────┘   └────────────────┘   └──────────────────┘
+                                            │
+                                    ┌───────┴───────┐
+                                    ▼               ▼
+                            ┌────────────┐  ┌──────────────┐
+                            │ Metrics    │  │ Report       │
+                            │ Calculator │  │ Generator    │
+                            └────────────┘  └──────────────┘
+```
+
+#### 3. Backtest Orchestrator
+- **Responsibility**: Coordinate the full backtest lifecycle from job submission to result delivery
+- **Key Features**:
+  - Receives backtest job specification (script, symbol, timeframe, date range, config)
+  - Fetches historical OHLCV data from the Data Service for the requested range
+  - Invokes the Pine Runtime (existing Execution Engine) to compile and execute the strategy, capturing OrderRequest events
+  - Pipes OrderRequest events into the Broker Simulator for order lifecycle management
+  - After simulation, invokes the Metrics Calculator to compute performance statistics
+  - Stores the completed BacktestResult for retrieval via REST API
+  - Reports progress updates during long-running backtests
+
+#### 4. Broker Simulator
+- **Responsibility**: Simulate realistic broker conditions including order management, fills, margin, and fees
+
+**4.1 Order Manager:**
+- Maintains active order book: pending, working, and filled orders
+- Processes OrderRequest events from the strategy engine
+- Validates orders against account state (margin, pyramiding limits, position sizing rules)
+- Tracks order lifecycle: pending → accepted → filled/cancelled/expired
+
+**4.2 Fill Engine:**
+- On each bar (or tick for intrabar mode), evaluates all active orders for fill conditions
+- **Market orders**: Filled at next bar open + slippage (or immediately on intrabar tick)
+- **Limit orders**: Filled when price crosses the limit level (for longs: low <= limit; for shorts: high >= limit)
+- **Stop orders**: Filled when price breaches stop level (for longs: high >= stop; for shorts: low <= stop); converted to market order after trigger
+- **Stop-limit orders**: Triggered like stop orders, then placed as limit orders
+- Applies slippage adjustment to fill prices based on order type and configured slippage parameters
+- Records fill price, fill time, and commission for each fill
+
+**4.3 Margin Tracker:**
+- Tracks initial and maintenance margin requirements
+- On each bar, checks if equity falls below maintenance margin threshold
+- If margin call triggered, liquidates positions at current market price
+- Updates Account state: balance, equity, margin_used, free_margin
+
+**4.4 Position Manager:**
+- Maintains current positions (symbol, direction, quantity, avg_entry_price)
+- Handles position opening, increasing, reducing, and closing
+- Supports pyramiding: configurable maximum entries in same direction (0 = single entry, N = up to N entries)
+- Handles position reversal: opposite-direction entry closes existing position first, then opens new position
+
+**4.5 Commission & Slippage:**
+- Commission types: percent of trade value, cash per contract, cash per order
+- Slippage modes: fixed ticks, fixed points, percentage of price
+- Configurable via strategy() declaration parameters
+
+#### 5. Bar Processing Loop
+```
+for each bar in historical range (chronological):
+    if multi-timeframe needed, align requested TF data via Request System
+    execute Pine strategy on current bar (existing Execution Engine)
+    after script execution, process pending OrderRequest events:
+        for each OrderRequest:
+            validate against account state (margin, pyramiding)
+            if valid, register as PendingOrder in Order Manager
+    advance simulated clock to bar close time
+    check fill conditions for all active orders via Fill Engine
+    apply fills, update positions, P&L, margin, equity
+    record EquityPoint { time, equity, drawdown }
+    expire orders past their validity (GTC, day orders)
+    update progress percentage
+```
+
+#### 6. Intrabar Magnification (Bar Magnifier)
+- When enabled, retrieve a lower-resolution data series (e.g., 1-minute bars for daily charts)
+- Instead of using bar OHLC for fill decisions, iterate through lower-resolution sub-bars
+- On each sub-bar, re-evaluate order fill conditions using the sub-bar's price range
+- Entry/exit prices reflect the exact sub-bar price where fill conditions are met
+- Produces more realistic fill prices than open-close bar granularity
+
+#### 7. Performance Metrics Computation
+
+**Trade Metrics** (per trade):
+- Entry/exit time, price, size, direction
+- P&L (gross and net of commission)
+- Percent return
+- Bars held (duration in bars)
+- MAE (Maximum Adverse Excursion)
+- MFE (Maximum Favorable Excursion)
+
+**Portfolio Metrics:**
+- Total Net Profit, Gross Profit, Gross Loss
+- Profit Factor = Gross Profit / Gross Loss
+- Percent Profitable (Win Rate) = Winning Trades / Total Trades × 100
+- Average Trade = Net Profit / Number of Trades
+- Average Winning Trade, Average Losing Trade
+- Sharpe Ratio = (Mean(R) - Rf) / StdDev(R) — annualized, using daily equity returns
+- Sortino Ratio = (Mean(R) - Rf) / DownsideDev(R) — only downside deviation
+- Max Drawdown (absolute value and percentage)
+- Max Drawdown Duration (longest period from peak to recovery)
+- Average Bars in Trade
+- Return on Initial Capital = Net Profit / Initial Capital × 100
+- Buy & Hold Return (for comparison with strategy return)
+
+**Calculation method:**
+1. Collect all closed Trades from the simulation
+2. Build equity curve from EquityPoint records
+3. Compute daily returns from equity curve (EQ[t] / EQ[t-1] - 1)
+4. Apply metric formulas to daily returns and trade list
+
+#### 8. Data Models
+```
+Bar:             { time, open, high, low, close, volume }
+OrderRequest:    { id, strategy_id, direction, qty, limit_price, stop_price, order_type, oca_group }
+Order:           { id, request_id, status (pending|accepted|filled|cancelled|expired), fill_price, fill_time, commission, slippage }
+Position:        { symbol, direction, quantity, avg_entry_price, current_price, unrealized_pnl }
+Trade:           { entry_order_id, exit_order_id, direction, qty, entry_time, exit_time, entry_price, exit_price, gross_pnl, commission, net_pnl, return_pct, bars_held, mae, mfe }
+Account:         { initial_capital, balance, equity, margin_used, free_margin, currency }
+EquityPoint:     { time, equity, balance, drawdown_pct, drawdown_value }
+BacktestResult:  { config, metrics, trades[], equity_curve[], orders[] }
+```
+
+#### 9. REST API Specification
+
+**Submit Backtest:**
+```
+POST /api/backtest
+Request: {
+  "script": "//@version=6\nstrategy('My Strategy')\n...",
+  "symbol": "BTCUSDT",
+  "timeframe": "1D",
+  "start_date": "2020-01-01",
+  "end_date": "2023-01-01",
+  "initial_capital": 10000,
+  "commission_type": "percent",
+  "commission_value": 0.1,
+  "slippage": 1,
+  "pyramiding": 0,
+  "bar_magnifier": true,
+  "inputs": { "fast_len": 12, "slow_len": 26 }
+}
+Response: { "job_id": "uuid" }
+```
+
+**Get Backtest Status:**
+```
+GET /api/backtest/{job_id}
+Response: { "status": "queued|running|completed|failed", "progress": 85, "result_url": "/api/backtest/{job_id}/result" }
+```
+
+**Retrieve Result:**
+```
+GET /api/backtest/{job_id}/result
+Response: {
+  "metrics": { "net_profit": ..., "profit_factor": ..., "sharpe_ratio": ..., "max_drawdown_pct": ..., ... },
+  "equity_curve": [{"time": "2020-01-01", "equity": 10000, "drawdown_pct": 0}, ...],
+  "trades": [{ "entry_time": ..., "exit_time": ..., "pnl": ..., ... }],
+  "orders": [{ "id": ..., "status": ..., "fill_price": ..., ... }]
+}
+```
+
+#### 10. Broker Emulator Properties
+- `commission_type`: "percent" | "cash_per_contract" | "cash_per_order"
+- `commission_value`: number (percentage or absolute amount)
+- `slippage`: number in ticks/points/percent (configurable mode)
+- `initial_margin`: percentage (e.g., 50 for 2x leverage)
+- `maintenance_margin`: percentage (e.g., 25)
+- `default_qty_type`: "contracts" | "percent_of_equity" | "cash"
+- `default_qty_value`: number
+- `pyramiding`: 0 (no pyramiding), N (max N entries in same direction)
+- `currency`: "USD" | "BTC" | etc.
+
+#### 11. Testing Strategy
+- Unit tests for fill logic (market, limit, stop, stop-limit)
+- Unit tests for margin calculations and liquidation
+- Unit tests for commission and slippage calculations
+- Unit tests for each performance metric formula
+- Integration tests: run standard Pine strategies (SMA crossover, etc.) and compare metrics to TradingView output within 0.1% tolerance
+- Regression tests: curated library of scripts with known expected results
+- Performance tests: backtest on 1M bars must complete within 10 seconds
+
+#### 12. Deployment Considerations
+- Pine runtime isolated in sandbox (WebAssembly or restricted process)
+- Backtest workers scaled horizontally; message queue (RabbitMQ/Redis) for job distribution
+- Results stored in time-series or document database (MongoDB/InfluxDB)
+- Chart rendering via lightweight-charts or existing Canvas Charting Library
+
 ### Future Extensibility
 
 #### 1. Language Evolution
