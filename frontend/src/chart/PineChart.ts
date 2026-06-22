@@ -1,0 +1,364 @@
+import type {
+  CandlestickData,
+  PlotSeriesData,
+  ShapeMarkerData,
+  StrategyMarkerData,
+  FillData,
+  HLineData,
+  ChartOptions,
+} from './types.js';
+import { DEFAULT_OPTIONS } from './types.js';
+import { Viewport } from './Viewport.js';
+import { LayoutManager } from './LayoutManager.js';
+import { InteractionHandler } from './InteractionHandler.js';
+import { CandlestickRenderer } from './renderers/CandlestickRenderer.js';
+import { VolumeRenderer } from './renderers/VolumeRenderer.js';
+import { LineRenderer, type PlotRenderOptions } from './renderers/LineRenderer.js';
+import { AreaRenderer } from './renderers/AreaRenderer.js';
+import { MarkerRenderer } from './renderers/MarkerRenderer.js';
+import { HLineRenderer } from './renderers/HLineRenderer.js';
+import { GridRenderer } from './renderers/GridRenderer.js';
+import { AxisRenderer } from './renderers/AxisRenderer.js';
+import { CrosshairRenderer } from './renderers/CrosshairRenderer.js';
+
+export interface PlotSeriesHandle {
+  name: string;
+  options: PlotRenderOptions;
+  data: PlotSeriesData[];
+}
+
+export interface ChartEventCallbacks {
+  onCrosshairMove?: (barIndex: number, price: number) => void;
+  onVisibleRangeChange?: (start: number, end: number) => void;
+  onResize?: (width: number, height: number) => void;
+}
+
+export class PineChart {
+  private canvas: HTMLCanvasElement;
+  private offscreen: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private offCtx: CanvasRenderingContext2D;
+  private options: Required<ChartOptions>;
+  private viewport: Viewport;
+  private layout: LayoutManager;
+  private interaction: InteractionHandler;
+  private dirty: boolean = true;
+  private animFrame: number = 0;
+  private resizeObserver: ResizeObserver;
+
+  private candlestickRenderer: CandlestickRenderer;
+  private volumeRenderer: VolumeRenderer;
+  private lineRenderer: LineRenderer;
+  private areaRenderer: AreaRenderer;
+  private markerRenderer: MarkerRenderer;
+  private hlineRenderer: HLineRenderer;
+  private gridRenderer: GridRenderer;
+  private axisRenderer: AxisRenderer;
+  private crosshairRenderer: CrosshairRenderer;
+
+  private candles: CandlestickData[] = [];
+  private plotSeries: Map<string, PlotSeriesHandle> = new Map();
+  private shapeMarkers: ShapeMarkerData[] = [];
+  private strategyMarkers: StrategyMarkerData[] = [];
+  private fills: FillData[] = [];
+  private hlines: HLineData[] = [];
+  private barColors: Map<number, string> = new Map();
+  private eventCallbacks: ChartEventCallbacks = {};
+
+  constructor(container: HTMLElement, options: ChartOptions = {}) {
+    this.options = { ...DEFAULT_OPTIONS, ...options };
+
+    this.canvas = document.createElement('canvas');
+    this.canvas.style.width = '100%';
+    this.canvas.style.height = '100%';
+    this.canvas.style.cursor = 'crosshair';
+    container.appendChild(this.canvas);
+
+    this.offscreen = document.createElement('canvas');
+
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D not supported');
+    this.ctx = ctx;
+
+    const offCtx = this.offscreen.getContext('2d');
+    if (!offCtx) throw new Error('Offscreen canvas 2D not supported');
+    this.offCtx = offCtx;
+
+    this.viewport = new Viewport(
+      this.options.barSpacing,
+      this.options.minBarSpacing,
+      this.options.maxBarSpacing,
+    );
+
+    this.layout = new LayoutManager(
+      this.options.priceScaleWidth,
+      this.options.timeScaleHeight,
+      this.options.volumeHeightRatio,
+    );
+
+    this.candlestickRenderer = new CandlestickRenderer();
+    this.volumeRenderer = new VolumeRenderer();
+    this.lineRenderer = new LineRenderer();
+    this.areaRenderer = new AreaRenderer();
+    this.markerRenderer = new MarkerRenderer();
+    this.hlineRenderer = new HLineRenderer();
+    this.gridRenderer = new GridRenderer();
+    this.axisRenderer = new AxisRenderer();
+    this.crosshairRenderer = new CrosshairRenderer();
+
+    this.interaction = new InteractionHandler(
+      this.canvas,
+      this.viewport,
+      {
+        onCrosshairMove: (x, y) => {
+          this.crosshairRenderer.setPosition(x, y);
+          this.markDirty();
+        },
+        onCrosshairHide: () => {
+          this.crosshairRenderer.hide();
+          this.markDirty();
+        },
+        onVisibleRangeChange: () => {
+          this.markDirty();
+          const range = this.viewport.getVisibleRange();
+          this.eventCallbacks.onVisibleRangeChange?.(range.start, range.end);
+        },
+        onResize: () => {
+          this.resize();
+        },
+      },
+      this.canvas.clientWidth * (window.devicePixelRatio || 1),
+    );
+
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
+
+    this.resize();
+    this.startRenderLoop();
+  }
+
+  private resize(): void {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = this.canvas.parentElement?.getBoundingClientRect();
+    if (!rect) return;
+
+    const w = rect.width;
+    const h = rect.height;
+
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
+    this.offscreen.width = w * dpr;
+    this.offscreen.height = h * dpr;
+
+    this.layout.calculate(w * dpr, h * dpr);
+    this.interaction.setChartWidth(w * dpr);
+    this.markDirty();
+    this.eventCallbacks.onResize?.(w, h);
+  }
+
+  private startRenderLoop(): void {
+    const loop = () => {
+      if (this.dirty) {
+        this.render();
+        this.dirty = false;
+      }
+      this.animFrame = requestAnimationFrame(loop);
+    };
+    this.animFrame = requestAnimationFrame(loop);
+  }
+
+  private markDirty(): void {
+    this.dirty = true;
+  }
+
+  private render(): void {
+    const ctx = this.offCtx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = this.options.background;
+    ctx.fillRect(0, 0, w, h);
+
+    if (this.candles.length === 0) {
+      this.ctx.clearRect(0, 0, w, h);
+      this.ctx.drawImage(this.offscreen, 0, 0);
+      return;
+    }
+
+    this.updatePriceRange();
+    this.updateVolumeMax();
+
+    this.gridRenderer.render(ctx, this.viewport, this.layout, this.options.gridColor);
+
+    const allPlots = new Map<string, PlotSeriesData[]>();
+    for (const [key, handle] of this.plotSeries) {
+      allPlots.set(key, handle.data);
+    }
+
+    this.areaRenderer.render(ctx, this.fills, allPlots, this.viewport, this.layout);
+
+    this.volumeRenderer.render(ctx, this.candles, this.viewport, this.layout);
+
+    this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.barColors);
+
+    this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
+
+    for (const [_key, handle] of this.plotSeries) {
+      this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
+    }
+
+    this.markerRenderer.renderShapes(ctx, this.shapeMarkers, this.candles, this.viewport, this.layout);
+
+    this.markerRenderer.renderStrategyMarkers(ctx, this.strategyMarkers, this.candles, this.viewport, this.layout);
+
+    this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
+    this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
+
+    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor);
+
+    this.ctx.clearRect(0, 0, w, h);
+    this.ctx.drawImage(this.offscreen, 0, 0);
+  }
+
+  private updatePriceRange(): void {
+    const range = this.viewport.getVisibleRange();
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (let i = range.start; i < range.end && i < this.candles.length; i++) {
+      const c = this.candles[i];
+      if (c.low < min) min = c.low;
+      if (c.high > max) max = c.high;
+    }
+
+    for (const [_key, handle] of this.plotSeries) {
+      for (let i = range.start; i < range.end && i < handle.data.length; i++) {
+        const v = handle.data[i]?.value;
+        if (v !== null && v !== undefined) {
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+    }
+
+    if (min === Infinity) min = 0;
+    if (max === -Infinity) max = 100;
+    this.layout.setPriceRange(min, max);
+  }
+
+  private updateVolumeMax(): void {
+    const range = this.viewport.getVisibleRange();
+    let maxVol = 0;
+    for (let i = range.start; i < range.end && i < this.candles.length; i++) {
+      if (this.candles[i].volume > maxVol) maxVol = this.candles[i].volume;
+    }
+    this.layout.setVolumeMax(maxVol);
+  }
+
+  setCandles(data: CandlestickData[]): void {
+    this.candles = data;
+    this.viewport.setTotalBars(data.length);
+    this.markDirty();
+  }
+
+  setVolume(_data: CandlestickData[]): void {
+    // Volume is derived from candles
+    this.markDirty();
+  }
+
+  addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}): PlotSeriesHandle {
+    const handle: PlotSeriesHandle = {
+      name,
+      options: {
+        color: options.color ?? '#2196f3',
+        lineWidth: options.lineWidth ?? 1,
+        style: options.style ?? 'line',
+        histbase: options.histbase,
+      },
+      data: [],
+    };
+    this.plotSeries.set(name, handle);
+    return handle;
+  }
+
+  setPlotData(name: string, data: PlotSeriesData[]): void {
+    const handle = this.plotSeries.get(name);
+    if (handle) {
+      handle.data = data;
+      this.markDirty();
+    }
+  }
+
+  removeSeries(name: string): void {
+    this.plotSeries.delete(name);
+    this.markDirty();
+  }
+
+  setMarkers(markers: ShapeMarkerData[]): void {
+    this.shapeMarkers = markers;
+    this.markDirty();
+  }
+
+  setStrategyMarkers(markers: StrategyMarkerData[]): void {
+    this.strategyMarkers = markers;
+    this.markDirty();
+  }
+
+  setFills(fills: FillData[]): void {
+    this.fills = fills;
+    this.markDirty();
+  }
+
+  setHLines(hlines: HLineData[]): void {
+    this.hlines = hlines;
+    this.markDirty();
+  }
+
+  setBarColors(colors: Map<number, string>): void {
+    this.barColors = colors;
+    this.markDirty();
+  }
+
+  timeScale() {
+    return {
+      fitContent: () => {
+        this.viewport.fitContent(this.canvas.width);
+        this.markDirty();
+      },
+      scrollTo: (barIndex: number) => {
+        this.viewport.scrollTo(barIndex, this.canvas.width);
+        this.markDirty();
+      },
+      scrollToDate: (_timestamp: number) => {
+        this.markDirty();
+      },
+    };
+  }
+
+  applyOptions(options: Partial<ChartOptions>): void {
+    Object.assign(this.options, options);
+    this.markDirty();
+  }
+
+  on(event: string, callback: (...args: any[]) => void): void {
+    if (event === 'onCrosshairMove') {
+      this.eventCallbacks.onCrosshairMove = callback;
+    } else if (event === 'onVisibleRangeChange') {
+      this.eventCallbacks.onVisibleRangeChange = callback;
+    } else if (event === 'onResize') {
+      this.eventCallbacks.onResize = callback;
+    }
+  }
+
+  remove(): void {
+    this.resizeObserver.disconnect();
+    this.interaction.destroy();
+    cancelAnimationFrame(this.animFrame);
+    this.canvas.parentElement?.removeChild(this.canvas);
+  }
+}
+
+export function createChart(container: HTMLElement, options?: ChartOptions): PineChart {
+  return new PineChart(container, options);
+}

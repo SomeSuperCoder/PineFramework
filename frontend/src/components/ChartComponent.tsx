@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { createChart, type IChartApi, type ISeriesApi } from 'lightweight-charts';
-import type { CandlestickData, ScriptResult } from '../types';
+import { PineChart, createChart } from '../chart';
+import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData } from '../chart';
+import type { ScriptResult } from '../types';
 
 interface ChartComponentProps {
   data: CandlestickData[];
@@ -9,261 +10,128 @@ interface ChartComponentProps {
 }
 
 export function ChartComponent({ data, scriptResult, dataVersion }: ChartComponentProps) {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candlestickRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const seriesRefs = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<PineChart | null>(null);
+  const seriesNamesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    if (!containerRef.current) return;
 
-    const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { color: '#1a1a2e' },
-        textColor: '#e0e0e0',
-      },
-      grid: {
-        vertLines: { color: '#2a2a4e' },
-        horzLines: { color: '#2a2a4e' },
-      },
-      crosshair: {
-        mode: 0,
-      },
-      rightPriceScale: {
-        borderColor: '#0f3460',
-      },
-      timeScale: {
-        borderColor: '#0f3460',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
-
-    const candlestickSeries = chart.addCandlestickSeries({
-      upColor: '#4caf50',
-      downColor: '#e94560',
-      borderUpColor: '#4caf50',
-      borderDownColor: '#e94560',
-      wickUpColor: '#4caf50',
-      wickDownColor: '#e94560',
-    });
-
-    const volumeSeries = chart.addHistogramSeries({
-      priceFormat: {
-        type: 'volume',
-      },
-      priceScaleId: 'volume',
-    });
-
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: {
-        top: 0.8,
-        bottom: 0,
-      },
+    const chart = createChart(containerRef.current, {
+      background: '#1a1a2e',
+      textColor: '#e0e0e0',
+      gridColor: '#2a2a4e',
+      borderColor: '#0f3460',
+      barSpacing: 8,
     });
 
     chartRef.current = chart;
-    candlestickRef.current = candlestickSeries;
-    volumeRef.current = volumeSeries;
-
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    handleResize();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
       chart.remove();
+      chartRef.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!candlestickRef.current || !volumeRef.current) return;
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
 
-    const validData = data.filter((d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
+    const validData = data.filter(
+      (d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close),
+    );
 
-    const candleData = validData.map((d) => ({
-      time: d.time as unknown as import('lightweight-charts').Time,
-      open: d.open,
-      high: d.high,
-      low: d.low,
-      close: d.close,
-    }));
-
-    const volumeData = validData.map((d) => ({
-      time: d.time as unknown as import('lightweight-charts').Time,
-      value: d.volume,
-      color: d.close >= d.open ? 'rgba(76, 175, 80, 0.5)' : 'rgba(233, 69, 96, 0.5)',
-    }));
-
-    candlestickRef.current.setData(candleData);
-    volumeRef.current.setData(volumeData);
-    chartRef.current?.timeScale().fitContent();
+    chart.setCandles(validData);
+    chart.timeScale().fitContent();
   }, [data, dataVersion]);
 
   useEffect(() => {
     if (!chartRef.current || !scriptResult) return;
+    const chart = chartRef.current;
 
-    seriesRefs.current.forEach((series) => {
-      chartRef.current?.removeSeries(series);
-    });
-    seriesRefs.current.clear();
+    for (const name of seriesNamesRef.current) {
+      chart.removeSeries(name);
+    }
+    seriesNamesRef.current.clear();
 
-    scriptResult.plots.forEach((plot, index) => {
-      const series = chartRef.current?.addLineSeries({
-        color: plot.color || '#2196f3',
+    const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
+    let colorIndex = 0;
+
+    const ohlcvMap = new Map<number, CandlestickData>();
+    for (const c of data) {
+      ohlcvMap.set(c.time, c);
+    }
+
+    const plotKeyToTimeMap = new Map<string, Map<number, number>>();
+
+    for (const plot of scriptResult.plots) {
+      let title = plot.title || `Plot ${colorIndex + 1}`;
+      let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
+      colorIndex++;
+
+      chart.addPlotSeries(title, {
+        color: plotColor,
         lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-        title: plot.title || `Plot ${index + 1}`,
-        priceLineVisible: false,
-        lastValueVisible: false,
+        style: plot.type as any || 'line',
       });
+      seriesNamesRef.current.add(title);
 
-      if (series) {
-        const lineData = plot.data
-          .filter((d): d is { time: number; value: number } => d.value !== null)
-          .map((d) => ({
-            time: d.time as unknown as import('lightweight-charts').Time,
-            value: d.value,
-          }));
-        series.setData(lineData);
-        seriesRefs.current.set(`plot_${index}`, series);
+      const seriesData: PlotSeriesData[] = [];
+      const tsMap = new Map<number, number>();
+
+      for (const d of plot.data) {
+        if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
+          seriesData.push({ time: d.time, value: d.value });
+          tsMap.set(d.time, d.value);
+        } else {
+          seriesData.push({ time: d.time, value: null });
+        }
       }
-    });
 
-    // Merge shapes and strategy markers into a single markers array
-    const allMarkers: Array<{
-      time: import('lightweight-charts').Time;
-      position: import('lightweight-charts').SeriesMarkerPosition;
-      shape: import('lightweight-charts').SeriesMarkerShape;
-      color: string;
-      text?: string;
-    }> = [];
+      plotKeyToTimeMap.set(title, tsMap);
+      chart.setPlotData(title, seriesData);
+    }
 
-    if (scriptResult.shapes && scriptResult.shapes.length > 0) {
-      const shapeMap: Record<string, string> = {
-        triangleup: 'arrowUp',
-        triangledown: 'arrowDown',
-        circle: 'circle',
-        square: 'square',
-        diamond: 'circle',
-        arrowup: 'arrowUp',
-        arrowdown: 'arrowDown',
+    const shapeMarkers: ShapeMarkerData[] = (scriptResult.shapes || []).map((s) => {
+      const candle = ohlcvMap.get(s.time);
+      const barIdx = candle ? data.indexOf(candle) : -1;
+      return {
+        time: s.time,
+        position: (s.location || 'abovebar') as ShapeMarkerData['position'],
+        shape: s.type,
+        color: s.color || '#2196f3',
+        text: s.text || undefined,
+        barIndex: barIdx >= 0 ? barIdx : undefined,
       };
-      for (const s of scriptResult.shapes) {
-        allMarkers.push({
-          time: s.time as unknown as import('lightweight-charts').Time,
-          position: (s.location === 'belowbar' ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
-          shape: (shapeMap[s.type] || 'circle') as import('lightweight-charts').SeriesMarkerShape,
-          color: s.color || '#2196f3',
-          text: s.text || undefined,
-        });
-      }
-    }
+    });
+    chart.setMarkers(shapeMarkers);
 
-    if (scriptResult.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
-      for (const m of scriptResult.strategyMarkers) {
-        if (m.type === 'cancel' || m.type === 'cancel_all') continue;
-        const isLong = m.direction === 'long';
-        const isEntry = m.type === 'entry';
-        allMarkers.push({
-          time: Math.floor(m.timestamp / 1000) as unknown as import('lightweight-charts').Time,
-          position: (isEntry ? 'belowBar' : 'aboveBar') as import('lightweight-charts').SeriesMarkerPosition,
-          shape: ((isLong ? 'arrowUp' : 'arrowDown')) as import('lightweight-charts').SeriesMarkerShape,
-          color: m.color || (isEntry ? (isLong ? '#4caf50' : '#e91e63') : (isLong ? '#f44336' : '#2196f3')),
-          text: m.comment || (isEntry ? m.name : '') || undefined,
-        });
-      }
-    }
+    const stratMarkers: StrategyMarkerData[] = (scriptResult.strategyMarkers || []).map((m) => ({
+      type: m.type,
+      name: m.name,
+      direction: m.direction,
+      timestamp: m.timestamp,
+      color: m.color,
+      comment: m.comment,
+      barIndex: m.barIndex,
+    }));
+    chart.setStrategyMarkers(stratMarkers);
 
-    if (allMarkers.length > 0) {
-      const markerSeries = seriesRefs.current.values().next().value;
-      if (markerSeries) {
-        allMarkers.sort((a, b) => (a.time as number) - (b.time as number));
-        markerSeries.setMarkers(allMarkers);
-      }
-    }
+    const fills: FillData[] = (scriptResult.fills || []).map((f) => ({
+      from: f.from,
+      to: f.to,
+      color: f.color,
+    }));
+    chart.setFills(fills);
 
-    if (scriptResult.fills && scriptResult.fills.length > 0) {
-      const plotMap = new Map<string, Map<number, number>>();
-      scriptResult.plots.forEach((plot) => {
-        const tsMap = new Map<number, number>();
-        plot.data.forEach((d) => {
-          if (d.value !== null) tsMap.set(d.time, d.value);
-        });
-        plotMap.set(plot.title || '', tsMap);
-      });
-      scriptResult.fills.forEach((fill, index) => {
-        const fromData = plotMap.get(fill.from);
-        const toData = plotMap.get(fill.to);
-        if (fromData && toData) {
-          const allTimes = new Set([...fromData.keys(), ...toData.keys()]);
-          const fillData = [...allTimes]
-            .sort((a, b) => a - b)
-            .map((time) => {
-              const v1 = fromData.get(time);
-              const v2 = toData.get(time);
-              if (v1 !== undefined && v2 !== undefined) {
-                return {
-                  time: time as unknown as import('lightweight-charts').Time,
-                  value: Math.max(v1, v2),
-                };
-              }
-              return null;
-            })
-            .filter((d): d is { time: import('lightweight-charts').Time; value: number } => d !== null);
-          if (fillData.length > 0) {
-            const areaSeries = chartRef.current?.addAreaSeries({
-              lineColor: fill.color,
-              topColor: fill.color,
-              bottomColor: 'transparent',
-              lineWidth: 1,
-              priceLineVisible: false,
-              lastValueVisible: false,
-              title: `Fill ${index + 1}`,
-            });
-            if (areaSeries) {
-              areaSeries.setData(fillData);
-              seriesRefs.current.set(`fill_${index}`, areaSeries as any);
-            }
-          }
-        }
-      });
-    }
+    chart.setHLines([]);
 
-    if (scriptResult.lines) {
-      scriptResult.lines.forEach((line, index) => {
-        const series = chartRef.current?.addLineSeries({
-          color: line.color || '#ffc107',
-          lineWidth: (line.width as 1 | 2 | 3 | 4) || 1,
-          lineStyle: line.style === 'dotted' ? 1 : line.style === 'dashed' ? 2 : 0,
-          title: `Line ${index + 1}`,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-
-        if (series) {
-          const lineData = line.points.map((p) => ({
-            time: p.time as unknown as import('lightweight-charts').Time,
-            value: p.price,
-          }));
-          series.setData(lineData);
-          seriesRefs.current.set(`line_${index}`, series);
-        }
-      });
-    }
-  }, [scriptResult]);
+    chart.setBarColors(new Map());
+  }, [scriptResult, data]);
 
   return (
-    <div className="chart-panel">
-      <div ref={chartContainerRef} style={{ width: '100%', height: '100%' }} />
+    <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
 }
