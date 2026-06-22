@@ -135,6 +135,8 @@ export function useChartData() {
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
+    setCandles([]);
+    ohlcvDataRef.current = [];
     try {
       const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`);
       if (!response.ok) {

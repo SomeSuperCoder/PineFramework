@@ -50,8 +50,8 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
 
     chart.setCandles(validData);
 
-    if (shouldFitRef.current && validData.length > 0) {
-      chart.timeScale().fitContent();
+    if (shouldFitRef.current && validData.length > 10) {
+      chart.timeScale().scrollTo(validData.length - 1);
       shouldFitRef.current = false;
     }
   }, [data]);

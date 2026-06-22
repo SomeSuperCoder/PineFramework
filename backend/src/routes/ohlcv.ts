@@ -26,7 +26,7 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
       }
 
       const cached = cache.get(symbol, interval);
-      if (cached) {
+      if (cached && cached.length >= limit) {
         res.json({ symbol, interval, data: cached.slice(-limit) });
         return;
       }
