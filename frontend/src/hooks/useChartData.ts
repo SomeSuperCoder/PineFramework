@@ -21,6 +21,107 @@ interface ExecuteResponse {
   }>;
 }
 
+interface ExecutionResultMessage {
+  success: boolean;
+  error?: string;
+  outputs: Record<string, (number | string | boolean | null)[]>;
+  shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
+  fills: Array<{ from: string; to: string; color: string }>;
+  strategyMarkers: Array<{
+    type: string;
+    name: string;
+    direction: string;
+    action: string;
+    quantity: number;
+    price: number;
+    barIndex: number;
+    timestamp: number;
+    color: string;
+    comment?: string;
+  }>;
+  barIndex: number;
+}
+
+const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
+
+function buildScriptResult(
+  outputs: Record<string, (number | string | boolean | null)[]>,
+  shapes: ExecutionResultMessage['shapes'],
+  fills: ExecutionResultMessage['fills'],
+  strategyMarkers: ExecutionResultMessage['strategyMarkers'],
+  ohlcvData: Array<{ timestamp: number }>,
+): ScriptResult {
+  const plotData: import('../types').PlotData[] = [];
+  let colorIndex = 0;
+  for (const [key, values] of Object.entries(outputs)) {
+    let title = key;
+    let plotColor: string | undefined;
+    let lineWidth: number | undefined;
+    const colorMatch = key.match(/__color:([^_]+)/);
+    const lwMatch = key.match(/__lw:(\d+)/);
+    if (colorMatch) plotColor = colorMatch[1];
+    if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
+    title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
+    if (!plotColor) {
+      plotColor = COLORS[colorIndex % COLORS.length];
+    }
+    colorIndex++;
+    plotData.push({
+      type: 'line',
+      data: values
+        .map((v, i) => {
+          const ts = ohlcvData[i]?.timestamp;
+          if (ts === undefined) return null;
+          let numValue: number | null;
+          if (v === null || v === undefined) {
+            numValue = null;
+          } else if (typeof v === 'boolean') {
+            numValue = v ? 1 : 0;
+          } else if (typeof v === 'number') {
+            numValue = v;
+          } else {
+            numValue = null;
+          }
+          return { time: Math.floor(ts / 1000), value: numValue };
+        })
+        .filter((d): d is { time: number; value: number | null } => d !== null),
+      color: plotColor,
+      lineWidth,
+      title,
+    });
+  }
+
+  const shapeData: import('../types').ShapeData[] = (shapes || []).map((s) => ({
+    type: s.style as import('../types').ShapeData['type'],
+    time: Math.floor(s.time / 1000),
+    price: 0,
+    color: s.color,
+    text: s.text,
+    location: s.location as import('../types').ShapeData['location'],
+  }));
+
+  return {
+    plots: plotData,
+    shapes: shapeData,
+    lines: [],
+    boxes: [],
+    labels: [],
+    fills: (fills || []).map((f) => ({ from: f.from, to: f.to, color: f.color })),
+    strategyMarkers: (strategyMarkers || []).map((m) => ({
+      type: m.type,
+      name: m.name,
+      direction: m.direction,
+      action: m.action,
+      quantity: m.quantity,
+      price: m.price,
+      barIndex: m.barIndex,
+      timestamp: m.timestamp,
+      color: m.color,
+      comment: m.comment,
+    })),
+  };
+}
+
 export function useChartData() {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [scriptResult, setScriptResult] = useState<ScriptResult | null>(null);
@@ -29,6 +130,8 @@ export function useChartData() {
   const [isLoading, setIsLoading] = useState(true);
   const wsRef = useRef<WebSocket | null>(null);
   const subscribedTopicRef = useRef<string | null>(null);
+  const lastCodeRef = useRef<string | null>(null);
+  const ohlcvDataRef = useRef<Array<{ timestamp: number }>>([]);
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
@@ -48,6 +151,7 @@ export function useChartData() {
       })).filter((d: CandlestickData) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
       data.sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
       setCandles(data);
+      ohlcvDataRef.current = json.data;
     } catch (err) {
       console.error('Failed to fetch OHLCV:', err);
       setErrors((prev) => [...prev, {
@@ -56,6 +160,26 @@ export function useChartData() {
       }]);
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
+    const ohlcvData = ohlcvDataRef.current;
+    if (msg.success && msg.outputs) {
+      const result = buildScriptResult(
+        msg.outputs,
+        msg.shapes || [],
+        msg.fills || [],
+        msg.strategyMarkers || [],
+        ohlcvData,
+      );
+      setScriptResult(result);
+    }
+    if (msg.error) {
+      setErrors((prev) => [...prev, {
+        type: 'error',
+        message: msg.error || 'Execution failed',
+      }]);
     }
   }, []);
 
@@ -93,6 +217,17 @@ export function useChartData() {
               }
               return newCandles;
             });
+            if (k.timestamp) {
+              const ohlcvBar = { timestamp: k.timestamp * 1000 };
+              ohlcvDataRef.current = [...ohlcvDataRef.current.slice(-999), ohlcvBar];
+            }
+          } else if (data.type === 'execution_result' && data.data) {
+            handleExecutionResult(data.data);
+          } else if (data.type === 'error' && data.data) {
+            setErrors((prev) => [...prev, {
+              type: 'error',
+              message: data.data.message || 'WebSocket error',
+            }]);
           }
         } catch {
           // ignore parse errors
@@ -112,7 +247,7 @@ export function useChartData() {
     } catch {
       // retry
     }
-  }, []);
+  }, [handleExecutionResult]);
 
   const subscribe = useCallback((symbol: string, interval: string) => {
     const topic = `kline.${interval}.${symbol}`;
@@ -135,10 +270,12 @@ export function useChartData() {
 
   const executeScript = useCallback(async (code: string, symbol: string, interval: string) => {
     setErrors([]);
+    lastCodeRef.current = code;
     try {
       const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
       if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
       const ohlcvJson = await ohlcvResponse.json();
+      ohlcvDataRef.current = ohlcvJson.data;
 
       const response = await fetch('/api/execute', {
         method: 'POST',
@@ -161,76 +298,21 @@ export function useChartData() {
         return;
       }
 
-      const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
-      const plotData: import('../types').PlotData[] = [];
-      let colorIndex = 0;
-      for (const [key, values] of Object.entries(result.outputs)) {
-        let title = key;
-        let plotColor: string | undefined;
-        let lineWidth: number | undefined;
-        const colorMatch = key.match(/__color:([^_]+)/);
-        const lwMatch = key.match(/__lw:(\d+)/);
-        if (colorMatch) plotColor = colorMatch[1];
-        if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-        title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
-        if (!plotColor) {
-          plotColor = COLORS[colorIndex % COLORS.length];
-        }
-        colorIndex++;
-        plotData.push({
-          type: 'line',
-          data: values
-            .map((v, i) => {
-              const ts = ohlcvJson.data[i]?.timestamp;
-              if (ts === undefined) return null;
-              let numValue: number | null;
-              if (v === null || v === undefined) {
-                numValue = null;
-              } else if (typeof v === 'boolean') {
-                numValue = v ? 1 : 0;
-              } else if (typeof v === 'number') {
-                numValue = v;
-              } else {
-                numValue = null;
-              }
-              return { time: Math.floor(ts / 1000), value: numValue };
-            })
-            .filter((d): d is { time: number; value: number | null } => d !== null),
-          color: plotColor,
-          lineWidth,
-          title,
-        });
+      const scriptRes = buildScriptResult(
+        result.outputs,
+        result.shapes || [],
+        result.fills || [],
+        result.strategyMarkers || [],
+        ohlcvJson.data,
+      );
+      setScriptResult(scriptRes);
+
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'execute',
+          data: { source: code, symbol, interval, bars: ohlcvJson.data },
+        }));
       }
-
-      const shapeData: import('../types').ShapeData[] = (result.shapes || []).map((s) => ({
-        type: s.style as import('../types').ShapeData['type'],
-        time: Math.floor(s.time / 1000),
-        price: 0,
-        color: s.color,
-        text: s.text,
-        location: s.location as import('../types').ShapeData['location'],
-      }));
-
-      setScriptResult({
-        plots: plotData,
-        shapes: shapeData,
-        lines: [],
-        boxes: [],
-        labels: [],
-        fills: (result.fills || []).map((f) => ({ from: f.from, to: f.to, color: f.color })),
-        strategyMarkers: (result.strategyMarkers || []).map((m) => ({
-          type: m.type,
-          name: m.name,
-          direction: m.direction,
-          action: m.action,
-          quantity: m.quantity,
-          price: m.price,
-          barIndex: m.barIndex,
-          timestamp: m.timestamp,
-          color: m.color,
-          comment: m.comment,
-        })),
-      });
     } catch (error) {
       setErrors([{
         type: 'error',

@@ -1158,6 +1158,136 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify 25 integration tests pass
   - Ask the user if questions arise.
 
+- [x] 42. Enhance Price Range and Chart Interaction
+  - [x] 42.1 Add manual/auto price range management to LayoutManager
+    - Add `setManualPriceRange()`, `zoomPrice()`, `panPrice()`, `resetAutoPriceRange()` methods
+    - Track manual vs auto price range mode with `manualPriceRange` flag
+    - Auto price range computed from visible candles/plots; manual set by user drag or shift+wheel
+    - _Requirements: 21.67, 21.68, 21.69, 21.70_
+  
+  - [x] 42.2 Add price scale interaction to InteractionHandler
+    - Detect clicks on price scale region vs chart area using LayoutManager regions
+    - Support vertical drag on price scale for panning (ns-resize cursor)
+    - Support Shift+scroll-wheel for vertical zoom on price scale
+    - Add double-click to reset auto price range and fit content
+    - Add `onPriceRangeChange` callback to interaction events
+    - _Requirements: 21.68, 21.69, 21.70_
+  
+  - [x] 42.3 Improve price range computation in PineChart
+    - Filter non-finite and near-zero plot values (|v| < 1e-10) from auto price range
+    - Clamp total price range to at most 10x candle price range to prevent excessive scaling
+    - Handle edge case when no valid candles or plots exist (fallback to 0-100 range)
+    - _Requirements: 21.71, 21.72_
+  
+  - [x]* 42.4 Write tests for price range and interaction enhancements
+    - Test manual price range persistence across candle updates
+    - Test price range clamping with extreme plot values
+    - _Requirements: 21.67, 21.68, 21.69, 21.70, 21.71, 21.72_
+
+- [x] 43. Enhance Strategy Marker Naming and Parameters
+  - [x] 43.1 Add comment parameter to strategy.entry() and strategy.exit()
+    - Accept optional `comment` parameter in StrategyEngine.entry() and StrategyEngine.exit()
+    - Use comment text as marker name when provided, overriding defaults
+    - Forward comment through ExecutionEngine strategy builtins
+    - _Requirements: 8.23, 8.24, 8.25, 8.26_
+  
+  - [x] 43.2 Add stop and limit parameters to strategy.entry() and strategy.exit()
+    - Forward `stop` and `limit` parameters through ExecutionEngine builtins
+    - Support variable-length argument parsing for strategy.entry and strategy.exit
+    - Parse positional args: strategy.entry(id, direction, qty, price, stop, limit, comment)
+    - _Requirements: 8.21, 8.22_
+  
+  - [x] 43.3 Implement TradingView-convention marker naming
+    - Entry markers default to capitalized direction name ("Long"/"Short") when no comment given
+    - Exit markers default to "Exit {id}" format matching TradingView convention
+    - Close markers formatted as "Exit {name}" matching exit marker convention
+    - _Requirements: 8.24, 8.25, 8.26, 8.28_
+  
+  - [x] 43.4 Add comment field to backend strategy markers response
+    - Include `comment` field in each strategy marker entry returned from POST /api/execute
+    - _Requirements: 19.17_
+  
+  - [x] 43.5 Support named arguments for strategy.entry() and strategy.exit()
+    - Parse named arguments object (comment, stop, limit) from last argument in rest params
+    - Merge named values with positional parameters, preferring named when both present
+    - _Requirements: 8.27_
+  
+  - [x]* 43.6 Write tests for strategy naming and parameter enhancements
+    - Test comment parameter overrides default entry/exit marker names
+    - Test "Long"/"Short" default entry marker names by direction
+    - Test "Exit {id}" default exit marker naming
+    - Test comment field in strategy markers via backend execute response
+    - _Requirements: 8.21, 8.22, 8.23, 8.24, 8.25, 8.26, 8.27, 8.28_
+
+- [x] 44. Checkpoint - Price Range and Strategy Naming Validation
+  - Verify manual price range persists across candle updates
+  - Verify double-click resets to auto price range and fits content
+  - Verify Shift+wheel zooms price scale, not time scale
+  - Verify strategy.entry markers show "Long"/"Short" by direction
+  - Verify strategy.exit markers show "Exit {id}" by default
+  - Verify comment parameter overrides marker names for entry and exit
+  - Verify stop and limit parameters forward correctly in strategy builtins
+  - Verify named arguments work for strategy.entry() and strategy.exit()
+  - Verify 819+ tests pass across all suites
+  - Ask the user if questions arise.
+
+- [x] 45. Implement Real-Time Indicator Re-Execution on New Candles
+  - [x] 45.1 Add incremental real-time bar execution API to engine
+    - Expose `executeRealtimeBar(context)` on ExecutionEngine that processes a single new bar while preserving prior state
+    - Ensure `createSnapshot()` and `rollbackToSnapshot()` are used for error recovery during real-time updates
+    - Return full execution result (outputs, shapes, fills, strategyMarkers) from real-time bar execution
+    - _Requirements: 3.15, 3.16, 3.17_
+  
+  - [x] 45.2 Create Backend ScriptSession manager
+    - Maintain a `ScriptSession` per WebSocket client storing: compiled ExecutionEngine instance, source code, current bar array
+    - On `POST /api/execute`, store the compiled engine and bars in the session instead of discarding them
+    - Provide a method to append/update a bar and call `executeRealtimeBar()` on the persisted engine
+    - _Requirements: 19.18, 19.19_
+  
+  - [x] 45.3 Wire kline updates to persisted engine re-execution
+    - When a new kline arrives from Bybit WebSocket, locate the session for the matching client
+    - Append or update the bar in the session's bar set
+    - Call `executeRealtimeBar()` on the persisted engine with the new bar context
+    - _Requirements: 19.19_
+  
+  - [x] 45.4 Push updated results to frontend via WebSocket
+    - Add new `execution_result` WebSocket message type to backend gateway
+    - Send updated outputs, shapes, fills, strategyMarkers, and barIndex after each real-time re-execution
+    - _Requirements: 19.20, 19.21_
+  
+  - [x] 45.5 Add execute command WebSocket message
+    - Support client sending `{ type: "execute", data: { source: "…" } }` over WebSocket to register a script for persistent execution
+    - Parse and compile the script, create the session, and return initial execution results
+    - _Requirements: 19.18_
+  
+  - [x] 45.6 Update Frontend for automatic re-execution
+    - Store the last submitted script code in a ref for automatic re-submission
+    - When WebSocket kline data arrives, after updating candle state, automatically call execute if a script is stored
+    - Handle `execution_result` WebSocket messages to update indicator overlays
+    - _Requirements: 17.26, 17.27, 17.28_
+  
+  - [x] 45.7 Handle incremental candle updates (real-time wick updates)
+    - When a kline arrives with the same timestamp as the last bar, update the bar in-place (live candle wick update)
+    - Re-execute the engine with the updated bar to reflect intra-bar price changes
+    - _Requirements: 19.19_
+
+  - [x]* 45.8 Write tests for real-time execution pipeline
+    - Test incremental bar execution via executeRealtimeBar()
+    - Test ScriptSession persistence and bar append/update
+    - Test execution_result WebSocket message format
+    - Test frontend auto re-execution on kline arrival
+    - _Requirements: 3.15, 3.16, 3.17, 19.18, 19.19, 19.20, 19.21, 17.26, 17.27, 17.28_
+
+- [x] 46. Checkpoint - Real-Time Indicator Re-Execution Validation
+  - Deploy backend and frontend, connect to Bybit
+  - Write a simple SMA crossover indicator script
+  - Verify that when a new candle arrives via WebSocket, the SMA line updates on the chart automatically
+  - Verify that strategy positions and markers update on new candles
+  - Verify that the chart candles update in real-time while indicators track them
+  - Verify that reconnect/re-subscribe still triggers auto-execution
+  - Verify all tests pass
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -1236,7 +1366,15 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 55, "tasks": ["39.3"] },
     { "id": 56, "tasks": ["40.1", "40.2"] },
     { "id": 57, "tasks": ["40.3"] },
-    { "id": 58, "tasks": ["41"] }
+    { "id": 58, "tasks": ["41"] },
+    { "id": 59, "tasks": ["42.1", "42.2", "42.3"] },
+    { "id": 60, "tasks": ["42.4"] },
+    { "id": 61, "tasks": ["43.1", "43.2", "43.3", "43.4", "43.5"] },
+    { "id": 62, "tasks": ["43.6"] },
+    { "id": 63, "tasks": ["44"] },
+    { "id": 64, "tasks": ["45.1", "45.2", "45.3", "45.4", "45.5", "45.6", "45.7"] },
+    { "id": 65, "tasks": ["45.8"] },
+    { "id": 66, "tasks": ["46"] }
   ]
 }
 ```

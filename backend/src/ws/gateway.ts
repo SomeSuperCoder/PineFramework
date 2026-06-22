@@ -2,10 +2,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
+import { ScriptSession } from '../session/ScriptSession.js';
 
 interface ClientSubscription {
   ws: WebSocket;
   topics: Set<string>;
+  session: ScriptSession | null;
 }
 
 const BYBIT_WS_URL = process.env.BYBIT_WS_URL || 'wss://stream.bybit.com/v5/public/linear';
@@ -58,6 +60,8 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
             type: 'kline',
             data: { symbol, interval, ...bar },
           });
+
+          reexecuteForTopic(msg.topic, bar);
         }
       } catch {
         // ignore parse errors
@@ -73,6 +77,30 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
     bybitWs.on('error', (err) => {
       console.error('[WS] Bybit WebSocket error:', err.message);
     });
+  }
+
+  function reexecuteForTopic(topic: string, bar: Bar): void {
+    const subscribers = topicCallbacks.get(topic);
+    if (!subscribers) return;
+
+    for (const ws of subscribers) {
+      if (ws.readyState !== WebSocket.OPEN) continue;
+      const sub = clients.get(ws);
+      if (!sub || !sub.session) continue;
+
+      try {
+        const outputs = sub.session.appendOrUpdateBar(bar);
+        ws.send(JSON.stringify({
+          type: 'execution_result',
+          data: outputs,
+        }));
+      } catch {
+        ws.send(JSON.stringify({
+          type: 'error',
+          data: { message: 'Script re-execution failed' },
+        }));
+      }
+    }
   }
 
   function resubscribeAll(): void {
@@ -100,14 +128,19 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
 
   wss.on('connection', (ws: WebSocket) => {
     console.log('[WS] Client connected');
-    const sub: ClientSubscription = { ws, topics: new Set() };
+    const sub: ClientSubscription = { ws, topics: new Set(), session: null };
     clients.set(ws, sub);
 
     ws.send(JSON.stringify({ type: 'connected', data: { connectionId: Math.random().toString(36).slice(2) } }));
 
     ws.on('message', (data: Buffer) => {
       try {
-        const msg = JSON.parse(data.toString()) as { type: string; topic?: string };
+        const msg = JSON.parse(data.toString()) as {
+          type: string;
+          topic?: string;
+          data?: { source?: string; symbol?: string; interval?: string; bars?: Bar[] };
+        };
+
         if (msg.type === 'subscribe' && msg.topic) {
           sub.topics.add(msg.topic);
           if (!topicCallbacks.has(msg.topic)) {
@@ -121,6 +154,26 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
         } else if (msg.type === 'unsubscribe' && msg.topic) {
           sub.topics.delete(msg.topic);
           topicCallbacks.get(msg.topic)?.delete(ws);
+        } else if (msg.type === 'execute' && msg.data) {
+          const { source, symbol, interval, bars } = msg.data;
+          if (!source || !bars || bars.length === 0) {
+            ws.send(JSON.stringify({ type: 'error', data: { message: 'Missing source or bars' } }));
+            return;
+          }
+
+          try {
+            const session = new ScriptSession(
+              source,
+              symbol || '',
+              interval || '',
+              bars,
+            );
+            const outputs = session.initialize();
+            sub.session = session;
+            ws.send(JSON.stringify({ type: 'execution_result', data: outputs }));
+          } catch {
+            ws.send(JSON.stringify({ type: 'error', data: { message: 'Script compilation or execution failed' } }));
+          }
         }
       } catch {
         ws.send(JSON.stringify({ type: 'error', data: { message: 'Invalid message format' } }));
