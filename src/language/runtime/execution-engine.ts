@@ -643,7 +643,7 @@ export class ExecutionEngine {
   private registerStrategyBuiltins(): void {
     this.builtins.set(
       'strategy.entry',
-      (name: PineValue, directionOrQty: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+      (name: PineValue, directionOrQty: PineValue, quantity?: PineValue, price?: PineValue, stopPrice?: PineValue, limitPrice?: PineValue, comment?: PineValue): PineValue => {
         if (!this.strategyEngine) return NA;
 
         let dir: OrderDirection;
@@ -661,19 +661,25 @@ export class ExecutionEngine {
         }
 
         const entryName = typeof name === 'string' ? name : 'entry';
-        this.strategyEngine.entry(entryName, dir, qty, pr);
+        const sp = typeof stopPrice === 'number' ? stopPrice : undefined;
+        const lp = typeof limitPrice === 'number' ? limitPrice : undefined;
+        const cm = typeof comment === 'string' ? comment : undefined;
+        this.strategyEngine.entry(entryName, dir, qty, pr, sp, lp, cm);
         return NA;
       },
     );
 
     this.builtins.set(
       'strategy.exit',
-      (name: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+      (name: PineValue, quantity?: PineValue, price?: PineValue, stopPrice?: PineValue, limitPrice?: PineValue, comment?: PineValue): PineValue => {
         if (!this.strategyEngine) return NA;
         const exitName = typeof name === 'string' ? name : 'exit';
         const qty = typeof quantity === 'number' ? quantity : undefined;
         const pr = typeof price === 'number' ? price : 0;
-        this.strategyEngine.exit(exitName, qty, pr);
+        const sp = typeof stopPrice === 'number' ? stopPrice : undefined;
+        const lp = typeof limitPrice === 'number' ? limitPrice : undefined;
+        const cm = typeof comment === 'string' ? comment : undefined;
+        this.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
         return NA;
       },
     );

@@ -477,6 +477,31 @@ describe('StrategyEngine', () => {
       expect(markers[1]!.name).toBe('Exit Long');
     });
 
+    it('should use comment as entry marker name if provided', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1, 0, undefined, undefined, 'Buy Signal');
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(1);
+      expect(markers[0]!.name).toBe('Buy Signal');
+    });
+
+    it('should use comment as exit marker name if provided', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.exit('Long', undefined, 0, undefined, undefined, 'TP Hit');
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(2);
+      expect(markers[1]!.name).toBe('TP Hit');
+    });
+
     it('should track close markers', () => {
       const engine = new StrategyEngine();
 

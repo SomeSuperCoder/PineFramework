@@ -174,6 +174,7 @@ export class StrategyEngine {
     price: number = 0,
     stopPrice?: number,
     limitPrice?: number,
+    comment?: string,
   ): Order | undefined {
     const orderType: OrderType =
       stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
@@ -212,7 +213,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'entry',
       orderId: order.id,
-      name,
+      name: comment || name,
       direction,
       action: order.action,
       quantity,
@@ -281,6 +282,7 @@ export class StrategyEngine {
     price: number = 0,
     stopPrice?: number,
     limitPrice?: number,
+    comment?: string,
   ): Order | undefined {
     if (this.position.direction === 'flat' || this.position.quantity === 0) {
       return undefined;
@@ -319,7 +321,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'exit',
       orderId: order.id,
-      name: `Exit ${name}`,
+      name: comment || `Exit ${name}`,
       direction: order.direction,
       action: order.action,
       quantity: order.quantity,
