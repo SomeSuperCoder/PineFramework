@@ -1,19 +1,23 @@
 import type { Viewport } from './Viewport.js';
+import type { LayoutManager } from './LayoutManager.js';
 
 export interface InteractionCallbacks {
   onCrosshairMove: (x: number, y: number) => void;
   onCrosshairHide: () => void;
   onVisibleRangeChange: () => void;
+  onPriceRangeChange: () => void;
   onResize: () => void;
 }
 
 export class InteractionHandler {
   private canvas: HTMLCanvasElement;
   private viewport: Viewport;
+  private layout: LayoutManager;
   private callbacks: InteractionCallbacks;
   private isDragging: boolean = false;
-  private lastMouseY: number = 0;
+  private isPriceDragging: boolean = false;
   private dragStartX: number = 0;
+  private dragStartY: number = 0;
   private velocity: number = 0;
   private animFrame: number = 0;
   private chartWidth: number;
@@ -21,11 +25,13 @@ export class InteractionHandler {
   constructor(
     canvas: HTMLCanvasElement,
     viewport: Viewport,
+    layout: LayoutManager,
     callbacks: InteractionCallbacks,
     chartWidth: number,
   ) {
     this.canvas = canvas;
     this.viewport = viewport;
+    this.layout = layout;
     this.callbacks = callbacks;
     this.chartWidth = chartWidth;
     this.bindEvents();
@@ -41,6 +47,7 @@ export class InteractionHandler {
     this.canvas.addEventListener('mouseup', this.onMouseUp);
     this.canvas.addEventListener('mouseleave', this.onMouseLeave);
     this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    this.canvas.addEventListener('dblclick', this.onDoubleClick);
     this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
     this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
     this.canvas.addEventListener('touchend', this.onTouchEnd);
@@ -52,6 +59,7 @@ export class InteractionHandler {
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
     this.canvas.removeEventListener('mouseleave', this.onMouseLeave);
     this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas.removeEventListener('dblclick', this.onDoubleClick);
     this.canvas.removeEventListener('touchstart', this.onTouchStart);
     this.canvas.removeEventListener('touchmove', this.onTouchMove);
     this.canvas.removeEventListener('touchend', this.onTouchEnd);
@@ -67,11 +75,21 @@ export class InteractionHandler {
     };
   }
 
+  private isOnPriceScale(x: number): boolean {
+    const regions = this.layout.getRegions();
+    if (!regions) return false;
+    return x >= regions.priceScale.x;
+  }
+
   private onMouseMove = (e: MouseEvent): void => {
     const { x, y } = this.getCanvasCoords(e);
-    this.lastMouseY = y;
 
-    if (this.isDragging) {
+    if (this.isPriceDragging) {
+      const deltaY = y - this.dragStartY;
+      this.layout.panPrice(deltaY);
+      this.dragStartY = y;
+      this.callbacks.onPriceRangeChange();
+    } else if (this.isDragging) {
       const delta = x - this.dragStartX;
       this.viewport.pan(delta);
       this.dragStartX = x;
@@ -83,41 +101,65 @@ export class InteractionHandler {
   };
 
   private onMouseDown = (e: MouseEvent): void => {
-    const { x } = this.getCanvasCoords(e);
-    this.isDragging = true;
+    const { x, y } = this.getCanvasCoords(e);
     this.dragStartX = x;
+    this.dragStartY = y;
+
+    if (this.isOnPriceScale(x)) {
+      this.isPriceDragging = true;
+      this.canvas.style.cursor = 'ns-resize';
+    } else {
+      this.isDragging = true;
+      this.canvas.style.cursor = 'grabbing';
+    }
     this.velocity = 0;
-    this.canvas.style.cursor = 'grabbing';
   };
 
   private onMouseUp = (): void => {
     this.isDragging = false;
+    this.isPriceDragging = false;
     this.canvas.style.cursor = 'crosshair';
-    if (Math.abs(this.velocity) > 2) {
+    if (Math.abs(this.velocity) > 2 && !this.isPriceDragging) {
       this.startInertialScroll();
     }
   };
 
   private onMouseLeave = (): void => {
     this.isDragging = false;
+    this.isPriceDragging = false;
     this.canvas.style.cursor = 'crosshair';
     this.callbacks.onCrosshairHide();
   };
 
   private onWheel = (e: WheelEvent): void => {
     e.preventDefault();
-    const { x } = this.getCanvasCoords(e);
-    const factor = e.deltaY > 0 ? 0.9 : 1.1;
-    this.viewport.zoom(factor, x, this.chartWidth);
+    const { x, y } = this.getCanvasCoords(e);
+
+    if (this.isOnPriceScale(x) || e.shiftKey) {
+      const factor = e.deltaY > 0 ? 1.1 : 0.9;
+      this.layout.zoomPrice(factor, y);
+      this.callbacks.onPriceRangeChange();
+    } else {
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      this.viewport.zoom(factor, x, this.chartWidth);
+      this.callbacks.onVisibleRangeChange();
+    }
+    this.callbacks.onCrosshairMove(x, y);
+  };
+
+  private onDoubleClick = (): void => {
+    this.layout.resetAutoPriceRange();
+    this.viewport.fitContent(this.chartWidth);
+    this.callbacks.onPriceRangeChange();
     this.callbacks.onVisibleRangeChange();
-    this.callbacks.onCrosshairMove(x, this.lastMouseY);
   };
 
   private onTouchStart = (e: TouchEvent): void => {
     if (e.touches.length === 1) {
-      const { x } = this.getCanvasCoords(e.touches[0]);
+      const { x, y } = this.getCanvasCoords(e.touches[0]);
       this.isDragging = true;
       this.dragStartX = x;
+      this.dragStartY = y;
     }
   };
 

@@ -13,6 +13,8 @@ export interface PriceRange {
 export class LayoutManager {
   private regions!: LayoutRegions;
   private priceRange: PriceRange = { min: 0, max: 100 };
+  private autoPriceRange: PriceRange = { min: 0, max: 100 };
+  private manualPriceRange: boolean = false;
   private volumeMax: number = 1;
 
   constructor(
@@ -43,11 +45,53 @@ export class LayoutManager {
 
   setPriceRange(min: number, max: number): void {
     const padding = (max - min) * 0.05 || 1;
-    this.priceRange = { min: min - padding, max: max + padding };
+    this.autoPriceRange = { min: min - padding, max: max + padding };
+    if (!this.manualPriceRange) {
+      this.priceRange = { ...this.autoPriceRange };
+    }
   }
 
   getPriceRange(): PriceRange {
     return this.priceRange;
+  }
+
+  isManualPriceRange(): boolean {
+    return this.manualPriceRange;
+  }
+
+  setManualPriceRange(min: number, max: number): void {
+    this.manualPriceRange = true;
+    this.priceRange = { min, max };
+  }
+
+  zoomPrice(factor: number, centerPixelY: number): void {
+    if (!this.regions) return;
+    const { chartArea } = this.regions;
+    const centerPrice = this.pixelToPrice(centerPixelY, chartArea.y, chartArea.height);
+    const { min, max } = this.priceRange;
+    const range = max - min;
+    const newRange = range * factor;
+    const ratio = (centerPrice - min) / range;
+    const newMin = centerPrice - newRange * ratio;
+    const newMax = centerPrice + newRange * (1 - ratio);
+    this.manualPriceRange = true;
+    this.priceRange = { min: newMin, max: newMax };
+  }
+
+  panPrice(deltaPixels: number): void {
+    if (!this.regions) return;
+    const { chartArea } = this.regions;
+    const { min, max } = this.priceRange;
+    const range = max - min;
+    const pricePerPixel = range / chartArea.height;
+    const priceDelta = deltaPixels * pricePerPixel;
+    this.manualPriceRange = true;
+    this.priceRange = { min: min + priceDelta, max: max + priceDelta };
+  }
+
+  resetAutoPriceRange(): void {
+    this.manualPriceRange = false;
+    this.priceRange = { ...this.autoPriceRange };
   }
 
   setVolumeMax(max: number): void {

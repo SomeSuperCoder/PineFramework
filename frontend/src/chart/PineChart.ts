@@ -109,6 +109,7 @@ export class PineChart {
     this.interaction = new InteractionHandler(
       this.canvas,
       this.viewport,
+      this.layout,
       {
         onCrosshairMove: (x, y) => {
           this.crosshairRenderer.setPosition(x, y);
@@ -122,6 +123,9 @@ export class PineChart {
           this.markDirty();
           const range = this.viewport.getVisibleRange();
           this.eventCallbacks.onVisibleRangeChange?.(range.start, range.end);
+        },
+        onPriceRangeChange: () => {
+          this.markDirty();
         },
         onResize: () => {
           this.resize();
@@ -232,18 +236,31 @@ export class PineChart {
       if (c.high > max) max = c.high;
     }
 
+    if (min === Infinity || max === -Infinity) {
+      this.layout.setPriceRange(0, 100);
+      return;
+    }
+
+    const candleRange = max - min || 1;
+
     for (const [_key, handle] of this.plotSeries) {
       for (let i = range.start; i < range.end && i < handle.data.length; i++) {
         const v = handle.data[i]?.value;
-        if (v !== null && v !== undefined) {
+        if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
+          if (Math.abs(v) < 1e-10) continue;
           if (v < min) min = v;
           if (v > max) max = v;
         }
       }
     }
 
-    if (min === Infinity) min = 0;
-    if (max === -Infinity) max = 100;
+    const totalRange = max - min || 1;
+    if (totalRange > candleRange * 10) {
+      const center = (min + max) / 2;
+      min = center - candleRange * 5;
+      max = center + candleRange * 5;
+    }
+
     this.layout.setPriceRange(min, max);
   }
 
