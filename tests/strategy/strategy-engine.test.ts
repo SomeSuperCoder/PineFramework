@@ -457,9 +457,20 @@ describe('StrategyEngine', () => {
       const markers = engine.getMarkers();
       expect(markers.length).toBe(1);
       expect(markers[0]!.type).toBe('entry');
+      expect(markers[0]!.name).toBe('Long');
       expect(markers[0]!.direction).toBe('long');
       expect(markers[0]!.action).toBe('buy');
       expect(markers[0]!.color).toBe('#00FF00');
+    });
+
+    it('should use direction name for short entries', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('MyEntry', 'short', 1);
+
+      const markers = engine.getMarkers();
+      expect(markers[0]!.name).toBe('Short');
     });
 
     it('should track exit markers', () => {

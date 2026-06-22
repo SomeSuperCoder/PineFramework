@@ -213,7 +213,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'entry',
       orderId: order.id,
-      name: comment || name,
+      name: comment || (direction === 'long' ? 'Long' : 'Short'),
       direction,
       action: order.action,
       quantity,
