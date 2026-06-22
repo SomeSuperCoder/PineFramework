@@ -133,6 +133,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Auto-detects plot titles from variable names when no explicit title is provided
   - Maintains var/varip variable state across bars without resetting on re-declaration
   - Supports inclusive for-loop iteration (`for i = 0 to end` includes the `end` value)
+  - Forwards named arguments (comment, stop, limit) to strategy.entry() and strategy.exit() builtins
+  - Parses variable-length argument lists for strategy builtins to extract positional and named parameters
+  - Incremental real-time bar execution via `executeRealtimeBar()` which processes a single new bar while preserving prior state
+  - State snapshot management for rollback: `createSnapshot()` saves engine state before real-time updates, `rollbackToSnapshot()` restores on error
+  - The engine instance is kept alive across real-time updates so that var/varip, series indices, and strategy positions persist between bars
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -281,7 +286,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   │   ├── GridRenderer (price/time grid lines)
   │   ├── AxisRenderer (price scale labels, time scale labels)
   │   └── CrosshairRenderer (crosshair + tooltip)
-  └── InteractionHandler (mouse/touch events for zoom, pan, hover)
+  └── InteractionHandler (mouse/touch events for zoom, pan, hover, price scale drag/zoom, double-click reset)
   ```
 - **Key Features**:
   - Coordinate transformation system mapping (barIndex, price) → (x, y) pixels
@@ -296,8 +301,14 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Automatic price scale tick calculation
   - Multiple price scales (main + volume)
   - Momentum-based inertial scrolling
+  - Manual and auto price range modes: auto (computed from visible candles/plots), manual (set by user drag or shift+wheel)
+  - Vertical zoom on price scale via Shift+scroll-wheel, centered on cursor position
+  - Vertical pan and zoom on price scale via click-and-drag on the price scale area
+  - Double-click to reset to auto price range and fit content
+  - Price range computation filters non-finite and near-zero plot values to prevent chart distortion
+  - Price range clamped to at most 10x candle range to prevent excessive scaling when plot values exceed candle prices
   - ResizeObserver for responsive container handling
-  - Event system: onCrosshairMove, onVisibleRangeChange, onResize
+  - Event system: onCrosshairMove, onVisibleRangeChange, onResize, onPriceRangeChange
 - **API**:
   - `createChart(container, options)` → chart instance
   - `chart.setCandles(data)`, `chart.setVolume(data)`
@@ -306,6 +317,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `chart.removeSeries(name)`
   - `chart.timeScale()` → { fitContent(), scrollTo(), scrollToDate() }
   - `chart.applyOptions(options)`, `chart.remove()`
+  - Events: onCrosshairMove, onVisibleRangeChange, onResize, onPriceRangeChange
 - **Rendering Layers** (back to front):
   1. Background (bgcolor)
   2. Grid lines
@@ -333,10 +345,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 10. Strategy Engine
 - **Responsibility**: Execute and backtest trading strategies with visual markers
 - **Visual Markers**:
-  - `strategy.entry()`: Entry markers on chart — reverses position on opposite direction like TradingView
+  - `strategy.entry(id, direction, qty, price, stop, limit, comment)`: Entry markers on chart — reverses position on opposite direction like TradingView; marker name defaults to "Long"/"Short" by direction, overridden by comment parameter
   - `strategy.order()`: Order markers on chart
-  - `strategy.exit()`: Exit markers on chart with optional comment text
-  - `strategy.close()`: Closing markers on chart — supports named arguments (id, comment)
+  - `strategy.exit(id, qty, price, stop, limit, comment)`: Exit markers on chart with optional comment text; marker name defaults to "Exit {id}" format, overridden by comment parameter
+  - `strategy.close()`: Closing markers on chart — supports named arguments (id, comment); marker name formatted as "Exit {name}"
   - `strategy.close_all()`: Closing markers on chart for all open positions
   - `strategy.cancel()`: Update displayed orders
   - `strategy.cancel_all()`: Update displayed orders
@@ -355,6 +367,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - strategy.position_size builtin for querying current position quantity
   - strategy.commission.percent commission type support
   - getConfig() method for accessing strategy configuration
+  - strategy.entry() and strategy.exit() accept stop, limit, and comment parameters for advanced order configuration
+  - Entry marker naming: defaults to capitalized direction ("Long"/"Short"), overridden by comment parameter
+  - Exit marker naming: defaults to "Exit {id}" format, overridden by comment parameter
+  - Close marker naming: formatted as "Exit {name}" matching exit marker convention
 
 #### 11. Plugin Registry
 - **Responsibility**: Manage extensibility through plugins
@@ -460,6 +476,9 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Filters invalid data points (time=0, non-finite values) before rendering
   - Auto-assigns distinct colors to plot lines when not explicitly specified
   - Parses plot metadata (color, linewidth) from output keys
+  - Stores the last submitted script code in memory for automatic re-execution on new candle data
+  - Automatically re-executes the script via the backend when new WebSocket kline data arrives
+  - Applies updated indicator overlays (plots, shapes, fills, strategy markers) on the canvas chart without user interaction
 
 #### 17. Backend API Server
 - **Responsibility**: Bridge frontend and engine, serve market data, manage connections
@@ -467,6 +486,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **REST API Server**: Express/Fastify HTTP server on port 8080
   - **WebSocket Gateway**: ws-based realtime data streaming
   - **Script Executor**: Invokes `pine-framework` engine for compilation and execution
+  - **Session Manager**: Persists execution engine instances per WebSocket client for incremental real-time bar updates
   - **Data Cache**: In-memory LRU cache for recent OHLCV data
 - **API Endpoints**:
   - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000` - Historical kline data
@@ -477,8 +497,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Client sends: `{ type: "subscribe", topic: "kline.1m.BTCUSDT" }`
   - Client sends: `{ type: "unsubscribe", topic: "kline.1m.BTCUSDT" }`
   - Server sends: `{ type: "kline", data: { symbol, interval, open, high, low, close, volume, timestamp } }`
+  - Client sends: `{ type: "execute", data: { source: "…" } }` — register a Pine Script for persistent execution
   - Server sends: `{ type: "connected", data: { connectionId } }`
   - Server sends: `{ type: "error", data: { message, code } }`
+  - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, barIndex } }` — updated script results after each new kline
 - **Key Features**:
   - Manages Bybit API connections (REST + WebSocket)
   - Relays realtime market data to connected frontend clients
@@ -489,8 +511,12 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Graceful reconnection on Bybit disconnects
   - Accepts JSON request bodies up to 5MB
   - Returns shapes, fills, and strategyMarkers in execute response
+  - Includes `comment` field in each strategy marker entry returned from POST /api/execute
   - Handles non-JSON server responses gracefully
   - Validates WebSocket kline data before forwarding to clients
+  - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
+  - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `executeRealtimeBar()` on the persisted engine
+  - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, and strategyMarkers
 
 #### 18. Bybit Data Adapter
 - **Responsibility**: Integrate with Bybit exchange for real market data
@@ -522,8 +548,13 @@ Bybit REST API → Backend (Data Cache) → Frontend (OHLCV) → Backend (Pine E
 
 #### 3. Realtime Execution Flow
 ```
-Bybit WebSocket → Backend (WS Gateway) → Frontend (WS Client) → Chart Update
-                                        → Backend (Pine Engine) → Re-render → Frontend (Overlay Update)
+Bybit WebSocket → Backend (WS Gateway)
+  ├── Data Cache (update bar)
+  ├── Frontend (WS Client) → Chart Update (candle refresh)
+  └── Session Manager → Persisted Engine (executeRealtimeBar)
+        → Updated outputs, shapes, fills, strategyMarkers
+        → Backend (WS Gateway) → Frontend (WS Client)
+        → Chart Overlay Update (indicators, markers, fills)
 ```
 
 #### 4. Request Processing Flow

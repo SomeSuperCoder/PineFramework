@@ -73,6 +73,9 @@ This specification defines requirements for building a Pine Script v6 compatible
 12. THE Execution_Engine SHALL auto-detect plot titles from variable names when no title is provided
 13. THE Execution_Engine SHALL maintain var and varip variable state across bars without resetting on re-declaration
 14. THE Execution_Engine SHALL support inclusive for-loop iteration (`for i = 0 to end` includes the `end` value)
+15. THE Execution_Engine SHALL support incremental real-time bar execution via executeRealtimeBar() that processes a single new bar while preserving prior execution state
+16. THE Execution_Engine SHALL maintain execution state snapshots across real-time bar updates to enable rollback on errors
+17. WHEN a new bar is processed via executeRealtimeBar(), THE Execution_Engine SHALL return updated outputs (plots, shapes, fills, strategyMarkers) reflecting the current bar state
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -268,6 +271,14 @@ This specification defines requirements for building a Pine Script v6 compatible
 18. THE Strategy_Engine SHALL support strategy.commission.percent commission type
 19. THE Strategy_Engine SHALL support strategy.close() with named arguments (id, comment)
 20. THE Strategy_Engine SHALL support strategy.close_all() to close all open positions at once
+21. THE Strategy_Engine SHALL support strategy.entry() with comment, stop, and limit parameters in addition to existing parameters
+22. THE Strategy_Engine SHALL support strategy.exit() with comment, stop, and limit parameters in addition to existing parameters
+23. WHEN strategy.entry() is called, THE Strategy_Engine SHALL default the entry marker name to "Long" for long entries and "Short" for short entries when no comment is provided
+24. WHEN strategy.entry() is called with a comment parameter, THE Strategy_Engine SHALL use the comment text as the entry marker name
+25. WHEN strategy.exit() is called, THE Strategy_Engine SHALL format the exit marker name as "Exit {name}" by default
+26. WHEN strategy.exit() is called with a comment parameter, THE Strategy_Engine SHALL use the comment text as the exit marker name instead of the default format
+27. THE Strategy_Engine SHALL support named arguments (comment, stop, limit) for strategy.entry() and strategy.exit() calls
+28. WHEN strategy.close() is called, THE Strategy_Engine SHALL format the close marker name as "Exit {name}" matching the exit marker convention
 
 ### Requirement 9: Extensibility and Plugin Architecture
 
@@ -431,6 +442,9 @@ This specification defines requirements for building a Pine Script v6 compatible
 23. THE Frontend SHALL filter out invalid data points (time=0, non-finite values) before rendering
 24. THE Frontend SHALL auto-assign distinct colors to plot lines when not explicitly specified
 25. THE Frontend SHALL parse plot metadata (color, linewidth) from output keys
+26. WHEN new candle data arrives via WebSocket, THE Frontend SHALL automatically trigger script re-execution with the updated bar set
+27. THE Frontend SHALL store the last submitted script code in memory for automatic re-execution on new data
+28. THE Frontend SHALL update indicator overlays (plots, shapes, fills, strategy markers) on the chart automatically when new execution results arrive via WebSocket
 
 ### Requirement 18: Monorepo Project Structure
 
@@ -473,6 +487,11 @@ This specification defines requirements for building a Pine Script v6 compatible
 14. THE Backend SHALL return shapes, fills, and strategyMarkers in the POST /api/execute response
 15. THE Backend SHALL handle non-JSON server responses gracefully without crashing
 16. THE Backend SHALL validate WebSocket kline data before forwarding to clients (reject invalid timestamps, non-finite OHLC values)
+17. THE Backend SHALL include a `comment` field in each strategy marker object returned in the POST /api/execute response
+18. THE Backend SHALL persist the execution engine instance per WebSocket client session so that incremental real-time bar updates can be applied without re-parsing or re-compiling
+19. WHEN a new kline arrives via the Bybit WebSocket, THE Backend SHALL automatically re-execute the active script's execution engine with the updated bar data using incremental mode
+20. THE Backend SHALL push updated execution results (plots, shapes, fills, strategyMarkers) to the corresponding WebSocket client as a new message type `execution_result`
+21. THE Backend SHALL support WebSocket message type `execution_result` containing the full updated script outputs so the frontend can refresh indicator overlays without re-fetching
 
 ### Requirement 20: Bybit Exchange Integration
 
@@ -601,51 +620,60 @@ This specification defines requirements for building a Pine Script v6 compatible
 64. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
 65. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
 66. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
+67. THE Chart_Library SHALL maintain a price range with two modes: auto (computed from visible candles and plots) and manual (set by user interaction)
+68. THE Chart_Library SHALL support vertical zoom on the price scale via mouse scroll wheel while holding Shift, adjusting the visible price range centered on the cursor
+69. THE Chart_Library SHALL support vertical pan and zoom on the price scale via mouse drag on the price scale area, adjusting the visible price range
+70. THE Chart_Library SHALL reset to auto price range and fit content on double-click, restoring automatic price range computation
+71. THE Chart_Library SHALL filter non-finite and near-zero plot values when computing the auto price range to prevent chart distortion
+72. THE Chart_Library SHALL clamp the auto price range to at most 10 times the candle price range to prevent excessive vertical scaling when plot values far exceed candle prices
 
 **Performance:**
 
-67. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
-68. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
-69. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
-70. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
-71. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
+73. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
+74. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
+75. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
+76. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
+77. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
 
 **Resize and Responsiveness:**
 
-72. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
-73. THE Chart_Library SHALL support configurable chart padding and margins
-74. THE Chart_Library SHALL automatically adjust layout when the container size changes
+78. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
+79. THE Chart_Library SHALL support configurable chart padding and margins
+80. THE Chart_Library SHALL automatically adjust layout when the container size changes
 
 **Data Binding:**
 
-75. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
-76. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
-77. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
-78. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
-79. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
-80. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
-81. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+81. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
+82. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
+83. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
+84. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
+85. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
+86. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
+87. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
 
 **API Design:**
 
-82. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
-83. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
-84. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
-85. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
-86. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
-87. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
-88. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
-89. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
-90. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
-91. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
-92. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
-93. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
-94. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`
+88. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+89. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+90. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+91. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+92. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+93. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+94. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+95. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+96. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+97. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+98. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+99. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+100. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
 
 **Styling and Theming:**
 
-95. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
-96. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
-97. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
-19. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
-20. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
+101. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
+102. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+103. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
+
+**Frontend Requirements:**
+
+104. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
+105. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
