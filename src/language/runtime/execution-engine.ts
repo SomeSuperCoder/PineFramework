@@ -643,8 +643,13 @@ export class ExecutionEngine {
   private registerStrategyBuiltins(): void {
     this.builtins.set(
       'strategy.entry',
-      (name: PineValue, directionOrQty: PineValue, quantity?: PineValue, price?: PineValue, stopPrice?: PineValue, limitPrice?: PineValue, comment?: PineValue): PineValue => {
+      (name: PineValue, directionOrQty: PineValue, ...rest: PineValue[]): PineValue => {
         if (!this.strategyEngine) return NA;
+
+        const namedArgs = (rest.length > 0 && typeof rest[rest.length - 1] === 'object' && rest[rest.length - 1] !== null && !Array.isArray(rest[rest.length - 1]))
+          ? rest[rest.length - 1] as unknown as Record<string, PineValue>
+          : undefined;
+        const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
         let dir: OrderDirection;
         let qty: number;
@@ -652,18 +657,18 @@ export class ExecutionEngine {
 
         if (typeof directionOrQty === 'string') {
           dir = directionOrQty === 'short' ? 'short' : 'long';
-          qty = typeof quantity === 'number' ? quantity : this.strategyEngine.getConfig().defaultQty;
-          pr = typeof price === 'number' ? price : 0;
+          qty = typeof restArgs[0] === 'number' ? restArgs[0] : this.strategyEngine.getConfig().defaultQty;
+          pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
         } else {
           dir = 'long';
           qty = typeof directionOrQty === 'number' ? directionOrQty : this.strategyEngine.getConfig().defaultQty;
-          pr = typeof quantity === 'number' ? quantity : 0;
+          pr = typeof restArgs[0] === 'number' ? restArgs[0] : 0;
         }
 
         const entryName = typeof name === 'string' ? name : 'entry';
-        const sp = typeof stopPrice === 'number' ? stopPrice : undefined;
-        const lp = typeof limitPrice === 'number' ? limitPrice : undefined;
-        const cm = typeof comment === 'string' ? comment : undefined;
+        const sp = typeof restArgs[2] === 'number' ? restArgs[2] : undefined;
+        const lp = typeof restArgs[3] === 'number' ? restArgs[3] : undefined;
+        const cm = (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ?? (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
         this.strategyEngine.entry(entryName, dir, qty, pr, sp, lp, cm);
         return NA;
       },
@@ -671,14 +676,20 @@ export class ExecutionEngine {
 
     this.builtins.set(
       'strategy.exit',
-      (name: PineValue, quantity?: PineValue, price?: PineValue, stopPrice?: PineValue, limitPrice?: PineValue, comment?: PineValue): PineValue => {
+      (name: PineValue, ...rest: PineValue[]): PineValue => {
         if (!this.strategyEngine) return NA;
+
+        const namedArgs = (rest.length > 0 && typeof rest[rest.length - 1] === 'object' && rest[rest.length - 1] !== null && !Array.isArray(rest[rest.length - 1]))
+          ? rest[rest.length - 1] as unknown as Record<string, PineValue>
+          : undefined;
+        const restArgs = namedArgs ? rest.slice(0, -1) : rest;
+
         const exitName = typeof name === 'string' ? name : 'exit';
-        const qty = typeof quantity === 'number' ? quantity : undefined;
-        const pr = typeof price === 'number' ? price : 0;
-        const sp = typeof stopPrice === 'number' ? stopPrice : undefined;
-        const lp = typeof limitPrice === 'number' ? limitPrice : undefined;
-        const cm = typeof comment === 'string' ? comment : undefined;
+        const qty = typeof restArgs[0] === 'number' ? restArgs[0] : undefined;
+        const pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
+        const sp = typeof restArgs[2] === 'number' ? restArgs[2] : undefined;
+        const lp = typeof restArgs[3] === 'number' ? restArgs[3] : undefined;
+        const cm = (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ?? (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
         this.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
         return NA;
       },

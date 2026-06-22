@@ -58,6 +58,7 @@ executeRouter.post('/execute', async (req, res) => {
       barIndex: m.barIndex,
       timestamp: m.timestamp,
       color: m.color,
+      comment: m.comment,
     }));
 
     res.json({
