@@ -37,21 +37,24 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
         };
 
         if (msg.topic && msg.topic.startsWith('kline.') && msg.data) {
-          const d = msg.data;
-          const timestamp = parseInt(d.start || d.timestamp || '0', 10);
-          const open = parseFloat(d.open || '0');
-          const high = parseFloat(d.high || '0');
-          const low = parseFloat(d.low || '0');
-          const close = parseFloat(d.close || '0');
-          const volume = parseFloat(d.volume || '0');
+          const dataArr = Array.isArray(msg.data) ? msg.data : [msg.data];
+          if (dataArr.length === 0) return;
+          const d = dataArr[0]!;
+          const timestamp = parseInt(String(d.start || d.timestamp || '0'), 10);
+          const open = parseFloat(String(d.open || '0'));
+          const high = parseFloat(String(d.high || '0'));
+          const low = parseFloat(String(d.low || '0'));
+          const close = parseFloat(String(d.close || '0'));
+          const volume = parseFloat(String(d.volume || '0'));
 
           if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
             return;
           }
 
           const bar: Bar = { timestamp, open, high, low, close, volume };
-          const symbol = d.symbol || '';
-          const interval = d.interval || '';
+          const topicParts = msg.topic.split('.');
+          const symbol = topicParts[2] || '';
+          const interval = String(d.interval || topicParts[1] || '');
           if (symbol && interval) {
             cache.set(symbol, interval, [bar]);
           }

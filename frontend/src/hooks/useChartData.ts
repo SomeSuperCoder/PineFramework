@@ -189,6 +189,9 @@ export function useChartData() {
 
       ws.onopen = () => {
         setIsConnected(true);
+        if (subscribedTopicRef.current) {
+          ws.send(JSON.stringify({ type: 'subscribe', topic: subscribedTopicRef.current }));
+        }
       };
 
       ws.onmessage = (event) => {
@@ -218,7 +221,7 @@ export function useChartData() {
               return newCandles;
             });
             if (k.timestamp) {
-              const ohlcvBar = { timestamp: k.timestamp * 1000 };
+              const ohlcvBar = { timestamp: k.timestamp };
               ohlcvDataRef.current = [...ohlcvDataRef.current.slice(-999), ohlcvBar];
             }
           } else if (data.type === 'execution_result' && data.data) {
@@ -252,12 +255,13 @@ export function useChartData() {
   const subscribe = useCallback((symbol: string, interval: string) => {
     const topic = `kline.${interval}.${symbol}`;
     if (subscribedTopicRef.current === topic) return;
+    const prevTopic = subscribedTopicRef.current;
+    subscribedTopicRef.current = topic;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      if (subscribedTopicRef.current) {
-        wsRef.current.send(JSON.stringify({ type: 'unsubscribe', topic: subscribedTopicRef.current }));
+      if (prevTopic) {
+        wsRef.current.send(JSON.stringify({ type: 'unsubscribe', topic: prevTopic }));
       }
       wsRef.current.send(JSON.stringify({ type: 'subscribe', topic }));
-      subscribedTopicRef.current = topic;
     }
   }, []);
 
