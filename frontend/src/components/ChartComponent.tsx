@@ -13,6 +13,13 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
+  const shouldFitRef = useRef(true);
+  const prevDataVersionRef = useRef(dataVersion);
+
+  if (dataVersion !== prevDataVersionRef.current) {
+    prevDataVersionRef.current = dataVersion;
+    shouldFitRef.current = true;
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -42,8 +49,12 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
     );
 
     chart.setCandles(validData);
-    chart.timeScale().fitContent();
-  }, [data, dataVersion]);
+
+    if (shouldFitRef.current && validData.length > 0) {
+      chart.timeScale().fitContent();
+      shouldFitRef.current = false;
+    }
+  }, [data]);
 
   useEffect(() => {
     if (!chartRef.current || !scriptResult) return;
