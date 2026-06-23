@@ -25,7 +25,7 @@ export function useBacktest() {
   const submitBacktest = useCallback(async (
     symbol: string,
     timeframe: string,
-    config: Partial<BacktestConfig>,
+    config: Partial<BacktestConfig> & { script?: string },
     startDate?: string,
     endDate?: string,
   ) => {

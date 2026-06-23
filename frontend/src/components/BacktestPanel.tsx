@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBacktest } from '../hooks/useBacktest';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
-import type { BacktestConfig } from '../types';
+import type { BacktestConfig, BacktestResultResponse } from '../types';
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -21,7 +21,7 @@ interface BacktestPanelProps {
   symbol: string;
   timeframe: string;
   scriptSource?: string;
-  onResult: (result: NonNullable<ReturnType<typeof useBacktest>['result']>) => void;
+  onResult: (result: BacktestResultResponse) => void;
 }
 
 export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: BacktestPanelProps) {
@@ -31,6 +31,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
   const [endDate, setEndDate] = useState('');
   const [loadedFromScript, setLoadedFromScript] = useState(false);
   const { status, progress, result, error, loading, submitBacktest } = useBacktest();
+  const prevResultRef = useRef<BacktestResultResponse | null>(null);
 
   useEffect(() => {
     if (!scriptSource || isOpen) return;
@@ -41,19 +42,22 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
     }
   }, [scriptSource, isOpen]);
 
+  useEffect(() => {
+    if (result && result !== prevResultRef.current) {
+      prevResultRef.current = result;
+      onResult(result);
+    }
+  }, [result, onResult]);
+
   const handleSubmit = () => {
     submitBacktest(
       symbol,
       timeframe,
-      config,
+      { ...config, script: scriptSource },
       startDate || undefined,
       endDate || undefined,
     );
   };
-
-  if (result) {
-    onResult(result);
-  }
 
   return (
     <>
