@@ -6,6 +6,7 @@ import { createOHLCVRouter } from './routes/ohlcv.js';
 import { executeRouter } from './routes/execute.js';
 import { symbolsRouter } from './routes/symbols.js';
 import { statusRouter } from './routes/status.js';
+import { createBacktestRouter } from './routes/backtest.js';
 import { createWSGateway } from './ws/gateway.js';
 
 const app = express();
@@ -21,6 +22,7 @@ app.use('/api', createOHLCVRouter(cache));
 app.use('/api', executeRouter);
 app.use('/api', symbolsRouter);
 app.use('/api', statusRouter);
+app.use('/api', createBacktestRouter());
 
 createWSGateway(server, cache);
 

@@ -1380,77 +1380,77 @@ This implementation plan outlines the step-by-step development of a production-g
     - Provide serialization for API responses
     - _Requirements: 22.49, 22.50_
 
-- [ ] 50. Implement Backtest REST API
-  - [ ] 50.1 Create job queue and worker system
+- [x] 50. Implement Backtest REST API
+  - [x] 50.1 Create job queue and worker system
     - Accept backtest jobs via POST /api/backtest
     - Assign unique job_id and queue for processing
     - Support concurrent backtest workers
     - Track job status: queued → running → completed/failed
     - _Requirements: 22.34, 22.40_
 
-  - [ ] 50.2 Implement status and result endpoints
+  - [x] 50.2 Implement status and result endpoints
     - GET /api/backtest/{job_id} returns status and progress
     - GET /api/backtest/{job_id}/result returns full BacktestResult
     - _Requirements: 22.35, 22.36_
 
-  - [ ] 50.3 Add backtest progress reporting
+  - [x] 50.3 Add backtest progress reporting
     - Report progress percentage during bar processing loop
     - Support progress polling via status endpoint
     - Optionally push progress via WebSocket
     - _Requirements: 22.37_
 
-- [ ] 51. Implement Backtest Visualization
-  - [ ] 51.1 Overlay strategy entry/exit markers on price chart
+- [x] 51. Implement Backtest Visualization
+  - [x] 51.1 Overlay strategy entry/exit markers on price chart
     - Use existing StrategyMarkerRenderer for entry/exit markers
     - Show trade direction and comment text on markers
     - _Requirements: 22.28_
 
-  - [ ] 51.2 Build equity curve and drawdown chart
+  - [x] 51.2 Build equity curve and drawdown chart
     - Render equity curve as line plot below main price chart
     - Render drawdown as shaded area below equity curve
     - _Requirements: 22.29_
 
-  - [ ] 51.3 Create trade list table
+  - [x] 51.3 Create trade list table
     - Sortable table with per-trade statistics (entry/exit, P&L, return, bars, MAE/MFE)
     - Click trade to highlight on chart
     - _Requirements: 22.32_
 
-  - [ ] 51.4 Build backtest report export
+  - [x] 51.4 Build backtest report export
     - Export as PDF, HTML, and CSV formats
     - Include metrics summary, trade list, equity curve
     - _Requirements: 22.31_
 
-- [ ] 52. Create Backtest Configuration Panel
-  - [ ] 52.1 Build web UI for strategy settings
+- [x] 52. Create Backtest Configuration Panel
+  - [x] 52.1 Build web UI for strategy settings
     - Form for strategy inputs (fast_len, slow_len, etc.)
     - Date range picker for backtest period
     - Symbol and timeframe selectors
     - _Requirements: 22.33_
 
-  - [ ] 52.2 Build broker emulator configuration UI
+  - [x] 52.2 Build broker emulator configuration UI
     - Commission type/value, slippage, margin settings
     - Default quantity type/value, pyramiding limit
     - Initial capital input
     - _Requirements: 22.33_
 
-  - [ ] 52.3 Add run/submit button with progress indicator
+  - [x] 52.3 Add run/submit button with progress indicator
     - Submit backtest job via POST /api/backtest
     - Show progress bar during execution
     - Display results on completion
     - _Requirements: 22.37_
 
-- [ ] 53. Implement Data Source Integration for Backtesting
-  - [ ] 53.1 Add CSV data import
+- [x] 53. Implement Data Source Integration for Backtesting
+  - [x] 53.1 Add CSV data import
     - Parse OHLCV data from CSV files
     - Support configurable column mapping
     - _Requirements: 22.5_
 
-  - [ ] 53.2 Add database data adapter
+  - [x] 53.2 Add database data adapter
     - Fetch historical data from PostgreSQL/MongoDB
     - Support date-range queries with pagination
     - _Requirements: 22.5_
 
-  - [ ] 53.3 Implement data alignment and gap handling
+  - [x] 53.3 Implement data alignment and gap handling
     - Align multi-timeframe data for request.security() during backtest
     - Forward-fill missing data and handle gaps
     - _Requirements: 22.6, 22.7_
@@ -1489,7 +1489,7 @@ This implementation plan outlines the step-by-step development of a production-g
   - Test concurrent backtest job processing
   - _Requirements: 22.38_
 
-- [ ] 58. Checkpoint - Backtest Engine Validation
+- [x] 58. Checkpoint - Backtest Engine Validation
   - Ensure Broker Simulator correctly fills orders and manages positions
   - Verify performance metrics match TradingView within 0.1% tolerance
   - Test REST API submit/status/result workflow end-to-end

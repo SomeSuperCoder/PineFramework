@@ -86,3 +86,96 @@ export interface StrategyMarkerData {
   color: string;
   comment?: string;
 }
+
+export interface BacktestMetrics {
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  profitFactor: number;
+  totalPnl: number;
+  totalPnlPercent: number;
+  maxDrawdown: number;
+  maxDrawdownPercent: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  averageWin: number;
+  averageLoss: number;
+  largestWin: number;
+  largestLoss: number;
+  averageTradeDuration: number;
+  commission: number;
+}
+
+export interface BacktestTrade {
+  id: string;
+  direction: string;
+  entryPrice: number;
+  exitPrice: number;
+  entryTime: number;
+  exitTime: number;
+  quantity: number;
+  pnl: number;
+  pnlPercent: number;
+  commission: number;
+  entryName: string;
+  exitName: string;
+  mae: number;
+  mfe: number;
+  barsHeld: number;
+}
+
+export interface BacktestOrder {
+  id: string;
+  direction: string;
+  action: string;
+  type: string;
+  quantity: number;
+  price: number;
+  fillPrice: number;
+  fillTime: number;
+  entryName: string;
+  commission: number;
+}
+
+export interface EquityPoint {
+  time: number;
+  equity: number;
+  drawdown: number;
+  balance: number;
+}
+
+export interface BacktestJobResponse {
+  job_id: string;
+}
+
+export interface BacktestStatusResponse {
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  progress: number;
+  result_url?: string;
+}
+
+export interface BacktestResultResponse {
+  metrics: BacktestMetrics;
+  equityCurve: number[];
+  drawdownCurve: number[];
+  trades: BacktestTrade[];
+  orders: BacktestOrder[];
+  equityPoints: EquityPoint[];
+  monthlyReturns: Record<string, number>;
+  buyHoldReturn: number;
+}
+
+export interface BacktestConfig {
+  initialCapital: number;
+  commission: number;
+  slippage: number;
+  commissionType: 'percent' | 'fixed' | 'per_contract' | 'per_order';
+  slippageType: 'percent' | 'ticks' | 'points';
+  defaultQty: number;
+  defaultQtyType: 'contracts' | 'percent_of_equity' | 'cash';
+  pyramiding: number;
+  marginLong: number;
+  marginShort: number;
+  currency: string;
+}

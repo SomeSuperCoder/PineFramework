@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
+import { BacktestPanel } from './components/BacktestPanel';
+import { BacktestResults } from './components/BacktestResults';
 import { useChartData } from './hooks/useChartData';
+import type { BacktestResultResponse } from './types';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
 const INTERVALS = [
@@ -21,6 +24,7 @@ function App() {
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
+  const [btResult, setBtResult] = useState<BacktestResultResponse | null>(null);
 
   const {
     candles,
@@ -44,6 +48,10 @@ function App() {
     setEditorOpen(false);
     await executeScript(code, symbol, timeframe);
   };
+
+  const handleBacktestResult = useCallback((result: BacktestResultResponse) => {
+    setBtResult(result);
+  }, []);
 
   return (
     <div className="app">
@@ -77,6 +85,15 @@ function App() {
       </button>
 
       <CodeEditor isOpen={editorOpen} onClose={() => setEditorOpen(false)} onExecute={handleExecute} />
+
+      <BacktestPanel symbol={symbol} timeframe={timeframe} onResult={handleBacktestResult} />
+
+      {btResult && (
+        <BacktestResults
+          result={btResult}
+          onClose={() => setBtResult(null)}
+        />
+      )}
     </div>
   );
 }
