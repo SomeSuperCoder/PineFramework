@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { ChartComponent } from './components/ChartComponent';
-import { CodeEditor } from './components/CodeEditor';
+import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { BacktestPanel } from './components/BacktestPanel';
 import { BacktestResults } from './components/BacktestResults';
@@ -19,12 +19,15 @@ const INTERVALS = [
   { value: 'W', label: '1W' },
 ];
 
+const savedCode = typeof window !== 'undefined' ? localStorage.getItem('pine-script-code') : null;
+
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
   const [btResult, setBtResult] = useState<BacktestResultResponse | null>(null);
+  const [currentCode, setCurrentCode] = useState(savedCode || DEFAULT_CODE);
 
   const {
     candles,
@@ -46,6 +49,7 @@ function App() {
 
   const handleExecute = async (code: string) => {
     setEditorOpen(false);
+    setCurrentCode(code);
     await executeScript(code, symbol, timeframe);
   };
 
@@ -84,9 +88,20 @@ function App() {
         Open Editor
       </button>
 
-      <CodeEditor isOpen={editorOpen} onClose={() => setEditorOpen(false)} onExecute={handleExecute} />
+      <CodeEditor
+        isOpen={editorOpen}
+        code={currentCode}
+        onCodeChange={setCurrentCode}
+        onClose={() => setEditorOpen(false)}
+        onExecute={handleExecute}
+      />
 
-      <BacktestPanel symbol={symbol} timeframe={timeframe} onResult={handleBacktestResult} />
+      <BacktestPanel
+        symbol={symbol}
+        timeframe={timeframe}
+        scriptSource={currentCode}
+        onResult={handleBacktestResult}
+      />
 
       {btResult && (
         <BacktestResults

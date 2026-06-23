@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useBacktest } from '../hooks/useBacktest';
+import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig } from '../types';
 
 const defaultConfig: BacktestConfig = {
@@ -19,15 +20,26 @@ const defaultConfig: BacktestConfig = {
 interface BacktestPanelProps {
   symbol: string;
   timeframe: string;
+  scriptSource?: string;
   onResult: (result: NonNullable<ReturnType<typeof useBacktest>['result']>) => void;
 }
 
-export function BacktestPanel({ symbol, timeframe, onResult }: BacktestPanelProps) {
+export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: BacktestPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<BacktestConfig>({ ...defaultConfig });
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [loadedFromScript, setLoadedFromScript] = useState(false);
   const { status, progress, result, error, loading, submitBacktest } = useBacktest();
+
+  useEffect(() => {
+    if (!scriptSource || isOpen) return;
+    const scriptParams = extractStrategyParams(scriptSource);
+    if (Object.keys(scriptParams).length > 0) {
+      setConfig((prev) => ({ ...prev, ...scriptParams }));
+      setLoadedFromScript(true);
+    }
+  }, [scriptSource, isOpen]);
 
   const handleSubmit = () => {
     submitBacktest(
@@ -84,6 +96,19 @@ export function BacktestPanel({ symbol, timeframe, onResult }: BacktestPanelProp
           }}
         >
           <h3 style={{ margin: '0 0 16px', color: '#2196f3' }}>Backtest Configuration</h3>
+          {loadedFromScript && (
+            <div style={{
+              padding: '6px 10px',
+              marginBottom: '12px',
+              background: '#0a2e1a',
+              border: '1px solid #4caf50',
+              borderRadius: '4px',
+              color: '#4caf50',
+              fontSize: '11px',
+            }}>
+              Settings auto-loaded from your strategy() declaration. You can override any value below.
+            </div>
+          )}
 
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Start Date</label>

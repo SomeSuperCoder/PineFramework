@@ -236,6 +236,79 @@ describe('Script Declarations', () => {
       const config = getDefaultConfig('indicator');
       expect(getStrategyConfig(config)).toBeNull();
     });
+
+    it('should map commission_type per_order to per_order', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        commission_type: 'per_order',
+        commission_value: 5,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.commissionType).toBe('per_order');
+      expect(stratConfig!.commission).toBe(5);
+    });
+
+    it('should map commission_type per_contract to per_contract', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        commission_type: 'per_contract',
+        commission_value: 0.5,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.commissionType).toBe('per_contract');
+    });
+
+    it('should map default_qty_type percent_of_equity', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        default_qty_type: 'percent_of_equity',
+        default_qty_value: 10,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.defaultQtyType).toBe('percent_of_equity');
+    });
+
+    it('should map default_qty_type currency to cash', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        default_qty_type: 'currency',
+        default_qty_value: 5000,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.defaultQtyType).toBe('cash');
+    });
+
+    it('should map default_qty_type fixed to contracts', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        default_qty_type: 'fixed',
+        default_qty_value: 2,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.defaultQtyType).toBe('contracts');
+    });
+
+    it('should map margin_long and margin_short as decimal ratios', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+        margin_long: 50,
+        margin_short: 25,
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.marginLong).toBe(0.5);
+      expect(stratConfig!.marginShort).toBe(0.25);
+    });
+
+    it('should use defaults for all new fields when not specified', () => {
+      const config = parseStrategyDeclaration({
+        title: 'Test',
+      });
+      const stratConfig = getStrategyConfig(config);
+      expect(stratConfig!.defaultQtyType).toBe('contracts');
+      expect(stratConfig!.commissionType).toBe('percent');
+      expect(stratConfig!.marginLong).toBe(1);
+      expect(stratConfig!.marginShort).toBe(1);
+    });
   });
 
   describe('getDrawingLimits', () => {

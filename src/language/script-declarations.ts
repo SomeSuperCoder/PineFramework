@@ -310,33 +310,50 @@ export function getStrategyConfig(config: ScriptConfig): {
   initialCapital: number;
   commission: number;
   slippage: number;
-  commissionType: 'percent' | 'fixed';
-  slippageType: 'ticks';
+  commissionType: 'percent' | 'fixed' | 'per_contract' | 'per_order';
+  slippageType: 'percent' | 'ticks' | 'points';
   defaultQty: number;
+  defaultQtyType: 'contracts' | 'percent_of_equity' | 'cash';
   pyramiding: number;
   calcOnOrderFills: boolean;
   calcOnEveryTick: boolean;
   processOrdersOnClose: boolean;
   maxBarsBack: number;
+  marginLong: number;
+  marginShort: number;
 } | null {
   if (config.type !== 'strategy') return null;
 
   const strat = config as StrategyConfig;
+
+  const mapCommissionType = (t?: CommissionType): 'percent' | 'fixed' | 'per_contract' | 'per_order' => {
+    if (t === 'per_order') return 'per_order';
+    if (t === 'per_contract') return 'per_contract';
+    if (t === 'percent') return 'percent';
+    return 'percent';
+  };
+
+  const mapQtyType = (t?: DefaultQtyType): 'contracts' | 'percent_of_equity' | 'cash' => {
+    if (t === 'percent_of_equity') return 'percent_of_equity';
+    if (t === 'currency') return 'cash';
+    return 'contracts';
+  };
+
   return {
     initialCapital: strat.initial_capital ?? 10000,
     commission: strat.commission_value ?? 0,
     slippage: strat.slippage ?? 0,
-    commissionType:
-      strat.commission_type === 'per_order' || strat.commission_type === 'per_contract'
-        ? 'fixed'
-        : 'percent',
+    commissionType: mapCommissionType(strat.commission_type),
     slippageType: 'ticks',
     defaultQty: strat.default_qty_value ?? 1,
+    defaultQtyType: mapQtyType(strat.default_qty_type),
     pyramiding: strat.pyramiding ?? 0,
     calcOnOrderFills: true,
     calcOnEveryTick: strat.calc_on_every_tick ?? false,
     processOrdersOnClose: strat.process_orders_on_close ?? false,
     maxBarsBack: 0,
+    marginLong: (strat.margin_long ?? 100) / 100,
+    marginShort: (strat.margin_short ?? 100) / 100,
   };
 }
 

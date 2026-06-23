@@ -1,12 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 
 interface CodeEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onExecute: (code: string) => void;
+  code: string;
+  onCodeChange: (code: string) => void;
 }
 
-const DEFAULT_CODE = `//@version=6
+export const DEFAULT_CODE = `//@version=6
 indicator("My Indicator", overlay=true)
 
 // Get close price
@@ -24,8 +26,7 @@ plotshape(closePrice > sma20, "Buy Signal", shape.triangleup, location.belowbar,
 plotshape(closePrice < sma20, "Sell Signal", shape.triangledown, location.abovebar, color.red)
 `;
 
-export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
-  const [code, setCode] = useState(DEFAULT_CODE);
+export function CodeEditor({ isOpen, onClose, onExecute, code, onCodeChange }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       const newCode = code.substring(0, start) + '  ' + code.substring(end);
-      setCode(newCode);
+      onCodeChange(newCode);
       setTimeout(() => {
         textarea.selectionStart = textarea.selectionEnd = start + 2;
       }, 0);
@@ -69,7 +70,7 @@ export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
   const handleLoad = () => {
     const saved = localStorage.getItem('pine-script-code');
     if (saved) {
-      setCode(saved);
+      onCodeChange(saved);
     }
   };
 
@@ -91,7 +92,7 @@ export function CodeEditor({ isOpen, onClose, onExecute }: CodeEditorProps) {
           <textarea
             ref={textareaRef}
             value={code}
-            onChange={(e) => setCode(e.target.value)}
+            onChange={(e) => onCodeChange(e.target.value)}
             onKeyDown={handleKeyDown}
             style={{
               width: '100%',
