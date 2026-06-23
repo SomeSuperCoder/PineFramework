@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { BacktestEngine, type StrategyEngine, type Bar, type BacktestConfig } from 'pine-framework';
+import { parse, compile, ExecutionEngine, createSeries, type Bar } from 'pine-framework';
 import { randomUUID } from 'crypto';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
@@ -34,59 +34,88 @@ export function createBacktestRouter() {
 
   async function runBacktest(job: BacktestJob): Promise<void> {
     try {
-      const config: Partial<BacktestConfig> = {
-        initialCapital: (job.config.initialCapital as number) ?? 10000,
-        commission: (job.config.commission as number) ?? 0,
-        slippage: (job.config.slippage as number) ?? 0,
-        commissionType: (job.config.commissionType as BacktestConfig['commissionType']) ?? 'percent',
-        slippageType: (job.config.slippageType as BacktestConfig['slippageType']) ?? 'ticks',
-        defaultQty: (job.config.defaultQty as number) ?? 1,
-        pyramiding: (job.config.pyramiding as number) ?? 0,
-        startDate: job.startDate ? new Date(job.startDate).getTime() : undefined,
-        endDate: job.endDate ? new Date(job.endDate).getTime() : undefined,
-        barMagnifier: job.config.barMagnifier as string | undefined,
-      };
-
-      const bars = await fetchBars(job.symbol, job.timeframe, config.startDate, config.endDate);
+      const bars = await fetchBars(job.symbol, job.timeframe,
+        job.startDate ? new Date(job.startDate).getTime() : undefined,
+        job.endDate ? new Date(job.endDate).getTime() : undefined,
+      );
       updateProgress(job.jobId, 10);
 
       if (bars.length === 0) {
         throw new Error('No bar data available for the specified symbol and timeframe');
       }
 
-      const engine = new BacktestEngine(config);
+      const script = job.config.script as string | undefined;
 
-      const result = engine.run(bars, (_eng: StrategyEngine, _bar: Bar, _index: number) => {
-        // In a full implementation, this would execute the compiled Pine Script strategy
-        // For now, the strategyFn is a no-op placeholder
-        // The strategy logic would be injected via the strategyFn callback
-      });
+      if (!script) {
+        throw new Error('No Pine Script source provided. Set "script" in the request body.');
+      }
+
+      const parseResult = parse(script);
+      const compileResult = compile(parseResult.ast);
+
+      const execEngine = new ExecutionEngine(compileResult);
+
+      const contexts = bars.map((bar, i) => ({
+        barIndex: i,
+        barCount: bars.length,
+        timestamp: bar.timestamp,
+        open: createSeries('open', [bar.open]),
+        high: createSeries('high', [bar.high]),
+        low: createSeries('low', [bar.low]),
+        close: createSeries('close', [bar.close]),
+        volume: createSeries('volume', [bar.volume]),
+      }));
+
+      updateProgress(job.jobId, 20);
+
+      execEngine.executeBars(contexts);
+
+      updateProgress(job.jobId, 80);
+
+      const strategyEngine = execEngine.getStrategyEngine();
+
+      if (!strategyEngine) {
+        throw new Error('Script is not a strategy (missing strategy() declaration)');
+      }
+
+      const trades = strategyEngine.getTrades();
+      const metrics = strategyEngine.getMetrics();
+      const filledOrders = strategyEngine.getFilledOrders();
+
+      const initialCapital = strategyEngine.getConfig().initialCapital;
+      const equityCurve = buildEquityCurve(initialCapital, trades);
+      const drawdownCurve = buildDrawdownCurve(equityCurve);
+      const equityPoints = buildEquityPoints(bars, equityCurve, drawdownCurve);
+      const monthlyReturns = computeMonthlyReturns(equityPoints);
+      const buyHoldReturn = bars.length >= 2
+        ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100
+        : 0;
 
       updateProgress(job.jobId, 90);
 
       job.result = {
         metrics: {
-          totalTrades: result.metrics.totalTrades,
-          winningTrades: result.metrics.winningTrades,
-          losingTrades: result.metrics.losingTrades,
-          winRate: result.metrics.winRate,
-          profitFactor: result.metrics.profitFactor,
-          totalPnl: result.metrics.totalPnl,
-          totalPnlPercent: result.metrics.totalPnlPercent,
-          maxDrawdown: result.metrics.maxDrawdown,
-          maxDrawdownPercent: result.metrics.maxDrawdownPercent,
-          sharpeRatio: result.metrics.sharpeRatio,
-          sortinoRatio: result.metrics.sortinoRatio,
-          averageWin: result.metrics.averageWin,
-          averageLoss: result.metrics.averageLoss,
-          largestWin: result.metrics.largestWin,
-          largestLoss: result.metrics.largestLoss,
-          averageTradeDuration: result.metrics.averageTradeDuration,
-          commission: result.metrics.commission,
+          totalTrades: metrics.totalTrades,
+          winningTrades: metrics.winningTrades,
+          losingTrades: metrics.losingTrades,
+          winRate: metrics.winRate,
+          profitFactor: metrics.profitFactor,
+          totalPnl: metrics.totalPnl,
+          totalPnlPercent: metrics.totalPnlPercent,
+          maxDrawdown: metrics.maxDrawdown,
+          maxDrawdownPercent: metrics.maxDrawdownPercent,
+          sharpeRatio: metrics.sharpeRatio,
+          sortinoRatio: metrics.sortinoRatio,
+          averageWin: metrics.averageWin,
+          averageLoss: metrics.averageLoss,
+          largestWin: metrics.largestWin,
+          largestLoss: metrics.largestLoss,
+          averageTradeDuration: metrics.averageTradeDuration,
+          commission: metrics.commission,
         },
-        equityCurve: result.equityCurve,
-        drawdownCurve: result.drawdownCurve,
-        trades: result.trades.map((t) => ({
+        equityCurve,
+        drawdownCurve,
+        trades: trades.map((t) => ({
           id: t.id,
           direction: t.direction,
           entryPrice: t.entryPrice,
@@ -103,7 +132,7 @@ export function createBacktestRouter() {
           mfe: t.mfe,
           barsHeld: t.barsHeld,
         })),
-        orders: result.filledOrders.map((o) => ({
+        orders: filledOrders.map((o) => ({
           id: o.id,
           direction: o.direction,
           action: o.action,
@@ -115,9 +144,9 @@ export function createBacktestRouter() {
           entryName: o.entryName,
           commission: o.commission,
         })),
-        equityPoints: result.equityPoints,
-        monthlyReturns: result.monthlyReturns,
-        buyHoldReturn: result.buyHoldReturn,
+        equityPoints,
+        monthlyReturns,
+        buyHoldReturn: Math.round(buyHoldReturn * 100) / 100,
       };
 
       job.status = 'completed';
@@ -132,7 +161,7 @@ export function createBacktestRouter() {
 
   router.post('/backtest', async (req, res) => {
     try {
-      const { symbol, timeframe, startDate, endDate, ...config } = req.body as Record<string, unknown>;
+      const { symbol, timeframe, script, startDate, endDate, ...config } = req.body as Record<string, unknown>;
 
       if (!symbol || typeof symbol !== 'string') {
         res.status(400).json({ error: 'Missing or invalid "symbol" field' });
@@ -152,7 +181,7 @@ export function createBacktestRouter() {
         timeframe,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
-        config: config as Record<string, unknown>,
+        config: { ...config, script } as Record<string, unknown>,
         createdAt: Date.now(),
       };
 
@@ -205,6 +234,63 @@ export function createBacktestRouter() {
   });
 
   return router;
+}
+
+function buildEquityCurve(initialCapital: number, trades: Array<{ pnl: number }>): number[] {
+  const curve: number[] = [initialCapital];
+  let equity = initialCapital;
+  for (const trade of trades) {
+    equity += trade.pnl;
+    curve.push(equity);
+  }
+  return curve;
+}
+
+function buildDrawdownCurve(equityCurve: number[]): number[] {
+  const curve: number[] = [];
+  let peak = -Infinity;
+  for (const eq of equityCurve) {
+    if (eq > peak) peak = eq;
+    curve.push(peak - eq);
+  }
+  return curve;
+}
+
+function buildEquityPoints(
+  bars: Array<{ timestamp: number }>,
+  equityCurve: number[],
+  drawdownCurve: number[],
+): Array<{ time: number; equity: number; drawdown: number; balance: number }> {
+  const points: Array<{ time: number; equity: number; drawdown: number; balance: number }> = [];
+  const len = Math.min(bars.length, equityCurve.length);
+  for (let i = 0; i < len; i++) {
+    points.push({
+      time: bars[i]!.timestamp,
+      equity: equityCurve[i] ?? 0,
+      drawdown: drawdownCurve[i] ?? 0,
+      balance: equityCurve[i] ?? 0,
+    });
+  }
+  return points;
+}
+
+function computeMonthlyReturns(
+  points: Array<{ time: number; equity: number }>,
+): Record<string, number> {
+  const monthly: Record<string, number> = {};
+  if (points.length < 2) return monthly;
+  let prevMonthEquity = points[0]!.equity;
+  for (const point of points) {
+    const date = new Date(point.time);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthly[key]) {
+      monthly[key] = prevMonthEquity > 0
+        ? Math.round(((point.equity - prevMonthEquity) / prevMonthEquity) * 10000) / 100
+        : 0;
+      prevMonthEquity = point.equity;
+    }
+  }
+  return monthly;
 }
 
 async function fetchBars(
