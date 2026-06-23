@@ -1288,22 +1288,22 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify all tests pass
   - Ask the user if questions arise.
 
-- [ ] 47. Implement Broker Simulator
-  - [ ] 47.1 Create Account model and state management
+- [x] 47. Implement Broker Simulator
+  - [x] 47.1 Create Account model and state management
     - Implement Account data model: { initial_capital, balance, equity, margin_used, free_margin }
     - Track balance updates from P&L, commissions, deposits
     - Compute equity = balance + unrealized P&L
     - Compute free_margin = equity - margin_used
     - _Requirements: 22.9, 22.44, 22.48_
 
-  - [ ] 47.2 Create Order Manager
+  - [x] 47.2 Create Order Manager
     - Implement order lifecycle: pending → accepted → filled/cancelled/expired
     - Maintain active order book (pending orders, working orders, filled orders)
     - Register OrderRequest events from strategy execution as PendingOrders
     - Validate orders against account state (margin, pyramiding, position sizing)
     - _Requirements: 22.13, 22.14_
 
-  - [ ] 47.3 Create Fill Engine
+  - [x] 47.3 Create Fill Engine
     - Implement market order fills at next available price (bar open + slippage)
     - Implement limit order fills when price crosses limit level
     - Implement stop order fills when price breaches stop level (converted to market)
@@ -1311,71 +1311,71 @@ This implementation plan outlines the step-by-step development of a production-g
     - Support intrabar resolution for more accurate fill prices
     - _Requirements: 22.15, 22.51, 22.52, 22.53, 22.54_
 
-  - [ ] 47.4 Create Margin Tracker
+  - [x] 47.4 Create Margin Tracker
     - Compute initial and maintenance margin requirements
     - Check margin sufficiency before allowing new positions
     - Liquidate positions when equity falls below maintenance margin
     - _Requirements: 22.18, 22.58_
 
-  - [ ] 47.5 Create Position Manager
+  - [x] 47.5 Create Position Manager
     - Track positions with direction, quantity, avg_entry_price
     - Handle position opening, increasing, reducing, closing, reversal
     - Enforce pyramiding limits (max entries in same direction)
     - _Requirements: 22.19, 22.46_
 
-  - [ ] 47.6 Implement commission and slippage models
+  - [x] 47.6 Implement commission and slippage models
     - Commission types: percent, cash per contract, cash per order
     - Slippage modes: fixed ticks, fixed points, percentage
     - Apply commission and slippage to fill prices and P&L
     - _Requirements: 22.16, 22.17, 22.56, 22.57_
 
-  - [ ] 47.7 Implement trade size calculation
+  - [x] 47.7 Implement trade size calculation
     - Support fixed contracts, percentage of equity, fixed cash amount
     - Calculate position size based on default_qty_type and default_qty_value
     - _Requirements: 22.20, 22.59_
 
-- [ ] 48. Implement Backtest Orchestrator
-  - [ ] 48.1 Create bar processing loop
+- [x] 48. Implement Backtest Orchestrator
+  - [x] 48.1 Create bar processing loop
     - Iterate bars chronologically over the historical date range
     - For each bar: execute strategy → process orders → advance clock → check fills → update state → record equity point
     - Align multi-timeframe data when needed via Request System
     - _Requirements: 22.9, 22.10, 22.12_
 
-  - [ ] 48.2 Implement intrabar magnification (bar magnifier)
+  - [x] 48.2 Implement intrabar magnification (bar magnifier)
     - Retrieve lower-resolution data series (e.g., 1m for daily bars)
     - Iterate sub-bars within each main bar for fill evaluation
     - Set fill prices to exact sub-bar price where conditions are met
     - _Requirements: 22.11, 22.55_
 
-  - [ ] 48.3 Wire strategy.*() events to Broker Simulator
+  - [x] 48.3 Wire strategy.*() events to Broker Simulator
     - Capture OrderRequest events emitted by strategy.entry/exit/close
     - Pipe events into Order Manager for validation and registration
     - _Requirements: 22.4_
 
-- [ ] 49. Implement Performance Metrics Calculator
-  - [ ] 49.1 Implement trade-level metrics
+- [x] 49. Implement Performance Metrics Calculator
+  - [x] 49.1 Implement trade-level metrics
     - Compute per-trade P&L (gross/net), return %, bars held
     - Compute MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion)
     - _Requirements: 22.25_
 
-  - [ ] 49.2 Implement portfolio-level metrics
+  - [x] 49.2 Implement portfolio-level metrics
     - Net Profit, Gross Profit, Gross Loss, Profit Factor
     - Win Rate, Average Trade, Average Winning/Losing Trade
     - _Requirements: 22.21, 22.24_
 
-  - [ ] 49.3 Implement risk-adjusted metrics
+  - [x] 49.3 Implement risk-adjusted metrics
     - Sharpe Ratio (annualized, using daily equity returns)
     - Sortino Ratio (downside deviation only)
     - Max Drawdown and Max Drawdown Duration
     - _Requirements: 22.22, 22.23_
 
-  - [ ] 49.4 Build equity curve and other time series
+  - [x] 49.4 Build equity curve and other time series
     - Generate EquityPoint series from per-bar snapshots
     - Generate monthly returns heatmap data
     - Compute Buy & Hold return for comparison
     - _Requirements: 22.26, 22.27_
 
-  - [ ] 49.5 Create BacktestResult data structure
+  - [x] 49.5 Create BacktestResult data structure
     - Assemble config, metrics, trades[], equity_curve[], orders[]
     - Provide serialization for API responses
     - _Requirements: 22.49, 22.50_

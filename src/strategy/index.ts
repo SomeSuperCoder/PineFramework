@@ -11,6 +11,9 @@ export type {
   OrderAction,
   OrderType,
   PositionDirection,
+  Account,
+  QtyType,
+  CommissionType,
 } from './strategy-engine.js';
 
 export { BacktestEngine } from './backtest-engine.js';

@@ -1,7 +1,17 @@
 export type OrderDirection = 'long' | 'short';
 export type OrderAction = 'buy' | 'sell';
-export type OrderType = 'market' | 'limit' | 'stop';
+export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
 export type PositionDirection = 'long' | 'short' | 'flat';
+export type QtyType = 'contracts' | 'percent_of_equity' | 'cash';
+export type CommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
+
+export interface Account {
+  initialCapital: number;
+  balance: number;
+  equity: number;
+  marginUsed: number;
+  freeMargin: number;
+}
 
 export interface Order {
   id: string;
@@ -18,6 +28,7 @@ export interface Order {
   barIndex: number;
   slippage: number;
   commission: number;
+  ocaGroup?: string;
 }
 
 export interface FilledOrder extends Order {
@@ -36,6 +47,7 @@ export interface Position {
   pnl: number;
   pnlPercent: number;
   commission: number;
+  unrealizedPnl: number;
 }
 
 export interface Trade {
@@ -54,6 +66,9 @@ export interface Trade {
   commission: number;
   entryName: string;
   exitName: string;
+  mae: number;
+  mfe: number;
+  barsHeld: number;
 }
 
 export interface StrategyMetrics {
@@ -80,14 +95,18 @@ export interface StrategyConfig {
   initialCapital: number;
   commission: number;
   slippage: number;
-  commissionType: 'percent' | 'fixed';
-  slippageType: 'percent' | 'ticks';
+  commissionType: CommissionType;
+  slippageType: 'percent' | 'ticks' | 'points';
   defaultQty: number;
+  defaultQtyType: QtyType;
   pyramiding: number;
   calcOnOrderFills: boolean;
   calcOnEveryTick: boolean;
   processOrdersOnClose: boolean;
   maxBarsBack: number;
+  marginLong: number;
+  marginShort: number;
+  currency: string;
 }
 
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
@@ -97,11 +116,15 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   commissionType: 'percent',
   slippageType: 'ticks',
   defaultQty: 1,
+  defaultQtyType: 'contracts',
   pyramiding: 0,
   calcOnOrderFills: true,
   calcOnEveryTick: false,
   processOrdersOnClose: false,
   maxBarsBack: 0,
+  marginLong: 1,
+  marginShort: 1,
+  currency: 'USD',
 };
 
 export interface StrategyMarker {
@@ -141,6 +164,8 @@ export class StrategyEngine {
   private barIndex: number;
   private timestamp: number;
   private currentPrice: number;
+  private high: number;
+  private low: number;
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -154,6 +179,7 @@ export class StrategyEngine {
       pnl: 0,
       pnlPercent: 0,
       commission: 0,
+      unrealizedPnl: 0,
     };
     this.pendingOrders = [];
     this.filledOrders = [];
@@ -165,6 +191,8 @@ export class StrategyEngine {
     this.barIndex = 0;
     this.timestamp = 0;
     this.currentPrice = 0;
+    this.high = 0;
+    this.low = 0;
   }
 
   entry(
@@ -176,8 +204,12 @@ export class StrategyEngine {
     limitPrice?: number,
     comment?: string,
   ): Order | undefined {
+    const hasStop = stopPrice !== undefined && stopPrice > 0;
+    const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' :
+      hasStop ? 'stop' :
+      hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -234,8 +266,12 @@ export class StrategyEngine {
     stopPrice?: number,
     limitPrice?: number,
   ): Order | undefined {
+    const hasStop = stopPrice !== undefined && stopPrice > 0;
+    const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' :
+      hasStop ? 'stop' :
+      hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -288,8 +324,12 @@ export class StrategyEngine {
       return undefined;
     }
 
+    const hasStop = stopPrice !== undefined && stopPrice > 0;
+    const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      stopPrice !== undefined ? 'stop' : limitPrice !== undefined ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' :
+      hasStop ? 'stop' :
+      hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -424,14 +464,19 @@ export class StrategyEngine {
     return [...this.markers];
   }
 
-  private canOpenPosition(direction: OrderDirection, _quantity: number): boolean {
+  private canOpenPosition(direction: OrderDirection, quantity: number): boolean {
     if (this.position.direction === 'flat') {
-      return true;
+      const marginRate = direction === 'long' ? this.config.marginLong : this.config.marginShort;
+      const marginRequired = this.currentPrice * quantity * marginRate;
+      return marginRequired <= this.getAccount().freeMargin;
     }
 
     if (this.position.direction === direction) {
       const currentPyramiding = this.position.quantity / this.config.defaultQty;
-      return currentPyramiding < this.config.pyramiding + 1;
+      if (currentPyramiding >= this.config.pyramiding + 1) return false;
+      const marginRate = direction === 'long' ? this.config.marginLong : this.config.marginShort;
+      const marginRequired = this.currentPrice * quantity * marginRate;
+      return marginRequired <= this.getAccount().freeMargin;
     }
 
     return false;
@@ -471,10 +516,22 @@ export class StrategyEngine {
     this.position.commission += commission;
   }
 
+  private checkLiquidation(): void {
+    if (this.position.direction === 'flat' || this.position.quantity === 0) return;
+
+    const positionValue = this.currentPrice * this.position.quantity;
+    const marginRate = this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
+    const maintenanceMargin = positionValue * marginRate;
+
+    if (this.equity < maintenanceMargin) {
+      this.close('liquidation', 'Margin liquidation');
+    }
+  }
+
   private calculateSlippage(_order: Order, price: number): number {
     if (this.config.slippage === 0) return 0;
 
-    if (this.config.slippageType === 'ticks') {
+    if (this.config.slippageType === 'ticks' || this.config.slippageType === 'points') {
       return this.config.slippage;
     }
 
@@ -484,8 +541,12 @@ export class StrategyEngine {
   private calculateCommission(order: Order, price: number): number {
     if (this.config.commission === 0) return 0;
 
-    if (this.config.commissionType === 'fixed') {
+    if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
       return this.config.commission;
+    }
+
+    if (this.config.commissionType === 'per_contract') {
+      return this.config.commission * order.quantity;
     }
 
     return price * order.quantity * (this.config.commission / 100);
@@ -508,6 +569,7 @@ export class StrategyEngine {
         pnl: 0,
         pnlPercent: 0,
         commission,
+        unrealizedPnl: 0,
       };
     } else {
       const totalQuantity = this.position.quantity + quantity;
@@ -516,6 +578,13 @@ export class StrategyEngine {
       this.position.quantity = totalQuantity;
       this.position.commission += commission;
     }
+  }
+
+  private getExtremePrice(direction: OrderDirection, high: number, low: number): { maxPrice: number; minPrice: number } {
+    if (direction === 'long') {
+      return { maxPrice: high, minPrice: low };
+    }
+    return { maxPrice: low, minPrice: high };
   }
 
   private closeOrReducePosition(
@@ -529,6 +598,20 @@ export class StrategyEngine {
       this.position.direction === 'long'
         ? (price - this.position.avgPrice) * closeQuantity
         : (this.position.avgPrice - price) * closeQuantity;
+
+    const { maxPrice, minPrice } = this.getExtremePrice(
+      this.position.direction as OrderDirection,
+      this.high,
+      this.low,
+    );
+
+    const mae = this.position.direction === 'long'
+      ? (this.position.avgPrice - minPrice) / this.position.avgPrice * 100
+      : (maxPrice - this.position.avgPrice) / this.position.avgPrice * 100;
+
+    const mfe = this.position.direction === 'long'
+      ? (maxPrice - this.position.avgPrice) / this.position.avgPrice * 100
+      : (this.position.avgPrice - minPrice) / this.position.avgPrice * 100;
 
     const trade: Trade = {
       id: `trade_${this.trades.length + 1}`,
@@ -551,6 +634,9 @@ export class StrategyEngine {
       commission,
       entryName: '',
       exitName,
+      mae: Math.max(0, mae),
+      mfe: Math.max(0, mfe),
+      barsHeld: this.barIndex - this.position.entryBarIndex,
     };
 
     this.trades.push(trade);
@@ -568,6 +654,7 @@ export class StrategyEngine {
         pnl: 0,
         pnlPercent: 0,
         commission: 0,
+        unrealizedPnl: 0,
       };
     }
 
@@ -597,10 +684,13 @@ export class StrategyEngine {
     this.barIndex = barIndex;
     this.timestamp = timestamp;
     this.currentPrice = close;
+    this.high = high;
+    this.low = low;
 
     this.fillPendingMarketOrders(open);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
+    this.checkLiquidation();
   }
 
   private fillPendingMarketOrders(open: number): void {
@@ -614,6 +704,7 @@ export class StrategyEngine {
 
   private processPendingOrders(high: number, low: number): void {
     const ordersToFill: Order[] = [];
+    const stopLimitTriggers: Order[] = [];
 
     this.pendingOrders = this.pendingOrders.filter((order) => {
       if (order.type === 'limit') {
@@ -634,6 +725,15 @@ export class StrategyEngine {
           ordersToFill.push(order);
           return false;
         }
+      } else if (order.type === 'stop-limit') {
+        const stopHit =
+          order.action === 'buy'
+            ? high >= (order.stopPrice ?? order.price)
+            : low <= (order.stopPrice ?? order.price);
+        if (stopHit) {
+          stopLimitTriggers.push(order);
+          return false;
+        }
       }
       return true;
     });
@@ -645,15 +745,37 @@ export class StrategyEngine {
           : (order.stopPrice ?? order.price);
       this.fillOrder(order, fillPrice);
     }
+
+    for (const order of stopLimitTriggers) {
+      const limitPrice = order.limitPrice ?? order.price;
+      const limitHit =
+        order.action === 'buy'
+          ? low <= limitPrice
+          : high >= limitPrice;
+      if (limitHit) {
+        this.fillOrder(order, limitPrice);
+      } else {
+        const limitOrder: Order = {
+          ...order,
+          id: generateOrderId(),
+          type: 'limit',
+          price: limitPrice,
+          stopPrice: undefined,
+        };
+        this.pendingOrders.push(limitOrder);
+      }
+    }
   }
 
   private updatePositionPnL(currentPrice: number): void {
     if (this.position.direction === 'flat') return;
 
-    this.position.pnl =
+    this.position.unrealizedPnl =
       this.position.direction === 'long'
         ? (currentPrice - this.position.avgPrice) * this.position.quantity
         : (this.position.avgPrice - currentPrice) * this.position.quantity;
+
+    this.position.pnl = this.position.unrealizedPnl;
 
     this.position.pnlPercent =
       this.position.avgPrice > 0
@@ -662,7 +784,7 @@ export class StrategyEngine {
           (this.position.direction === 'long' ? 1 : -1)
         : 0;
 
-    const totalEquity = this.equity + this.position.pnl;
+    const totalEquity = this.equity + this.position.unrealizedPnl;
     if (totalEquity > this.peakEquity) {
       this.peakEquity = totalEquity;
     }
@@ -703,6 +825,36 @@ export class StrategyEngine {
 
   getTrades(): Trade[] {
     return [...this.trades];
+  }
+
+  getAccount(): Account {
+    const marginRate = this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
+    const positionValue = this.currentPrice * this.position.quantity;
+    const marginUsed = this.position.direction !== 'flat' ? positionValue * marginRate : 0;
+    const totalEquity = this.equity + this.position.unrealizedPnl;
+
+    return {
+      initialCapital: this.config.initialCapital,
+      balance: this.equity,
+      equity: totalEquity,
+      marginUsed,
+      freeMargin: totalEquity - marginUsed,
+    };
+  }
+
+  calculateQty(_direction: OrderDirection): number {
+    switch (this.config.defaultQtyType) {
+      case 'percent_of_equity': {
+        const account = this.getAccount();
+        const cashAmount = account.equity * (this.config.defaultQty / 100);
+        return this.currentPrice > 0 ? Math.floor(cashAmount / this.currentPrice) : 0;
+      }
+      case 'cash': {
+        return this.currentPrice > 0 ? Math.floor(this.config.defaultQty / this.currentPrice) : 0;
+      }
+      default:
+        return this.config.defaultQty;
+    }
   }
 
   getMetrics(): StrategyMetrics {
@@ -773,6 +925,7 @@ export class StrategyEngine {
       pnl: 0,
       pnlPercent: 0,
       commission: 0,
+      unrealizedPnl: 0,
     };
     this.pendingOrders = [];
     this.filledOrders = [];

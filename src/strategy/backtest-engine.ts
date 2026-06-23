@@ -7,12 +7,20 @@ import {
   type FilledOrder,
 } from './strategy-engine.js';
 
+export interface EquityPoint {
+  time: number;
+  equity: number;
+  drawdown: number;
+  balance: number;
+}
+
 export interface BacktestResult {
   metrics: StrategyMetrics;
   trades: Trade[];
   filledOrders: FilledOrder[];
   equityCurve: number[];
   drawdownCurve: number[];
+  equityPoints: EquityPoint[];
   positions: Array<{
     barIndex: number;
     direction: string;
@@ -20,11 +28,16 @@ export interface BacktestResult {
     avgPrice: number;
     pnl: number;
   }>;
+  monthlyReturns: Record<string, number>;
+  buyHoldReturn: number;
+  config: BacktestConfig;
 }
 
 export interface BacktestConfig extends StrategyConfig {
   startDate?: number;
   endDate?: number;
+  barMagnifier?: string;
+  subBars?: Bar[];
 }
 
 export class BacktestEngine {
@@ -38,11 +51,15 @@ export class BacktestEngine {
       commissionType: 'percent',
       slippageType: 'ticks',
       defaultQty: 1,
+      defaultQtyType: 'contracts',
       pyramiding: 0,
       calcOnOrderFills: true,
       calcOnEveryTick: false,
       processOrdersOnClose: false,
       maxBarsBack: 0,
+      marginLong: 1,
+      marginShort: 1,
+      currency: 'USD',
       ...config,
     };
   }
@@ -54,6 +71,7 @@ export class BacktestEngine {
     const engine = new StrategyEngine(this.config);
     const equityCurve: number[] = [];
     const drawdownCurve: number[] = [];
+    const equityPoints: EquityPoint[] = [];
     const positions: Array<{
       barIndex: number;
       direction: string;
@@ -71,14 +89,21 @@ export class BacktestEngine {
       filteredBars = filteredBars.filter((b) => b.timestamp <= this.config.endDate!);
     }
 
+    const subBarMap = this.buildSubBarMap(filteredBars);
+
     for (let i = 0; i < filteredBars.length; i++) {
       const bar = filteredBars[i]!;
 
-      engine.updateBar(i, bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume);
-
-      strategyFn(engine, bar, i);
+      const subBars = subBarMap.get(i) ?? undefined;
+      if (subBars && subBars.length > 0) {
+        this.processWithIntrabarMagnification(engine, bar, i, subBars, strategyFn);
+      } else {
+        engine.updateBar(i, bar.timestamp, bar.open, bar.high, bar.low, bar.close, bar.volume);
+        strategyFn(engine, bar, i);
+      }
 
       const position = engine.getPosition();
+      const account = engine.getAccount();
       positions.push({
         barIndex: i,
         direction: position.direction,
@@ -89,7 +114,16 @@ export class BacktestEngine {
 
       equityCurve.push(engine.getEquity());
       drawdownCurve.push(engine.getMaxDrawdown());
+      equityPoints.push({
+        time: bar.timestamp,
+        equity: account.equity,
+        drawdown: engine.getMaxDrawdown(),
+        balance: account.balance,
+      });
     }
+
+    const monthlyReturns = this.computeMonthlyReturns(equityPoints);
+    const buyHoldReturn = this.computeBuyHoldReturn(filteredBars);
 
     return {
       metrics: engine.getMetrics(),
@@ -97,8 +131,95 @@ export class BacktestEngine {
       filledOrders: engine.getFilledOrders(),
       equityCurve,
       drawdownCurve,
+      equityPoints,
       positions,
+      monthlyReturns,
+      buyHoldReturn,
+      config: { ...this.config },
     };
+  }
+
+  private buildSubBarMap(bars: Bar[]): Map<number, Bar[]> {
+    const map = new Map<number, Bar[]>();
+    if (!this.config.barMagnifier || !this.config.subBars) return map;
+
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i]!;
+      const matching = this.config.subBars.filter(
+        (sb) => sb.timestamp >= bar.timestamp &&
+          (i === bars.length - 1 || sb.timestamp < bars[i + 1]!.timestamp),
+      );
+      if (matching.length > 0) {
+        map.set(i, matching);
+      }
+    }
+
+    return map;
+  }
+
+  private processWithIntrabarMagnification(
+    engine: StrategyEngine,
+    mainBar: Bar,
+    barIndex: number,
+    subBars: Bar[],
+    strategyFn: (engine: StrategyEngine, bar: Bar, index: number) => void,
+  ): void {
+    let lastSubIndex = 0;
+    for (const subBar of subBars) {
+      engine.updateBar(
+        barIndex,
+        subBar.timestamp,
+        subBar.open,
+        subBar.high,
+        subBar.low,
+        subBar.close,
+        subBar.volume,
+      );
+      strategyFn(engine, subBar, barIndex);
+      lastSubIndex++;
+    }
+
+    if (lastSubIndex === subBars.length) {
+      const finalSub = subBars[subBars.length - 1]!;
+      engine.updateBar(
+        barIndex,
+        mainBar.timestamp,
+        finalSub.open,
+        Math.max(finalSub.high, mainBar.high),
+        Math.min(finalSub.low, mainBar.low),
+        mainBar.close,
+        mainBar.volume,
+      );
+    }
+  }
+
+  private computeMonthlyReturns(points: EquityPoint[]): Record<string, number> {
+    const monthly: Record<string, number> = {};
+    if (points.length < 2) return monthly;
+
+    const startEquity = points[0]!.equity;
+    let prevMonthEquity = startEquity;
+
+    for (const point of points) {
+      const date = new Date(point.time);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+
+      if (!monthly[key]) {
+        monthly[key] = prevMonthEquity > 0
+          ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100
+          : 0;
+        prevMonthEquity = point.equity;
+      }
+    }
+
+    return monthly;
+  }
+
+  private computeBuyHoldReturn(bars: Bar[]): number {
+    if (bars.length < 2) return 0;
+    const firstClose = bars[0]!.close;
+    const lastClose = bars[bars.length - 1]!.close;
+    return firstClose > 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
   }
 
   runWithOHLCV(
