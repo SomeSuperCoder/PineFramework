@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { parse, compile, ExecutionEngine, createSeries, type Bar } from 'pine-framework';
+import { parse, compile, ExecutionEngine, createSeries, type Bar, type StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
@@ -57,7 +57,21 @@ export function createBacktestRouter() {
         throw new Error('Script must be a strategy (use strategy() instead of indicator() or library())');
       }
 
-      const execEngine = new ExecutionEngine(compileResult);
+      const configOverride: Partial<StrategyConfig> = {};
+      const configFields: Array<keyof StrategyConfig> = [
+        'initialCapital', 'commission', 'slippage',
+        'commissionType', 'slippageType',
+        'defaultQty', 'defaultQtyType',
+        'pyramiding', 'marginLong', 'marginShort',
+      ];
+      for (const field of configFields) {
+        const val = job.config[field];
+        if (val !== undefined) {
+          (configOverride as Record<string, unknown>)[field] = val;
+        }
+      }
+
+      const execEngine = new ExecutionEngine(compileResult, Object.keys(configOverride).length > 0 ? configOverride : undefined);
 
       const contexts = bars.map((bar, i) => ({
         barIndex: i,

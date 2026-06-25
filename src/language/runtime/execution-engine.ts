@@ -123,7 +123,7 @@ export class ExecutionEngine {
   private maxSnapshots: number;
   private currentTimestamp: number = 0;
 
-  constructor(compileResult: CompileResult) {
+  constructor(compileResult: CompileResult, strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>) {
     this.compiledScript = compileResult.ir;
     this.sourceProgram = compileResult.source;
     this.globalScope = createRuntimeScope();
@@ -147,7 +147,7 @@ export class ExecutionEngine {
     this.initializeGlobals();
 
     if (this.sourceProgram.scriptKind === 'strategy') {
-      this.initializeStrategy();
+      this.initializeStrategy(strategyConfigOverride);
     }
   }
 
@@ -602,7 +602,7 @@ export class ExecutionEngine {
     }
   }
 
-  private initializeStrategy(): void {
+  private initializeStrategy(override?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>): void {
     const args: Record<string, unknown> = {};
     for (const arg of this.sourceProgram.scriptArgs) {
       if (arg.name) {
@@ -611,7 +611,10 @@ export class ExecutionEngine {
     }
 
     const config = parseStrategyDeclaration(args);
-    const strategyConfig = getStrategyConfig(config);
+    let strategyConfig = getStrategyConfig(config);
+    if (override && strategyConfig) {
+      strategyConfig = { ...strategyConfig, ...override };
+    }
     if (strategyConfig) {
       this.strategyEngine = new StrategyEngine(strategyConfig);
     }
