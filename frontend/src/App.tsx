@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
@@ -40,11 +40,22 @@ function App() {
     setErrors,
   } = useChartData();
 
+  const prevTfRef = useRef(timeframe);
+  const prevSymRef = useRef(symbol);
+
   useEffect(() => {
     setDataVersion((v) => v + 1);
     fetchOHLCV(symbol, timeframe);
     subscribe(symbol, timeframe);
   }, [symbol, timeframe, fetchOHLCV, subscribe]);
+
+  useEffect(() => {
+    if (prevTfRef.current !== timeframe || prevSymRef.current !== symbol) {
+      prevTfRef.current = timeframe;
+      prevSymRef.current = symbol;
+      executeScript(currentCode, symbol, timeframe);
+    }
+  }, [symbol, timeframe, executeScript, currentCode]);
 
   useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {

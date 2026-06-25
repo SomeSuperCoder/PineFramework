@@ -201,6 +201,10 @@ export function useChartData() {
           const data = JSON.parse(event.data);
           if (data.type === 'kline' && data.data) {
             const k = data.data;
+            const topic = `kline.${k.interval}.${k.symbol}`;
+            if (topic !== subscribedTopicRef.current) {
+              return;
+            }
             const time = Math.floor(k.timestamp / 1000);
             if (!time || time <= 0) return;
             const candle: CandlestickData = {
