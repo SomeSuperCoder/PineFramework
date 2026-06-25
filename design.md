@@ -452,6 +452,17 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Code Editor**: Monaco/CodeMirror-based editor with Pine Script syntax highlighting and auto-completion
   - **Canvas Chart**: Custom HTML5 Canvas charting library (see section 8a) rendering candlesticks, volume, plots, shapes, fills, strategy markers, crosshair
   - **Error Console**: Real-time error logging with line numbers and descriptions
+  - **Strategy Results Popup**: Full-screen overlay showing backtest metrics, equity/drawdown chart, and trade list with sortable columns; includes gear icon to open a compact settings overlay for tweaking strategy parameters
+- **Workflow**:
+  1. User clicks "Open Editor" → popup editor opens with default Pine Script code
+  2. User writes/modifies code and clicks "Run" or presses Ctrl+Enter
+  3. Script is sent to Backend `/api/execute` for compilation and execution
+  4. Execution results (plots, shapes, fills, strategy markers) are rendered on the chart
+  5. If the script returned `strategyMarkers` (indicating a strategy, not an indicator), a "View Backtest Results" button appears in the header area
+  6. Clicking "View Backtest Results" opens a nearly full-screen popup (~90% viewport)
+  7. The popup shows key metrics, equity/drawdown chart, and sortable trade list
+  8. A settings gear button opens a compact overlay where the user can tweak strategy parameters (initial capital, commission, slippage, etc.) — these auto-load from the `strategy()` declaration
+  9. Changing settings and clicking "Run Backtest" triggers a new backtest via the Backend
 - **Key Features**:
   - Realtime candlestick chart rendered entirely on HTML5 Canvas
   - Popup code editor for Pine Script entry
@@ -479,6 +490,16 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Stores the last submitted script code in memory for automatic re-execution on new candle data
   - Automatically re-executes the script via the backend when new WebSocket kline data arrives
   - Applies updated indicator overlays (plots, shapes, fills, strategy markers) on the canvas chart without user interaction
+- **Strategy Results Popup Details**:
+  - Position: fixed, centered, ~90vw × ~90vh, dark theme matching the existing UI
+  - Sections:
+    - Header: title "Backtest Results", close button (✕), settings gear (⚙), status (connected/disconnected), progress bar during backtest run
+    - Metrics grid: 8 tiles (Net Profit, Win Rate, Profit Factor, Sharpe, Max DD, Sortino, Total Trades, Commission)
+    - Equity/Drawdown chart: canvas-rendered equity curve (blue line) and drawdown (red line), dual-panel layout
+    - Trades table: sortable columns (Direction, Entry, Exit, PnL, Return, MAE, MFE, Bars), green/red coloring
+  - Settings overlay: compact popup within the main popup containing fields: initial capital, commission (value + type), slippage (value + type), default quantity (value + type), pyramiding, margin (long/short), start date, end date
+  - Auto-extracts default values from `strategy()` declaration in the script source
+  - Backtest runs asynchronously via `/api/backtest` with progress polling
 
 #### 17. Backend API Server
 - **Responsibility**: Bridge frontend and engine, serve market data, manage connections

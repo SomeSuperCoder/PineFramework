@@ -1,11 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
-import { BacktestPanel } from './components/BacktestPanel';
-import { BacktestResults } from './components/BacktestResults';
+import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { useChartData } from './hooks/useChartData';
-import type { BacktestResultResponse } from './types';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
 const INTERVALS = [
@@ -26,8 +24,9 @@ function App() {
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
-  const [btResult, setBtResult] = useState<BacktestResultResponse | null>(null);
   const [currentCode, setCurrentCode] = useState(savedCode || DEFAULT_CODE);
+  const [showStrategyPopup, setShowStrategyPopup] = useState(false);
+  const [isStrategy, setIsStrategy] = useState(false);
 
   const {
     candles,
@@ -47,15 +46,20 @@ function App() {
     subscribe(symbol, timeframe);
   }, [symbol, timeframe, fetchOHLCV, subscribe]);
 
+  useEffect(() => {
+    if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
+      setIsStrategy(true);
+    } else {
+      setIsStrategy(false);
+      setShowStrategyPopup(false);
+    }
+  }, [scriptResult]);
+
   const handleExecute = async (code: string) => {
     setEditorOpen(false);
     setCurrentCode(code);
     await executeScript(code, symbol, timeframe);
   };
-
-  const handleBacktestResult = useCallback((result: BacktestResultResponse) => {
-    setBtResult(result);
-  }, []);
 
   return (
     <div className="app">
@@ -72,6 +76,11 @@ function App() {
               <option key={i.value} value={i.value}>{i.label}</option>
             ))}
           </select>
+          {isStrategy && (
+            <button className="view-results-button" onClick={() => setShowStrategyPopup(true)}>
+              View Backtest Results
+            </button>
+          )}
           <span style={{ fontSize: '12px', color: isConnected ? '#4caf50' : '#e94560' }}>
             {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
           </span>
@@ -96,19 +105,13 @@ function App() {
         onExecute={handleExecute}
       />
 
-      <BacktestPanel
+      <StrategyResultsPopup
+        isOpen={showStrategyPopup}
+        onClose={() => setShowStrategyPopup(false)}
         symbol={symbol}
         timeframe={timeframe}
         scriptSource={currentCode}
-        onResult={handleBacktestResult}
       />
-
-      {btResult && (
-        <BacktestResults
-          result={btResult}
-          onClose={() => setBtResult(null)}
-        />
-      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import type { BacktestResultResponse } from '../types';
 
 interface BacktestResultsProps {
   result: BacktestResultResponse;
-  onClose: () => void;
+  onClose?: () => void;
   onSelectTrade?: (tradeIndex: number) => void;
 }
 
@@ -119,17 +119,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     <div
       className="backtest-results"
       style={{
-        position: 'fixed',
-        top: '60px',
-        right: '20px',
-        width: '600px',
-        maxHeight: 'calc(100vh - 100px)',
-        overflowY: 'auto',
-        background: '#16213e',
-        border: '1px solid #0f3460',
-        borderRadius: '8px',
-        padding: '20px',
-        zIndex: 98,
+        width: '100%',
         color: '#e0e0e0',
         fontSize: '13px',
       }}
@@ -152,12 +142,14 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
               </div>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{ padding: '6px 12px', background: '#3a1a1a', color: '#e94560', border: '1px solid #e94560', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-          >
-            Close
-          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              style={{ padding: '6px 12px', background: '#3a1a1a', color: '#e94560', border: '1px solid #e94560', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
 

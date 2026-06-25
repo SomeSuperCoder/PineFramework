@@ -306,7 +306,7 @@ describe('Script Declarations', () => {
       });
       const stratConfig = getStrategyConfig(config);
       expect(stratConfig!.defaultQtyType).toBe('percent_of_equity');
-      expect(stratConfig!.defaultQty).toBe(100);
+      expect(stratConfig!.defaultQty).toBe(20);
       expect(stratConfig!.commissionType).toBe('percent');
       expect(stratConfig!.marginLong).toBe(1);
       expect(stratConfig!.marginShort).toBe(1);

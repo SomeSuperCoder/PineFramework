@@ -420,7 +420,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 1. THE Frontend SHALL display a realtime candlestick chart rendered on an HTML5 Canvas element with OHLCV data fetched from the Backend
 2. THE Frontend SHALL provide a button that opens a popup code editor
 3. THE Frontend SHALL allow users to enter Pine Script v6 code in the editor
-4. WHEN the editor is closed, THE Frontend SHALL send the script to the Backend for compilation and execution, then render the results on the chart
+4. WHEN the user clicks Run in the editor, THE Frontend SHALL send the script to the Backend for compilation and execution, then render the results on the chart
 5. IF compilation errors occur, THE Frontend SHALL log errors in an error console/panel
 6. IF runtime errors occur, THE Frontend SHALL log errors in an error console/panel
 7. THE Frontend SHALL display error messages with line numbers and descriptions
@@ -445,6 +445,15 @@ This specification defines requirements for building a Pine Script v6 compatible
 26. WHEN new candle data arrives via WebSocket, THE Frontend SHALL automatically trigger script re-execution with the updated bar set
 27. THE Frontend SHALL store the last submitted script code in memory for automatic re-execution on new data
 28. THE Frontend SHALL update indicator overlays (plots, shapes, fills, strategy markers) on the chart automatically when new execution results arrive via WebSocket
+
+**Strategy Results Popup:**
+29. WHEN the user clicks Run and the script returned strategy markers (indicating a strategy, not an indicator), THE Frontend SHALL display a "View Backtest Results" button on the chart
+30. WHEN the user clicks "View Backtest Results", THE Frontend SHALL open a nearly full-screen popup overlay (centered, ~90% viewport) showing the strategy backtest results
+31. THE Strategy Results popup SHALL use default settings auto-extracted from the strategy() declaration (initial_capital, commission_value, slippage, pyramiding, default_qty_value, default_qty_type, margin_long, margin_short)
+32. THE Strategy Results popup SHALL provide a settings button (gear icon) that opens a compact settings overlay within the popup for tweaking strategy parameters
+33. WHEN the user modifies settings and clicks "Run Backtest", THE Frontend SHALL send a backtest request to the Backend with the updated parameters
+34. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
+35. THE Strategy Results popup SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
 
 ### Requirement 18: Monorepo Project Structure
 
