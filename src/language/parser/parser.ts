@@ -29,6 +29,8 @@ import type {
   StatementNode,
   StringLiteralNode,
   SwitchCaseNode,
+  SwitchExpressionCaseNode,
+  SwitchExpressionNode,
   SwitchStatementNode,
   TernaryExpressionNode,
   TypeAnnotationNode,
@@ -452,6 +454,52 @@ export class Parser {
     };
   }
 
+  private parseSwitchExpression(): SwitchExpressionNode {
+    const start = this.previous().span.start;
+    const expression = this.parseExpression();
+    const switchColumn = start.column;
+    const cases: SwitchExpressionCaseNode[] = [];
+
+    while (!this.isAtEnd()) {
+      const nextCol = this.peek().span.start.column;
+      if (nextCol <= switchColumn) {
+        break;
+      }
+
+      const caseStart = this.peek().span.start;
+
+      if (this.match(TokenType.Arrow)) {
+        const result = this.parseExpression();
+        cases.push({
+          kind: 'SwitchExpressionCase',
+          span: spanBetween(caseStart, result.span.end),
+          value: undefined,
+          result,
+        });
+        continue;
+      }
+
+      const value = this.parseExpression();
+      this.consume(TokenType.Arrow, 'Expected "=>" after case value in switch expression');
+      const result = this.parseExpression();
+      cases.push({
+        kind: 'SwitchExpressionCase',
+        span: spanBetween(caseStart, result.span.end),
+        value,
+        result,
+      });
+    }
+
+    const end = cases[cases.length - 1]?.span.end ?? expression.span.end;
+
+    return {
+      kind: 'SwitchExpression',
+      span: spanBetween(start, end),
+      expression,
+      cases,
+    };
+  }
+
   private parseReturnStatement(): ReturnStatementNode {
     const start = this.previous().span.start;
     let value: ExpressionNode | undefined;
@@ -813,6 +861,9 @@ export class Parser {
     }
     if (this.match(TokenType.LBrace)) {
       return this.parseMapExpression();
+    }
+    if (this.match(TokenType.Switch)) {
+      return this.parseSwitchExpression();
     }
 
     throw this.error(`Unexpected token: ${this.peek().lexeme || this.peek().type}`);

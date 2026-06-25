@@ -27,6 +27,7 @@ import type {
   MapExpressionNode,
   FunctionExpressionNode,
   ParenthesizedExpressionNode,
+  SwitchExpressionNode,
 } from '../parser/ast/nodes.js';
 import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { NA, isNa, pineTruthy, type PineValue } from '../types/na.js';
@@ -1132,6 +1133,27 @@ export class ExecutionEngine {
     return NA;
   }
 
+  private executeSwitchExpression(
+    expr: SwitchExpressionNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    const condValue = this.executeExpression(expr.expression, scope, context);
+
+    for (const caseNode of expr.cases) {
+      if (caseNode.value) {
+        const caseValue = this.executeExpression(caseNode.value, scope, context);
+        if (condValue === caseValue || (typeof condValue === 'number' && condValue === caseValue)) {
+          return this.executeExpression(caseNode.result, scope, context);
+        }
+      } else {
+        return this.executeExpression(caseNode.result, scope, context);
+      }
+    }
+
+    return NA;
+  }
+
   private executeReturnStatement(
     stmt: ReturnStatementNode,
     scope: RuntimeScope,
@@ -1181,6 +1203,8 @@ export class ExecutionEngine {
         return this.executeFunctionExpression(expr, scope, context);
       case 'ParenthesizedExpression':
         return this.executeParenthesizedExpression(expr, scope, context);
+      case 'SwitchExpression':
+        return this.executeSwitchExpression(expr, scope, context);
       default:
         throw new Error(`Unsupported expression kind: ${(expr as ExpressionNode).kind}`);
     }

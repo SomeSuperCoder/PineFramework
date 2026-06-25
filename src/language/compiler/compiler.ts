@@ -258,6 +258,18 @@ export class Compiler {
         return ANY_TYPE;
       case 'ParenthesizedExpression':
         return this.inferExpressionType(expr.expression);
+      case 'SwitchExpression': {
+        this.inferExpressionType(expr.expression);
+        if (expr.cases.length === 0) return ANY_TYPE;
+        let resultType = this.inferExpressionType(expr.cases[0]!.result);
+        for (let i = 1; i < expr.cases.length; i++) {
+          const caseType = this.inferExpressionType(expr.cases[i]!.result);
+          if (isAssignable(caseType, resultType)) {
+            resultType = caseType;
+          }
+        }
+        return resultType;
+      }
       default:
         return ANY_TYPE;
     }

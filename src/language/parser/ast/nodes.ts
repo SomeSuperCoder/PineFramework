@@ -98,6 +98,20 @@ export interface SwitchStatementNode {
   defaultCase?: StatementNode[];
 }
 
+export interface SwitchExpressionCaseNode {
+  kind: 'SwitchExpressionCase';
+  span: SourceSpan;
+  value?: ExpressionNode;
+  result: ExpressionNode;
+}
+
+export interface SwitchExpressionNode {
+  kind: 'SwitchExpression';
+  span: SourceSpan;
+  expression: ExpressionNode;
+  cases: SwitchExpressionCaseNode[];
+}
+
 export interface TypeDeclarationNode {
   kind: 'TypeDeclaration';
   span: SourceSpan;
@@ -153,7 +167,8 @@ export type ExpressionNode =
   | ArrayExpressionNode
   | MapExpressionNode
   | FunctionExpressionNode
-  | ParenthesizedExpressionNode;
+  | ParenthesizedExpressionNode
+  | SwitchExpressionNode;
 
 export type LiteralNode =
   | NumberLiteralNode
