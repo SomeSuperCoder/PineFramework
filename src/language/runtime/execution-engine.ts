@@ -123,6 +123,7 @@ export class ExecutionEngine {
   private executionTimes: number[];
   private maxSnapshots: number;
   private currentTimestamp: number = 0;
+  private currentContext: ExecutionContext | null = null;
 
   constructor(compileResult: CompileResult, strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>) {
     this.compiledScript = compileResult.ir;
@@ -154,6 +155,7 @@ export class ExecutionEngine {
 
   private smaBuffers: Map<string, number[]> = new Map();
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
+  private sarState: Map<string, { position: 'long' | 'short'; ep: number; af: number; prevSar: number }> = new Map();
   private fills: Array<{ from: string; to: string; color: string }> = [];
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossCallIndex: number = 0;
@@ -199,6 +201,53 @@ export class ExecutionEngine {
       const state = this.emaState.get(key)!;
       state.prev = (source as number) * k + state.prev * (1 - k);
       return state.prev;
+    });
+
+    this.builtins.set('ta.sar', (start: PineValue, inc: PineValue, max: PineValue): PineValue => {
+      if (!this.currentContext) return NA;
+      const ctx = this.currentContext;
+      const high = ctx.high.getRelative(0);
+      const low = ctx.low.getRelative(0);
+      if (typeof high !== 'number' || typeof low !== 'number') return NA;
+      const afStart = typeof start === 'number' ? start : 0.02;
+      const afInc = typeof inc === 'number' ? inc : 0.02;
+      const afMax = typeof max === 'number' ? max : 0.2;
+      const key = 'sar';
+      if (!this.sarState.has(key)) {
+        this.sarState.set(key, { position: 'long', ep: high, af: afStart, prevSar: low });
+        return low;
+      }
+      const state = this.sarState.get(key)!;
+      let sar: number;
+      if (state.position === 'long') {
+        sar = state.prevSar + state.af * (state.ep - state.prevSar);
+        sar = Math.min(sar, Math.min(low, state.ep));
+        if (high > state.ep) {
+          state.ep = high;
+          state.af = Math.min(state.af + afInc, afMax);
+        }
+        if (low < sar) {
+          state.position = 'short';
+          state.ep = low;
+          state.af = afStart;
+          sar = Math.max(sar, high);
+        }
+      } else {
+        sar = state.prevSar - state.af * (state.prevSar - state.ep);
+        sar = Math.max(sar, Math.max(high, state.ep));
+        if (low < state.ep) {
+          state.ep = low;
+          state.af = Math.min(state.af + afInc, afMax);
+        }
+        if (high > sar) {
+          state.position = 'long';
+          state.ep = high;
+          state.af = afStart;
+          sar = Math.min(sar, low);
+        }
+      }
+      state.prevSar = sar;
+      return sar;
     });
 
     this.builtins.set('math.max', (...args: PineValue[]): PineValue => {
@@ -810,6 +859,7 @@ export class ExecutionEngine {
   executeBar(context: ExecutionContext): ExecutionResult {
     const startTime = performance.now();
     this.currentTimestamp = context.timestamp;
+    this.currentContext = context;
     this.crossCallIndex = 0;
 
     try {

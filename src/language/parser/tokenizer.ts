@@ -213,6 +213,9 @@ export class Tokenizer {
         if (this.match('=')) {
           return this.makeToken(TokenType.Equal, '==', start);
         }
+        if (this.match('>')) {
+          return this.makeToken(TokenType.Arrow, '=>', start);
+        }
         return this.makeToken(TokenType.Assign, '=', start);
       case '!':
         if (this.match('=')) {

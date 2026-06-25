@@ -457,12 +457,23 @@ export class Parser {
   private parseSwitchExpression(): SwitchExpressionNode {
     const start = this.previous().span.start;
     const expression = this.parseExpression();
-    const switchColumn = start.column;
     const cases: SwitchExpressionCaseNode[] = [];
+
+    // Find the base column: the column of the first token on the switch keyword's line,
+    // so indented cases (which are at a column between base and switch) are not skipped.
+    const switchLine = start.line;
+    let baseColumn = start.column;
+    let i = this.current - 2;
+    while (i >= 0 && this.tokens[i]!.span.start.line === switchLine) {
+      if (this.tokens[i]!.span.start.column < baseColumn) {
+        baseColumn = this.tokens[i]!.span.start.column;
+      }
+      i--;
+    }
 
     while (!this.isAtEnd()) {
       const nextCol = this.peek().span.start.column;
-      if (nextCol <= switchColumn) {
+      if (nextCol <= baseColumn) {
         break;
       }
 
