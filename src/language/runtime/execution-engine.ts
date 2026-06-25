@@ -652,16 +652,16 @@ export class ExecutionEngine {
         const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
         let dir: OrderDirection;
-        let qty: number;
+        let qty: number | undefined;
         let pr: number;
 
         if (typeof directionOrQty === 'string') {
           dir = directionOrQty === 'short' ? 'short' : 'long';
-          qty = typeof restArgs[0] === 'number' ? restArgs[0] : this.strategyEngine.getConfig().defaultQty;
+          qty = typeof restArgs[0] === 'number' ? restArgs[0] : undefined;
           pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
         } else {
           dir = 'long';
-          qty = typeof directionOrQty === 'number' ? directionOrQty : this.strategyEngine.getConfig().defaultQty;
+          qty = typeof directionOrQty === 'number' ? directionOrQty : undefined;
           pr = typeof restArgs[0] === 'number' ? restArgs[0] : 0;
         }
 
@@ -685,10 +685,10 @@ export class ExecutionEngine {
         const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
         const exitName = typeof name === 'string' ? name : 'exit';
-        const qty = typeof restArgs[0] === 'number' ? restArgs[0] : undefined;
+        const qty = typeof restArgs[0] === 'number' ? restArgs[0] : (typeof namedArgs?.qty === 'number' ? namedArgs.qty : undefined);
         const pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
-        const sp = typeof restArgs[2] === 'number' ? restArgs[2] : undefined;
-        const lp = typeof restArgs[3] === 'number' ? restArgs[3] : undefined;
+        const sp = typeof restArgs[2] === 'number' ? restArgs[2] : (typeof namedArgs?.stop === 'number' ? namedArgs.stop : undefined);
+        const lp = typeof restArgs[3] === 'number' ? restArgs[3] : (typeof namedArgs?.limit === 'number' ? namedArgs.limit : undefined);
         const cm = (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ?? (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
         this.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
         return NA;
@@ -749,7 +749,7 @@ export class ExecutionEngine {
         if (!this.strategyEngine) return NA;
         const orderName = typeof name === 'string' ? name : 'order';
         const dir: OrderDirection = direction === 'short' ? 'short' : 'long';
-        const qty = typeof quantity === 'number' ? quantity : this.strategyEngine.getConfig().defaultQty;
+        const qty = typeof quantity === 'number' ? quantity : undefined;
         const pr = typeof price === 'number' ? price : 0;
         this.strategyEngine.order(orderName, dir, qty, pr);
         return NA;
@@ -1452,6 +1452,9 @@ export class ExecutionEngine {
         }
         if (expr.property === 'position_size' && this.strategyEngine) {
           return this.strategyEngine.getPosition().quantity;
+        }
+        if (expr.property === 'position_avg_price' && this.strategyEngine) {
+          return this.strategyEngine.getPosition().avgPrice;
         }
       }
       if (objName === '__strategy.commission__') {

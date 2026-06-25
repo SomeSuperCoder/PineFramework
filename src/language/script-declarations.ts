@@ -336,7 +336,8 @@ export function getStrategyConfig(config: ScriptConfig): {
   const mapQtyType = (t?: DefaultQtyType): 'contracts' | 'percent_of_equity' | 'cash' => {
     if (t === 'percent_of_equity') return 'percent_of_equity';
     if (t === 'currency') return 'cash';
-    return 'contracts';
+    if (t === 'fixed') return 'contracts';
+    return 'percent_of_equity';
   };
 
   return {
@@ -345,7 +346,7 @@ export function getStrategyConfig(config: ScriptConfig): {
     slippage: strat.slippage ?? 0,
     commissionType: mapCommissionType(strat.commission_type),
     slippageType: 'ticks',
-    defaultQty: strat.default_qty_value ?? 1,
+    defaultQty: strat.default_qty_value ?? 20,
     defaultQtyType: mapQtyType(strat.default_qty_type),
     pyramiding: strat.pyramiding ?? 0,
     calcOnOrderFills: true,

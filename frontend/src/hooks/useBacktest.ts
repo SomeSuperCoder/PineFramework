@@ -74,6 +74,7 @@ export function useBacktest() {
             }
           } else if (statusData.status === 'failed') {
             stopPolling();
+            setError(statusData.error || 'Backtest failed without details');
           }
         } catch {
           // continue polling

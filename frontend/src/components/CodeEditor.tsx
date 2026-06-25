@@ -9,21 +9,18 @@ interface CodeEditorProps {
 }
 
 export const DEFAULT_CODE = `//@version=6
-indicator("My Indicator", overlay=true)
-
-// Get close price
-closePrice = close
+strategy("My Strategy", overlay=true, initial_capital=10000)
 
 // Calculate SMA
-sma20 = ta.sma(closePrice, 20)
+sma20 = ta.sma(close, 20)
 
-// Plot results
-plot(closePrice, "Close", color=color.blue)
-plot(sma20, "SMA 20", color=color.orange)
+// Entry: buy when close crosses above SMA
+if (close > sma20)
+    strategy.entry("Long", strategy.long)
 
-// Add signals
-plotshape(closePrice > sma20, "Buy Signal", shape.triangleup, location.belowbar, color.green)
-plotshape(closePrice < sma20, "Sell Signal", shape.triangledown, location.abovebar, color.red)
+// Exit: sell when close crosses below SMA
+if (close < sma20)
+    strategy.close("Long")
 `;
 
 export function CodeEditor({ isOpen, onClose, onExecute, code, onCodeChange }: CodeEditorProps) {

@@ -286,6 +286,7 @@ describe('Script Declarations', () => {
       });
       const stratConfig = getStrategyConfig(config);
       expect(stratConfig!.defaultQtyType).toBe('contracts');
+      expect(stratConfig!.defaultQty).toBe(2);
     });
 
     it('should map margin_long and margin_short as decimal ratios', () => {
@@ -304,7 +305,8 @@ describe('Script Declarations', () => {
         title: 'Test',
       });
       const stratConfig = getStrategyConfig(config);
-      expect(stratConfig!.defaultQtyType).toBe('contracts');
+      expect(stratConfig!.defaultQtyType).toBe('percent_of_equity');
+      expect(stratConfig!.defaultQty).toBe(100);
       expect(stratConfig!.commissionType).toBe('percent');
       expect(stratConfig!.marginLong).toBe(1);
       expect(stratConfig!.marginShort).toBe(1);

@@ -115,8 +115,8 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   slippage: 0,
   commissionType: 'percent',
   slippageType: 'ticks',
-  defaultQty: 1,
-  defaultQtyType: 'contracts',
+  defaultQty: 100,
+  defaultQtyType: 'percent_of_equity',
   pyramiding: 0,
   calcOnOrderFills: true,
   calcOnEveryTick: false,
@@ -166,6 +166,7 @@ export class StrategyEngine {
   private currentPrice: number;
   private high: number;
   private low: number;
+  private entries: number;
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -193,12 +194,13 @@ export class StrategyEngine {
     this.currentPrice = 0;
     this.high = 0;
     this.low = 0;
+    this.entries = 0;
   }
 
   entry(
     name: string,
     direction: OrderDirection,
-    quantity: number = this.config.defaultQty,
+    quantity?: number,
     price: number = 0,
     stopPrice?: number,
     limitPrice?: number,
@@ -213,6 +215,10 @@ export class StrategyEngine {
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
+    }
+
+    if (quantity === undefined) {
+      quantity = this.calculateQty(direction);
     }
 
     if (!this.canOpenPosition(direction, quantity)) {
@@ -241,6 +247,7 @@ export class StrategyEngine {
     };
 
     this.pendingOrders.push(order);
+    this.entries++;
 
     this.markers.push({
       type: 'entry',
@@ -261,11 +268,14 @@ export class StrategyEngine {
   order(
     name: string,
     direction: OrderDirection,
-    quantity: number = this.config.defaultQty,
+    quantity?: number,
     price: number = 0,
     stopPrice?: number,
     limitPrice?: number,
   ): Order | undefined {
+    if (quantity === undefined) {
+      quantity = this.calculateQty(direction);
+    }
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
@@ -472,8 +482,7 @@ export class StrategyEngine {
     }
 
     if (this.position.direction === direction) {
-      const currentPyramiding = this.position.quantity / this.config.defaultQty;
-      if (currentPyramiding >= this.config.pyramiding + 1) return false;
+      if (this.entries >= this.config.pyramiding + 1) return false;
       const marginRate = direction === 'long' ? this.config.marginLong : this.config.marginShort;
       const marginRequired = this.currentPrice * quantity * marginRate;
       return marginRequired <= this.getAccount().freeMargin;
@@ -522,8 +531,9 @@ export class StrategyEngine {
     const positionValue = this.currentPrice * this.position.quantity;
     const marginRate = this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
     const maintenanceMargin = positionValue * marginRate;
+    const totalEquity = this.equity + this.position.unrealizedPnl;
 
-    if (this.equity < maintenanceMargin) {
+    if (totalEquity < maintenanceMargin) {
       this.close('liquidation', 'Margin liquidation');
     }
   }
@@ -644,6 +654,7 @@ export class StrategyEngine {
 
     this.position.quantity -= closeQuantity;
     if (this.position.quantity <= 0) {
+      this.entries = 0;
       this.position = {
         symbol: '',
         direction: 'flat',
@@ -847,10 +858,10 @@ export class StrategyEngine {
       case 'percent_of_equity': {
         const account = this.getAccount();
         const cashAmount = account.equity * (this.config.defaultQty / 100);
-        return this.currentPrice > 0 ? Math.floor(cashAmount / this.currentPrice) : 0;
+        return this.currentPrice > 0 ? cashAmount / this.currentPrice : 0;
       }
       case 'cash': {
-        return this.currentPrice > 0 ? Math.floor(this.config.defaultQty / this.currentPrice) : 0;
+        return this.currentPrice > 0 ? this.config.defaultQty / this.currentPrice : 0;
       }
       default:
         return this.config.defaultQty;

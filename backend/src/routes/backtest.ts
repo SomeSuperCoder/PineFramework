@@ -53,6 +53,10 @@ export function createBacktestRouter() {
       const parseResult = parse(script);
       const compileResult = compile(parseResult.ast);
 
+      if (compileResult.ir.scriptKind !== 'strategy') {
+        throw new Error('Script must be a strategy (use strategy() instead of indicator() or library())');
+      }
+
       const execEngine = new ExecutionEngine(compileResult);
 
       const contexts = bars.map((bar, i) => ({
@@ -68,7 +72,10 @@ export function createBacktestRouter() {
 
       updateProgress(job.jobId, 20);
 
-      execEngine.executeBars(contexts);
+      const execResult = execEngine.executeBars(contexts);
+      if (!execResult.success) {
+        throw new Error(execResult.error || 'Execution failed');
+      }
 
       updateProgress(job.jobId, 80);
 
@@ -212,6 +219,7 @@ export function createBacktestRouter() {
     res.json({
       status: job.status,
       progress: job.progress,
+      error: job.error,
       result_url: job.status === 'completed' ? `/api/backtest/${jobId}/result` : undefined,
     });
   });

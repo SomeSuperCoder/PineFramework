@@ -152,6 +152,7 @@ export interface BacktestJobResponse {
 export interface BacktestStatusResponse {
   status: 'queued' | 'running' | 'completed' | 'failed';
   progress: number;
+  error?: string;
   result_url?: string;
 }
 
