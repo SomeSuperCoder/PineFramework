@@ -10,8 +10,8 @@ const defaultConfig: BacktestConfig = {
   slippage: 0,
   commissionType: 'percent',
   slippageType: 'ticks',
-  defaultQty: 1,
-  defaultQtyType: 'contracts',
+  defaultQty: 20,
+  defaultQtyType: 'percent_of_equity',
   pyramiding: 0,
   marginLong: 1,
   marginShort: 1,
@@ -54,12 +54,10 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
   }, [isOpen]);
 
   const handleRun = useCallback(() => {
-    const scriptParams = extractStrategyParams(scriptSource);
-    const merged = { ...defaultConfig, ...scriptParams, ...config };
     submitBacktest(
       symbol,
       timeframe,
-      { ...merged, script: scriptSource },
+      { ...config, script: scriptSource },
       startDate || undefined,
       endDate || undefined,
     );
