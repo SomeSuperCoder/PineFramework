@@ -48,4 +48,45 @@ plot(x, "ticker")`;
     const result = engine.executeBar(ctx);
     expect(result.success).toBe(true);
   });
+
+  it('executes the full indicator on one bar without crashing', () => {
+    const { ast } = parse(source);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const bar: Bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
+    const ctx: ExecutionContext = { barIndex: 0, barCount: 1, timestamp: bar.timestamp, open: createSeries('open', [bar.open]), high: createSeries('high', [bar.high]), low: createSeries('low', [bar.low]), close: createSeries('close', [bar.close]), volume: createSeries('volume', [bar.volume]) };
+    const result = engine.executeBar(ctx);
+    if (!result.success) {
+      console.error('Execution error:', result.error);
+    }
+    expect(result.success).toBe(true);
+  });
+
+  it('executes the full indicator on multiple bars without crashing', () => {
+    const { ast } = parse(source);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const bars = createBars(50, 100);
+    const contexts: ExecutionContext[] = bars.map((bar, i) => ({
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
+      high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
+      low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
+      close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
+      volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+    }));
+    const result = engine.executeBars(contexts);
+    expect(result.success).toBe(true);
+    expect(result.outputs.size).toBeGreaterThan(0);
+    let hasValues = false;
+    for (const [, series] of result.outputs) {
+      if (series.values.some(v => v !== null && v !== undefined)) {
+        hasValues = true;
+        break;
+      }
+    }
+    expect(hasValues).toBe(true);
+  });
 });

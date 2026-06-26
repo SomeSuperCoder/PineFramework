@@ -97,10 +97,12 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
           type: 'execution_result',
           data: outputs,
         }));
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Script re-execution failed';
+        console.error('[WS] Script re-execution error:', message);
         ws.send(JSON.stringify({
           type: 'error',
-          data: { message: 'Script re-execution failed' },
+          data: { message },
         }));
       }
     }
@@ -174,8 +176,10 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
             const outputs = session.initialize();
             sub.session = session;
             ws.send(JSON.stringify({ type: 'execution_result', data: outputs }));
-          } catch {
-            ws.send(JSON.stringify({ type: 'error', data: { message: 'Script compilation or execution failed' } }));
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Script compilation or execution failed';
+            console.error('[WS] Script execution error:', message);
+            ws.send(JSON.stringify({ type: 'error', data: { message } }));
           }
         }
       } catch {
