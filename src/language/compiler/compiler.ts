@@ -9,6 +9,7 @@ import type {
 import {
   ANY_TYPE,
   FLOAT_TYPE,
+  NA_TYPE,
   typeFromAnnotation,
   type PineType,
   seriesOf,
@@ -200,7 +201,7 @@ export class Compiler {
       case 'ColorLiteral':
         return inferLiteralType(expr.value);
       case 'NaLiteral':
-        return inferLiteralType(null);
+        return NA_TYPE;
       case 'Identifier': {
         const varType = resolveVariable(this.scope, expr.name);
         if (!varType) {
@@ -241,8 +242,16 @@ export class Compiler {
         }
         return alternateType;
       }
-      case 'CallExpression':
+      case 'CallExpression': {
+        if (expr.callee.kind === 'MemberExpression' && expr.callee.object.kind === 'Identifier' && expr.callee.object.name === 'array') {
+          const parts = expr.callee.property.split('_');
+          if (parts[0] === 'new' && parts.length > 1) {
+            const elementType = parts.slice(1).join('_');
+            return typeFromAnnotation('array', { typeArguments: [typeFromAnnotation(elementType, {})] });
+          }
+        }
         return seriesOf(FLOAT_TYPE);
+      }
       case 'MemberExpression':
         return seriesOf(FLOAT_TYPE);
       case 'IndexExpression':

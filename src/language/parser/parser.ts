@@ -144,13 +144,13 @@ export class Parser {
 
   private parseStatement(): StatementNode {
     if (this.match(TokenType.Var)) {
-      if (this.checkTypeKeyword()) {
+      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
         return this.parseTypedVariableDeclaration(true, false);
       }
       return this.parseVariableDeclaration(true, false);
     }
     if (this.match(TokenType.Varip)) {
-      if (this.checkTypeKeyword()) {
+      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
         return this.parseTypedVariableDeclaration(true, true);
       }
       return this.parseVariableDeclaration(true, true);
@@ -179,7 +179,7 @@ export class Parser {
     if (this.match(TokenType.Continue)) {
       return this.parseContinueStatement();
     }
-    if (this.checkTypeKeyword()) {
+    if (this.checkTypeKeyword() || this.looksLikeUserType()) {
       return this.parseTypedVariableDeclaration(false, false);
     }
 
@@ -246,14 +246,15 @@ export class Parser {
   private parseTypeDeclaration(): TypeDeclarationNode {
     const start = this.previous().span.start;
     const nameToken = this.consume(TokenType.Identifier, 'Expected type name');
-    this.consume(TokenType.Assign, 'Expected "=" after type name');
+    this.match(TokenType.Assign); // = is optional
 
     const fields: TypeFieldNode[] = [];
 
-    while (!this.isAtEnd() && this.check(TokenType.Identifier) && !this.isTopLevelStatement()) {
+    while (!this.isAtEnd() && !this.isTopLevelStatement()) {
       const fieldStart = this.peek().span.start;
-      const fieldName = this.consume(TokenType.Identifier, 'Expected field name');
+      if (!this.checkTypeKeyword() && !this.looksLikeUserType()) break;
       const typeAnnotation = this.parseTypeAnnotation();
+      const fieldName = this.consume(TokenType.Identifier, 'Expected field name');
       fields.push({
         kind: 'TypeField',
         span: spanBetween(fieldStart, this.previous().span.end),
@@ -292,33 +293,6 @@ export class Parser {
 
   private parseIfStatement(): IfStatementNode {
     const start = this.previous().span.start;
-    if (this.match(TokenType.LParen)) {
-      const condition = this.parseExpression();
-      this.consume(TokenType.RParen, 'Expected ")" after if condition');
-      const thenBranch = this.parseIndentedBlock();
-      let elseBranch: StatementNode[] | undefined;
-
-      if (this.match(TokenType.Else)) {
-        if (this.check(TokenType.If)) {
-          elseBranch = [this.parseStatement()];
-        } else {
-          elseBranch = this.parseIndentedBlock();
-        }
-      }
-
-      const end = elseBranch?.length
-        ? elseBranch[elseBranch.length - 1]!.span.end
-        : (thenBranch[thenBranch.length - 1]?.span.end ?? condition.span.end);
-
-      return {
-        kind: 'IfStatement',
-        span: spanBetween(start, end),
-        condition,
-        thenBranch,
-        elseBranch,
-      };
-    }
-
     const condition = this.parseExpression();
     const thenBranch = this.parseIndentedBlock();
     let elseBranch: StatementNode[] | undefined;
@@ -421,6 +395,66 @@ export class Parser {
     const expression = this.parseExpression();
     const cases: SwitchCaseNode[] = [];
     let defaultCase: StatementNode[] | undefined;
+
+    let nextCol = this.peek().span.start.column;
+
+    if (nextCol <= start.column) {
+      // Check for arrow syntax: skip newlines, look for => coming before case/default
+      while (this.peek().type === TokenType.Newline || this.peek().type === TokenType.Indent) {
+        this.advance();
+      }
+      nextCol = this.peek().span.start.column;
+    }
+
+    // Detect arrow syntax: the first case is a value expression followed by =>
+    if (!this.check(TokenType.Case) && !this.check(TokenType.Default)) {
+      const switchLine = start.line;
+      let baseColumn = start.column;
+      let i = this.current - 2;
+      while (i >= 0 && this.tokens[i]!.span.start.line === switchLine) {
+        if (this.tokens[i]!.span.start.column < baseColumn) {
+          baseColumn = this.tokens[i]!.span.start.column;
+        }
+        i--;
+      }
+
+      while (!this.isAtEnd()) {
+        const caseCol = this.peek().span.start.column;
+        if (caseCol <= baseColumn) {
+          break;
+        }
+
+        const caseStart = this.peek().span.start;
+
+        if (this.match(TokenType.Arrow)) {
+          const body = this.parseIndentedBlock();
+          defaultCase = body;
+          break;
+        }
+
+        const value = this.parseExpression();
+        this.consume(TokenType.Arrow, 'Expected "=>" after case value in switch statement');
+        const body = this.parseIndentedBlock();
+        cases.push({
+          kind: 'SwitchCase',
+          span: spanBetween(caseStart, body[body.length - 1]?.span.end ?? value.span.end),
+          value,
+          body,
+        });
+      }
+
+      const end = defaultCase?.length
+        ? defaultCase[defaultCase.length - 1]!.span.end
+        : (cases[cases.length - 1]?.span.end ?? expression.span.end);
+
+      return {
+        kind: 'SwitchStatement',
+        span: spanBetween(start, end),
+        expression,
+        cases,
+        defaultCase,
+      };
+    }
 
     while (!this.isAtEnd()) {
       if (this.match(TokenType.Case)) {
@@ -730,6 +764,8 @@ export class Parser {
     let expr = this.parsePrimary();
 
     while (true) {
+      if (this.isAtEnd()) break;
+      if (this.peek().span.start.line > expr.span.end.line) break;
       if (this.match(TokenType.LBracket)) {
         const index = this.parseExpression();
         const bracketEnd = this.consume(TokenType.RBracket, 'Expected "]" after index').span.end;
@@ -755,6 +791,43 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  private parseFunctionParams(): ParameterNode[] {
+    this.consume(TokenType.LParen, 'Expected "(" before parameters');
+    const params: ParameterNode[] = [];
+    while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
+      params.push(this.parseParameter());
+      if (!this.check(TokenType.RParen)) {
+        this.consume(TokenType.Comma, 'Expected "," between parameters');
+      }
+    }
+    this.consume(TokenType.RParen, 'Expected ")" after parameters');
+    return params;
+  }
+
+  private finishFunctionExpr(
+    name: string | undefined,
+    start: SourceSpan['start'],
+    parameters: ParameterNode[],
+  ): FunctionExpressionNode {
+    this.consume(TokenType.Arrow, 'Expected "=>" in function expression');
+
+    let returnType: TypeAnnotationNode | undefined;
+    if (this.checkTypeKeyword()) {
+      returnType = this.parseTypeAnnotation();
+    }
+
+    const body = this.parseIndentedBlock();
+
+    return {
+      kind: 'FunctionExpression',
+      span: spanBetween(start, body[body.length - 1]?.span.end ?? start),
+      name,
+      parameters,
+      returnType,
+      body,
+    };
   }
 
   private finishCall(callee: ExpressionNode): CallExpressionNode {
@@ -845,11 +918,31 @@ export class Parser {
         value: token.value as string,
       } as ColorLiteralNode;
     }
-    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType) || this.match(TokenType.Strategy) || this.match(TokenType.Indicator) || this.match(TokenType.Library)) {
+    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType) || this.match(TokenType.Strategy) || this.match(TokenType.Indicator) || this.match(TokenType.Library) || this.match(TokenType.Array) || this.match(TokenType.Map) || this.match(TokenType.Matrix)) {
       const token = this.previous();
 
-      if (this.check(TokenType.Arrow)) {
+      if (this.check(TokenType.Arrow) && this.peek().span.start.line === token.span.start.line) {
         return this.parseFunctionExpression(token.lexeme, token.span.start);
+      }
+
+      if (this.check(TokenType.LParen) && this.peek().span.start.line === token.span.start.line) {
+        const saved = this.current;
+        this.advance();
+        let depth = 1;
+        while (!this.isAtEnd() && depth > 0) {
+          if (this.peek().type === TokenType.LParen) depth++;
+          if (this.peek().type === TokenType.RParen) depth--;
+          if (depth > 0) this.advance();
+        }
+        if (depth === 0) {
+          this.advance();
+          if (this.check(TokenType.Arrow)) {
+            this.current = saved;
+            const params = this.parseFunctionParams();
+            return this.finishFunctionExpr(token.lexeme, token.span.start, params);
+          }
+        }
+        this.current = saved;
       }
 
       return {
@@ -884,6 +977,9 @@ export class Parser {
     name: string | undefined,
     start: SourceSpan['start'],
   ): FunctionExpressionNode {
+    if (this.check(TokenType.LParen)) {
+      return this.finishFunctionExpr(name, start, this.parseFunctionParams());
+    }
     this.consume(TokenType.Arrow, 'Expected "=>" in function expression');
     const parameters: ParameterNode[] = [];
 
@@ -1060,6 +1156,16 @@ export class Parser {
       this.check(TokenType.Map) ||
       this.check(TokenType.Matrix)
     );
+  }
+
+  private looksLikeUserType(): boolean {
+    if (!this.check(TokenType.Identifier)) return false;
+    const saved = this.current;
+    this.advance();
+    const isArrayType = this.check(TokenType.LBracket) && this.checkNext(TokenType.RBracket);
+    const isSingleType = this.check(TokenType.Identifier);
+    this.current = saved;
+    return isArrayType || isSingleType;
   }
 
   private parseMemberName(): string {

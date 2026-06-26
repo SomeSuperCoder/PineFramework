@@ -761,7 +761,7 @@ x = a < b and b < c
     it('parses type declaration', () => {
       const source = `//@version=6
 indicator("Test")
-type Point = x float y float
+type Point = float x float y
 `;
       const { ast } = parse(source);
       expect(ast.body.some((s) => s.kind === 'TypeDeclaration')).toBe(true);
@@ -770,7 +770,7 @@ type Point = x float y float
     it('parses type declaration with single field', () => {
       const source = `//@version=6
 indicator("Test")
-type Result = value int
+type Result = int value
 `;
       const { ast } = parse(source);
       const typeDecl = ast.body[0];

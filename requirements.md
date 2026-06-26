@@ -323,6 +323,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 7. THE Test_Framework SHALL provide test coverage reporting
 8. THE Test_Framework SHALL include complex script integration tests covering if/else chains, var persistence, for-loop accumulation, ternary expressions, math function chains, multi-plot outputs, and combined features
 9. THE Test_Framework SHALL validate strategy engine behavior including market order fill deferral, position reversal, and marker generation
+10. THE Test_Framework SHALL include real-world indicator compatibility tests that parse, compile, and execute full complex indicators from `test_indicators/` directory to ensure production readiness
 
 ### Requirement 12: Input and Configuration System
 

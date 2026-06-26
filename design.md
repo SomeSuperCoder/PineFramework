@@ -944,6 +944,7 @@ interface RendererPlugin {
 - Numerical precision validation
 - Visual rendering comparison
 - Cross-version compatibility
+- Real-world indicator compatibility: parse, compile, and execute full complex indicators from `test_indicators/` directory (e.g., TrendCraft ICT SwiftEdge) to validate production readiness
 
 **Property-Based Tests:**
 - Mathematical property verification

@@ -727,6 +727,68 @@ export class ExecutionEngine {
       return isNa(defaultVal) ? 0 : defaultVal;
     });
 
+    this.builtins.set('input.timeframe', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? '';
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
+      return isNa(defaultVal) ? '' : defaultVal;
+    });
+
+    this.builtins.set('input.source', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      let defaultVal: PineValue = defaultValOrNamed ?? 0;
+      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
+        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+      }
+      return isNa(defaultVal) ? 0 : defaultVal;
+    });
+
+    this.builtins.set('ta.pivothigh', (source: PineValue, left: PineValue, right?: PineValue): PineValue => {
+      const r = right ?? left;
+      if (isNa(source) || isNa(left) || isNa(r)) return NA;
+      return NA;
+    });
+
+    this.builtins.set('ta.pivotlow', (source: PineValue, left: PineValue, right?: PineValue): PineValue => {
+      const r = right ?? left;
+      if (isNa(source) || isNa(left) || isNa(r)) return NA;
+      return NA;
+    });
+
+    this.builtins.set('array.new_line', (size: PineValue): PineValue => {
+      return [];
+    });
+
+    this.builtins.set('array.new_float', (size: PineValue): PineValue => {
+      return [];
+    });
+
+    this.builtins.set('array.new_int', (size: PineValue): PineValue => {
+      return [];
+    });
+
+    this.builtins.set('line.new', (..._args: PineValue[]): PineValue => {
+      return 0;
+    });
+
+    this.builtins.set('line.get_x2', (..._args: PineValue[]): PineValue => {
+      return 0;
+    });
+
+    this.builtins.set('label.new', (..._args: PineValue[]): PineValue => {
+      return 0;
+    });
+
+    this.builtins.set('na', (value: PineValue): PineValue => {
+      return isNa(value);
+    });
+
+    this.builtins.set('request.security', (...args: PineValue[]): PineValue => {
+      return args.length > 2 ? args[2]! : NA;
+    });
+
     this.builtins.set('ta.crossover', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
       const idx = this.crossCallIndex++;
@@ -1199,11 +1261,39 @@ export class ExecutionEngine {
     const value = this.executeExpression(stmt.value, scope, context);
 
     if (stmt.target.kind === 'Identifier') {
-      const binding = resolveVariable(scope, stmt.target.name);
+      const name = stmt.target.name;
+      let binding = resolveVariable(scope, name);
+
+      if (!binding && stmt.operator === '=') {
+        binding = declareVariable(scope, name, FLOAT_TYPE);
+      }
+
       if (!binding) {
-        throw new Error(`Variable '${stmt.target.name}' is not defined`);
+        throw new Error(`Variable '${name}' is not defined`);
       }
       binding.series.push(value);
+      return value;
+    }
+
+    if (stmt.target.kind === 'MemberExpression') {
+      return value;
+    }
+
+    if (stmt.target.kind === 'ArrayExpression') {
+      if (!Array.isArray(value)) {
+        return NA;
+      }
+      for (let i = 0; i < stmt.target.elements.length; i++) {
+        const elem = stmt.target.elements[i];
+        if (elem && elem.kind === 'Identifier') {
+          const name = elem.name;
+          let binding = resolveVariable(scope, name);
+          if (!binding) {
+            binding = declareVariable(scope, name, FLOAT_TYPE);
+          }
+          binding.series.push((value as PineValue[])[i] ?? NA);
+        }
+      }
       return value;
     }
 
@@ -1619,11 +1709,12 @@ export class ExecutionEngine {
       setVariableValue(funcScope, param.name, value);
     }
 
+    let result: PineValue = NA;
     for (const stmt of func.body) {
-      this.executeStatement(stmt, funcScope, context);
+      result = this.executeStatement(stmt, funcScope, context);
     }
 
-    return NA;
+    return result;
   }
 
   private executeMemberExpression(
@@ -1656,6 +1747,16 @@ export class ExecutionEngine {
       if (objName === 'text' || objName === 'linewidth' || objName === 'linecap' || objName === 'linejoin' || objName === 'textalign') {
         return expr.property;
       }
+      if (objName === 'syminfo') {
+        const syminfoProps: Record<string, PineValue> = {
+          tickerid: 'SYMBOL',
+          mintick: 0.01,
+          pointvalue: 1,
+          pricescale: 100,
+          currency: 'USD',
+        };
+        return syminfoProps[expr.property] ?? expr.property;
+      }
       if (objName === 'strategy') {
         const strategyConstants: Record<string, PineValue> = {
           long: 'long',
@@ -1681,6 +1782,15 @@ export class ExecutionEngine {
         return expr.property;
       }
       if (objName === 'plot') {
+        return expr.property;
+      }
+      if (objName === 'line' || objName === 'label') {
+        return expr.property;
+      }
+      if (objName === 'barmerge') {
+        return expr.property;
+      }
+      if (objName === 'xloc') {
         return expr.property;
       }
 

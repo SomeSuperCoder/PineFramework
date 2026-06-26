@@ -484,7 +484,7 @@ x = 1
     it('compiles type declarations', () => {
       const source = `//@version=6
 indicator("Test")
-type Point = x float y float
+type Point = float x float y
 `;
       const { ast } = parse(source);
       const { ir } = compile(ast);
@@ -497,7 +497,7 @@ type Point = x float y float
     it('compiles type with single field', () => {
       const source = `//@version=6
 indicator("Test")
-type Result = value int
+type Result = int value
 `;
       const { ast } = parse(source);
       const { ir } = compile(ast);
