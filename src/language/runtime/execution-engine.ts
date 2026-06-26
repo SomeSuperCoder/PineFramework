@@ -174,7 +174,9 @@ export class ExecutionEngine {
   }
 
   private smaBuffers: Map<string, number[]> = new Map();
+  private smaCallIndex: number = 0;
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
+  private emaCallIndex: number = 0;
   private sarState: Map<string, {
     initialized: boolean;
     trend: 'up' | 'down';
@@ -204,7 +206,7 @@ export class ExecutionEngine {
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
 
-      const key = `sma_${len}`;
+      const key = `sma_${len}_${this.smaCallIndex++}`;
       if (!this.smaBuffers.has(key)) {
         this.smaBuffers.set(key, []);
       }
@@ -228,7 +230,7 @@ export class ExecutionEngine {
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
 
-      const key = `ema_${len}`;
+      const key = `ema_${len}_${this.emaCallIndex++}`;
       const k = 2 / (len + 1);
       if (!this.emaState.has(key)) {
         this.emaState.set(key, { prev: source as number, initialized: false });
@@ -1063,6 +1065,8 @@ export class ExecutionEngine {
     this.currentTimestamp = context.timestamp;
     this.currentContext = context;
     this.crossCallIndex = 0;
+    this.smaCallIndex = 0;
+    this.emaCallIndex = 0;
 
     try {
       this.createSnapshot();

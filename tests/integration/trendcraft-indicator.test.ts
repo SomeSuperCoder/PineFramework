@@ -79,14 +79,12 @@ plot(x, "ticker")`;
     }));
     const result = engine.executeBars(contexts);
     expect(result.success).toBe(true);
-    expect(result.outputs.size).toBeGreaterThan(0);
-    let hasValues = false;
-    for (const [, series] of result.outputs) {
-      if (series.values.some(v => v !== null && v !== undefined)) {
-        hasValues = true;
-        break;
-      }
+    expect(result.outputs.size).toBe(2);
+    expect(result.fills.length).toBeGreaterThan(0);
+    for (const [key, series] of result.outputs) {
+      const nonNull = series.values.filter(v => v !== null && v !== undefined);
+      expect(nonNull.length).toBeGreaterThan(0);
+      console.log(`  ${key}: ${nonNull.length}/${series.values.length} non-null`);
     }
-    expect(hasValues).toBe(true);
   });
 });
