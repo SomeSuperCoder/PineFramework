@@ -26,6 +26,7 @@ export interface ScriptOutputs {
     color: string;
     comment?: string;
   }>;
+  bgcolor?: Array<{ time: number; color: string }>;
   barIndex: number;
 }
 
@@ -119,6 +120,7 @@ export class ScriptSession {
       shapes,
       fills,
       strategyMarkers,
+      bgcolor: result.bgcolor,
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
     };
   }

@@ -63,6 +63,7 @@ export class PineChart {
   private fills: FillData[] = [];
   private hlines: HLineData[] = [];
   private barColors: Map<number, string> = new Map();
+  private bgColors: Map<number, string> = new Map();
   private eventCallbacks: ChartEventCallbacks = {};
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
@@ -204,6 +205,20 @@ export class PineChart {
 
     this.volumeRenderer.render(ctx, this.candles, this.viewport, this.layout);
 
+    if (this.bgColors.size > 0) {
+      const regions = this.layout.getRegions();
+      const visibleRange = this.viewport.getVisibleRange();
+      for (let i = visibleRange.start; i < visibleRange.end && i < this.candles.length; i++) {
+        const color = this.bgColors.get(i);
+        if (color) {
+          const barSpacing = this.viewport.getBarSpacing();
+          const barX = this.viewport.barIndexToPixel(i);
+          ctx.fillStyle = this.cssColor(color);
+          ctx.fillRect(barX, regions.chartArea.y, barSpacing, regions.chartArea.height);
+        }
+      }
+    }
+
     this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.barColors);
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
@@ -223,6 +238,17 @@ export class PineChart {
 
     this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(this.offscreen, 0, 0);
+  }
+
+  private cssColor(color: string): string {
+    if (color.length === 9 && color.startsWith('#')) {
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      const a = parseInt(color.slice(7, 9), 16) / 255;
+      return `rgba(${r},${g},${b},${a.toFixed(3)})`;
+    }
+    return color;
   }
 
   private updatePriceRange(): void {
@@ -334,6 +360,11 @@ export class PineChart {
 
   setBarColors(colors: Map<number, string>): void {
     this.barColors = colors;
+    this.markDirty();
+  }
+
+  setBgColors(colors: Map<number, string>): void {
+    this.bgColors = colors;
     this.markDirty();
   }
 

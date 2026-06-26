@@ -138,6 +138,18 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
     chart.setHLines([]);
 
     chart.setBarColors(new Map());
+
+    const bgColorsMap = new Map<number, string>();
+    for (const b of (scriptResult.bgcolor || [])) {
+      const candle = ohlcvMap.get(b.time);
+      if (candle) {
+        const barIdx = data.indexOf(candle);
+        if (barIdx >= 0) {
+          bgColorsMap.set(barIdx, b.color);
+        }
+      }
+    }
+    chart.setBgColors(bgColorsMap);
   }, [scriptResult, data]);
 
   return (

@@ -79,6 +79,7 @@ export interface ExecutionResult {
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: StrategyMarkerEntry[];
+  bgcolor: Array<{ time: number; color: string }>;
 }
 
 export interface StrategyMarkerEntry {
@@ -107,6 +108,24 @@ interface ExecutionSnapshot {
   outputs: Map<string, Series>;
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
+  bgcolorData: Array<{ time: number; color: string }>;
+  sarState: Map<string, {
+    initialized: boolean;
+    trend: 'up' | 'down';
+    sar: number;
+    ep: number;
+    af: number;
+    afStart: number;
+    afInc: number;
+    afMax: number;
+    prevSar: number;
+    prevEp: number;
+    prevLow1: number;
+    prevLow2: number;
+    prevHigh1: number;
+    prevHigh2: number;
+    barCount: number;
+  }>;
   barIndex: number;
 }
 
@@ -118,6 +137,7 @@ export class ExecutionEngine {
   private builtins: Map<string, (...args: any[]) => PineValue>;
   private outputs: Map<string, Series>;
   private shapes: ShapeEntry[];
+  private bgcolorData: Array<{ time: number; color: string }> = [];
   private snapshots: ExecutionSnapshot[];
   private metrics: ExecutionMetrics;
   private executionTimes: number[];
@@ -155,7 +175,23 @@ export class ExecutionEngine {
 
   private smaBuffers: Map<string, number[]> = new Map();
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
-  private sarState: Map<string, { position: 'long' | 'short'; ep: number; af: number; prevSar: number }> = new Map();
+  private sarState: Map<string, {
+    initialized: boolean;
+    trend: 'up' | 'down';
+    sar: number;
+    ep: number;
+    af: number;
+    afStart: number;
+    afInc: number;
+    afMax: number;
+    prevSar: number;
+    prevEp: number;
+    prevLow1: number;
+    prevLow2: number;
+    prevHigh1: number;
+    prevHigh2: number;
+    barCount: number;
+  }> = new Map();
   private fills: Array<{ from: string; to: string; color: string }> = [];
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossCallIndex: number = 0;
@@ -208,45 +244,120 @@ export class ExecutionEngine {
       const ctx = this.currentContext;
       const high = ctx.high.getRelative(0);
       const low = ctx.low.getRelative(0);
-      if (typeof high !== 'number' || typeof low !== 'number') return NA;
+      const close = ctx.close.getRelative(0);
+      if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
+
       const afStart = typeof start === 'number' ? start : 0.02;
       const afInc = typeof inc === 'number' ? inc : 0.02;
       const afMax = typeof max === 'number' ? max : 0.2;
       const key = 'sar';
+
       if (!this.sarState.has(key)) {
-        this.sarState.set(key, { position: 'long', ep: high, af: afStart, prevSar: low });
-        return low;
+        this.sarState.set(key, {
+          initialized: false,
+          trend: 'up',
+          sar: 0,
+          ep: 0,
+          af: afStart,
+          afStart,
+          afInc,
+          afMax,
+          prevSar: 0,
+          prevEp: 0,
+          prevLow1: 0,
+          prevLow2: 0,
+          prevHigh1: 0,
+          prevHigh2: 0,
+          barCount: 0,
+        });
       }
+
       const state = this.sarState.get(key)!;
-      let sar: number;
-      if (state.position === 'long') {
-        sar = state.prevSar + state.af * (state.ep - state.prevSar);
-        sar = Math.min(sar, Math.min(low, state.ep));
-        if (high > state.ep) {
+      state.barCount++;
+
+      const prevHigh = ctx.high.getRelative(1);
+      const prevLow = ctx.low.getRelative(1);
+      const prevClose = ctx.close.getRelative(1);
+
+      if (!state.initialized) {
+        if (typeof prevHigh !== 'number' || typeof prevLow !== 'number' || typeof prevClose !== 'number') {
+          state.prevHigh1 = high;
+          state.prevLow1 = low;
+          state.prevHigh2 = high;
+          state.prevLow2 = low;
+          state.prevSar = low;
+          state.prevEp = high;
+          state.sar = low;
           state.ep = high;
-          state.af = Math.min(state.af + afInc, afMax);
+          return low;
         }
+
+        if (close > prevClose) {
+          state.trend = 'up';
+          state.sar = Math.min(low, prevLow);
+          state.ep = Math.max(high, prevHigh);
+        } else {
+          state.trend = 'down';
+          state.sar = Math.max(high, prevHigh);
+          state.ep = Math.min(low, prevLow);
+        }
+
+        state.af = afStart;
+        state.prevSar = state.sar;
+        state.prevEp = state.ep;
+        state.prevLow1 = low;
+        state.prevLow2 = prevLow;
+        state.prevHigh1 = high;
+        state.prevHigh2 = prevHigh;
+        state.initialized = true;
+        return state.sar;
+      }
+
+      const prevLow1 = state.prevLow1;
+      const prevLow2 = state.prevLow2;
+      const prevHigh1 = state.prevHigh1;
+      const prevHigh2 = state.prevHigh2;
+      const prevEp = state.prevEp;
+
+      let sar = state.prevSar + state.af * (state.ep - state.prevSar);
+
+      if (state.trend === 'up') {
+        sar = Math.min(sar, prevLow1, prevLow2);
+
         if (low < sar) {
-          state.position = 'short';
+          state.trend = 'down';
+          sar = prevEp;
           state.ep = low;
           state.af = afStart;
-          sar = Math.max(sar, high);
+        } else {
+          if (high > state.ep) {
+            state.ep = high;
+            state.af = Math.min(state.af + afInc, afMax);
+          }
         }
       } else {
-        sar = state.prevSar - state.af * (state.prevSar - state.ep);
-        sar = Math.max(sar, Math.max(high, state.ep));
-        if (low < state.ep) {
-          state.ep = low;
-          state.af = Math.min(state.af + afInc, afMax);
-        }
+        sar = Math.max(sar, prevHigh1, prevHigh2);
+
         if (high > sar) {
-          state.position = 'long';
+          state.trend = 'up';
+          sar = prevEp;
           state.ep = high;
           state.af = afStart;
-          sar = Math.min(sar, low);
+        } else {
+          if (low < state.ep) {
+            state.ep = low;
+            state.af = Math.min(state.af + afInc, afMax);
+          }
         }
       }
+
       state.prevSar = sar;
+      state.prevEp = state.ep;
+      state.prevLow1 = low;
+      state.prevLow2 = prevLow1;
+      state.prevHigh1 = high;
+      state.prevHigh2 = prevHigh1;
+
       return sar;
     });
 
@@ -481,26 +592,45 @@ export class ExecutionEngine {
       let seriesName = 'plot';
       let color: string | undefined;
       let linewidth: number | undefined;
+      let style: string | undefined;
+      const PINE_STYLE_MAP: Record<string, string> = {
+        'style_line': 'line',
+        'style_linebr': 'line',
+        'style_stepline': 'stepline',
+        'style_steplinebr': 'stepline',
+        'style_histogram': 'histogram',
+        'style_columns': 'columns',
+        'style_circles': 'circles',
+        'style_cross': 'cross',
+        'style_areabr': 'areabr',
+        'style_area': 'area',
+        'style_areaoutline': 'area',
+        'style_circledot': 'circles',
+      };
       if (typeof titleOrNamed === 'string') {
         seriesName = titleOrNamed;
         if (namedArgs) {
           if (typeof namedArgs.color === 'string') color = namedArgs.color;
           if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
           if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
+          if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
         }
       } else if (typeof titleOrNamed === 'object' && titleOrNamed !== null && !Array.isArray(titleOrNamed)) {
         const na = titleOrNamed as unknown as Record<string, PineValue>;
         if (typeof na.title === 'string') seriesName = na.title;
         if (typeof na.color === 'string') color = na.color;
         if (typeof na.linewidth === 'number') linewidth = na.linewidth;
+        if (typeof na.style === 'string') style = PINE_STYLE_MAP[na.style] || 'line';
       } else if (namedArgs) {
         if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
         if (typeof namedArgs.color === 'string') color = namedArgs.color;
         if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
+        if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
       }
       const metaParts = [seriesName];
       if (color) metaParts.push(`__color:${color}`);
       if (linewidth) metaParts.push(`__lw:${linewidth}`);
+      if (style) metaParts.push(`__style:${style}`);
       const key = metaParts.join('');
       if (!this.outputs.has(key)) {
         this.outputs.set(key, createSeries(key));
@@ -531,6 +661,13 @@ export class ExecutionEngine {
           text: textStr,
         });
       }
+      return NA;
+    });
+
+    this.builtins.set('bgcolor', (colorInput: PineValue): PineValue => {
+      if (isNa(colorInput)) return NA;
+      const colorStr = typeof colorInput === 'string' ? colorInput : '#000000';
+      this.bgcolorData.push({ time: this.currentTimestamp, color: colorStr });
       return NA;
     });
 
@@ -816,6 +953,8 @@ export class ExecutionEngine {
       outputs: this.cloneOutputs(),
       shapes: [...this.shapes],
       fills: [...this.fills],
+      bgcolorData: [...this.bgcolorData],
+      sarState: new Map([...this.sarState].map(([k, v]) => [k, { ...v }])),
       barIndex: this.metrics.totalBars,
     };
     this.snapshots.push(snapshot);
@@ -837,6 +976,8 @@ export class ExecutionEngine {
     this.outputs = snapshot.outputs;
     this.shapes = snapshot.shapes;
     this.fills = snapshot.fills;
+    this.bgcolorData = snapshot.bgcolorData;
+    this.sarState = new Map([...snapshot.sarState].map(([k, v]) => [k, { ...v }]));
     this.snapshots = this.snapshots.slice(0, snapshotIndex);
     return true;
   }
@@ -896,6 +1037,7 @@ export class ExecutionEngine {
         shapes: this.shapes,
         fills: this.fills,
         strategyMarkers: this.getStrategyMarkers(),
+        bgcolor: this.bgcolorData,
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -909,12 +1051,13 @@ export class ExecutionEngine {
         shapes: this.shapes,
         fills: this.fills,
         strategyMarkers: this.getStrategyMarkers(),
+        bgcolor: this.bgcolorData,
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers() };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);

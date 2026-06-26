@@ -48,6 +48,11 @@ executeRouter.post('/execute', async (req, res) => {
       color: f.color,
     }));
 
+    const bgcolor = (result.bgcolor || []).map((b) => ({
+      time: b.time,
+      color: b.color,
+    }));
+
     const strategyMarkers = (result.strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,
@@ -67,6 +72,7 @@ executeRouter.post('/execute', async (req, res) => {
       outputs,
       shapes,
       fills,
+      bgcolor,
       strategyMarkers,
     });
   } catch (err) {

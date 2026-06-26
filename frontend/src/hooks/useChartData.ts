@@ -19,6 +19,7 @@ interface ExecuteResponse {
     color: string;
     comment?: string;
   }>;
+  bgcolor?: Array<{ time: number; color: string }>;
 }
 
 interface ExecutionResultMessage {
@@ -39,6 +40,7 @@ interface ExecutionResultMessage {
     color: string;
     comment?: string;
   }>;
+  bgcolor?: Array<{ time: number; color: string }>;
   barIndex: number;
 }
 
@@ -50,6 +52,7 @@ function buildScriptResult(
   fills: ExecutionResultMessage['fills'],
   strategyMarkers: ExecutionResultMessage['strategyMarkers'],
   ohlcvData: Array<{ timestamp: number }>,
+  bgcolor?: ExecutionResultMessage['bgcolor'],
 ): ScriptResult {
   const plotData: import('../types').PlotData[] = [];
   let colorIndex = 0;
@@ -59,15 +62,17 @@ function buildScriptResult(
     let lineWidth: number | undefined;
     const colorMatch = key.match(/__color:([^_]+)/);
     const lwMatch = key.match(/__lw:(\d+)/);
+    const styleMatch = key.match(/__style:([^_]+)/);
     if (colorMatch) plotColor = colorMatch[1];
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
+    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
+    title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '').replace(/__style:[^_]+/, '');
     if (!plotColor) {
       plotColor = COLORS[colorIndex % COLORS.length];
     }
     colorIndex++;
     plotData.push({
-      type: 'line',
+      type: plotStyle,
       data: values
         .map((v, i) => {
           const ts = ohlcvData[i]?.timestamp;
@@ -119,6 +124,7 @@ function buildScriptResult(
       color: m.color,
       comment: m.comment,
     })),
+    bgcolor: (bgcolor || []).map((b) => ({ time: Math.floor(b.time / 1000), color: b.color })),
   };
 }
 
@@ -174,6 +180,7 @@ export function useChartData() {
         msg.fills || [],
         msg.strategyMarkers || [],
         ohlcvData,
+        msg.bgcolor,
       );
       setScriptResult(result);
     }
@@ -314,6 +321,7 @@ export function useChartData() {
         result.fills || [],
         result.strategyMarkers || [],
         ohlcvJson.data,
+        result.bgcolor,
       );
       setScriptResult(scriptRes);
 
