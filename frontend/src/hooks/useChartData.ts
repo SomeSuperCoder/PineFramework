@@ -57,16 +57,13 @@ function buildScriptResult(
   const plotData: import('../types').PlotData[] = [];
   let colorIndex = 0;
   for (const [key, values] of Object.entries(outputs)) {
-    let title = key;
     let plotColor: string | undefined;
     let lineWidth: number | undefined;
-    const colorMatch = key.match(/__color:([^_]+)/);
     const lwMatch = key.match(/__lw:(\d+)/);
     const styleMatch = key.match(/__style:([^_]+)/);
-    if (colorMatch) plotColor = colorMatch[1];
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
     const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
-    title = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '').replace(/__style:[^_]+/, '');
+    const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     if (!plotColor) {
       plotColor = COLORS[colorIndex % COLORS.length];
     }
@@ -96,6 +93,8 @@ function buildScriptResult(
     });
   }
 
+  const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+
   const shapeData: import('../types').ShapeData[] = (shapes || []).map((s) => ({
     type: s.style as import('../types').ShapeData['type'],
     time: Math.floor(s.time / 1000),
@@ -111,7 +110,7 @@ function buildScriptResult(
     lines: [],
     boxes: [],
     labels: [],
-    fills: (fills || []).map((f) => ({ from: f.from, to: f.to, color: f.color })),
+    fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
     strategyMarkers: (strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,

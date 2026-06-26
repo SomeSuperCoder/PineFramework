@@ -628,7 +628,6 @@ export class ExecutionEngine {
         if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
       }
       const metaParts = [seriesName];
-      if (color) metaParts.push(`__color:${color}`);
       if (linewidth) metaParts.push(`__lw:${linewidth}`);
       if (style) metaParts.push(`__style:${style}`);
       const key = metaParts.join('');
