@@ -101,6 +101,10 @@ function buildScriptResult(
   }
 
   const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+  const transformFillKey = (rawKey: string) => {
+    const parts = rawKey.split('::');
+    return parts.map(stripMeta).join('::');
+  };
 
   const shapeData: import('../types').ShapeData[] = (shapes || []).map((s) => ({
     type: s.style as import('../types').ShapeData['type'],
@@ -111,6 +115,13 @@ function buildScriptResult(
     location: s.location as import('../types').ShapeData['location'],
   }));
 
+  const transformedFillColorData: Record<string, (string | null)[]> = {};
+  if (fillColorData) {
+    for (const [key, colors] of Object.entries(fillColorData)) {
+      transformedFillColorData[transformFillKey(key)] = colors;
+    }
+  }
+
   return {
     plots: plotData,
     shapes: shapeData,
@@ -118,7 +129,7 @@ function buildScriptResult(
     boxes: [],
     labels: [],
     fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
-    fillColorData,
+    fillColorData: transformedFillColorData,
     strategyMarkers: (strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,
