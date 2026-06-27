@@ -143,6 +143,7 @@ export function executePineScript(
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: import('./language/runtime/execution-engine.js').StrategyMarkerEntry[];
   metrics: import('./language/runtime/execution-engine.js').ExecutionMetrics;
+  plotColors?: Map<string, (string | null)[]>;
 } {
   const result = parse(source);
   const compileResult = compile(result.ast);
@@ -158,6 +159,7 @@ export function executePineScript(
     fills: execResult.fills,
     strategyMarkers: execResult.strategyMarkers,
     metrics: engine.getMetrics(),
+    plotColors: execResult.plotColors,
   };
 }
 

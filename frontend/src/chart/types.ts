@@ -10,6 +10,7 @@ export interface CandlestickData {
 export interface PlotSeriesData {
   time: number;
   value: number | null;
+  color?: string;
 }
 
 export interface ShapeMarkerData {

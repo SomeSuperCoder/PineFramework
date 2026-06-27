@@ -61,6 +61,7 @@ export class PineChart {
   private shapeMarkers: ShapeMarkerData[] = [];
   private strategyMarkers: StrategyMarkerData[] = [];
   private fills: FillData[] = [];
+  private fillColorData: Record<string, (string | null)[]> = {};
   private hlines: HLineData[] = [];
   private barColors: Map<number, string> = new Map();
   private bgColors: Map<number, string> = new Map();
@@ -201,7 +202,7 @@ export class PineChart {
       allPlots.set(key, handle.data);
     }
 
-    this.areaRenderer.render(ctx, this.fills, allPlots, this.viewport, this.layout);
+    this.areaRenderer.render(ctx, this.fills, allPlots, this.viewport, this.layout, this.fillColorData);
 
     this.volumeRenderer.render(ctx, this.candles, this.viewport, this.layout);
 
@@ -350,6 +351,11 @@ export class PineChart {
 
   setFills(fills: FillData[]): void {
     this.fills = fills;
+    this.markDirty();
+  }
+
+  setFillColorData(data: Record<string, (string | null)[]>): void {
+    this.fillColorData = data;
     this.markDirty();
   }
 

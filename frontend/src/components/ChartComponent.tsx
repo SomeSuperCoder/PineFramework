@@ -92,10 +92,10 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
 
       for (const d of plot.data) {
         if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
-          seriesData.push({ time: d.time, value: d.value });
+          seriesData.push({ time: d.time, value: d.value, color: d.color });
           tsMap.set(d.time, d.value);
         } else {
-          seriesData.push({ time: d.time, value: null });
+          seriesData.push({ time: d.time, value: null, color: d.color });
         }
       }
 
@@ -134,6 +134,9 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
       color: f.color,
     }));
     chart.setFills(fills);
+    if (scriptResult.fillColorData) {
+      chart.setFillColorData(scriptResult.fillColorData);
+    }
 
     chart.setHLines([]);
 

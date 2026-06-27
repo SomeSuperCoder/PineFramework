@@ -5,6 +5,8 @@ interface ExecuteResponse {
   success: boolean;
   error?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
+  plotColors?: Record<string, (string | null)[]>;
+  fillColorData?: Record<string, (string | null)[]>;
   shapes?: Array<{ style: string; location: string; color: string; time: number; text: string }>;
   fills?: Array<{ from: string; to: string; color: string }>;
   strategyMarkers?: Array<{
@@ -26,6 +28,8 @@ interface ExecutionResultMessage {
   success: boolean;
   error?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
+  plotColors?: Record<string, (string | null)[]>;
+  fillColorData?: Record<string, (string | null)[]>;
   shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<{
@@ -53,6 +57,8 @@ function buildScriptResult(
   strategyMarkers: ExecutionResultMessage['strategyMarkers'],
   ohlcvData: Array<{ timestamp: number }>,
   bgcolor?: ExecutionResultMessage['bgcolor'],
+  plotColors?: Record<string, (string | null)[]>,
+  fillColorData?: Record<string, (string | null)[]>,
 ): ScriptResult {
   const plotData: import('../types').PlotData[] = [];
   let colorIndex = 0;
@@ -64,6 +70,7 @@ function buildScriptResult(
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
     const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
+    const perBarColors = plotColors?.[key];
     if (!plotColor) {
       plotColor = COLORS[colorIndex % COLORS.length];
     }
@@ -84,9 +91,9 @@ function buildScriptResult(
           } else {
             numValue = null;
           }
-          return { time: Math.floor(ts / 1000), value: numValue };
+          return { time: Math.floor(ts / 1000), value: numValue, color: perBarColors?.[i] ?? undefined };
         })
-        .filter((d): d is { time: number; value: number | null } => d !== null),
+        .filter((d): d is { time: number; value: number | null; color?: string } => d !== null),
       color: plotColor,
       lineWidth,
       title,
@@ -111,6 +118,7 @@ function buildScriptResult(
     boxes: [],
     labels: [],
     fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
+    fillColorData,
     strategyMarkers: (strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,
@@ -180,6 +188,8 @@ export function useChartData() {
         msg.strategyMarkers || [],
         ohlcvData,
         msg.bgcolor,
+        msg.plotColors,
+        msg.fillColorData,
       );
       setScriptResult(result);
     }
@@ -321,6 +331,8 @@ export function useChartData() {
         result.strategyMarkers || [],
         ohlcvJson.data,
         result.bgcolor,
+        result.plotColors,
+        result.fillColorData,
       );
       setScriptResult(scriptRes);
 

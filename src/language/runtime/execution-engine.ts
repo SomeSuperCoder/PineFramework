@@ -80,6 +80,8 @@ export interface ExecutionResult {
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: StrategyMarkerEntry[];
   bgcolor: Array<{ time: number; color: string }>;
+  plotColors?: Map<string, (string | null)[]>;
+  fillColorData?: Map<string, (string | null)[]>;
 }
 
 export interface StrategyMarkerEntry {
@@ -195,6 +197,8 @@ export class ExecutionEngine {
     barCount: number;
   }> = new Map();
   private fills: Array<{ from: string; to: string; color: string }> = [];
+  private plotColors: Map<string, (string | null)[]> = new Map();
+  private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossCallIndex: number = 0;
   private crossPrevValues: Array<{ src: number; cmp: number }> = [];
@@ -637,6 +641,10 @@ export class ExecutionEngine {
         this.outputs.set(key, createSeries(key));
       }
       this.outputs.get(key)!.push(isNa(value) ? null : value);
+      if (!this.plotColors.has(key)) {
+        this.plotColors.set(key, []);
+      }
+      this.plotColors.get(key)!.push(color ?? null);
       return `__plot_ref:${key}` as PineValue;
     });
 
@@ -832,12 +840,19 @@ export class ExecutionEngine {
     this.builtins.set('fill', (plot1: PineValue, plot2: PineValue, namedOrNamed?: PineValue): PineValue => {
       const from = typeof plot1 === 'string' && plot1.startsWith('__plot_ref:') ? plot1.slice(10) : String(plot1);
       const to = typeof plot2 === 'string' && plot2.startsWith('__plot_ref:') ? plot2.slice(10) : String(plot2);
-      let fillColor = 'rgba(33,150,243,0.2)';
+      let fillColor: string | null = null;
       if (typeof namedOrNamed === 'object' && namedOrNamed !== null && !Array.isArray(namedOrNamed)) {
         const na = namedOrNamed as unknown as Record<string, PineValue>;
         if (typeof na.color === 'string') fillColor = na.color;
       }
-      this.fills.push({ from, to, color: fillColor });
+      const fillKey = `${from}::${to}`;
+      if (!this.fills.some(f => f.from === from && f.to === to)) {
+        this.fills.push({ from, to, color: fillColor ?? 'rgba(33,150,243,0.2)' });
+      }
+      if (!this.fillColorData.has(fillKey)) {
+        this.fillColorData.set(fillKey, []);
+      }
+      this.fillColorData.get(fillKey)!.push(fillColor);
       return NA;
     });
 
@@ -1103,6 +1118,8 @@ export class ExecutionEngine {
         fills: this.fills,
         strategyMarkers: this.getStrategyMarkers(),
         bgcolor: this.bgcolorData,
+        plotColors: this.plotColors,
+        fillColorData: this.fillColorData,
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -1117,12 +1134,14 @@ export class ExecutionEngine {
         fills: this.fills,
         strategyMarkers: this.getStrategyMarkers(),
         bgcolor: this.bgcolorData,
+        plotColors: this.plotColors,
+        fillColorData: this.fillColorData,
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);

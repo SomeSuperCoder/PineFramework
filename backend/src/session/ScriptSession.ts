@@ -12,6 +12,8 @@ export interface ScriptOutputs {
   success: boolean;
   error?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
+  plotColors?: Record<string, (string | null)[]>;
+  fillColorData?: Record<string, (string | null)[]>;
   shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<{
@@ -86,6 +88,20 @@ export class ScriptSession {
       }
     }
 
+    const plotColors: Record<string, (string | null)[]> = {};
+    if (result.plotColors) {
+      for (const [key, colors] of result.plotColors) {
+        plotColors[key] = Array.from(colors);
+      }
+    }
+
+    const fillColorData: Record<string, (string | null)[]> = {};
+    if (result.fillColorData) {
+      for (const [key, colors] of result.fillColorData) {
+        fillColorData[key] = Array.from(colors);
+      }
+    }
+
     const shapes = (result.shapes || []).map((s) => ({
       style: s.style,
       location: s.location,
@@ -117,6 +133,8 @@ export class ScriptSession {
       success: result.success,
       error: result.error,
       outputs,
+      plotColors,
+      fillColorData,
       shapes,
       fills,
       strategyMarkers,

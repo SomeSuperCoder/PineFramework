@@ -61,26 +61,29 @@ export class LineRenderer {
     chartArea: { x: number; y: number; width: number; height: number },
     range: { start: number; end: number },
     barSpacing: number,
-    _options: PlotRenderOptions,
+    options: PlotRenderOptions,
   ): void {
-    let started = false;
-    ctx.beginPath();
+    let prevX: number | undefined;
+    let prevY: number | undefined;
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) {
-        started = false;
+        prevX = undefined;
+        prevY = undefined;
         continue;
       }
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
-      if (!started) {
-        ctx.moveTo(x, y);
-        started = true;
-      } else {
+      if (prevX !== undefined && prevY !== undefined) {
+        ctx.strokeStyle = d.color ?? options.color;
+        ctx.beginPath();
+        ctx.moveTo(prevX, prevY);
         ctx.lineTo(x, y);
+        ctx.stroke();
       }
+      prevX = x;
+      prevY = y;
     }
-    ctx.stroke();
   }
 
   private renderStepline(
@@ -91,25 +94,35 @@ export class LineRenderer {
     chartArea: { x: number; y: number; width: number; height: number },
     range: { start: number; end: number },
     barSpacing: number,
-    _options: PlotRenderOptions,
+    options: PlotRenderOptions,
   ): void {
-    let prevY: number | null = null;
-    ctx.beginPath();
+    let prevX: number | undefined;
+    let prevY: number | undefined;
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) {
-        prevY = null;
+        prevX = undefined;
+        prevY = undefined;
         continue;
       }
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
-      if (prevY !== null) {
+      if (prevX !== undefined && prevY !== undefined) {
+        const segmentColor = d.color ?? options.color;
+        ctx.strokeStyle = segmentColor;
+        ctx.beginPath();
+        ctx.moveTo(prevX, prevY);
         ctx.lineTo(x, prevY);
+        ctx.stroke();
+        ctx.strokeStyle = segmentColor;
+        ctx.beginPath();
+        ctx.moveTo(x, prevY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
       }
-      ctx.lineTo(x, y);
+      prevX = x;
       prevY = y;
     }
-    ctx.stroke();
   }
 
   private renderHistogram(
@@ -123,16 +136,17 @@ export class LineRenderer {
     options: PlotRenderOptions,
   ): void {
     const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height);
-    ctx.beginPath();
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      ctx.strokeStyle = d.color ?? options.color;
+      ctx.beginPath();
       ctx.moveTo(x, baseY);
       ctx.lineTo(x, y);
+      ctx.stroke();
     }
-    ctx.stroke();
   }
 
   private renderColumns(
@@ -154,6 +168,7 @@ export class LineRenderer {
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
       const top = Math.min(baseY, y);
       const height = Math.max(1, Math.abs(y - baseY));
+      ctx.fillStyle = d.color ?? options.color;
       ctx.fillRect(x - colWidth / 2, top, colWidth, height);
     }
   }

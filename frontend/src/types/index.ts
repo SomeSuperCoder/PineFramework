@@ -16,7 +16,7 @@ export interface PineScriptError {
 
 export interface PlotData {
   type: 'line' | 'stepline' | 'area' | 'areabr' | 'histogram' | 'columns' | 'circles' | 'cross';
-  data: Array<{ time: number; value: number | null }>;
+  data: Array<{ time: number; value: number | null; color?: string }>;
   color?: string;
   lineWidth?: number;
   title?: string;
@@ -71,6 +71,7 @@ export interface ScriptResult {
     to: string;
     color: string;
   }>;
+  fillColorData?: Record<string, (string | null)[]>;
   strategyMarkers?: StrategyMarkerData[];
 }
 
