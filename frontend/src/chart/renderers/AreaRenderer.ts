@@ -24,31 +24,49 @@ export class AreaRenderer {
       const fillKey = `${fill.from}::${fill.to}`;
       const perBarColors = fillColorData?.[fillKey];
 
-      for (let i = range.start; i < range.end - 1; i++) {
+      const points: Array<{ x: number; upper: number; lower: number; color?: string }> = [];
+      for (let i = range.start; i < range.end; i++) {
         const v1 = fromData[i]?.value;
         const v2 = toData[i]?.value;
-        const v1n = fromData[i + 1]?.value;
-        const v2n = toData[i + 1]?.value;
         if (v1 === null || v1 === undefined || v2 === null || v2 === undefined) continue;
-        if (v1n === null || v1n === undefined || v2n === null || v2n === undefined) continue;
-
-        const segmentColor = perBarColors?.[i] ?? fill.color;
-        if (!segmentColor) continue;
-
-        const x1 = viewport.barIndexToPixel(i) + barSpacing / 2;
-        const x2 = viewport.barIndexToPixel(i + 1) + barSpacing / 2;
-
-        ctx.fillStyle = segmentColor;
-        ctx.globalAlpha = 0.3;
-        ctx.beginPath();
-        ctx.moveTo(x1, layout.priceToPixel(Math.max(v1, v2), chartArea.y, chartArea.height));
-        ctx.lineTo(x2, layout.priceToPixel(Math.max(v1n, v2n), chartArea.y, chartArea.height));
-        ctx.lineTo(x2, layout.priceToPixel(Math.min(v1n, v2n), chartArea.y, chartArea.height));
-        ctx.lineTo(x1, layout.priceToPixel(Math.min(v1, v2), chartArea.y, chartArea.height));
-        ctx.closePath();
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        const x = viewport.barIndexToPixel(i) + barSpacing / 2;
+        const upper = layout.priceToPixel(Math.max(v1, v2), chartArea.y, chartArea.height);
+        const lower = layout.priceToPixel(Math.min(v1, v2), chartArea.y, chartArea.height);
+        points.push({ x, upper, lower, color: perBarColors?.[i] ?? undefined });
       }
+
+      if (points.length < 2) continue;
+
+      // Draw a solid base area using the first fill color
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = fill.color;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].upper);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].upper);
+      }
+      for (let i = points.length - 1; i >= 0; i--) {
+        ctx.lineTo(points[i].x, points[i].lower);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Overlay per-bar color segments on top
+      if (perBarColors) {
+        for (let i = 0; i < points.length - 1; i++) {
+          const segColor = points[i].color;
+          if (!segColor) continue;
+          ctx.fillStyle = segColor;
+          ctx.beginPath();
+          ctx.moveTo(points[i].x, points[i].upper);
+          ctx.lineTo(points[i + 1].x, points[i + 1].upper);
+          ctx.lineTo(points[i + 1].x, points[i + 1].lower);
+          ctx.lineTo(points[i].x, points[i].lower);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
     }
   }
 }
