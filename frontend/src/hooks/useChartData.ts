@@ -22,6 +22,9 @@ interface ExecuteResponse {
     comment?: string;
   }>;
   bgcolor?: Array<{ time: number; color: string }>;
+  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
+  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  barTimestamps?: number[];
 }
 
 interface ExecutionResultMessage {
@@ -45,6 +48,9 @@ interface ExecutionResultMessage {
     comment?: string;
   }>;
   bgcolor?: Array<{ time: number; color: string }>;
+  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
+  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  barTimestamps?: number[];
   barIndex: number;
 }
 
@@ -59,6 +65,8 @@ function buildScriptResult(
   bgcolor?: ExecutionResultMessage['bgcolor'],
   plotColors?: Record<string, (string | null)[]>,
   fillColorData?: Record<string, (string | null)[]>,
+  lines?: ExecutionResultMessage['lines'],
+  labels?: ExecutionResultMessage['labels'],
 ): ScriptResult {
   const plotData: import('../types').PlotData[] = [];
   let colorIndex = 0;
@@ -125,9 +133,22 @@ function buildScriptResult(
   return {
     plots: plotData,
     shapes: shapeData,
-    lines: [],
+    lines: (lines || []).map((l) => ({
+      points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
+      color: l.color,
+      width: l.width,
+      style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
+    })),
     boxes: [],
-    labels: [],
+    labels: (labels || []).map((l) => ({
+      time: Math.floor(l.time / 1000),
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textColor,
+      style: l.style,
+      size: l.size,
+    })),
     fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
     fillColorData: transformedFillColorData,
     strategyMarkers: (strategyMarkers || []).map((m) => ({
@@ -201,6 +222,8 @@ export function useChartData() {
         msg.bgcolor,
         msg.plotColors,
         msg.fillColorData,
+        msg.lines,
+        msg.labels,
       );
       setScriptResult(result);
     }
@@ -344,6 +367,8 @@ export function useChartData() {
         result.bgcolor,
         result.plotColors,
         result.fillColorData,
+        result.lines,
+        result.labels,
       );
       setScriptResult(scriptRes);
 

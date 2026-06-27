@@ -29,6 +29,8 @@ export interface ScriptOutputs {
     comment?: string;
   }>;
   bgcolor?: Array<{ time: number; color: string }>;
+  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
+  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barIndex: number;
 }
 
@@ -129,6 +131,27 @@ export class ScriptSession {
       comment: m.comment,
     }));
 
+    const barTimestamps = result.barTimestamps ?? [];
+    const lines = (result.lines || []).map((l) => ({
+      points: [
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+      ],
+      color: l.color,
+      width: l.width,
+      style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid' as string,
+    }));
+
+    const labels = (result.labels || []).map((l) => ({
+      time: l.time,
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textcolor,
+      style: l.style,
+      size: l.size,
+    }));
+
     return {
       success: result.success,
       error: result.error,
@@ -139,6 +162,8 @@ export class ScriptSession {
       fills,
       strategyMarkers,
       bgcolor: result.bgcolor,
+      lines,
+      labels,
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
     };
   }

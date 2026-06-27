@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { PineChart, createChart } from '../chart';
-import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData } from '../chart';
+import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData } from '../chart';
 import type { ScriptResult } from '../types';
 
 interface ChartComponentProps {
@@ -137,6 +137,25 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
     if (scriptResult.fillColorData) {
       chart.setFillColorData(scriptResult.fillColorData);
     }
+
+    const drawingLines: DrawingLineData[] = (scriptResult.lines || []).map((l) => ({
+      points: l.points,
+      color: l.color || '#2196f3',
+      width: l.width || 1,
+      style: l.style || 'dotted',
+    }));
+    chart.setDrawingLines(drawingLines);
+
+    const chartLabels: LabelData[] = (scriptResult.labels || []).map((l) => ({
+      time: l.time,
+      price: l.price,
+      text: l.text,
+      color: l.color || '#2196f3',
+      textColor: l.textColor || '#ffffff',
+      style: l.style,
+      size: l.size,
+    }));
+    chart.setLabels(chartLabels);
 
     chart.setHLines([]);
 

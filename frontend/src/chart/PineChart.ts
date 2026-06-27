@@ -5,6 +5,8 @@ import type {
   StrategyMarkerData,
   FillData,
   HLineData,
+  DrawingLineData,
+  LabelData,
   ChartOptions,
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
@@ -65,6 +67,8 @@ export class PineChart {
   private hlines: HLineData[] = [];
   private barColors: Map<number, string> = new Map();
   private bgColors: Map<number, string> = new Map();
+  private drawingLines: DrawingLineData[] = [];
+  private chartLabels: LabelData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
@@ -224,6 +228,9 @@ export class PineChart {
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 
+    // Render drawing lines (line.new)
+    this.renderDrawingLines(ctx);
+
     for (const [_key, handle] of this.plotSeries) {
       this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
     }
@@ -232,6 +239,9 @@ export class PineChart {
 
     this.markerRenderer.renderStrategyMarkers(ctx, this.strategyMarkers, this.candles, this.viewport, this.layout);
 
+    // Render labels (label.new)
+    this.renderLabels(ctx);
+
     this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
     this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
 
@@ -239,6 +249,76 @@ export class PineChart {
 
     this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(this.offscreen, 0, 0);
+  }
+
+  private findBarIndex(time: number): number {
+    const target = Math.floor(time);
+    for (let i = 0; i < this.candles.length; i++) {
+      if (this.candles[i].time === target) return i;
+    }
+    let lo = 0, hi = this.candles.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.candles[mid].time < target) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  private renderDrawingLines(ctx: CanvasRenderingContext2D): void {
+    const regions = this.layout.getRegions();
+    const { chartArea } = regions;
+    for (const line of this.drawingLines) {
+      if (line.points.length < 2) continue;
+      const bi1 = this.findBarIndex(line.points[0].time);
+      const bi2 = this.findBarIndex(line.points[1].time);
+      const x1 = this.viewport.barIndexToPixel(bi1);
+      const y1 = this.layout.priceToPixel(line.points[0].price, chartArea.y, chartArea.height);
+      const x2 = this.viewport.barIndexToPixel(bi2);
+      const y2 = this.layout.priceToPixel(line.points[1].price, chartArea.y, chartArea.height);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.strokeStyle = this.cssColor(line.color || '#2196f3');
+      ctx.lineWidth = line.width || 1;
+      if (line.style === 'dotted') {
+        ctx.setLineDash([4, 4]);
+      } else if (line.style === 'dashed') {
+        ctx.setLineDash([8, 4]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  private renderLabels(ctx: CanvasRenderingContext2D): void {
+    const regions = this.layout.getRegions();
+    const { chartArea } = regions;
+    for (const label of this.chartLabels) {
+      const bi = this.findBarIndex(label.time);
+      const x = this.viewport.barIndexToPixel(bi) + this.viewport.getBarSpacing() / 2;
+      const y = this.layout.priceToPixel(label.price, chartArea.y, chartArea.height);
+      const text = label.text || '';
+      ctx.save();
+      ctx.font = 'bold 12px Arial';
+      const metrics = ctx.measureText(text);
+      const pad = 4;
+      const bw = metrics.width + pad * 2;
+      const bh = 20;
+      const bx = x - bw / 2;
+      const by = y - bh - 4;
+      ctx.fillStyle = this.cssColor(label.color || '#2196f3');
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 4);
+      ctx.fill();
+      ctx.fillStyle = label.textColor || '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x, by + bh / 2);
+      ctx.restore();
+    }
   }
 
   private cssColor(color: string): string {
@@ -298,6 +378,16 @@ export class PineChart {
       if (this.candles[i].volume > maxVol) maxVol = this.candles[i].volume;
     }
     this.layout.setVolumeMax(maxVol);
+  }
+
+  setDrawingLines(lines: DrawingLineData[]): void {
+    this.drawingLines = lines;
+    this.markDirty();
+  }
+
+  setLabels(labels: LabelData[]): void {
+    this.chartLabels = labels;
+    this.markDirty();
   }
 
   setCandles(data: CandlestickData[]): void {

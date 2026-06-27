@@ -72,6 +72,27 @@ export interface ShapeEntry {
   text: string;
 }
 
+export interface LineEntry {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+  style: string;
+  width: number;
+  xloc: string;
+}
+
+export interface LabelEntry {
+  time: number;
+  price: number;
+  text: string;
+  color: string;
+  textcolor: string;
+  style: string;
+  size: string;
+}
+
 export interface ExecutionResult {
   success: boolean;
   error?: string;
@@ -82,6 +103,9 @@ export interface ExecutionResult {
   bgcolor: Array<{ time: number; color: string }>;
   plotColors?: Map<string, (string | null)[]>;
   fillColorData?: Map<string, (string | null)[]>;
+  lines?: LineEntry[];
+  labels?: LabelEntry[];
+  barTimestamps?: number[];
 }
 
 export interface StrategyMarkerEntry {
@@ -110,6 +134,9 @@ interface ExecutionSnapshot {
   outputs: Map<string, Series>;
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
+  lines: Map<number, LineEntry>;
+  lineIdCounter: number;
+  labels: LabelEntry[];
   bgcolorData: Array<{ time: number; color: string }>;
   sarState: Map<string, {
     initialized: boolean;
@@ -146,6 +173,7 @@ export class ExecutionEngine {
   private maxSnapshots: number;
   private currentTimestamp: number = 0;
   private currentContext: ExecutionContext | null = null;
+  private barTimestamps: number[] = [];
 
   constructor(compileResult: CompileResult, strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>) {
     this.compiledScript = compileResult.ir;
@@ -197,6 +225,10 @@ export class ExecutionEngine {
     barCount: number;
   }> = new Map();
   private fills: Array<{ from: string; to: string; color: string }> = [];
+  private lines: Map<number, LineEntry> = new Map();
+  private lineIdCounter: number = 0;
+  private labels: LabelEntry[] = [];
+  private userTypeFields: Map<string, string[]> = new Map();
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
@@ -754,16 +786,53 @@ export class ExecutionEngine {
       return isNa(defaultVal) ? 0 : defaultVal;
     });
 
-    this.builtins.set('ta.pivothigh', (source: PineValue, left: PineValue, right?: PineValue): PineValue => {
-      const r = right ?? left;
-      if (isNa(source) || isNa(left) || isNa(r)) return NA;
-      return NA;
+    this.builtins.set('ta.pivothigh', (...args: PineValue[]): PineValue => {
+      const ctx = this.currentContext;
+      if (!ctx) return NA;
+      // Last arg may be namedArgs {} from executeCallExpression(…args, namedArgs)
+      const last = args[args.length - 1];
+      const hasNamed = typeof last === 'object' && last !== null && !Array.isArray(last);
+      const positionalCount = hasNamed ? args.length - 1 : args.length;
+      if (positionalCount < 2) return NA;
+      const leftBars = args[0] as number;
+      const rightBars = args[1] as number;
+      if (leftBars < 1 || rightBars < 1) return NA;
+      const series = ctx.high;
+      const len = series.length;
+      if (len < leftBars + rightBars + 1) return NA;
+      const candidateOffset = rightBars;
+      const candidateValue = series.getRelative(candidateOffset);
+      if (isNa(candidateValue)) return NA;
+      for (let d = -leftBars; d <= rightBars; d++) {
+        if (d === 0) continue;
+        const v = series.getRelative(rightBars - d);
+        if (!isNa(v) && (v as number) >= (candidateValue as number)) return NA;
+      }
+      return candidateValue;
     });
 
-    this.builtins.set('ta.pivotlow', (source: PineValue, left: PineValue, right?: PineValue): PineValue => {
-      const r = right ?? left;
-      if (isNa(source) || isNa(left) || isNa(r)) return NA;
-      return NA;
+    this.builtins.set('ta.pivotlow', (...args: PineValue[]): PineValue => {
+      const ctx = this.currentContext;
+      if (!ctx) return NA;
+      const last = args[args.length - 1];
+      const hasNamed = typeof last === 'object' && last !== null && !Array.isArray(last);
+      const positionalCount = hasNamed ? args.length - 1 : args.length;
+      if (positionalCount < 2) return NA;
+      const leftBars = args[0] as number;
+      const rightBars = args[1] as number;
+      if (leftBars < 1 || rightBars < 1) return NA;
+      const series = ctx.low;
+      const len = series.length;
+      if (len < leftBars + rightBars + 1) return NA;
+      const candidateOffset = rightBars;
+      const candidateValue = series.getRelative(candidateOffset);
+      if (isNa(candidateValue)) return NA;
+      for (let d = -leftBars; d <= rightBars; d++) {
+        if (d === 0) continue;
+        const v = series.getRelative(rightBars - d);
+        if (!isNa(v) && (v as number) <= (candidateValue as number)) return NA;
+      }
+      return candidateValue;
     });
 
     this.builtins.set('array.new_line', (size: PineValue): PineValue => {
@@ -778,15 +847,73 @@ export class ExecutionEngine {
       return [];
     });
 
-    this.builtins.set('line.new', (..._args: PineValue[]): PineValue => {
+    this.builtins.set('line.new', (x1: PineValue, y1: PineValue, x2: PineValue, y2: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
+      if (isNa(x1) || isNa(y1) || isNa(x2) || isNa(y2)) {
+        return 0;
+      }
+      let colorStr = '#2196f3';
+      let styleStr = 'solid';
+      let widthNum = 1;
+      let xlocStr = 'bar_index';
+      if (typeof namedArgs === 'object' && namedArgs !== null) {
+        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+        if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
+        if (typeof namedArgs.width === 'number') widthNum = namedArgs.width;
+        if (typeof namedArgs.xloc === 'string') xlocStr = namedArgs.xloc;
+      }
+      const id = this.lineIdCounter++;
+      this.lines.set(id, {
+        x1: x1 as number,
+        y1: y1 as number,
+        x2: x2 as number,
+        y2: y2 as number,
+        color: colorStr,
+        style: styleStr,
+        width: widthNum,
+        xloc: xlocStr,
+      });
+      return id;
+    });
+
+    this.builtins.set('line.delete', (lineId: PineValue): PineValue => {
+      if (typeof lineId === 'number' && this.lines.has(lineId)) {
+        this.lines.delete(lineId);
+      }
       return 0;
     });
 
-    this.builtins.set('line.get_x2', (..._args: PineValue[]): PineValue => {
+    this.builtins.set('line.get_x2', (lineId: PineValue): PineValue => {
+      if (typeof lineId === 'number') {
+        const line = this.lines.get(lineId);
+        if (line) return line.x2;
+      }
       return 0;
     });
 
-    this.builtins.set('label.new', (..._args: PineValue[]): PineValue => {
+    this.builtins.set('label.new', (x: PineValue, y: PineValue, text: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
+      if (isNa(x) || isNa(y) || isNa(text)) return 0;
+      let colorStr = '#2196f3';
+      let textcolorStr = '#ffffff';
+      let styleStr = 'label.style_label_down';
+      let sizeStr = 'size.normal';
+      if (typeof namedArgs === 'object' && namedArgs !== null) {
+        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+        if (typeof namedArgs.textcolor === 'string') textcolorStr = namedArgs.textcolor;
+        if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
+        if (typeof namedArgs.size === 'string') sizeStr = namedArgs.size;
+      }
+      // Member expression resolution strips prefixes: label.style_label_down → style_label_down
+      if (!styleStr.startsWith('label.')) styleStr = 'label.' + styleStr;
+      if (!sizeStr.startsWith('size.')) sizeStr = 'size.' + sizeStr;
+      this.labels.push({
+        time: this.currentTimestamp,
+        price: y as number,
+        text: String(text),
+        color: colorStr,
+        textcolor: textcolorStr,
+        style: styleStr,
+        size: sizeStr,
+      });
       return 0;
     });
 
@@ -1031,6 +1158,9 @@ export class ExecutionEngine {
       outputs: this.cloneOutputs(),
       shapes: [...this.shapes],
       fills: [...this.fills],
+      lines: new Map(this.lines),
+      lineIdCounter: this.lineIdCounter,
+      labels: [...this.labels],
       bgcolorData: [...this.bgcolorData],
       sarState: new Map([...this.sarState].map(([k, v]) => [k, { ...v }])),
       barIndex: this.metrics.totalBars,
@@ -1054,6 +1184,9 @@ export class ExecutionEngine {
     this.outputs = snapshot.outputs;
     this.shapes = snapshot.shapes;
     this.fills = snapshot.fills;
+    this.lines = new Map(snapshot.lines);
+    this.lineIdCounter = snapshot.lineIdCounter;
+    this.labels = [...snapshot.labels];
     this.bgcolorData = snapshot.bgcolorData;
     this.sarState = new Map([...snapshot.sarState].map(([k, v]) => [k, { ...v }]));
     this.snapshots = this.snapshots.slice(0, snapshotIndex);
@@ -1079,6 +1212,7 @@ export class ExecutionEngine {
     const startTime = performance.now();
     this.currentTimestamp = context.timestamp;
     this.currentContext = context;
+    this.barTimestamps.push(context.timestamp);
     this.crossCallIndex = 0;
     this.smaCallIndex = 0;
     this.emaCallIndex = 0;
@@ -1111,6 +1245,7 @@ export class ExecutionEngine {
       const executionTime = performance.now() - startTime;
       this.updateMetrics(true, executionTime);
 
+      const activeLines = [...this.lines.values()].map(l => ({ ...l }));
       return {
         success: true,
         outputs: this.outputs,
@@ -1120,12 +1255,16 @@ export class ExecutionEngine {
         bgcolor: this.bgcolorData,
         plotColors: this.plotColors,
         fillColorData: this.fillColorData,
+        lines: activeLines,
+        labels: [...this.labels],
+        barTimestamps: [...this.barTimestamps],
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
       this.updateMetrics(false, executionTime);
       this.rollbackToPreviousBar();
 
+      const activeLines = [...this.lines.values()].map(l => ({ ...l }));
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -1136,12 +1275,15 @@ export class ExecutionEngine {
         bgcolor: this.bgcolorData,
         plotColors: this.plotColors,
         fillColorData: this.fillColorData,
+        lines: activeLines,
+        labels: [...this.labels],
+        barTimestamps: [...this.barTimestamps],
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps] };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
@@ -1431,10 +1573,11 @@ export class ExecutionEngine {
   }
 
   private executeTypeDeclaration(
-    _stmt: TypeDeclarationNode,
+    stmt: TypeDeclarationNode,
     _scope: RuntimeScope,
     _context: ExecutionContext,
   ): PineValue {
+    this.userTypeFields.set(stmt.name, stmt.fields.map(f => f.name));
     return NA;
   }
 
@@ -1696,6 +1839,19 @@ export class ExecutionEngine {
       }
     }
 
+    if (expr.callee.kind === 'NaLiteral') {
+      const args = expr.arguments.map((arg) => this.executeExpression(arg, scope, context));
+      const namedArgs: Record<string, PineValue> = {};
+      for (const na of expr.namedArguments) {
+        namedArgs[na.name] = this.executeExpression(na.value, scope, context);
+      }
+      const builtin = this.builtins.get('na');
+      if (builtin) {
+        return builtin(...args, namedArgs);
+      }
+      return isNa(args[0] ?? NA);
+    }
+
     if (expr.callee.kind === 'MemberExpression') {
       const objName = expr.callee.object.kind === 'Identifier' ? expr.callee.object.name : '';
       const methodName = expr.callee.property;
@@ -1709,6 +1865,16 @@ export class ExecutionEngine {
       const builtin = this.builtins.get(fullName);
       if (builtin) {
         return builtin(...args, namedArgs);
+      }
+
+      // Type constructor: TypeName.new(...)
+      if (methodName === 'new' && this.userTypeFields.has(objName)) {
+        const fields = this.userTypeFields.get(objName)!;
+        const obj: Record<string, PineValue> = {};
+        for (let i = 0; i < fields.length && i < args.length; i++) {
+          obj[fields[i]!] = args[i]!;
+        }
+        return obj;
       }
     }
 
@@ -1828,6 +1994,11 @@ export class ExecutionEngine {
       return NA;
     }
 
+    if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+      const val = (obj as Record<string, PineValue>)[expr.property];
+      return val !== undefined ? val : NA;
+    }
+
     return NA;
   }
 
@@ -1855,6 +2026,17 @@ export class ExecutionEngine {
       ) {
         const series = this.getOHLCSeries(objName, context);
         return series.getRelative(index as number);
+      }
+
+      if (objName === 'time') {
+        const idx = this.barTimestamps.length - 1 - (index as number);
+        if (idx >= 0 && idx < this.barTimestamps.length) {
+          return this.barTimestamps[idx]!;
+        }
+        return NA;
+      }
+      if (objName === 'bar_index') {
+        return (context.barIndex as number) - (index as number);
       }
 
       const binding = resolveVariable(scope, objName);

@@ -80,6 +80,27 @@ executeRouter.post('/execute', async (req, res) => {
       comment: m.comment,
     }));
 
+    const barTimestamps = result.barTimestamps ?? [];
+    const lines = (result.lines || []).map((l) => ({
+      points: [
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+      ],
+      color: l.color,
+      width: l.width,
+      style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
+    }));
+
+    const labels = (result.labels || []).map((l) => ({
+      time: l.time,
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textcolor,
+      style: l.style,
+      size: l.size,
+    }));
+
     res.json({
       success: result.success,
       error: result.error,
@@ -90,6 +111,8 @@ executeRouter.post('/execute', async (req, res) => {
       fills,
       bgcolor,
       strategyMarkers,
+      lines,
+      labels,
     });
   } catch (err) {
     console.error('[Execute] Error:', err);
