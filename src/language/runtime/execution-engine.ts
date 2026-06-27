@@ -806,7 +806,7 @@ export class ExecutionEngine {
       for (let d = -leftBars; d <= rightBars; d++) {
         if (d === 0) continue;
         const v = series.getRelative(rightBars - d);
-        if (!isNa(v) && (v as number) >= (candidateValue as number)) return NA;
+        if (!isNa(v) && (v as number) > (candidateValue as number)) return NA;
       }
       return candidateValue;
     });
@@ -830,7 +830,7 @@ export class ExecutionEngine {
       for (let d = -leftBars; d <= rightBars; d++) {
         if (d === 0) continue;
         const v = series.getRelative(rightBars - d);
-        if (!isNa(v) && (v as number) <= (candidateValue as number)) return NA;
+        if (!isNa(v) && (v as number) < (candidateValue as number)) return NA;
       }
       return candidateValue;
     });
@@ -933,7 +933,7 @@ export class ExecutionEngine {
         this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
         return false;
       }
-      const result = prev.src <= prev.cmp && (source as number) > (compare as number);
+      const result = prev.src < prev.cmp && (source as number) > (compare as number);
       prev.src = source as number;
       prev.cmp = compare as number;
       return result;
@@ -947,7 +947,7 @@ export class ExecutionEngine {
         this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
         return false;
       }
-      const result = prev.src >= prev.cmp && (source as number) < (compare as number);
+      const result = prev.src > prev.cmp && (source as number) < (compare as number);
       prev.src = source as number;
       prev.cmp = compare as number;
       return result;
