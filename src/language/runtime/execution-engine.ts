@@ -1876,6 +1876,47 @@ export class ExecutionEngine {
         }
         return obj;
       }
+
+      // Generic array methods (lin.size(), lin.first(), lin.shift(), lin.unshift(), etc.)
+      const obj = this.executeExpression(expr.callee.object, scope, context);
+      if (Array.isArray(obj)) {
+        switch (methodName) {
+          case 'size': return obj.length;
+          case 'first': return obj.length > 0 ? obj[0] : NA;
+          case 'last': return obj.length > 0 ? obj[obj.length - 1] : NA;
+          case 'shift': return obj.shift() ?? NA;
+          case 'pop': return obj.pop() ?? NA;
+          case 'push': obj.push(args[0] ?? NA); return obj.length;
+          case 'unshift': obj.unshift(args[0] ?? NA); return obj.length;
+          case 'insert': { const idx = (args[0] as number) ?? 0; obj.splice(idx, 0, args[1] ?? NA); return obj.length; }
+          case 'remove': { const ri = (args[0] as number) ?? 0; return obj.splice(ri, 1)[0] ?? NA; }
+          case 'contains': return obj.includes(args[0] ?? NA);
+          case 'fill': { const fv = args[0] ?? NA; for (let fi = 0; fi < obj.length; fi++) obj[fi] = fv; return obj; }
+          case 'set': { const si = (args[0] as number) ?? 0; obj[si] = args[1] ?? NA; return obj; }
+          case 'get': { const gi = (args[0] as number) ?? 0; return obj[gi] ?? NA; }
+          case 'sort': return obj.sort((a: PineValue, b: PineValue) => (a as number) - (b as number));
+          case 'copy': return [...obj];
+          default: return NA;
+        }
+      }
+
+      // Line/label methods on returned IDs (lin.shift().delete(), line.get_x2(id), etc.)
+      if (typeof obj === 'number') {
+        switch (methodName) {
+          case 'delete': this.lines.delete(obj); return true;
+          case 'get_x1': { const ln = this.lines.get(obj); return ln ? ln.x1 : NA; }
+          case 'get_y1': { const ln = this.lines.get(obj); return ln ? ln.y1 : NA; }
+          case 'get_x2': { const ln = this.lines.get(obj); return ln ? ln.x2 : NA; }
+          case 'get_y2': { const ln = this.lines.get(obj); return ln ? ln.y2 : NA; }
+          case 'get_color': { const ln = this.lines.get(obj); return ln ? ln.color : NA; }
+          case 'get_style': { const ln = this.lines.get(obj); return ln ? ln.style : NA; }
+          case 'get_width': { const ln = this.lines.get(obj); return ln ? ln.width : NA; }
+          case 'set_color': { const ln = this.lines.get(obj); if (ln) ln.color = String(args[0] ?? '#2196f3'); return true; }
+          case 'set_style': { const ln = this.lines.get(obj); if (ln) ln.style = String(args[0] ?? 'solid'); return true; }
+          case 'set_width': { const ln = this.lines.get(obj); if (ln) ln.width = (args[0] as number) ?? 1; return true; }
+          default: return NA;
+        }
+      }
     }
 
     const args = expr.arguments.map((arg) => this.executeExpression(arg, scope, context));

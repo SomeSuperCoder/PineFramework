@@ -219,6 +219,7 @@ plot(x, "ticker")`;
     console.log(`  labels produced: ${result.labels?.length ?? 0}`);
     if (result.labels && result.labels.length > 0) {
       for (const label of result.labels) {
+        console.log(`    label: text=${label.text}, time=${label.time}, price=${label.price}, color=${label.color}`);
         expect(typeof label.time).toBe('number');
         expect(typeof label.price).toBe('number');
         expect(['Buy', 'Sell']).toContain(label.text);
@@ -388,8 +389,8 @@ plot(ta.pivotlow(2, 2), "pl")`
     pivotTestBars[5]!.high = 148;
     pivotTestBars[6]!.high = 146;
 
-    // Add a break bar: bar 6 close[1] at bar 7 must be > pH.pp (150)
-    pivotTestBars[6] = { ...pivotTestBars[6]!, close: 155, high: 158 }; // previous bar close triggers break
+    // Add a break bar: bar 6 close triggers break (high must stay <= 150 so pivot at bar 4 is confirmed)
+    pivotTestBars[6]!.close = 155;
     pivotTestBars[7] = { ...pivotTestBars[7]!, close: 153 };
 
     // Also add a pivot low at bar 9 with left=2, right=2
@@ -415,5 +416,11 @@ plot(ta.pivotlow(2, 2), "pl")`
     const pivotResult = pivotEngine.executeBars(pivotContexts);
     expect(pivotResult.success).toBe(true);
     console.log(`  with known pivot data: lines=${pivotResult.lines?.length ?? 0}, labels=${pivotResult.labels?.length ?? 0}`);
+    if (pivotResult.lines) {
+      for (const l of pivotResult.lines) console.log(`    line: x1=${l.x1}, y1=${l.y1}, x2=${l.x2}, y2=${l.y2}, color=${l.color}`);
+    }
+    if (pivotResult.labels) {
+      for (const lb of pivotResult.labels) console.log(`    label: time=${lb.time}, price=${lb.price}, text=${lb.text}, color=${lb.color}`);
+    }
   });
 });
