@@ -37,8 +37,8 @@ export class AreaRenderer {
 
       if (points.length < 2) continue;
 
-      // Draw a solid base area using the first fill color
-      ctx.globalAlpha = 0.3;
+      // Draw the fill. Colors from color.new() already contain alpha;
+      // do NOT apply globalAlpha — that would double-reduce opacity.
       ctx.fillStyle = fill.color;
       ctx.beginPath();
       ctx.moveTo(points[0].x, points[0].upper);
@@ -66,7 +66,6 @@ export class AreaRenderer {
           ctx.fill();
         }
       }
-      ctx.globalAlpha = 1;
     }
   }
 }
