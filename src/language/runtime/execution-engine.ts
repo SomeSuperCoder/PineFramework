@@ -838,8 +838,8 @@ export class ExecutionEngine {
     });
 
     this.builtins.set('fill', (plot1: PineValue, plot2: PineValue, namedOrNamed?: PineValue): PineValue => {
-      const from = typeof plot1 === 'string' && plot1.startsWith('__plot_ref:') ? plot1.slice(10) : String(plot1);
-      const to = typeof plot2 === 'string' && plot2.startsWith('__plot_ref:') ? plot2.slice(10) : String(plot2);
+      const from = typeof plot1 === 'string' && plot1.startsWith('__plot_ref:') ? plot1.slice(11) : String(plot1);
+      const to = typeof plot2 === 'string' && plot2.startsWith('__plot_ref:') ? plot2.slice(11) : String(plot2);
       let fillColor: string | null = null;
       if (typeof namedOrNamed === 'object' && namedOrNamed !== null && !Array.isArray(namedOrNamed)) {
         const na = namedOrNamed as unknown as Record<string, PineValue>;
