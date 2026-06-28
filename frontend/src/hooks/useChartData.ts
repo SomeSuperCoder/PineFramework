@@ -179,8 +179,6 @@ export function useChartData() {
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
-  const cachedPlotDataRef = useRef<Map<string, Array<{ time: number; value: number | null; color?: string }>>>(new Map());
-  const cachedTimestampsRef = useRef<Set<number>>(new Set());
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
@@ -381,8 +379,6 @@ export function useChartData() {
     try {
       let barsToExecute = existingBars;
       if (!barsToExecute) {
-        cachedTimestampsRef.current.clear();
-        cachedPlotDataRef.current.clear();
         const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
         if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
         const ohlcvJson = await ohlcvResponse.json();
@@ -391,13 +387,10 @@ export function useChartData() {
       }
       if (!barsToExecute) throw new Error('No bars available for execution');
 
-      const cachedCount = cachedTimestampsRef.current.size;
-      const offset = barsToExecute.length > cachedCount ? cachedCount : 0;
-
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: code, bars: barsToExecute, offset }),
+        body: JSON.stringify({ source: code, bars: barsToExecute }),
       });
 
       if (!response.ok) {
@@ -416,38 +409,18 @@ export function useChartData() {
         return;
       }
 
-      const keepCount = barsToExecute.length - offset;
-      const slicedBars = offset > 0 ? barsToExecute.slice(0, keepCount) : barsToExecute;
-
       const scriptRes = buildScriptResult(
         result.outputs,
         result.shapes || [],
         result.fills || [],
         result.strategyMarkers || [],
-        slicedBars,
+        barsToExecute,
         result.bgcolor,
         result.plotColors,
         result.fillColorData,
         result.lines,
         result.labels,
       );
-
-      if (offset > 0 && cachedPlotDataRef.current.size > 0) {
-        for (const plot of scriptRes.plots) {
-          const cached = cachedPlotDataRef.current.get(plot.title);
-          if (cached) {
-            plot.data = [...plot.data, ...cached];
-          }
-        }
-      }
-
-      cachedPlotDataRef.current.clear();
-      for (const plot of scriptRes.plots) {
-        cachedPlotDataRef.current.set(plot.title, plot.data);
-      }
-      for (const bar of barsToExecute) {
-        cachedTimestampsRef.current.add(Math.floor(bar.timestamp / 1000));
-      }
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;
       setScriptResult(scriptRes);

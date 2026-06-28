@@ -116,12 +116,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     let colorIndex = 0;
 
     const currentTitles = new Set<string>();
-    const newPlotData: Array<{ title: string; color: string; lineWidth: number; style: any; data: PlotSeriesData[]; tsMap: Map<number, number> }> = [];
-
-    const ohlcvMap = new Map<number, CandlestickData>();
-    for (const c of data) {
-      ohlcvMap.set(c.time, c);
-    }
 
     for (const plot of scriptResult.plots) {
       let title = plot.title || `Plot ${colorIndex + 1}`;
@@ -130,18 +124,21 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       currentTitles.add(title);
 
       const seriesData: PlotSeriesData[] = [];
-      const tsMap = new Map<number, number>();
-
       for (const d of plot.data) {
         if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
           seriesData.push({ time: d.time, value: d.value, color: d.color });
-          tsMap.set(d.time, d.value);
         } else {
           seriesData.push({ time: d.time, value: null, color: d.color });
         }
       }
 
-      newPlotData.push({ title, color: plotColor, lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1, style: (plot.type as any) || 'line', data: seriesData, tsMap });
+      chart.addPlotSeries(title, {
+        color: plotColor,
+        lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
+        style: (plot.type as any) || 'line',
+      });
+      seriesNamesRef.current.add(title);
+      chart.setPlotData(title, seriesData);
     }
 
     for (const name of seriesNamesRef.current) {
@@ -150,35 +147,9 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
     seriesNamesRef.current.clear();
-
-    for (const pd of newPlotData) {
-      chart.addPlotSeries(pd.title, {
-        color: pd.color,
-        lineWidth: pd.lineWidth,
-        style: pd.style,
-      });
-      seriesNamesRef.current.add(pd.title);
-      chart.setPlotData(pd.title, pd.data);
+    for (const title of currentTitles) {
+      seriesNamesRef.current.add(title);
     }
-
-    const plotKeyToTimeMap = new Map<string, Map<number, number>>();
-    for (const pd of newPlotData) {
-      plotKeyToTimeMap.set(pd.title, pd.tsMap);
-    }
-
-    const shapeMarkers: ShapeMarkerData[] = (scriptResult.shapes || []).map((s) => {
-      const candle = ohlcvMap.get(s.time);
-      const barIdx = candle ? data.indexOf(candle) : -1;
-      return {
-        time: s.time,
-        position: (s.location || 'abovebar') as ShapeMarkerData['position'],
-        shape: s.type,
-        color: s.color || '#2196f3',
-        text: s.text || undefined,
-        barIndex: barIdx >= 0 ? barIdx : undefined,
-      };
-    });
-    chart.setMarkers(shapeMarkers);
 
     const stratMarkers: StrategyMarkerData[] = (scriptResult.strategyMarkers || []).map((m) => ({
       type: m.type,
@@ -221,8 +192,34 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setLabels(chartLabels);
 
     chart.setHLines([]);
-
     chart.setBarColors(new Map());
+    chart.endUpdate();
+  }, [scriptResult]);
+
+  useEffect(() => {
+    if (!chartRef.current || !scriptResult) return;
+    const chart = chartRef.current;
+
+    const ohlcvMap = new Map<number, CandlestickData>();
+    for (const c of data) {
+      ohlcvMap.set(c.time, c);
+    }
+
+    chart.beginUpdate();
+
+    const shapeMarkers: ShapeMarkerData[] = (scriptResult.shapes || []).map((s) => {
+      const candle = ohlcvMap.get(s.time);
+      const barIdx = candle ? data.indexOf(candle) : -1;
+      return {
+        time: s.time,
+        position: (s.location || 'abovebar') as ShapeMarkerData['position'],
+        shape: s.type,
+        color: s.color || '#2196f3',
+        text: s.text || undefined,
+        barIndex: barIdx >= 0 ? barIdx : undefined,
+      };
+    });
+    chart.setMarkers(shapeMarkers);
 
     const bgColorsMap = new Map<number, string>();
     for (const b of (scriptResult.bgcolor || [])) {
@@ -235,8 +232,9 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
     chart.setBgColors(bgColorsMap);
+
     chart.endUpdate();
-  }, [scriptResult]);
+  }, [scriptResult, data]);
 
   return (
     <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>

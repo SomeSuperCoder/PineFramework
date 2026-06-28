@@ -173,9 +173,9 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
               interval || '',
               bars,
             );
-            const outputs = session.initialize();
+            session.initialize();
             sub.session = session;
-            ws.send(JSON.stringify({ type: 'execution_result', data: outputs }));
+            ws.send(JSON.stringify({ type: 'session_ready' }));
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Script compilation or execution failed';
             console.error('[WS] Script execution error:', message);
