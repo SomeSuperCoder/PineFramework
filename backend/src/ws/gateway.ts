@@ -167,6 +167,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
           }
 
           try {
+            sub.session = null;
             const session = new ScriptSession(
               source,
               symbol || '',

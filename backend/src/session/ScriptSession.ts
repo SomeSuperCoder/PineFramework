@@ -31,6 +31,7 @@ export interface ScriptOutputs {
   bgcolor?: Array<{ time: number; color: string }>;
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  barTimestamps?: number[];
   barIndex: number;
 }
 
@@ -164,6 +165,7 @@ export class ScriptSession {
       bgcolor: result.bgcolor,
       lines,
       labels,
+      barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
     };
   }

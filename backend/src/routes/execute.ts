@@ -118,6 +118,7 @@ executeRouter.post('/execute', async (req, res) => {
       strategyMarkers,
       lines,
       labels,
+      barTimestamps: result.barTimestamps ?? [],
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

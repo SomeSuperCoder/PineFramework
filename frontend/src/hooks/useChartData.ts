@@ -67,7 +67,12 @@ function buildScriptResult(
   fillColorData?: Record<string, (string | null)[]>,
   lines?: ExecutionResultMessage['lines'],
   labels?: ExecutionResultMessage['labels'],
+  barTimestamps?: number[],
 ): ScriptResult {
+  const getTimestamp = (i: number): number | undefined => {
+    if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
+    return ohlcvData[i]?.timestamp;
+  };
   const plotData: import('../types').PlotData[] = [];
   let colorIndex = 0;
   for (const [key, values] of Object.entries(outputs)) {
@@ -87,7 +92,7 @@ function buildScriptResult(
       type: plotStyle,
       data: values
         .map((v, i) => {
-          const ts = ohlcvData[i]?.timestamp;
+          const ts = getTimestamp(i);
           if (ts === undefined) return null;
           let numValue: number | null;
           if (v === null || v === undefined) {
@@ -248,6 +253,17 @@ export function useChartData() {
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
     if (msg.success && msg.outputs) {
+      const barTimestamps = msg.barTimestamps;
+      const sampleKey = Object.keys(msg.outputs)[0];
+      if (sampleKey) {
+        const outputLen = msg.outputs[sampleKey].length;
+        if (barTimestamps && outputLen !== barTimestamps.length) {
+          return;
+        }
+        if (Math.abs(outputLen - ohlcvData.length) > 1) {
+          return;
+        }
+      }
       const result = buildScriptResult(
         msg.outputs,
         msg.shapes || [],
@@ -259,6 +275,7 @@ export function useChartData() {
         msg.fillColorData,
         msg.lines,
         msg.labels,
+        barTimestamps,
       );
       setScriptResult(result);
     }
@@ -414,6 +431,7 @@ export function useChartData() {
         result.fillColorData,
         result.lines,
         result.labels,
+        result.barTimestamps,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;
