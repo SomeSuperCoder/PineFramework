@@ -474,6 +474,9 @@ export class PineChart {
         this.viewport.scrollTo(barIndex, this.canvas.width);
         this.markDirty();
       },
+      getVisibleRange: () => {
+        return this.viewport.getVisibleRange();
+      },
       scrollToDate: (_timestamp: number) => {
         this.markDirty();
       },

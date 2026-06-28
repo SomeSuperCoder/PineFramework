@@ -7,9 +7,15 @@ interface ChartComponentProps {
   data: CandlestickData[];
   scriptResult: ScriptResult | null;
   dataVersion: number;
+  symbol: string;
+  interval: string;
+  fetchOlderOHLCV: (symbol: string, interval: string) => Promise<boolean>;
+  executeScript: (code: string, symbol: string, interval: string) => Promise<void>;
+  lastCodeRef: React.MutableRefObject<string | null>;
+  prependCountRef: React.MutableRefObject<number>;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, prependCountRef }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -40,6 +46,41 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
     };
   }, []);
 
+  const isLoadingHistoryRef = useRef(false);
+  const pendingPrependRef = useRef(0);
+  const fetchRef = useRef(fetchOlderOHLCV);
+  fetchRef.current = fetchOlderOHLCV;
+  const execRef = useRef(executeScript);
+  execRef.current = executeScript;
+  const codeRef = useRef(lastCodeRef);
+  codeRef.current = lastCodeRef;
+  const prependRef = useRef(prependCountRef);
+  prependRef.current = prependCountRef;
+  const symbolRef = useRef(symbol);
+  symbolRef.current = symbol;
+  const intervalRef = useRef(interval);
+  intervalRef.current = interval;
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const onRangeChange = (start: number) => {
+      if (start > 50 || isLoadingHistoryRef.current) return;
+      isLoadingHistoryRef.current = true;
+      const sy = symbolRef.current;
+      const iv = intervalRef.current;
+      fetchRef.current(sy, iv).then((added) => {
+        if (added) {
+          pendingPrependRef.current = prependRef.current.current;
+        }
+        isLoadingHistoryRef.current = false;
+      });
+    };
+
+    chart.on('onVisibleRangeChange', onRangeChange);
+  }, []);
+
   useEffect(() => {
     if (!chartRef.current) return;
     const chart = chartRef.current;
@@ -50,7 +91,15 @@ export function ChartComponent({ data, scriptResult, dataVersion }: ChartCompone
 
     chart.setCandles(validData);
 
-    if (shouldFitRef.current && validData.length > 10) {
+    if (pendingPrependRef.current > 0) {
+      const added = pendingPrependRef.current;
+      pendingPrependRef.current = 0;
+      const vs = chart.timeScale().getVisibleRange();
+      chart.timeScale().scrollTo(vs.end + added - 1);
+      if (codeRef.current.current) {
+        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current);
+      }
+    } else if (shouldFitRef.current && validData.length > 10) {
       chart.timeScale().scrollTo(validData.length - 1);
       shouldFitRef.current = false;
     }

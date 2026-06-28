@@ -36,8 +36,11 @@ function App() {
     isLoading,
     executeScript,
     fetchOHLCV,
+    fetchOlderOHLCV,
     subscribe,
     setErrors,
+    lastCodeRef,
+    prependCountRef,
   } = useChartData();
 
   const prevTfRef = useRef(timeframe);
@@ -99,7 +102,17 @@ function App() {
       </header>
 
       <main className="main-content">
-        <ChartComponent data={candles} scriptResult={scriptResult} dataVersion={dataVersion} />
+        <ChartComponent
+          data={candles}
+          scriptResult={scriptResult}
+          dataVersion={dataVersion}
+          symbol={symbol}
+          interval={timeframe}
+          fetchOlderOHLCV={fetchOlderOHLCV}
+          executeScript={executeScript}
+          lastCodeRef={lastCodeRef}
+          prependCountRef={prependCountRef}
+        />
       </main>
 
       <ErrorConsole errors={errors} onClear={() => setErrors([])} />

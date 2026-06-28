@@ -15,6 +15,7 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
       const symbol = (req.query.symbol as string)?.toUpperCase();
       const interval = req.query.interval as string;
       const limit = Math.min(parseInt(req.query.limit as string) || 1000, 1000);
+      const end = req.query.end ? parseInt(req.query.end as string, 10) : undefined;
 
       if (!symbol || !VALID_SYMBOLS.test(symbol)) {
         res.status(400).json({ error: 'Invalid symbol format' });
@@ -25,13 +26,18 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
         return;
       }
 
-      const cached = cache.get(symbol, interval);
-      if (cached && cached.length >= limit) {
-        res.json({ symbol, interval, data: cached.slice(-limit) });
-        return;
+      if (!end) {
+        const cached = cache.get(symbol, interval);
+        if (cached && cached.length >= limit) {
+          res.json({ symbol, interval, data: cached.slice(-limit) });
+          return;
+        }
       }
 
-      const url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+      let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+      if (end) {
+        url += `&end=${end}`;
+      }
       const response = await fetch(url);
       const json = await response.json() as {
         retCode: number;
@@ -53,8 +59,10 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
         volume: parseFloat(row[5]),
       })).reverse();
 
-      cache.set(symbol, interval, bars);
-      res.json({ symbol, interval, data: bars });
+      if (!end) {
+        cache.set(symbol, interval, bars);
+      }
+      res.json({ symbol, interval, data: bars, hasMore: bars.length === limit });
     } catch (err) {
       console.error('[OHLCV] Error:', err);
       res.status(500).json({ error: 'Failed to fetch OHLCV data' });

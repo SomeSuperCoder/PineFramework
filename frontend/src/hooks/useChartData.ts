@@ -177,6 +177,9 @@ export function useChartData() {
   const subscribedTopicRef = useRef<string | null>(null);
   const lastCodeRef = useRef<string | null>(null);
   const ohlcvDataRef = useRef<Array<{ timestamp: number }>>([]);
+  const hasMoreHistoryRef = useRef(true);
+  const isLoadingHistoryRef = useRef(false);
+  const prependCountRef = useRef(0);
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
@@ -207,6 +210,48 @@ export function useChartData() {
       }]);
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<boolean> => {
+    if (isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return false;
+    isLoadingHistoryRef.current = true;
+    try {
+      const oldest = ohlcvDataRef.current[0];
+      if (!oldest || !oldest.timestamp) {
+        hasMoreHistoryRef.current = false;
+        return false;
+      }
+      const end = oldest.timestamp - 1;
+      const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000&end=${end}`);
+      if (!response.ok) return false;
+      const json = await response.json();
+      if (!json.data || json.data.length === 0) {
+        hasMoreHistoryRef.current = false;
+        return false;
+      }
+      const olderBars: CandlestickData[] = json.data.map((bar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }) => ({
+        time: Math.floor(bar.timestamp / 1000),
+        open: bar.open,
+        high: bar.high,
+        low: bar.low,
+        close: bar.close,
+        volume: bar.volume,
+      })).filter((d: CandlestickData) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
+      olderBars.sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
+      if (json.hasMore === false) {
+        hasMoreHistoryRef.current = false;
+      }
+      const addedCount = olderBars.length;
+      if (addedCount === 0) return false;
+      prependCountRef.current += addedCount;
+      ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
+      setCandles((prev) => [...olderBars, ...prev]);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      isLoadingHistoryRef.current = false;
     }
   }, []);
 
@@ -394,7 +439,10 @@ export function useChartData() {
     isLoading,
     executeScript,
     fetchOHLCV,
+    fetchOlderOHLCV,
     subscribe,
     setErrors,
+    lastCodeRef,
+    prependCountRef,
   };
 }
