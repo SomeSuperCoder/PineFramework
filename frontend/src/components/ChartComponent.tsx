@@ -105,7 +105,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       chart.timeScale().scrollTo(Math.floor((vs.start + vs.end) / 2) + added);
       if (codeRef.current.current) {
         const version = ++executeVersionRef.current;
-        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>).then(() => {
+        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>).then(() => {
           if (version === executeVersionRef.current) {
             isLoadingHistoryRef.current = false;
           }
