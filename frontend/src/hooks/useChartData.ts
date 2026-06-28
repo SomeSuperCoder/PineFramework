@@ -181,7 +181,6 @@ export function useChartData() {
   const prependCountRef = useRef(0);
   const cachedPlotDataRef = useRef<Map<string, Array<{ time: number; value: number | null; color?: string }>>>(new Map());
   const cachedTimestampsRef = useRef<Set<number>>(new Set());
-  const pendingCandlesRef = useRef<CandlestickData[]>([]);
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
@@ -247,7 +246,7 @@ export function useChartData() {
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
-      pendingCandlesRef.current = olderBars;
+      setCandles((prev) => [...olderBars, ...prev]);
       return addedCount;
     } catch {
       return 0;
@@ -452,12 +451,6 @@ export function useChartData() {
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;
       setScriptResult(scriptRes);
-
-      if (pendingCandlesRef.current.length > 0) {
-        const pending = pendingCandlesRef.current;
-        pendingCandlesRef.current = [];
-        setCandles((prev) => [...pending, ...prev]);
-      }
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({

@@ -28,6 +28,11 @@ export class Viewport {
     this.totalBars = count;
   }
 
+  adjustForPrepend(added: number): void {
+    this.totalBars += added;
+    this.state.firstBarIndex += added;
+  }
+
   fitContent(chartWidth: number): void {
     if (this.totalBars === 0) return;
     this.state.barSpacing = Math.max(this.minBarSpacing, Math.min(this.maxBarSpacing, chartWidth / this.totalBars));

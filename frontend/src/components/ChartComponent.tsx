@@ -48,7 +48,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   }, []);
 
   const isLoadingHistoryRef = useRef(false);
-  const pendingPrependRef = useRef(0);
   const executeVersionRef = useRef(0);
   const fetchRef = useRef(fetchOlderOHLCV);
   fetchRef.current = fetchOlderOHLCV;
@@ -74,12 +73,9 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       const iv = intervalRef.current;
       try {
         const added = await fetchRef.current(sy, iv);
-        if (added > 0) {
-          pendingPrependRef.current = added;
-          if (codeRef.current.current) {
-            const version = ++executeVersionRef.current;
-            await execRef.current(codeRef.current.current, sy, iv, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version);
-          }
+        if (added > 0 && codeRef.current.current) {
+          const version = ++executeVersionRef.current;
+          await execRef.current(codeRef.current.current, sy, iv, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version);
         }
       } finally {
         if (!isLoadingHistoryRef.current) return;
@@ -102,12 +98,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
     chart.setCandles(validData);
 
-    if (pendingPrependRef.current > 0) {
-      const added = pendingPrependRef.current;
-      pendingPrependRef.current = 0;
-      const vs = chart.timeScale().getVisibleRange();
-      chart.timeScale().scrollTo(Math.floor((vs.start + vs.end) / 2) + added);
-    } else if (shouldFitRef.current) {
+    if (shouldFitRef.current) {
       chart.timeScale().scrollTo(validData.length - 1);
       shouldFitRef.current = false;
     }

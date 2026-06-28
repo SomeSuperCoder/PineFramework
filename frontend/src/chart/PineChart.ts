@@ -405,8 +405,14 @@ export class PineChart {
   }
 
   setCandles(data: CandlestickData[]): void {
+    const wasPrepended = data.length > this.candles.length && this.candles.length > 0 && data[0]?.time < this.candles[0]?.time;
+    const added = data.length - this.candles.length;
     this.candles = data;
-    this.viewport.setTotalBars(data.length);
+    if (wasPrepended) {
+      this.viewport.adjustForPrepend(added);
+    } else {
+      this.viewport.setTotalBars(data.length);
+    }
     this.markDirty();
   }
 
