@@ -66,9 +66,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
 │    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
 │                                                                             │
 │  Layer 8: Backend & Integration                                             │
-│    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐             │
-│    │ API Srv  │→│WS Gateway│→│ Bybit Adapter│→│ Data Cache   │             │
-│    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘             │
+│    ┌──────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────┐│
+│    │ API Srv  │→│WS Gateway│→│ Bybit Adapter│→│ Data Cache   │→│Telegram  ││
+│    └──────────┘ └──────────┘ └──────────────┘ └──────────────┘ │ Bot      ││
+│                                                                  └──────────┘│
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -426,10 +427,20 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Condition evaluation on each bar
   - Message formatting with template syntax
   - Duplicate prevention with configurable windows
-  - Multiple output destinations (email, webhook, popup, etc.)
+  - Multiple output destinations (email, webhook, popup, Telegram, etc.)
   - Alert logging and auditing
   - Display alertcondition() in indicator settings UI
   - Alert markers rendered on chart at trigger bar
+- **Telegram Integration (Telegraf Bot)**:
+  - Uses the **Telegraf** library (v4+, 9.2k GitHub stars, Bot API v7.1 compatible) as the Telegram Bot API framework
+  - Bot runs as a long-lived service colocated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
+  - On alert trigger, formats message with alert text, script name, symbol, timeframe, timestamp and dispatches via `ctx.telegram.sendMessage()`
+  - Supports MarkdownV2-formatted alert messages via `ctx.replyWithMarkdownV2()` with embedded OHLCV, indicator values, and plot references
+  - Supports sending chart screenshots with alerts via `ctx.telegram.sendPhoto()` using the canvas as a `Buffer`
+  - Command system via `bot.command()`: `/start`, `/help`, `/subscribe`, `/unsubscribe` with persistent subscription storage
+  - Middleware pipeline via `bot.use()` for logging, rate-limiting, and authorization checks
+  - Webhook mode support for production: attaches to the existing Express server via `bot.createWebhook()` for shared port usage
+  - Graceful error handling for Telegram API failures (rate limits, network, Bot API errors)
 
 #### 13. Input and Configuration System
 - **Responsibility**: Handle user inputs and script configuration
@@ -541,6 +552,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Script Executor**: Invokes `pine-framework` engine for compilation and execution
   - **Session Manager**: Persists execution engine instances per WebSocket client for incremental real-time bar updates
   - **Data Cache**: In-memory LRU cache for recent OHLCV data
+  - **Telegram Bot (Telegraf)**: Long-running Telegraf bot service for alert delivery, user subscriptions, command handling, and chart screenshot broadcasting
 - **API Endpoints**:
   - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000&end=<timestamp>` - Historical kline data (optional `end` param for lazy loading)
    - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers, lines, labels, bgcolor, per-bar colors, barTimestamps); accepts optional `offset` param for incremental results
@@ -590,6 +602,39 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Implements engine's `DataSource` interface for `request.security()` integration
   - Handles data gap detection and backfill
   - Symbol and interval subscription management
+
+#### 19. Telegram Bot Integration
+- **Responsibility**: Send script alert notifications to a Telegram user via a Telegram Bot
+- **Architecture**:
+  ```
+  Backend (Alert System) → Telegram Bot (HTTP API) → Telegram User
+  ```
+- **Configuration Storage**: Telegram Bot Token and Telegram Username stored in Database
+- **Key Features**:
+  - Sends Telegram messages when `alert()` or `alertcondition()` triggers during chart rendering
+  - Messages formatted with alert text, script name, symbol, timeframe, and timestamp
+  - Per-alert enable/disable toggle stored in Database — each alert condition has a `telegramEnabled` flag
+  - Disabled alerts still fire locally (chart markers, logs) but skip Telegram notification
+  - Configuration UI provided in the Frontend to set/update Telegram credentials
+  - Configuration UI provides per-alert toggle controls for Telegram selection
+  - Graceful error handling: retries on rate limit (429), logs failures, never blocks script execution
+  - Uses `telegraf` or raw fetch-based HTTP client to call Telegram Bot API (`sendMessage`)
+  - Database layer provides CRUD operations for Telegram config and per-alert preferences
+
+#### 20. Database Layer
+- **Responsibility**: Provide persistent storage for application configuration and user preferences
+- **Data Stores**: SQLite (development) / PostgreSQL (production)
+- **Tables**:
+  - `telegram_config`: stores `bot_token`, `chat_id/username`, `enabled`
+  - `alert_preferences`: stores `alert_id`, `script_name`, `telegram_enabled`
+  - `user_settings`: general user preferences (extensible)
+- **Key Features**:
+  - Database client integrated into the Backend service
+  - CRUD API exposed via REST endpoints: `GET/PUT /api/settings/telegram`, `GET/PUT /api/settings/alerts/:id/telegram`
+  - Migrations managed via simple migration scripts
+  - Connection pooling for production use
+  - Prepared statements to prevent injection
+  - Synchronous read/write for init-time config loading; async for runtime updates
 
 ### Data Flow
 
@@ -863,7 +908,10 @@ interface RendererPlugin {
 │    - Efficient for millions of candles                      │
 │                                                             │
 │  Layer 3: Persistent Storage                                │
-│    - SQLite for metadata                                    │
+│    - Database for configuration & metadata (SQLite/PostgreSQL)│
+│      - Telegram Bot Token and Telegram Username              │
+│      - Per-alert Telegram notification preferences           │
+│      - User settings and script configurations               │
 │    - Parquet files for time series data                     │
 │    - Compression for storage efficiency                     │
 │                                                             │

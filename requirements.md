@@ -403,6 +403,18 @@ This specification defines requirements for building a Pine Script v6 compatible
 15. THE Alert_System SHALL render alert condition names in the indicator's alert settings panel
 16. THE Alert_System SHALL support multiple alertcondition() calls per script, each with a unique title
 
+**Telegram Bot Notifications (Telegraf):**
+17. THE Alert_System SHALL deliver alert messages to Telegram users via a bot powered by the Telegraf library (v4+, Bot API v7.1 compatible)
+18. THE Telegram_Bot SHALL use Telegraf's `Telegraf` class for long-polling or webhook-based update delivery
+19. WHEN a Pine Script alert condition triggers, THE Telegram_Bot SHALL format the alert message and send it to configured Telegram chat IDs via `ctx.telegram.sendMessage()`
+20. THE Telegram_Bot SHALL support sending rich alert messages including MarkdownV2-formatted text with OHLCV values, indicator values, and plot references using Telegraf's `replyWithMarkdownV2()`
+21. THE Telegram_Bot SHALL support sending chart screenshots with alert messages via `ctx.telegram.sendPhoto()` with the current chart canvas as a buffer
+22. THE Telegram_Bot SHALL provide a `/start` and `/help` command handler via `bot.command()` for user onboarding and available command listing
+23. THE Telegram_Bot SHALL support a `/subscribe` command to register a chat for automatic alert delivery, storing subscriptions in persistent storage
+24. THE Telegram_Bot SHALL support a `/unsubscribe` command to remove a chat from the alert delivery list
+25. THE Telegram_Bot SHALL run as a long-running service integrated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
+26. THE Telegram_Bot SHALL integrate Telegraf's middleware system (`bot.use()`) for logging, rate-limiting, and authorization checks before command execution
+
 ### Requirement 15: Color System and Formatting
 
 **User Story:** As a Pine Script developer, I want to use Pine's color system, so that I can create visually appealing indicators.
@@ -851,3 +863,32 @@ This specification defines requirements for building a Pine Script v6 compatible
 61. `POST /api/backtest` SHALL accept `{ script, symbol, timeframe, start_date, end_date, initial_capital, commission_type, commission_value, slippage, pyramiding, bar_magnifier, inputs }` and return `{ job_id }`
 62. `GET /api/backtest/{job_id}` SHALL return `{ status (running/completed/failed), progress (0-100), result_url }`
 63. `GET /api/backtest/{job_id}/result` SHALL return `{ metrics, equity_curve, trades, orders }`
+
+### Requirement 23: Telegram Notification System and Persistent Storage
+
+**User Story:** As a trader, I want to receive Telegram bot notifications when script alerts fire on the chart, and I want to choose which alerts trigger notifications, so that I stay informed of trading opportunities without being overwhelmed.
+
+#### Acceptance Criteria
+
+**Telegram Bot Integration:**
+
+1. WHEN a script alert is triggered during chart rendering, THE Telegram_System SHALL send a notification message to the configured Telegram user via a Telegram Bot
+2. THE Telegram_System SHALL format alert messages with alert message text, script name, symbol, timeframe, and timestamp
+3. THE Telegram_System SHALL support sending notifications for both `alert()` and `alertcondition()` trigger events
+4. THE Telegram_System SHALL handle Telegram API errors gracefully (rate limits, network failures) without disrupting chart rendering or script execution
+5. THE Telegram_System SHALL provide a configuration UI to set the Telegram Bot Token and Telegram Username
+
+**Alert Selection:**
+
+6. THE Telegram_System SHALL allow users to enable/disable Telegram notifications per individual alert condition (per `alertcondition()` title or `alert()` call site)
+7. THE Telegram_System SHALL display a toggle control for each alert in the indicator settings UI to select which alerts are sent to Telegram
+8. BY DEFAULT, all alerts SHALL have Telegram notifications enabled
+9. WHEN an alert is disabled from Telegram, THE Telegram_System SHALL still evaluate and fire the alert locally (display on chart) but SHALL NOT send the Telegram notification
+
+**Persistent Storage:**
+
+10. THE Database SHALL be introduced to store persistent configuration data
+11. THE Database SHALL store the Telegram Bot Token and Telegram Username securely
+12. THE Database SHALL store per-alert Telegram notification preferences (which alerts are enabled/disabled for Telegram)
+13. THE Database SHALL persist data across application restarts
+14. THE Database SHALL support read and write operations from both the Backend and the Frontend configuration UI
