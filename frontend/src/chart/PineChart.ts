@@ -410,6 +410,16 @@ export class PineChart {
     this.candles = data;
     if (wasPrepended) {
       this.viewport.adjustForPrepend(added);
+      for (const [, handle] of this.plotSeries) {
+        if (handle.data.length < data.length) {
+          const padCount = data.length - handle.data.length;
+          const padding: PlotSeriesData[] = [];
+          for (let i = 0; i < padCount; i++) {
+            padding.push({ time: data[i].time, value: null });
+          }
+          handle.data = [...padding, ...handle.data];
+        }
+      }
     } else {
       this.viewport.setTotalBars(data.length);
     }
