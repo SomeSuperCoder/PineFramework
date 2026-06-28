@@ -933,7 +933,7 @@ export class ExecutionEngine {
         this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
         return false;
       }
-      const result = prev.src < prev.cmp && (source as number) > (compare as number);
+      const result = prev.src <= prev.cmp && (source as number) > (compare as number);
       prev.src = source as number;
       prev.cmp = compare as number;
       return result;
@@ -947,7 +947,7 @@ export class ExecutionEngine {
         this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
         return false;
       }
-      const result = prev.src > prev.cmp && (source as number) < (compare as number);
+      const result = prev.src >= prev.cmp && (source as number) < (compare as number);
       prev.src = source as number;
       prev.cmp = compare as number;
       return result;
@@ -1722,6 +1722,15 @@ export class ExecutionEngine {
     const left = this.executeExpression(expr.left, scope, context);
     const right = this.executeExpression(expr.right, scope, context);
 
+    // In Pine Script, and/or treat na as false (not propagating na).
+    // These must be evaluated BEFORE the na-propagation check.
+    if (expr.operator === 'and') {
+      return pineTruthy(left) && pineTruthy(right);
+    }
+    if (expr.operator === 'or') {
+      return pineTruthy(left) || pineTruthy(right);
+    }
+
     if (isNa(left) || isNa(right)) {
       return NA;
     }
@@ -1756,10 +1765,6 @@ export class ExecutionEngine {
         return (left as number) <= (right as number);
       case '>=':
         return (left as number) >= (right as number);
-      case 'and':
-        return pineTruthy(left) && pineTruthy(right);
-      case 'or':
-        return pineTruthy(left) || pineTruthy(right);
       default:
         throw new Error(`Unsupported binary operator: ${expr.operator}`);
     }
