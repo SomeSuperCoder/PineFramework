@@ -178,7 +178,6 @@ export function useChartData() {
   const lastCodeRef = useRef<string | null>(null);
   const ohlcvDataRef = useRef<Array<{ timestamp: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
-  const isLoadingHistoryRef = useRef(false);
   const prependCountRef = useRef(0);
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
@@ -214,8 +213,7 @@ export function useChartData() {
   }, []);
 
   const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<boolean> => {
-    if (isLoadingHistoryRef.current || !hasMoreHistoryRef.current) return false;
-    isLoadingHistoryRef.current = true;
+    if (!hasMoreHistoryRef.current) return false;
     try {
       const oldest = ohlcvDataRef.current[0];
       if (!oldest || !oldest.timestamp) {
@@ -250,8 +248,6 @@ export function useChartData() {
       return true;
     } catch {
       return false;
-    } finally {
-      isLoadingHistoryRef.current = false;
     }
   }, []);
 
@@ -317,13 +313,16 @@ export function useChartData() {
                 newCandles[newCandles.length - 1] = candle;
               } else {
                 newCandles.push(candle);
-                if (newCandles.length > 1000) newCandles.shift();
               }
               return newCandles;
             });
             if (k.timestamp) {
-              const ohlcvBar = { timestamp: k.timestamp };
-              ohlcvDataRef.current = [...ohlcvDataRef.current.slice(-999), ohlcvBar];
+              const lastOhlcv = ohlcvDataRef.current[ohlcvDataRef.current.length - 1];
+              if (lastOhlcv && lastOhlcv.timestamp === k.timestamp) {
+                ohlcvDataRef.current[ohlcvDataRef.current.length - 1] = { timestamp: k.timestamp };
+              } else {
+                ohlcvDataRef.current = [...ohlcvDataRef.current, { timestamp: k.timestamp }];
+              }
             }
           } else if (data.type === 'execution_result' && data.data) {
             handleExecutionResult(data.data);

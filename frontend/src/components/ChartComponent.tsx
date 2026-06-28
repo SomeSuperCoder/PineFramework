@@ -49,6 +49,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
   const isLoadingHistoryRef = useRef(false);
   const pendingPrependRef = useRef(0);
+  const executeVersionRef = useRef(0);
   const fetchRef = useRef(fetchOlderOHLCV);
   fetchRef.current = fetchOlderOHLCV;
   const execRef = useRef(executeScript);
@@ -76,7 +77,10 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       fetchRef.current(sy, iv).then((added) => {
         if (added) {
           pendingPrependRef.current = prependRef.current.current;
+        } else {
+          isLoadingHistoryRef.current = false;
         }
+      }).catch(() => {
         isLoadingHistoryRef.current = false;
       });
     };
@@ -98,9 +102,20 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       const added = pendingPrependRef.current;
       pendingPrependRef.current = 0;
       const vs = chart.timeScale().getVisibleRange();
-      chart.timeScale().scrollTo(vs.end + added - 1);
+      chart.timeScale().scrollTo(Math.floor((vs.start + vs.end) / 2) + added);
       if (codeRef.current.current) {
-        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>);
+        const version = ++executeVersionRef.current;
+        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>).then(() => {
+          if (version === executeVersionRef.current) {
+            isLoadingHistoryRef.current = false;
+          }
+        }).catch(() => {
+          if (version === executeVersionRef.current) {
+            isLoadingHistoryRef.current = false;
+          }
+        });
+      } else {
+        isLoadingHistoryRef.current = false;
       }
     } else if (shouldFitRef.current && validData.length > 10) {
       chart.timeScale().scrollTo(validData.length - 1);
@@ -108,8 +123,11 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }
   }, [data]);
 
+  const prevScriptResultRef = useRef<ScriptResult | null>(null);
   useEffect(() => {
     if (!chartRef.current || !scriptResult) return;
+    if (scriptResult === prevScriptResultRef.current) return;
+    prevScriptResultRef.current = scriptResult;
     const chart = chartRef.current;
 
     for (const name of seriesNamesRef.current) {
@@ -224,7 +242,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
     chart.setBgColors(bgColorsMap);
-  }, [scriptResult, data]);
+  }, [scriptResult]);
 
   return (
     <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
