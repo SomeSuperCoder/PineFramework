@@ -41,6 +41,7 @@ function App() {
     setErrors,
     lastCodeRef,
     prependCountRef,
+    ohlcvDataRef,
   } = useChartData();
 
   const prevTfRef = useRef(timeframe);
@@ -112,6 +113,7 @@ function App() {
           executeScript={executeScript}
           lastCodeRef={lastCodeRef}
           prependCountRef={prependCountRef}
+          ohlcvDataRef={ohlcvDataRef}
         />
       </main>
 

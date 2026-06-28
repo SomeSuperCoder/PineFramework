@@ -373,19 +373,24 @@ export function useChartData() {
     };
   }, [connectWebSocket]);
 
-  const executeScript = useCallback(async (code: string, symbol: string, interval: string) => {
+  const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>) => {
     setErrors([]);
     lastCodeRef.current = code;
     try {
-      const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
-      if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
-      const ohlcvJson = await ohlcvResponse.json();
-      ohlcvDataRef.current = ohlcvJson.data;
+      let barsToExecute = existingBars;
+      if (!barsToExecute) {
+        const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
+        if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
+        const ohlcvJson = await ohlcvResponse.json();
+        ohlcvDataRef.current = ohlcvJson.data;
+        barsToExecute = ohlcvJson.data as typeof barsToExecute;
+      }
+      if (!barsToExecute) throw new Error('No bars available for execution');
 
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: code, bars: ohlcvJson.data }),
+        body: JSON.stringify({ source: code, bars: barsToExecute }),
       });
 
       if (!response.ok) {
@@ -408,7 +413,7 @@ export function useChartData() {
         result.shapes || [],
         result.fills || [],
         result.strategyMarkers || [],
-        ohlcvJson.data,
+        barsToExecute,
         result.bgcolor,
         result.plotColors,
         result.fillColorData,
@@ -420,7 +425,7 @@ export function useChartData() {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
-          data: { source: code, symbol, interval, bars: ohlcvJson.data },
+          data: { source: code, symbol, interval, bars: barsToExecute },
         }));
       }
     } catch (error) {
@@ -444,5 +449,6 @@ export function useChartData() {
     setErrors,
     lastCodeRef,
     prependCountRef,
+    ohlcvDataRef,
   };
 }

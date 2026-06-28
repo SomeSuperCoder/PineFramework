@@ -10,12 +10,13 @@ interface ChartComponentProps {
   symbol: string;
   interval: string;
   fetchOlderOHLCV: (symbol: string, interval: string) => Promise<boolean>;
-  executeScript: (code: string, symbol: string, interval: string) => Promise<void>;
+  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>) => Promise<void>;
   lastCodeRef: React.MutableRefObject<string | null>;
   prependCountRef: React.MutableRefObject<number>;
+  ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number }>>;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, prependCountRef }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, prependCountRef, ohlcvDataRef }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -60,6 +61,8 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   symbolRef.current = symbol;
   const intervalRef = useRef(interval);
   intervalRef.current = interval;
+  const ohlcvRef = useRef(ohlcvDataRef);
+  ohlcvRef.current = ohlcvDataRef;
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -97,7 +100,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       const vs = chart.timeScale().getVisibleRange();
       chart.timeScale().scrollTo(vs.end + added - 1);
       if (codeRef.current.current) {
-        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current);
+        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>);
       }
     } else if (shouldFitRef.current && validData.length > 10) {
       chart.timeScale().scrollTo(validData.length - 1);
