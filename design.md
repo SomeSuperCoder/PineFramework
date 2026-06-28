@@ -519,7 +519,9 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Renders per-bar fill color overlays on top of base fill areas
   - Lazy loads historical OHLCV data when scrolling backwards: fetches older bars via Backend `end` timestamp param, prepends to chart data
   - Maintains scroll position when prepending data — viewport adjusts automatically, no visual jump
-  - Batches candle and indicator updates into a single React render cycle during lazy load to prevent flicker
+   - Batches candle and indicator updates into a single React render cycle during lazy load to prevent flicker
+   - Uses engine-generated `barTimestamps` (when available) for time-alignment of plot data in `buildScriptResult()`, falling back to `ohlcvData` timestamps — making plots self-describing regardless of `ohlcvDataRef` divergence during lazy loading
+   - Validates output lengths against both `barTimestamps.length` and `ohlcvData.length` (with ±1 tolerance for kline timing) in `handleExecutionResult()`, rejecting stale WS session results whose output count covers fewer bars than the frontend has, preventing indicator misalignment on newer candles
 - **Strategy Results Popup Details**:
   - Position: fixed, centered, ~90vw × ~90vh, dark theme matching the existing UI
   - Sections:
@@ -541,7 +543,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Data Cache**: In-memory LRU cache for recent OHLCV data
 - **API Endpoints**:
   - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000&end=<timestamp>` - Historical kline data (optional `end` param for lazy loading)
-  - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers, lines, labels, bgcolor, per-bar colors); accepts optional `offset` param for incremental results
+   - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers, lines, labels, bgcolor, per-bar colors, barTimestamps); accepts optional `offset` param for incremental results
   - `GET /api/symbols` - List available trading symbols
   - `GET /api/status` - Server and connection status
 - **WebSocket Protocol**:
@@ -551,7 +553,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Client sends: `{ type: "execute", data: { source: "…" } }` — register a Pine Script for persistent execution
   - Server sends: `{ type: "connected", data: { connectionId } }`
   - Server sends: `{ type: "error", data: { message, code } }`
-  - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, plotColors, fillColors, barIndex } }` — updated script results after each new kline
+   - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, plotColors, fillColors, barTimestamps, barIndex } }` — updated script results after each new kline
 - **Key Features**:
   - Manages Bybit API connections (REST + WebSocket)
   - Relays realtime market data to connected frontend clients
@@ -565,9 +567,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Includes `comment` field in each strategy marker entry returned from POST /api/execute
   - Handles non-JSON server responses gracefully
   - Validates WebSocket kline data before forwarding to clients
-  - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
+   - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
+   - Invalidates the previous ScriptSession before creating a new one on WS execute, preventing stale sessions from emitting outdated execution_result messages
   - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `executeRealtimeBar()` on the persisted engine
-  - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, and per-bar colors
+   - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, per-bar colors, and barTimestamps
   - Accepts `offset` parameter in POST /api/execute to return only outputs for newly added bars during lazy loading
   - Accepts `end` timestamp parameter in GET /api/ohlcv for fetching historical bars before a given time point
   - Includes bgcolor data, per-bar plot colors, per-bar fill colors, line objects (DrawingLineData), and label objects (LabelData) in execution responses

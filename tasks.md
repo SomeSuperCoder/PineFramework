@@ -1714,6 +1714,30 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify 849+ tests pass across all suites
   - Ask the user if questions arise.
 
+- [x] 69. Fix Indicator Alignment After Lazy Loading (BarTimestamps + Stale Session Guards)
+  - [x] 69.1 Add barTimestamps to ScriptOutputs in engine and backend
+    - Add `barTimestamps?: number[]` field to `ScriptOutputs` interface in `ScriptSession.ts`
+    - Return `barTimestamps` from `toOutputs()` method
+    - Include `barTimestamps` in REST `/api/execute` response
+    - Include `barTimestamps` in WebSocket `execution_result` messages
+    - _Requirements: 17.41, 19.18_
+  
+  - [x] 69.2 Use barTimestamps for plot alignment in frontend buildScriptResult
+    - Accept optional `barTimestamps` parameter in `buildScriptResult()`
+    - Add `getTimestamp(i)` that reads from `barTimestamps` first, falls back to `ohlcvData[i]?.timestamp`
+    - Pass `barTimestamps` through REST and WebSocket result paths
+    - _Requirements: 17.42_
+  
+  - [x] 69.3 Validate output lengths in handleExecutionResult
+    - Check `outputLen === barTimestamps.length` when barTimestamps present
+    - Add guard `Math.abs(outputLen - ohlcvData.length) > 1` to reject stale WS sessions that are self-consistent but cover fewer bars than the frontend has
+    - _Requirements: 17.43_
+  
+  - [x] 69.4 Invalidate old session on WS re-execute
+    - Set `sub.session = null` before creating new ScriptSession on WS execute command
+    - Prevent stale sessions from pushing kline-driven results with outdated bar counts
+    - _Requirements: 17.44_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -1730,6 +1754,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Requirements 6 and 7 comprehensively specify all plotting and drawing function parameters for canvas implementation
 - Tasks 47-58 implement the full backtest engine: broker simulator (47), backtest orchestrator (48), performance metrics calculator (49), backtest REST API (50), backtest visualization (51), configuration panel (52), data source integration (53), and comprehensive tests (54-57)
 - Tasks 59-68 implement post-backtest enhancements: switch expressions (59), generic array methods and line/label dispatch (60), lines/labels full frontend pipeline (61), per-bar colors (62), TA semantics fixes and missing builtins (63), lazy loading (64), TrendCraft compatibility (65), plot style/bgcolor/strategy tests (66), backend/frontend integration fixes (67), and final validation (68)
+- Task 69 fixes indicator alignment after lazy loading by adding barTimestamps to the execution pipeline, validating output lengths in handleExecutionResult, and guarding against stale WebSocket sessions
 
 ## Task Dependency Graph
 
@@ -1823,7 +1848,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 84, "tasks": ["65.1", "65.2", "65.3"] },
     { "id": 85, "tasks": ["66.1", "66.2", "66.3"] },
     { "id": 86, "tasks": ["67.1", "67.2", "67.3", "67.4"] },
-    { "id": 87, "tasks": ["68"] }
+    { "id": 87, "tasks": ["68"] },
+    { "id": 88, "tasks": ["69.1", "69.2", "69.3", "69.4"] }
   ]
 }
 ```

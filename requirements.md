@@ -483,11 +483,17 @@ This specification defines requirements for building a Pine Script v6 compatible
 39. THE Frontend SHALL batch candle data and indicator updates into a single React render cycle to prevent visual flicker during lazy loading
 40. THE Frontend SHALL automatically re-execute the active Pine Script when the symbol or timeframe changes, ensuring indicators compute against the correct bar set
 
+**Indicator Alignment and Stale Session Guards:**
+41. THE Backend SHALL include `barTimestamps` (a number array of timestamps parallel to the output arrays) in both REST `/api/execute` and WebSocket `execution_result` responses, so the frontend can time-align plots independently of `ohlcvDataRef`
+42. THE Frontend SHALL use `barTimestamps` from the execution response when constructing plot data, falling back to `ohlcvData` timestamps only when `barTimestamps` is unavailable — making plot data self-describing regardless of `ohlcvDataRef` divergence
+43. THE Frontend SHALL validate output array length against both `barTimestamps.length` (when present) and `ohlcvData.length` (with ±1 tolerance for kline timing) in `handleExecutionResult()`, rejecting stale WebSocket session results whose output count mismatches the frontend's candle count
+44. WHEN a new `execute` command arrives via WebSocket, THE Backend SHALL nullify the old `ScriptSession` before creating a new one, preventing the prior session from continuing to emit kline-driven `execution_result` messages with outdated bar counts
+
 **Lines, Labels, and Per-Bar Rendering:**
-41. THE Frontend SHALL render drawing lines (created via line.new()) on the canvas chart at correct bar index and price level positions with configurable color, width, style, and extend modes
-42. THE Frontend SHALL render labels (created via label.new()) on the canvas chart as styled rectangular boxes with configurable background color, text, border, and position
-43. THE Frontend SHALL render per-bar plot colors for line, stepline, histogram, and columns styles when the script supplies per-bar color data
-44. THE Frontend SHALL render per-bar fill color overlays on top of the base fill polygon when the script supplies per-bar fill color data
+45. THE Frontend SHALL render drawing lines (created via line.new()) on the canvas chart at correct bar index and price level positions with configurable color, width, style, and extend modes
+46. THE Frontend SHALL render labels (created via label.new()) on the canvas chart as styled rectangular boxes with configurable background color, text, border, and position
+47. THE Frontend SHALL render per-bar plot colors for line, stepline, histogram, and columns styles when the script supplies per-bar color data
+48. THE Frontend SHALL render per-bar fill color overlays on top of the base fill polygon when the script supplies per-bar fill color data
 
 ### Requirement 18: Monorepo Project Structure
 
