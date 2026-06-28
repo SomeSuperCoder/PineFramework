@@ -1497,6 +1497,223 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run 1M-bar performance test under 10 seconds
   - Ask the user if questions arise.
 
+- [x] 59. Implement Switch Expression Support
+  - [x] 59.1 Add switch expression parsing to Parser
+    - Parse `switch` keyword with local block scoping
+    - Support arrow syntax (=>) for mapping expressions
+    - Support conditional branching with multiple cases
+    - _Requirements: 1.10_
+  
+  - [x] 59.2 Add switch expression compilation
+    - Type-check switch branches and unify result types
+    - Compile to executable AST nodes
+    - _Requirements: 1.10_
+  
+  - [x] 59.3 Implement switch expression runtime execution
+    - Execute switch with full conditional branching
+    - Maintain local block scope for each branch
+    - Propagate branch result as expression value
+    - _Requirements: 3.18_
+  
+  - [x] 59.4 Fix switch expression edge cases
+    - Handle column check at end of switch block
+    - Support => arrow tokenizer and `=>` syntax
+    - Fix grouped condition paren special-casing
+    - _Requirements: 1.10, 3.18_
+
+- [x] 60. Implement Generic Array Methods and Line/Label Method Dispatch
+  - [x] 60.1 Add generic array operations to execution engine
+    - Implement array.size, array.first, array.last, array.shift, array.pop
+    - Implement array.push, array.unshift, array.insert, array.remove
+    - Implement array.contains, array.fill, array.set, array.get, array.sort, array.copy
+    - _Requirements: 2.8, 3.22_
+  
+  - [x] 60.2 Add method dispatch on numeric IDs for line/label objects
+    - Implement line.delete, line.get_x1/y1/x2/y2, line.get_price
+    - Implement line.set_color/style/width, line.set_extend/xloc
+    - Implement label.delete, label.get_x/y/text
+    - Implement label.set_x/y/xy, label.set_text/color/textcolor/size/style/tooltip
+    - Enable chained operations (lin.shift().delete(), line.get_x2(lin.first()))
+    - _Requirements: 2.9, 3.23_
+
+- [x] 61. Implement Lines/Labels Full Frontend Pipeline
+  - [x] 61.1 Add LineEntry/LabelEntry to Engine execution result
+    - Return line and label data as part of ExecutionResult
+    - Include lines/labels in snapshot/rollback state
+    - Handle NaLiteral callee (na() function) on IDs
+    - _Requirements: 3.22, 7.60_
+  
+  - [x] 61.2 Serialize lines and labels in Backend responses
+    - Map LineEntry to DrawingLineData (bar_index→timestamp via barTimestamps)
+    - Map LabelEntry to LabelData for frontend
+    - Include in both REST and WebSocket responses
+    - _Requirements: 19.25, 17.41_
+  
+  - [x] 61.3 Render drawing lines and labels in Frontend PineChart
+    - Add setDrawingLines() and setLabels() methods to PineChart API
+    - Render drawing lines as solid/dotted/dashed line segments with extend modes
+    - Render labels as rounded rectangle boxes with text, all label styles
+    - Add findBarIndex helper for coordinate mapping
+    - _Requirements: 17.41, 17.42, 21.49, 21.50, 21.51, 21.52_
+
+- [x] 62. Implement Per-Bar Plot and Fill Colors
+  - [x] 62.1 Store per-bar plot colors in execution engine
+    - Store per-bar color arrays separately from output keys
+    - plot() builtin produces single continuous series (no per-color split)
+    - Forward per-bar colors through API and backend
+    - _Requirements: 6.35, 6.36_
+  
+  - [x] 62.2 Store per-bar fill colors (fillColorData)
+    - Fill builtin creates one entry per unique from/to pair
+    - Store per-bar fill color data alongside fill entries
+    - _Requirements: 6.36_
+  
+  - [x] 62.3 Render per-bar plot colors on canvas
+    - LineRenderer: use per-point color for line, stepline, histogram, columns
+    - Pass per-bar color data in PlotSeriesData for canvas rendering
+    - _Requirements: 21.29, 21.30_
+  
+  - [x] 62.4 Render per-bar fill colors on canvas
+    - AreaRenderer: draw per-segment quads using per-bar colors
+    - Preserve full-range base polygon as fallback, overlay per-bar segments
+    - Fix fillColorData key mismatch (strip __lw/__style metadata for key matching)
+    - Remove double globalAlpha reduction on fill segments
+    - Fix fill.__plot_ref off-by-one in slice
+    - _Requirements: 21.41, 21.42, 6.37_
+
+- [x] 63. Fix TA Function Semantics and Add Missing Builtins
+  - [x] 63.1 Fix and/or NA propagation
+    - Treat na as false in AND/OR operators instead of propagating na
+    - Fix nPl1/nPh1 initialization tracking for swing points
+    - _Requirements: 3.20_
+  
+  - [x] 63.2 Fix strict comparisons for crossover/crossunder/pivot
+    - ta.crossover: use <= on prev bar (was <)
+    - ta.crossunder: use >= on prev bar (was >)
+    - ta.pivothigh: use > (was >=)
+    - ta.pivotlow: use < (was <=)
+    - _Requirements: 3.21, 4.9, 4.10_
+  
+  - [x] 63.3 Fix ta.sma/ta.ema per-call-site buffer isolation
+    - Add per-call-site counters (smaCallIndex, emaCallIndex)
+    - Reset counters each bar
+    - Each call site gets its own buffer/state
+    - _Requirements: 4.12_
+  
+  - [x] 63.4 Implement ta.sar with correct algorithm
+    - 2-bar initialization: UP if close > prevClose, else DOWN
+    - Track EP (extreme point) and AF (acceleration factor)
+    - Handle prev-two-bar clamping and prevEp tracking on reversal
+    - Correct EP/AF update order matching TradingView
+    - _Requirements: 4.11_
+  
+  - [x] 63.5 Add syminfo namespace and missing builtins
+    - Implement syminfo.tickerid, syminfo.mintick, syminfo.pointvalue
+    - Implement syminfo.pricescale, syminfo.currency
+    - Add array.new_line/float/int type inference
+    - Add input.timeframe, input.source builtins
+    - Add ta.pivothigh/low, na(), request.security builtins
+    - Add barmerge, xloc, line, label namespace member constants
+    - _Requirements: 3.19_
+
+- [x] 64. Implement Lazy Loading of Historical Data
+  - [x] 64.1 Extend Backend /api/ohlcv with end timestamp param
+    - Accept optional `end` parameter for fetching bars before a given time
+    - Enable lazy loading of older historical data
+    - _Requirements: 19.26_
+  
+  - [x] 64.2 Add fetchOlderOHLCV to Frontend data hook
+    - Fetch 1000 bars before the oldest loaded bar timestamp
+    - Return actual bar count for scroll offset calculation
+    - Prepend fetched bars to candle data in ohlcvDataRef
+    - _Requirements: 17.36, 17.37_
+  
+  - [x] 64.3 Implement viewport auto-adjust on prepend
+    - Viewport.adjustForPrepend(added): shift totalBars and firstBarIndex
+    - PineChart.setCandles: detect prepend by timestamp comparison
+    - Call adjustForPrepend instead of setTotalBars — no manual scrollTo
+    - _Requirements: 21.77_
+  
+  - [x] 64.4 Add backend offset parameter for lazy loading
+    - POST /api/execute accepts `offset` to return only new bar outputs
+    - Engine processes all bars internally but transmits only delta
+    - Frontend caches per-title plot data and prepends new results
+    - _Requirements: 19.22_
+  
+  - [x] 64.5 Implement batch rendering for lazy loading
+    - PineChart: beginUpdate/endUpdate batching for single-frame updates
+    - Frontend: batch setCandles + setScriptResult into single React render
+    - Re-execute script after fetching older data so indicators warm up correctly
+    - _Requirements: 17.39, 21.78_
+
+- [x] 65. Fix TrendCraft ICT SwiftEdge Compatibility
+  - [x] 65.1 Fix parser edge cases for complex indicator
+    - Fix parsePostfix line boundary check
+    - Fix function expression detection (require Arrow/LParen on same line)
+    - Remove if-statement paren special-casing for grouped conditions
+    - _Requirements: 1.1_
+  
+  - [x] 65.2 Fix array.new_<type>() type inference
+    - Return array<elementType> instead of generic type
+    - Fix NaLiteral → NA_TYPE (was ANY_TYPE)
+    - _Requirements: 1.11_
+  
+  - [x] 65.3 Wire barsToContexts with full OHLCV history
+    - Pass bars.slice(0, i + 1) for each OHLCV series
+    - TA functions have access to historical data, not just current bar
+    - _Requirements: 3.1_
+
+- [x] 66. Fix Plot Style and Rendering Enhancements
+  - [x] 66.1 Add plot style parameter support
+    - Plot builtin accepts and forwards style parameter
+    - Frontend renders circles, cross, histogram styles correctly
+    - _Requirements: 6.34_
+  
+  - [x] 66.2 Fix bgcolor passthrough
+    - Forward bgcolor data through WebSocket and HTTP responses
+    - Background colors render on chart from script output
+    - _Requirements: 6.37, 19.23_
+  
+  - [x] 66.3 Add strategy integration tests
+    - Create 338-line strategy integration test suite
+    - Test market order fill deferral, position reversal, marker generation
+    - _Requirements: 11.9_
+
+- [x] 67. Fix Backend and Frontend Integration Issues
+  - [x] 67.1 Wire backtest REST API to actual Pine Script execution
+    - Replace no-op with real compilation + bar-by-bar execution
+    - Extract trades/metrics from StrategyEngine
+    - _Requirements: 8.11_
+  
+  - [x] 67.2 Fix backtest settings propagation
+    - Accept strategyConfigOverride in ExecutionEngine constructor
+    - Forward config from frontend settings to engine
+    - _Requirements: 8.9_
+  
+  - [x] 67.3 Fix timeframe switch stale data issues
+    - Filter WS klines by subscribed topic during switches
+    - Auto re-execute script on symbol/interval change
+    - _Requirements: 17.40_
+  
+  - [x] 67.4 Fix backtest defaults and error propagation
+    - Change default qty to 20% of equity (percent_of_equity)
+    - Show backtest error details in frontend
+    - Validate script kind (indicator vs strategy) in backtest route
+    - _Requirements: 8.11_
+
+- [x] 68. Checkpoint - Full System Validation
+  - Verify switch expressions compile and execute correctly
+  - Verify array methods and line/label dispatch work
+  - Verify lines/labels render correctly on canvas chart
+  - Verify per-bar colors render correctly on line and fill plots
+  - Verify lazy loading loads older bars without scroll jump
+  - Verify plot style parameter renders circles, cross, histogram correctly
+  - Verify ta.sar, ta.sma, ta.ema produce correct results
+  - Verify bgcolor renders on chart from script output
+  - Verify TrendCraft ICT SwiftEdge indicator executes without errors
+  - Verify 849+ tests pass across all suites
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -1512,6 +1729,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 22.1 wires all drawing/alert builtins (label.*, line.*, box.*, polyline.*, linefill.*, table.*, chart.point.*, alert) into the execution engine
 - Requirements 6 and 7 comprehensively specify all plotting and drawing function parameters for canvas implementation
 - Tasks 47-58 implement the full backtest engine: broker simulator (47), backtest orchestrator (48), performance metrics calculator (49), backtest REST API (50), backtest visualization (51), configuration panel (52), data source integration (53), and comprehensive tests (54-57)
+- Tasks 59-68 implement post-backtest enhancements: switch expressions (59), generic array methods and line/label dispatch (60), lines/labels full frontend pipeline (61), per-bar colors (62), TA semantics fixes and missing builtins (63), lazy loading (64), TrendCraft compatibility (65), plot style/bgcolor/strategy tests (66), backend/frontend integration fixes (67), and final validation (68)
 
 ## Task Dependency Graph
 
@@ -1593,7 +1811,19 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 72, "tasks": ["52.1", "52.2", "52.3"] },
     { "id": 73, "tasks": ["53.1", "53.2", "53.3"] },
     { "id": 74, "tasks": ["54", "55", "56", "57"] },
-    { "id": 75, "tasks": ["58"] }
+    { "id": 75, "tasks": ["58"] },
+    { "id": 76, "tasks": ["59.1", "59.2"] },
+    { "id": 77, "tasks": ["59.3", "59.4"] },
+    { "id": 78, "tasks": ["60.1", "60.2"] },
+    { "id": 79, "tasks": ["61.1", "61.2", "61.3"] },
+    { "id": 80, "tasks": ["62.1", "62.2", "62.3", "62.4"] },
+    { "id": 81, "tasks": ["63.1", "63.2", "63.3", "63.4", "63.5"] },
+    { "id": 82, "tasks": ["64.1", "64.2"] },
+    { "id": 83, "tasks": ["64.3", "64.4", "64.5"] },
+    { "id": 84, "tasks": ["65.1", "65.2", "65.3"] },
+    { "id": 85, "tasks": ["66.1", "66.2", "66.3"] },
+    { "id": 86, "tasks": ["67.1", "67.2", "67.3", "67.4"] },
+    { "id": 87, "tasks": ["68"] }
   ]
 }
 ```

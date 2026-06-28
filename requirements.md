@@ -38,6 +38,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 7. FOR ALL valid Pine Script programs, parsing then compilation SHALL produce an executable representation
 8. THE Parser SHALL support named arguments in function calls (identified by `identifier = expression`, `colorType = expression`, or `stringType = expression`)
 9. THE Parser SHALL support color, shape, location, strategy, indicator, and library token types as valid identifiers in member expressions
+10. THE Parser SHALL support switch expressions with all Pine v6 semantics including local block scoping, arrow syntax (=>), and conditional branching
+11. THE Parser SHALL support type-inferred array declarations (array.new_<type>() returning array<elementType>)
 
 ### Requirement 2: Pine Type System
 
@@ -52,6 +54,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 5. THE Type_System SHALL support Pine's array and map data structures
 6. THE Type_System SHALL implement Pine's na (not available) value semantics
 7. THE Type_System SHALL support user-defined types via type aliases
+8. THE Type_System SHALL support generic array operations (size, first, last, shift, pop, push, unshift, insert, remove, contains, fill, set, get, sort, copy)
+9. THE Type_System SHALL support method dispatch on numeric IDs for line and label objects enabling chained operations (e.g., lin.shift().delete(), line.get_x2(lin.first()))
 
 ### Requirement 3: Execution Engine
 
@@ -76,6 +80,12 @@ This specification defines requirements for building a Pine Script v6 compatible
 15. THE Execution_Engine SHALL support incremental real-time bar execution via executeRealtimeBar() that processes a single new bar while preserving prior execution state
 16. THE Execution_Engine SHALL maintain execution state snapshots across real-time bar updates to enable rollback on errors
 17. WHEN a new bar is processed via executeRealtimeBar(), THE Execution_Engine SHALL return updated outputs (plots, shapes, fills, strategyMarkers) reflecting the current bar state
+18. THE Execution_Engine SHALL execute switch expressions with full conditional branching and local block scoping
+19. THE Execution_Engine SHALL support the syminfo namespace (tickerid, mintick, pointvalue, pricescale, currency) as built-in read-only variables
+20. THE Execution_Engine SHALL treat logical AND/OR with na operands as false (Pine Script boolean semantics) instead of propagating na
+21. THE Execution_Engine SHALL implement strict comparisons for ta.crossover (prev src <= prev cmp) and ta.crossunder (prev src >= prev cmp) and strict inequality for ta.pivothigh (>) and ta.pivotlow (<) to match TradingView semantics
+22. THE Execution_Engine SHALL return line and label entries (LineEntry, LabelEntry) as part of the execution result alongside shapes, fills, and strategyMarkers
+23. THE Execution_Engine SHALL dispatch line.* and label.* method calls on numeric IDs returned by line.new() and label.new(), supporting delete, get_*, and set_* methods via method dispatch
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -93,6 +103,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 8. THE TA_Engine SHALL implement ta.ema() using the exponential moving average formula (prev * (1-k) + source * k) with proper initialization
 9. THE TA_Engine SHALL implement ta.crossover() with internal state tracking to detect when source crosses above compare
 10. THE TA_Engine SHALL implement ta.crossunder() with internal state tracking to detect when source crosses below compare
+11. THE TA_Engine SHALL implement ta.sar() with correct 2-bar initialization, parabolic SAR EP/AF tracking, and reversal logic matching TradingView
+12. THE TA_Engine SHALL use per-call-site state isolation for ta.sma() and ta.ema() so multiple calls with different source series (e.g., ta.sma(high, 20) and ta.sma(low, 20)) do not share internal buffers
 
 ### Requirement 5: Multi-Symbol and Multi-Timeframe Data Access
 
@@ -163,6 +175,10 @@ This specification defines requirements for building a Pine Script v6 compatible
 31. WHEN fill(plot1, plot2, color, title, editable, fillgaps) is called, THE Plot_Engine SHALL render a filled area between two plot series or hlines
 32. THE Plot_Engine SHALL support the fillgaps parameter to control whether gaps in data are filled or skipped
 33. THE Plot_Engine SHALL render fills as semi-transparent polygons with the specified color
+34. THE Plot_Engine SHALL support the style parameter on plot() to render circles, cross, histogram, columns, stepline, and areabr visual styles
+35. THE Plot_Engine SHALL maintain each plot as a single continuous series even when color varies per bar (no splitting into per-color variant series)
+36. THE Plot_Engine SHALL support per-bar plot colors and per-bar fill colors, storing them as separate color data arrays alongside output values for fine-grained visual rendering
+37. THE Plot_Engine SHALL pass bgcolor data through the execution result pipeline for chart background rendering
 
 ### Requirement 7: Drawing Objects
 
@@ -244,6 +260,10 @@ This specification defines requirements for building a Pine Script v6 compatible
 57. THE Drawing_Engine SHALL support all extend modes (none, left, right, both)
 58. THE Drawing_Engine SHALL render all drawing objects on the canvas at the correct bar index and price level positions
 59. THE Drawing_Engine SHALL update drawing object positions when the chart is zoomed or panned
+60. THE Drawing_Engine SHALL wire line.new() and label.new() through the full execution pipeline: engine creates LineEntry/LabelEntry data returned in execution result, backend serializes and forwards it, frontend renders drawing lines and labels on the canvas chart at correct bar index and price level positions
+61. THE Drawing_Engine SHALL support na() function calls on drawing object IDs (returns true if the object handle is na)
+62. THE Drawing_Engine SHALL render drawing lines on the canvas as solid, dotted, or dashed line segments between coordinate points with configurable color, width, and extend modes
+63. THE Drawing_Engine SHALL render labels on the canvas as styled rectangular boxes with rounded corners, background color, border, and configurable text properties at the specified bar index and price level
 
 ### Requirement 8: Strategy Execution
 
@@ -456,6 +476,19 @@ This specification defines requirements for building a Pine Script v6 compatible
 34. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
 35. THE Strategy Results popup SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
 
+**Lazy Loading and Re-Execution:**
+36. THE Frontend SHALL support lazy loading of historical OHLCV data when scrolling the chart backwards, fetching older bars on demand from the Backend via an `end` timestamp parameter
+37. WHEN the user scrolls near the start of loaded data (less than 50 bars remaining), THE Frontend SHALL automatically fetch the next batch of older bars and prepend them to the chart
+38. THE Frontend SHALL maintain scroll position when prepending historical data by adjusting the viewport offset, preventing visual scroll jump or teleportation
+39. THE Frontend SHALL batch candle data and indicator updates into a single React render cycle to prevent visual flicker during lazy loading
+40. THE Frontend SHALL automatically re-execute the active Pine Script when the symbol or timeframe changes, ensuring indicators compute against the correct bar set
+
+**Lines, Labels, and Per-Bar Rendering:**
+41. THE Frontend SHALL render drawing lines (created via line.new()) on the canvas chart at correct bar index and price level positions with configurable color, width, style, and extend modes
+42. THE Frontend SHALL render labels (created via label.new()) on the canvas chart as styled rectangular boxes with configurable background color, text, border, and position
+43. THE Frontend SHALL render per-bar plot colors for line, stepline, histogram, and columns styles when the script supplies per-bar color data
+44. THE Frontend SHALL render per-bar fill color overlays on top of the base fill polygon when the script supplies per-bar fill color data
+
 ### Requirement 18: Monorepo Project Structure
 
 **User Story:** As a developer, I want a unified monorepo managed by pnpm workspaces, so that the engine, frontend, and backend are developed and built from a single repository with shared dependencies.
@@ -502,6 +535,11 @@ This specification defines requirements for building a Pine Script v6 compatible
 19. WHEN a new kline arrives via the Bybit WebSocket, THE Backend SHALL automatically re-execute the active script's execution engine with the updated bar data using incremental mode
 20. THE Backend SHALL push updated execution results (plots, shapes, fills, strategyMarkers) to the corresponding WebSocket client as a new message type `execution_result`
 21. THE Backend SHALL support WebSocket message type `execution_result` containing the full updated script outputs so the frontend can refresh indicator overlays without re-fetching
+22. THE Backend SHALL accept an `offset` parameter in POST /api/execute to return only output for newly added bars, reducing payload size during lazy loading while the engine still processes all bars internally for state continuity
+23. THE Backend SHALL include bgcolor data in POST /api/execute and WebSocket execution_result responses
+24. THE Backend SHALL include per-bar plot color data and per-bar fill color data in execution responses for fine-grained canvas rendering
+25. THE Backend SHALL include line objects (LineEntry mapped to DrawingLineData) and label objects (LabelData) in execution responses for canvas rendering
+26. THE Backend SHALL extend GET /api/ohlcv to accept an `end` timestamp parameter for fetching bars older than a given time point (lazy loading)
 
 ### Requirement 20: Bybit Exchange Integration
 
@@ -569,6 +607,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 27. THE Chart_Library SHALL render circle plots as small filled circles at each data point
 28. THE Chart_Library SHALL render cross plots as small cross marks (+) at each data point
 29. THE Chart_Library SHALL filter null values, breaking the line at gaps rather than connecting through nulls
+30. THE Chart_Library SHALL render per-bar plot colors for line, stepline, histogram, and columns styles when supplied as per-point color data alongside the value array
 
 **Shape Marker Rendering:**
 
@@ -586,6 +625,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 38. THE Chart_Library SHALL compute the fill polygon by connecting the upper line forward and the lower line backward, forming a closed path
 39. THE Chart_Library SHALL apply configurable fill color with alpha transparency to the polygon
 40. THE Chart_Library SHALL clip fill polygons to the visible chart area to prevent rendering outside bounds
+41. THE Chart_Library SHALL draw per-bar fill color overlay segments on top of the base fill polygon when per-bar color data is supplied, enabling fine-grained color control across bars
+42. THE Chart_Library SHALL not apply additional globalAlpha reduction beyond the color's own alpha channel to prevent fill segments from becoming invisible
 
 **Strategy Marker Rendering:**
 
@@ -601,92 +642,104 @@ This specification defines requirements for building a Pine Script v6 compatible
 47. THE Chart_Library SHALL support line styles: solid, dotted, dashed
 48. THE Chart_Library SHALL render hlines on a layer above candlesticks but below plot lines
 
+**Drawing Line and Label Rendering:**
+
+49. THE Chart_Library SHALL render drawing lines (line.new objects) as line segments between coordinate points with configurable color, width (1-4px), and style (solid, dotted, dashed)
+50. THE Chart_Library SHALL support extend modes for drawing lines (none, left, right, both) extending the line beyond endpoint coordinates
+51. THE Chart_Library SHALL render labels (label.new objects) as rounded rectangular boxes with configurable background color, text color, border, font size, and text alignment
+52. THE Chart_Library SHALL support all label styles (label_up, label_down, label_left, label_right, label_center, square, diamond, circle, cross) with correct visual rendering
+
 **Crosshair:**
 
-49. THE Chart_Library SHALL render a crosshair cursor following the mouse position with a vertical line through the hovered bar and a horizontal line at the hovered price
-50. THE Chart_Library SHALL display a data window tooltip showing OHLCV values and indicator values for the hovered bar
-51. THE Chart_Library SHALL snap the vertical crosshair line to the nearest bar center
-52. THE Chart_Library SHALL render price and time labels on the axes at the crosshair position
+53. THE Chart_Library SHALL render a crosshair cursor following the mouse position with a vertical line through the hovered bar and a horizontal line at the hovered price
+54. THE Chart_Library SHALL display a data window tooltip showing OHLCV values and indicator values for the hovered bar
+55. THE Chart_Library SHALL snap the vertical crosshair line to the nearest bar center
+56. THE Chart_Library SHALL render price and time labels on the axes at the crosshair position
 
 **Grid:**
 
-53. THE Chart_Library SHALL render a grid of horizontal lines at price scale tick intervals
-54. THE Chart_Library SHALL render a grid of vertical lines at time scale major tick intervals
-55. THE Chart_Library SHALL use subtle, low-opacity colors for grid lines (e.g., #2a2a4e)
+57. THE Chart_Library SHALL render a grid of horizontal lines at price scale tick intervals
+58. THE Chart_Library SHALL render a grid of vertical lines at time scale major tick intervals
+59. THE Chart_Library SHALL use subtle, low-opacity colors for grid lines (e.g., #2a2a4e)
 
 **Interaction — Zoom and Pan:**
 
-56. THE Chart_Library SHALL support horizontal zoom via mouse scroll wheel, adjusting the bar spacing (pixels per bar) centered on the cursor position
-57. THE Chart_Library SHALL support horizontal zoom via pinch gesture on touch devices
-58. THE Chart_Library SHALL support horizontal panning via click-and-drag on the chart area
-59. THE Chart_Library SHALL support vertical zoom/pan on the price scale via mouse drag on the price scale area
-60. THE Chart_Library SHALL implement momentum-based inertial scrolling for smooth pan deceleration
-61. THE Chart_Library SHALL enforce minimum and maximum bar spacing limits (e.g., 2px to 100px per bar)
+60. THE Chart_Library SHALL support horizontal zoom via mouse scroll wheel, adjusting the bar spacing (pixels per bar) centered on the cursor position
+61. THE Chart_Library SHALL support horizontal zoom via pinch gesture on touch devices
+62. THE Chart_Library SHALL support horizontal panning via click-and-drag on the chart area
+63. THE Chart_Library SHALL support vertical zoom/pan on the price scale via mouse drag on the price scale area
+64. THE Chart_Library SHALL implement momentum-based inertial scrolling for smooth pan deceleration
+65. THE Chart_Library SHALL enforce minimum and maximum bar spacing limits (e.g., 2px to 100px per bar)
 
 **Viewport Management:**
 
-62. THE Chart_Library SHALL maintain a viewport state tracking the visible range (first visible bar index, bar count)
-63. THE Chart_Library SHALL only render bars that fall within the visible viewport plus a small overscan buffer on each side
-64. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
-65. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
-66. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
-67. THE Chart_Library SHALL maintain a price range with two modes: auto (computed from visible candles and plots) and manual (set by user interaction)
-68. THE Chart_Library SHALL support vertical zoom on the price scale via mouse scroll wheel while holding Shift, adjusting the visible price range centered on the cursor
-69. THE Chart_Library SHALL support vertical pan and zoom on the price scale via mouse drag on the price scale area, adjusting the visible price range
-70. THE Chart_Library SHALL reset to auto price range and fit content on double-click, restoring automatic price range computation
-71. THE Chart_Library SHALL filter non-finite and near-zero plot values when computing the auto price range to prevent chart distortion
-72. THE Chart_Library SHALL clamp the auto price range to at most 10 times the candle price range to prevent excessive vertical scaling when plot values far exceed candle prices
+66. THE Chart_Library SHALL maintain a viewport state tracking the visible range (first visible bar index, bar count)
+67. THE Chart_Library SHALL only render bars that fall within the visible viewport plus a small overscan buffer on each side
+68. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
+69. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
+70. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
+71. THE Chart_Library SHALL maintain a price range with two modes: auto (computed from visible candles and plots) and manual (set by user interaction)
+72. THE Chart_Library SHALL support vertical zoom on the price scale via mouse scroll wheel while holding Shift, adjusting the visible price range centered on the cursor
+73. THE Chart_Library SHALL support vertical pan and zoom on the price scale via mouse drag on the price scale area, adjusting the visible price range
+74. THE Chart_Library SHALL reset to auto price range and fit content on double-click, restoring automatic price range computation
+75. THE Chart_Library SHALL filter non-finite and near-zero plot values when computing the auto price range to prevent chart distortion
+76. THE Chart_Library SHALL clamp the auto price range to at most 10 times the candle price range to prevent excessive vertical scaling when plot values far exceed candle prices
+77. THE Chart_Library SHALL support prepending bars to the data set with automatic viewport adjustment (adjustForPrepend) to prevent scroll position jump when older bars are loaded
+78. THE Chart_Library SHALL provide beginUpdate/endUpdate batch update API to defer rendering until multiple indicator updates are complete, ensuring all visual elements update in a single frame
 
 **Performance:**
 
-73. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
-74. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
-75. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
-76. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
-77. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
+79. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
+80. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
+81. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
+82. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
+83. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
 
 **Resize and Responsiveness:**
 
-78. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
-79. THE Chart_Library SHALL support configurable chart padding and margins
-80. THE Chart_Library SHALL automatically adjust layout when the container size changes
+84. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
+85. THE Chart_Library SHALL support configurable chart padding and margins
+86. THE Chart_Library SHALL automatically adjust layout when the container size changes
 
 **Data Binding:**
 
-81. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
-82. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
-83. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
-84. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
-85. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
-86. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
-87. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+87. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
+88. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
+89. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
+90. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
+91. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
+92. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
+93. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
+94. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+95. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
 
 **API Design:**
 
-88. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
-89. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
-90. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
-91. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
-92. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
-93. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
-94. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
-95. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
-96. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
-97. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
-98. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
-99. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
-100. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
+96. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+97. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+98. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+99. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+100. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+101. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+102. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+103. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
+104. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+105. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+106. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+107. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+108. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+109. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
 
 **Styling and Theming:**
 
-101. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
-102. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
-103. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
+110. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
+111. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+112. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
 
 **Frontend Requirements:**
 
-104. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
-105. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
+113. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
+114. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
 
 ### Requirement 22: Strategy Backtest Engine
 

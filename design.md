@@ -88,7 +88,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Input**: Pine Script v6 source code string
 - **Output**: Abstract Syntax Tree (AST)
 - **Key Features**:
-  - Handles all Pine Script v6 language constructs
+  - Handles all Pine Script v6 language constructs including switch expressions, arrow syntax (=>), and type-inferred array.new_<type>() declarations
   - Version detection (`//@version=6`)
   - Syntax error reporting with line/column information
   - Supports all Pine script types: indicator, strategy, library
@@ -98,7 +98,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Input**: AST from Parser
 - **Output**: Compiled script with type-checked IR (Intermediate Representation)
 - **Key Features**:
-  - Type checking and validation
+  - Type checking and validation including switch expression branch type unification and array.new_<type>() type inference
   - Scope resolution
   - Variable declaration validation
   - Constant folding optimization
@@ -114,8 +114,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Key Features**:
   - Automatic type coercion following Pine rules
   - Series type semantics
-  - `na` (not available) value handling
-  - Type inference
+  - `na` (not available) value handling; logical AND/OR treats na as false (Pine Script boolean semantics)
+  - Type inference for array.new_<type>() returning array<elementType>
+  - Generic array operations: size, first, last, shift, pop, push, unshift, insert, remove, contains, fill, set, get, sort, copy
+  - Method dispatch on numeric IDs for line and label objects enabling chained operations
 
 #### 4. Execution Engine
 - **Responsibility**: Execute compiled Pine scripts bar-by-bar
@@ -128,7 +130,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Implements Pine's series indexing (`close[1]`, etc.)
   - Variable scope management
   - Error recovery with rollback
-  - Returns shapes (plotshape markers), fills (area between plots), and strategyMarkers as part of execution result
+  - Returns shapes (plotshape markers), fills (area between plots), strategyMarkers, lines (LineEntry), and labels (LabelEntry) as part of execution result
   - Supports named arguments forwarding to built-in functions
   - Auto-detects plot titles from variable names when no explicit title is provided
   - Maintains var/varip variable state across bars without resetting on re-declaration
@@ -138,6 +140,14 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Incremental real-time bar execution via `executeRealtimeBar()` which processes a single new bar while preserving prior state
   - State snapshot management for rollback: `createSnapshot()` saves engine state before real-time updates, `rollbackToSnapshot()` restores on error
   - The engine instance is kept alive across real-time updates so that var/varip, series indices, and strategy positions persist between bars
+  - Executes switch expressions with full conditional branching and local block scoping
+  - Supports syminfo namespace as built-in read-only variables (tickerid, mintick, pointvalue, pricescale, currency)
+  - Implements strict comparisons matching Pine Script: ta.crossover uses <= on prev bar, ta.crossunder uses >=, ta.pivothigh uses strict >, ta.pivotlow uses strict <
+  - Generic array method execution: size, push, pop, shift, unshift, insert, remove, contains, fill, set, get, sort, copy
+  - Method dispatch system for line.* and label.* calls on numeric object IDs returned by line.new() and label.new()
+  - Per-bar color storage: plot color data and fill color data stored as separate arrays alongside output values
+  - plot() builtin outputs a single continuous series key regardless of per-bar color variation (no splitting into per-color variants)
+  - bgcolor data forwarded through execution result pipeline
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -156,7 +166,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Function Categories**:
   - Moving averages: `sma`, `ema`, `wma`, etc.
   - Oscillators: `rsi`, `macd`, `stoch`, etc.
-  - Indicators: `bb`, `atr`, `adx`, etc.
+  - Indicators: `bb`, `atr`, `adx`, `sar`, etc.
   - Mathematical: `highest`, `lowest`, `correlation`, etc.
   - Crossover/Crossunder: `ta.crossover`, `ta.crossunder` with proper state tracking
 - **Key Features**:
@@ -167,6 +177,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Real ta.sma() using circular buffer with configurable lookback, returning NA until sufficient data
   - Real ta.ema() using exponential moving average formula (prev * (1-k) + source * k)
   - ta.crossover() and ta.crossunder() with internal state tracking for proper detection
+  - ta.sar() with correct 2-bar initialization (UP/DOWN detection from close vs prevClose), EP/AF tracking, and reversal logic
+  - Per-call-site state isolation for ta.sma() and ta.ema() via call-site counters so multiple calls with different sources do not share internal buffers
 
 #### 7. Request System
 - **Responsibility**: Handle multi-symbol and multi-timeframe data access
@@ -193,7 +205,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Style support (color, linewidth, transparency, offset, editable, show_last, display)
   - Z-ordering for overlapping plots
   - Visual fidelity matching TradingView
-  - Support for all plot.style_* enums
+  - Support for all plot.style_* enums (line, stepline, histogram, columns, area, areabr, circles, cross)
   - Support for size enums (tiny, small, normal, large, huge, auto)
   - Support for location enums (abovebar, belowbar, top, bottom, absolute)
   - Support for all Pine plot parameters
@@ -201,6 +213,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Named arguments support for all plot functions
   - Null value filtering before rendering
   - Color, shape, and location namespace syntax support
+  - plot() style parameter support for circles, cross, histogram, columns, stepline, and areabr visual styles
+  - Per-bar plot colors and per-bar fill colors stored as separate color data arrays alongside output values for fine-grained rendering
+  - Single continuous plot series key regardless of per-bar color variation (no splitting into per-color variant series)
+  - bgcolor data forwarded through the full execution result pipeline (API, Websocket, frontend)
 
 #### 9. Drawing Engine
 - **Responsibility**: Render drawing objects on charts
@@ -262,22 +278,22 @@ Key insights from Pine Script v6 and TradingView architecture research:
   ```
   PineChart (main orchestrator)
   ├── CoordinateSystem (data-space ↔ pixel-space transforms)
-  ├── Viewport (visible range, zoom, pan state)
+  ├── Viewport (visible range, zoom, pan state; adjustForPrepend for scroll-preserving prepend)
   ├── LayoutManager (chart area, volume area, price scale, time scale regions)
   ├── Renderers
   │   ├── CandlestickRenderer (OHLCV bodies + wicks)
   │   ├── VolumeRenderer (volume histogram bars)
-  │   ├── LineRenderer (line, stepline, dotted, dashed styles)
-  │   ├── AreaRenderer (fill between plots)
+  │   ├── LineRenderer (line, stepline, dotted, dashed styles; per-bar color support)
+  │   ├── AreaRenderer (fill between plots; per-bar color overlay on base polygon)
   │   ├── MarkerRenderer (shape markers: arrows, circles, squares, diamonds)
   │   ├── CharRenderer (text characters on bars)
   │   ├── ArrowRenderer (directional arrows for plotarrow)
   │   ├── HLineRenderer (horizontal lines)
   │   ├── BarColorRenderer (bar color overrides)
   │   ├── BackgroundRenderer (background color fills)
-  │   ├── DrawingLineRenderer (drawing lines)
+  │   ├── DrawingLineRenderer (drawing lines from line.new, extend modes)
   │   ├── BoxRenderer (drawing boxes/rectangles)
-  │   ├── LabelRenderer (drawing labels with text)
+  │   ├── LabelRenderer (drawing labels with text, all label styles)
   │   ├── TableRenderer (floating data tables)
   │   ├── PolylineRenderer (multi-point lines)
   │   ├── LineFillRenderer (fill between two lines)
@@ -297,6 +313,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Batched canvas draw calls by style (color, lineWidth) to minimize state changes
   - Path batching for line plots (single beginPath/stroke per style group)
   - Viewport management with overscan buffer (only render visible bars)
+  - Viewport adjustForPrepend(added): shifts totalBars and firstBarIndex when bars are prepended, preserving visible content without scroll jump
+  - beginUpdate/endUpdate batch API to defer rendering until multiple indicator/data updates are complete
   - Configurable bar spacing (pixels per bar) for zoom
   - Automatic price scale tick calculation
   - Multiple price scales (main + volume)
@@ -307,35 +325,40 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Double-click to reset to auto price range and fit content
   - Price range computation filters non-finite and near-zero plot values to prevent chart distortion
   - Price range clamped to at most 10x candle range to prevent excessive scaling when plot values exceed candle prices
+  - Per-bar plot color rendering for line, stepline, histogram, columns styles
+  - Per-bar fill color overlay segments on top of base fill polygon
+  - Drawing line rendering (solid, dotted, dashed, extend modes: none/left/right/both)
+  - Label rendering (rounded boxes, all label styles, configurable text/background/border colors)
   - ResizeObserver for responsive container handling
   - Event system: onCrosshairMove, onVisibleRangeChange, onResize, onPriceRangeChange
 - **API**:
   - `createChart(container, options)` → chart instance
   - `chart.setCandles(data)`, `chart.setVolume(data)`
   - `chart.addPlotSeries(name, options)` → series handle
-  - `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setHLines(hlines)`
+  - `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setLabels(labels)`, `chart.setHLines(hlines)`, `chart.setDrawingLines(drawingLines)`
   - `chart.removeSeries(name)`
   - `chart.timeScale()` → { fitContent(), scrollTo(), scrollToDate() }
   - `chart.applyOptions(options)`, `chart.remove()`
+  - `chart.beginUpdate()`, `chart.endUpdate()` — batch update batching
   - Events: onCrosshairMove, onVisibleRangeChange, onResize, onPriceRangeChange
 - **Rendering Layers** (back to front):
   1. Background (bgcolor)
   2. Grid lines
   3. Volume bars
-  4. Fill areas (polygons between plots)
+  4. Fill areas (base polygon + per-bar color overlay segments)
   5. Candlesticks
   6. Bar color overrides (barcolor)
   7. Horizontal lines (hline)
-  8. Line plots (line, stepline, circles, cross, histogram, columns)
+  8. Line plots (line, stepline, circles, cross, histogram, columns; with per-bar color support)
   9. Area plots (area, areabr)
-  10. Drawing lines (line.new objects)
+  10. Drawing lines (line.new objects, solid/dotted/dashed, extend modes)
   11. Boxes (box.new objects)
   12. Polylines (polyline.new objects)
   13. Linefills (linefill.new objects)
   14. Shape markers (plotshape)
   15. Character markers (plotchar)
   16. Directional arrows (plotarrow)
-  17. Drawing labels (label.new objects)
+  17. Drawing labels (label.new objects, all styles)
   18. Strategy markers (entry/exit/close)
   19. Alert markers (alert trigger points)
   20. Axes (price scale, time scale)
@@ -490,6 +513,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Stores the last submitted script code in memory for automatic re-execution on new candle data
   - Automatically re-executes the script via the backend when new WebSocket kline data arrives
   - Applies updated indicator overlays (plots, shapes, fills, strategy markers) on the canvas chart without user interaction
+  - Automatically re-executes the active script when symbol or timeframe changes
+  - Renders drawing lines from line.new() and labels from label.new() on the canvas
+  - Renders per-bar plot colors for line, stepline, histogram, and columns styles
+  - Renders per-bar fill color overlays on top of base fill areas
+  - Lazy loads historical OHLCV data when scrolling backwards: fetches older bars via Backend `end` timestamp param, prepends to chart data
+  - Maintains scroll position when prepending data — viewport adjusts automatically, no visual jump
+  - Batches candle and indicator updates into a single React render cycle during lazy load to prevent flicker
 - **Strategy Results Popup Details**:
   - Position: fixed, centered, ~90vw × ~90vh, dark theme matching the existing UI
   - Sections:
@@ -510,8 +540,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - **Session Manager**: Persists execution engine instances per WebSocket client for incremental real-time bar updates
   - **Data Cache**: In-memory LRU cache for recent OHLCV data
 - **API Endpoints**:
-  - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000` - Historical kline data
-  - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers)
+  - `GET /api/ohlcv?symbol=BTCUSDT&interval=1m&limit=1000&end=<timestamp>` - Historical kline data (optional `end` param for lazy loading)
+  - `POST /api/execute` - Compile and execute Pine Script code (returns outputs, shapes, fills, strategyMarkers, lines, labels, bgcolor, per-bar colors); accepts optional `offset` param for incremental results
   - `GET /api/symbols` - List available trading symbols
   - `GET /api/status` - Server and connection status
 - **WebSocket Protocol**:
@@ -521,7 +551,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Client sends: `{ type: "execute", data: { source: "…" } }` — register a Pine Script for persistent execution
   - Server sends: `{ type: "connected", data: { connectionId } }`
   - Server sends: `{ type: "error", data: { message, code } }`
-  - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, barIndex } }` — updated script results after each new kline
+  - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, plotColors, fillColors, barIndex } }` — updated script results after each new kline
 - **Key Features**:
   - Manages Bybit API connections (REST + WebSocket)
   - Relays realtime market data to connected frontend clients
@@ -537,7 +567,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Validates WebSocket kline data before forwarding to clients
   - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
   - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `executeRealtimeBar()` on the persisted engine
-  - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, and strategyMarkers
+  - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, and per-bar colors
+  - Accepts `offset` parameter in POST /api/execute to return only outputs for newly added bars during lazy loading
+  - Accepts `end` timestamp parameter in GET /api/ohlcv for fetching historical bars before a given time point
+  - Includes bgcolor data, per-bar plot colors, per-bar fill colors, line objects (DrawingLineData), and label objects (LabelData) in execution responses
 
 #### 18. Bybit Data Adapter
 - **Responsibility**: Integrate with Bybit exchange for real market data
