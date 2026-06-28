@@ -180,6 +180,19 @@ export function useChartData() {
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
 
+  const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
+    const data: CandlestickData[] = bars.map((bar) => ({
+      time: Math.floor(bar.timestamp / 1000),
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume,
+    })).filter((d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
+    data.sort((a, b) => a.time - b.time);
+    return data;
+  }, []);
+
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
     setCandles([]);
@@ -190,17 +203,8 @@ export function useChartData() {
         throw new Error(`Failed to fetch data: ${response.statusText}`);
       }
       const json = await response.json();
-      const data: CandlestickData[] = json.data.map((bar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }) => ({
-        time: Math.floor(bar.timestamp / 1000),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-        volume: bar.volume,
-      })).filter((d: CandlestickData) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
-      data.sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
-      setCandles(data);
       ohlcvDataRef.current = json.data;
+      setCandles(toCandleData(json.data));
     } catch (err) {
       console.error('Failed to fetch OHLCV:', err);
       setErrors((prev) => [...prev, {
@@ -210,7 +214,7 @@ export function useChartData() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [toCandleData]);
 
   const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<number> => {
     if (!hasMoreHistoryRef.current) return 0;
@@ -228,23 +232,13 @@ export function useChartData() {
         hasMoreHistoryRef.current = false;
         return 0;
       }
-      const olderBars: CandlestickData[] = json.data.map((bar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }) => ({
-        time: Math.floor(bar.timestamp / 1000),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-        volume: bar.volume,
-      })).filter((d: CandlestickData) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close));
-      olderBars.sort((a: CandlestickData, b: CandlestickData) => a.time - b.time);
       if (json.hasMore === false) {
         hasMoreHistoryRef.current = false;
       }
-      const addedCount = olderBars.length;
+      const addedCount = json.data.length;
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
-      setCandles((prev) => [...olderBars, ...prev]);
       return addedCount;
     } catch {
       return 0;
@@ -423,6 +417,8 @@ export function useChartData() {
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;
+
+      setCandles(toCandleData(barsToExecute));
       setScriptResult(scriptRes);
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -438,7 +434,7 @@ export function useChartData() {
         message: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }]);
     }
-  }, []);
+  }, [toCandleData]);
 
   return {
     candles,
