@@ -179,6 +179,9 @@ export function useChartData() {
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
+  const cachedPlotDataRef = useRef<Map<string, Array<{ time: number; value: number | null; color?: string }>>>(new Map());
+  const cachedTimestampsRef = useRef<Set<number>>(new Set());
+  const pendingCandlesRef = useRef<CandlestickData[]>([]);
 
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
@@ -212,21 +215,21 @@ export function useChartData() {
     }
   }, []);
 
-  const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<boolean> => {
-    if (!hasMoreHistoryRef.current) return false;
+  const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<number> => {
+    if (!hasMoreHistoryRef.current) return 0;
     try {
       const oldest = ohlcvDataRef.current[0];
       if (!oldest || !oldest.timestamp) {
         hasMoreHistoryRef.current = false;
-        return false;
+        return 0;
       }
       const end = oldest.timestamp - 1;
       const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000&end=${end}`);
-      if (!response.ok) return false;
+      if (!response.ok) return 0;
       const json = await response.json();
       if (!json.data || json.data.length === 0) {
         hasMoreHistoryRef.current = false;
-        return false;
+        return 0;
       }
       const olderBars: CandlestickData[] = json.data.map((bar: { timestamp: number; open: number; high: number; low: number; close: number; volume: number }) => ({
         time: Math.floor(bar.timestamp / 1000),
@@ -241,13 +244,13 @@ export function useChartData() {
         hasMoreHistoryRef.current = false;
       }
       const addedCount = olderBars.length;
-      if (addedCount === 0) return false;
+      if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
-      setCandles((prev) => [...olderBars, ...prev]);
-      return true;
+      pendingCandlesRef.current = olderBars;
+      return addedCount;
     } catch {
-      return false;
+      return 0;
     }
   }, []);
 
@@ -379,6 +382,8 @@ export function useChartData() {
     try {
       let barsToExecute = existingBars;
       if (!barsToExecute) {
+        cachedTimestampsRef.current.clear();
+        cachedPlotDataRef.current.clear();
         const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
         if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
         const ohlcvJson = await ohlcvResponse.json();
@@ -387,10 +392,13 @@ export function useChartData() {
       }
       if (!barsToExecute) throw new Error('No bars available for execution');
 
+      const cachedCount = cachedTimestampsRef.current.size;
+      const offset = barsToExecute.length > cachedCount ? cachedCount : 0;
+
       const response = await fetch('/api/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ source: code, bars: barsToExecute }),
+        body: JSON.stringify({ source: code, bars: barsToExecute, offset }),
       });
 
       if (!response.ok) {
@@ -409,12 +417,15 @@ export function useChartData() {
         return;
       }
 
+      const keepCount = barsToExecute.length - offset;
+      const slicedBars = offset > 0 ? barsToExecute.slice(0, keepCount) : barsToExecute;
+
       const scriptRes = buildScriptResult(
         result.outputs,
         result.shapes || [],
         result.fills || [],
         result.strategyMarkers || [],
-        barsToExecute,
+        slicedBars,
         result.bgcolor,
         result.plotColors,
         result.fillColorData,
@@ -422,8 +433,31 @@ export function useChartData() {
         result.labels,
       );
 
+      if (offset > 0 && cachedPlotDataRef.current.size > 0) {
+        for (const plot of scriptRes.plots) {
+          const cached = cachedPlotDataRef.current.get(plot.title);
+          if (cached) {
+            plot.data = [...plot.data, ...cached];
+          }
+        }
+      }
+
+      cachedPlotDataRef.current.clear();
+      for (const plot of scriptRes.plots) {
+        cachedPlotDataRef.current.set(plot.title, plot.data);
+      }
+      for (const bar of barsToExecute) {
+        cachedTimestampsRef.current.add(Math.floor(bar.timestamp / 1000));
+      }
+
       if (versionRef && version !== undefined && version !== versionRef.current) return;
       setScriptResult(scriptRes);
+
+      if (pendingCandlesRef.current.length > 0) {
+        const pending = pendingCandlesRef.current;
+        pendingCandlesRef.current = [];
+        setCandles((prev) => [...pending, ...prev]);
+      }
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({

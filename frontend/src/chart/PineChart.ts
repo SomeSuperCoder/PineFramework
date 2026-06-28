@@ -45,6 +45,7 @@ export class PineChart {
   private layout: LayoutManager;
   private interaction: InteractionHandler;
   private dirty: boolean = true;
+  private batchCount: number = 0;
   private animFrame: number = 0;
   private resizeObserver: ResizeObserver;
 
@@ -178,7 +179,20 @@ export class PineChart {
   }
 
   private markDirty(): void {
-    this.dirty = true;
+    if (this.batchCount === 0) {
+      this.dirty = true;
+    }
+  }
+
+  beginUpdate(): void {
+    this.batchCount++;
+  }
+
+  endUpdate(): void {
+    this.batchCount = Math.max(0, this.batchCount - 1);
+    if (this.batchCount === 0) {
+      this.markDirty();
+    }
   }
 
   private render(): void {

@@ -14,7 +14,7 @@ export const executeRouter = Router();
 
 executeRouter.post('/execute', async (req, res) => {
   try {
-    const { source, bars } = req.body as { source: string; bars: Bar[] };
+    const { source, bars, offset = 0 } = req.body as { source: string; bars: Bar[]; offset?: number };
 
     if (!source || typeof source !== 'string') {
       res.status(400).json({ error: 'Missing or invalid "source" field' });
@@ -27,24 +27,29 @@ executeRouter.post('/execute', async (req, res) => {
 
     const result = engine.execute(source, bars);
 
+    const keepCount = offset > 0 ? Math.max(0, bars.length - offset) : bars.length;
+
     const outputs: Record<string, (number | string | boolean | null)[]> = {};
     if (result.outputs) {
       for (const [key, series] of result.outputs) {
-        outputs[key] = Array.from(series.values).map(pineValueToJSON);
+        const values = Array.from(series.values).map(pineValueToJSON);
+        outputs[key] = values.slice(0, keepCount);
       }
     }
 
     const plotColors: Record<string, (string | null)[]> = {};
     if (result.plotColors) {
       for (const [key, colors] of result.plotColors) {
-        plotColors[key] = Array.from(colors);
+        const arr = Array.from(colors);
+        plotColors[key] = arr.slice(0, keepCount);
       }
     }
 
     const fillColorData: Record<string, (string | null)[]> = {};
     if (result.fillColorData) {
       for (const [key, colors] of result.fillColorData) {
-        fillColorData[key] = Array.from(colors);
+        const arr = Array.from(colors);
+        fillColorData[key] = arr.slice(0, keepCount);
       }
     }
 

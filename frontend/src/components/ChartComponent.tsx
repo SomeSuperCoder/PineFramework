@@ -9,7 +9,7 @@ interface ChartComponentProps {
   dataVersion: number;
   symbol: string;
   interval: string;
-  fetchOlderOHLCV: (symbol: string, interval: string) => Promise<boolean>;
+  fetchOlderOHLCV: (symbol: string, interval: string) => Promise<number>;
   executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number) => Promise<void>;
   lastCodeRef: React.MutableRefObject<string | null>;
   prependCountRef: React.MutableRefObject<number>;
@@ -56,8 +56,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   execRef.current = executeScript;
   const codeRef = useRef(lastCodeRef);
   codeRef.current = lastCodeRef;
-  const prependRef = useRef(prependCountRef);
-  prependRef.current = prependCountRef;
   const symbolRef = useRef(symbol);
   symbolRef.current = symbol;
   const intervalRef = useRef(interval);
@@ -69,20 +67,24 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     const chart = chartRef.current;
     if (!chart) return;
 
-    const onRangeChange = (start: number) => {
+    const onRangeChange = async (start: number) => {
       if (start > 50 || isLoadingHistoryRef.current) return;
       isLoadingHistoryRef.current = true;
       const sy = symbolRef.current;
       const iv = intervalRef.current;
-      fetchRef.current(sy, iv).then((added) => {
-        if (added) {
-          pendingPrependRef.current = prependRef.current.current;
-        } else {
-          isLoadingHistoryRef.current = false;
+      try {
+        const added = await fetchRef.current(sy, iv);
+        if (added > 0) {
+          pendingPrependRef.current = added;
+          if (codeRef.current.current) {
+            const version = ++executeVersionRef.current;
+            await execRef.current(codeRef.current.current, sy, iv, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version);
+          }
         }
-      }).catch(() => {
+      } finally {
+        if (!isLoadingHistoryRef.current) return;
         isLoadingHistoryRef.current = false;
-      });
+      }
     };
 
     chart.on('onVisibleRangeChange', onRangeChange);
@@ -96,6 +98,8 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       (d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close),
     );
 
+    if (validData.length === 0) return;
+
     chart.setCandles(validData);
 
     if (pendingPrependRef.current > 0) {
@@ -103,21 +107,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       pendingPrependRef.current = 0;
       const vs = chart.timeScale().getVisibleRange();
       chart.timeScale().scrollTo(Math.floor((vs.start + vs.end) / 2) + added);
-      if (codeRef.current.current) {
-        const version = ++executeVersionRef.current;
-        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version).then(() => {
-          if (version === executeVersionRef.current) {
-            isLoadingHistoryRef.current = false;
-          }
-        }).catch(() => {
-          if (version === executeVersionRef.current) {
-            isLoadingHistoryRef.current = false;
-          }
-        });
-      } else {
-        isLoadingHistoryRef.current = false;
-      }
-    } else if (shouldFitRef.current && validData.length > 10) {
+    } else if (shouldFitRef.current) {
       chart.timeScale().scrollTo(validData.length - 1);
       shouldFitRef.current = false;
     }
@@ -129,6 +119,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     if (scriptResult === prevScriptResultRef.current) return;
     prevScriptResultRef.current = scriptResult;
     const chart = chartRef.current;
+    chart.beginUpdate();
 
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
     let colorIndex = 0;
@@ -253,6 +244,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
     chart.setBgColors(bgColorsMap);
+    chart.endUpdate();
   }, [scriptResult]);
 
   return (
