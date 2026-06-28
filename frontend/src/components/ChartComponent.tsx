@@ -10,10 +10,10 @@ interface ChartComponentProps {
   symbol: string;
   interval: string;
   fetchOlderOHLCV: (symbol: string, interval: string) => Promise<boolean>;
-  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>) => Promise<void>;
+  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number) => Promise<void>;
   lastCodeRef: React.MutableRefObject<string | null>;
   prependCountRef: React.MutableRefObject<number>;
-  ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number }>>;
+  ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>;
 }
 
 export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, prependCountRef, ohlcvDataRef }: ChartComponentProps) {
@@ -105,7 +105,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       chart.timeScale().scrollTo(Math.floor((vs.start + vs.end) / 2) + added);
       if (codeRef.current.current) {
         const version = ++executeVersionRef.current;
-        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>).then(() => {
+        execRef.current(codeRef.current.current, symbolRef.current, intervalRef.current, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version).then(() => {
           if (version === executeVersionRef.current) {
             isLoadingHistoryRef.current = false;
           }
@@ -130,32 +130,22 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     prevScriptResultRef.current = scriptResult;
     const chart = chartRef.current;
 
-    for (const name of seriesNamesRef.current) {
-      chart.removeSeries(name);
-    }
-    seriesNamesRef.current.clear();
-
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
     let colorIndex = 0;
+
+    const currentTitles = new Set<string>();
+    const newPlotData: Array<{ title: string; color: string; lineWidth: number; style: any; data: PlotSeriesData[]; tsMap: Map<number, number> }> = [];
 
     const ohlcvMap = new Map<number, CandlestickData>();
     for (const c of data) {
       ohlcvMap.set(c.time, c);
     }
 
-    const plotKeyToTimeMap = new Map<string, Map<number, number>>();
-
     for (const plot of scriptResult.plots) {
       let title = plot.title || `Plot ${colorIndex + 1}`;
       let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
       colorIndex++;
-
-      chart.addPlotSeries(title, {
-        color: plotColor,
-        lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-        style: plot.type as any || 'line',
-      });
-      seriesNamesRef.current.add(title);
+      currentTitles.add(title);
 
       const seriesData: PlotSeriesData[] = [];
       const tsMap = new Map<number, number>();
@@ -169,8 +159,29 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         }
       }
 
-      plotKeyToTimeMap.set(title, tsMap);
-      chart.setPlotData(title, seriesData);
+      newPlotData.push({ title, color: plotColor, lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1, style: (plot.type as any) || 'line', data: seriesData, tsMap });
+    }
+
+    for (const name of seriesNamesRef.current) {
+      if (!currentTitles.has(name)) {
+        chart.removeSeries(name);
+      }
+    }
+    seriesNamesRef.current.clear();
+
+    for (const pd of newPlotData) {
+      chart.addPlotSeries(pd.title, {
+        color: pd.color,
+        lineWidth: pd.lineWidth,
+        style: pd.style,
+      });
+      seriesNamesRef.current.add(pd.title);
+      chart.setPlotData(pd.title, pd.data);
+    }
+
+    const plotKeyToTimeMap = new Map<string, Map<number, number>>();
+    for (const pd of newPlotData) {
+      plotKeyToTimeMap.set(pd.title, pd.tsMap);
     }
 
     const shapeMarkers: ShapeMarkerData[] = (scriptResult.shapes || []).map((s) => {

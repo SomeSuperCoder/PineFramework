@@ -176,7 +176,7 @@ export function useChartData() {
   const wsRef = useRef<WebSocket | null>(null);
   const subscribedTopicRef = useRef<string | null>(null);
   const lastCodeRef = useRef<string | null>(null);
-  const ohlcvDataRef = useRef<Array<{ timestamp: number }>>([]);
+  const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
 
@@ -317,11 +317,12 @@ export function useChartData() {
               return newCandles;
             });
             if (k.timestamp) {
+              const ohlcvBar = { timestamp: k.timestamp, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume };
               const lastOhlcv = ohlcvDataRef.current[ohlcvDataRef.current.length - 1];
               if (lastOhlcv && lastOhlcv.timestamp === k.timestamp) {
-                ohlcvDataRef.current[ohlcvDataRef.current.length - 1] = { timestamp: k.timestamp };
+                ohlcvDataRef.current[ohlcvDataRef.current.length - 1] = ohlcvBar;
               } else {
-                ohlcvDataRef.current = [...ohlcvDataRef.current, { timestamp: k.timestamp }];
+                ohlcvDataRef.current = [...ohlcvDataRef.current, ohlcvBar];
               }
             }
           } else if (data.type === 'execution_result' && data.data) {
@@ -372,7 +373,7 @@ export function useChartData() {
     };
   }, [connectWebSocket]);
 
-  const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>) => {
+  const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number) => {
     setErrors([]);
     lastCodeRef.current = code;
     try {
@@ -400,6 +401,7 @@ export function useChartData() {
       const result: ExecuteResponse = await response.json();
 
       if (!result.success || result.error) {
+        if (versionRef && version !== undefined && version !== versionRef.current) return;
         setErrors([{
           type: 'error',
           message: result.error || 'Execution failed',
@@ -419,6 +421,8 @@ export function useChartData() {
         result.lines,
         result.labels,
       );
+
+      if (versionRef && version !== undefined && version !== versionRef.current) return;
       setScriptResult(scriptRes);
 
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -428,6 +432,7 @@ export function useChartData() {
         }));
       }
     } catch (error) {
+      if (versionRef && version !== undefined && version !== versionRef.current) return;
       setErrors([{
         type: 'error',
         message: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
