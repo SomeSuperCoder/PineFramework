@@ -42,22 +42,30 @@ export class TelegramService {
 
     this.bot.command('start', async (ctx: Context) => {
       await ctx.reply(
-        'Welcome to Pine Framework Bot!\n\n'
-        + 'I will send you alerts from your Pine Script indicators.\n\n'
-        + 'Commands:\n'
-        + '/help - Show available commands\n'
-        + '/subscribe - Subscribe to alert notifications\n'
-        + '/unsubscribe - Unsubscribe from alert notifications',
+        '*Welcome to Pine Framework Bot!* 🚀\n\n'
+        + 'I send you real-time alerts from your Pine Script indicators straight to this chat.\n\n'
+        + '*Getting Started:*\n'
+        + '1. Paste your bot token in the Telegram Config panel on the Pine Framework web app\n'
+        + '2. Run `/subscribe` to register this chat for notifications\n'
+        + '3. Write Pine Script indicators with `alertcondition()` — I\'ll notify you when they fire\n\n'
+        + '*Commands:*\n'
+        + '/subscribe — Receive alert notifications here\n'
+        + '/unsubscribe — Stop receiving alert notifications\n'
+        + '/help — Show this message again',
       );
     });
 
     this.bot.command('help', async (ctx: Context) => {
       await ctx.reply(
-        'Available commands:\n\n'
-        + '/start - Start the bot\n'
-        + '/help - Show this help message\n'
-        + '/subscribe - Subscribe to alert notifications\n'
-        + '/unsubscribe - Unsubscribe from alert notifications',
+        '*Pine Framework Bot — Help*\n\n'
+        + 'I forward `alertcondition()` triggers from your Pine Script indicators to Telegram.\n\n'
+        + '*Commands:*\n'
+        + '/start — Welcome message and setup instructions\n'
+        + '/subscribe — Subscribe to alert notifications\n'
+        + '/unsubscribe — Unsubscribe from alert notifications\n\n'
+        + '*Setup:*\n'
+        + 'Enter your bot token in the Pine Framework web app under Telegram Config, '
+        + 'then run /subscribe to register this chat.',
       );
     });
 
