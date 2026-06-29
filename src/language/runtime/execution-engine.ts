@@ -999,20 +999,24 @@ export class ExecutionEngine {
       return NA;
     });
 
-    this.builtins.set('alertcondition', (condition: PineValue, arg2?: PineValue): PineValue => {
+    this.builtins.set('alertcondition', (...args: PineValue[]): PineValue => {
+      const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
+        ? args[args.length - 1] as Record<string, PineValue>
+        : {};
+      const condition = args[0] ?? NA;
+      const titleVal = namedArgs['title'];
+      const msgVal = namedArgs['message'];
+      const title = typeof titleVal === 'string' ? titleVal : `Alert ${this.alertConditionEntries.length + 1}`;
+      const message = typeof msgVal === 'string' ? msgVal : title;
+      const existing = this.alertConditionEntries.find(e => e.title === title);
+      let id: string;
+      if (existing) {
+        id = existing.id;
+      } else {
+        id = `alert_${this.alertConditionEntries.length + 1}`;
+        this.alertConditionEntries.push({ id, title, message });
+      }
       if (pineTruthy(condition) && this.currentContext) {
-        const id = `alert_${this.alertConditionEntries.length + 1}`;
-        let title = '';
-        let message = '';
-        if (arg2 && typeof arg2 === 'object' && !Array.isArray(arg2)) {
-          const namedMap = arg2 as Map<string, PineValue>;
-          const titleVal = namedMap.get('title');
-          const msgVal = namedMap.get('message');
-          title = typeof titleVal === 'string' ? titleVal : '';
-          message = typeof msgVal === 'string' ? msgVal : (typeof titleVal === 'string' ? titleVal : 'Alert triggered');
-        }
-        const entry: AlertConditionEntry = { id, title: title || `Alert ${this.alertConditionEntries.length + 1}`, message: message || title || 'Alert triggered' };
-        this.alertConditionEntries.push(entry);
         this.alertTriggers.push({ alertId: id, barIndex: this.currentContext.barIndex, timestamp: this.currentContext.timestamp });
       }
       return NA;
@@ -2055,6 +2059,16 @@ export class ExecutionEngine {
       }
       if (objName === 'line' || objName === 'label') {
         return expr.property;
+      }
+      if (objName === 'barstate') {
+        const barstateProps: Record<string, PineValue> = {
+          isfirst: context.barIndex === 0,
+          islast: context.barIndex === context.barCount - 1,
+          isnew: true,
+          isconfirmed: true,
+          ishistory: true,
+        };
+        return barstateProps[expr.property] ?? NA;
       }
       if (objName === 'barmerge') {
         return expr.property;
