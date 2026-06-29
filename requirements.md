@@ -419,6 +419,13 @@ This specification defines requirements for building a Pine Script v6 compatible
 29. THE Telegram_Bot SHALL create the `backend/data/` directory and `telegram.json` file automatically on first launch if they do not exist, initializing with sensible defaults (empty subscribers, no token)
 30. THE Telegram_Bot SHALL reload the JSON file from disk on each read to support manual edits and external backup/restore workflows
 
+**SOCKS5 Proxy for Telegram Bot:**
+31. THE Telegram_Bot SHALL route all Telegram Bot API connections through a SOCKS5 proxy
+32. THE Telegram_Bot SHALL read SOCKS5 proxy configuration (host, port, username, password) from the `proxy` key in the `settings` object of `backend/data/telegram.json`
+33. THE Telegram_Bot SHALL expose SOCKS5 proxy settings via REST API endpoints `GET /api/settings/telegram/proxy` and `PUT /api/settings/telegram/proxy`
+34. THE Frontend SHALL provide a SOCKS5 proxy configuration UI in the Telegram settings panel with fields for host, port, username, and password
+35. WHEN no SOCKS5 proxy is configured, THE Telegram_Bot SHALL connect directly to the Telegram Bot API (backward compatible)
+
 ### Requirement 15: Color System and Formatting
 
 **User Story:** As a Pine Script developer, I want to use Pine's color system, so that I can create visually appealing indicators.

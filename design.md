@@ -441,6 +441,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Middleware pipeline via `bot.use()` for logging, rate-limiting, and authorization checks
   - Webhook mode support for production: attaches to the existing Express server via `bot.createWebhook()` for shared port usage
   - Graceful error handling for Telegram API failures (rate limits, network, Bot API errors)
+  - **SOCKS5 Proxy**: All Telegram Bot API outbound connections are routed through a configurable SOCKS5 proxy
+    - Proxy settings (host, port, username, password) are persisted in the `proxy` key under `settings` in `backend/data/telegram.json`
+    - On bot initialization, if proxy settings are present, a SOCKS5 agent (via `socks-proxy-agent` or equivalent) is created and passed as the Telegram HTTP agent via Telegraf's `telegram.options.agent` configuration
+    - If no proxy is configured, the bot connects directly (backward compatible)
+    - Proxy configuration is exposed via REST endpoints `GET /api/settings/telegram/proxy` and `PUT /api/settings/telegram/proxy`
 - **JSON File Persistence** (`backend/data/telegram.json`):
   - Single-file storage for all Telegram configuration and subscriptions — no database dependency
   - Schema: `{ botToken: string, subscribers: Array<{chatId, username, subscribedAt, alerts: [{id, title, enabled}]}>, settings: object }`
@@ -617,6 +622,11 @@ Key insights from Pine Script v6 and TradingView architecture research:
   Backend (Alert System) → Telegram Bot (HTTP API) → Telegram User
   ```
 - **Configuration Storage**: Telegram Bot Token and Telegram Username stored in Database
+- **SOCKS5 Proxy**: All Telegram Bot API outbound connections are routed through a SOCKS5 proxy when configured
+  - Proxy settings (host, port, username, password) stored in the `proxy` key under `settings` in `backend/data/telegram.json`
+  - On initialization, if proxy settings are present, a SOCKS5 agent is created and configured as the Telegram HTTP agent
+  - Falls back to direct connection when no proxy is configured
+  - Exposed via REST API for frontend configuration UI
 - **Key Features**:
   - Sends Telegram messages when `alert()` or `alertcondition()` triggers during chart rendering
   - Messages formatted with alert text, script name, symbol, timeframe, and timestamp
