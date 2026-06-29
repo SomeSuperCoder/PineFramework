@@ -162,6 +162,8 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }));
     chart.setStrategyMarkers(stratMarkers);
 
+    chart.setAlertTriggers(scriptResult.alertTriggers || []);
+
     const fills: FillData[] = (scriptResult.fills || []).map((f) => ({
       from: f.from,
       to: f.to,

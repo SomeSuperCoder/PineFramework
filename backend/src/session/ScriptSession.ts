@@ -33,6 +33,8 @@ export interface ScriptOutputs {
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
   barIndex: number;
+  alertConditions?: Array<{ id: string; title: string; message: string }>;
+  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
 }
 
 export class ScriptSession {
@@ -153,6 +155,23 @@ export class ScriptSession {
       size: l.size,
     }));
 
+    const resultAny = result as unknown as Record<string, unknown>;
+    const alertConditions: Array<{ id: string; title: string; message: string }> = [];
+    const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
+    if (rawConditions) {
+      for (const ac of rawConditions) {
+        alertConditions.push({ id: ac.id, title: ac.title, message: ac.message });
+      }
+    }
+
+    const alertTriggers: Array<{ alertId: string; barIndex: number; timestamp: number }> = [];
+    const rawTriggers = resultAny.alertTriggers as Array<{ alertId: string; barIndex: number; timestamp: number }> | undefined;
+    if (rawTriggers) {
+      for (const at of rawTriggers) {
+        alertTriggers.push({ alertId: at.alertId, barIndex: at.barIndex, timestamp: at.timestamp });
+      }
+    }
+
     return {
       success: result.success,
       error: result.error,
@@ -167,6 +186,8 @@ export class ScriptSession {
       labels,
       barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
+      alertConditions,
+      alertTriggers,
     };
   }
 }

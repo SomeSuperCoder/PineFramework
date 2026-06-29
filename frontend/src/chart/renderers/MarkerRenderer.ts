@@ -1,4 +1,4 @@
-import type { ShapeMarkerData, StrategyMarkerData } from '../types.js';
+import type { ShapeMarkerData, StrategyMarkerData, AlertTriggerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
 import type { CandlestickData } from '../types.js';
@@ -88,6 +88,35 @@ export class MarkerRenderer {
         ctx.fillText(label, x, y + (isEntry ? 14 : -8));
       }
     }
+  }
+
+  renderAlertTriggers(
+    ctx: CanvasRenderingContext2D,
+    triggers: AlertTriggerData[],
+    candles: CandlestickData[],
+    viewport: Viewport,
+    layout: LayoutManager,
+  ): void {
+    const regions = layout.getRegions();
+    const { chartArea } = regions;
+    const barSpacing = viewport.getBarSpacing();
+    const size = Math.max(3, barSpacing * 0.35);
+    ctx.fillStyle = '#ff9800';
+    ctx.strokeStyle = '#ff9800';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.7;
+
+    for (const trigger of triggers) {
+      const barIdx = trigger.barIndex;
+      if (barIdx < 0 || barIdx >= candles.length) continue;
+      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const y = chartArea.y + 2;
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
   }
 
   private drawShape(

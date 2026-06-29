@@ -25,6 +25,8 @@ interface ExecuteResponse {
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
+  alertConditions?: Array<{ id: string; title: string; message: string }>;
+  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
 }
 
 interface ExecutionResultMessage {
@@ -51,6 +53,8 @@ interface ExecutionResultMessage {
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
+  alertConditions?: Array<{ id: string; title: string; message: string }>;
+  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
   barIndex: number;
 }
 
@@ -68,6 +72,8 @@ function buildScriptResult(
   lines?: ExecutionResultMessage['lines'],
   labels?: ExecutionResultMessage['labels'],
   barTimestamps?: number[],
+  alertConditions?: Array<{ id: string; title: string; message: string }>,
+  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>,
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -169,6 +175,8 @@ function buildScriptResult(
       comment: m.comment,
     })),
     bgcolor: (bgcolor || []).map((b) => ({ time: Math.floor(b.time / 1000), color: b.color })),
+    alertConditions: (alertConditions || []).map((a) => ({ id: a.id, title: a.title, message: a.message })),
+    alertTriggers: (alertTriggers || []).map((t) => ({ alertId: t.alertId, barIndex: t.barIndex, timestamp: t.timestamp })),
   };
 }
 
@@ -276,6 +284,8 @@ export function useChartData() {
         msg.lines,
         msg.labels,
         barTimestamps,
+        msg.alertConditions,
+        msg.alertTriggers,
       );
       setScriptResult(result);
     }
@@ -432,6 +442,8 @@ export function useChartData() {
         result.lines,
         result.labels,
         result.barTimestamps,
+        result.alertConditions,
+        result.alertTriggers,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;

@@ -1,0 +1,201 @@
+import { Telegraf, type Context } from 'telegraf';
+import type { TelegramConfigStore } from '../store/TelegramConfigStore.js';
+
+interface TelegramServiceOptions {
+  configStore: TelegramConfigStore;
+  onSubscribe?: (chatId: number, username: string) => void;
+  onUnsubscribe?: (chatId: number) => void;
+}
+
+export class TelegramService {
+  private bot: Telegraf | null = null;
+  private configStore: TelegramConfigStore;
+  private onSubscribe?: (chatId: number, username: string) => void;
+  private onUnsubscribe?: (chatId: number) => void;
+  private isRunning = false;
+
+  constructor(options: TelegramServiceOptions) {
+    this.configStore = options.configStore;
+    this.onSubscribe = options.onSubscribe;
+    this.onUnsubscribe = options.onUnsubscribe;
+  }
+
+  async start(): Promise<void> {
+    if (this.isRunning) return;
+
+    const token = this.configStore.getBotToken();
+    if (!token) {
+      console.log('[Telegram] No bot token configured, skipping start');
+      return;
+    }
+
+    this.bot = new Telegraf(token);
+
+    this.bot.use(async (ctx: Context, next: () => Promise<void>) => {
+      console.log(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);
+      try {
+        await next();
+      } catch (err) {
+        console.error('[Telegram] Middleware error:', err);
+      }
+    });
+
+    this.bot.command('start', async (ctx: Context) => {
+      await ctx.reply(
+        'Welcome to Pine Framework Bot!\n\n'
+        + 'I will send you alerts from your Pine Script indicators.\n\n'
+        + 'Commands:\n'
+        + '/help - Show available commands\n'
+        + '/subscribe - Subscribe to alert notifications\n'
+        + '/unsubscribe - Unsubscribe from alert notifications',
+      );
+    });
+
+    this.bot.command('help', async (ctx: Context) => {
+      await ctx.reply(
+        'Available commands:\n\n'
+        + '/start - Start the bot\n'
+        + '/help - Show this help message\n'
+        + '/subscribe - Subscribe to alert notifications\n'
+        + '/unsubscribe - Unsubscribe from alert notifications',
+      );
+    });
+
+    this.bot.command('subscribe', async (ctx: Context) => {
+      const chatId = ctx.chat?.id;
+      const username = ctx.from?.username || `user_${ctx.from?.id}`;
+      if (!chatId) {
+        await ctx.reply('Error: Could not identify chat.');
+        return;
+      }
+      this.configStore.addSubscriber(chatId, username);
+      if (this.onSubscribe) {
+        this.onSubscribe(chatId, username);
+      }
+      await ctx.reply('You have been subscribed to alert notifications!');
+    });
+
+    this.bot.command('unsubscribe', async (ctx: Context) => {
+      const chatId = ctx.chat?.id;
+      if (!chatId) {
+        await ctx.reply('Error: Could not identify chat.');
+        return;
+      }
+      const removed = this.configStore.removeSubscriber(chatId);
+      if (this.onUnsubscribe) {
+        this.onUnsubscribe(chatId);
+      }
+      if (removed) {
+        await ctx.reply('You have been unsubscribed from alert notifications.');
+      } else {
+        await ctx.reply('You were not subscribed.');
+      }
+    });
+
+    try {
+      await this.bot.launch();
+      this.isRunning = true;
+      console.log('[Telegram] Bot started');
+    } catch (err) {
+      console.error('[Telegram] Failed to start bot:', err);
+      this.bot = null;
+    }
+  }
+
+  async stop(): Promise<void> {
+    if (!this.isRunning || !this.bot) return;
+    this.isRunning = false;
+    try {
+      await this.bot.stop();
+      console.log('[Telegram] Bot stopped');
+    } catch (err) {
+      console.error('[Telegram] Error stopping bot:', err);
+    }
+    this.bot = null;
+  }
+
+  async sendMessage(chatId: number, message: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) return false;
+    try {
+      await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
+      return true;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('429')) {
+        const retryAfter = msg.match(/retry after (\d+)/)?.[1];
+        const wait = retryAfter ? parseInt(retryAfter, 10) * 1000 : 10000;
+        console.log(`[Telegram] Rate limited, waiting ${wait}ms`);
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        try {
+          await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
+          return true;
+        } catch {
+          return false;
+        }
+      }
+      console.error('[Telegram] sendMessage error:', msg);
+      return false;
+    }
+  }
+
+  async sendPhoto(chatId: number, buffer: Buffer, caption?: string): Promise<boolean> {
+    if (!this.bot || !this.isRunning) return false;
+    try {
+      await this.bot.telegram.sendPhoto(chatId, { source: buffer }, caption ? { caption } : undefined);
+      return true;
+    } catch (err: unknown) {
+      console.error('[Telegram] sendPhoto error:', err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  }
+
+  async sendAlertToSubscribers(
+    message: string,
+    alertId: string,
+    symbol?: string,
+    timeframe?: string,
+  ): Promise<void> {
+    const subscribers = this.configStore.getSubscribers();
+    const escapedMessage = message
+      .replace(/_/g, '\\_')
+      .replace(/\*/g, '\\*')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      .replace(/~/g, '\\~')
+      .replace(/`/g, '\\`')
+      .replace(/>/g, '\\>')
+      .replace(/#/g, '\\#')
+      .replace(/\+/g, '\\+')
+      .replace(/-/g, '\\-')
+      .replace(/=/g, '\\=')
+      .replace(/\|/g, '\\|')
+      .replace(/\{/g, '\\{')
+      .replace(/\}/g, '\\}')
+      .replace(/\./g, '\\.')
+      .replace(/!/g, '\\!');
+
+    const header = symbol || timeframe
+      ? `*Alert*${symbol ? ` \\- ${symbol}` : ''}${timeframe ? ` \\- ${timeframe}` : ''}`
+      : '*Alert*';
+
+    const fullMessage = `${header}\n\n${escapedMessage}`;
+
+    for (const sub of subscribers) {
+      if (alertId) {
+        const enabled = this.configStore.getAlertPreference(sub.chatId, alertId);
+        if (!enabled) continue;
+      }
+      await this.sendMessage(sub.chatId, fullMessage);
+    }
+  }
+
+  isActive(): boolean {
+    return this.isRunning && this.bot !== null;
+  }
+
+  getBot(): Telegraf | null {
+    return this.bot;
+  }
+}

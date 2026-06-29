@@ -106,6 +106,23 @@ executeRouter.post('/execute', async (req, res) => {
       size: l.size,
     }));
 
+    const resultAny = result as unknown as Record<string, unknown>;
+    const alertConditions: Array<{ id: string; title: string; message: string }> = [];
+    const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
+    if (rawConditions) {
+      for (const ac of rawConditions) {
+        alertConditions.push({ id: ac.id, title: ac.title, message: ac.message });
+      }
+    }
+
+    const alertTriggers: Array<{ alertId: string; barIndex: number; timestamp: number }> = [];
+    const rawTriggers = resultAny.alertTriggers as Array<{ alertId: string; barIndex: number; timestamp: number }> | undefined;
+    if (rawTriggers) {
+      for (const at of rawTriggers) {
+        alertTriggers.push({ alertId: at.alertId, barIndex: at.barIndex, timestamp: at.timestamp });
+      }
+    }
+
     res.json({
       success: result.success,
       error: result.error,
@@ -119,6 +136,8 @@ executeRouter.post('/execute', async (req, res) => {
       lines,
       labels,
       barTimestamps: result.barTimestamps ?? [],
+      alertConditions,
+      alertTriggers,
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

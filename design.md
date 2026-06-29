@@ -437,10 +437,17 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - On alert trigger, formats message with alert text, script name, symbol, timeframe, timestamp and dispatches via `ctx.telegram.sendMessage()`
   - Supports MarkdownV2-formatted alert messages via `ctx.replyWithMarkdownV2()` with embedded OHLCV, indicator values, and plot references
   - Supports sending chart screenshots with alerts via `ctx.telegram.sendPhoto()` using the canvas as a `Buffer`
-  - Command system via `bot.command()`: `/start`, `/help`, `/subscribe`, `/unsubscribe` with persistent subscription storage
+  - Command system via `bot.command()`: `/start`, `/help`, `/subscribe`, `/unsubscribe` with persistent subscription storage in `backend/data/telegram.json`
   - Middleware pipeline via `bot.use()` for logging, rate-limiting, and authorization checks
   - Webhook mode support for production: attaches to the existing Express server via `bot.createWebhook()` for shared port usage
   - Graceful error handling for Telegram API failures (rate limits, network, Bot API errors)
+- **JSON File Persistence** (`backend/data/telegram.json`):
+  - Single-file storage for all Telegram configuration and subscriptions — no database dependency
+  - Schema: `{ botToken: string, subscribers: Array<{chatId, username, subscribedAt, alerts: [{id, title, enabled}]}>, settings: object }`
+  - Auto-creates `backend/data/` directory and `telegram.json` with defaults on first launch
+  - Synchronous atomic reads/writes with file-locking (via `proper-lockfile` or similar) to prevent concurrent write corruption
+  - Reloads from disk on every read to support manual edits and external backup workflows
+  - Lightweight JSON CRUD service (`JsonStore`) wrapping `fs.readFileSync`/`fs.writeFileSync` with validation
 
 #### 13. Input and Configuration System
 - **Responsibility**: Handle user inputs and script configuration

@@ -62,6 +62,12 @@ export interface LabelData {
   size?: string;
 }
 
+export interface AlertTriggerData {
+  alertId: string;
+  barIndex: number;
+  timestamp: number;
+}
+
 export interface BoxData {
   startTime: number;
   startPrice: number;

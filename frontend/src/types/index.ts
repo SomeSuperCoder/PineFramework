@@ -58,6 +58,12 @@ export interface LabelData {
   size?: string;
 }
 
+export interface AlertConditionData {
+  id: string;
+  title: string;
+  message: string;
+}
+
 export interface ScriptResult {
   plots: PlotData[];
   shapes: ShapeData[];
@@ -73,6 +79,30 @@ export interface ScriptResult {
   }>;
   fillColorData?: Record<string, (string | null)[]>;
   strategyMarkers?: StrategyMarkerData[];
+  alertConditions?: AlertConditionData[];
+  alertTriggers?: AlertTriggerData[];
+}
+
+export interface TelegramSubscriber {
+  chatId: number;
+  hasAlertPreferences: boolean;
+}
+
+export interface TelegramConfig {
+  botToken: string;
+  subscribers: TelegramSubscriber[];
+}
+
+export interface AlertTriggerData {
+  alertId: string;
+  barIndex: number;
+  timestamp: number;
+}
+
+export interface AlertMarkerData {
+  id: string;
+  time: number;
+  title: string;
 }
 
 export interface StrategyMarkerData {

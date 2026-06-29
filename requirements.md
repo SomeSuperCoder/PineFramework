@@ -410,10 +410,14 @@ This specification defines requirements for building a Pine Script v6 compatible
 20. THE Telegram_Bot SHALL support sending rich alert messages including MarkdownV2-formatted text with OHLCV values, indicator values, and plot references using Telegraf's `replyWithMarkdownV2()`
 21. THE Telegram_Bot SHALL support sending chart screenshots with alert messages via `ctx.telegram.sendPhoto()` with the current chart canvas as a buffer
 22. THE Telegram_Bot SHALL provide a `/start` and `/help` command handler via `bot.command()` for user onboarding and available command listing
-23. THE Telegram_Bot SHALL support a `/subscribe` command to register a chat for automatic alert delivery, storing subscriptions in persistent storage
+23. THE Telegram_Bot SHALL support a `/subscribe` command to register a chat for automatic alert delivery, storing subscriptions persistently in `backend/data/telegram.json`
 24. THE Telegram_Bot SHALL support a `/unsubscribe` command to remove a chat from the alert delivery list
 25. THE Telegram_Bot SHALL run as a long-running service integrated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
 26. THE Telegram_Bot SHALL integrate Telegraf's middleware system (`bot.use()`) for logging, rate-limiting, and authorization checks before command execution
+27. THE Telegram_Bot SHALL persist all configuration and subscriptions in a single `backend/data/telegram.json` file using synchronous reads/writes with file-locking to prevent corruption
+28. THE `backend/data/telegram.json` file SHALL use a schema with top-level keys: `botToken`, `subscribers` (array of `{chatId, username, subscribedAt, alerts: [{id, title, enabled}]}`), and `settings` (extensible object for future preferences)
+29. THE Telegram_Bot SHALL create the `backend/data/` directory and `telegram.json` file automatically on first launch if they do not exist, initializing with sensible defaults (empty subscribers, no token)
+30. THE Telegram_Bot SHALL reload the JSON file from disk on each read to support manual edits and external backup/restore workflows
 
 ### Requirement 15: Color System and Formatting
 

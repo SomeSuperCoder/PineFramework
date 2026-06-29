@@ -3,6 +3,7 @@ import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
+import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { useChartData } from './hooks/useChartData';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
@@ -129,6 +130,10 @@ function App() {
         onCodeChange={setCurrentCode}
         onClose={() => setEditorOpen(false)}
         onExecute={handleExecute}
+      />
+
+      <TelegramConfigPanel
+        alertConditions={scriptResult?.alertConditions || []}
       />
 
       <StrategyResultsPopup

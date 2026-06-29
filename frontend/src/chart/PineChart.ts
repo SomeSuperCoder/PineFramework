@@ -18,6 +18,7 @@ import { VolumeRenderer } from './renderers/VolumeRenderer.js';
 import { LineRenderer, type PlotRenderOptions } from './renderers/LineRenderer.js';
 import { AreaRenderer } from './renderers/AreaRenderer.js';
 import { MarkerRenderer } from './renderers/MarkerRenderer.js';
+import type { AlertTriggerData } from './types.js';
 import { HLineRenderer } from './renderers/HLineRenderer.js';
 import { GridRenderer } from './renderers/GridRenderer.js';
 import { AxisRenderer } from './renderers/AxisRenderer.js';
@@ -66,6 +67,7 @@ export class PineChart {
   private fills: FillData[] = [];
   private fillColorData: Record<string, (string | null)[]> = {};
   private hlines: HLineData[] = [];
+  private alertTriggers: AlertTriggerData[] = [];
   private barColors: Map<number, string> = new Map();
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
@@ -252,6 +254,8 @@ export class PineChart {
     this.markerRenderer.renderShapes(ctx, this.shapeMarkers, this.candles, this.viewport, this.layout);
 
     this.markerRenderer.renderStrategyMarkers(ctx, this.strategyMarkers, this.candles, this.viewport, this.layout);
+
+    this.markerRenderer.renderAlertTriggers(ctx, this.alertTriggers, this.candles, this.viewport, this.layout);
 
     // Render labels (label.new)
     this.renderLabels(ctx);
@@ -466,6 +470,11 @@ export class PineChart {
 
   setStrategyMarkers(markers: StrategyMarkerData[]): void {
     this.strategyMarkers = markers;
+    this.markDirty();
+  }
+
+  setAlertTriggers(triggers: AlertTriggerData[]): void {
+    this.alertTriggers = triggers;
     this.markDirty();
   }
 

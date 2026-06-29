@@ -1738,56 +1738,59 @@ This implementation plan outlines the step-by-step development of a production-g
     - Prevent stale sessions from pushing kline-driven results with outdated bar counts
     - _Requirements: 17.44_
 
-- [ ] 70. Implement Database Layer for Persistent Storage
-  - [ ] 70.1 Set up database client in Backend
-    - Integrate SQLite (dev) / PostgreSQL (prod) database client in the Backend package
-    - Create migration system for schema management
-    - Set up connection pooling for production
-    - _Requirements: 23.10, 23.11, 23.12, 23.13, 23.14_
+- [x] 70. Implement JSON File Store for Persistent Storage
+  - [x] 70.1 Create `backend/data/` directory and `telegram.json` file
+    - Ensure `backend/data/` directory exists on Backend startup (auto-create if missing)
+    - Create `backend/data/telegram.json` on first launch with default schema: `{ botToken: "", subscribers: [], settings: {} }`
+    - Add `backend/data/` to `.gitignore` (user-local data, not committed)
+    - _Requirements: 14.27, 14.28, 14.29_
 
-  - [ ] 70.2 Create database schema and migrations
-    - Create `telegram_config` table: `id`, `bot_token`, `chat_id`, `username`, `enabled`, `created_at`, `updated_at`
-    - Create `alert_preferences` table: `id`, `script_name`, `alert_id`, `alert_title`, `telegram_enabled`, `created_at`, `updated_at`
-    - Create `user_settings` table for general preferences (extensible)
-    - Write migration scripts for schema creation and updates
-    - _Requirements: 23.10, 23.11, 23.12_
+  - [x] 70.2 Implement `JsonStore` class for file operations
+    - Create `JsonStore<T>` generic class wrapping `fs.readFileSync()` / `fs.writeFileSync()` with JSON parse/stringify
+    - Implement file-locking via `proper-lockfile` (or `lockfile` package) to prevent concurrent write corruption
+    - Provide methods: `read()`, `write(data)`, `patch(path, value)` for partial updates
+    - Handle missing file gracefully (return defaults, never throw)
+    - Validate JSON schema on write to prevent corruption
+    - _Requirements: 14.27, 14.28_
 
-  - [ ] 70.3 Implement database CRUD operations
-    - Create `DatabaseService` class with methods: `getTelegramConfig()`, `saveTelegramConfig()`, `getAlertPreferences()`, `updateAlertPreference()`
-    - Use parameterized queries to prevent injection
-    - Handle connection errors gracefully with retry logic
-    - _Requirements: 23.11, 23.12, 23.14_
+  - [x] 70.3 Implement `TelegramConfigStore` domain wrapper
+    - Create `TelegramConfigStore` class using `JsonStore<TelegramData>` internally
+    - Methods: `getBotToken()`, `setBotToken(token)`, `getSubscribers()`, `addSubscriber(chatId, username)`, `removeSubscriber(chatId)`, `getAlertPreference(chatId, alertId)`, `setAlertPreference(chatId, alertId, enabled)`
+    - Reload file from disk on every read to support manual edits and external backup/restore
+    - Sanitize and validate all inputs before writing
+    - _Requirements: 14.27, 14.28, 14.29, 14.30_
 
-  - [ ] 70.4 Expose database settings via REST API
-    - `GET /api/settings/telegram` — retrieve Telegram Bot Token and Username
-    - `PUT /api/settings/telegram` — update Telegram Bot Token and Username
+  - [x] 70.4 Expose settings via REST API
+    - `GET /api/settings/telegram` — retrieve Telegram Bot Token
+    - `PUT /api/settings/telegram` — update Telegram Bot Token
     - `GET /api/settings/alerts/:id/telegram` — get per-alert Telegram preference
     - `PUT /api/settings/alerts/:id/telegram` — toggle per-alert Telegram preference
     - Validate and sanitize all inputs before storage
-    - _Requirements: 23.6, 23.7, 23.14_
+    - _Requirements: 14.27, 14.28_
 
-  - [ ] 70.5 Write tests for database layer
-    - Test CRUD operations on telegram_config table
-    - Test CRUD operations on alert_preferences table
-    - Test error handling (connection failures, invalid queries)
+  - [x] 70.5 Write tests for JSON file store
+    - Test `JsonStore` read/write with valid and invalid JSON
+    - Test `TelegramConfigStore` CRUD operations
+    - Test file-locking semantics (concurrent writes)
+    - Test auto-creation of missing file and directory
     - Test REST endpoints for settings
-    - _Requirements: 23.10, 23.11, 23.12, 23.13, 23.14_
+    - _Requirements: 14.27, 14.28, 14.29, 14.30_
 
-- [ ] 71. Implement Telegram Bot Notification System (Telegraf)
-  - [ ] 71.1 Create Telegram Bot client in Backend with Telegraf
+- [x] 71. Implement Telegram Bot Notification System (Telegraf)
+  - [x] 71.1 Create Telegram Bot client in Backend with Telegraf
     - Create `TelegramService` class wrapping the **Telegraf** library (v4+, Bot API v7.1)
     - Initialize bot via `new Telegraf(token)` and launch with `bot.launch()`
     - Implement `sendMessage(chatId, message)` using `ctx.telegram.sendMessage()` for plain-text and `ctx.replyWithMarkdownV2()` for rich-formatted alerts
     - Implement `sendPhoto(chatId, buffer)` using `ctx.telegram.sendPhoto()` for chart screenshots
     - Implement `/start` and `/help` commands via `bot.command()` for onboarding
-    - Implement `/subscribe` and `/unsubscribe` commands with persistent storage integration
+    - Implement `/subscribe` and `/unsubscribe` commands with `TelegramConfigStore` (backed by `backend/data/telegram.json`)
     - Add middleware via `bot.use()` for logging, rate-limiting, and auth checks
     - Set up graceful shutdown via `bot.stop()` on `SIGINT`/`SIGTERM`
     - Support webhook mode in production via `bot.createWebhook()` attached to Express server
     - Handle Telegram API errors: rate limit (429 with retry-after), network failures, invalid tokens
     - _Requirements: 14.17, 14.18, 14.19, 14.21, 14.25, 14.26_
 
-  - [ ] 71.2 Wire Telegram notifications into Alert System
+  - [x] 71.2 Wire Telegram notifications into Alert System
     - When an alert triggers during chart rendering (alert() or alertcondition()), check if Telegram is enabled globally
     - Look up per-alert preference — skip if Telegram is disabled for this specific alert
     - Format message with MarkdownV2: alert text, script name, symbol, timeframe, timestamp, OHLCV values
@@ -1795,12 +1798,12 @@ This implementation plan outlines the step-by-step development of a production-g
     - Log sent/failed notifications for auditing
     - _Requirements: 14.17, 14.19, 14.20, 14.22_
 
-  - [ ] 71.3 Add alert metadata to execution result pipeline
+  - [x] 71.3 Add alert metadata to execution result pipeline
     - Include alert ID and alert title in execution result metadata so frontend can render per-alert toggles
     - Map alertcondition() calls to unique IDs for preference lookup
     - _Requirements: 14.24_
 
-  - [ ] 71.4 Write tests for Telegram notification system
+  - [x] 71.4 Write tests for Telegram notification system
     - Test message formatting with various alert data (MarkdownV2 escaping)
     - Test Telegraf error handling (rate limit, network failure, Bot API errors)
     - Test per-alert preference filtering
@@ -1809,8 +1812,8 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test graceful shutdown path
     - _Requirements: 14.17, 14.18, 14.19, 14.20, 14.21, 14.22, 14.25_
 
-- [ ] 72. Build Frontend UI for Telegram Configuration
-  - [ ] 72.1 Create Telegram settings panel in Frontend
+- [x] 72. Build Frontend UI for Telegram Configuration
+  - [x] 72.1 Create Telegram settings panel in Frontend
     - Add a settings page/modal with fields for Telegram Bot Token and Telegram Username
     - Fetch current values from `GET /api/settings/telegram` on mount
     - Save changes via `PUT /api/settings/telegram`
@@ -1818,30 +1821,32 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add a "Test Notification" button to verify configuration
     - _Requirements: 23.5, 23.11_
 
-  - [ ] 72.2 Add per-alert Telegram toggle in indicator settings
+  - [x] 72.2 Add per-alert Telegram toggle in indicator settings
     - In the indicator settings UI (where alertcondition() items are listed), add a Telegram toggle (checkbox/switch) per alert
     - Fetch per-alert preference from `GET /api/settings/alerts/:id/telegram`
     - Toggle updates via `PUT /api/settings/alerts/:id/telegram`
     - Default all alerts to enabled
     - _Requirements: 23.6, 23.7, 23.8, 23.12_
 
-  - [ ] 72.3 Display non-content-blocking alert markers on chart
+  - [x] 72.3 Display non-content-blocking alert markers on chart
     - Ensure alert markers render as minimal, non-intrusive indicators on the chart (e.g., small icons/badges at the top or bottom of the chart pane)
     - Use the existing AlertMarkerRenderer but with subtle styling that does not obscure price action
     - Alert markers remain visible for reference without blocking chart content
     - _Requirements: 23.1 (non-content-blocking display)_
 
-  - [ ] 72.4 Write tests for Telegram UI
+  - [x] 72.4 Write tests for Telegram UI
     - Test settings panel rendering and data binding
     - Test per-alert toggle rendering and interaction
     - Test API integration (fetch and save)
     - _Requirements: 23.5, 23.6, 23.7, 23.8, 23.11, 23.12_
 
-- [ ] 73. Checkpoint - Telegram Notification and Database Validation
+- [x] 73. Checkpoint - Telegram Notification and JSON File Persistence Validation
   - Verify Telegram Bot sends notifications when alerts fire on chart
   - Verify per-alert toggle correctly enables/disables Telegram notifications
-  - Verify Telegram Bot Token and Username persist across server restarts
-  - Verify database CRUD operations work correctly via REST API
+  - Verify Telegram Bot Token and Username persist across server restarts via `backend/data/telegram.json`
+  - Verify JSON file store CRUD operations work correctly via REST API
+  - Verify `backend/data/` directory and `telegram.json` are auto-created on first launch
+  - Verify manual edit of `telegram.json` is reflected on next read (no in-memory cache staleness)
   - Verify alert markers render non-intrusively on chart
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
@@ -1863,8 +1868,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Tasks 47-58 implement the full backtest engine: broker simulator (47), backtest orchestrator (48), performance metrics calculator (49), backtest REST API (50), backtest visualization (51), configuration panel (52), data source integration (53), and comprehensive tests (54-57)
 - Tasks 59-68 implement post-backtest enhancements: switch expressions (59), generic array methods and line/label dispatch (60), lines/labels full frontend pipeline (61), per-bar colors (62), TA semantics fixes and missing builtins (63), lazy loading (64), TrendCraft compatibility (65), plot style/bgcolor/strategy tests (66), backend/frontend integration fixes (67), and final validation (68)
 - Task 69 fixes indicator alignment after lazy loading by adding barTimestamps to the execution pipeline, validating output lengths in handleExecutionResult, and guarding against stale WebSocket sessions
-- Tasks 70-72 implement the database layer for persistent storage, Telegram Bot notification system, and per-alert Telegram selection UI
-- Task 73 is the checkpoint validating Telegram notifications, database persistence, and non-content-blocking alert markers
+- Tasks 70-72 implement JSON file-based persistent storage (`backend/data/telegram.json`), Telegram Bot notification system, and per-alert Telegram selection UI
+- Task 73 is the checkpoint validating Telegram notifications, JSON file persistence, and non-content-blocking alert markers
 
 ## Task Dependency Graph
 

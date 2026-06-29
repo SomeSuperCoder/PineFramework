@@ -11,5 +11,6 @@ export type {
   LabelData,
   BoxData,
   ChartOptions,
+  AlertTriggerData,
 } from './types.js';
 export { DEFAULT_OPTIONS } from './types.js';

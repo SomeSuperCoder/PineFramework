@@ -93,6 +93,18 @@ export interface LabelEntry {
   size: string;
 }
 
+export interface AlertConditionEntry {
+  id: string;
+  title: string;
+  message: string;
+}
+
+export interface AlertTriggerEntry {
+  alertId: string;
+  barIndex: number;
+  timestamp: number;
+}
+
 export interface ExecutionResult {
   success: boolean;
   error?: string;
@@ -106,6 +118,8 @@ export interface ExecutionResult {
   lines?: LineEntry[];
   labels?: LabelEntry[];
   barTimestamps?: number[];
+  alertConditions?: AlertConditionEntry[];
+  alertTriggers?: AlertTriggerEntry[];
 }
 
 export interface StrategyMarkerEntry {
@@ -167,6 +181,8 @@ export class ExecutionEngine {
   private outputs: Map<string, Series>;
   private shapes: ShapeEntry[];
   private bgcolorData: Array<{ time: number; color: string }> = [];
+  private alertConditionEntries: AlertConditionEntry[] = [];
+  private alertTriggers: AlertTriggerEntry[] = [];
   private snapshots: ExecutionSnapshot[];
   private metrics: ExecutionMetrics;
   private executionTimes: number[];
@@ -983,7 +999,22 @@ export class ExecutionEngine {
       return NA;
     });
 
-    this.builtins.set('alertcondition', (_condition: PineValue, _namedOrNamed?: PineValue): PineValue => {
+    this.builtins.set('alertcondition', (condition: PineValue, arg2?: PineValue): PineValue => {
+      if (pineTruthy(condition) && this.currentContext) {
+        const id = `alert_${this.alertConditionEntries.length + 1}`;
+        let title = '';
+        let message = '';
+        if (arg2 && typeof arg2 === 'object' && !Array.isArray(arg2)) {
+          const namedMap = arg2 as Map<string, PineValue>;
+          const titleVal = namedMap.get('title');
+          const msgVal = namedMap.get('message');
+          title = typeof titleVal === 'string' ? titleVal : '';
+          message = typeof msgVal === 'string' ? msgVal : (typeof titleVal === 'string' ? titleVal : 'Alert triggered');
+        }
+        const entry: AlertConditionEntry = { id, title: title || `Alert ${this.alertConditionEntries.length + 1}`, message: message || title || 'Alert triggered' };
+        this.alertConditionEntries.push(entry);
+        this.alertTriggers.push({ alertId: id, barIndex: this.currentContext.barIndex, timestamp: this.currentContext.timestamp });
+      }
       return NA;
     });
   }
@@ -1258,6 +1289,8 @@ export class ExecutionEngine {
         lines: activeLines,
         labels: [...this.labels],
         barTimestamps: [...this.barTimestamps],
+        alertConditions: [...this.alertConditionEntries],
+        alertTriggers: [...this.alertTriggers],
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -1278,12 +1311,14 @@ export class ExecutionEngine {
         lines: activeLines,
         labels: [...this.labels],
         barTimestamps: [...this.barTimestamps],
+        alertConditions: [...this.alertConditionEntries],
+        alertTriggers: [...this.alertTriggers],
       };
     }
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps] };
+    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps], alertConditions: this.alertConditionEntries, alertTriggers: [...this.alertTriggers] };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
