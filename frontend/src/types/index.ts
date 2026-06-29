@@ -93,6 +93,12 @@ export interface TelegramConfig {
   subscribers: TelegramSubscriber[];
 }
 
+export interface ProxyConfig {
+  host: string;
+  port: number;
+  username: string;
+}
+
 export interface AlertTriggerData {
   alertId: string;
   barIndex: number;

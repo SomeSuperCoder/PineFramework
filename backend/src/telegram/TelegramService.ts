@@ -1,10 +1,25 @@
 import { Telegraf, type Context } from 'telegraf';
-import type { TelegramConfigStore } from '../store/TelegramConfigStore.js';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+import type { TelegramConfigStore, ProxyConfig } from '../store/TelegramConfigStore.js';
 
 interface TelegramServiceOptions {
   configStore: TelegramConfigStore;
   onSubscribe?: (chatId: number, username: string) => void;
   onUnsubscribe?: (chatId: number) => void;
+}
+
+function createSocksAgent(proxy: ProxyConfig): SocksProxyAgent {
+  const { host, port, username, password } = proxy;
+  let proxyUrl = `socks5://`;
+  if (username) {
+    proxyUrl += encodeURIComponent(username);
+    if (password) {
+      proxyUrl += `:${encodeURIComponent(password)}`;
+    }
+    proxyUrl += `@`;
+  }
+  proxyUrl += `${host}:${port}`;
+  return new SocksProxyAgent(proxyUrl);
 }
 
 export class TelegramService {
@@ -29,7 +44,18 @@ export class TelegramService {
       return;
     }
 
-    this.bot = new Telegraf(token);
+    const proxy = this.configStore.getProxy();
+    let agent: SocksProxyAgent | undefined;
+    if (proxy && proxy.host && proxy.port) {
+      try {
+        agent = createSocksAgent(proxy);
+        console.log(`[Telegram] Using SOCKS5 proxy: ${proxy.host}:${proxy.port}`);
+      } catch (err) {
+        console.error('[Telegram] Failed to create SOCKS5 proxy agent:', err);
+      }
+    }
+
+    this.bot = new Telegraf(token, agent ? { telegram: { options: { agent } } } : undefined);
 
     this.bot.use(async (ctx: Context, next: () => Promise<void>) => {
       console.log(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TelegramConfig, AlertConditionData } from '../types';
+import type { TelegramConfig, AlertConditionData, ProxyConfig } from '../types';
 
 interface TelegramConfigPanelProps {
   alertConditions: AlertConditionData[];
@@ -36,6 +36,20 @@ async function setAlertPreference(chatId: number, alertId: string, enabled: bool
   });
 }
 
+async function fetchProxyConfig(): Promise<ProxyConfig | null> {
+  const res = await fetch('/api/settings/telegram/proxy');
+  const data = await res.json();
+  return data;
+}
+
+async function saveProxyConfig(proxy: { host: string; port: number; username?: string; password?: string } | null): Promise<void> {
+  await fetch('/api/settings/telegram/proxy', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(proxy),
+  });
+}
+
 export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [config, setConfig] = useState<TelegramConfig | null>(null);
@@ -45,6 +59,14 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
   const [testSending, setTestSending] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [alertPrefs, setAlertPrefs] = useState<Record<string, Record<number, boolean>>>({});
+  const [proxy, setProxy] = useState<ProxyConfig | null>(null);
+  const [proxyHost, setProxyHost] = useState('');
+  const [proxyPort, setProxyPort] = useState('');
+  const [proxyUsername, setProxyUsername] = useState('');
+  const [proxyPassword, setProxyPassword] = useState('');
+  const [showProxyPassword, setShowProxyPassword] = useState(false);
+  const [proxySaving, setProxySaving] = useState(false);
+  const [proxySaveStatus, setProxySaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
@@ -52,6 +74,11 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
       const cfg = await fetchTelegramConfig();
       setConfig(cfg);
       setBotToken(cfg.botToken || '');
+      const proxyCfg = await fetchProxyConfig();
+      setProxy(proxyCfg);
+      setProxyHost(proxyCfg?.host || '');
+      setProxyPort(proxyCfg?.port ? String(proxyCfg.port) : '');
+      setProxyUsername(proxyCfg?.username || '');
     } catch {
       // ignore
     } finally {
@@ -106,6 +133,35 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
       // ignore
     } finally {
       setTestSending(false);
+    }
+  };
+
+  const handleProxySave = async () => {
+    setProxySaving(true);
+    setProxySaveStatus('idle');
+    try {
+      if (proxyHost.trim()) {
+        const port = parseInt(proxyPort, 10);
+        if (isNaN(port) || port <= 0 || port > 65535) {
+          setProxySaveStatus('error');
+          setProxySaving(false);
+          return;
+        }
+        await saveProxyConfig({
+          host: proxyHost.trim(),
+          port,
+          username: proxyUsername || undefined,
+          password: proxyPassword || undefined,
+        });
+      } else {
+        await saveProxyConfig(null);
+      }
+      setProxySaveStatus('saved');
+      setTimeout(() => setProxySaveStatus('idle'), 2000);
+    } catch {
+      setProxySaveStatus('error');
+    } finally {
+      setProxySaving(false);
     }
   };
 
@@ -228,6 +284,124 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                 >
                   {testSending ? 'Sending...' : 'Send Test Message'}
                 </button>
+              </div>
+
+              <div style={{ marginBottom: '16px', borderTop: '1px solid #0f3460', paddingTop: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>
+                  SOCKS5 Proxy (optional)
+                </label>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                  <input
+                    type="text"
+                    value={proxyHost}
+                    onChange={(e) => setProxyHost(e.target.value)}
+                    placeholder="Host (e.g., 127.0.0.1)"
+                    style={{
+                      flex: 1,
+                      padding: '6px',
+                      background: '#1a1a2e',
+                      color: '#e0e0e0',
+                      border: '1px solid #0f3460',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <input
+                    type="number"
+                    value={proxyPort}
+                    onChange={(e) => setProxyPort(e.target.value)}
+                    placeholder="Port"
+                    min={1}
+                    max={65535}
+                    style={{
+                      width: '80px',
+                      padding: '6px',
+                      background: '#1a1a2e',
+                      color: '#e0e0e0',
+                      border: '1px solid #0f3460',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                  <input
+                    type="text"
+                    value={proxyUsername}
+                    onChange={(e) => setProxyUsername(e.target.value)}
+                    placeholder="Username (optional)"
+                    style={{
+                      flex: 1,
+                      padding: '6px',
+                      background: '#1a1a2e',
+                      color: '#e0e0e0',
+                      border: '1px solid #0f3460',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <div style={{ position: 'relative', flex: 1 }}>
+                    <input
+                      type={showProxyPassword ? 'text' : 'password'}
+                      value={proxyPassword}
+                      onChange={(e) => setProxyPassword(e.target.value)}
+                      placeholder="Password (optional)"
+                      style={{
+                        width: '100%',
+                        padding: '6px',
+                        paddingRight: '28px',
+                        background: '#1a1a2e',
+                        color: '#e0e0e0',
+                        border: '1px solid #0f3460',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowProxyPassword(!showProxyPassword)}
+                      style={{
+                        position: 'absolute',
+                        right: '4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#888',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        padding: '2px 4px',
+                      }}
+                    >
+                      {showProxyPassword ? '🙈' : '👁'}
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button
+                    onClick={handleProxySave}
+                    disabled={proxySaving}
+                    style={{
+                      padding: '6px 12px',
+                      background: proxySaving ? '#333' : '#ff9800',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: proxySaving ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                      fontSize: '12px',
+                    }}
+                  >
+                    {proxySaving ? '...' : 'Save Proxy'}
+                  </button>
+                  {proxySaveStatus === 'saved' && (
+                    <span style={{ color: '#4caf50', fontSize: '11px' }}>Proxy saved</span>
+                  )}
+                  {proxySaveStatus === 'error' && (
+                    <span style={{ color: '#e94560', fontSize: '11px' }}>Failed to save</span>
+                  )}
+                </div>
               </div>
 
               {config && (

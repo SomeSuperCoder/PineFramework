@@ -1851,35 +1851,35 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
 
-- [ ] 74. Implement SOCKS5 Proxy Support for Telegram Bot
-  - [ ] 74.1 Add SOCKS5 proxy configuration to telegram.json schema
+- [x] 74. Implement SOCKS5 Proxy Support for Telegram Bot
+  - [x] 74.1 Add SOCKS5 proxy configuration to telegram.json schema
     - Add `proxy` key to `settings` object in `backend/data/telegram.json` with fields: `host`, `port`, `username`, `password`
     - Update `TelegramConfigStore` with proxy getter/setter methods
     - Load proxy config on TelegramService initialization
     - _Requirements: 14.31, 14.32_
   
-  - [ ] 74.2 Implement SOCKS5 agent creation and Telegraf integration
+  - [x] 74.2 Implement SOCKS5 agent creation and Telegraf integration
     - Install `socks-proxy-agent` (or equivalent) dependency in backend
     - On bot launch, if proxy host and port are configured, create a `SocksProxyAgent` and pass it via `new Telegraf(token, { telegram: { options: { agent } } })`
     - Handle proxy authentication (username/password) when credentials are provided
     - Fall back to direct connection when no proxy is configured
     - _Requirements: 14.31, 14.35_
   
-  - [ ] 74.3 Add REST API endpoints for SOCKS5 proxy configuration
+  - [x] 74.3 Add REST API endpoints for SOCKS5 proxy configuration
     - `GET /api/settings/telegram/proxy` — return current proxy settings (omit password in response)
     - `PUT /api/settings/telegram/proxy` — update proxy settings
     - Validate host/port format and credentials
     - Restart/reconfigure TelegramService after proxy update
     - _Requirements: 14.33_
   
-  - [ ] 74.4 Add SOCKS5 proxy configuration UI to Frontend
+  - [x] 74.4 Add SOCKS5 proxy configuration UI to Frontend
     - Add proxy settings section to the Telegram settings panel
     - Input fields for host, port, username, password
     - Password field with show/hide toggle
     - Save button that calls `PUT /api/settings/telegram/proxy`
     - _Requirements: 14.34_
   
-  - [ ] 74.5 Write tests for SOCKS5 proxy support
+  - [x] 74.5 Write tests for SOCKS5 proxy support
     - Test proxy config CRUD via TelegramConfigStore
     - Test proxy agent creation with valid/invalid settings
     - Test fallback to direct connection when no proxy configured

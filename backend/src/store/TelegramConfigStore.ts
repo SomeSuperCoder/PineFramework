@@ -1,5 +1,12 @@
 import { JsonStore } from './JsonStore.js';
 
+export interface ProxyConfig {
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+}
+
 export interface TelegramSubscriber {
   chatId: number;
   username: string;
@@ -11,10 +18,15 @@ export interface TelegramSubscriber {
   }>;
 }
 
+export interface TelegramSettings {
+  proxy?: ProxyConfig;
+  [key: string]: unknown;
+}
+
 export interface TelegramData {
   botToken: string;
   subscribers: TelegramSubscriber[];
-  settings: Record<string, unknown>;
+  settings: TelegramSettings;
   [key: string]: unknown;
 }
 
@@ -105,6 +117,31 @@ export class TelegramConfigStore {
       existing.enabled = enabled;
     } else {
       sub.alerts.push({ id: alertId, title: alertId, enabled });
+    }
+    this.store.write(data);
+  }
+
+  getProxy(): ProxyConfig | undefined {
+    return this.store.read().settings.proxy;
+  }
+
+  setProxy(proxy: ProxyConfig | undefined): void {
+    const data = this.store.read();
+    if (proxy) {
+      if (typeof proxy.host !== 'string' || proxy.host.trim() === '') {
+        throw new Error('proxy.host must be a non-empty string');
+      }
+      if (typeof proxy.port !== 'number' || proxy.port <= 0 || proxy.port > 65535) {
+        throw new Error('proxy.port must be a number between 1 and 65535');
+      }
+      data.settings.proxy = {
+        host: proxy.host.trim(),
+        port: proxy.port,
+        username: proxy.username || undefined,
+        password: proxy.password || undefined,
+      };
+    } else {
+      delete data.settings.proxy;
     }
     this.store.write(data);
   }

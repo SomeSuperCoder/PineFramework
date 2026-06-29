@@ -1,11 +1,20 @@
 import { Router } from 'express';
 
+interface ProxyConfigInput {
+  host: string;
+  port: number;
+  username?: string;
+  password?: string;
+}
+
 interface SettingsDeps {
   getBotToken: () => string;
   setBotToken: (token: string) => void;
   getAlertPreference: (chatId: number, alertId: string) => boolean;
   setAlertPreference: (chatId: number, alertId: string, enabled: boolean) => void;
   getSubscribers: () => Array<{ chatId: number }>;
+  getProxy: () => ProxyConfigInput | undefined;
+  setProxy: (proxy: ProxyConfigInput | undefined) => void;
 }
 
 export function createSettingsRouter(deps: SettingsDeps): Router {
@@ -63,6 +72,51 @@ export function createSettingsRouter(deps: SettingsDeps): Router {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update alert preference' });
+    }
+  });
+
+  router.get('/settings/telegram/proxy', (_req, res) => {
+    try {
+      const proxy = deps.getProxy();
+      if (proxy) {
+        res.json({
+          host: proxy.host,
+          port: proxy.port,
+          username: proxy.username || '',
+        });
+      } else {
+        res.json(null);
+      }
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to get proxy settings' });
+    }
+  });
+
+  router.put('/settings/telegram/proxy', (req, res) => {
+    try {
+      const proxy = req.body as ProxyConfigInput | null;
+      if (proxy === null || proxy === undefined) {
+        deps.setProxy(undefined);
+        res.json({ success: true });
+        return;
+      }
+      if (typeof proxy.host !== 'string' || proxy.host.trim() === '') {
+        res.status(400).json({ error: 'host must be a non-empty string' });
+        return;
+      }
+      if (typeof proxy.port !== 'number' || proxy.port <= 0 || proxy.port > 65535) {
+        res.status(400).json({ error: 'port must be a number between 1 and 65535' });
+        return;
+      }
+      deps.setProxy({
+        host: proxy.host.trim(),
+        port: proxy.port,
+        username: proxy.username || undefined,
+        password: proxy.password || undefined,
+      });
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to update proxy settings' });
     }
   });
 

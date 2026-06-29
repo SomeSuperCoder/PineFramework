@@ -45,12 +45,22 @@ app.post('/api/telegram/test', async (_req, res) => {
   res.json({ success: ok });
 });
 
+async function restartTelegramService(): Promise<void> {
+  await telegramService.stop();
+  await telegramService.start();
+}
+
 app.use('/api', createSettingsRouter({
   getBotToken: () => telegramConfig.getBotToken(),
   setBotToken: (token: string) => telegramConfig.setBotToken(token),
   getAlertPreference: (chatId: number, alertId: string) => telegramConfig.getAlertPreference(chatId, alertId),
   setAlertPreference: (chatId: number, alertId: string, enabled: boolean) => telegramConfig.setAlertPreference(chatId, alertId, enabled),
   getSubscribers: () => telegramConfig.getSubscribers(),
+  getProxy: () => telegramConfig.getProxy(),
+  setProxy: (proxy) => {
+    telegramConfig.setProxy(proxy);
+    restartTelegramService().catch((err) => console.error('[Telegram] Error restarting after proxy update:', err));
+  },
 }));
 
 createWSGateway(server, cache);
