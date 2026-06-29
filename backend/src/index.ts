@@ -35,6 +35,41 @@ app.use('/api', executeRouter);
 app.use('/api', symbolsRouter);
 app.use('/api', statusRouter);
 app.use('/api', createBacktestRouter());
+app.get('/api/telegram/proxy-test', async (_req, res) => {
+  const proxy = telegramConfig.getProxy();
+  if (!proxy) {
+    res.json({ ok: false, error: 'No proxy configured' });
+    return;
+  }
+  try {
+    const { SocksProxyAgent } = await import('socks-proxy-agent');
+    let proxyUrl = `socks5://`;
+    if (proxy.username) {
+      proxyUrl += encodeURIComponent(proxy.username);
+      if (proxy.password) proxyUrl += `:${encodeURIComponent(proxy.password)}`;
+      proxyUrl += `@`;
+    }
+    proxyUrl += `${proxy.host}:${proxy.port}`;
+    console.log(`[Proxy-Test] Testing SOCKS5 proxy: ${proxyUrl}`);
+    const agent = new SocksProxyAgent(proxyUrl);
+    const https = await import('node:https');
+    await new Promise<void>((resolve, reject) => {
+      const req = https.get('https://api.telegram.org', { agent, timeout: 10000 }, (resp) => {
+        resp.resume();
+        resolve();
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Connection timed out')); });
+    });
+    console.log(`[Proxy-Test] Proxy works!`);
+    res.json({ ok: true, proxy: `${proxy.host}:${proxy.port}` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[Proxy-Test] Proxy test failed:`, msg);
+    res.json({ ok: false, error: msg, proxy: `${proxy.host}:${proxy.port}` });
+  }
+});
+
 app.post('/api/telegram/test', async (_req, res) => {
   const subs = telegramConfig.getSubscribers();
   if (subs.length === 0) {

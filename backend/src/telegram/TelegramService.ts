@@ -49,13 +49,17 @@ export class TelegramService {
     if (proxy && proxy.host && proxy.port) {
       try {
         agent = createSocksAgent(proxy);
-        console.log(`[Telegram] Using SOCKS5 proxy: ${proxy.host}:${proxy.port}`);
+        const authInfo = proxy.username ? ' (with auth)' : '';
+        console.log(`[Telegram] SOCKS5 proxy agent created for ${proxy.host}:${proxy.port}${authInfo}`);
+        console.log(`[Telegram] Bot will route all Telegram API calls through proxy`);
       } catch (err) {
         console.error('[Telegram] Failed to create SOCKS5 proxy agent:', err);
       }
+    } else {
+      console.log('[Telegram] No proxy configured, connecting directly');
     }
 
-    this.bot = new Telegraf(token, agent ? { telegram: { options: { agent } } } : undefined);
+    this.bot = new Telegraf(token, agent ? { telegram: { agent } } : undefined);
 
     this.bot.use(async (ctx: Context, next: () => Promise<void>) => {
       console.log(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);
