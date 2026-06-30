@@ -130,6 +130,9 @@ export interface FormingCandleResult {
   diffFills: Array<{ from: string; to: string; color: string }>;
   diffLines: LineEntry[];
   diffLabels: LabelEntry[];
+  diffPlotColors?: Record<string, (string | null)[]>;
+  diffFillColorData?: Record<string, (string | null)[]>;
+  diffBgcolor?: Array<{ time: number; color: string }>;
   barTimestamps: number[];
   barIndex: number;
   isDiff: boolean;
@@ -1387,6 +1390,9 @@ export class ExecutionEngine {
     const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, [...v]]));
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
     const preCrossPrevValues = [...this.crossPrevValues];
+    const prePlotColors = new Map([...this.plotColors].map(([k, v]) => [k, [...v]]));
+    const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
+    const preBgcolorDataLen = this.bgcolorData.length;
 
     const result = this.executeBar(context);
 
@@ -1408,6 +1414,9 @@ export class ExecutionEngine {
     this.smaBuffers = preSmaBuffers;
     this.emaState = preEmaState;
     this.crossPrevValues = preCrossPrevValues;
+    this.plotColors = prePlotColors;
+    this.fillColorData = preFillColorData;
+    this.bgcolorData.length = preBgcolorDataLen;
 
     const diffOutputs: Record<string, PineValue> = {};
     for (const [key, series] of this.outputs) {
@@ -1459,6 +1468,27 @@ export class ExecutionEngine {
       this.alertTriggers.length = preAlertTriggersLen;
     }
 
+    const diffPlotColors: Record<string, (string | null)[]> = {};
+    for (const [key, colors] of this.plotColors) {
+      const preColors = prePlotColors.get(key);
+      if (!preColors || colors.length > preColors.length) {
+        diffPlotColors[key] = colors.slice(preColors?.length ?? 0);
+      }
+    }
+
+    const diffFillColorData: Record<string, (string | null)[]> = {};
+    for (const [key, colors] of this.fillColorData) {
+      const preColors = preFillColorData.get(key);
+      if (!preColors || colors.length > preColors.length) {
+        diffFillColorData[key] = colors.slice(preColors?.length ?? 0);
+      }
+    }
+
+    let diffBgcolor: Array<{ time: number; color: string }> = [];
+    if (this.bgcolorData.length > preBgcolorDataLen) {
+      diffBgcolor = this.bgcolorData.slice(preBgcolorDataLen);
+    }
+
     const isDiff =
       Object.keys(diffOutputs).length > 0 ||
       diffShapes.length > 0 ||
@@ -1475,6 +1505,9 @@ export class ExecutionEngine {
       diffFills,
       diffLines,
       diffLabels,
+      diffPlotColors: Object.keys(diffPlotColors).length > 0 ? diffPlotColors : undefined,
+      diffFillColorData: Object.keys(diffFillColorData).length > 0 ? diffFillColorData : undefined,
+      diffBgcolor: diffBgcolor.length > 0 ? diffBgcolor : undefined,
       barTimestamps: [...this.barTimestamps],
       barIndex: this.barTimestamps.length - 1,
       isDiff,

@@ -79,10 +79,8 @@ export class ScriptSession {
       return this.toFormingCandleOutputs(result);
     } else {
       this.bars.push(bar);
-      const singleCtx = barsToContext([bar])[0]!;
-      singleCtx.barIndex = this.contexts.length;
-      singleCtx.barCount = this.contexts.length + 1;
-      this.contexts.push(singleCtx);
+      const fullContexts = barsToContext(this.bars);
+      this.contexts.push(fullContexts[fullContexts.length - 1]!);
     }
 
     const context = this.contexts[this.contexts.length - 1]!;
@@ -243,9 +241,12 @@ export class ScriptSession {
       success: result.success,
       error: result.error,
       outputs,
+      plotColors: result.diffPlotColors,
+      fillColorData: result.diffFillColorData,
       shapes,
       fills,
       strategyMarkers,
+      bgcolor: result.diffBgcolor,
       lines,
       labels,
       barTimestamps,

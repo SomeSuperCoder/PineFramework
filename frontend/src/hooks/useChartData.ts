@@ -277,9 +277,11 @@ export function useChartData() {
                 : typeof diffValue === 'number' ? diffValue : null;
               const lastEntry = plot.data[plot.data.length - 1];
               if (lastEntry) {
+                const perBarColors = msg.plotColors?.[diffKey];
+                const color = perBarColors?.[perBarColors.length - 1] ?? undefined;
                 return {
                   ...plot,
-                  data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue }],
+                  data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
                 };
               }
             }
@@ -304,7 +306,9 @@ export function useChartData() {
             to: stripMeta(f.to),
             color: f.color,
           }));
-          const mergedFills = diffFills.length > 0 ? diffFills : prev.fills;
+          const mergedFills = diffFills.length > 0
+            ? [...prev.fills.slice(0, -diffFills.length || undefined), ...diffFills]
+            : prev.fills;
 
           const diffLines = (msg.lines || []).map((l) => ({
             points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
@@ -312,7 +316,9 @@ export function useChartData() {
             width: l.width,
             style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
           }));
-          const mergedLines = diffLines.length > 0 ? diffLines : prev.lines;
+          const mergedLines = diffLines.length > 0
+            ? [...prev.lines.slice(0, -diffLines.length || undefined), ...diffLines]
+            : prev.lines;
 
           const diffLabels = (msg.labels || []).map((l) => ({
             time: Math.floor(l.time / 1000),
@@ -323,7 +329,9 @@ export function useChartData() {
             style: l.style,
             size: l.size,
           }));
-          const mergedLabels = diffLabels.length > 0 ? diffLabels : prev.labels;
+          const mergedLabels = diffLabels.length > 0
+            ? [...prev.labels.slice(0, -diffLabels.length || undefined), ...diffLabels]
+            : prev.labels;
 
           const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
             type: m.type,
@@ -341,6 +349,34 @@ export function useChartData() {
             ? [...prev.strategyMarkers?.slice(0, -diffStrategyMarkers.length || undefined), ...diffStrategyMarkers]
             : prev.strategyMarkers;
 
+          const mergedPlotColors = msg.plotColors
+            ? Object.entries(msg.plotColors).reduce((acc, [key, colors]) => {
+                const prevColors = prev.plotColors?.[key];
+                if (prevColors) {
+                  acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
+                } else {
+                  acc[key] = colors;
+                }
+                return acc;
+              }, {} as Record<string, (string | null)[]>)
+            : prev.plotColors;
+
+          const mergedFillColorData = msg.fillColorData
+            ? Object.entries(msg.fillColorData).reduce((acc, [key, colors]) => {
+                const prevColors = prev.fillColorData?.[key];
+                if (prevColors) {
+                  acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
+                } else {
+                  acc[key] = colors;
+                }
+                return acc;
+              }, {} as Record<string, (string | null)[]>)
+            : prev.fillColorData;
+
+          const mergedBgcolor = msg.bgcolor
+            ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor]
+            : prev.bgcolor;
+
           return {
             ...prev,
             plots: mergedPlots,
@@ -349,6 +385,9 @@ export function useChartData() {
             lines: mergedLines,
             labels: mergedLabels,
             strategyMarkers: mergedStrategyMarkers,
+            plotColors: mergedPlotColors,
+            fillColorData: mergedFillColorData,
+            bgcolor: mergedBgcolor,
           };
         });
         return;
@@ -359,9 +398,11 @@ export function useChartData() {
       if (sampleKey) {
         const outputLen = msg.outputs[sampleKey].length;
         if (barTimestamps && outputLen !== barTimestamps.length) {
+          console.warn(`Execution result dropped: outputLen (${outputLen}) !== barTimestamps.length (${barTimestamps.length})`);
           return;
         }
         if (Math.abs(outputLen - ohlcvData.length) > 1) {
+          console.warn(`Execution result dropped: outputLen (${outputLen}) vs ohlcvData.length (${ohlcvData.length})`);
           return;
         }
       }
