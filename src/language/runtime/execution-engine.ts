@@ -122,6 +122,19 @@ export interface ExecutionResult {
   alertTriggers?: AlertTriggerEntry[];
 }
 
+export interface FormingCandleResult {
+  success: boolean;
+  error?: string;
+  diffOutputs: Record<string, PineValue>;
+  diffShapes: ShapeEntry[];
+  diffFills: Array<{ from: string; to: string; color: string }>;
+  diffLines: LineEntry[];
+  diffLabels: LabelEntry[];
+  barTimestamps: number[];
+  barIndex: number;
+  isDiff: boolean;
+}
+
 export interface StrategyMarkerEntry {
   type: string;
   name: string;
@@ -851,14 +864,17 @@ export class ExecutionEngine {
       return candidateValue;
     });
 
+    // @ts-ignore size parameter unused in stub implementation
     this.builtins.set('array.new_line', (size: PineValue): PineValue => {
       return [];
     });
 
+    // @ts-ignore size parameter unused in stub implementation
     this.builtins.set('array.new_float', (size: PineValue): PineValue => {
       return [];
     });
 
+    // @ts-ignore size parameter unused in stub implementation
     this.builtins.set('array.new_int', (size: PineValue): PineValue => {
       return [];
     });
@@ -1001,7 +1017,7 @@ export class ExecutionEngine {
 
     this.builtins.set('alertcondition', (...args: PineValue[]): PineValue => {
       const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
-        ? args[args.length - 1] as Record<string, PineValue>
+        ? args[args.length - 1] as unknown as Record<string, PineValue>
         : {};
       const condition = args[0] ?? NA;
       const titleVal = namedArgs['title'];
@@ -1339,6 +1355,130 @@ export class ExecutionEngine {
       this.createSnapshot();
     }
     return this.executeBar(context);
+  }
+
+  computeFormingCandle(context: ExecutionContext): FormingCandleResult {
+    if (this.metrics.totalBars === 0) {
+      const result = this.executeRealtimeBar(context);
+      return {
+        success: result.success,
+        error: result.error,
+        diffOutputs: Object.fromEntries(
+          Array.from(result.outputs).map(([k, s]) => [k, s.last()]),
+        ),
+        diffShapes: [...result.shapes],
+        diffFills: [...result.fills],
+        diffLines: [...(result.lines || [])],
+        diffLabels: [...(result.labels || [])],
+        barTimestamps: [...(result.barTimestamps ?? [])],
+        barIndex: (result.barTimestamps ?? []).length - 1,
+        isDiff: true,
+      };
+    }
+
+    const preOutputs = this.cloneOutputs();
+    const preShapesLen = this.shapes.length;
+    const preFillsLen = this.fills.length;
+    const preLinesSize = this.lines.size;
+    const preLabelsLen = this.labels.length;
+    const preTimestampsLen = this.barTimestamps.length;
+    const preTotalBars = this.metrics.totalBars;
+    const preAlertTriggersLen = this.alertTriggers.length;
+    const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, [...v]]));
+    const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
+    const preCrossPrevValues = [...this.crossPrevValues];
+
+    const result = this.executeBar(context);
+
+    const snapshotsAdded = this.snapshots.length > 0 ? 1 : 0;
+    for (let i = 0; i < snapshotsAdded; i++) {
+      this.snapshots.pop();
+    }
+
+    this.barTimestamps.length = preTimestampsLen;
+    this.metrics.totalBars = preTotalBars;
+    this.metrics.successfulBars = result.success
+      ? this.metrics.successfulBars - 1
+      : this.metrics.successfulBars;
+    this.metrics.failedBars = result.success
+      ? this.metrics.failedBars
+      : this.metrics.failedBars - 1;
+
+    this.globalScope = cloneRuntimeScope(this.globalScope);
+    this.smaBuffers = preSmaBuffers;
+    this.emaState = preEmaState;
+    this.crossPrevValues = preCrossPrevValues;
+
+    const diffOutputs: Record<string, PineValue> = {};
+    for (const [key, series] of this.outputs) {
+      const preSeries = preOutputs.get(key);
+      if (preSeries && series.length > 0 && preSeries.length > 0) {
+        const lastVal = series.last();
+        const preLastVal = preSeries.last();
+        if (lastVal !== preLastVal) {
+          diffOutputs[key] = lastVal;
+          series.values.length = preSeries.length;
+        }
+      } else if (series.length > 0 && (!preSeries || preSeries.length === 0)) {
+        diffOutputs[key] = series.last();
+      }
+    }
+
+    let diffShapes: ShapeEntry[] = [];
+    if (this.shapes.length > preShapesLen) {
+      diffShapes = this.shapes.slice(preShapesLen);
+      this.shapes.length = preShapesLen;
+    }
+
+    let diffFills: Array<{ from: string; to: string; color: string }> = [];
+    if (this.fills.length > preFillsLen) {
+      diffFills = this.fills.slice(preFillsLen);
+      this.fills.length = preFillsLen;
+    }
+
+    let diffLines: LineEntry[] = [];
+    if (this.lines.size > preLinesSize) {
+      diffLines = [];
+      for (const [id, entry] of this.lines) {
+        if (id >= preLinesSize) {
+          diffLines.push({ ...entry });
+          this.lines.delete(id);
+        }
+      }
+    }
+
+    let diffLabels: LabelEntry[] = [];
+    if (this.labels.length > preLabelsLen) {
+      diffLabels = this.labels.slice(preLabelsLen);
+      this.labels.length = preLabelsLen;
+    }
+
+    let diffAlertTriggers: AlertTriggerEntry[] = [];
+    if (this.alertTriggers.length > preAlertTriggersLen) {
+      diffAlertTriggers = this.alertTriggers.slice(preAlertTriggersLen);
+      this.alertTriggers.length = preAlertTriggersLen;
+    }
+
+    const isDiff =
+      Object.keys(diffOutputs).length > 0 ||
+      diffShapes.length > 0 ||
+      diffFills.length > 0 ||
+      diffLines.length > 0 ||
+      diffLabels.length > 0 ||
+      diffAlertTriggers.length > 0;
+
+    return {
+      success: result.success,
+      error: result.error,
+      diffOutputs,
+      diffShapes,
+      diffFills,
+      diffLines,
+      diffLabels,
+      barTimestamps: [...this.barTimestamps],
+      barIndex: this.barTimestamps.length - 1,
+      isDiff,
+    };
   }
 
   private updateMetrics(success: boolean, executionTimeMs: number): void {
@@ -1918,7 +2058,7 @@ export class ExecutionEngine {
         for (let i = 0; i < fields.length && i < args.length; i++) {
           obj[fields[i]!] = args[i]!;
         }
-        return obj;
+        return obj as unknown as PineValue;
       }
 
       // Generic array methods (lin.size(), lin.first(), lin.shift(), lin.unshift(), etc.)
@@ -2090,7 +2230,7 @@ export class ExecutionEngine {
     }
 
     if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
-      const val = (obj as Record<string, PineValue>)[expr.property];
+      const val = (obj as unknown as Record<string, PineValue>)[expr.property];
       return val !== undefined ? val : NA;
     }
 

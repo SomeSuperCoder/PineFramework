@@ -1,4 +1,4 @@
-import { parseAndCompile, barsToContext, ExecutionEngine, type Bar } from 'pine-framework';
+import { parseAndCompile, barsToContext, ExecutionEngine, type Bar, type FormingCandleResult } from 'pine-framework';
 import type { ExecutionContext } from 'pine-framework';
 
 function pineValueToJSON(v: unknown): number | string | boolean | null {
@@ -33,6 +33,7 @@ export interface ScriptOutputs {
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
   barIndex: number;
+  formingCandle?: boolean;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
 }
@@ -70,8 +71,12 @@ export class ScriptSession {
     const lastBar = this.bars[this.bars.length - 1];
     if (lastBar && lastBar.timestamp === bar.timestamp) {
       this.bars[this.bars.length - 1] = bar;
-      const singleCtx = barsToContext([bar])[0]!;
-      this.contexts[this.contexts.length - 1] = singleCtx;
+      const fullContexts = barsToContext(this.bars);
+      this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+
+      const context = this.contexts[this.contexts.length - 1]!;
+      const result = this.engine.computeFormingCandle(context);
+      return this.toFormingCandleOutputs(result);
     } else {
       this.bars.push(bar);
       const singleCtx = barsToContext([bar])[0]!;
@@ -188,6 +193,64 @@ export class ScriptSession {
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
       alertConditions,
       alertTriggers,
+    };
+  }
+
+  private toFormingCandleOutputs(result: FormingCandleResult): ScriptOutputs {
+    const outputs: Record<string, (number | string | boolean | null)[]> = {};
+    for (const [key, value] of Object.entries(result.diffOutputs)) {
+      outputs[key] = [pineValueToJSON(value)];
+    }
+
+    const shapes = result.diffShapes.map((s) => ({
+      style: s.style,
+      location: s.location,
+      color: s.color,
+      time: s.time,
+      text: s.text,
+    }));
+
+    const fills = result.diffFills.map((f) => ({
+      from: f.from,
+      to: f.to,
+      color: f.color,
+    }));
+
+    const strategyMarkers: ScriptOutputs['strategyMarkers'] = [];
+
+    const barTimestamps = result.barTimestamps ?? [];
+    const lines = (result.diffLines || []).map((l) => ({
+      points: [
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
+        { time: l.xloc === 'bar_index' ? (barTimestamps[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+      ],
+      color: l.color,
+      width: l.width,
+      style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid' as string,
+    }));
+
+    const labels = (result.diffLabels || []).map((l) => ({
+      time: l.time,
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textcolor,
+      style: l.style,
+      size: l.size,
+    }));
+
+    return {
+      success: result.success,
+      error: result.error,
+      outputs,
+      shapes,
+      fills,
+      strategyMarkers,
+      lines,
+      labels,
+      barTimestamps,
+      barIndex: result.barIndex,
+      formingCandle: true,
     };
   }
 }

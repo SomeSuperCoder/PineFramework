@@ -53,6 +53,7 @@ interface ExecutionResultMessage {
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
+  formingCandle?: boolean;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
   barIndex: number;
@@ -261,6 +262,98 @@ export function useChartData() {
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
     if (msg.success && msg.outputs) {
+      if (msg.formingCandle) {
+        setScriptResult((prev) => {
+          if (!prev) return prev;
+          const mergedPlots = prev.plots.map((plot) => {
+            const diffKey = Object.keys(msg.outputs).find((k) => {
+              const stripped = k.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
+              return stripped === plot.title || k === plot.title;
+            });
+            if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
+              const diffValue = msg.outputs[diffKey]![0];
+              const numValue = diffValue === null || diffValue === undefined ? null
+                : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
+                : typeof diffValue === 'number' ? diffValue : null;
+              const lastEntry = plot.data[plot.data.length - 1];
+              if (lastEntry) {
+                return {
+                  ...plot,
+                  data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue }],
+                };
+              }
+            }
+            return plot;
+          });
+
+          const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+          const diffShapes = (msg.shapes || []).map((s) => ({
+            type: s.style as import('../types').ShapeData['type'],
+            time: Math.floor(s.time / 1000),
+            price: 0,
+            color: s.color,
+            text: s.text,
+            location: s.location as import('../types').ShapeData['location'],
+          }));
+          const mergedShapes = diffShapes.length > 0
+            ? [...prev.shapes.slice(0, -diffShapes.length || undefined), ...diffShapes]
+            : prev.shapes;
+
+          const diffFills = (msg.fills || []).map((f) => ({
+            from: stripMeta(f.from),
+            to: stripMeta(f.to),
+            color: f.color,
+          }));
+          const mergedFills = diffFills.length > 0 ? diffFills : prev.fills;
+
+          const diffLines = (msg.lines || []).map((l) => ({
+            points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
+            color: l.color,
+            width: l.width,
+            style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
+          }));
+          const mergedLines = diffLines.length > 0 ? diffLines : prev.lines;
+
+          const diffLabels = (msg.labels || []).map((l) => ({
+            time: Math.floor(l.time / 1000),
+            price: l.price,
+            text: l.text,
+            color: l.color,
+            textColor: l.textColor,
+            style: l.style,
+            size: l.size,
+          }));
+          const mergedLabels = diffLabels.length > 0 ? diffLabels : prev.labels;
+
+          const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
+            type: m.type,
+            name: m.name,
+            direction: m.direction,
+            action: m.action,
+            quantity: m.quantity,
+            price: m.price,
+            barIndex: m.barIndex,
+            timestamp: m.timestamp,
+            color: m.color,
+            comment: m.comment,
+          }));
+          const mergedStrategyMarkers = diffStrategyMarkers.length > 0
+            ? [...prev.strategyMarkers?.slice(0, -diffStrategyMarkers.length || undefined), ...diffStrategyMarkers]
+            : prev.strategyMarkers;
+
+          return {
+            ...prev,
+            plots: mergedPlots,
+            shapes: mergedShapes,
+            fills: mergedFills,
+            lines: mergedLines,
+            labels: mergedLabels,
+            strategyMarkers: mergedStrategyMarkers,
+          };
+        });
+        return;
+      }
+
       const barTimestamps = msg.barTimestamps;
       const sampleKey = Object.keys(msg.outputs)[0];
       if (sampleKey) {

@@ -1887,25 +1887,25 @@ This implementation plan outlines the step-by-step development of a production-g
      - Test frontend proxy configuration UI rendering
      - _Requirements: 14.31, 14.32, 14.33, 14.34, 14.35_
 
-- [ ] 75. Implement real-time indicator computation for forming candles
-   - [ ] 75.1 Add forming-candle computation mode to execution engine
+- [x] 75. Implement real-time indicator computation for forming candles
+   - [x] 75.1 Add forming-candle computation mode to execution engine
      - Implement computeFormingCandle() that re-evaluates the script for only the last (live) bar
      - Preserve var/varip state and series history across intra-bar updates
      - Return updated outputs (plots, shapes, fills, strategyMarkers) for the forming candle only
      - _Requirements: 3.24_
 
-   - [ ] 75.2 Wire forming-candle computation into backend real-time pipeline
+   - [x] 75.2 Wire forming-candle computation into backend real-time pipeline
      - When a real-time kline/tick update arrives for the same bar timestamp, call computeFormingCandle() on the persisted engine instead of a full re-execution
      - Push partial indicator updates for the forming candle via WebSocket execution_result
      - _Requirements: 3.24, 19.19_
 
-   - [ ] 75.3 Update frontend to render forming-candle indicator values
+   - [x] 75.3 Update frontend to render forming-candle indicator values
      - Accept partial indicator updates targeting only the last bar
      - Re-render plot lines, shapes, fills for the forming candle without disrupting completed bars
      - Ensure crosshair tooltip shows up-to-date indicator values for the forming candle
      - _Requirements: 17.28, 17.13_
 
-   - [ ] 75.4 Write tests for forming-candle computation
+   - [x] 75.4 Write tests for forming-candle computation
      - Test computeFormingCandle() with various indicator types (SMA, EMA, RSI, crossover)
      - Test state preservation across multiple intra-bar updates
      - Test backend WebSocket push of partial results

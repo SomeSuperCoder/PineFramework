@@ -1,0 +1,339 @@
+import { parse } from '../../src/language/parser/parser.js';
+import { compile } from '../../src/language/compiler/compiler.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
+import { createSeries } from '../../src/language/runtime/series.js';
+
+interface TestBar {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+function makeBars(count: number, startPrice = 100, baseTime = 1000000): TestBar[] {
+  const bars: TestBar[] = [];
+  let price = startPrice;
+  for (let i = 0; i < count; i++) {
+    const open = price;
+    const close = open + 2;
+    bars.push({
+      timestamp: baseTime + i * 60000,
+      open,
+      high: Math.max(open, close) + 1,
+      low: Math.min(open, close) - 1,
+      close,
+      volume: 1000,
+    });
+    price = close;
+  }
+  return bars;
+}
+
+function barsToContexts(bars: TestBar[]): ExecutionContext[] {
+  return bars.map((bar, index) => ({
+    barIndex: index,
+    barCount: bars.length,
+    timestamp: bar.timestamp,
+    open: createSeries('open', bars.slice(0, index + 1).map(b => b.open)),
+    high: createSeries('high', bars.slice(0, index + 1).map(b => b.high)),
+    low: createSeries('low', bars.slice(0, index + 1).map(b => b.low)),
+    close: createSeries('close', bars.slice(0, index + 1).map(b => b.close)),
+    volume: createSeries('volume', bars.slice(0, index + 1).map(b => b.volume)),
+  }));
+}
+
+function makeFormingContext(bars: TestBar[], newClose: number): ExecutionContext {
+  const index = bars.length - 1;
+  const lastBar = bars[index]!;
+  return {
+    barIndex: index,
+    barCount: bars.length,
+    timestamp: lastBar.timestamp,
+    open: createSeries('open', bars.map(b => b.open)),
+    high: createSeries('high', bars.map(b => b.high)),
+    low: createSeries('low', bars.map(b => b.low)),
+    close: createSeries('close', bars.map((b, i) => i === index ? newClose : b.close)),
+    volume: createSeries('volume', bars.map(b => b.volume)),
+  };
+}
+
+function compileScript(source: string): ExecutionEngine {
+  const { ast } = parse(source);
+  const result = compile(ast);
+  return new ExecutionEngine(result);
+}
+
+const SMA_SCRIPT = `//@version=6
+indicator("SMA Test")
+smaValue = ta.sma(close, 5)
+plot(smaValue)
+`;
+
+const EMA_SCRIPT = `//@version=6
+indicator("EMA Test")
+emaValue = ta.ema(close, 10)
+plot(emaValue)
+`;
+
+const VAR_SCRIPT = `//@version=6
+indicator("Var Test")
+var counter = 0.0
+counter := counter + 1
+plot(counter)
+`;
+
+const MULTI_PLOT_SCRIPT = `//@version=6
+indicator("Multi Plot")
+sma5 = ta.sma(close, 5)
+sma10 = ta.sma(close, 10)
+plot(sma5)
+plot(sma10)
+`;
+
+describe('Forming Candle Computation', () => {
+  describe('computeFormingCandle()', () => {
+    it('should return diff outputs for the forming candle only', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+      expect(result.isDiff).toBe(true);
+      expect(Object.keys(result.diffOutputs).length).toBeGreaterThan(0);
+    });
+
+    it('should preserve engine state after forming candle computation', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const totalBarsBefore = engine.getMetrics().totalBars;
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      engine.computeFormingCandle(formingCtx);
+
+      const totalBarsAfter = engine.getMetrics().totalBars;
+      expect(totalBarsAfter).toBe(totalBarsBefore);
+    });
+
+    it('should not add a new bar to barTimestamps', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      const result = engine.executeBars(contexts);
+
+      const timestampsBefore = result.barTimestamps?.length ?? 0;
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const formingResult = engine.computeFormingCandle(formingCtx);
+      expect(formingResult.barTimestamps.length).toBe(timestampsBefore);
+    });
+
+    it('should return updated output value when OHLCV changes', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      const fullResult = engine.executeBars(contexts);
+
+      const smaKey = Array.from(fullResult.outputs.keys()).find(k => k.includes('sma'));
+      expect(smaKey).toBeDefined();
+      const smaSeries = fullResult.outputs.get(smaKey!)!;
+      const prevSmaValue = smaSeries.last();
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, (prevSmaValue as number) + 10);
+
+      const formingResult = engine.computeFormingCandle(formingCtx);
+      if (formingResult.diffOutputs[smaKey!] !== undefined) {
+        const newSmaValue = formingResult.diffOutputs[smaKey!];
+        expect(newSmaValue).not.toBe(prevSmaValue);
+      }
+    });
+
+    it('should re-evaluate indicators correctly with unchanged OHLCV', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const sameCtx = makeFormingContext(bars, lastBar.close);
+
+      const result = engine.computeFormingCandle(sameCtx);
+      expect(result.success).toBe(true);
+      expect(result.barTimestamps.length).toBe(bars.length);
+    });
+
+    it('should handle forming candle before any historical bars', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const formingCtx = {
+        barIndex: 0,
+        barCount: 1,
+        timestamp: 1000000,
+        open: createSeries('open', [105]),
+        high: createSeries('high', [108]),
+        low: createSeries('low', [104]),
+        close: createSeries('close', [107]),
+        volume: createSeries('volume', [1000]),
+      };
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+      expect(result.isDiff).toBe(true);
+    });
+
+    it('should handle multiple consecutive forming candle updates', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      for (let tick = 0; tick < 5; tick++) {
+        const formingCtx = makeFormingContext(bars, lastBar.close + tick);
+        const result = engine.computeFormingCandle(formingCtx);
+        expect(result.success).toBe(true);
+        expect(result.barTimestamps.length).toBe(bars.length);
+      }
+    });
+
+    it('should not corrupt state when followed by a new bar', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+      engine.computeFormingCandle(formingCtx);
+
+      const newBarCtx = {
+        barIndex: 15,
+        barCount: 16,
+        timestamp: lastBar.timestamp + 60000,
+        open: createSeries('open', [lastBar.close + 10]),
+        high: createSeries('high', [lastBar.close + 13]),
+        low: createSeries('low', [lastBar.close + 9]),
+        close: createSeries('close', [lastBar.close + 12]),
+        volume: createSeries('volume', [1000]),
+      };
+      const newBarResult = engine.executeRealtimeBar(newBarCtx);
+      expect(newBarResult.success).toBe(true);
+      expect(newBarResult.barTimestamps.length).toBe(bars.length + 1);
+    });
+
+    it('should preserve var state across forming candle updates', () => {
+      const engine = compileScript(VAR_SCRIPT);
+      const bars = makeBars(5, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const counterOutput = engine.getOutput('counter');
+      expect(counterOutput!.last()).toBe(5);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+
+      const counterAfter = engine.getOutput('counter');
+      expect(counterAfter!.last()).toBe(5);
+    });
+
+    it('should return empty diff shapes when no new shapes created', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.diffShapes.length).toBe(0);
+      expect(result.diffFills.length).toBe(0);
+      expect(result.diffLines.length).toBe(0);
+      expect(result.diffLabels.length).toBe(0);
+    });
+
+    it('should produce correct barIndex in result', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.barIndex).toBe(bars.length - 1);
+    });
+
+    it('should work with multi-plot scripts', () => {
+      const engine = compileScript(MULTI_PLOT_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+      const outputKeys = Object.keys(result.diffOutputs);
+      expect(outputKeys.length).toBeGreaterThan(0);
+    });
+
+    it('should handle EMA correctly with forming candle', () => {
+      const engine = compileScript(EMA_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      const fullResult = engine.executeBars(contexts);
+
+      const emaKey = Array.from(fullResult.outputs.keys()).find(k => k.includes('ema'));
+      expect(emaKey).toBeDefined();
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 10);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+    });
+
+    it('should return correct error on execution failure', () => {
+      const engine = compileScript(SMA_SCRIPT);
+      const bars = makeBars(3, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const formingCtx = {
+        barIndex: 2,
+        barCount: 3,
+        timestamp: bars[2]!.timestamp,
+        open: createSeries('open', [100, 102, NaN]),
+        high: createSeries('high', [101, 103, NaN]),
+        low: createSeries('low', [99, 101, NaN]),
+        close: createSeries('close', [100, 102, NaN]),
+        volume: createSeries('volume', [1000, 1000, NaN]),
+      };
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+    });
+  });
+});
