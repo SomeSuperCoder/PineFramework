@@ -86,6 +86,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 21. THE Execution_Engine SHALL implement strict comparisons for ta.crossover (prev src <= prev cmp) and ta.crossunder (prev src >= prev cmp) and strict inequality for ta.pivothigh (>) and ta.pivotlow (<) to match TradingView semantics
 22. THE Execution_Engine SHALL return line and label entries (LineEntry, LabelEntry) as part of the execution result alongside shapes, fills, and strategyMarkers
 23. THE Execution_Engine SHALL dispatch line.* and label.* method calls on numeric IDs returned by line.new() and label.new(), supporting delete, get_*, and set_* methods via method dispatch
+24. THE Execution_Engine SHALL compute indicator values for the currently forming (live) candle on every real-time tick or kline update, updating only the last bar's output without reprocessing historical bars, so that indicators track intra-bar price action in real time
 
 ### Requirement 4: Technical Analysis Functions
 

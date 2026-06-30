@@ -149,6 +149,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Per-bar color storage: plot color data and fill color data stored as separate arrays alongside output values
   - plot() builtin outputs a single continuous series key regardless of per-bar color variation (no splitting into per-color variants)
   - bgcolor data forwarded through execution result pipeline
+  - Forming-candle computation: on each real-time tick or kline update, only the last (live) bar is re-evaluated without reprocessing historical bars, enabling sub-bar indicator updates that track intra-bar price action
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -670,10 +671,18 @@ Bybit REST API → Backend (Data Cache) → Frontend (OHLCV) → Backend (Pine E
 Bybit WebSocket → Backend (WS Gateway)
   ├── Data Cache (update bar)
   ├── Frontend (WS Client) → Chart Update (candle refresh)
-  └── Session Manager → Persisted Engine (executeRealtimeBar)
-        → Updated outputs, shapes, fills, strategyMarkers
-        → Backend (WS Gateway) → Frontend (WS Client)
-        → Chart Overlay Update (indicators, markers, fills)
+  │
+  ├── New candle (period rollover):
+  │     Session Manager → Persisted Engine (executeRealtimeBar)
+  │       → Updated outputs, shapes, fills, strategyMarkers
+  │       → Backend (WS Gateway) → Frontend (WS Client)
+  │       → Chart Overlay Update (indicators, markers, fills)
+  │
+  └── Forming-candle tick (intra-bar update):
+        Session Manager → Persisted Engine (computeFormingCandle)
+          → Updated indicator values for last bar only
+          → Backend (WS Gateway) → Frontend (WS Client)
+          → Chart Last-Bar Overlay Update (indicators track live price)
 ```
 
 #### 4. Request Processing Flow
@@ -757,12 +766,16 @@ pine-framework (engine library)
 - Finalize historical state
 
 #### 3. Realtime Processing Phase
-- On new bar data:
+- On new bar (period rollover):
   - Rollback to last confirmed state
-  - Update with new bar data
-  - Re-execute script
-  - Update visualizations
+  - Append new bar data and execute script for the new bar
+  - Store series state and update visualizations
+- On forming-candle tick (same bar, intra-bar update):
+  - Update last bar's OHLCV values in-place
+  - Execute script for only the last bar (no historical reprocessing)
+  - Push updated indicator values for the forming candle to the frontend
   - Trigger alerts if conditions met
+  - Repeat for each tick/kline update within the candle's lifetime
 - Repeat for each realtime update
 
 #### 4. Cleanup Phase

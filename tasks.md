@@ -1879,13 +1879,38 @@ This implementation plan outlines the step-by-step development of a production-g
     - Save button that calls `PUT /api/settings/telegram/proxy`
     - _Requirements: 14.34_
   
-  - [x] 74.5 Write tests for SOCKS5 proxy support
-    - Test proxy config CRUD via TelegramConfigStore
-    - Test proxy agent creation with valid/invalid settings
-    - Test fallback to direct connection when no proxy configured
-    - Test REST API endpoints for proxy settings
-    - Test frontend proxy configuration UI rendering
-    - _Requirements: 14.31, 14.32, 14.33, 14.34, 14.35_
+   - [x] 74.5 Write tests for SOCKS5 proxy support
+     - Test proxy config CRUD via TelegramConfigStore
+     - Test proxy agent creation with valid/invalid settings
+     - Test fallback to direct connection when no proxy configured
+     - Test REST API endpoints for proxy settings
+     - Test frontend proxy configuration UI rendering
+     - _Requirements: 14.31, 14.32, 14.33, 14.34, 14.35_
+
+- [ ] 75. Implement real-time indicator computation for forming candles
+   - [ ] 75.1 Add forming-candle computation mode to execution engine
+     - Implement computeFormingCandle() that re-evaluates the script for only the last (live) bar
+     - Preserve var/varip state and series history across intra-bar updates
+     - Return updated outputs (plots, shapes, fills, strategyMarkers) for the forming candle only
+     - _Requirements: 3.24_
+
+   - [ ] 75.2 Wire forming-candle computation into backend real-time pipeline
+     - When a real-time kline/tick update arrives for the same bar timestamp, call computeFormingCandle() on the persisted engine instead of a full re-execution
+     - Push partial indicator updates for the forming candle via WebSocket execution_result
+     - _Requirements: 3.24, 19.19_
+
+   - [ ] 75.3 Update frontend to render forming-candle indicator values
+     - Accept partial indicator updates targeting only the last bar
+     - Re-render plot lines, shapes, fills for the forming candle without disrupting completed bars
+     - Ensure crosshair tooltip shows up-to-date indicator values for the forming candle
+     - _Requirements: 17.28, 17.13_
+
+   - [ ] 75.4 Write tests for forming-candle computation
+     - Test computeFormingCandle() with various indicator types (SMA, EMA, RSI, crossover)
+     - Test state preservation across multiple intra-bar updates
+     - Test backend WebSocket push of partial results
+     - Test frontend rendering of partial indicator updates for the forming candle
+     - _Requirements: 3.24_
 
 ## Notes
 
@@ -1906,6 +1931,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 69 fixes indicator alignment after lazy loading by adding barTimestamps to the execution pipeline, validating output lengths in handleExecutionResult, and guarding against stale WebSocket sessions
 - Tasks 70-72 implement JSON file-based persistent storage (`backend/data/telegram.json`), Telegram Bot notification system, and per-alert Telegram selection UI
 - Task 73 is the checkpoint validating Telegram notifications, JSON file persistence, and non-content-blocking alert markers
+- Task 75 implements real-time indicator computation for forming (live) candles: on each tick or kline update within the current candle's lifetime, only the last bar is re-evaluated without historical reprocessing, pushing partial indicator updates to the frontend for live intra-bar tracking
 
 ## Task Dependency Graph
 
@@ -2007,7 +2033,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 92, "tasks": ["71.4"] },
     { "id": 93, "tasks": ["72.1", "72.2", "72.3"] },
     { "id": 94, "tasks": ["72.4"] },
-    { "id": 95, "tasks": ["73"] }
+    { "id": 95, "tasks": ["73"] },
+    { "id": 96, "tasks": ["75.1", "75.2", "75.3"] },
+    { "id": 97, "tasks": ["75.4"] }
   ]
 }
 ```
