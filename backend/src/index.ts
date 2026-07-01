@@ -10,13 +10,16 @@ import { symbolsRouter } from './routes/symbols.js';
 import { statusRouter } from './routes/status.js';
 import { createBacktestRouter } from './routes/backtest.js';
 import { createSettingsRouter } from './routes/settings.js';
+import { createScriptsRouter } from './routes/scripts.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
+import { ScriptStore } from './store/ScriptStore.js';
 import { TelegramService } from './telegram/TelegramService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
 const TELEGRAM_JSON_PATH = path.join(DATA_DIR, 'telegram.json');
+const SCRIPTS_JSON_PATH = path.join(DATA_DIR, 'scripts.json');
 
 const app = express();
 const server = createServer(app);
@@ -26,6 +29,8 @@ const cache = new OHLCVCache(100, 60_000);
 
 const telegramConfig = new TelegramConfigStore(TELEGRAM_JSON_PATH);
 const telegramService = new TelegramService({ configStore: telegramConfig });
+
+const scriptStore = new ScriptStore(SCRIPTS_JSON_PATH);
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -97,6 +102,8 @@ app.use('/api', createSettingsRouter({
     restartTelegramService().catch((err) => console.error('[Telegram] Error restarting after proxy update:', err));
   },
 }));
+
+app.use('/api', createScriptsRouter(scriptStore));
 
 createWSGateway(server, cache, telegramService);
 

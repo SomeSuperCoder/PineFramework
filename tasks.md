@@ -1912,15 +1912,15 @@ This implementation plan outlines the step-by-step development of a production-g
      - Test frontend rendering of partial indicator updates for the forming candle
      - _Requirements: 3.24_
 
-- [ ] 76. Implement Script Bank Backend (JSON Store + REST API)
-  - [ ] 76.1 Create `ScriptStore` domain wrapper using `JsonStore`
+- [x] 76. Implement Script Bank Backend (JSON Store + REST API)
+  - [x] 76.1 Create `ScriptStore` domain wrapper using `JsonStore`
     - Create `backend/data/scripts.json` with default schema `{ scripts: [], activeScriptId: null }`
     - Implement `ScriptStore` class with methods: `getAll()`, `getById(id)`, `create(name, source)`, `update(id, name?, source?)`, `delete(id)`, `getActive()`, `setActive(scriptId)`
     - Generate UUIDs for new scripts, set `createdAt` and `updatedAt` timestamps
     - Auto-detect `scriptType` from source (check for `strategy()` vs `indicator()` calls)
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.9_
 
-  - [ ] 76.2 Implement REST API endpoints for Script Bank
+  - [x] 76.2 Implement REST API endpoints for Script Bank
     - `GET /api/scripts` — return all scripts (id, name, scriptType, updatedAt; omit source for list)
     - `POST /api/scripts` — create script, accept `{ name, source }`, return created entry
     - `GET /api/scripts/:id` — return full script entry including source
@@ -1930,7 +1930,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - `GET /api/scripts/active` — return active script entry with full source
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.6, 24.7_
 
-  - [ ] 76.3 Add search/filter support to list endpoint
+  - [x] 76.3 Add search/filter support to list endpoint
     - `GET /api/scripts?q=<term>` — filter scripts by name (case-insensitive contains)
     - _Requirements: 24.10_
 
@@ -1943,8 +1943,8 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test validation (missing name/source, invalid scriptId)
     - _Requirements: 24.1-24.10_
 
-- [ ] 77. Implement Script Bank Frontend UI
-  - [ ] 77.1 Create ScriptBankPanel component
+- [x] 77. Implement Script Bank Frontend UI
+  - [x] 77.1 Create ScriptBankPanel component
     - Render list of scripts with name, type badge (indicator/strategy), last modified date
     - Add search input at top for filtering by name
     - Add "New Script" button that opens create dialog
@@ -1952,20 +1952,20 @@ This implementation plan outlines the step-by-step development of a production-g
     - Click a script to select it as active (loads into editor + executes on chart)
     - _Requirements: 24.1, 24.6, 24.8, 24.10_
 
-  - [ ] 77.2 Add script CRUD dialogs
+  - [x] 77.2 Add script CRUD dialogs
     - Create dialog: name input + code editor pre-filled with default template
     - Edit dialog: name input + code editor pre-filled with existing source
     - Delete confirmation dialog (are you sure?)
     - Wire dialogs to backend REST endpoints
     - _Requirements: 24.2, 24.3, 24.4_
 
-  - [ ] 77.3 Implement active script loading on app startup
+  - [x] 77.3 Implement active script loading on app startup
     - On mount, fetch `GET /api/scripts/active`
     - If active script exists, load its source into the code editor and auto-execute
     - Store active script ID in state for highlight in panel
     - _Requirements: 24.7, 24.8_
 
-  - [ ] 77.4 Wire script selection to chart execution
+  - [x] 77.4 Wire script selection to chart execution
     - When user clicks a script in the bank panel, call `PUT /api/scripts/active`
     - Load the selected script's source into the code editor
     - Execute the script on the chart via existing POST /api/execute flow
@@ -1979,7 +1979,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test app startup loads active script into editor
     - _Requirements: 24.1-24.10_
 
-- [ ] 78. Checkpoint - Script Bank Validation
+- [x] 78. Checkpoint - Script Bank Validation
   - Create a new script via the panel, verify it appears in the list
   - Edit a script name and source, verify changes persist
   - Delete a script, verify it is removed from the list

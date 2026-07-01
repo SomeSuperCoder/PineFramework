@@ -4,6 +4,7 @@ import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
+import { ScriptBankPanel } from './components/ScriptBankPanel';
 import { useChartData } from './hooks/useChartData';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
@@ -44,6 +45,17 @@ function App() {
     prependCountRef,
     ohlcvDataRef,
   } = useChartData();
+
+  useEffect(() => {
+    fetch('/api/scripts/active')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.script?.source) {
+          setCurrentCode(data.script.source);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setDataVersion((v) => v + 1);
@@ -122,6 +134,13 @@ function App() {
         onCodeChange={setCurrentCode}
         onClose={() => setEditorOpen(false)}
         onExecute={handleExecute}
+      />
+
+      <ScriptBankPanel
+        onLoadScript={(source) => {
+          setCurrentCode(source);
+          executeScript(source, symbol, timeframe);
+        }}
       />
 
       <TelegramConfigPanel
