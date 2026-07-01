@@ -1989,8 +1989,8 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
 
-- [ ] 79. Unify Script Editor — Replace ScriptBankPanel with Dropdown in CodeEditor
-  - [ ] 79.1 Add `runningScriptId` to backend ScriptBankData schema
+- [x] 79. Unify Script Editor — Replace ScriptBankPanel with Dropdown in CodeEditor
+  - [x] 79.1 Add `runningScriptId` to backend ScriptBankData schema
     - Extend `ScriptBankData` with `runningScriptId: string | null` field (separate from `activeScriptId`)
     - Add `getRunning()` and `setRunning(id)` methods to `ScriptStore`
     - Add `PUT /api/scripts/running` endpoint to set the running script
@@ -1998,7 +1998,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Keep existing `activeScriptId` for backward compatibility (or repurpose it as runningScriptId)
     - _Requirements: 25.6, 25.11, 25.12_
 
-  - [ ] 79.2 Refactor CodeEditor to include script dropdown and auto-save
+  - [x] 79.2 Refactor CodeEditor to include script dropdown and auto-save
     - Add a dropdown (`<select>`) at the top of the CodeEditor listing all scripts by name
     - On editor open, fetch `GET /api/scripts/running` and load that script's source
     - On dropdown change, fetch the selected script's source via `GET /api/scripts/:id` and load into textarea WITHOUT executing on chart
@@ -2009,20 +2009,20 @@ This implementation plan outlines the step-by-step development of a production-g
     - When name is extracted, update script name via `PUT /api/scripts/:id` with `{ name }`
     - _Requirements: 25.1, 25.2, 25.3, 25.4, 25.7, 25.8, 25.9, 25.10_
 
-  - [ ] 79.3 Wire "Run" button to persist running script
+  - [x] 79.3 Wire "Run" button to persist running script
     - When "Run" is clicked, execute the current source on the chart (existing behavior)
     - Additionally, call `PUT /api/scripts/running` with `{ scriptId: currentScriptId }` to persist it as the running script
     - Store the running script ID in App.tsx state for the editor to read on next open
     - _Requirements: 25.6_
 
-  - [ ] 79.4 Remove ScriptBankPanel from App.tsx
+  - [x] 79.4 Remove ScriptBankPanel from App.tsx
     - Remove the `ScriptBankPanel` import and component from `App.tsx`
     - Remove the `ScriptBankPanel.tsx` file from `frontend/src/components/`
     - Remove the `onLoadScript` prop wiring that was used by the old panel
     - Verify no remaining references to `ScriptBankPanel` exist in the codebase
     - _Requirements: 25.1_
 
-  - [ ] 79.5 Load running script on app startup
+  - [x] 79.5 Load running script on app startup
     - On app mount, fetch `GET /api/scripts/running` to get the currently running script
     - Set the editor's current script ID and source from the running script
     - Do NOT auto-execute the chart on mount (user must click Run)
@@ -2039,7 +2039,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test startup loads running script into editor
     - _Requirements: 25.1-25.12_
 
-- [ ] 80. Checkpoint - Unified Editor Validation
+- [x] 80. Checkpoint - Unified Editor Validation
   - Open editor, verify dropdown shows all scripts and running script is selected
   - Switch scripts via dropdown, verify source loads but chart does NOT re-execute
   - Edit source, verify changes auto-save but chart does NOT re-execute

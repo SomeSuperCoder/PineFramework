@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
-import { ScriptBankPanel } from './components/ScriptBankPanel';
 import { useChartData } from './hooks/useChartData';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
@@ -19,14 +18,13 @@ const INTERVALS = [
   { value: 'W', label: '1W' },
 ];
 
-const savedCode = typeof window !== 'undefined' ? localStorage.getItem('pine-script-code') : null;
-
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
-  const [currentCode, setCurrentCode] = useState(savedCode || DEFAULT_CODE);
+  const [currentCode, setCurrentCode] = useState(DEFAULT_CODE);
+  const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
 
@@ -47,10 +45,11 @@ function App() {
   } = useChartData();
 
   useEffect(() => {
-    fetch('/api/scripts/active')
+    fetch('/api/scripts/running')
       .then((res) => res.json())
       .then((data) => {
-        if (data.script?.source) {
+        if (data.script) {
+          setCurrentScriptId(data.script.id);
           setCurrentCode(data.script.source);
         }
       })
@@ -63,10 +62,6 @@ function App() {
   }, [symbol, timeframe, subscribe]);
 
   useEffect(() => {
-    executeScript(currentCode, symbol, timeframe);
-  }, [symbol, timeframe, executeScript, currentCode]);
-
-  useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
       setIsStrategy(true);
     } else {
@@ -75,10 +70,16 @@ function App() {
     }
   }, [scriptResult]);
 
-  const handleExecute = async (code: string) => {
+  const handleRun = async (scriptId: string, source: string) => {
     setEditorOpen(false);
-    setCurrentCode(code);
-    await executeScript(code, symbol, timeframe);
+    setCurrentScriptId(scriptId);
+    setCurrentCode(source);
+    await executeScript(source, symbol, timeframe);
+    fetch('/api/scripts/running', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scriptId }),
+    }).catch(() => {});
   };
 
   return (
@@ -130,17 +131,9 @@ function App() {
 
       <CodeEditor
         isOpen={editorOpen}
-        code={currentCode}
-        onCodeChange={setCurrentCode}
         onClose={() => setEditorOpen(false)}
-        onExecute={handleExecute}
-      />
-
-      <ScriptBankPanel
-        onLoadScript={(source) => {
-          setCurrentCode(source);
-          executeScript(source, symbol, timeframe);
-        }}
+        onRun={handleRun}
+        initialScriptId={currentScriptId}
       />
 
       <TelegramConfigPanel
