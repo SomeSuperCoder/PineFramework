@@ -166,10 +166,11 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
 
   const handleNewScript = async () => {
     try {
+      const extracted = extractName(DEFAULT_CODE);
       const res = await fetch('/api/scripts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Untitled', source: DEFAULT_CODE }),
+        body: JSON.stringify({ name: extracted || 'Untitled', source: DEFAULT_CODE }),
       });
       const data = await res.json();
       if (data.script) {
