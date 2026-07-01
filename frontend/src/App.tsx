@@ -62,6 +62,10 @@ function App() {
   }, [symbol, timeframe, subscribe]);
 
   useEffect(() => {
+    executeScript(currentCode, symbol, timeframe);
+  }, [symbol, timeframe, executeScript, currentCode]);
+
+  useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
       setIsStrategy(true);
     } else {
