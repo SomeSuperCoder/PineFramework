@@ -133,6 +133,7 @@ export interface FormingCandleResult {
   diffPlotColors?: Record<string, (string | null)[]>;
   diffFillColorData?: Record<string, (string | null)[]>;
   diffBgcolor?: Array<{ time: number; color: string }>;
+  diffAlertTriggers?: AlertTriggerEntry[];
   barTimestamps: number[];
   barIndex: number;
   isDiff: boolean;
@@ -1508,6 +1509,7 @@ export class ExecutionEngine {
       diffPlotColors: Object.keys(diffPlotColors).length > 0 ? diffPlotColors : undefined,
       diffFillColorData: Object.keys(diffFillColorData).length > 0 ? diffFillColorData : undefined,
       diffBgcolor: diffBgcolor.length > 0 ? diffBgcolor : undefined,
+      diffAlertTriggers: diffAlertTriggers.length > 0 ? diffAlertTriggers : undefined,
       barTimestamps: [...this.barTimestamps],
       barIndex: this.barTimestamps.length - 1,
       isDiff,

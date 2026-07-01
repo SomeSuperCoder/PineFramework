@@ -98,7 +98,7 @@ app.use('/api', createSettingsRouter({
   },
 }));
 
-createWSGateway(server, cache);
+createWSGateway(server, cache, telegramService);
 
 server.listen(PORT, async () => {
   console.log(`Backend server running on http://localhost:${PORT}`);

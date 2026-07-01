@@ -3,6 +3,7 @@ import type { Server } from 'http';
 import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
+import type { TelegramService } from '../telegram/TelegramService.js';
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -12,7 +13,7 @@ interface ClientSubscription {
 
 const BYBIT_WS_URL = process.env.BYBIT_WS_URL || 'wss://stream.bybit.com/v5/public/linear';
 
-export function createWSGateway(server: Server, cache: OHLCVCache): void {
+export function createWSGateway(server: Server, cache: OHLCVCache, telegramService?: TelegramService): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const clients = new Map<WebSocket, ClientSubscription>();
   let bybitWs: WebSocket | null = null;
@@ -86,6 +87,10 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) return;
 
+    const topicParts = topic.split('.');
+    const symbol = topicParts[2] || '';
+    const interval = topicParts[1] || '';
+
     for (const ws of subscribers) {
       if (ws.readyState !== WebSocket.OPEN) continue;
       const sub = clients.get(ws);
@@ -97,6 +102,20 @@ export function createWSGateway(server: Server, cache: OHLCVCache): void {
           type: 'execution_result',
           data: outputs,
         }));
+
+        if (telegramService?.isActive() && outputs.alertTriggers && outputs.alertTriggers.length > 0) {
+          for (const trigger of outputs.alertTriggers) {
+            const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
+            const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
+            const title = condition?.title || trigger.alertId;
+            telegramService.sendAlertToSubscribers(
+              `*${title}*\n\n${message}`,
+              trigger.alertId,
+              symbol || undefined,
+              interval || undefined,
+            );
+          }
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Script re-execution failed';
         console.error('[WS] Script re-execution error:', message);

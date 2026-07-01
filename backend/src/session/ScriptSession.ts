@@ -45,6 +45,7 @@ export class ScriptSession {
   private bars: Bar[];
   private engine: ExecutionEngine | null = null;
   private contexts: ExecutionContext[] = [];
+  private cachedAlertConditions: Array<{ id: string; title: string; message: string }> = [];
 
   constructor(source: string, symbol: string, interval: string, bars: Bar[]) {
     this.source = source;
@@ -167,6 +168,10 @@ export class ScriptSession {
       }
     }
 
+    if (alertConditions.length > 0) {
+      this.cachedAlertConditions = alertConditions;
+    }
+
     const alertTriggers: Array<{ alertId: string; barIndex: number; timestamp: number }> = [];
     const rawTriggers = resultAny.alertTriggers as Array<{ alertId: string; barIndex: number; timestamp: number }> | undefined;
     if (rawTriggers) {
@@ -252,6 +257,8 @@ export class ScriptSession {
       barTimestamps,
       barIndex: result.barIndex,
       formingCandle: true,
+      alertConditions: this.cachedAlertConditions,
+      alertTriggers: result.diffAlertTriggers ?? [],
     };
   }
 }
