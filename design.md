@@ -1574,6 +1574,65 @@ Response: {
 - Results stored in time-series or document database (MongoDB/InfluxDB)
 - Chart rendering via lightweight-charts or existing Canvas Charting Library
 
+### Script Bank Architecture
+
+#### 1. Overview
+The Script Bank provides persistent storage and management for Pine Script programs. Users can create, update, delete, and select scripts from a centralized bank, with the active script selection persisted across restarts.
+
+#### 2. Data Model
+```
+ScriptEntry: {
+  id: string (UUID),
+  name: string,
+  source: string (Pine Script code),
+  scriptType: "indicator" | "strategy" | "library",
+  createdAt: number (timestamp),
+  updatedAt: number (timestamp)
+}
+
+ScriptBankData: {
+  scripts: ScriptEntry[],
+  activeScriptId: string | null
+}
+```
+
+#### 3. Storage
+- Single JSON file at `backend/data/scripts.json`
+- Same `JsonStore` infrastructure used for `telegram.json`
+- Auto-creates directory and file with defaults on first launch
+- Schema: `{ scripts: [], activeScriptId: null }`
+
+#### 4. Backend API Endpoints
+```
+GET    /api/scripts                  → List all scripts
+POST   /api/scripts                  → Create a new script { name, source }
+GET    /api/scripts/:id              → Get a single script
+PUT    /api/scripts/:id              → Update script { name?, source? }
+DELETE /api/scripts/:id              → Delete a script
+PUT    /api/scripts/active           → Set active script { scriptId }
+GET    /api/scripts/active           → Get active script (full entry + source)
+```
+
+#### 5. Frontend Components
+- **ScriptBankPanel**: Sidebar/modal listing all saved scripts
+  - Displays script name, type badge, last modified date
+  - Search/filter input at top
+  - "New Script" button opens create dialog
+  - Click a script to select it (loads into editor + executes on chart)
+  - Edit button per script (inline or dialog)
+  - Delete button per script with confirmation
+  - Visual indicator (highlight/checkmark) on the currently active script
+- **ScriptBankProvider**: React context/state managing script bank data
+  - Fetches scripts on mount from `GET /api/scripts`
+  - Provides CRUD operations to child components
+  - Syncs active script selection with backend
+
+#### 6. Integration with Existing Flow
+- On app load, fetch active script from `GET /api/scripts/active`
+- If active script exists, load its source into the code editor and auto-execute
+- When user selects a different script from the bank, load source into editor and execute
+- When user creates/edits a script in the editor, prompt to save to bank or auto-save
+
 ### Future Extensibility
 
 #### 1. Language Evolution

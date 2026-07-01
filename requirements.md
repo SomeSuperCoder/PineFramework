@@ -876,6 +876,23 @@ This specification defines requirements for building a Pine Script v6 compatible
 62. `GET /api/backtest/{job_id}` SHALL return `{ status (running/completed/failed), progress (0-100), result_url }`
 63. `GET /api/backtest/{job_id}/result` SHALL return `{ metrics, equity_curve, trades, orders }`
 
+### Requirement 24: Script Bank Management
+
+**User Story:** As a Pine Script developer, I want to maintain a bank of scripts that I can create, update, and select from, so that I can organize my indicators and strategies and persistently choose which one is displayed on the chart.
+
+#### Acceptance Criteria
+
+1. THE Script_Bank SHALL provide a list of all saved scripts with name, last modified timestamp, and script type (indicator/strategy)
+2. THE Script_Bank SHALL allow creating a new script with a name and Pine Script source code
+3. THE Script_Bank SHALL allow updating an existing script's name and/or source code
+4. THE Script_Bank SHALL allow deleting a saved script
+5. THE Script_Bank SHALL persist all script source code to persistent storage across application restarts
+6. THE Script_Bank SHALL allow selecting one script as the active script to be displayed on the chart
+7. THE Script_Bank SHALL persist the active script selection across application restarts
+8. WHEN the active script is selected, THE Frontend SHALL automatically load it into the code editor and execute it on the chart
+9. THE Script_Bank SHALL provide a unique identifier for each saved script
+10. THE Script_Bank SHALL support searching or filtering scripts by name
+
 ### Requirement 23: Telegram Notification System and Persistent Storage
 
 **User Story:** As a trader, I want to receive Telegram bot notifications when script alerts fire on the chart, and I want to choose which alerts trigger notifications, so that I stay informed of trading opportunities without being overwhelmed.

@@ -1912,6 +1912,83 @@ This implementation plan outlines the step-by-step development of a production-g
      - Test frontend rendering of partial indicator updates for the forming candle
      - _Requirements: 3.24_
 
+- [ ] 76. Implement Script Bank Backend (JSON Store + REST API)
+  - [ ] 76.1 Create `ScriptStore` domain wrapper using `JsonStore`
+    - Create `backend/data/scripts.json` with default schema `{ scripts: [], activeScriptId: null }`
+    - Implement `ScriptStore` class with methods: `getAll()`, `getById(id)`, `create(name, source)`, `update(id, name?, source?)`, `delete(id)`, `getActive()`, `setActive(scriptId)`
+    - Generate UUIDs for new scripts, set `createdAt` and `updatedAt` timestamps
+    - Auto-detect `scriptType` from source (check for `strategy()` vs `indicator()` calls)
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.9_
+
+  - [ ] 76.2 Implement REST API endpoints for Script Bank
+    - `GET /api/scripts` — return all scripts (id, name, scriptType, updatedAt; omit source for list)
+    - `POST /api/scripts` — create script, accept `{ name, source }`, return created entry
+    - `GET /api/scripts/:id` — return full script entry including source
+    - `PUT /api/scripts/:id` — update script name and/or source
+    - `DELETE /api/scripts/:id` — delete script
+    - `PUT /api/scripts/active` — set active script, accept `{ scriptId }`, validate scriptId exists
+    - `GET /api/scripts/active` — return active script entry with full source
+    - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.6, 24.7_
+
+  - [ ] 76.3 Add search/filter support to list endpoint
+    - `GET /api/scripts?q=<term>` — filter scripts by name (case-insensitive contains)
+    - _Requirements: 24.10_
+
+  - [ ]* 76.4 Write tests for Script Bank backend
+    - Test CRUD operations via REST endpoints
+    - Test active script set/get persistence
+    - Test search filtering by name
+    - Test auto-detection of scriptType from source
+    - Test delete active script clears activeScriptId
+    - Test validation (missing name/source, invalid scriptId)
+    - _Requirements: 24.1-24.10_
+
+- [ ] 77. Implement Script Bank Frontend UI
+  - [ ] 77.1 Create ScriptBankPanel component
+    - Render list of scripts with name, type badge (indicator/strategy), last modified date
+    - Add search input at top for filtering by name
+    - Add "New Script" button that opens create dialog
+    - Highlight/checkmark the currently active script
+    - Click a script to select it as active (loads into editor + executes on chart)
+    - _Requirements: 24.1, 24.6, 24.8, 24.10_
+
+  - [ ] 77.2 Add script CRUD dialogs
+    - Create dialog: name input + code editor pre-filled with default template
+    - Edit dialog: name input + code editor pre-filled with existing source
+    - Delete confirmation dialog (are you sure?)
+    - Wire dialogs to backend REST endpoints
+    - _Requirements: 24.2, 24.3, 24.4_
+
+  - [ ] 77.3 Implement active script loading on app startup
+    - On mount, fetch `GET /api/scripts/active`
+    - If active script exists, load its source into the code editor and auto-execute
+    - Store active script ID in state for highlight in panel
+    - _Requirements: 24.7, 24.8_
+
+  - [ ] 77.4 Wire script selection to chart execution
+    - When user clicks a script in the bank panel, call `PUT /api/scripts/active`
+    - Load the selected script's source into the code editor
+    - Execute the script on the chart via existing POST /api/execute flow
+    - _Requirements: 24.6, 24.8_
+
+  - [ ]* 77.5 Write tests for Script Bank frontend
+    - Test ScriptBankPanel renders script list from API
+    - Test search filtering narrows the list
+    - Test create/edit/delete dialogs open and submit correctly
+    - Test active script highlight and selection
+    - Test app startup loads active script into editor
+    - _Requirements: 24.1-24.10_
+
+- [ ] 78. Checkpoint - Script Bank Validation
+  - Create a new script via the panel, verify it appears in the list
+  - Edit a script name and source, verify changes persist
+  - Delete a script, verify it is removed from the list
+  - Select a script as active, restart the backend, verify active selection persists
+  - Verify active script loads into editor and executes on chart on app startup
+  - Test search filtering works correctly
+  - Run all existing tests to confirm no regressions
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -1932,6 +2009,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Tasks 70-72 implement JSON file-based persistent storage (`backend/data/telegram.json`), Telegram Bot notification system, and per-alert Telegram selection UI
 - Task 73 is the checkpoint validating Telegram notifications, JSON file persistence, and non-content-blocking alert markers
 - Task 75 implements real-time indicator computation for forming (live) candles: on each tick or kline update within the current candle's lifetime, only the last bar is re-evaluated without historical reprocessing, pushing partial indicator updates to the frontend for live intra-bar tracking
+- Tasks 76-77 implement the Script Bank: a persistent bank of scripts with CRUD operations (create, read, update, delete) stored in `backend/data/scripts.json`, REST API endpoints, and a frontend panel for browsing, creating, editing, deleting, and selecting scripts. The active script selection is persisted across restarts and auto-loaded into the editor on app startup
 
 ## Task Dependency Graph
 
@@ -2035,7 +2113,12 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 94, "tasks": ["72.4"] },
     { "id": 95, "tasks": ["73"] },
     { "id": 96, "tasks": ["75.1", "75.2", "75.3"] },
-    { "id": 97, "tasks": ["75.4"] }
+    { "id": 97, "tasks": ["75.4"] },
+    { "id": 98, "tasks": ["76.1", "76.2", "76.3"] },
+    { "id": 99, "tasks": ["76.4"] },
+    { "id": 100, "tasks": ["77.1", "77.2", "77.3", "77.4"] },
+    { "id": 101, "tasks": ["77.5"] },
+    { "id": 102, "tasks": ["78"] }
   ]
 }
 ```
