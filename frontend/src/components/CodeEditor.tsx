@@ -225,37 +225,43 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
         <div className="editor-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
             <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>Pine Script Editor</h2>
-            <select
-              value={currentScriptId || ''}
-              onChange={handleDropdownChange}
-              style={{
-                flex: 1,
-                padding: '4px 8px',
-                background: '#1a1a2e',
-                color: '#e0e0e0',
-                border: '1px solid #0f3460',
-                borderRadius: '4px',
-                fontSize: '13px',
-                minWidth: 0,
-              }}
-            >
-              {scripts.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+            {scripts.length > 0 && (
+              <select
+                value={currentScriptId || ''}
+                onChange={handleDropdownChange}
+                style={{
+                  flex: 1,
+                  padding: '4px 8px',
+                  background: '#1a1a2e',
+                  color: '#e0e0e0',
+                  border: '1px solid #0f3460',
+                  borderRadius: '4px',
+                  fontSize: '13px',
+                  minWidth: 0,
+                }}
+              >
+                {scripts.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="editor-actions">
-            <button onClick={handleNewScript}>New</button>
-            <button onClick={handleDelete} disabled={!currentScriptId}>Delete</button>
-            <button
-              className="primary"
-              onClick={() => {
-                if (currentScriptId) onRun(currentScriptId, source);
-              }}
-              disabled={!currentScriptId}
-            >
-              Run (Ctrl+Enter)
-            </button>
+            {scripts.length > 0 && (
+              <>
+                <button onClick={handleNewScript}>New</button>
+                <button onClick={handleDelete} disabled={!currentScriptId}>Delete</button>
+                <button
+                  className="primary"
+                  onClick={() => {
+                    if (currentScriptId) onRun(currentScriptId, source);
+                  }}
+                  disabled={!currentScriptId}
+                >
+                  Run (Ctrl+Enter)
+                </button>
+              </>
+            )}
             <button onClick={onClose}>Close</button>
           </div>
         </div>
@@ -278,6 +284,36 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
         <div className="editor-content">
           {loading ? (
             <div style={{ padding: '16px', color: '#888' }}>Loading scripts...</div>
+          ) : scripts.length === 0 ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              gap: '16px',
+              color: '#888',
+            }}>
+              <div style={{ fontSize: '15px', color: '#e0e0e0' }}>No scripts yet</div>
+              <div style={{ fontSize: '13px', maxWidth: '320px', textAlign: 'center', lineHeight: '1.5' }}>
+                Create your first Pine Script to get started. You can write indicators and strategies, then run them on the chart.
+              </div>
+              <button
+                onClick={handleNewScript}
+                style={{
+                  padding: '10px 24px',
+                  background: '#4caf50',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                }}
+              >
+                Create Your First Script
+              </button>
+            </div>
           ) : (
             <textarea
               ref={textareaRef}
