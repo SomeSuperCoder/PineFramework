@@ -1989,6 +1989,68 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
 
+- [ ] 79. Unify Script Editor — Replace ScriptBankPanel with Dropdown in CodeEditor
+  - [ ] 79.1 Add `runningScriptId` to backend ScriptBankData schema
+    - Extend `ScriptBankData` with `runningScriptId: string | null` field (separate from `activeScriptId`)
+    - Add `getRunning()` and `setRunning(id)` methods to `ScriptStore`
+    - Add `PUT /api/scripts/running` endpoint to set the running script
+    - Add `GET /api/scripts/running` endpoint to get the running script
+    - Keep existing `activeScriptId` for backward compatibility (or repurpose it as runningScriptId)
+    - _Requirements: 25.6, 25.11, 25.12_
+
+  - [ ] 79.2 Refactor CodeEditor to include script dropdown and auto-save
+    - Add a dropdown (`<select>`) at the top of the CodeEditor listing all scripts by name
+    - On editor open, fetch `GET /api/scripts/running` and load that script's source
+    - On dropdown change, fetch the selected script's source via `GET /api/scripts/:id` and load into textarea WITHOUT executing on chart
+    - Auto-save source changes on every edit (debounced 500ms) via `PUT /api/scripts/:id` with `{ source }` — do NOT trigger chart re-execution
+    - Add "New Script" button that creates a script via `POST /api/scripts` with default template, selects it in dropdown
+    - Add "Delete" button that deletes the current script via `DELETE /api/scripts/:id` and selects the next available script
+    - Auto-extract script name from source via regex: `/strategy\(\s*["'](.+?)["']/` or `/indicator\(\s*["'](.+?)["']/`
+    - When name is extracted, update script name via `PUT /api/scripts/:id` with `{ name }`
+    - _Requirements: 25.1, 25.2, 25.3, 25.4, 25.7, 25.8, 25.9, 25.10_
+
+  - [ ] 79.3 Wire "Run" button to persist running script
+    - When "Run" is clicked, execute the current source on the chart (existing behavior)
+    - Additionally, call `PUT /api/scripts/running` with `{ scriptId: currentScriptId }` to persist it as the running script
+    - Store the running script ID in App.tsx state for the editor to read on next open
+    - _Requirements: 25.6_
+
+  - [ ] 79.4 Remove ScriptBankPanel from App.tsx
+    - Remove the `ScriptBankPanel` import and component from `App.tsx`
+    - Remove the `ScriptBankPanel.tsx` file from `frontend/src/components/`
+    - Remove the `onLoadScript` prop wiring that was used by the old panel
+    - Verify no remaining references to `ScriptBankPanel` exist in the codebase
+    - _Requirements: 25.1_
+
+  - [ ] 79.5 Load running script on app startup
+    - On app mount, fetch `GET /api/scripts/running` to get the currently running script
+    - Set the editor's current script ID and source from the running script
+    - Do NOT auto-execute the chart on mount (user must click Run)
+    - _Requirements: 25.11_
+
+  - [ ]* 79.6 Write tests for unified editor
+    - Test dropdown renders all scripts and selects running script on open
+    - Test switching scripts loads source without executing
+    - Test auto-save debounces and persists source changes
+    - Test "Run" button executes chart AND sets running script
+    - Test "New Script" creates and selects a new script
+    - Test "Delete" removes script and selects next
+    - Test name extraction from strategy/indicator source
+    - Test startup loads running script into editor
+    - _Requirements: 25.1-25.12_
+
+- [ ] 80. Checkpoint - Unified Editor Validation
+  - Open editor, verify dropdown shows all scripts and running script is selected
+  - Switch scripts via dropdown, verify source loads but chart does NOT re-execute
+  - Edit source, verify changes auto-save but chart does NOT re-execute
+  - Click "Run", verify chart executes AND running script persists across reload
+  - Reload page, open editor, verify running script is loaded by default
+  - Create new script, verify it appears in dropdown and is selected
+  - Delete a script, verify it is removed from dropdown
+  - Verify script name auto-updates when strategy()/indicator() name changes in source
+  - Run all existing tests to confirm no regressions
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2010,6 +2072,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 73 is the checkpoint validating Telegram notifications, JSON file persistence, and non-content-blocking alert markers
 - Task 75 implements real-time indicator computation for forming (live) candles: on each tick or kline update within the current candle's lifetime, only the last bar is re-evaluated without historical reprocessing, pushing partial indicator updates to the frontend for live intra-bar tracking
 - Tasks 76-77 implement the Script Bank: a persistent bank of scripts with CRUD operations (create, read, update, delete) stored in `backend/data/scripts.json`, REST API endpoints, and a frontend panel for browsing, creating, editing, deleting, and selecting scripts. The active script selection is persisted across restarts and auto-loaded into the editor on app startup
+- Tasks 79-80 unify the script editor: the separate ScriptBankPanel is removed and replaced with a dropdown inside the CodeEditor. The editor becomes the single source of truth for script management. Scripts auto-save on edit without re-executing the chart. The "Run" button executes and persists the running script. Script names are auto-extracted from source. A separate "runningScriptId" tracks the currently running script across reloads
 
 ## Task Dependency Graph
 
@@ -2118,7 +2181,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 99, "tasks": ["76.4"] },
     { "id": 100, "tasks": ["77.1", "77.2", "77.3", "77.4"] },
     { "id": 101, "tasks": ["77.5"] },
-    { "id": 102, "tasks": ["78"] }
+    { "id": 102, "tasks": ["78"] },
+    { "id": 103, "tasks": ["79.1", "79.2", "79.3", "79.4", "79.5"] },
+    { "id": 104, "tasks": ["79.6"] },
+    { "id": 105, "tasks": ["80"] }
   ]
 }
 ```

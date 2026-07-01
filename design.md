@@ -1614,24 +1614,26 @@ GET    /api/scripts/active           → Get active script (full entry + source)
 ```
 
 #### 5. Frontend Components
-- **ScriptBankPanel**: Sidebar/modal listing all saved scripts
-  - Displays script name, type badge, last modified date
-  - Search/filter input at top
-  - "New Script" button opens create dialog
-  - Click a script to select it (loads into editor + executes on chart)
-  - Edit button per script (inline or dialog)
-  - Delete button per script with confirmation
-  - Visual indicator (highlight/checkmark) on the currently active script
-- **ScriptBankProvider**: React context/state managing script bank data
-  - Fetches scripts on mount from `GET /api/scripts`
-  - Provides CRUD operations to child components
-  - Syncs active script selection with backend
+- **CodeEditor (Unified)**: The sole interface for script management and editing
+  - Dropdown at top listing all saved scripts by name
+  - Textarea for editing Pine Script source code
+  - "New Script" button creates a blank script with default template
+  - "Delete" button removes the currently selected script
+  - Auto-saves source changes on every edit (debounced) without re-executing the chart
+  - "Run" button executes the current source on the chart AND persists it as the currently running script
+  - Script name auto-extracted from `strategy("Name", ...)` or `indicator("Name", ...)` in source
+  - On open, loads the currently running script's source (not the last-edited script)
+- **ScriptBankPanel**: REMOVED — superseded by the unified CodeEditor dropdown
 
 #### 6. Integration with Existing Flow
 - On app load, fetch active script from `GET /api/scripts/active`
-- If active script exists, load its source into the code editor and auto-execute
-- When user selects a different script from the bank, load source into editor and execute
-- When user creates/edits a script in the editor, prompt to save to bank or auto-save
+- If active script exists, load its source into the code editor (but do NOT auto-execute)
+- When user opens the editor, the currently running script is shown by default
+- When user switches scripts via dropdown, source loads but chart does NOT re-execute
+- When user edits source, changes auto-save to backend but chart does NOT re-execute
+- When user clicks "Run", the source is executed on the chart and persisted as the running script
+- Script name is auto-extracted from the source via regex on `strategy()` or `indicator()` first argument
+- The "currently running" script ID is stored separately from the "selected in editor" script ID
 
 ### Future Extensibility
 

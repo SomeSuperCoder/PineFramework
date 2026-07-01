@@ -893,6 +893,25 @@ This specification defines requirements for building a Pine Script v6 compatible
 9. THE Script_Bank SHALL provide a unique identifier for each saved script
 10. THE Script_Bank SHALL support searching or filtering scripts by name
 
+### Requirement 25: Unified Script Editor with Dropdown Selection
+
+**User Story:** As a Pine Script developer, I want a single editor where I can select, create, edit, and run scripts from a dropdown, so that there is one source of truth for script management and the editor is the central place for all script operations.
+
+#### Acceptance Criteria
+
+1. THE Code_Editor SHALL display a dropdown at the top listing all saved scripts by name
+2. THE Code_Editor SHALL load the currently running script's source into the editor on open
+3. WHEN a different script is selected from the dropdown, THE Code_Editor SHALL load that script's source into the editor without executing it on the chart
+4. THE Code_Editor SHALL auto-save script source changes to persistent storage on every edit without re-executing the chart
+5. THE Code_Editor SHALL NOT re-execute the chart when switching between scripts via the dropdown
+6. THE Code_Editor SHALL provide a "Run" button that executes the current editor content on the chart AND persists it as the currently running script
+7. THE Code_Editor SHALL provide a "New Script" button that creates a blank script with a default template and selects it in the dropdown
+8. THE Code_Editor SHALL auto-determine the script name from the `strategy("Name", ...)` or `indicator("Name", ...)` call in the source code
+9. WHEN the script name is extracted from source, THE Frontend SHALL update the script's name in persistent storage
+10. THE Code_Editor SHALL provide a "Delete" button to remove the currently selected script from the bank
+11. WHEN the application reloads, THE Frontend SHALL load the currently running script into the editor by default
+12. THE Script_Bank SHALL persist the "currently running" script selection (separate from the "active/selected in editor" script) across application restarts
+
 ### Requirement 23: Telegram Notification System and Persistent Storage
 
 **User Story:** As a trader, I want to receive Telegram bot notifications when script alerts fire on the chart, and I want to choose which alerts trigger notifications, so that I stay informed of trading opportunities without being overwhelmed.
