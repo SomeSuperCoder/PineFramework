@@ -193,6 +193,7 @@ export function useChartData() {
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
+  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string; bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> } | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -278,7 +279,7 @@ export function useChartData() {
               const lastEntry = plot.data[plot.data.length - 1];
               if (lastEntry) {
                 const perBarColors = msg.plotColors?.[diffKey];
-                const color = perBarColors?.[perBarColors.length - 1] ?? undefined;
+                const color = perBarColors?.[perBarColors.length - 1] ?? lastEntry.color;
                 return {
                   ...plot,
                   data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
@@ -374,7 +375,7 @@ export function useChartData() {
             : prev.fillColorData;
 
           const mergedBgcolor = msg.bgcolor
-            ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor]
+            ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor.map((b) => ({ time: Math.floor(b.time / 1000), color: b.color }))]
             : prev.bgcolor;
 
           return {
@@ -439,6 +440,12 @@ export function useChartData() {
         setIsConnected(true);
         if (subscribedTopicRef.current) {
           ws.send(JSON.stringify({ type: 'subscribe', topic: subscribedTopicRef.current }));
+        }
+        if (pendingExecuteRef.current) {
+          ws.send(JSON.stringify({
+            type: 'execute',
+            data: pendingExecuteRef.current,
+          }));
         }
       };
 
@@ -585,10 +592,12 @@ export function useChartData() {
       setCandles(toCandleData(barsToExecute));
       setScriptResult(scriptRes);
 
+      const executeData = { source: code, symbol, interval, bars: barsToExecute };
+      pendingExecuteRef.current = executeData;
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
-          data: { source: code, symbol, interval, bars: barsToExecute },
+          data: executeData,
         }));
       }
     } catch (error) {

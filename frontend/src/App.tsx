@@ -45,21 +45,13 @@ function App() {
     ohlcvDataRef,
   } = useChartData();
 
-  const prevTfRef = useRef(timeframe);
-  const prevSymRef = useRef(symbol);
-
   useEffect(() => {
     setDataVersion((v) => v + 1);
-    fetchOHLCV(symbol, timeframe);
     subscribe(symbol, timeframe);
-  }, [symbol, timeframe, fetchOHLCV, subscribe]);
+  }, [symbol, timeframe, subscribe]);
 
   useEffect(() => {
-    if (prevTfRef.current !== timeframe || prevSymRef.current !== symbol) {
-      prevTfRef.current = timeframe;
-      prevSymRef.current = symbol;
-      executeScript(currentCode, symbol, timeframe);
-    }
+    executeScript(currentCode, symbol, timeframe);
   }, [symbol, timeframe, executeScript, currentCode]);
 
   useEffect(() => {
