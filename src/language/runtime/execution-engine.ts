@@ -1427,10 +1427,11 @@ export class ExecutionEngine {
         const preLastVal = preSeries.last();
         if (lastVal !== preLastVal) {
           diffOutputs[key] = lastVal;
-          series.values.length = preSeries.length;
         }
+        series.values.length = preSeries.length;
       } else if (series.length > 0 && (!preSeries || preSeries.length === 0)) {
         diffOutputs[key] = series.last();
+        this.outputs.delete(key);
       }
     }
 
