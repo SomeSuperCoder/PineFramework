@@ -85,12 +85,20 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
     });
   }
 
+  const recentAlertKeys = new Set<string>();
+
   function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) {
       console.log(`[WS] reexecuteForTopic: no subscribers for topic "${topic}"`);
       return;
     }
+
+    // Prune stale connections before iterating
+    for (const cb of subscribers) {
+      if (cb.readyState !== WebSocket.OPEN) subscribers.delete(cb);
+    }
+
     console.log(`[WS] reexecuteForTopic: ${subscribers.size} subscriber(s) for topic "${topic}"`);
 
     const topicParts = topic.split('.');
@@ -135,6 +143,16 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
             const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
             const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
             const title = condition?.title || trigger.alertId;
+            const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
+            if (recentAlertKeys.has(dedupKey)) {
+              console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
+              continue;
+            }
+            recentAlertKeys.add(dedupKey);
+            if (recentAlertKeys.size > 100) {
+              const first = recentAlertKeys.values().next().value;
+              if (first) recentAlertKeys.delete(first);
+            }
             console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
             telegramService.sendAlertToSubscribers(
               `*${title}*\n\n${message}`,
