@@ -193,7 +193,7 @@ export function useChartData() {
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
-  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string; bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> } | null>(null);
+  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string } | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -444,7 +444,7 @@ export function useChartData() {
         if (pendingExecuteRef.current) {
           ws.send(JSON.stringify({
             type: 'execute',
-            data: pendingExecuteRef.current,
+            data: { ...pendingExecuteRef.current, bars: ohlcvDataRef.current },
           }));
         }
       };
@@ -592,12 +592,11 @@ export function useChartData() {
       setCandles(toCandleData(barsToExecute));
       setScriptResult(scriptRes);
 
-      const executeData = { source: code, symbol, interval, bars: barsToExecute };
-      pendingExecuteRef.current = executeData;
+      pendingExecuteRef.current = { source: code, symbol, interval };
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
-          data: executeData,
+          data: { source: code, symbol, interval, bars: ohlcvDataRef.current },
         }));
       }
     } catch (error) {
