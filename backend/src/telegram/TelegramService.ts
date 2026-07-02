@@ -60,6 +60,7 @@ export class TelegramService {
     }
 
     this.bot = new Telegraf(token, agent ? { telegram: { agent } } : undefined);
+    this.isRunning = true;
 
     this.bot.use(async (ctx: Context, next: () => Promise<void>) => {
       console.log(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);
@@ -132,11 +133,11 @@ export class TelegramService {
 
     try {
       await this.bot.launch();
-      this.isRunning = true;
       console.log('[Telegram] Bot started');
     } catch (err) {
       console.error('[Telegram] Failed to start bot:', err);
       this.bot = null;
+      this.isRunning = false;
     }
   }
 
@@ -153,12 +154,18 @@ export class TelegramService {
   }
 
   async sendMessage(chatId: number, message: string): Promise<boolean> {
-    if (!this.bot || !this.isRunning) return false;
+    if (!this.bot) {
+      console.log(`[Telegram] sendMessage: bot not created, skipping send to ${chatId}`);
+      return false;
+    }
+    console.log(`[Telegram] sendMessage: attempting to send to chatId=${chatId} with MarkdownV2`);
     try {
       await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
+      console.log(`[Telegram] sendMessage: SUCCESS (MarkdownV2) to chatId=${chatId}`);
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
+      console.log(`[Telegram] sendMessage: FAILED (MarkdownV2) to chatId=${chatId}: ${msg.slice(0, 200)}`);
       if (msg.includes('429')) {
         const retryAfter = msg.match(/retry after (\d+)/)?.[1];
         const wait = retryAfter ? parseInt(retryAfter, 10) * 1000 : 10000;
@@ -166,12 +173,27 @@ export class TelegramService {
         await new Promise((resolve) => setTimeout(resolve, wait));
         try {
           await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
+          console.log(`[Telegram] sendMessage: SUCCESS (retry) to chatId=${chatId}`);
           return true;
-        } catch {
+        } catch (retryErr) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          console.error(`[Telegram] sendMessage: retry also failed for chatId=${chatId}: ${retryMsg.slice(0, 200)}`);
           return false;
         }
       }
-      console.error('[Telegram] sendMessage error:', msg);
+      if (msg.includes('parse') || msg.includes('entities') || msg.includes('can\'t')) {
+        console.warn(`[Telegram] MarkdownV2 parse error, falling back to plain text for chatId=${chatId}: ${msg.slice(0, 200)}`);
+        try {
+          await this.bot.telegram.sendMessage(chatId, message);
+          console.log(`[Telegram] sendMessage: SUCCESS (plain text fallback) to chatId=${chatId}`);
+          return true;
+        } catch (fallbackErr) {
+          const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          console.error(`[Telegram] Plain text fallback also failed for chatId=${chatId}: ${fbMsg.slice(0, 200)}`);
+          return false;
+        }
+      }
+      console.error(`[Telegram] sendMessage error for chatId=${chatId}: ${msg.slice(0, 200)}`);
       return false;
     }
   }
@@ -194,6 +216,8 @@ export class TelegramService {
     timeframe?: string,
   ): Promise<void> {
     const subscribers = this.configStore.getSubscribers();
+    console.log(`[Telegram] sendAlertToSubscribers: alertId="${alertId}", ${subscribers.length} subscribers, symbol="${symbol}", timeframe="${timeframe}"`);
+
     const escapedMessage = message
       .replace(/_/g, '\\_')
       .replace(/\*/g, '\\*')
@@ -223,14 +247,19 @@ export class TelegramService {
     for (const sub of subscribers) {
       if (alertId) {
         const enabled = this.configStore.getAlertPreference(sub.chatId, alertId);
-        if (!enabled) continue;
+        console.log(`[Telegram] sendAlertToSubscribers: subscriber chatId=${sub.chatId}, alertId="${alertId}", enabled=${enabled}`);
+        if (!enabled) {
+          console.log(`[Telegram] sendAlertToSubscribers: SKIPPING subscriber ${sub.chatId} (alert disabled)`);
+          continue;
+        }
       }
+      console.log(`[Telegram] sendAlertToSubscribers: sending to chatId=${sub.chatId}`);
       await this.sendMessage(sub.chatId, fullMessage);
     }
   }
 
   isActive(): boolean {
-    return this.isRunning && this.bot !== null;
+    return this.bot !== null;
   }
 
   getBot(): Telegraf | null {

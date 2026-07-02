@@ -85,29 +85,52 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
 
   function reexecuteForTopic(topic: string, bar: Bar): void {
     const subscribers = topicCallbacks.get(topic);
-    if (!subscribers) return;
+    if (!subscribers) {
+      console.log(`[WS] reexecuteForTopic: no subscribers for topic "${topic}"`);
+      return;
+    }
+    console.log(`[WS] reexecuteForTopic: ${subscribers.size} subscriber(s) for topic "${topic}"`);
 
     const topicParts = topic.split('.');
     const symbol = topicParts[2] || '';
     const interval = topicParts[1] || '';
 
     for (const ws of subscribers) {
-      if (ws.readyState !== WebSocket.OPEN) continue;
+      if (ws.readyState !== WebSocket.OPEN) {
+        console.log(`[WS] reexecuteForTopic: skipping non-open WS connection`);
+        continue;
+      }
       const sub = clients.get(ws);
-      if (!sub || !sub.session) continue;
+      if (!sub) {
+        console.log(`[WS] reexecuteForTopic: subscriber not found in clients map`);
+        continue;
+      }
+      if (!sub.session) {
+        console.log(`[WS] reexecuteForTopic: subscriber has NO session! Chart updates work but script won't re-execute.`);
+        continue;
+      }
 
       try {
+        console.log(`[WS] reexecuteForTopic: calling appendOrUpdateBar for ${symbol} ${interval}`);
         const outputs = sub.session.appendOrUpdateBar(bar);
+        console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, formingCandle=${outputs.formingCandle}`);
+
         ws.send(JSON.stringify({
           type: 'execution_result',
           data: outputs,
         }));
 
-        if (telegramService?.isActive() && outputs.alertTriggers && outputs.alertTriggers.length > 0) {
-          for (const trigger of outputs.alertTriggers) {
+        const tgActive = telegramService?.isActive() ?? false;
+        const triggers = outputs.alertTriggers;
+        const hasTriggers = triggers !== undefined && triggers.length > 0;
+        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}`);
+
+        if (tgActive && hasTriggers && telegramService) {
+          for (const trigger of triggers) {
             const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
             const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
             const title = condition?.title || trigger.alertId;
+            console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
             telegramService.sendAlertToSubscribers(
               `*${title}*\n\n${message}`,
               trigger.alertId,
@@ -115,6 +138,10 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
               interval || undefined,
             );
           }
+        } else if (!tgActive) {
+          console.log(`[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`);
+        } else if (!hasTriggers) {
+          console.log(`[WS] reexecuteForTopic: no alert triggers in output, nothing to send`);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Script re-execution failed';

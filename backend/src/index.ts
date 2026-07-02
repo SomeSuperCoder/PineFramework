@@ -77,11 +77,18 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
 
 app.post('/api/telegram/test', async (_req, res) => {
   const subs = telegramConfig.getSubscribers();
+  console.log(`[Telegram-Test] Sending test message, ${subs.length} subscribers found`);
   if (subs.length === 0) {
     res.status(400).json({ error: 'No subscribers' });
     return;
   }
-  const ok = await telegramService.sendMessage(subs[0].chatId, '*Test Message*\n\nYour Telegram bot is working correctly!');
+  console.log(`[Telegram-Test] Target chatId: ${subs[0].chatId}, username: ${subs[0].username}`);
+  // Must be valid MarkdownV2: escape all special chars except paired * for bold
+  const base = '*Test Message*\n\nYour Telegram bot is working correctly';
+  const escaped = base.replace(/!/g, '\\!').replace(/\./g, '\\.');
+  console.log(`[Telegram-Test] Calling sendMessage with chatId=${subs[0].chatId}`);
+  const ok = await telegramService.sendMessage(subs[0].chatId, escaped);
+  console.log(`[Telegram-Test] sendMessage returned: ${ok}`);
   res.json({ success: ok });
 });
 
