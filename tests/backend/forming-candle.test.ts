@@ -321,7 +321,7 @@ describe('Forming Candle Computation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should suppress alert triggers during forming candle computation', () => {
+    it('should include alert triggers during forming candle computation (suppressed at gateway level)', () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
@@ -331,10 +331,12 @@ describe('Forming Candle Computation', () => {
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
 
       const result = engine.computeFormingCandle(formingCtx);
-      expect(result.diffAlertTriggers).toBeUndefined();
+      // Triggers are now computed (not suppressed at engine level);
+      // suppression happens in the gateway via isConfirmed guard
+      expect(result.diffAlertTriggers).toBeDefined();
     });
 
-    it('should set isConfirmed=false on forming candle result', () => {
+    it('should set isConfirmed=false on forming candle result when caller sets forming flag', () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
@@ -342,6 +344,7 @@ describe('Forming Candle Computation', () => {
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+      engine.setFormingCandle(true);
 
       const result = engine.computeFormingCandle(formingCtx);
       expect(result.isConfirmed).toBe(false);
@@ -359,6 +362,7 @@ plot(x ? 1 : 0, "confirmed")`;
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+      engine.setFormingCandle(true);
 
       const result = engine.computeFormingCandle(formingCtx);
       const confirmedOutput = result.diffOutputs['confirmed'];

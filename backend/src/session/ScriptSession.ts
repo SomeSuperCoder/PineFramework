@@ -71,7 +71,10 @@ export class ScriptSession {
       return this.initialize();
     }
 
-    // When Bybit confirms the kline (bar close), execute as a confirmed real-time bar
+    // When Bybit confirms the kline (bar close), execute with isFormingCandle=false
+    // so barstate.isconfirmed=true and alert triggers are produced.
+    // Uses computeFormingCandle (not executeRealtimeBar) to avoid state advancement
+    // since the bar was already processed during initialize().
     if (confirmed) {
       // Dedup: skip re-execution if we already confirmed this bar timestamp
       if (bar.timestamp <= this.lastConfirmedTimestamp) {
@@ -79,6 +82,7 @@ export class ScriptSession {
         const fullContexts = barsToContext(this.bars);
         this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
         const context = this.contexts[this.contexts.length - 1]!;
+        this.engine.setFormingCandle(true);
         const result = this.engine.computeFormingCandle(context);
         return this.toFormingCandleOutputs(result);
       }
@@ -87,7 +91,8 @@ export class ScriptSession {
       const fullContexts = barsToContext(this.bars);
       this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
       const context = this.contexts[this.contexts.length - 1]!;
-      const result = this.engine.executeRealtimeBar(context);
+      this.engine.setFormingCandle(false);
+      const result = this.engine.computeFormingCandle(context);
       return this.toOutputs(result);
     }
 
@@ -98,6 +103,7 @@ export class ScriptSession {
       this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
 
       const context = this.contexts[this.contexts.length - 1]!;
+      this.engine.setFormingCandle(true);
       const result = this.engine.computeFormingCandle(context);
       return this.toFormingCandleOutputs(result);
     } else {
@@ -108,6 +114,7 @@ export class ScriptSession {
 
     // First tick of a new candle (not yet confirmed by Bybit) — treat as forming
     const context = this.contexts[this.contexts.length - 1]!;
+    this.engine.setFormingCandle(true);
     const result = this.engine.computeFormingCandle(context);
     return this.toFormingCandleOutputs(result);
   }
@@ -280,8 +287,8 @@ export class ScriptSession {
       labels,
       barTimestamps,
       barIndex: result.barIndex,
-      formingCandle: true,
-      isConfirmed: false,
+      formingCandle: !(result.isConfirmed ?? false),
+      isConfirmed: result.isConfirmed ?? false,
       alertConditions: this.cachedAlertConditions,
       alertTriggers: result.diffAlertTriggers ?? [],
     };

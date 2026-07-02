@@ -1365,7 +1365,6 @@ export class ExecutionEngine {
     if (this.snapshots.length === 0) {
       this.createSnapshot();
     }
-    this.isFormingCandle = false;
     return this.executeBar(context);
   }
 
@@ -1403,7 +1402,6 @@ export class ExecutionEngine {
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
 
-    this.isFormingCandle = true;
     const result = this.executeBar(context);
 
     const snapshotsAdded = this.snapshots.length > 0 ? 1 : 0;
@@ -1500,12 +1498,6 @@ export class ExecutionEngine {
       diffBgcolor = this.bgcolorData.slice(preBgcolorDataLen);
     }
 
-    // Restore non-forming state after rollback
-    this.isFormingCandle = false;
-
-    // Suppress alert triggers for forming candles — alerts only fire on bar close (task 81.1)
-    diffAlertTriggers = [];
-
     const isDiff =
       Object.keys(diffOutputs).length > 0 ||
       diffShapes.length > 0 ||
@@ -1529,7 +1521,7 @@ export class ExecutionEngine {
       barTimestamps: [...this.barTimestamps],
       barIndex: this.barTimestamps.length - 1,
       isDiff,
-      isConfirmed: false,
+      isConfirmed: !this.isFormingCandle,
     };
   }
 
