@@ -123,9 +123,12 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
         const tgActive = telegramService?.isActive() ?? false;
         const triggers = outputs.alertTriggers;
         const hasTriggers = triggers !== undefined && triggers.length > 0;
-        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}`);
+        const isConfirmed = outputs.isConfirmed ?? false;
+        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}`);
 
-        if (tgActive && hasTriggers && telegramService) {
+        if (!isConfirmed) {
+          console.log(`[WS] reexecuteForTopic: forming candle (isConfirmed=false), suppressing alert dispatch`);
+        } else if (tgActive && hasTriggers && telegramService) {
           for (const trigger of triggers) {
             const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
             const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;

@@ -34,6 +34,7 @@ export interface ScriptOutputs {
   barTimestamps?: number[];
   barIndex: number;
   formingCandle?: boolean;
+  isConfirmed?: boolean;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
 }
@@ -194,6 +195,7 @@ export class ScriptSession {
       labels,
       barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
+      isConfirmed: true,
       alertConditions,
       alertTriggers,
     };
@@ -257,6 +259,7 @@ export class ScriptSession {
       barTimestamps,
       barIndex: result.barIndex,
       formingCandle: true,
+      isConfirmed: false,
       alertConditions: this.cachedAlertConditions,
       alertTriggers: result.diffAlertTriggers ?? [],
     };

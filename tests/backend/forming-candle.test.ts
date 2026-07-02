@@ -95,6 +95,12 @@ plot(sma5)
 plot(sma10)
 `;
 
+const ALERT_SCRIPT = `//@version=6
+indicator("Alert Test")
+alertcondition(close > open, title="Bullish Bar", message="Bullish bar confirmed")
+plot(close)
+`;
+
 describe('Forming Candle Computation', () => {
   describe('computeFormingCandle()', () => {
     it('should return diff outputs for the forming candle only', () => {
@@ -313,6 +319,59 @@ describe('Forming Candle Computation', () => {
 
       const result = engine.computeFormingCandle(formingCtx);
       expect(result.success).toBe(true);
+    });
+
+    it('should suppress alert triggers during forming candle computation', () => {
+      const engine = compileScript(ALERT_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.diffAlertTriggers).toBeUndefined();
+    });
+
+    it('should set isConfirmed=false on forming candle result', () => {
+      const engine = compileScript(ALERT_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.isConfirmed).toBe(false);
+    });
+
+    it('should produce alert triggers on bar close (executeRealtimeBar)', () => {
+      const engine = compileScript(ALERT_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const newBarCtx = {
+        barIndex: 15,
+        barCount: 16,
+        timestamp: lastBar.timestamp + 60000,
+        open: createSeries('open', [lastBar.close]),
+        high: createSeries('high', [lastBar.close + 3]),
+        low: createSeries('low', [lastBar.close - 1]),
+        close: createSeries('close', [lastBar.close + 2]),
+        volume: createSeries('volume', [1000]),
+      };
+
+      const result = engine.executeRealtimeBar(newBarCtx);
+      expect(result.success).toBe(true);
+
+      const resultAny = result as unknown as Record<string, unknown>;
+      const triggers = resultAny.alertTriggers as Array<unknown> | undefined;
+      expect(triggers).toBeDefined();
+      expect(triggers!.length).toBeGreaterThan(0);
     });
 
     it('should return correct error on execution failure', () => {

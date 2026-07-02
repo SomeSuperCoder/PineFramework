@@ -404,28 +404,31 @@ This specification defines requirements for building a Pine Script v6 compatible
 15. THE Alert_System SHALL render alert condition names in the indicator's alert settings panel
 16. THE Alert_System SHALL support multiple alertcondition() calls per script, each with a unique title
 
+**Alert Dispatch on Bar Close:**
+17. THE Alert_System SHALL dispatch alert notifications only on confirmed bar close (barstate.isconfirmed). Intra-bar updates, forming-candle recalculations, and real-time ticks SHALL NOT trigger alert delivery — alert conditions are evaluated for computation but the resulting triggers are suppressed until the candle closes.
+
 **Telegram Bot Notifications (Telegraf):**
-17. THE Alert_System SHALL deliver alert messages to Telegram users via a bot powered by the Telegraf library (v4+, Bot API v7.1 compatible)
-18. THE Telegram_Bot SHALL use Telegraf's `Telegraf` class for long-polling or webhook-based update delivery
-19. WHEN a Pine Script alert condition triggers, THE Telegram_Bot SHALL format the alert message and send it to configured Telegram chat IDs via `ctx.telegram.sendMessage()`
-20. THE Telegram_Bot SHALL support sending rich alert messages including MarkdownV2-formatted text with OHLCV values, indicator values, and plot references using Telegraf's `replyWithMarkdownV2()`
-21. THE Telegram_Bot SHALL support sending chart screenshots with alert messages via `ctx.telegram.sendPhoto()` with the current chart canvas as a buffer
-22. THE Telegram_Bot SHALL provide a `/start` and `/help` command handler via `bot.command()` for user onboarding and available command listing
-23. THE Telegram_Bot SHALL support a `/subscribe` command to register a chat for automatic alert delivery, storing subscriptions persistently in `backend/data/telegram.json`
-24. THE Telegram_Bot SHALL support a `/unsubscribe` command to remove a chat from the alert delivery list
-25. THE Telegram_Bot SHALL run as a long-running service integrated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
-26. THE Telegram_Bot SHALL integrate Telegraf's middleware system (`bot.use()`) for logging, rate-limiting, and authorization checks before command execution
-27. THE Telegram_Bot SHALL persist all configuration and subscriptions in a single `backend/data/telegram.json` file using synchronous reads/writes with file-locking to prevent corruption
-28. THE `backend/data/telegram.json` file SHALL use a schema with top-level keys: `botToken`, `subscribers` (array of `{chatId, username, subscribedAt, alerts: [{id, title, enabled}]}`), and `settings` (extensible object for future preferences)
-29. THE Telegram_Bot SHALL create the `backend/data/` directory and `telegram.json` file automatically on first launch if they do not exist, initializing with sensible defaults (empty subscribers, no token)
-30. THE Telegram_Bot SHALL reload the JSON file from disk on each read to support manual edits and external backup/restore workflows
+18. THE Alert_System SHALL deliver alert messages to Telegram users via a bot powered by the Telegraf library (v4+, Bot API v7.1 compatible)
+19. THE Telegram_Bot SHALL use Telegraf's `Telegraf` class for long-polling or webhook-based update delivery
+20. WHEN a Pine Script alert condition triggers, THE Telegram_Bot SHALL format the alert message and send it to configured Telegram chat IDs via `ctx.telegram.sendMessage()`
+21. THE Telegram_Bot SHALL support sending rich alert messages including MarkdownV2-formatted text with OHLCV values, indicator values, and plot references using Telegraf's `replyWithMarkdownV2()`
+22. THE Telegram_Bot SHALL support sending chart screenshots with alert messages via `ctx.telegram.sendPhoto()` with the current chart canvas as a buffer
+23. THE Telegram_Bot SHALL provide a `/start` and `/help` command handler via `bot.command()` for user onboarding and available command listing
+24. THE Telegram_Bot SHALL support a `/subscribe` command to register a chat for automatic alert delivery, storing subscriptions persistently in `backend/data/telegram.json`
+25. THE Telegram_Bot SHALL support a `/unsubscribe` command to remove a chat from the alert delivery list
+26. THE Telegram_Bot SHALL run as a long-running service integrated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
+27. THE Telegram_Bot SHALL integrate Telegraf's middleware system (`bot.use()`) for logging, rate-limiting, and authorization checks before command execution
+28. THE Telegram_Bot SHALL persist all configuration and subscriptions in a single `backend/data/telegram.json` file using synchronous reads/writes with file-locking to prevent corruption
+29. THE `backend/data/telegram.json` file SHALL use a schema with top-level keys: `botToken`, `subscribers` (array of `{chatId, username, subscribedAt, alerts: [{id, title, enabled}]}`), and `settings` (extensible object for future preferences)
+30. THE Telegram_Bot SHALL create the `backend/data/` directory and `telegram.json` file automatically on first launch if they do not exist, initializing with sensible defaults (empty subscribers, no token)
+31. THE Telegram_Bot SHALL reload the JSON file from disk on each read to support manual edits and external backup/restore workflows
 
 **SOCKS5 Proxy for Telegram Bot:**
-31. THE Telegram_Bot SHALL route all Telegram Bot API connections through a SOCKS5 proxy
-32. THE Telegram_Bot SHALL read SOCKS5 proxy configuration (host, port, username, password) from the `proxy` key in the `settings` object of `backend/data/telegram.json`
-33. THE Telegram_Bot SHALL expose SOCKS5 proxy settings via REST API endpoints `GET /api/settings/telegram/proxy` and `PUT /api/settings/telegram/proxy`
-34. THE Frontend SHALL provide a SOCKS5 proxy configuration UI in the Telegram settings panel with fields for host, port, username, and password
-35. WHEN no SOCKS5 proxy is configured, THE Telegram_Bot SHALL connect directly to the Telegram Bot API (backward compatible)
+32. THE Telegram_Bot SHALL route all Telegram Bot API connections through a SOCKS5 proxy
+33. THE Telegram_Bot SHALL read SOCKS5 proxy configuration (host, port, username, password) from the `proxy` key in the `settings` object of `backend/data/telegram.json`
+34. THE Telegram_Bot SHALL expose SOCKS5 proxy settings via REST API endpoints `GET /api/settings/telegram/proxy` and `PUT /api/settings/telegram/proxy`
+35. THE Frontend SHALL provide a SOCKS5 proxy configuration UI in the Telegram settings panel with fields for host, port, username, and password
+36. WHEN no SOCKS5 proxy is configured, THE Telegram_Bot SHALL connect directly to the Telegram Bot API (backward compatible)
 
 ### Requirement 15: Color System and Formatting
 

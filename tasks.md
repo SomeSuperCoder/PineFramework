@@ -1743,7 +1743,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Ensure `backend/data/` directory exists on Backend startup (auto-create if missing)
     - Create `backend/data/telegram.json` on first launch with default schema: `{ botToken: "", subscribers: [], settings: {} }`
     - Add `backend/data/` to `.gitignore` (user-local data, not committed)
-    - _Requirements: 14.27, 14.28, 14.29_
+    - _Requirements: 14.28, 14.29, 14.30_
 
   - [x] 70.2 Implement `JsonStore` class for file operations
     - Create `JsonStore<T>` generic class wrapping `fs.readFileSync()` / `fs.writeFileSync()` with JSON parse/stringify
@@ -1751,14 +1751,14 @@ This implementation plan outlines the step-by-step development of a production-g
     - Provide methods: `read()`, `write(data)`, `patch(path, value)` for partial updates
     - Handle missing file gracefully (return defaults, never throw)
     - Validate JSON schema on write to prevent corruption
-    - _Requirements: 14.27, 14.28_
+    - _Requirements: 14.28, 14.29_
 
   - [x] 70.3 Implement `TelegramConfigStore` domain wrapper
     - Create `TelegramConfigStore` class using `JsonStore<TelegramData>` internally
     - Methods: `getBotToken()`, `setBotToken(token)`, `getSubscribers()`, `addSubscriber(chatId, username)`, `removeSubscriber(chatId)`, `getAlertPreference(chatId, alertId)`, `setAlertPreference(chatId, alertId, enabled)`
     - Reload file from disk on every read to support manual edits and external backup/restore
     - Sanitize and validate all inputs before writing
-    - _Requirements: 14.27, 14.28, 14.29, 14.30_
+    - _Requirements: 14.28, 14.29, 14.30, 14.31_
 
   - [x] 70.4 Expose settings via REST API
     - `GET /api/settings/telegram` — retrieve Telegram Bot Token
@@ -1766,7 +1766,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - `GET /api/settings/alerts/:id/telegram` — get per-alert Telegram preference
     - `PUT /api/settings/alerts/:id/telegram` — toggle per-alert Telegram preference
     - Validate and sanitize all inputs before storage
-    - _Requirements: 14.27, 14.28_
+    - _Requirements: 14.28, 14.29_
 
   - [x] 70.5 Write tests for JSON file store
     - Test `JsonStore` read/write with valid and invalid JSON
@@ -1774,9 +1774,9 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test file-locking semantics (concurrent writes)
     - Test auto-creation of missing file and directory
     - Test REST endpoints for settings
-    - _Requirements: 14.27, 14.28, 14.29, 14.30_
+    - _Requirements: 14.28, 14.29, 14.30, 14.31_
 
-- [x] 71. Implement Telegram Bot Notification System (Telegraf)
+  - [x] 71. Implement Telegram Bot Notification System (Telegraf)
   - [x] 71.1 Create Telegram Bot client in Backend with Telegraf
     - Create `TelegramService` class wrapping the **Telegraf** library (v4+, Bot API v7.1)
     - Initialize bot via `new Telegraf(token)` and launch with `bot.launch()`
@@ -1788,7 +1788,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Set up graceful shutdown via `bot.stop()` on `SIGINT`/`SIGTERM`
     - Support webhook mode in production via `bot.createWebhook()` attached to Express server
     - Handle Telegram API errors: rate limit (429 with retry-after), network failures, invalid tokens
-    - _Requirements: 14.17, 14.18, 14.19, 14.21, 14.25, 14.26_
+    - _Requirements: 14.18, 14.19, 14.20, 14.22, 14.26, 14.27_
 
   - [x] 71.2 Wire Telegram notifications into Alert System
     - When an alert triggers during chart rendering (alert() or alertcondition()), check if Telegram is enabled globally
@@ -1796,12 +1796,12 @@ This implementation plan outlines the step-by-step development of a production-g
     - Format message with MarkdownV2: alert text, script name, symbol, timeframe, timestamp, OHLCV values
     - Send via `ctx.telegram.sendMessage()` asynchronously (non-blocking to chart rendering)
     - Log sent/failed notifications for auditing
-    - _Requirements: 14.17, 14.19, 14.20, 14.22_
+    - _Requirements: 14.18, 14.20, 14.21, 14.23_
 
   - [x] 71.3 Add alert metadata to execution result pipeline
     - Include alert ID and alert title in execution result metadata so frontend can render per-alert toggles
     - Map alertcondition() calls to unique IDs for preference lookup
-    - _Requirements: 14.24_
+    - _Requirements: 14.25_
 
   - [x] 71.4 Write tests for Telegram notification system
     - Test message formatting with various alert data (MarkdownV2 escaping)
@@ -1810,9 +1810,9 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test async non-blocking behavior
     - Test command handlers (`/start`, `/help`, `/subscribe`, `/unsubscribe`)
     - Test graceful shutdown path
-    - _Requirements: 14.17, 14.18, 14.19, 14.20, 14.21, 14.22, 14.25_
+    - _Requirements: 14.18, 14.19, 14.20, 14.21, 14.22, 14.23, 14.26_
 
-- [x] 72. Build Frontend UI for Telegram Configuration
+  - [x] 72. Build Frontend UI for Telegram Configuration
   - [x] 72.1 Create Telegram settings panel in Frontend
     - Add a settings page/modal with fields for Telegram Bot Token and Telegram Username
     - Fetch current values from `GET /api/settings/telegram` on mount
@@ -1856,36 +1856,36 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add `proxy` key to `settings` object in `backend/data/telegram.json` with fields: `host`, `port`, `username`, `password`
     - Update `TelegramConfigStore` with proxy getter/setter methods
     - Load proxy config on TelegramService initialization
-    - _Requirements: 14.31, 14.32_
-  
+    - _Requirements: 14.32, 14.33_
+   
   - [x] 74.2 Implement SOCKS5 agent creation and Telegraf integration
     - Install `socks-proxy-agent` (or equivalent) dependency in backend
     - On bot launch, if proxy host and port are configured, create a `SocksProxyAgent` and pass it via `new Telegraf(token, { telegram: { options: { agent } } })`
     - Handle proxy authentication (username/password) when credentials are provided
     - Fall back to direct connection when no proxy is configured
-    - _Requirements: 14.31, 14.35_
-  
+    - _Requirements: 14.32, 14.36_
+   
   - [x] 74.3 Add REST API endpoints for SOCKS5 proxy configuration
     - `GET /api/settings/telegram/proxy` — return current proxy settings (omit password in response)
     - `PUT /api/settings/telegram/proxy` — update proxy settings
     - Validate host/port format and credentials
     - Restart/reconfigure TelegramService after proxy update
-    - _Requirements: 14.33_
-  
+    - _Requirements: 14.34_
+   
   - [x] 74.4 Add SOCKS5 proxy configuration UI to Frontend
     - Add proxy settings section to the Telegram settings panel
     - Input fields for host, port, username, password
     - Password field with show/hide toggle
     - Save button that calls `PUT /api/settings/telegram/proxy`
-    - _Requirements: 14.34_
-  
+    - _Requirements: 14.35_
+   
    - [x] 74.5 Write tests for SOCKS5 proxy support
      - Test proxy config CRUD via TelegramConfigStore
      - Test proxy agent creation with valid/invalid settings
      - Test fallback to direct connection when no proxy configured
      - Test REST API endpoints for proxy settings
      - Test frontend proxy configuration UI rendering
-     - _Requirements: 14.31, 14.32, 14.33, 14.34, 14.35_
+      - _Requirements: 14.32, 14.33, 14.34, 14.35, 14.36_
 
 - [x] 75. Implement real-time indicator computation for forming candles
    - [x] 75.1 Add forming-candle computation mode to execution engine
@@ -1934,7 +1934,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - `GET /api/scripts?q=<term>` — filter scripts by name (case-insensitive contains)
     - _Requirements: 24.10_
 
-  - [ ]* 76.4 Write tests for Script Bank backend
+  - [x] 76.4 Write tests for Script Bank backend
     - Test CRUD operations via REST endpoints
     - Test active script set/get persistence
     - Test search filtering by name
@@ -1971,7 +1971,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Execute the script on the chart via existing POST /api/execute flow
     - _Requirements: 24.6, 24.8_
 
-  - [ ]* 77.5 Write tests for Script Bank frontend
+  - [x] 77.5 Write tests for Script Bank frontend
     - Test ScriptBankPanel renders script list from API
     - Test search filtering narrows the list
     - Test create/edit/delete dialogs open and submit correctly
@@ -2028,7 +2028,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Do NOT auto-execute the chart on mount (user must click Run)
     - _Requirements: 25.11_
 
-  - [ ]* 79.6 Write tests for unified editor
+  - [x] 79.6 Write tests for unified editor
     - Test dropdown renders all scripts and selects running script on open
     - Test switching scripts loads source without executing
     - Test auto-save debounces and persists source changes
@@ -2050,6 +2050,21 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify script name auto-updates when strategy()/indicator() name changes in source
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
+
+- [x] 81. Implement bar-close only alert dispatch
+  - [x] 81.1 Suppress alert triggers during forming-candle computation
+    - Modify `computeFormingCandle()` in the ExecutionEngine to return an empty `alertTriggers` array (or omit them entirely) — alert conditions are still evaluated internally but their triggers are not emitted until the bar closes
+    - `appendOrUpdateBar()` (which fires on bar close / new bar) continues to return alert triggers as normal
+    - _Requirements: 14.17_
+  - [x] 81.2 Add barstate.isconfirmed awareness to gateway alert dispatch
+    - In `reexecuteForTopic()` in `backend/src/ws/gateway.ts`, guard Telegram alert dispatch with a check that the engine is processing a confirmed bar (not a forming-candle tick)
+    - Add an `isConfirmed` flag to `appendOrUpdateBar()` / `computeFormingCandle()` return values so the gateway can distinguish bar-close from intra-bar updates
+    - _Requirements: 14.17_
+  - [x] 81.3 Write tests for bar-close alert dispatch
+    - Test that `computeFormingCandle()` returns an empty `alertTriggers` array
+    - Test that `appendOrUpdateBar()` still returns alert triggers on bar close
+    - Test end-to-end that Telegram is not called on forming-candle ticks
+    - _Requirements: 14.17_
 
 ## Notes
 
@@ -2073,6 +2088,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 75 implements real-time indicator computation for forming (live) candles: on each tick or kline update within the current candle's lifetime, only the last bar is re-evaluated without historical reprocessing, pushing partial indicator updates to the frontend for live intra-bar tracking
 - Tasks 76-77 implement the Script Bank: a persistent bank of scripts with CRUD operations (create, read, update, delete) stored in `backend/data/scripts.json`, REST API endpoints, and a frontend panel for browsing, creating, editing, deleting, and selecting scripts. The active script selection is persisted across restarts and auto-loaded into the editor on app startup
 - Tasks 79-80 unify the script editor: the separate ScriptBankPanel is removed and replaced with a dropdown inside the CodeEditor. The editor becomes the single source of truth for script management. Scripts auto-save on edit without re-executing the chart. The "Run" button executes and persists the running script. Script names are auto-extracted from source. A separate "runningScriptId" tracks the currently running script across reloads
+- Task 81 implements bar-close only alert dispatch: `computeFormingCandle()` suppresses alert triggers during intra-bar updates so that Telegram/email/webhook notifications only fire on confirmed bar close, preventing notification spam during live candle formation. Requirement 14.17 specifies the constraint.
 
 ## Task Dependency Graph
 
@@ -2184,7 +2200,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 102, "tasks": ["78"] },
     { "id": 103, "tasks": ["79.1", "79.2", "79.3", "79.4", "79.5"] },
     { "id": 104, "tasks": ["79.6"] },
-    { "id": 105, "tasks": ["80"] }
+    { "id": 105, "tasks": ["80"] },
+    { "id": 106, "tasks": ["81.1", "81.2"] },
+    { "id": 107, "tasks": ["81.3"] }
   ]
 }
 ```

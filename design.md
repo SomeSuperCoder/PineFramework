@@ -432,6 +432,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Alert logging and auditing
   - Display alertcondition() in indicator settings UI
   - Alert markers rendered on chart at trigger bar
+  - Bar-close dispatch: alert triggers are suppressed during intra-bar updates and forming-candle recalculations; Telegram/email/webhook delivery only fires on confirmed bar close (`barstate.isconfirmed`), preventing notification spam during live candle formation
 - **Telegram Integration (Telegraf Bot)**:
   - Uses the **Telegraf** library (v4+, 9.2k GitHub stars, Bot API v7.1 compatible) as the Telegram Bot API framework
   - Bot runs as a long-lived service colocated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`

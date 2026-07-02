@@ -137,6 +137,8 @@ export interface FormingCandleResult {
   barTimestamps: number[];
   barIndex: number;
   isDiff: boolean;
+  /** True when the engine processed a confirmed (closed) bar, false for forming candle ticks */
+  isConfirmed?: boolean;
 }
 
 export interface StrategyMarkerEntry {
@@ -1491,6 +1493,9 @@ export class ExecutionEngine {
       diffBgcolor = this.bgcolorData.slice(preBgcolorDataLen);
     }
 
+    // Suppress alert triggers for forming candles — alerts only fire on bar close (task 81.1)
+    diffAlertTriggers = [];
+
     const isDiff =
       Object.keys(diffOutputs).length > 0 ||
       diffShapes.length > 0 ||
@@ -1514,6 +1519,7 @@ export class ExecutionEngine {
       barTimestamps: [...this.barTimestamps],
       barIndex: this.barTimestamps.length - 1,
       isDiff,
+      isConfirmed: false,
     };
   }
 
