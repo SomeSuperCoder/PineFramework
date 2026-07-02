@@ -93,7 +93,7 @@ export class ScriptSession {
       const context = this.contexts[this.contexts.length - 1]!;
       this.engine.setFormingCandle(false);
       const result = this.engine.computeFormingCandle(context);
-      return this.toOutputs(result);
+      return this.toFormingCandleOutputs(result);
     }
 
     const lastBar = this.bars[this.bars.length - 1];

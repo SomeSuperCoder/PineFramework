@@ -48,6 +48,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
           const close = parseFloat(String(d.close || '0'));
           const volume = parseFloat(String(d.volume || '0'));
           const confirmed = d.confirm === true || d.confirm === 'true';
+          console.log(`[WS] Bybit kline: confirm=${JSON.stringify(d.confirm)} parsed=${confirmed}`);
 
           if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
             return;
