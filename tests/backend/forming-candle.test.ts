@@ -347,6 +347,56 @@ describe('Forming Candle Computation', () => {
       expect(result.isConfirmed).toBe(false);
     });
 
+    it('should evaluate barstate.isconfirmed as false during forming candle', () => {
+      const testSource = `//@version=6
+indicator("BarState Test")
+x = barstate.isconfirmed
+plot(x ? 1 : 0, "confirmed")`;
+      const engine = compileScript(testSource);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      const confirmedOutput = result.diffOutputs['confirmed'];
+      // During forming candle, barstate.isconfirmed should be false → plot value is 0
+      expect(confirmedOutput).toBe(0);
+    });
+
+    it('should evaluate barstate.isconfirmed as true during realtime bar executeRealtimeBar', () => {
+      const testSource = `//@version=6
+indicator("BarState Test")
+x = barstate.isconfirmed
+plot(x ? 1 : 0, "confirmed")`;
+      const engine = compileScript(testSource);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const newBarCtx = {
+        barIndex: 15,
+        barCount: 16,
+        timestamp: lastBar.timestamp + 60000,
+        open: createSeries('open', [lastBar.close]),
+        high: createSeries('high', [lastBar.close + 3]),
+        low: createSeries('low', [lastBar.close - 1]),
+        close: createSeries('close', [lastBar.close + 2]),
+        volume: createSeries('volume', [1000]),
+      };
+
+      const result = engine.executeRealtimeBar(newBarCtx);
+      expect(result.success).toBe(true);
+      const confirmedKey = Array.from(result.outputs.keys()).find(k => k.includes('confirmed'));
+      expect(confirmedKey).toBeDefined();
+      const series = result.outputs.get(confirmedKey!)!;
+      // During real-time bar execution, barstate.isconfirmed should be true → plot value is 1
+      expect(series.last()).toBe(1);
+    });
+
     it('should produce alert triggers on bar close (executeRealtimeBar)', () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);

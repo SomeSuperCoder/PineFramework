@@ -63,11 +63,21 @@ export class ScriptSession {
     return this.toOutputs(result);
   }
 
-  appendOrUpdateBar(bar: Bar): ScriptOutputs {
+  appendOrUpdateBar(bar: Bar, confirmed?: boolean): ScriptOutputs {
     if (!this.engine) {
       this.bars = [bar];
       this.contexts = barsToContext(this.bars);
       return this.initialize();
+    }
+
+    // When Bybit confirms the kline (bar close), execute as a confirmed real-time bar
+    if (confirmed) {
+      this.bars[this.bars.length - 1] = bar;
+      const fullContexts = barsToContext(this.bars);
+      this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+      const context = this.contexts[this.contexts.length - 1]!;
+      const result = this.engine.executeRealtimeBar(context);
+      return this.toOutputs(result);
     }
 
     const lastBar = this.bars[this.bars.length - 1];
@@ -85,9 +95,10 @@ export class ScriptSession {
       this.contexts.push(fullContexts[fullContexts.length - 1]!);
     }
 
+    // First tick of a new candle (not yet confirmed by Bybit) — treat as forming
     const context = this.contexts[this.contexts.length - 1]!;
-    const result = this.engine.executeRealtimeBar(context);
-    return this.toOutputs(result);
+    const result = this.engine.computeFormingCandle(context);
+    return this.toFormingCandleOutputs(result);
   }
 
   private toOutputs(result: import('pine-framework').ExecutionResult): ScriptOutputs {

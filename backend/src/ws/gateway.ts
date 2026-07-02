@@ -47,6 +47,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
           const low = parseFloat(String(d.low || '0'));
           const close = parseFloat(String(d.close || '0'));
           const volume = parseFloat(String(d.volume || '0'));
+          const confirmed = d.confirm === true || d.confirm === 'true';
 
           if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
             return;
@@ -62,10 +63,10 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
 
           broadcast(msg.topic, {
             type: 'kline',
-            data: { symbol, interval, ...bar },
+            data: { symbol, interval, ...bar, confirmed },
           });
 
-          reexecuteForTopic(msg.topic, bar);
+          reexecuteForTopic(msg.topic, bar, confirmed);
         }
       } catch {
         // ignore parse errors
@@ -83,7 +84,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
     });
   }
 
-  function reexecuteForTopic(topic: string, bar: Bar): void {
+  function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) {
       console.log(`[WS] reexecuteForTopic: no subscribers for topic "${topic}"`);
@@ -112,8 +113,8 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
 
       try {
         console.log(`[WS] reexecuteForTopic: calling appendOrUpdateBar for ${symbol} ${interval}`);
-        const outputs = sub.session.appendOrUpdateBar(bar);
-        console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, formingCandle=${outputs.formingCandle}`);
+        const outputs = sub.session.appendOrUpdateBar(bar, confirmed);
+        console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, isConfirmed=${outputs.isConfirmed}, confirmed=${confirmed}`);
 
         ws.send(JSON.stringify({
           type: 'execution_result',

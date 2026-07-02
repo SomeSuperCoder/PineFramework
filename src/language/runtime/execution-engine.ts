@@ -209,6 +209,7 @@ export class ExecutionEngine {
   private currentTimestamp: number = 0;
   private currentContext: ExecutionContext | null = null;
   private barTimestamps: number[] = [];
+  private isFormingCandle: boolean = false;
 
   constructor(compileResult: CompileResult, strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>) {
     this.compiledScript = compileResult.ir;
@@ -270,6 +271,10 @@ export class ExecutionEngine {
   private crossCallIndex: number = 0;
   private crossPrevValues: Array<{ src: number; cmp: number }> = [];
   private strategyEngine: StrategyEngine | null = null;
+
+  setFormingCandle(v: boolean): void {
+    this.isFormingCandle = v;
+  }
 
   private registerBuiltins(): void {
     this.builtins.set('ta.sma', (source: PineValue, length: PineValue): PineValue => {
@@ -1360,6 +1365,7 @@ export class ExecutionEngine {
     if (this.snapshots.length === 0) {
       this.createSnapshot();
     }
+    this.isFormingCandle = false;
     return this.executeBar(context);
   }
 
@@ -1397,6 +1403,7 @@ export class ExecutionEngine {
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
 
+    this.isFormingCandle = true;
     const result = this.executeBar(context);
 
     const snapshotsAdded = this.snapshots.length > 0 ? 1 : 0;
@@ -1492,6 +1499,9 @@ export class ExecutionEngine {
     if (this.bgcolorData.length > preBgcolorDataLen) {
       diffBgcolor = this.bgcolorData.slice(preBgcolorDataLen);
     }
+
+    // Restore non-forming state after rollback
+    this.isFormingCandle = false;
 
     // Suppress alert triggers for forming candles — alerts only fire on bar close (task 81.1)
     diffAlertTriggers = [];
@@ -2247,7 +2257,7 @@ export class ExecutionEngine {
           isfirst: context.barIndex === 0,
           islast: context.barIndex === context.barCount - 1,
           isnew: true,
-          isconfirmed: true,
+          isconfirmed: !this.isFormingCandle,
           ishistory: true,
         };
         return barstateProps[expr.property] ?? NA;
