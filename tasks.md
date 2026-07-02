@@ -2065,6 +2065,78 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test that `appendOrUpdateBar()` still returns alert triggers on bar close
     - Test end-to-end that Telegram is not called on forming-candle ticks
     - _Requirements: 14.17_
+  - [x] 81.4 Add `lastConfirmedTimestamp` dedup in ScriptSession
+    - Track the timestamp of the last confirmed bar per session — if a duplicate `confirmed=true` kline arrives with the same or older timestamp, skip re-execution and return a forming-candle result with `isConfirmed=false` (alerts suppressed)
+    - Prevents re-dispatch when Bybit resends the same confirmed kline
+    - _Requirements: 14.18_
+  - [x] 81.5 Add `recentAlertKeys` Set dedup in WebSocket gateway
+    - Maintain a module-level Set keyed by `alertId:timestamp:topic` (bounded at 100 entries, oldest evicted first)
+    - Before dispatching a Telegram alert, check the Set; if the key exists, suppress the duplicate with a log message
+    - Prevents double-alerts when two WebSocket sessions (e.g., stale + fresh from HMR) both subscribe to the same topic and independently produce triggers
+    - _Requirements: 14.18, 19.29_
+  - [x] 81.6 Fix series length drift in `computeFormingCandle`
+    - Always truncate output series (`barTimestamps`, `totalBars`, etc.) to the pre-execution length after rollback in `computeFormingCandle()`, even when no diff was produced — prevents drift between the engine's internal bar count and `barTimestamps.length` used for frontend time-alignment
+    - _Requirements: 3.24_
+  - [x] 81.7 Prune stale WebSocket connections from topic subscriber sets
+    - At the start of `reexecuteForTopic()`, remove any connections with `readyState !== WebSocket.OPEN` from the subscriber Set before iterating
+    - Prevents orphaned sessions (from Vite HMR, page refreshes, etc.) from producing phantom alert dispatches
+    - _Requirements: 19.27_
+
+- [x] 82. Refactor forming-candle architecture — caller controls `isFormingCandle`
+  - [x] 82.1 Move `isFormingCandle` management from engine internals to external caller
+    - Remove `this.isFormingCandle = true` from `computeFormingCandle()` and `this.isFormingCandle = false` from `executeRealtimeBar()`
+    - Add `engine.setFormingCandle(v: boolean)` method for external callers
+    - `barstate.isconfirmed` resolves to `!this.isFormingCandle` — reflects the externally-set flag
+    - `isConfirmed` in `FormingCandleResult` uses `!this.isFormingCandle` so the gateway knows whether this is a confirmed bar
+    - _Requirements: 3.24, 14.17_
+  - [x] 82.2 Route confirmed bars through `computeFormingCandle` instead of `executeRealtimeBar`
+    - In `ScriptSession.appendOrUpdateBar()`, the confirmed branch (`confirmed=true`) calls `engine.setFormingCandle(false)` then `computeFormingCandle()` — not `executeRealtimeBar()`
+    - Avoids state advancement (barTimestamps push, totalBars increment) that `executeRealtimeBar()` performs — confirmed bars were already processed during `initialize()` and should not be re-added
+    - Calls `toFormingCandleOutputs()` (not `toOutputs()`) on the `FormingCandleResult` to correctly map diff outputs
+    - _Requirements: 3.24, 14.17, 14.18_
+  - [x] 82.3 Update forming-candle branches to set flag before calling engine
+    - Forming/intra-bar branches call `engine.setFormingCandle(true)` before `computeFormingCandle()`
+    - Dedup branch (already-confirmed bar re-received) calls `engine.setFormingCandle(true)` before `computeFormingCandle()`
+    - _Requirements: 14.17, 14.18_
+  - [x] 82.4 Remove `diffAlertTriggers = []` from `computeFormingCandle`
+    - Remove the engine-level alert trigger suppression; `computeFormingCandle()` now returns computed `diffAlertTriggers` regardless of forming/confirmed state
+    - Alert suppression is delegated entirely to the gateway layer via the `isConfirmed` guard in `ScriptOutputs`
+    - _Requirements: 14.17_
+
+- [x] 83. Improve CodeEditor UX
+  - [x] 83.1 Add "Create Your First Script" empty state
+    - When the script bank has no scripts, show a welcome screen with a "Create Your First Script" button instead of the empty dropdown and disabled controls
+    - Hides the script selector, Delete button, and Run button until at least one script exists
+    - _Requirements: 25.1, 25.3_
+  - [x] 83.2 Extract script name from source when creating a new script
+    - In `handleNewScript`, parse `DEFAULT_CODE` with the `extractName()` regex before POSTing to the API
+    - Ensures the default template's strategy/indicator name is persisted as the script name
+    - _Requirements: 25.8_
+  - [x] 83.3 Prevent flash of DEFAULT_CODE on page load
+    - Initialize `currentCode` state as `null` instead of `DEFAULT_CODE` in `App.tsx`
+    - Guard the auto-execute useEffect with `if (!currentCode) return;`
+    - Only set `currentCode` to `DEFAULT_CODE` as a fallback if the `/api/scripts/running` API returns no running script or fails
+    - Prevents the chart from briefly executing DEFAULT_CODE before the running script's source loads from the API
+    - _Requirements: 17.27_
+
+- [x] 84. Improve Telegram alert delivery reliability
+  - [x] 84.1 Fix `isActive()` race condition at startup
+    - Move `this.isRunning = true` to before `bot.launch()` so `isActive()` returns true immediately
+    - Change `isActive()` to check `this.bot !== null` instead of `this.isRunning` for consistency
+    - _Requirements: 14.18_
+  - [x] 84.2 Add MarkdownV2 plain-text fallback
+    - When `replyWithMarkdownV2()` throws a parse error (e.g., reserved characters), fall back to `sendMessage(text, { parse_mode: undefined })` for plain text delivery
+    - Ensures alerts are never lost due to Markdown formatting issues
+    - _Requirements: 14.20_
+  - [x] 84.3 Add comprehensive alert pipeline logging
+    - Log every step of the alert pipeline: entry into `reexecuteForTopic`, subscriber count, `appendOrUpdateBar` result (alertTriggers count, isConfirmed), Telegram service activation status, and dispatch/suppression decisions
+    - _Requirements: 14.7_
+
+- [x] 85. Fix stale-bar gap in WebSocket session creation
+  - [x] 85.1 Use `ohlcvDataRef.current` for WS session bars
+    - In `useChartData`, when sending the `execute` WebSocket message, use `ohlcvDataRef.current` (the up-to-date bar array from the last REST fetch) instead of `pendingExecuteRef.bars` (which may contain stale data from a previous request)
+    - Prevents indicator misalignment when the frontend has fetched newer OHLCV data than what was available when the pending execute was queued
+    - _Requirements: 17.1_
 
 ## Notes
 
@@ -2089,6 +2161,11 @@ This implementation plan outlines the step-by-step development of a production-g
 - Tasks 76-77 implement the Script Bank: a persistent bank of scripts with CRUD operations (create, read, update, delete) stored in `backend/data/scripts.json`, REST API endpoints, and a frontend panel for browsing, creating, editing, deleting, and selecting scripts. The active script selection is persisted across restarts and auto-loaded into the editor on app startup
 - Tasks 79-80 unify the script editor: the separate ScriptBankPanel is removed and replaced with a dropdown inside the CodeEditor. The editor becomes the single source of truth for script management. Scripts auto-save on edit without re-executing the chart. The "Run" button executes and persists the running script. Script names are auto-extracted from source. A separate "runningScriptId" tracks the currently running script across reloads
 - Task 81 implements bar-close only alert dispatch: `computeFormingCandle()` suppresses alert triggers during intra-bar updates so that Telegram/email/webhook notifications only fire on confirmed bar close, preventing notification spam during live candle formation. Requirement 14.17 specifies the constraint.
+- Task 81.4-81.7 adds three layers of alert deduplication: `lastConfirmedTimestamp` per-session guard, `recentAlertKeys` module-level Set with 100-entry LRU eviction, and stale WebSocket connection pruning at iteration start. Also fixes series length drift in `computeFormingCandle()` rollback.
+- Task 82 refactors the forming-candle architecture so that `isFormingCandle` is entirely caller-managed via `engine.setFormingCandle()`. Confirmed bars route through `computeFormingCandle()` (not `executeRealtimeBar()`) to avoid double-advancing state. The engine-level `diffAlertTriggers = []` suppression is removed — alert control is fully delegated to the gateway layer.
+- Task 83 improves CodeEditor UX: "Create Your First Script" empty state, script name extraction on creation, and flash prevention by initializing `currentCode` as `null`.
+- Task 84 improves Telegram reliability: fixes `isActive()` race condition by moving `this.isRunning = true` before `bot.launch()`, adds MarkdownV2 plain-text fallback on parse errors, and adds comprehensive alert pipeline logging.
+- Task 85 fixes stale-bar gap by using `ohlcvDataRef.current` instead of `pendingExecuteRef.bars` when sending the WebSocket execute message.
 
 ## Task Dependency Graph
 
@@ -2202,7 +2279,12 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 104, "tasks": ["79.6"] },
     { "id": 105, "tasks": ["80"] },
     { "id": 106, "tasks": ["81.1", "81.2"] },
-    { "id": 107, "tasks": ["81.3"] }
+    { "id": 107, "tasks": ["81.3"] },
+    { "id": 108, "tasks": ["81.4", "81.5", "81.6", "81.7"] },
+    { "id": 109, "tasks": ["82.1", "82.2", "82.3", "82.4"] },
+    { "id": 110, "tasks": ["83.1", "83.2", "83.3"] },
+    { "id": 111, "tasks": ["84.1", "84.2", "84.3"] },
+    { "id": 112, "tasks": ["85.1"] }
   ]
 }
 ```

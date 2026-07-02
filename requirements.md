@@ -406,6 +406,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 **Alert Dispatch on Bar Close:**
 17. THE Alert_System SHALL dispatch alert notifications only on confirmed bar close (barstate.isconfirmed). Intra-bar updates, forming-candle recalculations, and real-time ticks SHALL NOT trigger alert delivery — alert conditions are evaluated for computation but the resulting triggers are suppressed until the candle closes.
+18. THE Alert_System SHALL deduplicate alert triggers within both ScriptSession and the WebSocket gateway: ScriptSession tracks `lastConfirmedTimestamp` to skip re-execution of an already-confirmed bar; the gateway maintains a `recentAlertKeys` Set keyed by `alertId:timestamp:topic` to suppress duplicate dispatch across multiple WebSocket sessions subscribed to the same topic.
 
 **Telegram Bot Notifications (Telegraf):**
 18. THE Alert_System SHALL deliver alert messages to Telegram users via a bot powered by the Telegraf library (v4+, Bot API v7.1 compatible)
@@ -515,6 +516,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 42. THE Frontend SHALL use `barTimestamps` from the execution response when constructing plot data, falling back to `ohlcvData` timestamps only when `barTimestamps` is unavailable — making plot data self-describing regardless of `ohlcvDataRef` divergence
 43. THE Frontend SHALL validate output array length against both `barTimestamps.length` (when present) and `ohlcvData.length` (with ±1 tolerance for kline timing) in `handleExecutionResult()`, rejecting stale WebSocket session results whose output count mismatches the frontend's candle count
 44. WHEN a new `execute` command arrives via WebSocket, THE Backend SHALL nullify the old `ScriptSession` before creating a new one, preventing the prior session from continuing to emit kline-driven `execution_result` messages with outdated bar counts
+45. THE Frontend SHALL use `ohlcvDataRef.current` (the up-to-date bar array) when establishing a new WebSocket ScriptSession, preventing execution against stale bars that cause indicator misalignment on newer candles
+46. THE Frontend SHALL automatically re-execute the active Pine Script on page mount via a useEffect that calls `executeScript`, ensuring the WebSocket session is established and real-time kline updates are applied from the start
 
 **Lines, Labels, and Per-Bar Rendering:**
 45. THE Frontend SHALL render drawing lines (created via line.new()) on the canvas chart at correct bar index and price level positions with configurable color, width, style, and extend modes
@@ -573,6 +576,9 @@ This specification defines requirements for building a Pine Script v6 compatible
 24. THE Backend SHALL include per-bar plot color data and per-bar fill color data in execution responses for fine-grained canvas rendering
 25. THE Backend SHALL include line objects (LineEntry mapped to DrawingLineData) and label objects (LabelData) in execution responses for canvas rendering
 26. THE Backend SHALL extend GET /api/ohlcv to accept an `end` timestamp parameter for fetching bars older than a given time point (lazy loading)
+27. THE Backend WebSocket gateway SHALL prune stale (closed) WebSocket connections from topic subscriber sets before each re-execution iteration to prevent connection-set drift
+28. THE Backend WebSocket gateway SHALL forward the Bybit `confirm` field from kline messages to the frontend as `confirmed` in the kline data payload
+29. THE Backend WebSocket gateway SHALL maintain a `recentAlertKeys` Set (bounded at 100 entries, oldest evicted first) keyed by `alertId:timestamp:topic` to suppress duplicate Telegram alert dispatch across multiple sessions subscribed to the same topic
 
 ### Requirement 20: Bybit Exchange Integration
 

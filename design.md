@@ -138,7 +138,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Supports inclusive for-loop iteration (`for i = 0 to end` includes the `end` value)
   - Forwards named arguments (comment, stop, limit) to strategy.entry() and strategy.exit() builtins
   - Parses variable-length argument lists for strategy builtins to extract positional and named parameters
-  - Incremental real-time bar execution via `executeRealtimeBar()` which processes a single new bar while preserving prior state
+  - Incremental real-time bar execution via `executeRealtimeBar()` which processes a single new bar while preserving prior state; primarily used for the initial `totalBars === 0` edge case
   - State snapshot management for rollback: `createSnapshot()` saves engine state before real-time updates, `rollbackToSnapshot()` restores on error
   - The engine instance is kept alive across real-time updates so that var/varip, series indices, and strategy positions persist between bars
   - Executes switch expressions with full conditional branching and local block scoping
@@ -150,6 +150,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - plot() builtin outputs a single continuous series key regardless of per-bar color variation (no splitting into per-color variants)
   - bgcolor data forwarded through execution result pipeline
   - Forming-candle computation: on each real-time tick or kline update, only the last (live) bar is re-evaluated without reprocessing historical bars, enabling sub-bar indicator updates that track intra-bar price action
+  - **Caller controls `isFormingCandle` flag**: The caller (`ScriptSession`) sets `engine.setFormingCandle(true|false)` before calling `computeFormingCandle()`. The engine no longer manages this flag internally. Both forming (intra-bar) and confirmed (bar-close) updates use `computeFormingCandle()`; `executeRealtimeBar()` is only used for the `totalBars === 0` edge case.
+  - `barstate.isconfirmed` resolves to `!this.isFormingCandle`, so the Pine script sees `true` when `setFormingCandle(false)` was called (confirmed bar close) and `false` during intra-bar ticks.
+  - `computeFormingCandle()` generates alert triggers in `diffAlertTriggers` regardless of the forming/confirmed state; suppression happens at the gateway layer via the `isConfirmed` guard in the `ScriptOutputs` result.
+  - Output series length is always truncated to the pre-execution length after `computeFormingCandle()` rollback, preventing series-length drift when `barTimestamps.length` is used for time-alignment.
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -433,6 +437,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Display alertcondition() in indicator settings UI
   - Alert markers rendered on chart at trigger bar
   - Bar-close dispatch: alert triggers are suppressed during intra-bar updates and forming-candle recalculations; Telegram/email/webhook delivery only fires on confirmed bar close (`barstate.isconfirmed`), preventing notification spam during live candle formation
+- **Three-Layer Alert Dedup Enforcement**:
+  1. **ScriptSession `lastConfirmedTimestamp`** — Per-session timestamp tracking: if a second `confirmed=true` kline arrives with the same or older timestamp, the session skips re-execution entirely (returns forming-candle result with `isConfirmed=false`, alerts suppressed).
+  2. **Gateway `recentAlertKeys` Set** — Module-level Set keyed by `alertId:timestamp:topic` (bounded at 100 entries, oldest evicted first). Before dispatching a Telegram alert, the gateway checks this Set; if the key exists, the duplicate is suppressed with a log message.
+  3. **Stale connection pruning** — Before iterating topic subscribers, closed WebSocket connections are removed from the subscriber Set, preventing orphaned sessions from producing phantom alerts.
 - **Telegram Integration (Telegraf Bot)**:
   - Uses the **Telegraf** library (v4+, 9.2k GitHub stars, Bot API v7.1 compatible) as the Telegram Bot API framework
   - Bot runs as a long-lived service colocated with the Backend, using `bot.launch()` with graceful `SIGINT`/`SIGTERM` shutdown via `bot.stop()`
@@ -595,11 +603,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Validates WebSocket kline data before forwarding to clients
    - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
    - Invalidates the previous ScriptSession before creating a new one on WS execute, preventing stale sessions from emitting outdated execution_result messages
-  - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `executeRealtimeBar()` on the persisted engine
+  - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `appendOrUpdateBar()` on the persisted ScriptSession, which delegates to `computeFormingCandle()` for both forming and confirmed updates
    - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, per-bar colors, and barTimestamps
   - Accepts `offset` parameter in POST /api/execute to return only outputs for newly added bars during lazy loading
   - Accepts `end` timestamp parameter in GET /api/ohlcv for fetching historical bars before a given time point
   - Includes bgcolor data, per-bar plot colors, per-bar fill colors, line objects (DrawingLineData), and label objects (LabelData) in execution responses
+  - **Stale connection pruning**: Before iterating a topic's subscriber Set in `reexecuteForTopic`, closed connections (`readyState !== WebSocket.OPEN`) are removed, preventing the Set from accumulating stale references
+  - **Confirm field forwarding**: The Bybit `confirm` property is parsed (`d.confirm === true || d.confirm === 'true'`) and forwarded to both the frontend (as `confirmed` in the kline data) and `ScriptSession.appendOrUpdateBar()` for bar-close detection
 
 #### 18. Bybit Data Adapter
 - **Responsibility**: Integrate with Bybit exchange for real market data
@@ -616,6 +626,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Implements engine's `DataSource` interface for `request.security()` integration
   - Handles data gap detection and backfill
   - Symbol and interval subscription management
+  - **Confirm field threading**: The `confirm` property from Bybit V5 kline WebSocket messages is parsed (`d.confirm === 'true'`) and threaded through the execution pipeline — forwarded to `ScriptSession.appendOrUpdateBar()` as the `confirmed` parameter, which controls whether the bar is treated as a confirmed close (`setFormingCandle(false)`) or a forming tick (`setFormingCandle(true)`)
 
 #### 19. Telegram Bot Integration
 - **Responsibility**: Send script alert notifications to a Telegram user via a Telegram Bot
@@ -673,17 +684,31 @@ Bybit WebSocket → Backend (WS Gateway)
   ├── Data Cache (update bar)
   ├── Frontend (WS Client) → Chart Update (candle refresh)
   │
-  ├── New candle (period rollover):
-  │     Session Manager → Persisted Engine (executeRealtimeBar)
-  │       → Updated outputs, shapes, fills, strategyMarkers
-  │       → Backend (WS Gateway) → Frontend (WS Client)
-  │       → Chart Overlay Update (indicators, markers, fills)
-  │
-  └── Forming-candle tick (intra-bar update):
-        Session Manager → Persisted Engine (computeFormingCandle)
-          → Updated indicator values for last bar only
-          → Backend (WS Gateway) → Frontend (WS Client)
-          → Chart Last-Bar Overlay Update (indicators track live price)
+  └── reexecuteForTopic(topic, bar, confirmed)
+        │
+        │ prune stale (closed) WS connections
+        │
+        └── for EACH subscriber with an active ScriptSession:
+              ├── ScriptSession.appendOrUpdateBar(bar, confirmed)
+              │     │
+              │     ├── if confirmed && timestamp <= lastConfirmedTimestamp
+              │     │     → dedup: setFormingCandle(true), computeFormingCandle()
+              │     │     → forming result, isConfirmed=false → alerts SUPPRESSED
+              │     │
+              │     ├── if confirmed && timestamp > lastConfirmedTimestamp
+              │     │     → setFormingCandle(false), computeFormingCandle()
+              │     │     → confirmed result, isConfirmed=true → alerts GENERATED
+              │     │     (dedup via recentAlertKeys Set before Telegram dispatch)
+              │     │
+              │     └── if !confirmed (forming tick)
+              │           → setFormingCandle(true), computeFormingCandle()
+              │           → forming result, isConfirmed=false → alerts SUPPRESSED
+              │
+              ├── execution_result sent to WS client (plots, shapes, fills, etc.)
+              │
+              └── if isConfirmed && tgActive && hasTriggers
+                    → check recentAlertKeys Set → if duplicate, suppress
+                    → telegramService.sendAlertToSubscribers() for each trigger
 ```
 
 #### 4. Request Processing Flow
