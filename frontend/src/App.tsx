@@ -23,7 +23,7 @@ function App() {
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
-  const [currentCode, setCurrentCode] = useState(DEFAULT_CODE);
+  const [currentCode, setCurrentCode] = useState<string | null>(null);
   const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
@@ -51,9 +51,11 @@ function App() {
         if (data.script) {
           setCurrentScriptId(data.script.id);
           setCurrentCode(data.script.source);
+        } else {
+          setCurrentCode(DEFAULT_CODE);
         }
       })
-      .catch(() => {});
+      .catch(() => setCurrentCode(DEFAULT_CODE));
   }, []);
 
   useEffect(() => {
@@ -62,6 +64,7 @@ function App() {
   }, [symbol, timeframe, subscribe]);
 
   useEffect(() => {
+    if (!currentCode) return;
     executeScript(currentCode, symbol, timeframe);
   }, [symbol, timeframe, executeScript, currentCode]);
 
