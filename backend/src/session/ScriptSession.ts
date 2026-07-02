@@ -47,6 +47,7 @@ export class ScriptSession {
   private engine: ExecutionEngine | null = null;
   private contexts: ExecutionContext[] = [];
   private cachedAlertConditions: Array<{ id: string; title: string; message: string }> = [];
+  private lastConfirmedTimestamp: number = 0;
 
   constructor(source: string, symbol: string, interval: string, bars: Bar[]) {
     this.source = source;
@@ -72,6 +73,16 @@ export class ScriptSession {
 
     // When Bybit confirms the kline (bar close), execute as a confirmed real-time bar
     if (confirmed) {
+      // Dedup: skip re-execution if we already confirmed this bar timestamp
+      if (bar.timestamp <= this.lastConfirmedTimestamp) {
+        this.bars[this.bars.length - 1] = bar;
+        const fullContexts = barsToContext(this.bars);
+        this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+        const context = this.contexts[this.contexts.length - 1]!;
+        const result = this.engine.computeFormingCandle(context);
+        return this.toFormingCandleOutputs(result);
+      }
+      this.lastConfirmedTimestamp = bar.timestamp;
       this.bars[this.bars.length - 1] = bar;
       const fullContexts = barsToContext(this.bars);
       this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;

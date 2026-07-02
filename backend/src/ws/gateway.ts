@@ -66,7 +66,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
             data: { symbol, interval, ...bar, confirmed },
           });
 
-          reexecuteForTopic(msg.topic, bar, confirmed);
+          reexecuteForTopic(msg.topic, bar, confirmed, msg.type === 'snapshot');
         }
       } catch {
         // ignore parse errors
@@ -84,7 +84,7 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
     });
   }
 
-  function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
+  function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean, historical?: boolean): void {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) {
       console.log(`[WS] reexecuteForTopic: no subscribers for topic "${topic}"`);
@@ -125,10 +125,12 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
         const triggers = outputs.alertTriggers;
         const hasTriggers = triggers !== undefined && triggers.length > 0;
         const isConfirmed = outputs.isConfirmed ?? false;
-        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}`);
+        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}, historical=${historical}`);
 
         if (!isConfirmed) {
           console.log(`[WS] reexecuteForTopic: forming candle (isConfirmed=false), suppressing alert dispatch`);
+        } else if (historical) {
+          console.log(`[WS] reexecuteForTopic: historical snapshot catchup, suppressing alert dispatch`);
         } else if (tgActive && hasTriggers && telegramService) {
           for (const trigger of triggers) {
             const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
