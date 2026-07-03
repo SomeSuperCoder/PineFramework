@@ -48,7 +48,7 @@ export interface AssignmentNode {
   kind: 'Assignment';
   span: SourceSpan;
   target: ExpressionNode;
-  operator: ':=' | '=';
+  operator: ':=' | '=' | '+=' | '-=' | '*=' | '/=';
   value: ExpressionNode;
 }
 

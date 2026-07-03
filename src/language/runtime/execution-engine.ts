@@ -1742,8 +1742,31 @@ export class ExecutionEngine {
       if (!binding) {
         throw new Error(`Variable '${name}' is not defined`);
       }
-      binding.series.push(value);
-      return value;
+
+      let result: PineValue = value;
+      if (stmt.operator !== '=') {
+        const current = binding.series.getRelative(0);
+        switch (stmt.operator) {
+          case '+=':
+            result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0);
+            break;
+          case '-=':
+            result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0);
+            break;
+          case '*=':
+            result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0);
+            break;
+          case '/=':
+            result = (typeof current === 'number' && typeof value === 'number' && value !== 0)
+              ? current / value : 0;
+            break;
+          case ':=':
+            result = value;
+            break;
+        }
+      }
+      binding.series.push(result);
+      return result;
     }
 
     if (stmt.target.kind === 'MemberExpression') {
