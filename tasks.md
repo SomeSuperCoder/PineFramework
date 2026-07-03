@@ -2138,6 +2138,74 @@ This implementation plan outlines the step-by-step development of a production-g
     - Prevents indicator misalignment when the frontend has fetched newer OHLCV data than what was available when the pending execute was queued
     - _Requirements: 17.1_
 
+- [x] 86. Fix Two-Pole Trend Filter Compatibility
+  - [x] 86.1 Fix parser for method keyword and type-first parameters
+    - Add `method` keyword handling: parse `method name(...) =>` as `ExpressionStatement(FunctionExpression)`
+    - Add `checkNextTypeKeyword()` to distinguish typed variable declarations from expressions
+    - Add PascalCase guard to `looksLikeUserType()` to prevent false positives (e.g., `f2 tp_f`)
+    - Support type-first parameter syntax (`float src`) in `parseParameter()`
+    - Remove return type annotation parsing from `finishFunctionExpr()` and `parseFunctionExpression()` to avoid consuming `float` from `=> float x = ...`
+    - Remove non-existent `TokenType.Indent` reference from `parseSwitchStatement()`
+    - _Requirements: 1.1, 1.12_
+  
+  - [x] 86.2 Add compound assignment operators to tokenizer and parser
+    - Add `PlusAssign`, `MinusAssign`, `StarAssign`, `SlashAssign` token types to tokenizer
+    - Widen `AssignmentNode.operator` type to include `+=`, `-=`, `*=`, `/=`
+    - Parse compound assignments in `parseExpressionOrAssignmentStatement()`
+    - _Requirements: 1.12, 3.26_
+  
+  - [x] 86.3 Fix isAssignable type coercion
+    - Restore numeric narrowing (int→float allowed, float→int blocked)
+    - Add series<T>→any fallback for builtin return values
+    - _Requirements: 2.3_
+  
+  - [x] 86.4 Implement compound assignment execution
+    - Read current series value via `getRelative(0)` before applying operator
+    - Support `+=`, `-=`, `*=`, `/=`, `:=` operators in `executeAssignment()`
+    - _Requirements: 3.26_
+  
+  - [x] 86.5 Fix namedArgs contamination and method dispatch
+    - Only pass namedArgs to builtins when non-empty (prevent empty `{}` as positional arg)
+    - Check user-defined methods BEFORE line/label switch in method dispatch
+    - _Requirements: 3.11, 3.23_
+  
+  - [x] 86.6 Implement var persistence in function/method scopes
+    - Add `functionPersistentScopes` map to reuse persistent scope across bars for named functions/methods
+    - Call `pushBarValues()` on persistent scope each bar so var variables retain values
+    - Declare parameters only once (check `resolveVariable` before `declareVariable`)
+    - _Requirements: 3.13_
+  
+  - [x] 86.7 Add ta.atr, color.from_gradient, barcolor, nz, math constants builtins
+    - Implement `ta.atr(length)` with per-key state tracking and warmup period
+    - Implement `color.from_gradient(value, min, max, color1, color2)` with RGB interpolation
+    - Implement `barcolor(color)` storing `{time, color}` entries in `barColorData`
+    - Implement `nz(value, fallback)` replacing na with 0 or custom fallback
+    - Add `math.pi`, `math.e`, `math.phi` as constants in member expression resolution
+    - _Requirements: 4.1, 6.29, 6.37_
+  
+  - [x] 86.8 Fix plotshape title and add barColorData to snapshots
+    - Remove title (2nd positional arg) from being used as display text — only `text` named arg appears on shapes
+    - Add `barColorData` field to `ExecutionSnapshot` and include in `createSnapshot()`/`rollbackToSnapshot()`
+    - Include `barColorData` in `ExecutionResult` and `executeBars()` return value
+    - _Requirements: 6.15, 3.25_
+  
+  - [x] 86.9 Fix shape rendering pipeline for location.absolute
+    - Add `price` field to `ShapeEntry` in engine and serialize in backend responses
+    - Frontend hook: pass `s.price ?? 0` instead of `price: 0`
+    - Frontend types: extend `ShapeData.location` with `'absolute'`, add `price` to `ShapeMarkerData`
+    - MarkerRenderer: handle `location.absolute` by using `priceToPixel(marker.price)` instead of candle high/low
+    - _Requirements: 6.17, 21.30_
+  
+  - [x]* 86.10 Write integration tests for two-pole trend filter
+    - Create 15 tests: parse/compile, output keys, non-null values, filter convergence, monotonic increase, gradient colors, color transitions, var persistence, no shapes when default, no barcolors when default, history operator, nz behavior
+    - _Requirements: 11.10_
+
+- [x] 87. Add Compatibility Implementation Prompt
+  - [x] 87.1 Create prompts/compatibility-impl.md
+    - Document integration test-first workflow for implementing new Pine Script indicators
+    - Include test structure template, common gotchas, key file references
+    - _Requirements: 11.10_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2166,6 +2234,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 83 improves CodeEditor UX: "Create Your First Script" empty state, script name extraction on creation, and flash prevention by initializing `currentCode` as `null`.
 - Task 84 improves Telegram reliability: fixes `isActive()` race condition by moving `this.isRunning = true` before `bot.launch()`, adds MarkdownV2 plain-text fallback on parse errors, and adds comprehensive alert pipeline logging.
 - Task 85 fixes stale-bar gap by using `ohlcvDataRef.current` instead of `pendingExecuteRef.bars` when sending the WebSocket execute message.
+- Task 86 implements Two-Pole Trend Filter compatibility: parser fixes (method keyword, compound assignments, type-first params, PascalCase guard), runtime fixes (var persistence, namedArgs, method dispatch, compound assignment execution), new builtins (ta.atr, color.from_gradient, barcolor, nz, math constants), barColorData pipeline, plotshape title fix, shape location.absolute rendering, and integration tests.
+- Task 87 adds the compatibility implementation prompt template (`prompts/compatibility-impl.md`) for onboarding new Pine Script indicators with a test-first workflow.
 
 ## Task Dependency Graph
 
@@ -2284,7 +2354,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 109, "tasks": ["82.1", "82.2", "82.3", "82.4"] },
     { "id": 110, "tasks": ["83.1", "83.2", "83.3"] },
     { "id": 111, "tasks": ["84.1", "84.2", "84.3"] },
-    { "id": 112, "tasks": ["85.1"] }
+    { "id": 112, "tasks": ["85.1"] },
+    { "id": 113, "tasks": ["86.1", "86.2", "86.3", "86.4", "86.5", "86.6", "86.7", "86.8", "86.9"] },
+    { "id": 114, "tasks": ["86.10"] },
+    { "id": 115, "tasks": ["87.1"] }
   ]
 }
 ```

@@ -40,6 +40,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 9. THE Parser SHALL support color, shape, location, strategy, indicator, and library token types as valid identifiers in member expressions
 10. THE Parser SHALL support switch expressions with all Pine v6 semantics including local block scoping, arrow syntax (=>), and conditional branching
 11. THE Parser SHALL support type-inferred array declarations (array.new_<type>() returning array<elementType>)
+12. THE Parser SHALL support compound assignment operators (`+=`, `-=`, `*=`, `/=`) as distinct token types and as valid assignment operators in expression statements
 
 ### Requirement 2: Pine Type System
 
@@ -87,6 +88,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 22. THE Execution_Engine SHALL return line and label entries (LineEntry, LabelEntry) as part of the execution result alongside shapes, fills, and strategyMarkers
 23. THE Execution_Engine SHALL dispatch line.* and label.* method calls on numeric IDs returned by line.new() and label.new(), supporting delete, get_*, and set_* methods via method dispatch
 24. THE Execution_Engine SHALL compute indicator values for the currently forming (live) candle on every real-time tick or kline update, updating only the last bar's output without reprocessing historical bars, so that indicators track intra-bar price action in real time
+25. THE Execution_Engine SHALL include `barColorData` (an array of `{time, color}` objects) in the execution result, populated by `barcolor()` calls, and shall preserve it across snapshots and rollbacks
+26. THE Execution_Engine SHALL execute compound assignment operators (`+=`, `-=`, `*=`, `/=`) by reading the current series value, applying the operator with the right-hand side, and pushing the result
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -574,11 +577,12 @@ This specification defines requirements for building a Pine Script v6 compatible
 22. THE Backend SHALL accept an `offset` parameter in POST /api/execute to return only output for newly added bars, reducing payload size during lazy loading while the engine still processes all bars internally for state continuity
 23. THE Backend SHALL include bgcolor data in POST /api/execute and WebSocket execution_result responses
 24. THE Backend SHALL include per-bar plot color data and per-bar fill color data in execution responses for fine-grained canvas rendering
-25. THE Backend SHALL include line objects (LineEntry mapped to DrawingLineData) and label objects (LabelData) in execution responses for canvas rendering
-26. THE Backend SHALL extend GET /api/ohlcv to accept an `end` timestamp parameter for fetching bars older than a given time point (lazy loading)
-27. THE Backend WebSocket gateway SHALL prune stale (closed) WebSocket connections from topic subscriber sets before each re-execution iteration to prevent connection-set drift
-28. THE Backend WebSocket gateway SHALL forward the Bybit `confirm` field from kline messages to the frontend as `confirmed` in the kline data payload
-29. THE Backend WebSocket gateway SHALL maintain a `recentAlertKeys` Set (bounded at 100 entries, oldest evicted first) keyed by `alertId:timestamp:topic` to suppress duplicate Telegram alert dispatch across multiple sessions subscribed to the same topic
+25. THE Backend SHALL include barColorData in POST /api/execute and WebSocket execution_result responses for bar coloring overrides
+26. THE Backend SHALL include line objects (LineEntry mapped to DrawingLineData) and label objects (LabelData) in execution responses for canvas rendering
+27. THE Backend SHALL extend GET /api/ohlcv to accept an `end` timestamp parameter for fetching bars older than a given time point (lazy loading)
+28. THE Backend WebSocket gateway SHALL prune stale (closed) WebSocket connections from topic subscriber sets before each re-execution iteration to prevent connection-set drift
+29. THE Backend WebSocket gateway SHALL forward the Bybit `confirm` field from kline messages to the frontend as `confirmed` in the kline data payload
+30. THE Backend WebSocket gateway SHALL maintain a `recentAlertKeys` Set (bounded at 100 entries, oldest evicted first) keyed by `alertId:timestamp:topic` to suppress duplicate Telegram alert dispatch across multiple sessions subscribed to the same topic
 
 ### Requirement 20: Bybit Exchange Integration
 
@@ -751,23 +755,24 @@ This specification defines requirements for building a Pine Script v6 compatible
 93. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
 94. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
 95. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
+96. THE Chart_Library SHALL accept barColorData (array of {time, color}) for candle body and wick color overrides
 
 **API Design:**
 
-96. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
-97. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
-98. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
-99. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
-100. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
-101. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
-102. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
-103. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
-104. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
-105. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
-106. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
-107. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
-108. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
-109. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
+97. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+98. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+99. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+100. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+101. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+102. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+103. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+104. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
+105. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+106. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+107. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+108. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+109. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+110. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
 
 **Styling and Theming:**
 

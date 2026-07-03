@@ -146,9 +146,14 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Implements strict comparisons matching Pine Script: ta.crossover uses <= on prev bar, ta.crossunder uses >=, ta.pivothigh uses strict >, ta.pivotlow uses strict <
   - Generic array method execution: size, push, pop, shift, unshift, insert, remove, contains, fill, set, get, sort, copy
   - Method dispatch system for line.* and label.* calls on numeric object IDs returned by line.new() and label.new()
+  - User-defined method dispatch: checks user-defined methods before built-in line/label switches, enabling receiver.method(args) syntax
+  - `nz(value, fallback)` replaces na with 0 or custom fallback value
+  - `math.pi`, `math.e`, `math.phi` constants resolved via member expression
   - Per-bar color storage: plot color data and fill color data stored as separate arrays alongside output values
   - plot() builtin outputs a single continuous series key regardless of per-bar color variation (no splitting into per-color variants)
   - bgcolor data forwarded through execution result pipeline
+  - barColorData (array of `{time, color}` objects) forwarded through execution result pipeline, preserved across snapshots and rollbacks
+  - Compound assignment operators (`+=`, `-=`, `*=`, `/=`) read current series value via `getRelative(0)`, apply the operator, and push the result
   - Forming-candle computation: on each real-time tick or kline update, only the last (live) bar is re-evaluated without reprocessing historical bars, enabling sub-bar indicator updates that track intra-bar price action
   - **Caller controls `isFormingCandle` flag**: The caller (`ScriptSession`) sets `engine.setFormingCandle(true|false)` before calling `computeFormingCandle()`. The engine no longer manages this flag internally. Both forming (intra-bar) and confirmed (bar-close) updates use `computeFormingCandle()`; `executeRealtimeBar()` is only used for the `totalBars === 0` edge case.
   - `barstate.isconfirmed` resolves to `!this.isFormingCandle`, so the Pine script sees `true` when `setFormingCandle(false)` was called (confirmed bar close) and `false` during intra-bar ticks.
@@ -185,6 +190,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - ta.crossover() and ta.crossunder() with internal state tracking for proper detection
   - ta.sar() with correct 2-bar initialization (UP/DOWN detection from close vs prevClose), EP/AF tracking, and reversal logic
   - Per-call-site state isolation for ta.sma() and ta.ema() via call-site counters so multiple calls with different sources do not share internal buffers
+  - ta.atr(length) with per-key state tracking, true range calculation, and warmup period (returns NA until sufficient bars accumulated)
 
 #### 7. Request System
 - **Responsibility**: Handle multi-symbol and multi-timeframe data access
@@ -205,7 +211,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `hline()`: Horizontal lines at price levels with linestyle (solid, dotted, dashed)
 - **Background & Bar Coloring**:
   - `bgcolor()`: Color chart background with specified colors
-  - `barcolor()`: Color chart candles/bars with specified colors
+  - `barcolor()`: Color chart candles/bars with specified colors — stores `{time, color}` entries in `barColorData` array, forwarded through execution result pipeline
   - `fill()`: Fill area between two plots or hlines — produces fill polygon data for canvas rendering, accepts named `color` argument
 - **Key Features**:
   - Style support (color, linewidth, transparency, offset, editable, show_last, display)
@@ -489,6 +495,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Consistent rendering across displays
   - color.new(color, transp) builtin for creating colors with specified transparency
   - Color namespace syntax (color.blue, color.red, color.green, etc.) resolving to hex values
+  - color.from_gradient(value, minVal, maxVal, bottomColor, topColor) for linear RGB interpolation between two colors
 
 #### 15. Script Declaration System
 - **Responsibility**: Handle script type declarations and configuration
