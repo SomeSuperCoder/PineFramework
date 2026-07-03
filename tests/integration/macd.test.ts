@@ -6,8 +6,11 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import type { Bar } from '../../src/data/bar.js';
+import * as fs from 'fs';
 
-const MACD_SOURCE = `//@version=6
+const macdSource = fs.readFileSync('./test_indicators/macd.pine', 'utf-8');
+
+const SIMPLE_MACD = `//@version=6
 indicator("MACD", overlay = false)
 fastLen = input.int(12, "Fast length")
 slowLen = input.int(26, "Slow length")
@@ -61,32 +64,41 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
   }));
 }
 
+function executeMacd(source: string, barCount = 100) {
+  const { ast } = parse(source);
+  const compileResult = compile(ast);
+  const engine = new ExecutionEngine(compileResult);
+  const bars = createBars(barCount);
+  const contexts = barsToContext(bars);
+  return { ast, compileResult, engine, result: engine.executeBars(contexts) };
+}
+
 describe('Integration: MACD Indicator', () => {
-  describe('Parse and Compile', () => {
-    it('should parse MACD indicator without errors', () => {
-      const { ast } = parse(MACD_SOURCE);
+  describe('Parse and Compile (real macd.pine)', () => {
+    it('should parse test_indicators/macd.pine without errors', () => {
+      const { ast } = parse(macdSource);
       expect(ast).toBeDefined();
       expect(ast.scriptKind).toBe('indicator');
-      expect(ast.scriptName).toBe('MACD');
+      expect(ast.scriptName).toBe('Moving Average Convergence Divergence');
     });
 
-    it('should compile MACD with overlay=false', () => {
-      const { ast } = parse(MACD_SOURCE);
+    it('should compile macd.pine with overlay=false', () => {
+      const { ast } = parse(macdSource);
       const compileResult = compile(ast);
-      expect(compileResult.ir).toBeDefined();
       expect(compileResult.ir.overlay).toBe(false);
+    });
+
+    it('should parse and compile without throwing', () => {
+      expect(() => {
+        const { ast } = parse(macdSource);
+        compile(ast);
+      }).not.toThrow();
     });
   });
 
-  describe('Execution', () => {
-    it('should execute MACD with expected output keys', () => {
-      const { ast } = parse(MACD_SOURCE);
-      const compileResult = compile(ast);
-      const engine = new ExecutionEngine(compileResult);
-      const bars = createBars(100);
-      const contexts = barsToContext(bars);
-
-      const result = engine.executeBars(contexts);
+  describe('Execution (simplified MACD with ta.ema)', () => {
+    it('should execute with expected output keys', () => {
+      const { result } = executeMacd(SIMPLE_MACD);
 
       expect(result.success).toBe(true);
       expect(result.error).toBeUndefined();
@@ -105,13 +117,7 @@ describe('Integration: MACD Indicator', () => {
     });
 
     it('should produce non-null values after warmup period', () => {
-      const { ast } = parse(MACD_SOURCE);
-      const compileResult = compile(ast);
-      const engine = new ExecutionEngine(compileResult);
-      const bars = createBars(100);
-      const contexts = barsToContext(bars);
-
-      const result = engine.executeBars(contexts);
+      const { result } = executeMacd(SIMPLE_MACD);
 
       expect(result.success).toBe(true);
 
@@ -134,13 +140,7 @@ describe('Integration: MACD Indicator', () => {
     });
 
     it('should have MACD values that oscillate around zero', () => {
-      const { ast } = parse(MACD_SOURCE);
-      const compileResult = compile(ast);
-      const engine = new ExecutionEngine(compileResult);
-      const bars = createBars(100);
-      const contexts = barsToContext(bars);
-
-      const result = engine.executeBars(contexts);
+      const { result } = executeMacd(SIMPLE_MACD);
 
       const outputKeys = Array.from(result.outputs.keys());
       const macdKey = outputKeys.find((k) => k.includes('MACD'));
@@ -165,21 +165,33 @@ describe('Integration: MACD Indicator', () => {
 
   describe('Overlay Flag', () => {
     it('should have overlay=false in execution result', () => {
-      const { ast } = parse(MACD_SOURCE);
-      const compileResult = compile(ast);
-      const engine = new ExecutionEngine(compileResult);
-      const bars = createBars(50);
-      const contexts = barsToContext(bars);
-
-      const result = engine.executeBars(contexts);
-
+      const { result } = executeMacd(SIMPLE_MACD);
       expect(result.overlay).toBe(false);
     });
 
     it('should have overlay=false in compiled script', () => {
-      const { ast } = parse(MACD_SOURCE);
+      const { ast } = parse(SIMPLE_MACD);
       const compileResult = compile(ast);
+      expect(compileResult.ir.overlay).toBe(false);
+    });
 
+    it('should have overlay=true for overlay indicator', () => {
+      const overlaySource = `//@version=6
+indicator("Overlay Test", overlay = true)
+plot(close, "Close")`;
+
+      const { ast } = parse(overlaySource);
+      const compileResult = compile(ast);
+      expect(compileResult.ir.overlay).toBe(true);
+    });
+
+    it('should default overlay=false for indicators', () => {
+      const defaultSource = `//@version=6
+indicator("Default Test")
+plot(close, "Close")`;
+
+      const { ast } = parse(defaultSource);
+      const compileResult = compile(ast);
       expect(compileResult.ir.overlay).toBe(false);
     });
   });

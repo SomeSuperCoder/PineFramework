@@ -55,6 +55,7 @@ export enum TokenType {
   Map = 'Map',
   Matrix = 'Matrix',
   Series = 'Series',
+  Simple = 'Simple',
 
   // Operators
   Plus = 'Plus',
@@ -138,6 +139,7 @@ const KEYWORDS: Record<string, TokenType> = {
   map: TokenType.Map,
   matrix: TokenType.Matrix,
   series: TokenType.Series,
+  simple: TokenType.Simple,
 };
 
 export class Tokenizer {

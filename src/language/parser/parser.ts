@@ -1120,6 +1120,8 @@ export class Parser {
 
     if (this.match(TokenType.Series)) {
       isSeries = true;
+    } else if (this.match(TokenType.Simple)) {
+      // simple qualifier: same value on all bars (not series)
     }
 
     const typeToken = this.consumeTypeKeyword();
@@ -1181,6 +1183,7 @@ export class Parser {
   private checkTypeKeyword(): boolean {
     return (
       this.check(TokenType.Series) ||
+      this.check(TokenType.Simple) ||
       this.check(TokenType.Int) ||
       this.check(TokenType.Float) ||
       this.check(TokenType.Bool) ||
