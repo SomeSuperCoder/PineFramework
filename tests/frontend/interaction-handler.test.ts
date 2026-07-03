@@ -213,6 +213,42 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
     });
   });
 
+  describe('Chart area free pan', () => {
+    it('should pan both X and Y on chart area drag', () => {
+      canvas._emit('mousedown', createMouseEvent({ clientX: 400, clientY: 300 }));
+      canvas._emit('mousemove', createMouseEvent({ clientX: 450, clientY: 350 }));
+
+      expect(callbacks.onVisibleRangeChange).toHaveBeenCalled();
+      expect(callbacks.onPriceRangeChange).toHaveBeenCalled();
+    });
+
+    it('should pan horizontally only when moving only in X', () => {
+      canvas._emit('mousedown', createMouseEvent({ clientX: 400, clientY: 300 }));
+      canvas._emit('mousemove', createMouseEvent({ clientX: 500, clientY: 300 }));
+
+      expect(callbacks.onVisibleRangeChange).toHaveBeenCalled();
+      expect(callbacks.onPriceRangeChange).toHaveBeenCalled();
+    });
+  });
+
+  describe('Price scale drag zoom', () => {
+    it('should zoom price scale vertically on drag', () => {
+      const regions = layout.getRegions();
+      const priceScaleX = regions.priceScale.x + 10;
+      const initialRange = layout.getPriceRange();
+      const initialHeight = initialRange.max - initialRange.min;
+
+      canvas._emit('mousedown', createMouseEvent({ clientX: priceScaleX, clientY: 300 }));
+      canvas._emit('mousemove', createMouseEvent({ clientX: priceScaleX, clientY: 400 }));
+
+      const newRange = layout.getPriceRange();
+      const newHeight = newRange.max - newRange.min;
+
+      expect(newHeight).not.toBe(initialHeight);
+      expect(callbacks.onPriceRangeChange).toHaveBeenCalled();
+    });
+  });
+
   describe('Cursor changes', () => {
     it('should set ns-resize cursor on price scale mousedown', () => {
       const regions = layout.getRegions();

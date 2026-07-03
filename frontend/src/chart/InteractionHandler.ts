@@ -117,15 +117,20 @@ export class InteractionHandler {
       }
     } else if (this.isPriceDragging) {
       const deltaY = y - this.dragStartY;
-      this.layout.panPrice(deltaY);
+      const factor = 1 + deltaY * 0.005;
+      this.layout.zoomPrice(factor, y);
       this.dragStartY = y;
       this.callbacks.onPriceRangeChange();
     } else if (this.isDragging) {
-      const delta = x - this.dragStartX;
-      this.viewport.pan(delta);
+      const deltaX = x - this.dragStartX;
+      const deltaY = y - this.dragStartY;
+      this.viewport.pan(deltaX);
+      this.layout.panPrice(deltaY);
       this.dragStartX = x;
-      this.velocity = delta;
+      this.dragStartY = y;
+      this.velocity = deltaX;
       this.callbacks.onVisibleRangeChange();
+      this.callbacks.onPriceRangeChange();
     }
 
     this.callbacks.onCrosshairMove(x, y);
