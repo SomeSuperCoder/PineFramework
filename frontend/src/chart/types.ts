@@ -15,11 +15,12 @@ export interface PlotSeriesData {
 
 export interface ShapeMarkerData {
   time: number;
-  position: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom';
+  position: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom' | 'absolute';
   shape: string;
   color: string;
   text?: string;
   barIndex?: number;
+  price?: number;
 }
 
 export interface StrategyMarkerData {

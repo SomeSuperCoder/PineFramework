@@ -219,6 +219,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         color: s.color || '#2196f3',
         text: s.text || undefined,
         barIndex: barIdx >= 0 ? barIdx : undefined,
+        price: s.price,
       };
     });
     chart.setMarkers(shapeMarkers);

@@ -147,6 +147,7 @@ export class ScriptSession {
       color: s.color,
       time: s.time,
       text: s.text,
+      price: s.price,
     }));
 
     const fills = (result.fills || []).map((f) => ({

@@ -28,7 +28,7 @@ export interface ShapeData {
   price: number;
   color?: string;
   text?: string;
-  location?: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom';
+  location?: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom' | 'absolute';
 }
 
 export interface LineData {

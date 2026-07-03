@@ -7,7 +7,7 @@ interface ExecuteResponse {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
-  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string }>;
+  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number }>;
   fills?: Array<{ from: string; to: string; color: string }>;
   strategyMarkers?: Array<{
     type: string;
@@ -35,7 +35,7 @@ interface ExecutionResultMessage {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
-  shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
+  shapes: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<{
     type: string;
@@ -129,7 +129,7 @@ function buildScriptResult(
   const shapeData: import('../types').ShapeData[] = (shapes || []).map((s) => ({
     type: s.style as import('../types').ShapeData['type'],
     time: Math.floor(s.time / 1000),
-    price: 0,
+    price: s.price ?? 0,
     color: s.color,
     text: s.text,
     location: s.location as import('../types').ShapeData['location'],

@@ -23,7 +23,9 @@ export class MarkerRenderer {
       const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
       let y: number;
 
-      if (marker.position === 'belowbar') {
+      if (marker.position === 'absolute' && marker.price != null) {
+        y = layout.priceToPixel(marker.price, chartArea.y, chartArea.height);
+      } else if (marker.position === 'belowbar') {
         const candle = candles[barIdx];
         y = layout.priceToPixel(candle.low, chartArea.y, chartArea.height) + margin;
       } else {
