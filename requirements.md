@@ -41,6 +41,8 @@ This specification defines requirements for building a Pine Script v6 compatible
 10. THE Parser SHALL support switch expressions with all Pine v6 semantics including local block scoping, arrow syntax (=>), and conditional branching
 11. THE Parser SHALL support type-inferred array declarations (array.new_<type>() returning array<elementType>)
 12. THE Parser SHALL support compound assignment operators (`+=`, `-=`, `*=`, `/=`) as distinct token types and as valid assignment operators in expression statements
+13. THE Parser SHALL support the `const` keyword for declaring constant variables that are initialized once and cannot be reassigned
+14. THE Parser SHALL bind `else` clauses to the `if` statement at the same indentation level, using the `else` keyword's column as the effective base for nested `if` statements — preventing inner `if` blocks from stealing `else` clauses that belong to outer `if` statements at shallower indentation
 
 ### Requirement 2: Pine Type System
 
@@ -90,6 +92,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 24. THE Execution_Engine SHALL compute indicator values for the currently forming (live) candle on every real-time tick or kline update, updating only the last bar's output without reprocessing historical bars, so that indicators track intra-bar price action in real time
 25. THE Execution_Engine SHALL include `barColorData` (an array of `{time, color}` objects) in the execution result, populated by `barcolor()` calls, and shall preserve it across snapshots and rollbacks
 26. THE Execution_Engine SHALL execute compound assignment operators (`+=`, `-=`, `*=`, `/=`) by reading the current series value, applying the operator with the right-hand side, and pushing the result
+27. THE Execution_Engine SHALL support `const` variable declarations, marking variables as immutable after initialization and preventing reassignment
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -109,6 +112,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 10. THE TA_Engine SHALL implement ta.crossunder() with internal state tracking to detect when source crosses below compare
 11. THE TA_Engine SHALL implement ta.sar() with correct 2-bar initialization, parabolic SAR EP/AF tracking, and reversal logic matching TradingView
 12. THE TA_Engine SHALL use per-call-site state isolation for ta.sma() and ta.ema() so multiple calls with different source series (e.g., ta.sma(high, 20) and ta.sma(low, 20)) do not share internal buffers
+13. THE TA_Engine SHALL implement ta.hma() using a WMA-based Hull Moving Average algorithm with per-call-site buffer isolation (half-length WMA, full-length WMA, diff WMA with sqrt(length) period), returning NA until sufficient data is accumulated
 
 ### Requirement 5: Multi-Symbol and Multi-Timeframe Data Access
 
@@ -183,6 +187,23 @@ This specification defines requirements for building a Pine Script v6 compatible
 35. THE Plot_Engine SHALL maintain each plot as a single continuous series even when color varies per bar (no splitting into per-color variant series)
 36. THE Plot_Engine SHALL support per-bar plot colors and per-bar fill colors, storing them as separate color data arrays alongside output values for fine-grained visual rendering
 37. THE Plot_Engine SHALL pass bgcolor data through the execution result pipeline for chart background rendering
+
+**plotchar() — Display characters on bars:**
+38. WHEN plotchar(series, title, char, location, color, offset, text, textcolor, editable, size, show_last, display) is called, THE Plot_Engine SHALL render characters at the specified locations using unicode glyphs
+39. THE Plot_Engine SHALL render the char parameter as a text glyph at the computed bar/price position
+40. THE Plot_Engine SHALL support unicode characters (▲, ▼, ◆, etc.) in the char parameter
+
+**plotcandle() — Color candle bodies:**
+41. WHEN plotcandle(open, high, low, close, color, wickcolor, editable, show_last, text, textcolor, title, display) is called, THE Plot_Engine SHALL override candle body colors with the specified color
+42. THE Plot_Engine SHALL store plotcandle colors in barColorData for candle body rendering
+
+**display namespace:**
+43. THE Plot_Engine SHALL support the `display` namespace (display.data_window, display.pane, display.none) as a builtin returning display mode constants
+44. WHEN `display` is set to `display.none` or `0`, THE Plot_Engine SHALL suppress the plot from rendering
+
+**Variadic argument handling:**
+45. THE Plot_Engine SHALL accept plot() arguments as variadic positional args with a trailing optional namedArgs object, reading color from positionalArgs[2], linewidth from [3], style from [4], and display from [11]
+46. THE Plot_Engine SHALL accept fill() arguments as variadic positional args, reading top_color from positionalArgs[4] and bottom_color from [5], storing one color per bar in fillColorData
 
 ### Requirement 7: Drawing Objects
 
@@ -348,6 +369,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 8. THE Test_Framework SHALL include complex script integration tests covering if/else chains, var persistence, for-loop accumulation, ternary expressions, math function chains, multi-plot outputs, and combined features
 9. THE Test_Framework SHALL validate strategy engine behavior including market order fill deferral, position reversal, and marker generation
 10. THE Test_Framework SHALL include real-world indicator compatibility tests that parse, compile, and execute full complex indicators from `test_indicators/` directory to ensure production readiness
+11. THE Test_Framework SHALL include volatility-trail indicator integration tests covering trail computation, trend flips, fill rendering, plotchar markers, and ta.hma convergence, with regression tests for parser else-binding indentation bugs
 
 ### Requirement 12: Input and Configuration System
 
@@ -669,7 +691,9 @@ This specification defines requirements for building a Pine Script v6 compatible
 39. THE Chart_Library SHALL apply configurable fill color with alpha transparency to the polygon
 40. THE Chart_Library SHALL clip fill polygons to the visible chart area to prevent rendering outside bounds
 41. THE Chart_Library SHALL draw per-bar fill color overlay segments on top of the base fill polygon when per-bar color data is supplied, enabling fine-grained color control across bars
-42. THE Chart_Library SHALL not apply additional globalAlpha reduction beyond the color's own alpha channel to prevent fill segments from becoming invisible
+42. THE Chart_Library SHALL skip the base fill polygon entirely when per-bar fillColorData exists, drawing only per-bar color segments with their actual colors to prevent base polygon color bleeding through transparent segments
+43. THE Chart_Library SHALL not apply additional globalAlpha reduction beyond the color's own alpha channel to prevent fill segments from becoming invisible
+44. THE Chart_Library SHALL render unicode shape characters (▲, ▼, ◆) via MarkerRenderer by mapping them to the corresponding named shape handlers (arrowUp, arrowDown, diamond)
 
 **Strategy Marker Rendering:**
 

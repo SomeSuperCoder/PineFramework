@@ -2206,6 +2206,74 @@ This implementation plan outlines the step-by-step development of a production-g
     - Include test structure template, common gotchas, key file references
     - _Requirements: 11.10_
 
+- [x] 88. Implement Volatility Trail Indicator Compatibility
+  - [x] 88.1 Fix parser indentation-aware else-binding
+    - Add `baseColumn` parameter to `parseIfStatement()` for indentation-aware else consumption
+    - For standalone `if`, `baseColumn` = the `if` keyword's column; for `else if`, `baseColumn` = the `else` keyword's column (passed recursively)
+    - An `else` is only consumed when `elseToken.span.start.column >= baseColumn`
+    - For `else if`, consume the `if` keyword before recursing into `parseIfStatement(baseColumn)`
+    - Prevents inner `if` blocks from stealing `else` clauses that belong to outer `if` statements at shallower indentation
+    - _Requirements: 1.14, 3.24_
+
+  - [x] 88.2 Implement `const` keyword support
+    - Add `Const` token type to tokenizer and keyword mapping
+    - Add `isConst` to `VariableDeclarationNode` AST, `IRGlobal`, compiler, scope, and execution engine
+    - Parser branches for `const` declarations (typed and untyped)
+    - _Requirements: 1.13, 3.27_
+
+  - [x] 88.3 Implement `ta.hma()` builtin
+    - Hull Moving Average using WMA-based algorithm with per-call-site buffer isolation
+    - Maintains `half` (half-length WMA), `full` (full-length WMA), and `diff` (sqrt-length WMA of 2*half - full) buffers
+    - Key: `hma_${len}_${hmaCallIndex}` for per-call-site isolation
+    - Returns NA until sufficient data accumulated
+    - `hmaCallIndex` reset each bar in `executeBar()`
+    - _Requirements: 4.13_
+
+  - [x] 88.4 Implement `plotchar()` builtin
+    - Handles `plotchar(series, title, char, location, color, ...)` with variadic positional args
+    - Produces `ShapeEntry` objects with unicode char, location (abovebar/belowbar/absolute), color, and text
+    - Supports unicode characters (▲, ▼, ◆, etc.)
+    - _Requirements: 6.38, 6.39, 6.40_
+
+  - [x] 88.5 Implement `plotcandle()` builtin
+    - Handles `plotcandle(open, high, low, close, color, ...)` storing body color into `barColorData`
+    - _Requirements: 6.41, 6.42_
+
+  - [x] 88.6 Add `display` namespace support
+    - Resolve `display.data_window`, `display.pane`, `display.none` via `executeMemberExpression()`
+    - When display is `none` or `0`, suppress plot from rendering
+    - _Requirements: 6.43, 6.44_
+
+  - [x] 88.7 Rewrite `plot()` builtin with variadic arguments
+    - Changed from `(value, titleOrNamed?, namedArgs?)` to `(...allArgs)`
+    - Separates positional args from trailing namedArgs object
+    - Reads color from `positionalArgs[2]`, linewidth from `[3]`, style from `[4]`, display from `[11]`
+    - Named args override positional when both present
+    - Pushes `positionalArgs[0]` (the series) to output
+    - _Requirements: 6.45_
+
+  - [x] 88.8 Rewrite `fill()` builtin with variadic arguments
+    - Changed from `(plot1, plot2, namedOrNamed?)` to `(...allArgs)`
+    - Reads `top_color` from `positionalArgs[4]` and `bottom_color` from `positionalArgs[5]`
+    - Stores one color per bar in `fillColorData` for per-bar segment rendering
+    - _Requirements: 6.46_
+
+  - [x] 88.9 Fix AreaRenderer per-bar fill color rendering
+    - When `fillColorData` exists, skip the base fill polygon entirely
+    - Draw only per-bar color segments with their actual colors
+    - Prevents base polygon color bleeding through transparent per-bar overlay segments
+    - _Requirements: 21.42_
+
+  - [x] 88.10 Fix MarkerRenderer unicode shape handling
+    - Added `case '▲':`, `case '▼':`, `case '◆':` to `drawShape()` switch
+    - Maps unicode chars from `plotchar` to named shape handlers (arrowUp, arrowDown, diamond)
+    - _Requirements: 21.44_
+
+  - [x]* 88.11 Write integration tests for volatility-trail indicator
+    - Create 14 tests in `tests/integration/volatility-trail.test.ts`
+    - Tests: parse/compile, output keys, non-null values, trail computation, trend detection, trail follows upperBand in bearish mode, trail flatness regression, fill rendering, plotchar markers, ta.hma convergence, var persistence, color transitions, bar-by-bar trace, debug Pine script
+    - _Requirements: 11.11_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2236,6 +2304,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 85 fixes stale-bar gap by using `ohlcvDataRef.current` instead of `pendingExecuteRef.bars` when sending the WebSocket execute message.
 - Task 86 implements Two-Pole Trend Filter compatibility: parser fixes (method keyword, compound assignments, type-first params, PascalCase guard), runtime fixes (var persistence, namedArgs, method dispatch, compound assignment execution), new builtins (ta.atr, color.from_gradient, barcolor, nz, math constants), barColorData pipeline, plotshape title fix, shape location.absolute rendering, and integration tests.
 - Task 87 adds the compatibility implementation prompt template (`prompts/compatibility-impl.md`) for onboarding new Pine Script indicators with a test-first workflow.
+- Task 88 implements volatility-trail indicator compatibility: parser indentation-aware else-binding fix (the root cause of trail flatness), `const` keyword support, `ta.hma()` WMA-based Hull Moving Average, `plotchar()`/`plotcandle()` builtins, `display` namespace, variadic `plot()`/`fill()` builtins, AreaRenderer per-bar fill color fix (skip base polygon when fillColorData exists), MarkerRenderer unicode shape support (▲/▼/◆), and 14 integration tests. Also adds 20 debugging methodologies to `prompts/compatibility-impl.md`.
 
 ## Task Dependency Graph
 
@@ -2357,7 +2426,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 112, "tasks": ["85.1"] },
     { "id": 113, "tasks": ["86.1", "86.2", "86.3", "86.4", "86.5", "86.6", "86.7", "86.8", "86.9"] },
     { "id": 114, "tasks": ["86.10"] },
-    { "id": 115, "tasks": ["87.1"] }
+    { "id": 115, "tasks": ["87.1"] },
+    { "id": 116, "tasks": ["88.1", "88.2", "88.3", "88.4", "88.5", "88.6", "88.7", "88.8", "88.9", "88.10"] },
+    { "id": 117, "tasks": ["88.11"] }
   ]
 }
 ```

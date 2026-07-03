@@ -93,6 +93,8 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Version detection (`//@version=6`)
   - Syntax error reporting with line/column information
   - Supports all Pine script types: indicator, strategy, library
+  - Indentation-aware else-binding: `parseIfStatement(baseColumn?)` ensures `else` clauses bind to the `if` at the same indentation level. For standalone `if`, `baseColumn` = the `if` keyword's column. For `else if`, `baseColumn` = the `else` keyword's column (passed recursively). An `else` is only consumed when `elseToken.span.start.column >= baseColumn`
+  - Supports `const` keyword for constant variable declarations
 
 #### 2. Compiler Component
 - **Responsibility**: Validate AST and produce executable representation
@@ -159,6 +161,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `barstate.isconfirmed` resolves to `!this.isFormingCandle`, so the Pine script sees `true` when `setFormingCandle(false)` was called (confirmed bar close) and `false` during intra-bar ticks.
   - `computeFormingCandle()` generates alert triggers in `diffAlertTriggers` regardless of the forming/confirmed state; suppression happens at the gateway layer via the `isConfirmed` guard in the `ScriptOutputs` result.
   - Output series length is always truncated to the pre-execution length after `computeFormingCandle()` rollback, preventing series-length drift when `barTimestamps.length` is used for time-alignment.
+  - `const` variable declarations: variables marked as `const` are initialized once and cannot be reassigned; the `isConst` flag is threaded through `VariableDeclarationNode` → `IRGlobal` → `declareVariable()` → `VariableBinding`
+  - `ta.hma(source, length)`: Hull Moving Average implemented via WMA-based algorithm with per-call-site buffer isolation (`hmaBuffers` map keyed by `hma_${len}_${hmaCallIndex}`). Maintains `half` (half-length WMA), `full` (full-length WMA), and `diff` (sqrt-length WMA of 2*half - full) buffers. Returns NA until sufficient data is accumulated. `hmaCallIndex` reset each bar.
+  - `plotchar(series, title, char, location, color, ...)`: Character marker builtin that produces `ShapeEntry` objects with unicode char, location handling (abovebar/belowbar/absolute), and color. Supports unicode characters (▲, ▼, ◆, etc.).
+  - `plotcandle(open, high, low, close, color, ...)`: Candle color override builtin that stores body color into `barColorData` array for candle body rendering.
+  - `display` namespace: `display.data_window`, `display.pane`, `display.none` resolved as builtin constants via `executeMemberExpression()`. When `display` is `none` or `0`, the plot is suppressed.
+  - `plot()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs object. Reads color from `positionalArgs[2]`, linewidth from `[3]`, style from `[4]`, display from `[11]`. Named args override positional when both present. Pushes `positionalArgs[0]` (the series) to output, not the `value` parameter.
+  - `fill()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs. Reads `top_color` from `positionalArgs[4]` and `bottom_color` from `positionalArgs[5]`. Stores one color per bar in `fillColorData` for per-bar segment rendering.
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -191,6 +200,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - ta.sar() with correct 2-bar initialization (UP/DOWN detection from close vs prevClose), EP/AF tracking, and reversal logic
   - Per-call-site state isolation for ta.sma() and ta.ema() via call-site counters so multiple calls with different sources do not share internal buffers
   - ta.atr(length) with per-key state tracking, true range calculation, and warmup period (returns NA until sufficient bars accumulated)
+  - ta.hma(source, length) using WMA-based Hull Moving Average with per-call-site buffer isolation (half, full, diff buffers), returning NA until sufficient data
 
 #### 7. Request System
 - **Responsibility**: Handle multi-symbol and multi-timeframe data access
@@ -204,15 +214,16 @@ Key insights from Pine Script v6 and TradingView architecture research:
 #### 8. Plot Engine
 - **Responsibility**: Produce plot/shape/fill/marker data structures consumed by the Canvas Charting Library
 - **Plot Functions**:
-  - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross) — supports named arguments for color, linewidth, title; auto-detects title from variable names
+  - `plot()`: Line plots with styles (line, stepline, histogram, columns, area, areabr, circles, cross) — variadic positional args with trailing namedArgs; reads color from positionalArgs[2], linewidth from [3], style from [4], display from [11]; auto-detects title from variable names
   - `plotshape()`: Shape markers (arrowup, arrowdown, circle, square, diamond, triangleup, triangledown, cross, xcross) — produces shape data with bar index, position, and color for canvas rendering
-  - `plotchar()`: Character markers with custom characters
+  - `plotchar()`: Character markers with custom unicode characters (▲, ▼, ◆, etc.) at specified locations (abovebar, belowbar, absolute); produces ShapeEntry objects with char, location, color, and text
   - `plotarrow()`: Directional arrows with colorup/colordown
+  - `plotcandle()`: Candle body color overrides storing {time, color} entries in barColorData for candle body rendering
   - `hline()`: Horizontal lines at price levels with linestyle (solid, dotted, dashed)
 - **Background & Bar Coloring**:
   - `bgcolor()`: Color chart background with specified colors
   - `barcolor()`: Color chart candles/bars with specified colors — stores `{time, color}` entries in `barColorData` array, forwarded through execution result pipeline
-  - `fill()`: Fill area between two plots or hlines — produces fill polygon data for canvas rendering, accepts named `color` argument
+  - `fill()`: Fill area between two plots or hlines — variadic positional args with trailing namedArgs; reads top_color from positionalArgs[4] and bottom_color from [5]; stores one color per bar in fillColorData for per-bar segment rendering
 - **Key Features**:
   - Style support (color, linewidth, transparency, offset, editable, show_last, display)
   - Z-ordering for overlapping plots
@@ -297,7 +308,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   │   ├── VolumeRenderer (volume histogram bars)
   │   ├── LineRenderer (line, stepline, dotted, dashed styles; per-bar color support)
   │   ├── AreaRenderer (fill between plots; per-bar color overlay on base polygon)
-  │   ├── MarkerRenderer (shape markers: arrows, circles, squares, diamonds)
+  │   ├── MarkerRenderer (shape markers: arrows, circles, squares, diamonds; unicode ▲/▼/◆ mapped to named handlers)
   │   ├── CharRenderer (text characters on bars)
   │   ├── ArrowRenderer (directional arrows for plotarrow)
   │   ├── HLineRenderer (horizontal lines)
@@ -338,7 +349,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Price range computation filters non-finite and near-zero plot values to prevent chart distortion
   - Price range clamped to at most 10x candle range to prevent excessive scaling when plot values exceed candle prices
   - Per-bar plot color rendering for line, stepline, histogram, columns styles
-  - Per-bar fill color overlay segments on top of base fill polygon
+  - Per-bar fill color overlay: when fillColorData exists, skip the base fill polygon entirely and draw only per-bar color segments with their actual colors to prevent base polygon color bleeding through transparent segments
   - Drawing line rendering (solid, dotted, dashed, extend modes: none/left/right/both)
   - Label rendering (rounded boxes, all label styles, configurable text/background/border colors)
   - ResizeObserver for responsive container handling
@@ -1091,7 +1102,9 @@ interface RendererPlugin {
 - Numerical precision validation
 - Visual rendering comparison
 - Cross-version compatibility
-- Real-world indicator compatibility: parse, compile, and execute full complex indicators from `test_indicators/` directory (e.g., TrendCraft ICT SwiftEdge) to validate production readiness
+- Real-world indicator compatibility: parse, compile, and execute full complex indicators from `test_indicators/` directory (e.g., TrendCraft ICT SwiftEdge, volatility-trail) to validate production readiness
+- Debug Pine script methodology: create debug versions of indicators that output intermediate values (hull, upperBand, lowerBand, trail, prevTrail, trend) for bar-by-bar tracing
+- Indentation-aware else-binding validation: tests verify that inner `if` blocks do not steal `else` clauses from outer `if` statements at shallower indentation levels
 
 **Property-Based Tests:**
 - Mathematical property verification
