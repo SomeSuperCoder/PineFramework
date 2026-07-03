@@ -275,11 +275,18 @@ export class PineChart {
     ctx.restore();
 
     for (const pane of regions.indicatorPanes) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(pane.x, pane.y, pane.width, pane.height);
+      ctx.clip();
+
       for (const [_key, handle] of this.plotSeries) {
         if (!handle.overlay) {
           this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options, pane);
         }
       }
+
+      ctx.restore();
 
       ctx.strokeStyle = this.options.borderColor;
       ctx.lineWidth = 1;

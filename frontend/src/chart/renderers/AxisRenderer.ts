@@ -10,17 +10,18 @@ export class AxisRenderer {
     borderColor: string,
   ): void {
     const regions = layout.getRegions();
-    const { priceScale, chartArea, volumeArea } = regions;
-    const totalHeight = chartArea.height + volumeArea.height;
+    const { priceScale, chartArea, volumeArea, indicatorPanes } = regions;
+    const mainHeight = chartArea.height + volumeArea.height;
 
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(priceScale.x, priceScale.y, priceScale.width, priceScale.height);
 
+    // Main chart + volume price labels
     ctx.strokeStyle = borderColor;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(priceScale.x, priceScale.y);
-    ctx.lineTo(priceScale.x, priceScale.y + totalHeight);
+    ctx.lineTo(priceScale.x, priceScale.y + mainHeight);
     ctx.stroke();
 
     const priceRange = layout.getPriceRange();
@@ -33,9 +34,37 @@ export class AxisRenderer {
     ctx.textBaseline = 'middle';
 
     for (let price = startTick; price <= priceRange.max; price += tickSpacing) {
-      const y = layout.priceToPixel(price, chartArea.y, totalHeight);
-      if (y >= chartArea.y && y <= chartArea.y + totalHeight) {
+      const y = layout.priceToPixel(price, chartArea.y, mainHeight);
+      if (y >= chartArea.y && y <= chartArea.y + mainHeight) {
         ctx.fillText(this.formatPrice(price), priceScale.x + 4, y);
+      }
+    }
+
+    // Indicator pane price labels
+    for (const pane of indicatorPanes) {
+      const paneRange = layout.getIndicatorPriceRange(pane.id);
+      const paneTickSpacing = layout.calculateAutoTickSpacing(paneRange.max - paneRange.min);
+      const paneStartTick = Math.ceil(paneRange.min / paneTickSpacing) * paneTickSpacing;
+
+      // Pane border
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(priceScale.x, pane.y + pane.height);
+      ctx.lineTo(priceScale.x + priceScale.width, pane.y + pane.height);
+      ctx.stroke();
+
+      // Pane price labels
+      ctx.fillStyle = textColor;
+      ctx.font = '11px Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+
+      for (let price = paneStartTick; price <= paneRange.max; price += paneTickSpacing) {
+        const y = layout.priceToPixel(price, pane.y, pane.height, pane.id);
+        if (y >= pane.y && y <= pane.y + pane.height) {
+          ctx.fillText(this.formatPrice(price), priceScale.x + 4, y);
+        }
       }
     }
   }
