@@ -2318,6 +2318,51 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test cursor changes for each interaction mode
     - _Requirements: 21.66, 21.67, 21.68, 21.69, 21.70_
 
+- [x] 93. Fix Chart Drag and Price Scale Drag Behavior
+  - [x] 93.1 Change chart area drag to pan both horizontally and vertically (free move)
+    - Modify InteractionHandler onMouseMove to adjust both viewport.pan(deltaX) and layout.panPrice(deltaY) during chart drag
+    - Fire both onVisibleRangeChange and onPriceRangeChange callbacks
+    - _Requirements: 21.62_
+
+  - [x] 93.2 Change price scale drag to zoom vertically instead of panning
+    - Modify InteractionHandler onMouseMove to use layout.zoomPrice(factor, y) instead of layout.panPrice(deltaY)
+    - Compute zoom factor from drag distance: factor = 1 + deltaY * 0.005
+    - _Requirements: 21.63_
+
+  - [x] 93.3 Fix chart auto-fit on initial load
+    - Change ChartComponent to call chart.timeScale().fitContent() instead of chart.timeScale().scrollTo(lastIndex) on first data load
+    - Ensures all data is visible on initial render rather than showing a portion with default barSpacing
+    - _Requirements: 71_
+
+- [x] 94. Fix Real-time Indicator Data Alignment
+  - [x] 94.1 Permanently advance engine state for confirmed bars in ScriptSession
+    - When a new bar arrives in appendOrUpdateBar, call executeBar() for the previous bar before computing forming candle for the new bar
+    - Ensures EMA/SMA state is correct for indicator calculations across bar boundaries
+    - _Requirements: 72_
+
+  - [x] 94.2 Fix frontend forming candle merge to append new bar data
+    - Modify useChartData handleExecutionResult to detect new bars via barIndex >= data.length
+    - Append new plot data entries for new bars instead of replacing the last entry
+    - Maintains correct alignment between candle data and indicator values
+    - _Requirements: 73_
+
+- [x] 95. Implement Indicator Pane Independent Price Scales
+  - [x] 95.1 Render per-indicator-pane price scale labels on right side
+    - Modify AxisRenderer.renderPriceScale to iterate over indicatorPanes
+    - Render each pane's own price labels using layout.getIndicatorPriceRange(pane.id)
+    - Calculate tick spacing per pane using layout.calculateAutoTickSpacing()
+    - _Requirements: 74_
+
+  - [x] 95.2 Add clipping for indicator pane rendering
+    - Add ctx.save()/ctx.clip()/ctx.restore() around indicator pane rendering in PineChart.render()
+    - Clip to pane.x, pane.y, pane.width, pane.height to prevent visual bleed-through
+    - _Requirements: 75_
+
+  - [x] 95.3 Draw horizontal separator lines for indicator panes
+    - Draw border lines at bottom of each indicator pane
+    - Draw border line between volume area and first indicator pane
+    - _Requirements: 76_
+
 - [x] 89. Implement Pine Script v5 Compatibility Layer
   - [x] 89.1 Add v5 grammar rules to Parser
     - Create v5-specific grammar rule set alongside existing v6 rules
@@ -2499,6 +2544,9 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 90 implements separate indicator panes with overlay support: full-stack indicator pane support so non-overlay indicators (e.g., MACD) render in their own pane below the main chart with independent price scales. IR/Engine add overlay field, Backend forwards it, Frontend LayoutManager allocates pane space, PineChart renders indicator plots in separate coordinate space.
 - Task 91 fixes post-feature bugs in the indicator pane implementation: adds 'simple' type qualifier to parser, fixes switch-as-expression to return matched case body value (root cause of real macd.pine producing all-null outputs), adds layout recalculation on overlay count changes, clips candlesticks/volume/overlays to their respective canvas regions to prevent bleed-through into indicator panes, and expands integration tests to cover real MACD execution, input.source(), switch-in-function patterns, and overlay flags.
 - Task 92 implements TradingView-style chart navigation controls: Ctrl+scroll for fine-grained zoom, middle mouse button free panning, time axis drag for time-scale zoom, double-click time axis reset, and consolidated double-click price scale reset — matching the interaction model of TradingView's Lightweight Charts.
+- Task 93 fixes chart drag and price scale drag behavior: chart area drag now pans both horizontally and vertically (free move), price scale drag now zooms vertically instead of panning, and chart auto-fits all data on initial load using fitContent() instead of scrollTo().
+- Task 94 fixes real-time indicator data alignment: backend permanently advances engine state for confirmed bars via executeBar() when new bars arrive (previously always used computeFormingCandle which saved/restored state), frontend appends new plot data entries for new bars instead of replacing the last entry (previously caused MACD values to appear on genesis candle).
+- Task 95 implements indicator pane independent price scales: AxisRenderer now renders per-indicator-pane price labels on the right side using each pane's own price range, indicator pane rendering is clipped to allocated regions via canvas clipping, and horizontal separator lines are drawn between panes.
 
 ## Task Dependency Graph
 
@@ -2629,7 +2677,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 121, "tasks": ["90.9", "90.10"] },
     { "id": 122, "tasks": ["91.1", "91.2", "91.3", "91.4", "91.5"] },
     { "id": 123, "tasks": ["92.1", "92.2", "92.3", "92.4", "92.5"] },
-    { "id": 124, "tasks": ["92.6"] }
+    { "id": 124, "tasks": ["92.6"] },
+    { "id": 125, "tasks": ["93.1", "93.2", "93.3"] },
+    { "id": 126, "tasks": ["94.1", "94.2"] },
+    { "id": 127, "tasks": ["95.1", "95.2", "95.3"] }
   ]
 }
 ```

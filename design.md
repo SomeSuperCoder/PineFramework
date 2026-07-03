@@ -355,7 +355,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Momentum-based inertial scrolling
   - Manual and auto price range modes: auto (computed from visible candles/plots), manual (set by user drag or shift+wheel)
   - Vertical zoom on price scale via Shift+scroll-wheel, centered on cursor position
-  - Vertical pan and zoom on the price scale via click-and-drag on the price scale area
+  - Vertical zoom on price scale via click-and-drag on the price scale area (scales range centered on cursor)
   - Double-click to reset to auto price range and fit content
   - Ctrl+scroll wheel (Cmd+scroll on Mac) for fine-grained horizontal zoom with reduced zoom factor
   - Middle mouse button (or mouse wheel press) drag for free panning — unrestricted horizontal/vertical movement without affecting price scale auto-range mode
@@ -364,6 +364,9 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Double-click price scale to reset to auto price range and fit content
   - Price range computation filters non-finite and near-zero plot values to prevent chart distortion
   - Price range clamped to at most 10x candle range to prevent excessive scaling when plot values exceed candle prices
+  - Indicator panes have independent price scales rendered on the right side with per-pane tick labels
+  - Indicator pane rendering clipped to allocated regions via canvas clipping to prevent bleed-through
+  - Horizontal separator lines between indicator panes and between volume area and indicator panes
   - Per-bar plot color rendering for line, stepline, histogram, columns styles
   - Per-bar fill color overlay: when fillColorData exists, skip the base fill polygon entirely and draw only per-bar color segments with their actual colors to prevent base polygon color bleeding through transparent segments
   - Drawing line rendering (solid, dotted, dashed, extend modes: none/left/right/both)
@@ -639,7 +642,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Validates WebSocket kline data before forwarding to clients
    - Maintains a ScriptSession per WebSocket client storing the compiled engine instance, source code, and current bar set
    - Invalidates the previous ScriptSession before creating a new one on WS execute, preventing stale sessions from emitting outdated execution_result messages
-  - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `appendOrUpdateBar()` on the persisted ScriptSession, which delegates to `computeFormingCandle()` for both forming and confirmed updates
+   - On receiving a `kline` WebSocket message from Bybit, appends/updates the bar in the session's bar set and calls `appendOrUpdateBar()` on the persisted ScriptSession, which delegates to `computeFormingCandle()` for forming updates and permanently advances engine state via `executeBar()` when a new bar arrives (previous bar confirmed)
    - Pushes updated execution results to the frontend as `execution_result` WebSocket messages containing the full outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, per-bar colors, and barTimestamps
   - Accepts `offset` parameter in POST /api/execute to return only outputs for newly added bars during lazy loading
   - Accepts `end` timestamp parameter in GET /api/ohlcv for fetching historical bars before a given time point
