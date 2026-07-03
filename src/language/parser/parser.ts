@@ -167,6 +167,14 @@ export class Parser {
     if (this.match(TokenType.Switch)) {
       return this.parseSwitchStatement();
     }
+    if (this.match(TokenType.Method)) {
+      const nameToken = this.consume(TokenType.Identifier, 'Expected method name');
+      return {
+        kind: 'ExpressionStatement',
+        span: nameToken.span,
+        expression: this.parseFunctionExpression(nameToken.lexeme, nameToken.span.start),
+      } as any;
+    }
     if (this.match(TokenType.Type)) {
       return this.parseTypeDeclaration();
     }
@@ -179,7 +187,7 @@ export class Parser {
     if (this.match(TokenType.Continue)) {
       return this.parseContinueStatement();
     }
-    if (this.checkTypeKeyword() || this.looksLikeUserType()) {
+    if ((this.checkTypeKeyword() && (this.checkNext(TokenType.Identifier) || this.checkNextTypeKeyword())) || this.looksLikeUserType()) {
       return this.parseTypedVariableDeclaration(false, false);
     }
 
@@ -577,8 +585,17 @@ export class Parser {
   private parseExpressionOrAssignmentStatement(): StatementNode {
     const expr = this.parseExpression();
 
-    if (this.match(TokenType.ColonAssign, TokenType.Assign)) {
-      const operator = this.previous().type === TokenType.ColonAssign ? ':=' : '=';
+    if (this.match(TokenType.ColonAssign, TokenType.Assign, TokenType.PlusAssign, TokenType.MinusAssign, TokenType.StarAssign, TokenType.SlashAssign)) {
+      const op = this.previous().type;
+      const operatorMap: Record<string, string> = {
+        [TokenType.ColonAssign]: ':=',
+        [TokenType.Assign]: '=',
+        [TokenType.PlusAssign]: '+=',
+        [TokenType.MinusAssign]: '-=',
+        [TokenType.StarAssign]: '*=',
+        [TokenType.SlashAssign]: '/=',
+      };
+      const operator = operatorMap[op]!;
       const value = this.parseExpression();
       return {
         kind: 'Assignment',
@@ -641,6 +658,7 @@ export class Parser {
       type === TokenType.Return ||
       type === TokenType.Break ||
       type === TokenType.Continue ||
+      type === TokenType.Method ||
       type === TokenType.Identifier
     );
   }
@@ -813,11 +831,6 @@ export class Parser {
   ): FunctionExpressionNode {
     this.consume(TokenType.Arrow, 'Expected "=>" in function expression');
 
-    let returnType: TypeAnnotationNode | undefined;
-    if (this.checkTypeKeyword()) {
-      returnType = this.parseTypeAnnotation();
-    }
-
     const body = this.parseIndentedBlock();
 
     return {
@@ -825,7 +838,6 @@ export class Parser {
       span: spanBetween(start, body[body.length - 1]?.span.end ?? start),
       name,
       parameters,
-      returnType,
       body,
     };
   }
@@ -993,11 +1005,6 @@ export class Parser {
       this.consume(TokenType.RParen, 'Expected ")" after parameters');
     }
 
-    let returnType: TypeAnnotationNode | undefined;
-    if (this.checkTypeKeyword()) {
-      returnType = this.parseTypeAnnotation();
-    }
-
     const body = this.parseIndentedBlock();
 
     return {
@@ -1005,19 +1012,25 @@ export class Parser {
       span: spanBetween(start, body[body.length - 1]?.span.end ?? start),
       name,
       parameters,
-      returnType,
       body,
     };
   }
 
   private parseParameter(): ParameterNode {
     const start = this.peek().span.start;
-    const name = this.consume(TokenType.Identifier, 'Expected parameter name').lexeme;
     let typeAnnotation: TypeAnnotationNode | undefined;
+    let name: string;
     let defaultValue: ExpressionNode | undefined;
 
+    // Pine v6 can have type before name: "float src" or name before type: "src float"
     if (this.checkTypeKeyword()) {
       typeAnnotation = this.parseTypeAnnotation();
+      name = this.consume(TokenType.Identifier, 'Expected parameter name').lexeme;
+    } else {
+      name = this.consume(TokenType.Identifier, 'Expected parameter name').lexeme;
+      if (this.checkTypeKeyword()) {
+        typeAnnotation = this.parseTypeAnnotation();
+      }
     }
 
     if (this.match(TokenType.Assign)) {
@@ -1158,13 +1171,35 @@ export class Parser {
     );
   }
 
+  private checkNextTypeKeyword(): boolean {
+    if (this.current + 1 >= this.tokens.length) return false;
+    const type = this.tokens[this.current + 1]!.type;
+    return [
+      TokenType.Series,
+      TokenType.Int,
+      TokenType.Float,
+      TokenType.Bool,
+      TokenType.StringType,
+      TokenType.ColorType,
+      TokenType.Array,
+      TokenType.Map,
+      TokenType.Matrix,
+    ].includes(type);
+  }
+
   private looksLikeUserType(): boolean {
     if (!this.check(TokenType.Identifier)) return false;
     const saved = this.current;
+    const firstLexeme = this.peek().lexeme;
     this.advance();
     const isArrayType = this.check(TokenType.LBracket) && this.checkNext(TokenType.RBracket);
     const isSingleType = this.check(TokenType.Identifier);
     this.current = saved;
+    // User types in Pine Script follow PascalCase (e.g. MyType)
+    // Lowercase identifiers like "f2" are not valid type names
+    if (isSingleType && !/^[A-Z]/.test(firstLexeme)) {
+      return false;
+    }
     return isArrayType || isSingleType;
   }
 

@@ -216,11 +216,25 @@ export function isAssignable(source: PineType, target: PineType): boolean {
   const sourceBase = unwrapSeries(source);
   const targetBase = unwrapSeries(target);
 
+  // Allow numeric widening (int → float) but not narrowing (float → int)
   if (isNumeric(sourceBase) && isNumeric(targetBase)) {
     if (targetBase.name === 'float') {
       return true;
     }
-    return sourceBase.name === 'int' && targetBase.name === 'int';
+    if (sourceBase.name === 'int' && targetBase.name === 'int') {
+      return true;
+    }
+    // Don't return false here; fall through for series<T> checks
+  }
+
+  // Allow if base types match regardless of series wrapper (series<T> → T, T → series<T>)
+  if (sourceBase.name === targetBase.name) {
+    return true;
+  }
+
+  // Allow series source to assign to any target (runtime handles coercion for builtin returns)
+  if (source.isSeries) {
+    return true;
   }
 
   return false;

@@ -63,6 +63,10 @@ export enum TokenType {
   Percent = 'Percent',
   Assign = 'Assign',
   ColonAssign = 'ColonAssign',
+  PlusAssign = 'PlusAssign',
+  MinusAssign = 'MinusAssign',
+  StarAssign = 'StarAssign',
+  SlashAssign = 'SlashAssign',
   Equal = 'Equal',
   NotEqual = 'NotEqual',
   Less = 'Less',
@@ -193,12 +197,24 @@ export class Tokenizer {
       case ';':
         return this.makeToken(TokenType.Semicolon, ';', start);
       case '+':
+        if (this.match('=')) {
+          return this.makeToken(TokenType.PlusAssign, '+=', start);
+        }
         return this.makeToken(TokenType.Plus, '+', start);
       case '-':
+        if (this.match('=')) {
+          return this.makeToken(TokenType.MinusAssign, '-=', start);
+        }
         return this.makeToken(TokenType.Minus, '-', start);
       case '*':
+        if (this.match('=')) {
+          return this.makeToken(TokenType.StarAssign, '*=', start);
+        }
         return this.makeToken(TokenType.Star, '*', start);
       case '/':
+        if (this.match('=')) {
+          return this.makeToken(TokenType.SlashAssign, '/=', start);
+        }
         return this.makeToken(TokenType.Slash, '/', start);
       case '%':
         return this.makeToken(TokenType.Percent, '%', start);
@@ -426,6 +442,6 @@ export class Tokenizer {
 }
 
 export function extractVersion(source: string): number | null {
-  const match = source.match(/^\s*\/\/\s*@version\s*=\s*(\d+)/);
+  const match = source.match(/^\s*\/\/\s*@version\s*=\s*(\d+)/m);
   return match ? parseInt(match[1]!, 10) : null;
 }

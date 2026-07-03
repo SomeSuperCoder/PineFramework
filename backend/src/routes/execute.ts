@@ -6,6 +6,7 @@ const engine = createPineScriptEngine();
 function pineValueToJSON(v: unknown): number | string | boolean | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'symbol') return null;
+  if (typeof v === 'number' && !isFinite(v)) return null;
   if (typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') return v;
   return null;
 }
