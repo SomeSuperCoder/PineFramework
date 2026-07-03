@@ -1,8 +1,8 @@
-# Implementation Plan: Pine Script v6 Engine
+# Implementation Plan: Pine Script v5/v6 Engine
 
 ## Overview
 
-This implementation plan outlines the step-by-step development of a production-grade Pine Script v6 Engine using TypeScript. The engine will parse, execute, and render Pine Script v6 programs with TradingView-like semantics, featuring a seven-layer architecture with plugin-based extensibility, a web-based frontend for interactive development, a backend API server, and real Bybit market data integration. The entire system is organized as a pnpm monorepo. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
+This implementation plan outlines the step-by-step development of a production-grade Pine Script v5/v6 Engine using TypeScript. The engine will dynamically detect the declared Pine Script version (`//@version=5` or `//@version=6`), parse, execute, and render programs with TradingView-like semantics, featuring a seven-layer architecture with plugin-based extensibility, a web-based frontend for interactive development, a backend API server, and real Bybit market data integration. The entire system is organized as a pnpm monorepo. The plan follows incremental development with checkpoints to ensure correctness and maintainability.
 
 ## Tasks
 
@@ -2274,6 +2274,54 @@ This implementation plan outlines the step-by-step development of a production-g
     - Tests: parse/compile, output keys, non-null values, trail computation, trend detection, trail follows upperBand in bearish mode, trail flatness regression, fill rendering, plotchar markers, ta.hma convergence, var persistence, color transitions, bar-by-bar trace, debug Pine script
     - _Requirements: 11.11_
 
+- [ ] 89. Implement Pine Script v5 Compatibility Layer
+  - [ ] 89.1 Add v5 grammar rules to Parser
+    - Create v5-specific grammar rule set alongside existing v6 rules
+    - Parse `//@version=5` directive and select v5 grammar automatically
+    - Handle v5 syntax differences: `plot()` parameter ordering, `study()` alias for `indicator()`, different type declaration syntax
+    - Support v5-specific keywords and operators not present in v6
+    - _Requirements: 26.1, 26.2, 26.4_
+
+  - [ ] 89.2 Add v5 type system rules to Compiler
+    - Implement v5 type coercion rules (looser int/float casting, implicit conversions)
+    - Handle v5-specific type annotations and constraints
+    - Validate v5-specific function signatures and parameter types
+    - _Requirements: 26.3, 26.5_
+
+  - [ ] 89.3 Add v5 built-in function implementations
+    - Implement v5-specific built-in functions (e.g., `study()` instead of `indicator()`, v5 `plot()` signature)
+    - Handle v5 `request.security()` parameter differences from v6
+    - Implement v5-specific TA functions with v5 semantics
+    - Support v5 `strategy()` parameters and defaults
+    - _Requirements: 26.6, 26.7_
+
+  - [ ] 89.4 Add version detection to Execution Engine
+    - Pass detected version through parser → compiler → execution pipeline
+    - Dispatch built-in function calls to v5 or v6 implementations at runtime
+    - Maintain version metadata in execution context
+    - _Requirements: 26.1, 26.6, 26.10_
+
+  - [ ] 89.5 Update Backend to forward version info
+    - Include detected Pine Script version in POST /api/execute response
+    - Include version in WebSocket execution_result messages
+    - _Requirements: 26.10_
+
+  - [ ] 89.6 Update Frontend to display detected version
+    - Show detected Pine Script version in code editor status bar or header
+    - Display version in error messages for better debugging
+    - _Requirements: 26.9_
+
+  - [ ]* 89.7 Write tests for v5 compatibility
+    - Test `//@version=5` detection and grammar selection
+    - Test v5 `study()` declaration parsing
+    - Test v5 `plot()` with v5 parameter ordering
+    - Test v5 type coercion rules (int→float, float→int)
+    - Test v5 built-in functions produce correct results
+    - Test v6 scripts still work identically after v5 layer added
+    - Test scripts without version declaration default to v6
+    - Test mixed v5/v6 feature detection edge cases
+    - _Requirements: 26.1-26.10, 11.1_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2305,6 +2353,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 86 implements Two-Pole Trend Filter compatibility: parser fixes (method keyword, compound assignments, type-first params, PascalCase guard), runtime fixes (var persistence, namedArgs, method dispatch, compound assignment execution), new builtins (ta.atr, color.from_gradient, barcolor, nz, math constants), barColorData pipeline, plotshape title fix, shape location.absolute rendering, and integration tests.
 - Task 87 adds the compatibility implementation prompt template (`prompts/compatibility-impl.md`) for onboarding new Pine Script indicators with a test-first workflow.
 - Task 88 implements volatility-trail indicator compatibility: parser indentation-aware else-binding fix (the root cause of trail flatness), `const` keyword support, `ta.hma()` WMA-based Hull Moving Average, `plotchar()`/`plotcandle()` builtins, `display` namespace, variadic `plot()`/`fill()` builtins, AreaRenderer per-bar fill color fix (skip base polygon when fillColorData exists), MarkerRenderer unicode shape support (▲/▼/◆), and 14 integration tests. Also adds 20 debugging methodologies to `prompts/compatibility-impl.md`.
+- Task 89 implements Pine Script v5 compatibility layer: adds v5 grammar rules to the parser, v5 type coercion rules to the compiler, v5-specific built-in functions, version detection pipeline from parser through execution, backend version forwarding, frontend version display, and comprehensive tests. The engine dynamically detects `//@version=5` or `//@version=6` and applies the corresponding grammar and semantics automatically.
 
 ## Task Dependency Graph
 
@@ -2428,7 +2477,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 114, "tasks": ["86.10"] },
     { "id": 115, "tasks": ["87.1"] },
     { "id": 116, "tasks": ["88.1", "88.2", "88.3", "88.4", "88.5", "88.6", "88.7", "88.8", "88.9", "88.10"] },
-    { "id": 117, "tasks": ["88.11"] }
+    { "id": 117, "tasks": ["88.11"] },
+    { "id": 118, "tasks": ["89.1", "89.2", "89.3", "89.4", "89.5", "89.6"] },
+    { "id": 119, "tasks": ["89.7"] }
   ]
 }
 ```

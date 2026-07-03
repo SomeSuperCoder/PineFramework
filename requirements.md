@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This specification defines requirements for building a Pine Script v6 compatible execution and rendering engine. The system is a production-grade alternative runtime that parses, executes, and renders Pine Script v6 programs with TradingView-like semantics. It must handle millions of candles, support hundreds of indicators, process realtime updates, and provide extensibility through a plugin architecture.
+This specification defines requirements for building a Pine Script v5 and v6 compatible execution and rendering engine. The system is a production-grade alternative runtime that dynamically detects the declared Pine Script version (`//@version=5` or `//@version=6`), parses, executes, and renders programs with TradingView-like semantics. It must handle millions of candles, support hundreds of indicators, process realtime updates, and provide extensibility through a plugin architecture.
 
 ## Glossary
 
@@ -25,28 +25,31 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 ### Requirement 1: Language Parser and Compiler
 
-**User Story:** As a Pine Script developer, I want to write Pine Script v6 code, so that it can be parsed and compiled into an executable representation.
+**User Story:** As a Pine Script developer, I want to write Pine Script v5 or v6 code, so that it can be parsed and compiled into an executable representation regardless of version.
 
 #### Acceptance Criteria
 
-1. THE Parser SHALL parse Pine Script v6 syntax including all language constructs
-2. WHEN valid Pine Script code is provided, THE Parser SHALL produce a valid AST
-3. WHEN invalid syntax is encountered, THE Parser SHALL produce descriptive error messages
-4. THE Compiler SHALL validate type consistency across the entire program
-5. WHERE different Pine Script versions exist, THE Parser SHALL detect version declarations
-6. THE AST SHALL preserve all semantic information needed for execution
-7. FOR ALL valid Pine Script programs, parsing then compilation SHALL produce an executable representation
-8. THE Parser SHALL support named arguments in function calls (identified by `identifier = expression`, `colorType = expression`, or `stringType = expression`)
-9. THE Parser SHALL support color, shape, location, strategy, indicator, and library token types as valid identifiers in member expressions
-10. THE Parser SHALL support switch expressions with all Pine v6 semantics including local block scoping, arrow syntax (=>), and conditional branching
-11. THE Parser SHALL support type-inferred array declarations (array.new_<type>() returning array<elementType>)
-12. THE Parser SHALL support compound assignment operators (`+=`, `-=`, `*=`, `/=`) as distinct token types and as valid assignment operators in expression statements
-13. THE Parser SHALL support the `const` keyword for declaring constant variables that are initialized once and cannot be reassigned
-14. THE Parser SHALL bind `else` clauses to the `if` statement at the same indentation level, using the `else` keyword's column as the effective base for nested `if` statements — preventing inner `if` blocks from stealing `else` clauses that belong to outer `if` statements at shallower indentation
+1. THE Parser SHALL dynamically detect the declared Pine Script version from the `//@version=N` directive (supporting N=5 and N=6) and apply the corresponding grammar and syntax rules
+2. THE Parser SHALL parse Pine Script v5 syntax including all language constructs specific to v5
+3. THE Parser SHALL parse Pine Script v6 syntax including all language constructs
+4. WHEN valid Pine Script code is provided, THE Parser SHALL produce a valid AST
+5. WHEN invalid syntax is encountered, THE Parser SHALL produce descriptive error messages
+6. THE Compiler SHALL validate type consistency across the entire program
+7. WHERE different Pine Script versions exist, THE Parser SHALL detect version declarations
+8. THE AST SHALL preserve all semantic information needed for execution
+9. FOR ALL valid Pine Script programs, parsing then compilation SHALL produce an executable representation
+10. THE Parser SHALL support named arguments in function calls (identified by `identifier = expression`, `colorType = expression`, or `stringType = expression`)
+11. THE Parser SHALL support color, shape, location, strategy, indicator, and library token types as valid identifiers in member expressions
+12. THE Parser SHALL support switch expressions with all Pine v6 semantics including local block scoping, arrow syntax (=>), and conditional branching
+13. THE Parser SHALL support type-inferred array declarations (array.new_<type>() returning array<elementType>)
+14. THE Parser SHALL support compound assignment operators (`+=`, `-=`, `*=`, `/=`) as distinct token types and as valid assignment operators in expression statements
+15. THE Parser SHALL support the `const` keyword for declaring constant variables that are initialized once and cannot be reassigned
+16. THE Parser SHALL bind `else` clauses to the `if` statement at the same indentation level, using the `else` keyword's column as the effective base for nested `if` statements — preventing inner `if` blocks from stealing `else` clauses that belong to outer `if` statements at shallower indentation
+17. THE Parser SHALL automatically select v5 or v6 grammar based on the detected version, without requiring manual configuration
 
 ### Requirement 2: Pine Type System
 
-**User Story:** As a Pine Script developer, I want to use Pine's type system, so that my code behaves consistently with TradingView.
+**User Story:** As a Pine Script developer, I want to use Pine's type system across both v5 and v6, so that my code behaves consistently with TradingView.
 
 #### Acceptance Criteria
 
@@ -62,7 +65,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 ### Requirement 3: Execution Engine
 
-**User Story:** As a Pine Script developer, I want my code to execute with TradingView-like semantics, so that indicators and strategies produce consistent results.
+**User Story:** As a Pine Script developer, I want my code to execute with TradingView-like semantics for both v5 and v6, so that indicators and strategies produce consistent results.
 
 #### Acceptance Criteria
 
@@ -493,7 +496,7 @@ This specification defines requirements for building a Pine Script v6 compatible
 
 1. THE Frontend SHALL display a realtime candlestick chart rendered on an HTML5 Canvas element with OHLCV data fetched from the Backend
 2. THE Frontend SHALL provide a button that opens a popup code editor
-3. THE Frontend SHALL allow users to enter Pine Script v6 code in the editor
+3. THE Frontend SHALL allow users to enter Pine Script v5 or v6 code in the editor
 4. WHEN the user clicks Run in the editor, THE Frontend SHALL send the script to the Backend for compilation and execution, then render the results on the chart
 5. IF compilation errors occur, THE Frontend SHALL log errors in an error console/panel
 6. IF runtime errors occur, THE Frontend SHALL log errors in an error console/panel
@@ -978,3 +981,20 @@ This specification defines requirements for building a Pine Script v6 compatible
 12. THE Database SHALL store per-alert Telegram notification preferences (which alerts are enabled/disabled for Telegram)
 13. THE Database SHALL persist data across application restarts
 14. THE Database SHALL support read and write operations from both the Backend and the Frontend configuration UI
+
+### Requirement 26: Multi-Version Pine Script Support
+
+**User Story:** As a Pine Script developer, I want the engine to dynamically detect and support both Pine Script v5 and v6, so that I can use scripts from either version without manual configuration.
+
+#### Acceptance Criteria
+
+1. THE Engine SHALL automatically detect the Pine Script version from the `//@version=N` directive at the top of the source code
+2. WHEN `//@version=5` is detected, THE Engine SHALL apply v5-specific grammar, type system rules, and built-in function signatures
+3. WHEN `//@version=6` is detected, THE Engine SHALL apply v6-specific grammar, type system rules, and built-in function signatures
+4. THE Parser SHALL select the appropriate grammar variant (v5 or v6) based on the detected version before tokenizing and parsing
+5. THE Compiler SHALL apply version-appropriate type checking rules, including v5's looser type coercion where applicable
+6. THE Execution Engine SHALL dispatch built-in functions to version-specific implementations when v5 and v6 semantics differ
+7. THE Engine SHALL produce identical execution results to TradingView for scripts written in either v5 or v6
+8. WHEN a script does not declare a version, THE Engine SHALL default to v6 (the latest version)
+9. THE Frontend SHALL display the detected Pine Script version in the code editor or status bar
+10. THE Backend SHALL forward the detected version in execution responses for debugging and display purposes

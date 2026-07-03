@@ -1,14 +1,16 @@
-# Design Document: Pine Script v6 Engine
+# Design Document: Pine Script v5/v6 Engine
 
 ## Overview
 
-The Pine Script v6 Engine is a production-grade alternative runtime that parses, executes, and renders Pine Script v6 programs with TradingView-like semantics. This design document outlines the architecture, components, data flow, and implementation strategies for building a complete Pine Script v6 compatible system.
+The Pine Script v5/v6 Engine is a production-grade alternative runtime that dynamically detects the declared Pine Script version (`//@version=5` or `//@version=6`), parses, executes, and renders programs with TradingView-like semantics. This design document outlines the architecture, components, data flow, and implementation strategies for building a complete Pine Script v5 and v6 compatible system.
 
 ### Research Findings
 
 Key insights from Pine Script v6 and TradingView architecture research:
 
-1. **Pine Script v6 Language Features**: Latest version includes enums, dynamic data requests, runtime logging, and tighter type system
+1. **Pine Script v5 Language Features**: Mature version with well-established syntax, type system, and built-in functions; widely used by existing TradingView scripts
+2. **Pine Script v6 Language Features**: Latest version includes enums, dynamic data requests, runtime logging, tighter type system, and syntax refinements over v5
+3. **Version Detection**: The `//@version=N` directive at the top of a script declares the version; the engine must parse this before selecting grammar rules
 2. **Execution Model**: Bar-by-bar execution with rollback capability for realtime bars
 3. **Series Data Type**: Core Pine concept where each element corresponds to a historical bar
 4. **Script Structure**: `//@version=6` declaration, script type (indicator/strategy/library), main code body
@@ -28,7 +30,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Pine Script v6 Engine                              │
+│                     Pine Script v5/v6 Engine                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  Layer 1: Language Processing                                               │
 │    ┌──────────┐ ┌──────────┐ ┌──────────────┐                              │
@@ -77,7 +79,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                         │
 │  │ pine-       │  │ frontend    │  │ backend     │                         │
 │  │ framework   │←─│ (React+Vite)│←─│ (Express+WS)│                         │
-│  │ (engine)    │  │             │  │             │                         │
+│  │ (v5/v6 eng)│  │             │  │             │                         │
 │  └─────────────┘  └─────────────┘  └─────────────┘                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -85,50 +87,57 @@ Key insights from Pine Script v6 and TradingView architecture research:
 ### Component Specifications
 
 #### 1. Parser Component
-- **Responsibility**: Convert Pine Script v6 source code to tokens and parse tree
-- **Input**: Pine Script v6 source code string
+- **Responsibility**: Convert Pine Script v5 or v6 source code to tokens and parse tree
+- **Input**: Pine Script v5 or v6 source code string
 - **Output**: Abstract Syntax Tree (AST)
 - **Key Features**:
+  - Dynamic version detection from `//@version=N` directive (supports N=5 and N=6)
+  - Automatically selects v5 or v6 grammar based on detected version
+  - Handles all Pine Script v5 language constructs (original syntax, `plot()` conventions, type system)
   - Handles all Pine Script v6 language constructs including switch expressions, arrow syntax (=>), and type-inferred array.new_<type>() declarations
-  - Version detection (`//@version=6`)
+  - Version detection (`//@version=5` or `//@version=6`)
   - Syntax error reporting with line/column information
   - Supports all Pine script types: indicator, strategy, library
   - Indentation-aware else-binding: `parseIfStatement(baseColumn?)` ensures `else` clauses bind to the `if` at the same indentation level. For standalone `if`, `baseColumn` = the `if` keyword's column. For `else if`, `baseColumn` = the `else` keyword's column (passed recursively). An `else` is only consumed when `elseToken.span.start.column >= baseColumn`
-  - Supports `const` keyword for constant variable declarations
+  - Supports `const` keyword for constant variable declarations (v6)
+  - Maintains separate grammar rule sets for v5 and v6 to handle syntax differences (e.g., v5's `plot()` parameter ordering vs v6's variadic arguments)
 
 #### 2. Compiler Component
 - **Responsibility**: Validate AST and produce executable representation
-- **Input**: AST from Parser
+- **Input**: AST from Parser (v5 or v6)
 - **Output**: Compiled script with type-checked IR (Intermediate Representation)
 - **Key Features**:
-  - Type checking and validation including switch expression branch type unification and array.new_<type>() type inference
+  - Type checking and validation including switch expression branch type unification and array.new_<type>() type inference (v6)
+  - Version-aware type checking: applies v5 looser coercion rules or v6 stricter rules based on detected version
   - Scope resolution
   - Variable declaration validation
   - Constant folding optimization
   - Produces optimized bytecode or IR
 
 #### 3. Type System
-- **Responsibility**: Manage Pine's type system with automatic coercion
+- **Responsibility**: Manage Pine's type system with automatic coercion (v5 and v6)
 - **Types Supported**:
   - Primitives: `int`, `float`, `bool`, `string`, `color`
   - Series: `series<int>`, `series<float>`, etc.
   - Collections: `array`, `map`
   - User-defined: type aliases
 - **Key Features**:
-  - Automatic type coercion following Pine rules
+  - Automatic type coercion following Pine rules (v5 has looser coercion, v6 is stricter)
   - Series type semantics
   - `na` (not available) value handling; logical AND/OR treats na as false (Pine Script boolean semantics)
-  - Type inference for array.new_<type>() returning array<elementType>
+  - Type inference for array.new_<type>() returning array<elementType> (v6)
   - Generic array operations: size, first, last, shift, pop, push, unshift, insert, remove, contains, fill, set, get, sort, copy
   - Method dispatch on numeric IDs for line and label objects enabling chained operations
+  - Version-aware coercion: v5 allows implicit int→float and float→int in some contexts; v6 enforces stricter type boundaries
 
 #### 4. Execution Engine
-- **Responsibility**: Execute compiled Pine scripts bar-by-bar
+- **Responsibility**: Execute compiled Pine scripts bar-by-bar (v5 and v6)
 - **Execution Model**:
   - Historical mode: process bars sequentially
   - Realtime mode: update calculations on new bar data
   - Rollback capability for realtime execution
 - **Key Features**:
+  - Version-aware execution: dispatches built-in functions to v5 or v6 implementations based on detected version
   - Maintains series state across executions
   - Implements Pine's series indexing (`close[1]`, etc.)
   - Variable scope management
@@ -509,7 +518,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - color.from_gradient(value, minVal, maxVal, bottomColor, topColor) for linear RGB interpolation between two colors
 
 #### 15. Script Declaration System
-- **Responsibility**: Handle script type declarations and configuration
+- **Responsibility**: Handle script type declarations and configuration (v5 and v6)
 - **Script Types**:
   - `indicator()`: Configure script as indicator with overlay, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count
   - `strategy()`: Configure script as strategy with order management parameters
@@ -518,9 +527,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Support for all indicator() parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
   - Support for all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
   - Script type validation and compatibility checking
+  - Version-aware parameter handling: v5 and v6 may have different default values or parameter names for indicator()/strategy()/library()
 
 #### 16. Frontend Web Application
-- **Responsibility**: Provide interactive web-based interface for Pine Script development using a custom canvas-based charting library
+- **Responsibility**: Provide interactive web-based interface for Pine Script development (v5 and v6) using a custom canvas-based charting library
 - **Key Components**:
   - **Web Application**: Main application shell with routing and state management
   - **Code Editor**: Monaco/CodeMirror-based editor with Pine Script syntax highlighting and auto-completion
@@ -585,7 +595,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Backtest runs asynchronously via `/api/backtest` with progress polling
 
 #### 17. Backend API Server
-- **Responsibility**: Bridge frontend and engine, serve market data, manage connections
+- **Responsibility**: Bridge frontend and engine, serve market data, manage connections (v5 and v6)
 - **Key Components**:
   - **REST API Server**: Express/Fastify HTTP server on port 8080
   - **WebSocket Gateway**: ws-based realtime data streaming
