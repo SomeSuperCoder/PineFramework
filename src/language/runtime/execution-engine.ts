@@ -2055,19 +2055,22 @@ export class ExecutionEngine {
         const caseValue = this.executeExpression(caseNode.value, scope, context);
         if (exprValue === caseValue || (typeof exprValue === 'number' && exprValue === caseValue)) {
           const caseScope = createRuntimeScope(scope);
+          let lastResult: PineValue = NA;
           for (const s of caseNode.body) {
-            this.executeStatement(s, caseScope, context);
+            lastResult = this.executeStatement(s, caseScope, context);
           }
-          return NA;
+          return lastResult;
         }
       }
     }
 
     if (stmt.defaultCase) {
       const defaultScope = createRuntimeScope(scope);
+      let lastResult: PineValue = NA;
       for (const s of stmt.defaultCase) {
-        this.executeStatement(s, defaultScope, context);
+        lastResult = this.executeStatement(s, defaultScope, context);
       }
+      return lastResult;
     }
 
     return NA;

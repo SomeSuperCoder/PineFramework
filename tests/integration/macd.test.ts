@@ -74,6 +74,105 @@ function executeMacd(source: string, barCount = 100) {
 }
 
 describe('Integration: MACD Indicator', () => {
+  describe('Execution (real macd.pine)', () => {
+    it('should execute real macd.pine and produce non-null MACD data', () => {
+      const { result } = executeMacd(macdSource);
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(result.overlay).toBe(false);
+
+      const outputKeys = Array.from(result.outputs.keys());
+      expect(outputKeys.length).toBe(3);
+
+      let totalNonNull = 0;
+      for (const key of outputKeys) {
+        const series = result.outputs.get(key)!;
+        const values = Array.from(series.values);
+        const nonNullCount = values.filter((v) => v !== null && v !== undefined).length;
+        totalNonNull += nonNullCount;
+      }
+      expect(totalNonNull).toBeGreaterThan(0);
+    });
+
+    it('should execute simplified macd without switch/simple', () => {
+      const { result } = executeMacd(SIMPLE_MACD);
+      expect(result.success).toBe(true);
+      expect(result.overlay).toBe(false);
+
+      const outputKeys = Array.from(result.outputs.keys());
+      let totalNonNull = 0;
+      for (const key of outputKeys) {
+        const series = result.outputs.get(key)!;
+        const values = Array.from(series.values);
+        const nonNullCount = values.filter((v) => v !== null && v !== undefined).length;
+        totalNonNull += nonNullCount;
+      }
+      expect(totalNonNull).toBeGreaterThan(0);
+    });
+
+    it('should execute MACD using input.source', () => {
+      const inputSourceMacd = `//@version=6
+indicator("MACD Test", overlay = false)
+sourceInput = input.source(close, "Source")
+fastLen = input.int(12, "Fast length")
+slowLen = input.int(26, "Slow length")
+sigLen = input.int(9, "Signal length")
+maFast = ta.ema(sourceInput, fastLen)
+maSlow = ta.ema(sourceInput, slowLen)
+macd = maFast - maSlow
+signal = ta.ema(macd, sigLen)
+hist = macd - signal
+plot(hist, "Histogram", color.green, style = plot.style_columns)
+plot(macd, "MACD", color.blue)
+plot(signal, "Signal", color.orange)`;
+      const { result } = executeMacd(inputSourceMacd);
+      expect(result.success).toBe(true);
+      const outputKeys = Array.from(result.outputs.keys());
+      let totalNonNull = 0;
+      for (const key of outputKeys) {
+        const series = result.outputs.get(key)!;
+        const values = Array.from(series.values);
+        const nonNullCount = values.filter((v) => v !== null && v !== undefined).length;
+        totalNonNull += nonNullCount;
+      }
+      expect(totalNonNull).toBeGreaterThan(0);
+    });
+
+    it('should execute MACD using switch in function', () => {
+      const switchSource = `//@version=6
+indicator("MACD Switch Test", overlay = false)
+fastLen = input.int(12, "Fast length")
+slowLen = input.int(26, "Slow length")
+sigLen = input.int(9, "Signal length")
+oscType = input.string("EMA", "Oscillator MA type", options = ["EMA", "SMA"])
+
+ma(source, len, maType) =>
+    switch maType
+        "EMA" => ta.ema(source, len)
+        "SMA" => ta.sma(source, len)
+
+maFast = ma(close, fastLen, oscType)
+maSlow = ma(close, slowLen, oscType)
+macd = maFast - maSlow
+signal = ta.ema(macd, sigLen)
+hist = macd - signal
+plot(hist, "Histogram", color.green, style = plot.style_columns)
+plot(macd, "MACD", color.blue)
+plot(signal, "Signal", color.orange)`;
+      const { result } = executeMacd(switchSource);
+      expect(result.success).toBe(true);
+      const outputKeys = Array.from(result.outputs.keys());
+      let totalNonNull = 0;
+      for (const key of outputKeys) {
+        const series = result.outputs.get(key)!;
+        const values = Array.from(series.values);
+        const nonNullCount = values.filter((v) => v !== null && v !== undefined).length;
+        totalNonNull += nonNullCount;
+      }
+      expect(totalNonNull).toBeGreaterThan(0);
+    });
+  });
+
   describe('Parse and Compile (real macd.pine)', () => {
     it('should parse test_indicators/macd.pine without errors', () => {
       const { ast } = parse(macdSource);
