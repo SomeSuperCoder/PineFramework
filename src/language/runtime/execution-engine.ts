@@ -767,12 +767,12 @@ export class ExecutionEngine {
       if (typeof namedArgs.location === 'string') locationStr = namedArgs.location;
       if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
       if (typeof namedArgs.text === 'string') textStr = namedArgs.text;
-      // Also handle positional style (4th arg) and location (5th arg)
+      // Positional args: (series, title, style, location, color, text, ...)
+      // title (arg 1) is internal only — do NOT use it as display text
       for (let i = 1; i < args.length - (Object.keys(namedArgs).length > 0 ? 1 : 0) && i < 5; i++) {
         const a = args[i];
         if (typeof a === 'string') {
-          if (i === 1) textStr = a; // title -> text
-          else if (i === 2) styleStr = a; // style
+          if (i === 2) styleStr = a; // style
           else if (i === 3) locationStr = a; // location
         }
       }
