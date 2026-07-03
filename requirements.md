@@ -62,6 +62,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 7. THE Type_System SHALL support user-defined types via type aliases
 8. THE Type_System SHALL support generic array operations (size, first, last, shift, pop, push, unshift, insert, remove, contains, fill, set, get, sort, copy)
 9. THE Type_System SHALL support method dispatch on numeric IDs for line and label objects enabling chained operations (e.g., lin.shift().delete(), line.get_x2(lin.first()))
+10. THE Type_System SHALL support the `simple` type qualifier (e.g., `simple string`) as a prefix to type declarations, similar to the `series` qualifier
 
 ### Requirement 3: Execution Engine
 
@@ -96,6 +97,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 25. THE Execution_Engine SHALL include `barColorData` (an array of `{time, color}` objects) in the execution result, populated by `barcolor()` calls, and shall preserve it across snapshots and rollbacks
 26. THE Execution_Engine SHALL execute compound assignment operators (`+=`, `-=`, `*=`, `/=`) by reading the current series value, applying the operator with the right-hand side, and pushing the result
 27. THE Execution_Engine SHALL support `const` variable declarations, marking variables as immutable after initialization and preventing reassignment
+28. WHEN a switch expression is used as a function return value (arrow-syntax switch like `"EMA" => ta.ema(...)`), THE Execution_Engine SHALL return the last statement result of the matched case body as the expression value instead of NA
 
 ### Requirement 4: Technical Analysis Functions
 
@@ -373,6 +375,9 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 9. THE Test_Framework SHALL validate strategy engine behavior including market order fill deferral, position reversal, and marker generation
 10. THE Test_Framework SHALL include real-world indicator compatibility tests that parse, compile, and execute full complex indicators from `test_indicators/` directory to ensure production readiness
 11. THE Test_Framework SHALL include volatility-trail indicator integration tests covering trail computation, trend flips, fill rendering, plotchar markers, and ta.hma convergence, with regression tests for parser else-binding indentation bugs
+12. THE Test_Framework SHALL include real-world MACD indicator integration tests that parse, compile, and execute the full `test_indicators/macd.pine` script, verifying non-null Histogram, MACD, and Signal line outputs after warmup, correct overlay=false flag, and input.source() functionality
+13. THE Test_Framework SHALL include tests for switch expressions used as function return values, verifying that arrow-syntax switch cases return matched expression values instead of NA
+14. THE Test_Framework SHALL include pane layout tests verifying that non-overlay indicators receive separate vertical space with independent price scales, and that priceToPixel/pixelToPrice work correctly across panes
 
 ### Requirement 12: Input and Configuration System
 
@@ -757,60 +762,65 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 77. THE Chart_Library SHALL support prepending bars to the data set with automatic viewport adjustment (adjustForPrepend) to prevent scroll position jump when older bars are loaded
 78. THE Chart_Library SHALL provide beginUpdate/endUpdate batch update API to defer rendering until multiple indicator updates are complete, ensuring all visual elements update in a single frame
 
+**Pane Clipping:**
+
+79. THE Chart_Library SHALL clip candlestick and overlay plot rendering to the main chart area using canvas clipping, preventing visual bleed-through into indicator panes below
+80. THE Chart_Library SHALL clip volume bar rendering to the volume area, preventing volume bars from extending into the main chart or indicator pane areas
+
 **Performance:**
 
-79. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
-80. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
-81. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
-82. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
-83. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
+81. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
+82. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
+83. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
+84. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
+85. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
 
 **Resize and Responsiveness:**
 
-84. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
-85. THE Chart_Library SHALL support configurable chart padding and margins
-86. THE Chart_Library SHALL automatically adjust layout when the container size changes
+86. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
+87. THE Chart_Library SHALL support configurable chart padding and margins
+88. THE Chart_Library SHALL automatically adjust layout when the container size changes
 
 **Data Binding:**
 
-87. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
-88. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
-89. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
-90. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
-91. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
-92. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
-93. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
-94. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
-95. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
-96. THE Chart_Library SHALL accept barColorData (array of {time, color}) for candle body and wick color overrides
+89. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
+90. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
+91. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
+92. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
+93. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
+94. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
+95. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
+96. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+97. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
+98. THE Chart_Library SHALL accept barColorData (array of {time, color}) for candle body and wick color overrides
 
 **API Design:**
 
-97. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
-98. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
-99. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
-100. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
-101. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
-102. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
-103. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
-104. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
-105. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
-106. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
-107. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
-108. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
-109. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
-110. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
+99. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+100. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+101. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+102. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+103. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+104. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+105. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+106. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
+107. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+108. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+109. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+110. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+111. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+112. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
 
 **Styling and Theming:**
 
-110. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
-111. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
-112. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
+113. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
+114. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+115. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
 
 **Frontend Requirements:**
 
-113. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
-114. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
+116. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
+117. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
 
 ### Requirement 22: Strategy Backtest Engine
 

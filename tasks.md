@@ -2387,6 +2387,39 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test PineChart renders indicator plots in correct pane coordinates
     - _Requirements: 26.6, 26.7, 26.8_
 
+- [x] 91. Fix indicator pane post-feature bugs and expand test coverage
+  - [x] 91.1 Add 'simple' type qualifier to parser and tokenizer
+    - Add `Simple` token type to tokenizer and keyword mapping
+    - Add `checkTypeKeyword()` to recognize `simple` as a type prefix (like `series`)
+    - Update `parseTypeAnnotation()` to handle `simple` prefix before type names
+    - _Requirements: 2.10, 1.12_
+
+  - [x] 91.2 Fix switch statement to return matched case value instead of NA
+    - Fix `executeSwitchStatement()` in `src/language/runtime/execution-engine.ts` to return the last statement result of the matched case body instead of always returning NA
+    - Track `lastResult` through the case/default body loop and return it as the switch expression value
+    - This was the root cause of real macd.pine producing all-null outputs — user functions like `ma()` using arrow-syntax switch (`"EMA" => ta.ema(...)`) always returned NA
+    - _Requirements: 3.28_
+
+  - [x] 91.3 Fix layout recalculation when overlay plot series are added/removed
+    - Add `recalculateLayout()` method to PineChart that detects overlay count changes
+    - Trigger `resize()` when the number of overlay plot series changes, so LayoutManager re-allocates pane space correctly
+    - _Requirements: 26.6_
+
+  - [x] 91.4 Clip candlesticks and overlay plots to main chart area
+    - Add `ctx.save()`/`ctx.clip()`/`ctx.restore()` in `PineChart.render()` to create canvas clip regions
+    - Clip candlesticks and overlay plots to `chartArea` rectangle
+    - Clip volume bars to `volumeArea` rectangle
+    - Prevents visual bleed-through of candlesticks/wicks into indicator panes below
+    - _Requirements: 21.79, 21.80_
+
+  - [x] 91.5 Expand integration tests for real MACD execution
+    - Add test for real macd.pine execution producing 300 non-null values (100 bars × 3 outputs)
+    - Add test for `input.source()` returning valid source data
+    - Add test for switch-in-function patterns returning correct values
+    - Add test for overlay=false flag in execution result
+    - Add simplified MACD tests for independent verification
+    - _Requirements: 11.12, 11.13, 11.14_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2419,6 +2452,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 87 adds the compatibility implementation prompt template (`prompts/compatibility-impl.md`) for onboarding new Pine Script indicators with a test-first workflow.
 - Task 88 implements volatility-trail indicator compatibility: parser indentation-aware else-binding fix (the root cause of trail flatness), `const` keyword support, `ta.hma()` WMA-based Hull Moving Average, `plotchar()`/`plotcandle()` builtins, `display` namespace, variadic `plot()`/`fill()` builtins, AreaRenderer per-bar fill color fix (skip base polygon when fillColorData exists), MarkerRenderer unicode shape support (▲/▼/◆), and 14 integration tests. Also adds 20 debugging methodologies to `prompts/compatibility-impl.md`.
 - Task 89 implements Pine Script v5 compatibility layer: adds v5 grammar rules to the parser, v5 type coercion rules to the compiler, v5-specific built-in functions, version detection pipeline from parser through execution, backend version forwarding, frontend version display, and comprehensive tests. The engine dynamically detects `//@version=5` or `//@version=6` and applies the corresponding grammar and semantics automatically.
+- Task 90 implements separate indicator panes with overlay support: full-stack indicator pane support so non-overlay indicators (e.g., MACD) render in their own pane below the main chart with independent price scales. IR/Engine add overlay field, Backend forwards it, Frontend LayoutManager allocates pane space, PineChart renders indicator plots in separate coordinate space.
+- Task 91 fixes post-feature bugs in the indicator pane implementation: adds 'simple' type qualifier to parser, fixes switch-as-expression to return matched case body value (root cause of real macd.pine producing all-null outputs), adds layout recalculation on overlay count changes, clips candlesticks/volume/overlays to their respective canvas regions to prevent bleed-through into indicator panes, and expands integration tests to cover real MACD execution, input.source(), switch-in-function patterns, and overlay flags.
 
 ## Task Dependency Graph
 
@@ -2544,7 +2579,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 116, "tasks": ["88.1", "88.2", "88.3", "88.4", "88.5", "88.6", "88.7", "88.8", "88.9", "88.10"] },
     { "id": 117, "tasks": ["88.11"] },
     { "id": 118, "tasks": ["89.1", "89.2", "89.3", "89.4", "89.5", "89.6"] },
-    { "id": 119, "tasks": ["89.7"] }
+    { "id": 119, "tasks": ["89.7"] },
+    { "id": 120, "tasks": ["90.1", "90.2", "90.3", "90.4", "90.5", "90.6", "90.7", "90.8"] },
+    { "id": 121, "tasks": ["90.9", "90.10"] },
+    { "id": 122, "tasks": ["91.1", "91.2", "91.3", "91.4", "91.5"] }
   ]
 }
 ```

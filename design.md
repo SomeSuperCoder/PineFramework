@@ -119,6 +119,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Types Supported**:
   - Primitives: `int`, `float`, `bool`, `string`, `color`
   - Series: `series<int>`, `series<float>`, etc.
+  - Simple: `simple<string>`, `simple int`, etc. (similar to series qualifier)
   - Collections: `array`, `map`
   - User-defined: type aliases
 - **Key Features**:
@@ -153,6 +154,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - State snapshot management for rollback: `createSnapshot()` saves engine state before real-time updates, `rollbackToSnapshot()` restores on error
   - The engine instance is kept alive across real-time updates so that var/varip, series indices, and strategy positions persist between bars
   - Executes switch expressions with full conditional branching and local block scoping
+  - Switch-as-expression returns matched case body result: `executeSwitchStatement()` tracks `lastResult` through the matched case/default body loop and returns it, enabling arrow-syntax switch (`"EMA" => expr`) to return computed values instead of NA
   - Supports syminfo namespace as built-in read-only variables (tickerid, mintick, pointvalue, pricescale, currency)
   - Implements strict comparisons matching Pine Script: ta.crossover uses <= on prev bar, ta.crossunder uses >=, ta.pivothigh uses strict >, ta.pivotlow uses strict <
   - Generic array method execution: size, push, pop, shift, unshift, insert, remove, contains, fill, set, get, sort, copy
@@ -396,6 +398,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   20. Axes (price scale, time scale)
   21. Crosshair + tooltip
   22. Tables (floating data tables, rendered as overlay)
+  - **Clipping**: Candlesticks, overlay plots, and fills are clipped to `chartArea` using canvas clip regions; volume bars are clipped to `volumeArea`; indicator pane plots are clipped to their respective pane regions — preventing any visual bleed-through between panes
 
 #### 10. Strategy Engine
 - **Responsibility**: Execute and backtest trading strategies with visual markers
@@ -1454,6 +1457,8 @@ CompiledScript {
 - Non-overlay plots use indicator pane's coordinate space for `priceToPixel()`
 - LineRenderer, AreaRenderer, and HLineRenderer accept a target pane's Y coordinates
 - Separate price scale rendering for indicator pane
+- `recalculateLayout()` detects overlay count changes (new plot series added/removed) and triggers `resize()` to re-allocate pane space
+- Canvas clipping via `ctx.save()`/`ctx.clip()`/`ctx.restore()` restricts candlestick and overlay plot rendering to the `chartArea` and volume rendering to the `volumeArea`, preventing visual bleed-through into indicator panes below
 
 ### Backtest Engine Architecture
 
