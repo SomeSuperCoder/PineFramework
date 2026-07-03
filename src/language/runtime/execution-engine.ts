@@ -1304,6 +1304,7 @@ export class ExecutionEngine {
       lineIdCounter: this.lineIdCounter,
       labels: [...this.labels],
       bgcolorData: [...this.bgcolorData],
+      barColorData: [...this.barColorData],
       sarState: new Map([...this.sarState].map(([k, v]) => [k, { ...v }])),
       barIndex: this.metrics.totalBars,
     };
@@ -1330,6 +1331,7 @@ export class ExecutionEngine {
     this.lineIdCounter = snapshot.lineIdCounter;
     this.labels = [...snapshot.labels];
     this.bgcolorData = snapshot.bgcolorData;
+    this.barColorData = snapshot.barColorData;
     this.sarState = new Map([...snapshot.sarState].map(([k, v]) => [k, { ...v }]));
     this.snapshots = this.snapshots.slice(0, snapshotIndex);
     return true;

@@ -408,7 +408,7 @@ export class Parser {
 
     if (nextCol <= start.column) {
       // Check for arrow syntax: skip newlines, look for => coming before case/default
-      while (this.peek().type === TokenType.Newline || this.peek().type === TokenType.Indent) {
+      while (this.peek().type === TokenType.Newline) {
         this.advance();
       }
       nextCol = this.peek().span.start.column;
