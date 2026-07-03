@@ -74,6 +74,7 @@ export class PineChart {
   private drawingLines: DrawingLineData[] = [];
   private chartLabels: LabelData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
+  private lastIndicatorCount: number = 0;
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -492,6 +493,7 @@ export class PineChart {
       overlay,
     };
     this.plotSeries.set(name, handle);
+    this.recalculateLayout();
     return handle;
   }
 
@@ -505,7 +507,21 @@ export class PineChart {
 
   removeSeries(name: string): void {
     this.plotSeries.delete(name);
+    this.recalculateLayout();
     this.markDirty();
+  }
+
+  private recalculateLayout(): void {
+    let indicatorCount = 0;
+    for (const [, handle] of this.plotSeries) {
+      if (!handle.overlay) {
+        indicatorCount++;
+      }
+    }
+    if (indicatorCount !== this.lastIndicatorCount) {
+      this.lastIndicatorCount = indicatorCount;
+      this.resize();
+    }
   }
 
   setMarkers(markers: ShapeMarkerData[]): void {
