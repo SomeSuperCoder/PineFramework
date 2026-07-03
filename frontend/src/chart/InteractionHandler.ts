@@ -16,6 +16,8 @@ export class InteractionHandler {
   private callbacks: InteractionCallbacks;
   private isDragging: boolean = false;
   private isPriceDragging: boolean = false;
+  private isMiddleDragging: boolean = false;
+  private isTimeAxisDragging: boolean = false;
   private dragStartX: number = 0;
   private dragStartY: number = 0;
   private velocity: number = 0;
@@ -48,6 +50,7 @@ export class InteractionHandler {
     this.canvas.addEventListener('mouseleave', this.onMouseLeave);
     this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
     this.canvas.addEventListener('dblclick', this.onDoubleClick);
+    this.canvas.addEventListener('contextmenu', this.onContextMenu);
     this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
     this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
     this.canvas.addEventListener('touchend', this.onTouchEnd);
@@ -60,6 +63,7 @@ export class InteractionHandler {
     this.canvas.removeEventListener('mouseleave', this.onMouseLeave);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.canvas.removeEventListener('dblclick', this.onDoubleClick);
+    this.canvas.removeEventListener('contextmenu', this.onContextMenu);
     this.canvas.removeEventListener('touchstart', this.onTouchStart);
     this.canvas.removeEventListener('touchmove', this.onTouchMove);
     this.canvas.removeEventListener('touchend', this.onTouchEnd);
@@ -81,10 +85,37 @@ export class InteractionHandler {
     return x >= regions.priceScale.x;
   }
 
+  private isOnTimeAxis(y: number): boolean {
+    const regions = this.layout.getRegions();
+    if (!regions) return false;
+    return y >= regions.timeScale.y;
+  }
+
   private onMouseMove = (e: MouseEvent): void => {
     const { x, y } = this.getCanvasCoords(e);
 
-    if (this.isPriceDragging) {
+    if (this.isMiddleDragging) {
+      const deltaX = x - this.dragStartX;
+      const deltaY = y - this.dragStartY;
+      this.viewport.pan(deltaX);
+      this.layout.panPrice(deltaY);
+      this.dragStartX = x;
+      this.dragStartY = y;
+      this.callbacks.onVisibleRangeChange();
+      this.callbacks.onPriceRangeChange();
+    } else if (this.isTimeAxisDragging) {
+      const deltaX = x - this.dragStartX;
+      const regions = this.layout.getRegions();
+      if (regions) {
+        const timeAxisCenterX = regions.timeScale.x + regions.timeScale.width / 2;
+        const barSpacing = this.viewport.getBarSpacing();
+        const newBarSpacing = Math.max(2, Math.min(100, barSpacing + deltaX * 0.05));
+        const factor = newBarSpacing / barSpacing;
+        this.viewport.zoom(factor, timeAxisCenterX, this.chartWidth);
+        this.dragStartX = x;
+        this.callbacks.onVisibleRangeChange();
+      }
+    } else if (this.isPriceDragging) {
       const deltaY = y - this.dragStartY;
       this.layout.panPrice(deltaY);
       this.dragStartY = y;
@@ -105,7 +136,14 @@ export class InteractionHandler {
     this.dragStartX = x;
     this.dragStartY = y;
 
-    if (this.isOnPriceScale(x)) {
+    if (e.button === 1) {
+      e.preventDefault();
+      this.isMiddleDragging = true;
+      this.canvas.style.cursor = 'grab';
+    } else if (this.isOnTimeAxis(y)) {
+      this.isTimeAxisDragging = true;
+      this.canvas.style.cursor = 'ew-resize';
+    } else if (this.isOnPriceScale(x)) {
       this.isPriceDragging = true;
       this.canvas.style.cursor = 'ns-resize';
     } else {
@@ -118,8 +156,10 @@ export class InteractionHandler {
   private onMouseUp = (): void => {
     this.isDragging = false;
     this.isPriceDragging = false;
+    this.isMiddleDragging = false;
+    this.isTimeAxisDragging = false;
     this.canvas.style.cursor = 'crosshair';
-    if (Math.abs(this.velocity) > 2 && !this.isPriceDragging) {
+    if (Math.abs(this.velocity) > 2 && !this.isPriceDragging && !this.isMiddleDragging) {
       this.startInertialScroll();
     }
   };
@@ -127,6 +167,8 @@ export class InteractionHandler {
   private onMouseLeave = (): void => {
     this.isDragging = false;
     this.isPriceDragging = false;
+    this.isMiddleDragging = false;
+    this.isTimeAxisDragging = false;
     this.canvas.style.cursor = 'crosshair';
     this.callbacks.onCrosshairHide();
   };
@@ -140,18 +182,37 @@ export class InteractionHandler {
       this.layout.zoomPrice(factor, y);
       this.callbacks.onPriceRangeChange();
     } else {
-      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      let factor: number;
+      if (e.ctrlKey || e.metaKey) {
+        factor = e.deltaY > 0 ? 0.97 : 1.03;
+      } else {
+        factor = e.deltaY > 0 ? 0.9 : 1.1;
+      }
       this.viewport.zoom(factor, x, this.chartWidth);
       this.callbacks.onVisibleRangeChange();
     }
     this.callbacks.onCrosshairMove(x, y);
   };
 
-  private onDoubleClick = (): void => {
-    this.layout.resetAutoPriceRange();
-    this.viewport.fitContent(this.chartWidth);
-    this.callbacks.onPriceRangeChange();
-    this.callbacks.onVisibleRangeChange();
+  private onDoubleClick = (e: MouseEvent): void => {
+    const { x, y } = this.getCanvasCoords(e);
+
+    if (this.isOnTimeAxis(y)) {
+      this.viewport.fitContent(this.chartWidth);
+      this.callbacks.onVisibleRangeChange();
+    } else if (this.isOnPriceScale(x)) {
+      this.layout.resetAutoPriceRange();
+      this.callbacks.onPriceRangeChange();
+    } else {
+      this.layout.resetAutoPriceRange();
+      this.viewport.fitContent(this.chartWidth);
+      this.callbacks.onPriceRangeChange();
+      this.callbacks.onVisibleRangeChange();
+    }
+  };
+
+  private onContextMenu = (e: MouseEvent): void => {
+    e.preventDefault();
   };
 
   private onTouchStart = (e: TouchEvent): void => {

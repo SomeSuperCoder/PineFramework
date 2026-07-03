@@ -336,7 +336,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   │   ├── GridRenderer (price/time grid lines)
   │   ├── AxisRenderer (price scale labels, time scale labels)
   │   └── CrosshairRenderer (crosshair + tooltip)
-  └── InteractionHandler (mouse/touch events for zoom, pan, hover, price scale drag/zoom, double-click reset)
+  └── InteractionHandler (mouse/touch events for zoom, pan, hover, price scale drag/zoom, time axis drag, middle-mouse pan, Ctrl+scroll fine zoom, double-click reset on price/time axes)
   ```
 - **Key Features**:
   - Coordinate transformation system mapping (barIndex, price) → (x, y) pixels
@@ -355,8 +355,13 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Momentum-based inertial scrolling
   - Manual and auto price range modes: auto (computed from visible candles/plots), manual (set by user drag or shift+wheel)
   - Vertical zoom on price scale via Shift+scroll-wheel, centered on cursor position
-  - Vertical pan and zoom on price scale via click-and-drag on the price scale area
+  - Vertical pan and zoom on the price scale via click-and-drag on the price scale area
   - Double-click to reset to auto price range and fit content
+  - Ctrl+scroll wheel (Cmd+scroll on Mac) for fine-grained horizontal zoom with reduced zoom factor
+  - Middle mouse button (or mouse wheel press) drag for free panning — unrestricted horizontal/vertical movement without affecting price scale auto-range mode
+  - Time axis drag: dragging the bottom time scale area horizontally compresses/expands the time scale (bar spacing) for time-axis-only zoom
+  - Double-click time axis to reset bar spacing and fit all data
+  - Double-click price scale to reset to auto price range and fit content
   - Price range computation filters non-finite and near-zero plot values to prevent chart distortion
   - Price range clamped to at most 10x candle range to prevent excessive scaling when plot values exceed candle prices
   - Per-bar plot color rendering for line, stepline, histogram, columns styles

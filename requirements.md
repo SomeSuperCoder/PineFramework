@@ -741,86 +741,91 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 
 60. THE Chart_Library SHALL support horizontal zoom via mouse scroll wheel, adjusting the bar spacing (pixels per bar) centered on the cursor position
 61. THE Chart_Library SHALL support horizontal zoom via pinch gesture on touch devices
-62. THE Chart_Library SHALL support horizontal panning via click-and-drag on the chart area
+62. THE Chart_Library SHALL support horizontal panning via left-click-and-drag on the chart area
 63. THE Chart_Library SHALL support vertical zoom/pan on the price scale via mouse drag on the price scale area
 64. THE Chart_Library SHALL implement momentum-based inertial scrolling for smooth pan deceleration
 65. THE Chart_Library SHALL enforce minimum and maximum bar spacing limits (e.g., 2px to 100px per bar)
+66. THE Chart_Library SHALL support finer-grained horizontal zoom via Ctrl+scroll wheel (or Cmd+scroll on Mac), applying a reduced zoom factor compared to bare scroll wheel for precision control
+67. THE Chart_Library SHALL support free panning via middle mouse button (or mouse wheel press) drag on the chart area, allowing unrestricted horizontal and vertical panning without affecting the price scale auto-range mode
+68. THE Chart_Library SHALL support time axis drag interaction: dragging the time axis (bottom scale area) horizontally shall compress or expand the time scale (bar spacing), enabling time-axis-only zoom
+69. THE Chart_Library SHALL reset the time scale to fit all data on double-click of the time axis (bottom scale area), restoring the default bar spacing that shows all available data
+70. THE Chart_Library SHALL reset the price scale to auto-range on double-click of the price scale (right scale area), restoring automatic price range computation from visible data
 
 **Viewport Management:**
 
-66. THE Chart_Library SHALL maintain a viewport state tracking the visible range (first visible bar index, bar count)
-67. THE Chart_Library SHALL only render bars that fall within the visible viewport plus a small overscan buffer on each side
-68. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
-69. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
-70. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
-71. THE Chart_Library SHALL maintain a price range with two modes: auto (computed from visible candles and plots) and manual (set by user interaction)
-72. THE Chart_Library SHALL support vertical zoom on the price scale via mouse scroll wheel while holding Shift, adjusting the visible price range centered on the cursor
-73. THE Chart_Library SHALL support vertical pan and zoom on the price scale via mouse drag on the price scale area, adjusting the visible price range
-74. THE Chart_Library SHALL reset to auto price range and fit content on double-click, restoring automatic price range computation
-75. THE Chart_Library SHALL filter non-finite and near-zero plot values when computing the auto price range to prevent chart distortion
-76. THE Chart_Library SHALL clamp the auto price range to at most 10 times the candle price range to prevent excessive vertical scaling when plot values far exceed candle prices
-77. THE Chart_Library SHALL support prepending bars to the data set with automatic viewport adjustment (adjustForPrepend) to prevent scroll position jump when older bars are loaded
-78. THE Chart_Library SHALL provide beginUpdate/endUpdate batch update API to defer rendering until multiple indicator updates are complete, ensuring all visual elements update in a single frame
+71. THE Chart_Library SHALL maintain a viewport state tracking the visible range (first visible bar index, bar count)
+72. THE Chart_Library SHALL only render bars that fall within the visible viewport plus a small overscan buffer on each side
+73. THE Chart_Library SHALL implement fitContent() to automatically adjust the viewport to show all available data
+74. THE Chart_Library SHALL support scrollTo(barIndex) to center the view on a specific bar
+75. THE Chart_Library SHALL support scrollToDate(timestamp) to center the view on a specific time
+76. THE Chart_Library SHALL maintain a price range with two modes: auto (computed from visible candles and plots) and manual (set by user interaction)
+77. THE Chart_Library SHALL support vertical zoom on the price scale via mouse scroll wheel while holding Shift, adjusting the visible price range centered on the cursor
+78. THE Chart_Library SHALL support vertical pan and zoom on the price scale via mouse drag on the price scale area, adjusting the visible price range
+79. THE Chart_Library SHALL reset to auto price range and fit content on double-click, restoring automatic price range computation
+80. THE Chart_Library SHALL filter non-finite and near-zero plot values when computing the auto price range to prevent chart distortion
+81. THE Chart_Library SHALL clamp the auto price range to at most 10 times the candle price range to prevent excessive vertical scaling when plot values far exceed candle prices
+82. THE Chart_Library SHALL support prepending bars to the data set with automatic viewport adjustment (adjustForPrepend) to prevent scroll position jump when older bars are loaded
+83. THE Chart_Library SHALL provide beginUpdate/endUpdate batch update API to defer rendering until multiple indicator updates are complete, ensuring all visual elements update in a single frame
 
 **Pane Clipping:**
 
-79. THE Chart_Library SHALL clip candlestick and overlay plot rendering to the main chart area using canvas clipping, preventing visual bleed-through into indicator panes below
-80. THE Chart_Library SHALL clip volume bar rendering to the volume area, preventing volume bars from extending into the main chart or indicator pane areas
+84. THE Chart_Library SHALL clip candlestick and overlay plot rendering to the main chart area using canvas clipping, preventing visual bleed-through into indicator panes below
+85. THE Chart_Library SHALL clip volume bar rendering to the volume area, preventing volume bars from extending into the main chart or indicator pane areas
 
 **Performance:**
 
-81. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
-82. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
-83. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
-84. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
-85. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
+86. THE Chart_Library SHALL use double buffering (offscreen canvas) to prevent flickering during redraws
+87. THE Chart_Library SHALL batch canvas draw calls by style (color, lineWidth) to minimize state changes
+88. THE Chart_Library SHALL support rendering 1000+ candles at 60fps on modern hardware
+89. THE Chart_Library SHALL use path batching for line plots (single beginPath/stroke per style group instead of per-segment)
+90. THE Chart_Library SHALL only redraw when state is dirty (data changed, viewport changed, or interaction occurred)
 
 **Resize and Responsiveness:**
 
-86. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
-87. THE Chart_Library SHALL support configurable chart padding and margins
-88. THE Chart_Library SHALL automatically adjust layout when the container size changes
+91. THE Chart_Library SHALL handle container resize via ResizeObserver, updating canvas dimensions and re-rendering
+92. THE Chart_Library SHALL support configurable chart padding and margins
+93. THE Chart_Library SHALL automatically adjust layout when the container size changes
 
 **Data Binding:**
 
-89. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
-90. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
-91. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
-92. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
-93. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
-94. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
-95. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
-96. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
-97. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
-98. THE Chart_Library SHALL accept barColorData (array of {time, color}) for candle body and wick color overrides
+94. THE Chart_Library SHALL accept candlestick data as an array of {time, open, high, low, close, volume} objects
+95. THE Chart_Library SHALL accept plot data as arrays of {time, value} with null gaps
+96. THE Chart_Library SHALL accept shape markers as arrays of {time, position, shape, color, text}
+97. THE Chart_Library SHALL accept fill definitions as {from, to, color} referencing plot series names
+98. THE Chart_Library SHALL accept strategy markers as arrays of {type, name, direction, timestamp, color, comment}
+99. THE Chart_Library SHALL accept drawing lines as arrays of {points: [{time, price}], color, width, style}
+100. THE Chart_Library SHALL accept drawing labels as arrays of {time, price, text, color, textcolor, style, size}
+101. THE Chart_Library SHALL accept horizontal line definitions as {price, color, style}
+102. THE Chart_Library SHALL accept per-bar plot color data and per-bar fill color data alongside value arrays
+103. THE Chart_Library SHALL accept barColorData (array of {time, color}) for candle body and wick color overrides
 
 **API Design:**
 
-99. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
-100. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
-101. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
-102. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
-103. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
-104. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
-105. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
-106. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
-107. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
-108. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
-109. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
-110. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
-111. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
-112. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
+104. THE Chart_Library SHALL expose a `createChart(container, options)` factory function returning a chart instance
+105. THE Chart_Library SHALL expose `chart.setCandles(data)` to update candlestick data
+106. THE Chart_Library SHALL expose `chart.setVolume(data)` to update volume data
+107. THE Chart_Library SHALL expose `chart.addPlotSeries(name, options)` returning a series handle for setting data
+108. THE Chart_Library SHALL expose `chart.setMarkers(markers)` to set shape and strategy markers
+109. THE Chart_Library SHALL expose `chart.setFills(fills)` to define fill areas between plot series
+110. THE Chart_Library SHALL expose `chart.setLines(lines)` to set drawing lines
+111. THE Chart_Library SHALL expose `chart.setLabels(labels)` to set drawing labels
+112. THE Chart_Library SHALL expose `chart.setHLines(hlines)` to set horizontal lines
+113. THE Chart_Library SHALL expose `chart.removeSeries(name)` to remove a plot series
+114. THE Chart_Library SHALL expose `chart.timeScale()` returning an object with `fitContent()`, `scrollTo()`, and `scrollToDate()` methods
+115. THE Chart_Library SHALL expose `chart.applyOptions(options)` for runtime configuration changes
+116. THE Chart_Library SHALL expose `chart.remove()` for cleanup and teardown
+117. THE Chart_Library SHALL emit events: `onCrosshairMove`, `onVisibleRangeChange`, `onResize`, `onPriceRangeChange`
 
 **Styling and Theming:**
 
-113. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
-114. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
-115. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
+118. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
+119. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+120. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
 
 **Frontend Requirements:**
 
-116. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
-117. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
+121. THE Frontend SHALL be a workspace package within the monorepo, importing `pine-framework` as a workspace dependency
+122. THE Frontend SHALL NOT contain its own pnpm-lock.yaml or node_modules; all dependencies shall be managed by the root workspace
 
 ### Requirement 22: Strategy Backtest Engine
 

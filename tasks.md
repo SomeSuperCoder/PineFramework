@@ -2274,6 +2274,50 @@ This implementation plan outlines the step-by-step development of a production-g
     - Tests: parse/compile, output keys, non-null values, trail computation, trend detection, trail follows upperBand in bearish mode, trail flatness regression, fill rendering, plotchar markers, ta.hma convergence, var persistence, color transitions, bar-by-bar trace, debug Pine script
     - _Requirements: 11.11_
 
+- [x] 92. Implement TradingView-style Chart Navigation Controls
+  - [x] 92.1 Add Ctrl+scroll fine zoom to InteractionHandler
+    - Detect Ctrl (or Cmd on Mac) modifier key during mouse wheel events
+    - Apply a reduced zoom factor (e.g., 0.3x of normal zoom) when modifier is held
+    - Center the fine zoom on the cursor position like normal scroll zoom
+    - _Requirements: 21.66_
+
+  - [x] 92.2 Add middle mouse button free panning to InteractionHandler
+    - Detect middle mouse button (button === 1) mousedown on the chart area
+    - Enter free pan mode: track delta X and delta Y from mousedown position
+    - On mousemove, adjust both horizontal scroll position (bar index offset) and vertical price range offset
+    - On mouseup, exit free pan mode
+    - Do not affect price scale auto-range mode during middle-mouse pan
+    - Set cursor to `grab`/`grabbing` during middle-mouse pan
+    - _Requirements: 21.67_
+
+  - [x] 92.3 Add time axis drag interaction to InteractionHandler
+    - Detect mousedown on the time axis region (bottom scale area) via LayoutManager
+    - On drag, compute the drag distance in pixels and convert to bar spacing change
+    - Dragging right expands the time scale (increases bar spacing); dragging left compresses (decreases bar spacing)
+    - Center the time scale zoom on the cursor position along the x-axis
+    - Set cursor to `ew-resize` when hovering over the time axis area
+    - _Requirements: 21.68_
+
+  - [x] 92.4 Add double-click time axis reset to InteractionHandler
+    - Detect double-click on the time axis region (bottom scale area)
+    - Reset bar spacing to the default that fits all available data (equivalent to fitContent on time scale)
+    - Do not affect the price range mode (leave auto/manual as-is)
+    - _Requirements: 21.69_
+
+  - [x] 92.5 Consolidate double-click price scale reset
+    - Ensure double-click on the price scale area resets to auto price range and fits content
+    - Verify existing double-click behavior from task 42.2 works correctly with the new time axis double-click
+    - _Requirements: 21.70_
+
+  - [x] 92.6 Write tests for new chart navigation controls
+    - Test Ctrl+scroll applies reduced zoom factor vs bare scroll
+    - Test middle mouse button panning adjusts both X and Y offsets
+    - Test time axis drag changes bar spacing correctly
+    - Test double-click time axis resets bar spacing to fit content
+    - Test double-click price scale resets to auto price range
+    - Test cursor changes for each interaction mode
+    - _Requirements: 21.66, 21.67, 21.68, 21.69, 21.70_
+
 - [x] 89. Implement Pine Script v5 Compatibility Layer
   - [x] 89.1 Add v5 grammar rules to Parser
     - Create v5-specific grammar rule set alongside existing v6 rules
@@ -2454,6 +2498,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 89 implements Pine Script v5 compatibility layer: adds v5 grammar rules to the parser, v5 type coercion rules to the compiler, v5-specific built-in functions, version detection pipeline from parser through execution, backend version forwarding, frontend version display, and comprehensive tests. The engine dynamically detects `//@version=5` or `//@version=6` and applies the corresponding grammar and semantics automatically.
 - Task 90 implements separate indicator panes with overlay support: full-stack indicator pane support so non-overlay indicators (e.g., MACD) render in their own pane below the main chart with independent price scales. IR/Engine add overlay field, Backend forwards it, Frontend LayoutManager allocates pane space, PineChart renders indicator plots in separate coordinate space.
 - Task 91 fixes post-feature bugs in the indicator pane implementation: adds 'simple' type qualifier to parser, fixes switch-as-expression to return matched case body value (root cause of real macd.pine producing all-null outputs), adds layout recalculation on overlay count changes, clips candlesticks/volume/overlays to their respective canvas regions to prevent bleed-through into indicator panes, and expands integration tests to cover real MACD execution, input.source(), switch-in-function patterns, and overlay flags.
+- Task 92 implements TradingView-style chart navigation controls: Ctrl+scroll for fine-grained zoom, middle mouse button free panning, time axis drag for time-scale zoom, double-click time axis reset, and consolidated double-click price scale reset — matching the interaction model of TradingView's Lightweight Charts.
 
 ## Task Dependency Graph
 
@@ -2582,7 +2627,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 119, "tasks": ["89.7"] },
     { "id": 120, "tasks": ["90.1", "90.2", "90.3", "90.4", "90.5", "90.6", "90.7", "90.8"] },
     { "id": 121, "tasks": ["90.9", "90.10"] },
-    { "id": 122, "tasks": ["91.1", "91.2", "91.3", "91.4", "91.5"] }
+    { "id": 122, "tasks": ["91.1", "91.2", "91.3", "91.4", "91.5"] },
+    { "id": 123, "tasks": ["92.1", "92.2", "92.3", "92.4", "92.5"] },
+    { "id": 124, "tasks": ["92.6"] }
   ]
 }
 ```
