@@ -233,10 +233,16 @@ export class PineChart {
 
     this.areaRenderer.render(ctx, this.fills, allPlots, this.viewport, this.layout, this.fillColorData);
 
+    const regions = this.layout.getRegions();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(regions.volumeArea.x, regions.volumeArea.y, regions.volumeArea.width, regions.volumeArea.height);
+    ctx.clip();
     this.volumeRenderer.render(ctx, this.candles, this.viewport, this.layout);
+    ctx.restore();
 
     if (this.bgColors.size > 0) {
-      const regions = this.layout.getRegions();
       const visibleRange = this.viewport.getVisibleRange();
       for (let i = visibleRange.start; i < visibleRange.end && i < this.candles.length; i++) {
         const color = this.bgColors.get(i);
@@ -249,18 +255,24 @@ export class PineChart {
       }
     }
 
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(regions.chartArea.x, regions.chartArea.y, regions.chartArea.width, regions.chartArea.height);
+    ctx.clip();
+
     this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.barColors);
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 
     this.renderDrawingLines(ctx);
 
-    const regions = this.layout.getRegions();
     for (const [_key, handle] of this.plotSeries) {
       if (handle.overlay) {
         this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
       }
     }
+
+    ctx.restore();
 
     for (const pane of regions.indicatorPanes) {
       for (const [_key, handle] of this.plotSeries) {
