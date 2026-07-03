@@ -111,6 +111,11 @@ export class ScriptSession {
       const result = this.engine.computeFormingCandle(context);
       return this.toFormingCandleOutputs(result);
     } else {
+      // New bar arrived — permanently advance engine state for the previous bar first
+      if (this.contexts.length > 0) {
+        this.engine.setFormingCandle(false);
+        this.engine.executeBar(this.contexts[this.contexts.length - 1]!);
+      }
       this.bars.push(bar);
       const fullContexts = barsToContext(this.bars);
       this.contexts.push(fullContexts[fullContexts.length - 1]!);

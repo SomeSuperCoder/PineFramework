@@ -281,10 +281,19 @@ export function useChartData() {
               const numValue = diffValue === null || diffValue === undefined ? null
                 : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
                 : typeof diffValue === 'number' ? diffValue : null;
+              const perBarColors = msg.plotColors?.[diffKey];
+              const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
+              // New bar: barIndex >= data length → append; same bar tick → replace last entry
+              const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
+              if (isNewBar) {
+                const lastTime = plot.data[plot.data.length - 1]?.time ?? 0;
+                return {
+                  ...plot,
+                  data: [...plot.data, { time: lastTime, value: numValue, color }],
+                };
+              }
               const lastEntry = plot.data[plot.data.length - 1];
               if (lastEntry) {
-                const perBarColors = msg.plotColors?.[diffKey];
-                const color = perBarColors?.[perBarColors.length - 1] ?? lastEntry.color;
                 return {
                   ...plot,
                   data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
