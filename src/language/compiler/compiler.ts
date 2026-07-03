@@ -119,6 +119,7 @@ export class Compiler {
       type: varType,
       isVar: decl.isVar,
       isVarip: decl.isVarip,
+      isConst: decl.isConst,
     });
 
     if (decl.initializer) {
@@ -141,6 +142,7 @@ export class Compiler {
           type: existing,
           isVar: false,
           isVarip: false,
+          isConst: false,
         });
         this.builder.emit(IROpCode.StoreVar, stmt.span, name, stmt.operator);
         return;

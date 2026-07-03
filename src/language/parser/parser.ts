@@ -155,6 +155,12 @@ export class Parser {
       }
       return this.parseVariableDeclaration(true, true);
     }
+    if (this.match(TokenType.Const)) {
+      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
+        return this.parseTypedVariableDeclaration(false, false, true);
+      }
+      return this.parseVariableDeclaration(false, false, true);
+    }
     if (this.match(TokenType.If)) {
       return this.parseIfStatement();
     }
@@ -194,7 +200,7 @@ export class Parser {
     return this.parseExpressionOrAssignmentStatement();
   }
 
-  private parseTypedVariableDeclaration(isVar: boolean, isVarip: boolean): VariableDeclarationNode {
+  private parseTypedVariableDeclaration(isVar: boolean, isVarip: boolean, isConst: boolean = false): VariableDeclarationNode {
     const start = this.peek().span.start;
     const typeAnnotation = this.parseTypeAnnotation();
     const nameToken = this.consume(TokenType.Identifier, 'Expected variable name');
@@ -212,10 +218,11 @@ export class Parser {
       initializer,
       isVar,
       isVarip,
+      isConst,
     };
   }
 
-  private parseVariableDeclaration(isVar: boolean, isVarip: boolean): VariableDeclarationNode {
+  private parseVariableDeclaration(isVar: boolean, isVarip: boolean, isConst: boolean = false): VariableDeclarationNode {
     const start = this.previous().span.start;
     const nameToken = this.consume(TokenType.Identifier, 'Expected variable name');
     let typeAnnotation: TypeAnnotationNode | undefined;
@@ -230,6 +237,7 @@ export class Parser {
         initializer,
         isVar,
         isVarip,
+        isConst,
       };
     }
 
@@ -248,6 +256,7 @@ export class Parser {
       initializer,
       isVar,
       isVarip,
+      isConst,
     };
   }
 
@@ -290,6 +299,7 @@ export class Parser {
       type === TokenType.Library ||
       type === TokenType.Var ||
       type === TokenType.Varip ||
+      type === TokenType.Const ||
       type === TokenType.If ||
       type === TokenType.For ||
       type === TokenType.While ||
@@ -299,15 +309,25 @@ export class Parser {
     );
   }
 
-  private parseIfStatement(): IfStatementNode {
+  private parseIfStatement(baseColumn?: number): IfStatementNode {
     const start = this.previous().span.start;
     const condition = this.parseExpression();
     const thenBranch = this.parseIndentedBlock();
     let elseBranch: StatementNode[] | undefined;
 
-    if (this.match(TokenType.Else)) {
+    // In Pine Script, 'else' belongs to the 'if' at the same indentation level.
+    // Only consume 'else' if its column is at or deeper than the if-statement's
+    // base column. For standalone 'if', baseColumn = the 'if' keyword's column.
+    // For 'else if', baseColumn = the 'else' keyword's column (passed down).
+    const effectiveBase = baseColumn ?? start.column;
+    const elseToken = this.peek();
+    if (elseToken.type === TokenType.Else && elseToken.span.start.column >= effectiveBase) {
+      this.advance();
       if (this.check(TokenType.If)) {
-        elseBranch = [this.parseStatement()];
+        // For 'else if', consume the 'if' keyword and pass the else's column
+        // as the base for the inner if-statement
+        this.advance();
+        elseBranch = [this.parseIfStatement(elseToken.span.start.column)];
       } else {
         elseBranch = this.parseIndentedBlock();
       }
@@ -650,6 +670,7 @@ export class Parser {
     return (
       type === TokenType.Var ||
       type === TokenType.Varip ||
+      type === TokenType.Const ||
       type === TokenType.If ||
       type === TokenType.For ||
       type === TokenType.While ||

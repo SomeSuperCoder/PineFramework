@@ -37,22 +37,21 @@ export class AreaRenderer {
 
       if (points.length < 2) continue;
 
-      // Draw the fill. Colors from color.new() already contain alpha;
-      // do NOT apply globalAlpha — that would double-reduce opacity.
-      ctx.fillStyle = fill.color;
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].upper);
-      for (let i = 1; i < points.length; i++) {
-        ctx.lineTo(points[i].x, points[i].upper);
-      }
-      for (let i = points.length - 1; i >= 0; i--) {
-        ctx.lineTo(points[i].x, points[i].lower);
-      }
-      ctx.closePath();
-      ctx.fill();
-
-      // Overlay per-bar color segments on top
-      if (perBarColors) {
+      if (!perBarColors) {
+        // No per-bar data: draw a single fill polygon with the fill's static color
+        ctx.fillStyle = fill.color;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].upper);
+        for (let i = 1; i < points.length; i++) {
+          ctx.lineTo(points[i].x, points[i].upper);
+        }
+        for (let i = points.length - 1; i >= 0; i--) {
+          ctx.lineTo(points[i].x, points[i].lower);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // Per-bar colors available: draw each bar segment with its own color
         for (let i = 0; i < points.length - 1; i++) {
           const segColor = points[i].color;
           if (!segColor) continue;

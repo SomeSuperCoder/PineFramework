@@ -39,6 +39,7 @@ export interface IRGlobal {
   type: PineType;
   isVar: boolean;
   isVarip: boolean;
+  isConst: boolean;
   initializer?: IRInstruction[];
 }
 

@@ -8,6 +8,7 @@ export interface VariableBinding {
   series: Series;
   isVar: boolean;
   isVarip: boolean;
+  isConst: boolean;
 }
 
 export interface RuntimeScope {
@@ -28,6 +29,7 @@ export function declareVariable(
   type: PineType,
   isVar: boolean = false,
   isVarip: boolean = false,
+  isConst: boolean = false,
 ): VariableBinding {
   const series = createSeries(name);
   const binding: VariableBinding = {
@@ -36,6 +38,7 @@ export function declareVariable(
     series,
     isVar,
     isVarip,
+    isConst,
   };
   scope.variables.set(name, binding);
   return binding;

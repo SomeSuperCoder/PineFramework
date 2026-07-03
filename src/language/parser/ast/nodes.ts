@@ -42,6 +42,7 @@ export interface VariableDeclarationNode {
   initializer?: ExpressionNode;
   isVar: boolean;
   isVarip: boolean;
+  isConst: boolean;
 }
 
 export interface AssignmentNode {

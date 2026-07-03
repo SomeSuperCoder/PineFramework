@@ -249,6 +249,8 @@ export class ExecutionEngine {
   private smaCallIndex: number = 0;
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
   private emaCallIndex: number = 0;
+  private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
+  private hmaCallIndex: number = 0;
   private sarState: Map<string, {
     initialized: boolean;
     trend: 'up' | 'down';
@@ -470,6 +472,73 @@ export class ExecutionEngine {
       }
       state.prev = (state.prev * (len - 1) + tr) / len;
       return state.prev;
+    });
+
+    this.builtins.set('ta.hma', (source: PineValue, length: PineValue): PineValue => {
+      if (isNa(source) || isNa(length)) return NA;
+      const len = Math.trunc(length as number);
+      if (len <= 0) return NA;
+      const halfLen = Math.floor(len / 2);
+      const sqrtLen = Math.floor(Math.sqrt(len));
+
+      const key = `hma_${len}_${this.hmaCallIndex++}`;
+      if (!this.hmaBuffers.has(key)) {
+        this.hmaBuffers.set(key, { half: [], full: [], diff: [] });
+      }
+      const buf = this.hmaBuffers.get(key)!;
+      const val = source as number;
+
+      buf.half.push(val);
+      if (buf.half.length > halfLen) buf.half.shift();
+
+      buf.full.push(val);
+      if (buf.full.length > len) buf.full.shift();
+
+      // WMA of half-length
+      let wmaHalf = 0;
+      if (buf.half.length >= halfLen) {
+        let wSum = 0;
+        let wWeight = 0;
+        for (let i = 0; i < buf.half.length; i++) {
+          const weight = i + 1;
+          wSum += buf.half[i] * weight;
+          wWeight += weight;
+        }
+        wmaHalf = wSum / wWeight;
+      }
+
+      // WMA of full-length
+      let wmaFull = 0;
+      if (buf.full.length >= len) {
+        let wSum = 0;
+        let wWeight = 0;
+        for (let i = 0; i < buf.full.length; i++) {
+          const weight = i + 1;
+          wSum += buf.full[i] * weight;
+          wWeight += weight;
+        }
+        wmaFull = wSum / wWeight;
+      }
+
+      if (buf.half.length < halfLen || buf.full.length < len) {
+        return NA;
+      }
+
+      buf.diff.push(2 * wmaHalf - wmaFull);
+      if (buf.diff.length > sqrtLen) buf.diff.shift();
+
+      // WMA of diff with sqrtLen
+      if (buf.diff.length < sqrtLen) {
+        return NA;
+      }
+      let dSum = 0;
+      let dWeight = 0;
+      for (let i = 0; i < buf.diff.length; i++) {
+        const weight = i + 1;
+        dSum += buf.diff[i] * weight;
+        dWeight += weight;
+      }
+      return dSum / dWeight;
     });
 
     this.builtins.set('math.max', (...args: PineValue[]): PineValue => {
@@ -699,11 +768,12 @@ export class ExecutionEngine {
       },
     );
 
-    this.builtins.set('plot', (value: PineValue, titleOrNamed?: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
+    this.builtins.set('plot', (...allArgs: PineValue[]): PineValue => {
       let seriesName = 'plot';
       let color: string | undefined;
       let linewidth: number | undefined;
       let style: string | undefined;
+      let display: PineValue | undefined;
       const PINE_STYLE_MAP: Record<string, string> = {
         'style_line': 'line',
         'style_linebr': 'line',
@@ -718,26 +788,42 @@ export class ExecutionEngine {
         'style_areaoutline': 'area',
         'style_circledot': 'circles',
       };
-      if (typeof titleOrNamed === 'string') {
-        seriesName = titleOrNamed;
-        if (namedArgs) {
-          if (typeof namedArgs.color === 'string') color = namedArgs.color;
-          if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
-          if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
-          if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
-        }
-      } else if (typeof titleOrNamed === 'object' && titleOrNamed !== null && !Array.isArray(titleOrNamed)) {
-        const na = titleOrNamed as unknown as Record<string, PineValue>;
-        if (typeof na.title === 'string') seriesName = na.title;
-        if (typeof na.color === 'string') color = na.color;
-        if (typeof na.linewidth === 'number') linewidth = na.linewidth;
-        if (typeof na.style === 'string') style = PINE_STYLE_MAP[na.style] || 'line';
-      } else if (namedArgs) {
+
+      const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
+      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
+        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
+
+      // Pine Script plot(series, title, color, linewidth, style, trackprice, histbase, offset, join, editable, show_last, display)
+      if (positionalArgs.length >= 2 && typeof positionalArgs[1] === 'string') {
+        seriesName = positionalArgs[1] as string;
+      }
+      if (positionalArgs.length >= 3) {
+        const c = positionalArgs[2];
+        if (typeof c === 'string') color = c;
+      }
+      if (positionalArgs.length >= 4 && typeof positionalArgs[3] === 'number') {
+        linewidth = positionalArgs[3] as number;
+      }
+      if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string') {
+        style = PINE_STYLE_MAP[positionalArgs[4] as string] || 'line';
+      }
+      if (positionalArgs.length >= 12) {
+        display = positionalArgs[11];
+      }
+
+      if (namedArgs) {
         if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
         if (typeof namedArgs.color === 'string') color = namedArgs.color;
         if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
         if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
+        if (namedArgs.display !== undefined) display = namedArgs.display;
       }
+
+      if (display === 'none' || display === 0) {
+        return NA;
+      }
+
       const metaParts = [seriesName];
       if (linewidth) metaParts.push(`__lw:${linewidth}`);
       if (style) metaParts.push(`__style:${style}`);
@@ -745,7 +831,7 @@ export class ExecutionEngine {
       if (!this.outputs.has(key)) {
         this.outputs.set(key, createSeries(key));
       }
-      this.outputs.get(key)!.push(isNa(value) ? null : value);
+      this.outputs.get(key)!.push(isNa(positionalArgs[0]) ? null : positionalArgs[0]);
       if (!this.plotColors.has(key)) {
         this.plotColors.set(key, []);
       }
@@ -791,6 +877,54 @@ export class ExecutionEngine {
       return NA;
     });
 
+    this.builtins.set('plotchar', (...allArgs: PineValue[]): PineValue => {
+      const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
+      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
+        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
+
+      // Pine Script plotchar(series, title, char, location, color, offset, text, textcolor, editable, size, display)
+      const value = positionalArgs[0] ?? NA;
+      if (isNa(value)) return NA;
+      const char = positionalArgs.length >= 3 && typeof positionalArgs[2] === 'string' ? positionalArgs[2] as string : '●';
+      let locationStr = positionalArgs.length >= 4 && typeof positionalArgs[3] === 'string' ? positionalArgs[3] as string : 'abovebar';
+      let colorStr = positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string' ? positionalArgs[4] as string : '#2196f3';
+      let textStr = '';
+
+      if (namedArgs) {
+        if (typeof namedArgs.location === 'string') locationStr = namedArgs.location;
+        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+        if (typeof namedArgs.text === 'string') textStr = namedArgs.text;
+      }
+
+      // Also handle positional named args (location as string like "location.belowbar")
+      for (let i = 3; i < positionalArgs.length && i < 6; i++) {
+        const a = positionalArgs[i];
+        if (typeof a === 'string') {
+          if (i === 3) locationStr = a;
+          else if (i === 4) colorStr = a;
+        }
+      }
+
+      // location.belowbar -> belowbar
+      if (locationStr.startsWith('location.')) locationStr = locationStr.slice(9);
+
+      const isLocationBool = locationStr === 'abovebar' || locationStr === 'belowbar';
+      if (isLocationBool) {
+        if (value !== true && value !== 1) return NA;
+      }
+
+      this.shapes.push({
+        style: char,
+        location: locationStr,
+        color: colorStr,
+        time: this.currentTimestamp,
+        text: textStr,
+        price: typeof value === 'number' && !isLocationBool ? value : undefined,
+      });
+      return NA;
+    });
+
     this.builtins.set('bgcolor', (colorInput: PineValue): PineValue => {
       if (isNa(colorInput)) return NA;
       const colorStr = typeof colorInput === 'string' ? colorInput : '#000000';
@@ -803,6 +937,19 @@ export class ExecutionEngine {
       const colorStr = typeof colorInput === 'string' ? colorInput : '#000000';
       if (!this.barColorData) this.barColorData = [];
       this.barColorData.push({ time: this.currentTimestamp, color: colorStr });
+      return NA;
+    });
+
+    this.builtins.set('plotcandle', (...args: PineValue[]): PineValue => {
+      const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
+        ? args[args.length - 1] as unknown as Record<string, PineValue>
+        : {};
+      let bodyColor = '#000000';
+      if (typeof namedArgs.color === 'string') bodyColor = namedArgs.color;
+      if (bodyColor !== 'na' && bodyColor !== '') {
+        if (!this.barColorData) this.barColorData = [];
+        this.barColorData.push({ time: this.currentTimestamp, color: bodyColor });
+      }
       return NA;
     });
 
@@ -1087,22 +1234,36 @@ export class ExecutionEngine {
       return `#${r.toString(16).padStart(2, '0')}${g2v.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     });
 
-    this.builtins.set('fill', (plot1: PineValue, plot2: PineValue, namedOrNamed?: PineValue): PineValue => {
-      const from = typeof plot1 === 'string' && plot1.startsWith('__plot_ref:') ? plot1.slice(11) : String(plot1);
-      const to = typeof plot2 === 'string' && plot2.startsWith('__plot_ref:') ? plot2.slice(11) : String(plot2);
-      let fillColor: string | null = null;
-      if (typeof namedOrNamed === 'object' && namedOrNamed !== null && !Array.isArray(namedOrNamed)) {
-        const na = namedOrNamed as unknown as Record<string, PineValue>;
-        if (typeof na.color === 'string') fillColor = na.color;
+    this.builtins.set('fill', (...allArgs: PineValue[]): PineValue => {
+      const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
+      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
+        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
+
+      // Pine Script fill(plot1, plot2, top_value, bottom_value, top_color, bottom_color, editable, fillgaps, title)
+      const from = typeof positionalArgs[0] === 'string' && (positionalArgs[0] as string).startsWith('__plot_ref:')
+        ? (positionalArgs[0] as string).slice(11) : String(positionalArgs[0] ?? '');
+      const to = typeof positionalArgs[1] === 'string' && (positionalArgs[1] as string).startsWith('__plot_ref:')
+        ? (positionalArgs[1] as string).slice(11) : String(positionalArgs[1] ?? '');
+
+      let topColor: string | null = null;
+      let bottomColor: string | null = null;
+      if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string') topColor = positionalArgs[4] as string;
+      if (positionalArgs.length >= 6 && typeof positionalArgs[5] === 'string') bottomColor = positionalArgs[5] as string;
+
+      if (namedArgs) {
+        if (typeof namedArgs.color === 'string') topColor = namedArgs.color;
       }
+
       const fillKey = `${from}::${to}`;
       if (!this.fills.some(f => f.from === from && f.to === to)) {
-        this.fills.push({ from, to, color: fillColor ?? 'rgba(33,150,243,0.2)' });
+        this.fills.push({ from, to, color: topColor ?? bottomColor ?? 'rgba(33,150,243,0.2)' });
       }
       if (!this.fillColorData.has(fillKey)) {
         this.fillColorData.set(fillKey, []);
       }
-      this.fillColorData.get(fillKey)!.push(fillColor);
+      // Push the top color for this bar — the renderer uses one color per bar segment
+      this.fillColorData.get(fillKey)!.push(topColor);
       return NA;
     });
 
@@ -1132,7 +1293,7 @@ export class ExecutionEngine {
 
   private initializeGlobals(): void {
     for (const global of this.compiledScript.globals) {
-      declareVariable(this.globalScope, global.name, global.type, global.isVar, global.isVarip);
+      declareVariable(this.globalScope, global.name, global.type, global.isVar, global.isVarip, global.isConst);
     }
   }
 
@@ -1360,6 +1521,7 @@ export class ExecutionEngine {
     this.crossCallIndex = 0;
     this.smaCallIndex = 0;
     this.emaCallIndex = 0;
+    this.hmaCallIndex = 0;
 
     try {
       this.createSnapshot();
@@ -1717,7 +1879,7 @@ export class ExecutionEngine {
     if (existing) {
       existing.series.push(value);
     } else {
-      const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip);
+      const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip, decl.isConst);
       binding.series.push(value);
     }
 
@@ -2402,6 +2564,9 @@ export class ExecutionEngine {
         return expr.property;
       }
       if (objName === 'xloc') {
+        return expr.property;
+      }
+      if (objName === 'display') {
         return expr.property;
       }
       if (objName === 'math') {

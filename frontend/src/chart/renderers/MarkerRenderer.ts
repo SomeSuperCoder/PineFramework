@@ -135,6 +135,7 @@ export class MarkerRenderer {
     ctx.lineWidth = 1.5;
 
     switch (shape) {
+      case '▲':
       case 'arrowUp':
         ctx.beginPath();
         ctx.moveTo(x, y - size);
@@ -143,6 +144,7 @@ export class MarkerRenderer {
         ctx.closePath();
         ctx.fill();
         break;
+      case '▼':
       case 'arrowDown':
         ctx.beginPath();
         ctx.moveTo(x, y + size);
@@ -175,6 +177,7 @@ export class MarkerRenderer {
       case 'square':
         ctx.fillRect(x - size * 0.4, y - size * 0.4, size * 0.8, size * 0.8);
         break;
+      case '◆':
       case 'diamond':
         ctx.beginPath();
         ctx.moveTo(x, y - size * 0.5);
