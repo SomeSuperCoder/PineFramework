@@ -11,6 +11,7 @@ function pineValueToJSON(v: unknown): number | string | boolean | null {
 export interface ScriptOutputs {
   success: boolean;
   error?: string;
+  version?: number;
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
@@ -48,6 +49,7 @@ export class ScriptSession {
   private contexts: ExecutionContext[] = [];
   private cachedAlertConditions: Array<{ id: string; title: string; message: string }> = [];
   private lastConfirmedTimestamp: number = 0;
+  public version: number | null = null;
 
   constructor(source: string, symbol: string, interval: string, bars: Bar[]) {
     this.source = source;
@@ -58,6 +60,7 @@ export class ScriptSession {
 
   initialize(): ScriptOutputs {
     const compileResult = parseAndCompile(this.source);
+    this.version = compileResult.ir.version ?? null;
     this.engine = new ExecutionEngine(compileResult);
     this.contexts = barsToContext(this.bars);
     const result = this.engine.executeBars(this.contexts);
@@ -214,6 +217,7 @@ export class ScriptSession {
     return {
       success: result.success,
       error: result.error,
+      version: this.version ?? result.version,
       outputs,
       plotColors,
       fillColorData,
@@ -277,6 +281,7 @@ export class ScriptSession {
     return {
       success: result.success,
       error: result.error,
+      version: this.version ?? undefined,
       outputs,
       plotColors: result.diffPlotColors,
       fillColorData: result.diffFillColorData,

@@ -36,7 +36,14 @@ function extractName(source: string): string | null {
   if (strategyMatch) return strategyMatch[1];
   const indicatorMatch = source.match(/indicator\(\s*["'](.+?)["']/);
   if (indicatorMatch) return indicatorMatch[1];
+  const studyMatch = source.match(/study\(\s*["'](.+?)["']/);
+  if (studyMatch) return studyMatch[1];
   return null;
+}
+
+function extractVersion(source: string): number | null {
+  const match = source.match(/\/\/\s*@version\s*=\s*(\d+)/);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEditorProps) {
@@ -277,6 +284,21 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
             }}>
               {currentScript.scriptType}
             </span>
+            {(() => {
+              const pineVersion = extractVersion(source);
+              return pineVersion ? (
+                <span style={{
+                  marginLeft: '6px',
+                  padding: '1px 5px',
+                  background: '#1a2a3e',
+                  color: '#64b5f6',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                }}>
+                  v{pineVersion}
+                </span>
+              ) : null;
+            })()}
             <span style={{ marginLeft: '8px' }}>
               Updated {new Date(currentScript.updatedAt).toLocaleDateString()}
             </span>

@@ -56,8 +56,8 @@ export class Parser {
     if (version === null) {
       throw new ParseError('Missing //@version=N declaration');
     }
-    if (version !== 6) {
-      throw new ParseError(`Unsupported Pine Script version: ${version}. Only v6 is supported.`);
+    if (version !== 5 && version !== 6) {
+      throw new ParseError(`Unsupported Pine Script version: ${version}. Only v5 and v6 are supported.`);
     }
 
     this.tokens = new Tokenizer(source).tokenize();

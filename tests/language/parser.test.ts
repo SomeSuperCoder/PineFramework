@@ -260,7 +260,11 @@ for i = 0 to 10
   });
 
   it('throws on unsupported version', () => {
-    expect(() => parse('//@version=5\nindicator("Test")')).toThrow(ParseError);
+    expect(() => parse('//@version=4\nindicator("Test")')).toThrow(ParseError);
+  });
+
+  it('parses v5 version without throwing', () => {
+    expect(() => parse('//@version=5\nindicator("Test")')).not.toThrow();
   });
 
   describe('Script declarations', () => {

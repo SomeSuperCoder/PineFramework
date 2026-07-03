@@ -128,6 +128,7 @@ executeRouter.post('/execute', async (req, res) => {
     res.json({
       success: result.success,
       error: result.error,
+      version: result.version ?? null,
       outputs,
       plotColors,
       fillColorData,

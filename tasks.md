@@ -2274,44 +2274,44 @@ This implementation plan outlines the step-by-step development of a production-g
     - Tests: parse/compile, output keys, non-null values, trail computation, trend detection, trail follows upperBand in bearish mode, trail flatness regression, fill rendering, plotchar markers, ta.hma convergence, var persistence, color transitions, bar-by-bar trace, debug Pine script
     - _Requirements: 11.11_
 
-- [ ] 89. Implement Pine Script v5 Compatibility Layer
-  - [ ] 89.1 Add v5 grammar rules to Parser
+- [x] 89. Implement Pine Script v5 Compatibility Layer
+  - [x] 89.1 Add v5 grammar rules to Parser
     - Create v5-specific grammar rule set alongside existing v6 rules
     - Parse `//@version=5` directive and select v5 grammar automatically
     - Handle v5 syntax differences: `plot()` parameter ordering, `study()` alias for `indicator()`, different type declaration syntax
     - Support v5-specific keywords and operators not present in v6
     - _Requirements: 26.1, 26.2, 26.4_
 
-  - [ ] 89.2 Add v5 type system rules to Compiler
+  - [x] 89.2 Add v5 type system rules to Compiler
     - Implement v5 type coercion rules (looser int/float casting, implicit conversions)
     - Handle v5-specific type annotations and constraints
     - Validate v5-specific function signatures and parameter types
     - _Requirements: 26.3, 26.5_
 
-  - [ ] 89.3 Add v5 built-in function implementations
+  - [x] 89.3 Add v5 built-in function implementations
     - Implement v5-specific built-in functions (e.g., `study()` instead of `indicator()`, v5 `plot()` signature)
     - Handle v5 `request.security()` parameter differences from v6
     - Implement v5-specific TA functions with v5 semantics
     - Support v5 `strategy()` parameters and defaults
     - _Requirements: 26.6, 26.7_
 
-  - [ ] 89.4 Add version detection to Execution Engine
+  - [x] 89.4 Add version detection to Execution Engine
     - Pass detected version through parser → compiler → execution pipeline
     - Dispatch built-in function calls to v5 or v6 implementations at runtime
     - Maintain version metadata in execution context
     - _Requirements: 26.1, 26.6, 26.10_
 
-  - [ ] 89.5 Update Backend to forward version info
+  - [x] 89.5 Update Backend to forward version info
     - Include detected Pine Script version in POST /api/execute response
     - Include version in WebSocket execution_result messages
     - _Requirements: 26.10_
 
-  - [ ] 89.6 Update Frontend to display detected version
+  - [x] 89.6 Update Frontend to display detected version
     - Show detected Pine Script version in code editor status bar or header
     - Display version in error messages for better debugging
     - _Requirements: 26.9_
 
-  - [ ]* 89.7 Write tests for v5 compatibility
+  - [x]* 89.7 Write tests for v5 compatibility
     - Test `//@version=5` detection and grammar selection
     - Test v5 `study()` declaration parsing
     - Test v5 `plot()` with v5 parameter ordering

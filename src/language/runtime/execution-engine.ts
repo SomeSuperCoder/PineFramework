@@ -109,6 +109,7 @@ export interface AlertTriggerEntry {
 export interface ExecutionResult {
   success: boolean;
   error?: string;
+  version?: number;
   outputs: Map<string, Series>;
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
@@ -1554,6 +1555,7 @@ export class ExecutionEngine {
       const activeLines = [...this.lines.values()].map(l => ({ ...l }));
       return {
         success: true,
+        version: this.sourceProgram.version,
         outputs: this.outputs,
         shapes: this.shapes,
         fills: this.fills,
@@ -1576,6 +1578,7 @@ export class ExecutionEngine {
       const activeLines = [...this.lines.values()].map(l => ({ ...l }));
       return {
         success: false,
+        version: this.sourceProgram.version,
         error: error instanceof Error ? error.message : String(error),
         outputs: this.outputs,
         shapes: this.shapes,
@@ -1595,7 +1598,7 @@ export class ExecutionEngine {
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps], alertConditions: this.alertConditionEntries, alertTriggers: [...this.alertTriggers], barColorData: [...this.barColorData] };
+    let lastResult: ExecutionResult = { success: true, version: this.sourceProgram.version, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps], alertConditions: this.alertConditionEntries, alertTriggers: [...this.alertTriggers], barColorData: [...this.barColorData] };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);

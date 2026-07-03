@@ -100,6 +100,7 @@ export interface Token {
 
 const KEYWORDS: Record<string, TokenType> = {
   indicator: TokenType.Indicator,
+  study: TokenType.Indicator, // v5 alias for indicator
   strategy: TokenType.Strategy,
   library: TokenType.Library,
   var: TokenType.Var,
