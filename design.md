@@ -1412,6 +1412,49 @@ pine-framework (engine)
 - Performance optimization
 - Backup and recovery procedures
 
+### Indicator Pane Architecture
+
+#### 1. Overview
+In TradingView, the `overlay` parameter in `indicator()` determines whether an indicator renders on the main price chart (`overlay=true`) or in a separate pane below (`overlay=false`, the default). Non-overlay indicators like MACD, RSI, and Stochastic have their own Y-axis scale and are displayed below the main chart.
+
+#### 2. Data Flow
+```
+Script Declaration (indicator(..., overlay=false))
+  → Parser: scriptArgs parsed
+  → Compiler: overlay extracted into CompiledScript.overlay
+  → Engine: overlay included in ExecutionResult.overlay
+  → Backend: overlay included in API/WebSocket response
+  → Frontend: plots separated into overlay[] vs indicator[] arrays
+  → PineChart: non-overlay plots rendered in separate indicator pane with own price scale
+```
+
+#### 3. IR Changes
+```
+CompiledScript {
+  ...existing fields...
+  overlay: boolean  // NEW: extracted from indicator() declaration args
+}
+```
+
+#### 4. Layout Changes (LayoutManager)
+```
+┌──────────────────────────────────┐
+│  Main Chart Area (overlay=true)  │  ← candlesticks, volume, overlay plots
+│  Height: 70% of available        │
+├──────────────────────────────────┤  ← horizontal separator
+│  Indicator Pane (overlay=false)  │  ← MACD, RSI, etc.
+│  Height: 30% of available        │
+│  Own Y-axis price scale          │
+└──────────────────────────────────┘
+│         Time Scale               │
+```
+
+#### 5. PineChart Changes
+- `updatePriceRange()` splits into `updateOverlayPriceRange()` and `updateIndicatorPriceRange()`
+- Non-overlay plots use indicator pane's coordinate space for `priceToPixel()`
+- LineRenderer, AreaRenderer, and HLineRenderer accept a target pane's Y coordinates
+- Separate price scale rendering for indicator pane
+
 ### Backtest Engine Architecture
 
 #### 1. Overview

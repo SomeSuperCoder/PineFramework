@@ -65,6 +65,7 @@ export interface AlertConditionData {
 }
 
 export interface ScriptResult {
+  overlay: boolean;
   plots: PlotData[];
   shapes: ShapeData[];
   lines: LineData[];
@@ -78,6 +79,7 @@ export interface ScriptResult {
     color: string;
   }>;
   fillColorData?: Record<string, (string | null)[]>;
+  plotColors?: Record<string, (string | null)[]>;
   strategyMarkers?: StrategyMarkerData[];
   alertConditions?: AlertConditionData[];
   alertTriggers?: AlertTriggerData[];

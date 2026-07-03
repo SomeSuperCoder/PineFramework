@@ -4,6 +4,7 @@ import type { CandlestickData, ScriptResult, PineScriptError } from '../types';
 interface ExecuteResponse {
   success: boolean;
   error?: string;
+  overlay: boolean;
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
@@ -32,6 +33,7 @@ interface ExecuteResponse {
 interface ExecutionResultMessage {
   success: boolean;
   error?: string;
+  overlay: boolean;
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
@@ -62,6 +64,7 @@ interface ExecutionResultMessage {
 const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
 function buildScriptResult(
+  overlay: boolean,
   outputs: Record<string, (number | string | boolean | null)[]>,
   shapes: ExecutionResultMessage['shapes'],
   fills: ExecutionResultMessage['fills'],
@@ -143,6 +146,7 @@ function buildScriptResult(
   }
 
   return {
+    overlay,
     plots: plotData,
     shapes: shapeData,
     lines: (lines || []).map((l) => ({
@@ -163,6 +167,7 @@ function buildScriptResult(
     })),
     fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
     fillColorData: transformedFillColorData,
+    plotColors: plotColors || {},
     strategyMarkers: (strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,
@@ -408,6 +413,7 @@ export function useChartData() {
         }
       }
       const result = buildScriptResult(
+        msg.overlay,
         msg.outputs,
         msg.shapes || [],
         msg.fills || [],
@@ -572,6 +578,7 @@ export function useChartData() {
       }
 
       const scriptRes = buildScriptResult(
+        result.overlay,
         result.outputs,
         result.shapes || [],
         result.fills || [],

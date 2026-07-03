@@ -2322,6 +2322,71 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test mixed v5/v6 feature detection edge cases
     - _Requirements: 26.1-26.10, 11.1_
 
+- [x] 90. Implement Separate Indicator Panes (overlay support)
+  - [x] 90.1 Add `overlay` field to Compiler IR
+    - Add `overlay: boolean` to `CompiledScript` interface in `src/language/compiler/ir.ts`
+    - Extract `overlay` from `program.scriptArgs` during compilation (default: `false` for indicators)
+    - _Requirements: 26.2_
+
+  - [x] 90.2 Add `overlay` to ExecutionResult
+    - Add `overlay: boolean` to `ExecutionResult` interface in `src/language/runtime/execution-engine.ts`
+    - Pass through from `CompiledScript.overlay` during `executeBars()`
+    - Include in `FormingCandleResult` for real-time updates
+    - _Requirements: 26.3_
+
+  - [x] 90.3 Pass `overlay` through Backend API responses
+    - Include `overlay` in POST `/api/execute` response in `backend/src/routes/execute.ts`
+    - Include `overlay` in WebSocket `execution_result` messages in `backend/src/session/ScriptSession.ts`
+    - _Requirements: 26.4_
+
+  - [x] 90.4 Update Frontend types and data hook
+    - Add `overlay?: boolean` to `ScriptResult` interface in `frontend/src/types/index.ts`
+    - Add `overlay?: boolean` to `ExecuteResponse` and `ExecutionResultMessage` in `frontend/src/hooks/useChartData.ts`
+    - Pass `overlay` through `buildScriptResult()`
+    - _Requirements: 26.5_
+
+  - [x] 90.5 Update LayoutManager for multi-pane layout
+    - Add `indicatorPanes` array to `LayoutRegions` with per-pane Y coordinates and height
+    - Add `indicatorPriceRanges` map for per-indicator-pane price ranges
+    - Modify `calculate()` to allocate space: 70% main chart + 30% indicator pane (or proportional split)
+    - Add `setIndicatorPriceRange(paneId, min, max)` and `getIndicatorPriceRange(paneId)` methods
+    - Add `indicatorToPixel()` coordinate transform for indicator pane
+    - Add horizontal separator between panes
+    - _Requirements: 26.6, 26.7_
+
+  - [x] 90.6 Update PineChart for pane-aware rendering
+    - Split `updatePriceRange()` into overlay-only and indicator-pane price range computation
+    - Add `overlayPlots` vs `indicatorPlots` categorization in plot series management
+    - Render non-overlay plots using indicator pane coordinates
+    - Render indicator pane's own price scale labels
+    - Synchronize horizontal scroll/zoom across all panes
+    - _Requirements: 26.8, 26.9, 26.13_
+
+  - [x] 90.7 Update ChartComponent to wire overlay-aware data
+    - Separate `scriptResult.plots` into overlay vs indicator based on `overlay` flag
+    - Pass overlay plots to main chart area, indicator plots to indicator pane
+    - Update fills and hlines to respect pane assignment
+    - _Requirements: 26.5, 26.10, 26.11_
+
+  - [x] 90.8 Fix PineChart.updatePriceRange to exclude indicator values
+    - Ensure overlay price range computation only considers overlay plots (not MACD values)
+    - Ensure indicator pane price range only considers its own plots
+    - _Requirements: 26.7_
+
+  - [x]* 90.9 Write integration test for MACD indicator
+    - Create `tests/integration/macd.test.ts`
+    - Test parse/compile of macd.pine without errors
+    - Test execution produces expected output keys (histogram, MACD, signal)
+    - Test `overlay` flag is `false` in execution result
+    - Test non-null values after warmup period
+    - _Requirements: 26.12_
+
+  - [x]* 90.10 Write tests for pane layout
+    - Test LayoutManager allocates indicator pane space when overlay=false
+    - Test separate price ranges for overlay vs indicator plots
+    - Test PineChart renders indicator plots in correct pane coordinates
+    - _Requirements: 26.6, 26.7, 26.8_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP

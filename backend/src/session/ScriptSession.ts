@@ -12,6 +12,7 @@ export interface ScriptOutputs {
   success: boolean;
   error?: string;
   version?: number;
+  overlay: boolean;
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
@@ -218,6 +219,7 @@ export class ScriptSession {
       success: result.success,
       error: result.error,
       version: this.version ?? result.version,
+      overlay: result.overlay,
       outputs,
       plotColors,
       fillColorData,
@@ -282,6 +284,7 @@ export class ScriptSession {
       success: result.success,
       error: result.error,
       version: this.version ?? undefined,
+      overlay: result.overlay,
       outputs,
       plotColors: result.diffPlotColors,
       fillColorData: result.diffFillColorData,

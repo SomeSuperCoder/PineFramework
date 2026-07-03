@@ -982,7 +982,27 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 13. THE Database SHALL persist data across application restarts
 14. THE Database SHALL support read and write operations from both the Backend and the Frontend configuration UI
 
-### Requirement 26: Multi-Version Pine Script Support
+### Requirement 26: Separate Indicator Panes
+
+**User Story:** As a Pine Script developer, I want non-overlay indicators (like MACD, RSI, Stochastic) to render in a separate pane below the main price chart, so that their values don't distort the price scale and they display correctly as oscillators.
+
+#### Acceptance Criteria
+
+1. THE System SHALL respect the `overlay` parameter from `indicator()` declarations — `overlay=true` renders on the main chart pane, `overlay=false` (the default) renders in a separate indicator pane below the main chart
+2. THE Compiler IR SHALL include an `overlay` boolean field on `CompiledScript` derived from the script declaration
+3. THE Execution Engine SHALL include `overlay: boolean` in `ExecutionResult` so downstream layers know which pane the script belongs to
+4. THE Backend SHALL include `overlay` in both REST `/api/execute` and WebSocket `execution_result` responses
+5. THE Frontend SHALL separate plots into overlay plots (rendered on main chart) and non-overlay plots (rendered in a separate pane below)
+6. THE Frontend `LayoutManager` SHALL allocate vertical space for an indicator pane below the main chart area when non-overlay indicators are present
+7. THE Frontend indicator pane SHALL have its own independent price scale (Y-axis) computed from the indicator's output values
+8. THE Frontend SHALL render non-overlay plot lines, histograms, fills, and hlines within the indicator pane's coordinate space
+9. THE Frontend SHALL render the indicator pane's own price scale labels on the right side
+10. THE Frontend SHALL maintain a horizontal separator line between the main chart and indicator panes
+11. WHERE multiple non-overlay scripts exist, THE Frontend SHALL stack them vertically, each in its own pane with its own price scale
+12. THE MACD indicator (`test_indicators/macd.pine`) SHALL render its histogram, MACD line, and signal line in a separate pane below the price chart
+13. THE Frontend SHALL synchronize horizontal scrolling and zooming across all panes (main + indicator)
+
+### Requirement 27: Multi-Version Pine Script Support
 
 **User Story:** As a Pine Script developer, I want the engine to dynamically detect and support both Pine Script v5 and v6, so that I can use scripts from either version without manual configuration.
 

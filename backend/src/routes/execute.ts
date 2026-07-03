@@ -129,6 +129,7 @@ executeRouter.post('/execute', async (req, res) => {
       success: result.success,
       error: result.error,
       version: result.version ?? null,
+      overlay: result.overlay,
       outputs,
       plotColors,
       fillColorData,

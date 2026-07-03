@@ -1,6 +1,15 @@
+export interface PaneRegion {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface LayoutRegions {
   chartArea: { x: number; y: number; width: number; height: number };
   volumeArea: { x: number; y: number; width: number; height: number };
+  indicatorPanes: PaneRegion[];
   priceScale: { x: number; y: number; width: number; height: number };
   timeScale: { x: number; y: number; width: number; height: number };
 }
@@ -16,22 +25,48 @@ export class LayoutManager {
   private autoPriceRange: PriceRange = { min: 0, max: 100 };
   private manualPriceRange: boolean = false;
   private volumeMax: number = 1;
+  private indicatorPriceRanges: Map<string, PriceRange> = new Map();
+  private indicatorAutoPriceRanges: Map<string, PriceRange> = new Map();
 
   constructor(
     private priceScaleWidth: number = 70,
     private timeScaleHeight: number = 30,
     private volumeHeightRatio: number = 0.2,
+    private indicatorHeightRatio: number = 0.3,
+    private paneGap: number = 4,
   ) {}
 
-  calculate(canvasWidth: number, canvasHeight: number): LayoutRegions {
+  calculate(canvasWidth: number, canvasHeight: number, indicatorCount: number = 0): LayoutRegions {
     const chartWidth = canvasWidth - this.priceScaleWidth;
     const totalChartHeight = canvasHeight - this.timeScaleHeight;
     const volumeHeight = totalChartHeight * this.volumeHeightRatio;
-    const mainHeight = totalChartHeight - volumeHeight;
+
+    let indicatorTotalHeight = 0;
+    const indicatorPanes: PaneRegion[] = [];
+
+    if (indicatorCount > 0) {
+      indicatorTotalHeight = totalChartHeight * this.indicatorHeightRatio;
+      const paneHeight = (indicatorTotalHeight - (indicatorCount - 1) * this.paneGap) / indicatorCount;
+      let y = totalChartHeight - indicatorTotalHeight;
+
+      for (let i = 0; i < indicatorCount; i++) {
+        indicatorPanes.push({
+          id: `indicator_${i}`,
+          x: 0,
+          y,
+          width: chartWidth,
+          height: paneHeight,
+        });
+        y += paneHeight + this.paneGap;
+      }
+    }
+
+    const mainHeight = totalChartHeight - volumeHeight - indicatorTotalHeight;
 
     this.regions = {
       chartArea: { x: 0, y: 0, width: chartWidth, height: mainHeight },
       volumeArea: { x: 0, y: mainHeight, width: chartWidth, height: volumeHeight },
+      indicatorPanes,
       priceScale: { x: chartWidth, y: 0, width: this.priceScaleWidth, height: totalChartHeight },
       timeScale: { x: 0, y: totalChartHeight, width: canvasWidth, height: this.timeScaleHeight },
     };
@@ -62,6 +97,18 @@ export class LayoutManager {
   setManualPriceRange(min: number, max: number): void {
     this.manualPriceRange = true;
     this.priceRange = { min, max };
+  }
+
+  setIndicatorPriceRange(paneId: string, min: number, max: number): void {
+    const padding = (max - min) * 0.1 || 1;
+    this.indicatorAutoPriceRanges.set(paneId, { min: min - padding, max: max + padding });
+    if (!this.indicatorPriceRanges.has(paneId)) {
+      this.indicatorPriceRanges.set(paneId, this.indicatorAutoPriceRanges.get(paneId)!);
+    }
+  }
+
+  getIndicatorPriceRange(paneId: string): PriceRange {
+    return this.indicatorPriceRanges.get(paneId) || { min: -1, max: 1 };
   }
 
   zoomPrice(factor: number, centerPixelY: number): void {
@@ -102,15 +149,15 @@ export class LayoutManager {
     return this.volumeMax;
   }
 
-  priceToPixel(price: number, areaY: number, areaHeight: number): number {
-    const { min, max } = this.priceRange;
-    if (max === min) return areaY + areaHeight / 2;
-    return areaY + areaHeight - ((price - min) / (max - min)) * areaHeight;
+  priceToPixel(price: number, areaY: number, areaHeight: number, paneId?: string): number {
+    const range = paneId ? this.getIndicatorPriceRange(paneId) : this.priceRange;
+    if (range.max === range.min) return areaY + areaHeight / 2;
+    return areaY + areaHeight - ((price - range.min) / (range.max - range.min)) * areaHeight;
   }
 
-  pixelToPrice(pixelY: number, areaY: number, areaHeight: number): number {
-    const { min, max } = this.priceRange;
-    return min + ((areaY + areaHeight - pixelY) / areaHeight) * (max - min);
+  pixelToPrice(pixelY: number, areaY: number, areaHeight: number, paneId?: string): number {
+    const range = paneId ? this.getIndicatorPriceRange(paneId) : this.priceRange;
+    return range.min + ((areaY + areaHeight - pixelY) / areaHeight) * (range.max - range.min);
   }
 
   volumeToPixel(volume: number, areaY: number, areaHeight: number): number {

@@ -136,7 +136,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         color: plotColor,
         lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
         style: (plot.type as any) || 'line',
-      });
+      }, scriptResult.overlay);
       seriesNamesRef.current.add(title);
       chart.setPlotData(title, seriesData);
     }

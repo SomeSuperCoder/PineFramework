@@ -44,10 +44,20 @@ export class Compiler {
       this.compileStatement(stmt);
     }
 
+    let overlay = false;
+    if (program.scriptKind === 'indicator') {
+      for (const arg of program.scriptArgs) {
+        if (arg.name === 'overlay' && arg.value.kind === 'BooleanLiteral') {
+          overlay = arg.value.value;
+        }
+      }
+    }
+
     const ir: CompiledScript = {
       version: program.version,
       scriptKind: program.scriptKind,
       scriptName: program.scriptName,
+      overlay,
       globals: this.globals,
       functions: this.functions,
       main: this.builder.instructions,

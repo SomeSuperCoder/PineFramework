@@ -28,6 +28,7 @@ export interface PlotSeriesHandle {
   name: string;
   options: PlotRenderOptions;
   data: PlotSeriesData[];
+  overlay: boolean;
 }
 
 export interface ChartEventCallbacks {
@@ -163,7 +164,14 @@ export class PineChart {
     this.offscreen.width = w * dpr;
     this.offscreen.height = h * dpr;
 
-    this.layout.calculate(w * dpr, h * dpr);
+    let indicatorCount = 0;
+    for (const [, handle] of this.plotSeries) {
+      if (!handle.overlay) {
+        indicatorCount = 1;
+        break;
+      }
+    }
+    this.layout.calculate(w * dpr, h * dpr, indicatorCount);
     this.interaction.setChartWidth(w * dpr);
     this.markDirty();
     this.eventCallbacks.onResize?.(w, h);
@@ -244,11 +252,28 @@ export class PineChart {
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 
-    // Render drawing lines (line.new)
     this.renderDrawingLines(ctx);
 
+    const regions = this.layout.getRegions();
     for (const [_key, handle] of this.plotSeries) {
-      this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
+      if (handle.overlay) {
+        this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
+      }
+    }
+
+    for (const pane of regions.indicatorPanes) {
+      for (const [_key, handle] of this.plotSeries) {
+        if (!handle.overlay) {
+          this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options, pane);
+        }
+      }
+
+      ctx.strokeStyle = this.options.borderColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, pane.y);
+      ctx.lineTo(regions.chartArea.width, pane.y);
+      ctx.stroke();
     }
 
     this.markerRenderer.renderShapes(ctx, this.shapeMarkers, this.candles, this.viewport, this.layout);
@@ -257,7 +282,6 @@ export class PineChart {
 
     this.markerRenderer.renderAlertTriggers(ctx, this.alertTriggers, this.candles, this.viewport, this.layout);
 
-    // Render labels (label.new)
     this.renderLabels(ctx);
 
     this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
@@ -369,6 +393,7 @@ export class PineChart {
     const candleRange = max - min || 1;
 
     for (const [_key, handle] of this.plotSeries) {
+      if (!handle.overlay) continue;
       for (let i = range.start; i < range.end && i < handle.data.length; i++) {
         const v = handle.data[i]?.value;
         if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
@@ -387,6 +412,25 @@ export class PineChart {
     }
 
     this.layout.setPriceRange(min, max);
+
+    const regions = this.layout.getRegions();
+    for (const pane of regions.indicatorPanes) {
+      let indMin = Infinity;
+      let indMax = -Infinity;
+      for (const [_key, handle] of this.plotSeries) {
+        if (handle.overlay) continue;
+        for (let i = range.start; i < range.end && i < handle.data.length; i++) {
+          const v = handle.data[i]?.value;
+          if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
+            if (v < indMin) indMin = v;
+            if (v > indMax) indMax = v;
+          }
+        }
+      }
+      if (indMin !== Infinity && indMax !== -Infinity) {
+        this.layout.setIndicatorPriceRange(pane.id, indMin, indMax);
+      }
+    }
   }
 
   private updateVolumeMax(): void {
@@ -435,7 +479,7 @@ export class PineChart {
     this.markDirty();
   }
 
-  addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}): PlotSeriesHandle {
+  addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true): PlotSeriesHandle {
     const handle: PlotSeriesHandle = {
       name,
       options: {
@@ -445,6 +489,7 @@ export class PineChart {
         histbase: options.histbase,
       },
       data: [],
+      overlay,
     };
     this.plotSeries.set(name, handle);
     return handle;

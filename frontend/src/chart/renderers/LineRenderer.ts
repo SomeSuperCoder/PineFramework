@@ -1,6 +1,6 @@
 import type { PlotSeriesData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
-import type { LayoutManager } from '../LayoutManager.js';
+import type { LayoutManager, PaneRegion } from '../LayoutManager.js';
 
 export interface PlotRenderOptions {
   color: string;
@@ -16,11 +16,13 @@ export class LineRenderer {
     viewport: Viewport,
     layout: LayoutManager,
     options: PlotRenderOptions,
+    pane?: PaneRegion,
   ): void {
     const regions = layout.getRegions();
-    const { chartArea } = regions;
+    const chartArea = pane ?? regions.chartArea;
     const range = viewport.getVisibleRange();
     const barSpacing = viewport.getBarSpacing();
+    const paneId = pane?.id;
 
     ctx.strokeStyle = options.color;
     ctx.fillStyle = options.color;
@@ -29,26 +31,26 @@ export class LineRenderer {
 
     switch (options.style) {
       case 'line':
-        this.renderLine(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderLine(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'stepline':
-        this.renderStepline(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderStepline(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'histogram':
-        this.renderHistogram(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderHistogram(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'columns':
-        this.renderColumns(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderColumns(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'circles':
-        this.renderCircles(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderCircles(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'cross':
-        this.renderCross(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderCross(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
       case 'area':
       case 'areabr':
-        this.renderArea(ctx, data, viewport, layout, chartArea, range, barSpacing, options);
+        this.renderArea(ctx, data, viewport, layout, chartArea, range, barSpacing, options, paneId);
         break;
     }
   }
@@ -62,6 +64,7 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     options: PlotRenderOptions,
+    paneId?: string,
   ): void {
     let prevX: number | undefined;
     let prevY: number | undefined;
@@ -73,7 +76,7 @@ export class LineRenderer {
         continue;
       }
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
         ctx.strokeStyle = d.color ?? options.color;
         ctx.beginPath();
@@ -95,6 +98,7 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     options: PlotRenderOptions,
+    paneId?: string,
   ): void {
     let prevX: number | undefined;
     let prevY: number | undefined;
@@ -106,7 +110,7 @@ export class LineRenderer {
         continue;
       }
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
         const segmentColor = d.color ?? options.color;
         ctx.strokeStyle = segmentColor;
@@ -134,13 +138,14 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     options: PlotRenderOptions,
+    paneId?: string,
   ): void {
-    const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height);
+    const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height, paneId);
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.strokeStyle = d.color ?? options.color;
       ctx.beginPath();
       ctx.moveTo(x, baseY);
@@ -158,14 +163,15 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     options: PlotRenderOptions,
+    paneId?: string,
   ): void {
-    const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height);
+    const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height, paneId);
     const colWidth = Math.max(1, barSpacing * 0.5);
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       const top = Math.min(baseY, y);
       const height = Math.max(1, Math.abs(y - baseY));
       ctx.fillStyle = d.color ?? options.color;
@@ -182,6 +188,7 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     _options: PlotRenderOptions,
+    paneId?: string,
   ): void {
     const radius = Math.max(2, barSpacing * 0.2);
     ctx.beginPath();
@@ -189,7 +196,7 @@ export class LineRenderer {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.moveTo(x + radius, y);
       ctx.arc(x, y, radius, 0, Math.PI * 2);
     }
@@ -205,13 +212,14 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     _options: PlotRenderOptions,
+    paneId?: string,
   ): void {
     const size = Math.max(3, barSpacing * 0.25);
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.beginPath();
       ctx.moveTo(x - size, y - size);
       ctx.lineTo(x + size, y + size);
@@ -230,13 +238,14 @@ export class LineRenderer {
     range: { start: number; end: number },
     barSpacing: number,
     _options: PlotRenderOptions,
+    paneId?: string,
   ): void {
     const points: Array<{ x: number; y: number }> = [];
     for (let i = range.start; i < range.end && i < data.length; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
-      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height);
+      const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       points.push({ x, y });
     }
     if (points.length < 2) return;
