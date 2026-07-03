@@ -99,7 +99,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setCandles(validData);
 
     if (shouldFitRef.current) {
-      chart.timeScale().scrollTo(validData.length - 1);
+      chart.timeScale().fitContent();
       shouldFitRef.current = false;
     }
   }, [data]);
