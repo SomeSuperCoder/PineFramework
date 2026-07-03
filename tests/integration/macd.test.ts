@@ -152,11 +152,10 @@ describe('Integration: MACD Indicator', () => {
       let positiveCount = 0;
       let negativeCount = 0;
       for (let i = 35; i < values.length; i++) {
-        if (values[i] !== null && values[i] !== undefined) {
-          if (typeof values[i] === 'number') {
-            if (values[i]! > 0) positiveCount++;
-            if (values[i]! < 0) negativeCount++;
-          }
+        const v = values[i];
+        if (typeof v === 'number') {
+          if (v > 0) positiveCount++;
+          if (v < 0) negativeCount++;
         }
       }
 
