@@ -46,6 +46,7 @@ function App() {
     isConnected,
     isLoading,
     executeScript,
+    fetchOHLCV,
     fetchOlderOHLCV,
     subscribe,
     setErrors,
@@ -67,11 +68,10 @@ function App() {
   }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
   useEffect(() => {
+    fetchOHLCV(symbol, timeframe);
     indicatorManager.fetchIndicators().then((list) => {
-      if (list.length > 0) {
-        for (const ind of list) {
-          executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
-        }
+      for (const ind of list) {
+        executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
       }
     });
   }, []);
@@ -79,7 +79,8 @@ function App() {
   useEffect(() => {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
-  }, [symbol, timeframe, subscribe]);
+    fetchOHLCV(symbol, timeframe);
+  }, [symbol, timeframe, subscribe, fetchOHLCV]);
 
   useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
