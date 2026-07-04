@@ -176,7 +176,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
             }
           }
         } else if (data.length > 0 && seriesData.length > data.length) {
-          seriesData.splice(0, seriesData.length - data.length);
+          seriesData.length = data.length;
         }
 
         if (!seriesNamesRef.current.has(title)) {
