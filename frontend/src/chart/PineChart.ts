@@ -512,6 +512,7 @@ export class PineChart {
   addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true): PlotSeriesHandle {
     const existing = this.plotSeries.get(name);
     if (existing) return existing;
+    console.warn('[PineChart] addPlotSeries', name);
     const handle: PlotSeriesHandle = {
       name,
       options: {
@@ -531,12 +532,14 @@ export class PineChart {
   setPlotData(name: string, data: PlotSeriesData[]): void {
     const handle = this.plotSeries.get(name);
     if (handle) {
+      if (data.length === 0) console.warn('[PineChart] setPlotData EMPTY', name);
       handle.data = data;
       this.markDirty();
     }
   }
 
   removeSeries(name: string): void {
+    console.warn('[PineChart] removeSeries', name);
     this.plotSeries.delete(name);
     this.recalculateLayout();
     this.markDirty();
