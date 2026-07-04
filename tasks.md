@@ -2549,6 +2549,106 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add simplified MACD tests for independent verification
     - _Requirements: 11.12, 11.13, 11.14_
 
+- [ ] 97. Implement Dynamic Indicator Management UI
+  - [ ] 97.1 Add IndicatorManager state to Frontend
+    - Create `RunningIndicator` type with id, scriptId, name, overlay, source, active fields
+    - Create `useIndicatorManager()` hook with addIndicator, removeIndicator, handleIndicatorRemoved, getOverlayIndicators, getPaneIndicators methods
+    - Track running indicators in React state
+    - On app mount, fetch `GET /api/indicators` to restore persisted indicator list and re-execute each
+    - _Requirements: 28.1, 28.2, 28.3, 28.10, 28.11, 28.12_
+
+  - [ ] 97.2 Add multi-session support to Backend WebSocket gateway
+    - Extend ScriptSession to support multiple concurrent execution sessions per WebSocket client
+    - Each running indicator gets its own ScriptSession with independent engine instance
+    - On `execute` WS message, create a new ScriptSession keyed by indicator ID (not replacing existing sessions)
+    - On kline update, iterate all active ScriptSessions and push execution_result for each
+    - Add `indicatorId` field to execution_result WebSocket messages
+    - _Requirements: 28.1, 28.4, 28.5_
+
+  - [ ] 97.3 Add remove indicator API and WebSocket message
+    - Add `DELETE /api/indicators/:id` REST endpoint to stop an indicator's execution session
+    - Add `stop_indicator` WebSocket message type `{ type: "stop_indicator", data: { indicatorId } }`
+    - Clean up ScriptSession state and remove indicator from backend tracking
+    - _Requirements: 28.2, 28.4_
+
+  - [ ] 97.3a Persist running indicator list to backend
+    - Create `backend/data/indicators.json` with default schema `{ indicators: [] }`
+    - Add `RunningIndicatorsStore` class using `JsonStore` infrastructure
+    - Add `GET /api/indicators` endpoint to return persisted running indicator list
+    - Add `POST /api/indicators` endpoint to persist a new running indicator
+    - Add `DELETE /api/indicators/:id` endpoint to remove an indicator from the persisted list
+    - On add/remove, write through to disk so state survives restarts
+    - _Requirements: 28.10, 28.11, 28.12_
+
+  - [ ] 97.3b Auto-remove running indicators when script is deleted from bank
+    - When `DELETE /api/scripts/:id` is called, iterate running indicators and stop any that reference the deleted scriptId
+    - Remove auto-stopped indicators from `indicators.json` persistence
+    - Send `indicator_removed` WebSocket message to all connected clients with the removed indicator IDs
+    - Frontend handles `indicator_removed` by clearing chart data and updating indicator labels
+    - _Requirements: 28.13, 28.14, 28.15, 28.16_
+
+  - [ ] 97.4 Render overlay indicator labels on main chart
+    - In PineChart, render a vertical list of overlay indicator labels in the top-left corner of the main chart area
+    - Each label shows the indicator name as a semi-transparent pill with a delete (×) button
+    - Click delete button fires an `onRemoveIndicator(indicatorId)` callback
+    - Labels update dynamically when indicators are added or removed
+    - Labels are rendered on the topmost canvas layer (above candlesticks and plots)
+    - _Requirements: 28.6, 28.7, 28.8, 28.9, 28.10, 28.11_
+
+  - [ ] 97.5 Render indicator pane labels for non-overlay indicators
+    - In PineChart, render a label in the top-left corner of each indicator pane
+    - Each label shows the indicator name and an unplot button (−)
+    - Click unplot button fires an `onRemoveIndicator(indicatorId)` callback
+    - Labels are rendered within the pane's clipped canvas region
+    - _Requirements: 28.12, 28.13, 28.14, 28.15, 28.16_
+
+  - [ ] 97.6 Wire indicator management to chart data flow
+    - When addIndicator is called: send execute WS message, add to IndicatorManager state, route execution_result outputs to correct pane based on overlay flag
+    - When removeIndicator is called: send stop WS message, clear associated plot series/fills/shapes from PineChart, remove from IndicatorManager state, remove pane if empty
+    - Handle multiple overlay indicators merging plots into the same main chart area
+    - Handle multiple non-overlay indicators each in their own pane
+    - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
+
+  - [ ] 97.7 Wire CodeEditor "Add" button to multi-indicator mode
+    - Rename the "Run" button to "Add" in the CodeEditor
+    - "Add" button adds the current script as a new indicator to the chart (appends to running indicators via POST /api/indicators)
+    - "Add" button does NOT replace existing running indicators — it always adds a new one
+    - When the same script (by scriptId) is already running, skip adding a duplicate or show a brief notification
+    - Persist the new indicator to the backend via POST /api/indicators
+    - _Requirements: 28.6, 28.7, 28.8, 28.9_
+
+  - [ ]* 97.8 Write tests for dynamic indicator management
+    - Test addIndicator creates new ScriptSession and routes execution_result to correct pane
+    - Test removeIndicator stops session, clears chart data, removes pane if empty
+    - Test overlay labels render for overlay indicators and not for pane indicators
+    - Test pane labels render for non-overlay indicators and not for overlay indicators
+    - Test multiple overlay indicators coexist on main chart
+    - Test multiple non-overlay indicators each get their own pane
+    - Test remove indicator does NOT delete script from bank
+    - Test indicator re-add restores execution and rendering
+    - Test "Add" button appends indicator without replacing existing ones
+    - Test duplicate scriptId is not added twice
+    - Test persistence: add indicators, restart backend, verify indicators restored from GET /api/indicators
+    - Test auto-remove: delete script from bank, verify running indicators referencing it are removed from chart
+    - Test auto-remove: verify WebSocket `indicator_removed` message is sent to frontend
+    - Test auto-remove: verify persistence file is updated after cascade delete
+    - _Requirements: 28.1-28.27_
+
+- [ ] 98. Checkpoint - Dynamic Indicator Management Validation
+  - Add multiple overlay indicators (SMA, EMA, Bollinger) — verify labels appear in top-left and all plot on chart
+  - Remove an overlay indicator via delete button — verify its plots disappear and label is removed
+  - Add a non-overlay indicator (MACD) — verify label appears in pane top-left
+  - Remove MACD via unplot button — verify pane is removed
+  - Verify removed indicators are NOT deleted from the script bank
+  - Verify real-time updates continue for all running indicators independently
+  - Verify "Add" button adds indicator without replacing existing ones
+  - Verify duplicate script is not added twice
+  - Restart backend, verify running indicators are restored from persistence and re-execute on chart
+  - Delete a script from the bank — verify its running indicators are auto-removed from the chart
+  - Verify `indicator_removed` WebSocket message clears the frontend chart data
+  - Run all existing tests to confirm no regressions
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2588,6 +2688,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 94 fixes real-time indicator data alignment: backend permanently advances engine state for confirmed bars via executeBar() when new bars arrive (previously always used computeFormingCandle which saved/restored state), frontend appends new plot data entries for new bars instead of replacing the last entry (previously caused MACD values to appear on genesis candle).
 - Task 95 implements indicator pane independent price scales: AxisRenderer now renders per-indicator-pane price labels on the right side using each pane's own price range, indicator pane rendering is clipped to allocated regions via canvas clipping, and horizontal separator lines are drawn between panes.
 - Task 96 implements indicator pane autoscale on scroll: when the user scrolls, pans, or zooms the chart, each indicator pane automatically recomputes its Y-axis price range from the visible indicator values in the current viewport, providing seamless autoscaling that matches TradingView behavior.
+- Task 97 implements dynamic indicator management UI: users can add and remove multiple indicators from the chart independently. The "Add" button (renamed from "Run") appends indicators to the chart. Running indicator lists are persisted to `backend/data/indicators.json` and restored on restart. If a script is deleted from the bank, all its running indicators are automatically removed from the chart via cascade delete. Overlay indicators show labels with delete buttons in the top-left corner of the main chart. Non-overlay indicators show labels with unplot buttons in the top-left corner of their respective panes.
 
 ## Task Dependency Graph
 

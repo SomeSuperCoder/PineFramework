@@ -972,7 +972,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. WHEN a different script is selected from the dropdown, THE Code_Editor SHALL load that script's source into the editor without executing it on the chart
 4. THE Code_Editor SHALL auto-save script source changes to persistent storage on every edit without re-executing the chart
 5. THE Code_Editor SHALL NOT re-execute the chart when switching between scripts via the dropdown
-6. THE Code_Editor SHALL provide a "Run" button that executes the current editor content on the chart AND persists it as the currently running script
+6. THE Code_Editor SHALL provide an "Add" button that adds the current editor content as a new indicator to the chart (appended, not replacing existing indicators)
 7. THE Code_Editor SHALL provide a "New Script" button that creates a blank script with a default template and selects it in the dropdown
 8. THE Code_Editor SHALL auto-determine the script name from the `strategy("Name", ...)` or `indicator("Name", ...)` call in the source code
 9. WHEN the script name is extracted from source, THE Frontend SHALL update the script's name in persistent storage
@@ -1032,6 +1032,57 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 15. THE Frontend SHALL autoscale indicator pane price ranges when the chart zooms in or out, adjusting the Y-axis to fit all indicator values visible in the new viewport
 16. WHERE autoscaling is active, THE Frontend SHALL ignore any manual price range setting for indicator panes and recompute from visible data on every viewport change
 17. THE Frontend SHALL provide a smooth transition when autoscaling indicator panes, avoiding flicker or jarring jumps during scroll interactions
+
+### Requirement 28: Dynamic Indicator Management UI
+
+**User Story:** As a trader, I want to dynamically add and remove multiple indicators from the chart, so that I can compose my chart with only the indicators I need and manage them without touching the indicator bank.
+
+#### Acceptance Criteria
+
+**Dynamic Add/Remove:**
+
+1. THE Frontend SHALL allow the user to dynamically add and remove multiple indicators from the chart
+2. THE Frontend SHALL support removing an indicator from the chart without deleting it from the indicator bank (the script bank retains the source)
+3. WHEN an indicator is removed from the chart, THE Frontend SHALL stop rendering its plots, shapes, fills, and other visual outputs
+4. WHEN an indicator is removed from the chart, THE Frontend SHALL stop its real-time execution session (no further kline-driven re-execution)
+5. WHEN an indicator is re-added to the chart, THE Frontend SHALL re-execute it and render its outputs on the chart
+
+**Add Button:**
+
+6. THE Code_Editor SHALL display an "Add" button (instead of "Run") that adds the current script as a new indicator to the chart
+7. THE "Add" button SHALL append the indicator to the list of running indicators on the chart
+8. THE "Add" button SHALL NOT replace existing running indicators — it SHALL always add a new one
+9. WHEN the same script (by scriptId) is already running on the chart, THE "Add" button SHALL either skip adding a duplicate or notify the user that the indicator is already on the chart
+
+**Persisted Indicator List:**
+
+10. THE Backend SHALL persist the list of running indicators (which scripts are on the chart) to persistent storage
+11. THE Frontend SHALL restore the running indicator list from the Backend on page load and re-execute all previously running indicators
+12. WHEN the application restarts, THE Frontend SHALL automatically re-add all previously running indicators to the chart
+
+**Auto-Remove on Script Deletion:**
+
+13. WHEN a script is deleted from the script bank via `DELETE /api/scripts/:id`, THE Backend SHALL automatically remove all running indicators that reference that scriptId from the chart
+14. WHEN a script is deleted, THE Backend SHALL stop the execution sessions for any running indicators using that script
+15. THE Frontend SHALL clear the visual outputs (plots, fills, shapes) of auto-removed indicators from the chart
+16. THE Frontend SHALL update the running indicator list and labels to reflect the auto-removal
+
+**Overlay Indicator Labels (Top-Left Corner):**
+
+17. THE Frontend SHALL display a list of running overlay indicators in the top-left corner of the main chart area
+18. THE overlay indicator list SHALL show each indicator's name as a label
+19. Each overlay indicator label SHALL include a small delete button (X or trash icon) to remove that indicator from the chart
+20. THE delete button SHALL remove the indicator from the chart only — it SHALL NOT delete the script from the indicator bank
+21. THE overlay indicator list SHALL update dynamically when indicators are added or removed from the chart
+22. THE overlay indicator labels SHALL be rendered as non-intrusive overlays that do not obstruct candlestick or price action rendering
+
+**Indicator Pane Labels (Per-Pane Top-Left Corner):**
+
+23. THE Frontend SHALL display a label with the indicator's name in the top-left corner of each indicator pane that creates a separate pane (overlay=false)
+24. Each indicator pane label SHALL include an option to unplot (remove) the indicator from the chart
+25. The unplot option SHALL remove the indicator's plots from the pane and, if the indicator is the only one in that pane, remove the pane entirely
+26. The unplot option SHALL NOT delete the script from the indicator bank
+27. THE indicator pane labels SHALL be rendered within the pane's clipped region, ensuring they do not bleed into adjacent panes
 
 ### Requirement 27: Multi-Version Pine Script Support
 
