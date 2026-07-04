@@ -137,7 +137,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
           }
         }
 
-        if (data.length > seriesData.length) {
+        if (data.length > 0 && data.length > seriesData.length) {
           const padCount = data.length - seriesData.length;
           if (seriesData.length > 0 && data[0]?.time < seriesData[0]?.time) {
             const padding: PlotSeriesData[] = [];
@@ -150,7 +150,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
               seriesData.push({ time: data[data.length - padCount + i]?.time ?? 0, value: null });
             }
           }
-        } else if (seriesData.length > data.length) {
+        } else if (data.length > 0 && seriesData.length > data.length) {
           seriesData.splice(0, seriesData.length - data.length);
         }
 
