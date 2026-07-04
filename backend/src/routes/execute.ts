@@ -61,6 +61,7 @@ executeRouter.post('/execute', async (req, res) => {
       time: s.time,
       text: s.text,
       price: s.price,
+      overlay: s.overlay,
     }));
 
     const fills = (result.fills || []).map((f) => ({

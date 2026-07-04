@@ -157,6 +157,7 @@ export class ScriptSession {
       time: s.time,
       text: s.text,
       price: s.price,
+      overlay: s.overlay,
     }));
 
     const fills = (result.fills || []).map((f) => ({
@@ -254,6 +255,7 @@ export class ScriptSession {
       color: s.color,
       time: s.time,
       text: s.text,
+      overlay: s.overlay,
     }));
 
     const fills = result.diffFills.map((f) => ({

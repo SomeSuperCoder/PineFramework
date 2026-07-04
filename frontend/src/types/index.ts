@@ -29,6 +29,7 @@ export interface ShapeData {
   color?: string;
   text?: string;
   location?: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom' | 'absolute';
+  overlay?: boolean;
 }
 
 export interface LineData {

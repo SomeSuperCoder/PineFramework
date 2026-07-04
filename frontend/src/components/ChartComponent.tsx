@@ -220,6 +220,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         text: s.text || undefined,
         barIndex: barIdx >= 0 ? barIdx : undefined,
         price: s.price,
+        overlay: s.overlay,
       };
     });
     chart.setMarkers(shapeMarkers);

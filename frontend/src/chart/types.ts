@@ -21,6 +21,7 @@ export interface ShapeMarkerData {
   text?: string;
   barIndex?: number;
   price?: number;
+  overlay?: boolean;
 }
 
 export interface StrategyMarkerData {

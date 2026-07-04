@@ -216,6 +216,16 @@ describe('B-Xtrender @Puppytherapy', () => {
     }
   });
 
+  it('shapes have overlay=false for non-overlay indicator', () => {
+    const bars = createTrendingBars(300, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.shapes.length).toBeGreaterThan(0);
+    for (const shape of result.shapes) {
+      expect(shape.overlay).toBe(false);
+    }
+  });
+
   it('produces plot colors for colored plots', () => {
     const bars = createTrendingBars(300, 80);
     const { result } = runEngine(source, bars);

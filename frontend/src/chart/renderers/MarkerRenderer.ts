@@ -1,6 +1,6 @@
 import type { ShapeMarkerData, StrategyMarkerData, AlertTriggerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
-import type { LayoutManager } from '../LayoutManager.js';
+import type { LayoutManager, PaneRegion } from '../LayoutManager.js';
 import type { CandlestickData } from '../types.js';
 
 export class MarkerRenderer {
@@ -10,11 +10,14 @@ export class MarkerRenderer {
     candles: CandlestickData[],
     viewport: Viewport,
     layout: LayoutManager,
+    pane?: PaneRegion,
   ): void {
     const regions = layout.getRegions();
-    const { chartArea } = regions;
     const barSpacing = viewport.getBarSpacing();
     const margin = barSpacing * 1.5;
+
+    const area = pane ?? regions.chartArea;
+    const paneId = pane?.id;
 
     for (const marker of markers) {
       const barIdx = marker.barIndex ?? this.findBarIndex(candles, marker.time);
@@ -24,13 +27,13 @@ export class MarkerRenderer {
       let y: number;
 
       if (marker.position === 'absolute' && marker.price != null) {
-        y = layout.priceToPixel(marker.price, chartArea.y, chartArea.height);
+        y = layout.priceToPixel(marker.price, area.y, area.height, paneId);
       } else if (marker.position === 'belowbar') {
         const candle = candles[barIdx];
-        y = layout.priceToPixel(candle.low, chartArea.y, chartArea.height) + margin;
+        y = layout.priceToPixel(candle.low, area.y, area.height, paneId) + margin;
       } else {
         const candle = candles[barIdx];
-        y = layout.priceToPixel(candle.high, chartArea.y, chartArea.height) - margin;
+        y = layout.priceToPixel(candle.high, area.y, area.height, paneId) - margin;
       }
 
       this.drawShape(ctx, x, y, marker.shape, marker.color, barSpacing);

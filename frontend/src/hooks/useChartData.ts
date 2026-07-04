@@ -8,7 +8,7 @@ interface ExecuteResponse {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
-  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number }>;
+  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number; overlay?: boolean }>;
   fills?: Array<{ from: string; to: string; color: string }>;
   strategyMarkers?: Array<{
     type: string;
@@ -37,7 +37,7 @@ interface ExecutionResultMessage {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
-  shapes: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number }>;
+  shapes: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number; overlay?: boolean }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<{
     type: string;
@@ -136,6 +136,7 @@ function buildScriptResult(
     color: s.color,
     text: s.text,
     location: s.location as import('../types').ShapeData['location'],
+    overlay: s.overlay,
   }));
 
   const transformedFillColorData: Record<string, (string | null)[]> = {};

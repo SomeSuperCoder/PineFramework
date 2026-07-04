@@ -272,6 +272,11 @@ export class PineChart {
       }
     }
 
+    const overlayShapes = this.shapeMarkers.filter((s) => s.overlay !== false);
+    if (overlayShapes.length > 0) {
+      this.markerRenderer.renderShapes(ctx, overlayShapes, this.candles, this.viewport, this.layout);
+    }
+
     ctx.restore();
 
     for (const pane of regions.indicatorPanes) {
@@ -286,6 +291,11 @@ export class PineChart {
         }
       }
 
+      const paneShapes = this.shapeMarkers.filter((s) => s.overlay === false);
+      if (paneShapes.length > 0) {
+        this.markerRenderer.renderShapes(ctx, paneShapes, this.candles, this.viewport, this.layout, pane);
+      }
+
       ctx.restore();
 
       ctx.strokeStyle = this.options.borderColor;
@@ -295,8 +305,6 @@ export class PineChart {
       ctx.lineTo(regions.chartArea.width, pane.y);
       ctx.stroke();
     }
-
-    this.markerRenderer.renderShapes(ctx, this.shapeMarkers, this.candles, this.viewport, this.layout);
 
     this.markerRenderer.renderStrategyMarkers(ctx, this.strategyMarkers, this.candles, this.viewport, this.layout);
 

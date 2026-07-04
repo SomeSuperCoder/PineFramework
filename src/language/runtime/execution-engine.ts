@@ -68,6 +68,7 @@ export interface ShapeEntry {
   time: number;
   text: string;
   price?: number;
+  overlay: boolean;
 }
 
 export interface LineEntry {
@@ -940,6 +941,7 @@ export class ExecutionEngine {
         time: this.currentTimestamp,
         text: textStr,
         price: typeof value === 'number' && !isLocationBool ? value : undefined,
+        overlay: this.compiledScript.overlay,
       });
       return NA;
     });
@@ -1002,6 +1004,7 @@ export class ExecutionEngine {
         time: this.currentTimestamp,
         text: textStr,
         price: typeof value === 'number' && !isLocationBool ? value : undefined,
+        overlay: this.compiledScript.overlay,
       });
       return NA;
     });
