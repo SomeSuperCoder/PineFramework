@@ -22,7 +22,6 @@ interface ChartComponentProps {
 }
 
 export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
-  console.log('[CC] render', { dataLen: data.length, hasScript: !!scriptResult, indCount: indicatorResults?.size, indLabelCount: indicatorLabels.length });
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -35,7 +34,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   }
 
   useEffect(() => {
-    console.log('[CC] MOUNT effect');
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
@@ -49,9 +47,11 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chartRef.current = chart;
 
     return () => {
-      console.log('[CC] UNMOUNT effect - CHART DESTROYED');
       chart.remove();
       chartRef.current = null;
+      seriesNamesRef.current.clear();
+      activeKeysRef.current.clear();
+      keyToTitlesRef.current.clear();
     };
   }, []);
 
@@ -107,15 +107,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   const keyToTitlesRef = useRef<Map<string, Set<string>>>(new Map());
   useEffect(() => {
     if (!chartRef.current) return;
-    if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) {
-      console.log('[CC] plots effect SKIPPED (same refs)');
-      return;
-    }
-    console.log('[CC] plots effect RUNNING', {
-      hasScript: !!scriptResult,
-      indCount: indicatorResults?.size,
-      seriesNames: [...seriesNamesRef.current],
-    });
+    if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) return;
     prevScriptResultRef.current = scriptResult;
     prevIndicatorResultsRef.current = indicatorResults;
 
@@ -273,7 +265,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         allResults.push({ result: res, key: id });
       }
     }
-    console.log('[CC] shapes effect', { allResultsLen: allResults.length, dataLen: data.length });
     if (allResults.length === 0) return;
 
     const ohlcvMap = new Map<number, CandlestickData>();
