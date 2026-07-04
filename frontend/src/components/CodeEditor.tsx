@@ -16,18 +16,13 @@ interface CodeEditorProps {
 }
 
 export const DEFAULT_CODE = `//@version=6
-strategy("My Strategy", overlay=true, initial_capital=10000)
+indicator("My Indicator", overlay=true)
 
 // Calculate SMA
 sma20 = ta.sma(close, 20)
 
-// Entry: buy when close crosses above SMA
-if (close > sma20)
-    strategy.entry("Long", strategy.long)
-
-// Exit: sell when close crosses below SMA
-if (close < sma20)
-    strategy.close("Long")
+// Plot SMA
+plot(sma20, color=color.blue, linewidth=2)
 `;
 
 function extractName(source: string): string | null {

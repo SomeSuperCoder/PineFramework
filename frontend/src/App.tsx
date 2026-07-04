@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ChartComponent } from './components/ChartComponent';
-import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
+import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
@@ -25,10 +25,8 @@ function App() {
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
-  const [currentCode, setCurrentCode] = useState<string | null>(null);
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
-  const [indicatorsReady, setIndicatorsReady] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
   const indicatorManager = useIndicatorManager();
@@ -71,14 +69,10 @@ function App() {
   useEffect(() => {
     indicatorManager.fetchIndicators().then((list) => {
       if (list.length > 0) {
-        setCurrentCode(null);
         for (const ind of list) {
           executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
         }
-      } else {
-        setCurrentCode(DEFAULT_CODE);
       }
-      setIndicatorsReady(true);
     });
   }, []);
 
@@ -86,11 +80,6 @@ function App() {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
   }, [symbol, timeframe, subscribe]);
-
-  useEffect(() => {
-    if (!currentCode || !indicatorsReady) return;
-    executeScript(currentCode, symbol, timeframe);
-  }, [symbol, timeframe, executeScript, currentCode, indicatorsReady]);
 
   useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
@@ -198,7 +187,7 @@ function App() {
         onClose={() => setShowStrategyPopup(false)}
         symbol={symbol}
         timeframe={timeframe}
-        scriptSource={currentCode || ''}
+        scriptSource={''}
       />
     </div>
   );
