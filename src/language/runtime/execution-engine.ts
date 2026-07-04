@@ -37,10 +37,7 @@ import {
   type OrderDirection,
   type StrategyMarker,
 } from '../../strategy/strategy-engine.js';
-import {
-  parseStrategyDeclaration,
-  getStrategyConfig,
-} from '../script-declarations.js';
+import { parseStrategyDeclaration, getStrategyConfig } from '../script-declarations.js';
 import {
   type RuntimeScope,
   createRuntimeScope,
@@ -177,23 +174,26 @@ interface ExecutionSnapshot {
   labels: LabelEntry[];
   bgcolorData: Array<{ time: number; color: string }>;
   barColorData: Array<{ time: number; color: string }>;
-  sarState: Map<string, {
-    initialized: boolean;
-    trend: 'up' | 'down';
-    sar: number;
-    ep: number;
-    af: number;
-    afStart: number;
-    afInc: number;
-    afMax: number;
-    prevSar: number;
-    prevEp: number;
-    prevLow1: number;
-    prevLow2: number;
-    prevHigh1: number;
-    prevHigh2: number;
-    barCount: number;
-  }>;
+  sarState: Map<
+    string,
+    {
+      initialized: boolean;
+      trend: 'up' | 'down';
+      sar: number;
+      ep: number;
+      af: number;
+      afStart: number;
+      afInc: number;
+      afMax: number;
+      prevSar: number;
+      prevEp: number;
+      prevLow1: number;
+      prevLow2: number;
+      prevHigh1: number;
+      prevHigh2: number;
+      barCount: number;
+    }
+  >;
   barIndex: number;
 }
 
@@ -219,7 +219,10 @@ export class ExecutionEngine {
   private barTimestamps: number[] = [];
   private isFormingCandle: boolean = false;
 
-  constructor(compileResult: CompileResult, strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>) {
+  constructor(
+    compileResult: CompileResult,
+    strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>,
+  ) {
     this.compiledScript = compileResult.ir;
     this.sourceProgram = compileResult.source;
     this.globalScope = createRuntimeScope();
@@ -254,23 +257,26 @@ export class ExecutionEngine {
   private emaCallIndex: number = 0;
   private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
   private hmaCallIndex: number = 0;
-  private sarState: Map<string, {
-    initialized: boolean;
-    trend: 'up' | 'down';
-    sar: number;
-    ep: number;
-    af: number;
-    afStart: number;
-    afInc: number;
-    afMax: number;
-    prevSar: number;
-    prevEp: number;
-    prevLow1: number;
-    prevLow2: number;
-    prevHigh1: number;
-    prevHigh2: number;
-    barCount: number;
-  }> = new Map();
+  private sarState: Map<
+    string,
+    {
+      initialized: boolean;
+      trend: 'up' | 'down';
+      sar: number;
+      ep: number;
+      af: number;
+      afStart: number;
+      afInc: number;
+      afMax: number;
+      prevSar: number;
+      prevEp: number;
+      prevLow1: number;
+      prevLow2: number;
+      prevHigh1: number;
+      prevHigh2: number;
+      barCount: number;
+    }
+  > = new Map();
   private fills: Array<{ from: string; to: string; color: string }> = [];
   private lines: Map<number, LineEntry> = new Map();
   private lineIdCounter: number = 0;
@@ -282,6 +288,11 @@ export class ExecutionEngine {
   private crossCallIndex: number = 0;
   private crossPrevValues: Array<{ src: number; cmp: number }> = [];
   private atrState: Map<string, { prev: number; count: number }> = new Map();
+  private rsiState: Map<
+    string,
+    { prevAvgGain: number; prevAvgLoss: number; count: number; prevSource: number }
+  > = new Map();
+  private rsiCallIndex: number = 0;
   private strategyEngine: StrategyEngine | null = null;
 
   setFormingCandle(v: boolean): void {
@@ -329,13 +340,48 @@ export class ExecutionEngine {
       return state.prev;
     });
 
+    this.builtins.set('ta.rsi', (source: PineValue, length: PineValue): PineValue => {
+      if (isNa(source) || isNa(length)) return NA;
+      const len = Math.trunc(length as number);
+      if (len <= 0) return NA;
+      const val = source as number;
+      if (isNaN(val)) return NA;
+
+      const key = `rsi_${len}_${this.rsiCallIndex++}`;
+      if (!this.rsiState.has(key)) {
+        this.rsiState.set(key, { prevAvgGain: 0, prevAvgLoss: 0, count: 0, prevSource: val });
+        return NA;
+      }
+      const state = this.rsiState.get(key)!;
+      state.count++;
+
+      const change = val - state.prevSource;
+      const gain = change > 0 ? change : 0;
+      const loss = change < 0 ? -change : 0;
+      state.prevSource = val;
+
+      if (state.count <= len) {
+        state.prevAvgGain = (state.prevAvgGain * (state.count - 1) + gain) / state.count;
+        state.prevAvgLoss = (state.prevAvgLoss * (state.count - 1) + loss) / state.count;
+        if (state.count < len) return NA;
+      } else {
+        state.prevAvgGain = (state.prevAvgGain * (len - 1) + gain) / len;
+        state.prevAvgLoss = (state.prevAvgLoss * (len - 1) + loss) / len;
+      }
+
+      if (state.prevAvgLoss === 0) return state.prevAvgGain === 0 ? 50 : 100;
+      const rs = state.prevAvgGain / state.prevAvgLoss;
+      return 100 - 100 / (1 + rs);
+    });
+
     this.builtins.set('ta.sar', (start: PineValue, inc: PineValue, max: PineValue): PineValue => {
       if (!this.currentContext) return NA;
       const ctx = this.currentContext;
       const high = ctx.high.getRelative(0);
       const low = ctx.low.getRelative(0);
       const close = ctx.close.getRelative(0);
-      if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
+      if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number')
+        return NA;
 
       const afStart = typeof start === 'number' ? start : 0.02;
       const afInc = typeof inc === 'number' ? inc : 0.02;
@@ -370,7 +416,11 @@ export class ExecutionEngine {
       const prevClose = ctx.close.getRelative(1);
 
       if (!state.initialized) {
-        if (typeof prevHigh !== 'number' || typeof prevLow !== 'number' || typeof prevClose !== 'number') {
+        if (
+          typeof prevHigh !== 'number' ||
+          typeof prevLow !== 'number' ||
+          typeof prevClose !== 'number'
+        ) {
           state.prevHigh1 = high;
           state.prevLow1 = low;
           state.prevHigh2 = high;
@@ -459,9 +509,14 @@ export class ExecutionEngine {
       const high = ctx.high.getRelative(0);
       const low = ctx.low.getRelative(0);
       const close = ctx.close.getRelative(0);
-      if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
+      if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number')
+        return NA;
       const prevClose = ctx.close.getRelative(1);
-      const tr = Math.max(high - low, Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)), Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)));
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
+        Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+      );
       const key = `atr_${len}`;
       if (!this.atrState.has(key)) {
         this.atrState.set(key, { prev: tr, count: 1 });
@@ -470,7 +525,7 @@ export class ExecutionEngine {
       const state = this.atrState.get(key)!;
       state.count++;
       if (state.count <= len) {
-        state.prev = ((state.prev * (state.count - 1)) + tr) / state.count;
+        state.prev = (state.prev * (state.count - 1) + tr) / state.count;
         return NA;
       }
       state.prev = (state.prev * (len - 1) + tr) / len;
@@ -778,23 +833,28 @@ export class ExecutionEngine {
       let style: string | undefined;
       let display: PineValue | undefined;
       const PINE_STYLE_MAP: Record<string, string> = {
-        'style_line': 'line',
-        'style_linebr': 'line',
-        'style_stepline': 'stepline',
-        'style_steplinebr': 'stepline',
-        'style_histogram': 'histogram',
-        'style_columns': 'columns',
-        'style_circles': 'circles',
-        'style_cross': 'cross',
-        'style_areabr': 'areabr',
-        'style_area': 'area',
-        'style_areaoutline': 'area',
-        'style_circledot': 'circles',
+        style_line: 'line',
+        style_linebr: 'line',
+        style_stepline: 'stepline',
+        style_steplinebr: 'stepline',
+        style_histogram: 'histogram',
+        style_columns: 'columns',
+        style_circles: 'circles',
+        style_cross: 'cross',
+        style_areabr: 'areabr',
+        style_area: 'area',
+        style_areaoutline: 'area',
+        style_circledot: 'circles',
       };
 
       const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
-      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
-        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const namedArgs =
+        typeof lastArg === 'object' &&
+        lastArg !== null &&
+        !Array.isArray(lastArg) &&
+        !(lastArg as any).__isSeries
+          ? (lastArg as unknown as Record<string, PineValue>)
+          : undefined;
       const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
 
       // Pine Script plot(series, title, color, linewidth, style, trackprice, histbase, offset, join, editable, show_last, display)
@@ -843,9 +903,12 @@ export class ExecutionEngine {
     });
 
     this.builtins.set('plotshape', (...args: PineValue[]): PineValue => {
-      const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
-        ? args[args.length - 1] as unknown as Record<string, PineValue>
-        : {};
+      const namedArgs =
+        args.length > 0 &&
+        typeof args[args.length - 1] === 'object' &&
+        !Array.isArray(args[args.length - 1])
+          ? (args[args.length - 1] as unknown as Record<string, PineValue>)
+          : {};
       const value = args[0] ?? NA;
       if (isNa(value)) return NA;
       let styleStr: string = 'circle';
@@ -861,7 +924,8 @@ export class ExecutionEngine {
       for (let i = 1; i < args.length - (Object.keys(namedArgs).length > 0 ? 1 : 0) && i < 5; i++) {
         const a = args[i];
         if (typeof a === 'string') {
-          if (i === 2) styleStr = a; // style
+          if (i === 2)
+            styleStr = a; // style
           else if (i === 3) locationStr = a; // location
         }
       }
@@ -882,16 +946,30 @@ export class ExecutionEngine {
 
     this.builtins.set('plotchar', (...allArgs: PineValue[]): PineValue => {
       const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
-      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
-        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const namedArgs =
+        typeof lastArg === 'object' &&
+        lastArg !== null &&
+        !Array.isArray(lastArg) &&
+        !(lastArg as any).__isSeries
+          ? (lastArg as unknown as Record<string, PineValue>)
+          : undefined;
       const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
 
       // Pine Script plotchar(series, title, char, location, color, offset, text, textcolor, editable, size, display)
       const value = positionalArgs[0] ?? NA;
       if (isNa(value)) return NA;
-      const char = positionalArgs.length >= 3 && typeof positionalArgs[2] === 'string' ? positionalArgs[2] as string : '●';
-      let locationStr = positionalArgs.length >= 4 && typeof positionalArgs[3] === 'string' ? positionalArgs[3] as string : 'abovebar';
-      let colorStr = positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string' ? positionalArgs[4] as string : '#2196f3';
+      const char =
+        positionalArgs.length >= 3 && typeof positionalArgs[2] === 'string'
+          ? (positionalArgs[2] as string)
+          : '●';
+      let locationStr =
+        positionalArgs.length >= 4 && typeof positionalArgs[3] === 'string'
+          ? (positionalArgs[3] as string)
+          : 'abovebar';
+      let colorStr =
+        positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string'
+          ? (positionalArgs[4] as string)
+          : '#2196f3';
       let textStr = '';
 
       if (namedArgs) {
@@ -944,9 +1022,12 @@ export class ExecutionEngine {
     });
 
     this.builtins.set('plotcandle', (...args: PineValue[]): PineValue => {
-      const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
-        ? args[args.length - 1] as unknown as Record<string, PineValue>
-        : {};
+      const namedArgs =
+        args.length > 0 &&
+        typeof args[args.length - 1] === 'object' &&
+        !Array.isArray(args[args.length - 1])
+          ? (args[args.length - 1] as unknown as Record<string, PineValue>)
+          : {};
       let bodyColor = '#000000';
       if (typeof namedArgs.color === 'string') bodyColor = namedArgs.color;
       if (bodyColor !== 'na' && bodyColor !== '') {
@@ -956,79 +1037,137 @@ export class ExecutionEngine {
       return NA;
     });
 
-    this.builtins.set('input.int', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? 0;
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-        if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'int', default: defaultVal });
-      }
-      return isNa(defaultVal) ? 0 : defaultVal;
-    });
+    this.builtins.set(
+      'input.int',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? 0;
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+          if (typeof na.title === 'string')
+            this.inputs.set(na.title, { type: 'int', default: defaultVal });
+        }
+        return isNa(defaultVal) ? 0 : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.float', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? 0;
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-        if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'float', default: defaultVal });
-      }
-      return isNa(defaultVal) ? 0 : defaultVal;
-    });
+    this.builtins.set(
+      'input.float',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? 0;
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+          if (typeof na.title === 'string')
+            this.inputs.set(na.title, { type: 'float', default: defaultVal });
+        }
+        return isNa(defaultVal) ? 0 : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.color', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? '#2196f3';
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? '#2196f3' : defaultVal;
-    });
+    this.builtins.set(
+      'input.color',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? '#2196f3';
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? '#2196f3' : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.bool', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? false;
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? false : defaultVal;
-    });
+    this.builtins.set(
+      'input.bool',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? false;
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? false : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.string', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? '';
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? '' : defaultVal;
-    });
+    this.builtins.set(
+      'input.string',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? '';
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? '' : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.time', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? 0;
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? 0 : defaultVal;
-    });
+    this.builtins.set(
+      'input.time',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? 0;
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? 0 : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.timeframe', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? '';
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? '' : defaultVal;
-    });
+    this.builtins.set(
+      'input.timeframe',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? '';
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? '' : defaultVal;
+      },
+    );
 
-    this.builtins.set('input.source', (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      let defaultVal: PineValue = defaultValOrNamed ?? 0;
-      if (typeof defaultValOrNamed === 'object' && defaultValOrNamed !== null && !Array.isArray(defaultValOrNamed)) {
-        const na = defaultValOrNamed as unknown as Record<string, PineValue>;
-        if (na.defval !== undefined) defaultVal = na.defval;
-      }
-      return isNa(defaultVal) ? 0 : defaultVal;
-    });
+    this.builtins.set(
+      'input.source',
+      (defaultValOrNamed?: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        let defaultVal: PineValue = defaultValOrNamed ?? 0;
+        if (
+          typeof defaultValOrNamed === 'object' &&
+          defaultValOrNamed !== null &&
+          !Array.isArray(defaultValOrNamed)
+        ) {
+          const na = defaultValOrNamed as unknown as Record<string, PineValue>;
+          if (na.defval !== undefined) defaultVal = na.defval;
+        }
+        return isNa(defaultVal) ? 0 : defaultVal;
+      },
+    );
 
     this.builtins.set('ta.pivothigh', (...args: PineValue[]): PineValue => {
       const ctx = this.currentContext;
@@ -1094,33 +1233,42 @@ export class ExecutionEngine {
       return [];
     });
 
-    this.builtins.set('line.new', (x1: PineValue, y1: PineValue, x2: PineValue, y2: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
-      if (isNa(x1) || isNa(y1) || isNa(x2) || isNa(y2)) {
-        return 0;
-      }
-      let colorStr = '#2196f3';
-      let styleStr = 'solid';
-      let widthNum = 1;
-      let xlocStr = 'bar_index';
-      if (typeof namedArgs === 'object' && namedArgs !== null) {
-        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
-        if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
-        if (typeof namedArgs.width === 'number') widthNum = namedArgs.width;
-        if (typeof namedArgs.xloc === 'string') xlocStr = namedArgs.xloc;
-      }
-      const id = this.lineIdCounter++;
-      this.lines.set(id, {
-        x1: x1 as number,
-        y1: y1 as number,
-        x2: x2 as number,
-        y2: y2 as number,
-        color: colorStr,
-        style: styleStr,
-        width: widthNum,
-        xloc: xlocStr,
-      });
-      return id;
-    });
+    this.builtins.set(
+      'line.new',
+      (
+        x1: PineValue,
+        y1: PineValue,
+        x2: PineValue,
+        y2: PineValue,
+        namedArgs?: Record<string, PineValue>,
+      ): PineValue => {
+        if (isNa(x1) || isNa(y1) || isNa(x2) || isNa(y2)) {
+          return 0;
+        }
+        let colorStr = '#2196f3';
+        let styleStr = 'solid';
+        let widthNum = 1;
+        let xlocStr = 'bar_index';
+        if (typeof namedArgs === 'object' && namedArgs !== null) {
+          if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+          if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
+          if (typeof namedArgs.width === 'number') widthNum = namedArgs.width;
+          if (typeof namedArgs.xloc === 'string') xlocStr = namedArgs.xloc;
+        }
+        const id = this.lineIdCounter++;
+        this.lines.set(id, {
+          x1: x1 as number,
+          y1: y1 as number,
+          x2: x2 as number,
+          y2: y2 as number,
+          color: colorStr,
+          style: styleStr,
+          width: widthNum,
+          xloc: xlocStr,
+        });
+        return id;
+      },
+    );
 
     this.builtins.set('line.delete', (lineId: PineValue): PineValue => {
       if (typeof lineId === 'number' && this.lines.has(lineId)) {
@@ -1137,32 +1285,40 @@ export class ExecutionEngine {
       return 0;
     });
 
-    this.builtins.set('label.new', (x: PineValue, y: PineValue, text: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
-      if (isNa(x) || isNa(y) || isNa(text)) return 0;
-      let colorStr = '#2196f3';
-      let textcolorStr = '#ffffff';
-      let styleStr = 'label.style_label_down';
-      let sizeStr = 'size.normal';
-      if (typeof namedArgs === 'object' && namedArgs !== null) {
-        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
-        if (typeof namedArgs.textcolor === 'string') textcolorStr = namedArgs.textcolor;
-        if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
-        if (typeof namedArgs.size === 'string') sizeStr = namedArgs.size;
-      }
-      // Member expression resolution strips prefixes: label.style_label_down → style_label_down
-      if (!styleStr.startsWith('label.')) styleStr = 'label.' + styleStr;
-      if (!sizeStr.startsWith('size.')) sizeStr = 'size.' + sizeStr;
-      this.labels.push({
-        time: this.currentTimestamp,
-        price: y as number,
-        text: String(text),
-        color: colorStr,
-        textcolor: textcolorStr,
-        style: styleStr,
-        size: sizeStr,
-      });
-      return 0;
-    });
+    this.builtins.set(
+      'label.new',
+      (
+        x: PineValue,
+        y: PineValue,
+        text: PineValue,
+        namedArgs?: Record<string, PineValue>,
+      ): PineValue => {
+        if (isNa(x) || isNa(y) || isNa(text)) return 0;
+        let colorStr = '#2196f3';
+        let textcolorStr = '#ffffff';
+        let styleStr = 'label.style_label_down';
+        let sizeStr = 'size.normal';
+        if (typeof namedArgs === 'object' && namedArgs !== null) {
+          if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+          if (typeof namedArgs.textcolor === 'string') textcolorStr = namedArgs.textcolor;
+          if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
+          if (typeof namedArgs.size === 'string') sizeStr = namedArgs.size;
+        }
+        // Member expression resolution strips prefixes: label.style_label_down → style_label_down
+        if (!styleStr.startsWith('label.')) styleStr = 'label.' + styleStr;
+        if (!sizeStr.startsWith('size.')) sizeStr = 'size.' + sizeStr;
+        this.labels.push({
+          time: this.currentTimestamp,
+          price: y as number,
+          text: String(text),
+          color: colorStr,
+          textcolor: textcolorStr,
+          style: styleStr,
+          size: sizeStr,
+        });
+        return 0;
+      },
+    );
 
     this.builtins.set('na', (value: PineValue): PineValue => {
       return isNa(value);
@@ -1205,61 +1361,91 @@ export class ExecutionEngine {
       return result;
     });
 
-    this.builtins.set('color.new', (color: PineValue, transp: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      const c = typeof color === 'string' ? color : '#2196f3';
-      const t = isNa(transp) ? 0 : (transp as number);
-      const alpha = Math.round(Math.max(0, Math.min(100, 100 - t)) * 2.55);
-      const hex = alpha.toString(16).padStart(2, '0');
-      if (c.startsWith('#')) {
-        return c + hex;
-      }
-      return c;
-    });
+    this.builtins.set(
+      'color.new',
+      (color: PineValue, transp: PineValue, _namedOrNamed?: PineValue): PineValue => {
+        const c = typeof color === 'string' ? color : '#2196f3';
+        const t = isNa(transp) ? 0 : (transp as number);
+        const alpha = Math.round(Math.max(0, Math.min(100, 100 - t)) * 2.55);
+        const hex = alpha.toString(16).padStart(2, '0');
+        if (c.startsWith('#')) {
+          return c + hex;
+        }
+        return c;
+      },
+    );
 
-    this.builtins.set('color.from_gradient', (value: PineValue, minVal: PineValue, maxVal: PineValue, bottomColor: PineValue, topColor: PineValue): PineValue => {
-      if (isNa(value) || isNa(minVal) || isNa(maxVal)) return '#80808080';
-      const v = value as number;
-      const min = minVal as number;
-      const max = maxVal as number;
-      if (Math.abs(max - min) < 1e-10) return typeof bottomColor === 'string' ? bottomColor : '#808080';
-      const t = Math.max(0, Math.min(1, (v - min) / (max - min)));
-      const bot = typeof bottomColor === 'string' ? bottomColor : '#8BC34A';
-      const top = typeof topColor === 'string' ? topColor : '#F44336';
-      const parseRgb = (hex: string): [number, number, number] => {
-        const c = hex.replace('#', '');
-        return [parseInt(c.substring(0, 2), 16) || 0, parseInt(c.substring(2, 4), 16) || 0, parseInt(c.substring(4, 6), 16) || 0];
-      };
-      const [r1, g1, b1] = parseRgb(bot);
-      const [r2, g2, b2] = parseRgb(top);
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g2v = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      return `#${r.toString(16).padStart(2, '0')}${g2v.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-    });
+    this.builtins.set(
+      'color.from_gradient',
+      (
+        value: PineValue,
+        minVal: PineValue,
+        maxVal: PineValue,
+        bottomColor: PineValue,
+        topColor: PineValue,
+      ): PineValue => {
+        if (isNa(value) || isNa(minVal) || isNa(maxVal)) return '#80808080';
+        const v = value as number;
+        const min = minVal as number;
+        const max = maxVal as number;
+        if (Math.abs(max - min) < 1e-10)
+          return typeof bottomColor === 'string' ? bottomColor : '#808080';
+        const t = Math.max(0, Math.min(1, (v - min) / (max - min)));
+        const bot = typeof bottomColor === 'string' ? bottomColor : '#8BC34A';
+        const top = typeof topColor === 'string' ? topColor : '#F44336';
+        const parseRgb = (hex: string): [number, number, number] => {
+          const c = hex.replace('#', '');
+          return [
+            parseInt(c.substring(0, 2), 16) || 0,
+            parseInt(c.substring(2, 4), 16) || 0,
+            parseInt(c.substring(4, 6), 16) || 0,
+          ];
+        };
+        const [r1, g1, b1] = parseRgb(bot);
+        const [r2, g2, b2] = parseRgb(top);
+        const r = Math.round(r1 + (r2 - r1) * t);
+        const g2v = Math.round(g1 + (g2 - g1) * t);
+        const b = Math.round(b1 + (b2 - b1) * t);
+        return `#${r.toString(16).padStart(2, '0')}${g2v.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+      },
+    );
 
     this.builtins.set('fill', (...allArgs: PineValue[]): PineValue => {
       const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
-      const namedArgs = (typeof lastArg === 'object' && lastArg !== null && !Array.isArray(lastArg) && !(lastArg as any).__isSeries)
-        ? lastArg as unknown as Record<string, PineValue> : undefined;
+      const namedArgs =
+        typeof lastArg === 'object' &&
+        lastArg !== null &&
+        !Array.isArray(lastArg) &&
+        !(lastArg as any).__isSeries
+          ? (lastArg as unknown as Record<string, PineValue>)
+          : undefined;
       const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
 
       // Pine Script fill(plot1, plot2, top_value, bottom_value, top_color, bottom_color, editable, fillgaps, title)
-      const from = typeof positionalArgs[0] === 'string' && (positionalArgs[0] as string).startsWith('__plot_ref:')
-        ? (positionalArgs[0] as string).slice(11) : String(positionalArgs[0] ?? '');
-      const to = typeof positionalArgs[1] === 'string' && (positionalArgs[1] as string).startsWith('__plot_ref:')
-        ? (positionalArgs[1] as string).slice(11) : String(positionalArgs[1] ?? '');
+      const from =
+        typeof positionalArgs[0] === 'string' &&
+        (positionalArgs[0] as string).startsWith('__plot_ref:')
+          ? (positionalArgs[0] as string).slice(11)
+          : String(positionalArgs[0] ?? '');
+      const to =
+        typeof positionalArgs[1] === 'string' &&
+        (positionalArgs[1] as string).startsWith('__plot_ref:')
+          ? (positionalArgs[1] as string).slice(11)
+          : String(positionalArgs[1] ?? '');
 
       let topColor: string | null = null;
       let bottomColor: string | null = null;
-      if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string') topColor = positionalArgs[4] as string;
-      if (positionalArgs.length >= 6 && typeof positionalArgs[5] === 'string') bottomColor = positionalArgs[5] as string;
+      if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string')
+        topColor = positionalArgs[4] as string;
+      if (positionalArgs.length >= 6 && typeof positionalArgs[5] === 'string')
+        bottomColor = positionalArgs[5] as string;
 
       if (namedArgs) {
         if (typeof namedArgs.color === 'string') topColor = namedArgs.color;
       }
 
       const fillKey = `${from}::${to}`;
-      if (!this.fills.some(f => f.from === from && f.to === to)) {
+      if (!this.fills.some((f) => f.from === from && f.to === to)) {
         this.fills.push({ from, to, color: topColor ?? bottomColor ?? 'rgba(33,150,243,0.2)' });
       }
       if (!this.fillColorData.has(fillKey)) {
@@ -1271,15 +1457,19 @@ export class ExecutionEngine {
     });
 
     this.builtins.set('alertcondition', (...args: PineValue[]): PineValue => {
-      const namedArgs = args.length > 0 && typeof args[args.length - 1] === 'object' && !Array.isArray(args[args.length - 1])
-        ? args[args.length - 1] as unknown as Record<string, PineValue>
-        : {};
+      const namedArgs =
+        args.length > 0 &&
+        typeof args[args.length - 1] === 'object' &&
+        !Array.isArray(args[args.length - 1])
+          ? (args[args.length - 1] as unknown as Record<string, PineValue>)
+          : {};
       const condition = args[0] ?? NA;
       const titleVal = namedArgs['title'];
       const msgVal = namedArgs['message'];
-      const title = typeof titleVal === 'string' ? titleVal : `Alert ${this.alertConditionEntries.length + 1}`;
+      const title =
+        typeof titleVal === 'string' ? titleVal : `Alert ${this.alertConditionEntries.length + 1}`;
       const message = typeof msgVal === 'string' ? msgVal : title;
-      const existing = this.alertConditionEntries.find(e => e.title === title);
+      const existing = this.alertConditionEntries.find((e) => e.title === title);
       let id: string;
       if (existing) {
         id = existing.id;
@@ -1288,7 +1478,11 @@ export class ExecutionEngine {
         this.alertConditionEntries.push({ id, title, message });
       }
       if (pineTruthy(condition) && this.currentContext) {
-        this.alertTriggers.push({ alertId: id, barIndex: this.currentContext.barIndex, timestamp: this.currentContext.timestamp });
+        this.alertTriggers.push({
+          alertId: id,
+          barIndex: this.currentContext.barIndex,
+          timestamp: this.currentContext.timestamp,
+        });
       }
       return NA;
     });
@@ -1296,11 +1490,20 @@ export class ExecutionEngine {
 
   private initializeGlobals(): void {
     for (const global of this.compiledScript.globals) {
-      declareVariable(this.globalScope, global.name, global.type, global.isVar, global.isVarip, global.isConst);
+      declareVariable(
+        this.globalScope,
+        global.name,
+        global.type,
+        global.isVar,
+        global.isVarip,
+        global.isConst,
+      );
     }
   }
 
-  private initializeStrategy(override?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>): void {
+  private initializeStrategy(
+    override?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>,
+  ): void {
     const args: Record<string, unknown> = {};
     for (const arg of this.sourceProgram.scriptArgs) {
       if (arg.name) {
@@ -1347,9 +1550,13 @@ export class ExecutionEngine {
       (name: PineValue, directionOrQty: PineValue, ...rest: PineValue[]): PineValue => {
         if (!this.strategyEngine) return NA;
 
-        const namedArgs = (rest.length > 0 && typeof rest[rest.length - 1] === 'object' && rest[rest.length - 1] !== null && !Array.isArray(rest[rest.length - 1]))
-          ? rest[rest.length - 1] as unknown as Record<string, PineValue>
-          : undefined;
+        const namedArgs =
+          rest.length > 0 &&
+          typeof rest[rest.length - 1] === 'object' &&
+          rest[rest.length - 1] !== null &&
+          !Array.isArray(rest[rest.length - 1])
+            ? (rest[rest.length - 1] as unknown as Record<string, PineValue>)
+            : undefined;
         const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
         let dir: OrderDirection;
@@ -1369,84 +1576,101 @@ export class ExecutionEngine {
         const entryName = typeof name === 'string' ? name : 'entry';
         const sp = typeof restArgs[2] === 'number' ? restArgs[2] : undefined;
         const lp = typeof restArgs[3] === 'number' ? restArgs[3] : undefined;
-        const cm = (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ?? (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
+        const cm =
+          (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ??
+          (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
         this.strategyEngine.entry(entryName, dir, qty, pr, sp, lp, cm);
         return NA;
       },
     );
 
-    this.builtins.set(
-      'strategy.exit',
-      (name: PineValue, ...rest: PineValue[]): PineValue => {
-        if (!this.strategyEngine) return NA;
+    this.builtins.set('strategy.exit', (name: PineValue, ...rest: PineValue[]): PineValue => {
+      if (!this.strategyEngine) return NA;
 
-        const namedArgs = (rest.length > 0 && typeof rest[rest.length - 1] === 'object' && rest[rest.length - 1] !== null && !Array.isArray(rest[rest.length - 1]))
-          ? rest[rest.length - 1] as unknown as Record<string, PineValue>
+      const namedArgs =
+        rest.length > 0 &&
+        typeof rest[rest.length - 1] === 'object' &&
+        rest[rest.length - 1] !== null &&
+        !Array.isArray(rest[rest.length - 1])
+          ? (rest[rest.length - 1] as unknown as Record<string, PineValue>)
           : undefined;
-        const restArgs = namedArgs ? rest.slice(0, -1) : rest;
+      const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
-        const exitName = typeof name === 'string' ? name : 'exit';
-        const qty = typeof restArgs[0] === 'number' ? restArgs[0] : (typeof namedArgs?.qty === 'number' ? namedArgs.qty : undefined);
-        const pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
-        const sp = typeof restArgs[2] === 'number' ? restArgs[2] : (typeof namedArgs?.stop === 'number' ? namedArgs.stop : undefined);
-        const lp = typeof restArgs[3] === 'number' ? restArgs[3] : (typeof namedArgs?.limit === 'number' ? namedArgs.limit : undefined);
-        const cm = (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ?? (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
-        this.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
-        return NA;
-      },
-    );
+      const exitName = typeof name === 'string' ? name : 'exit';
+      const qty =
+        typeof restArgs[0] === 'number'
+          ? restArgs[0]
+          : typeof namedArgs?.qty === 'number'
+            ? namedArgs.qty
+            : undefined;
+      const pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
+      const sp =
+        typeof restArgs[2] === 'number'
+          ? restArgs[2]
+          : typeof namedArgs?.stop === 'number'
+            ? namedArgs.stop
+            : undefined;
+      const lp =
+        typeof restArgs[3] === 'number'
+          ? restArgs[3]
+          : typeof namedArgs?.limit === 'number'
+            ? namedArgs.limit
+            : undefined;
+      const cm =
+        (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ??
+        (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
+      this.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
+      return NA;
+    });
 
-    this.builtins.set(
-      'strategy.close',
-      (nameOrNamed?: PineValue): PineValue => {
-        if (!this.strategyEngine) return NA;
-        let closeName = 'close';
-        let comment: string | undefined;
-        if (typeof nameOrNamed === 'string') {
-          closeName = nameOrNamed;
-        } else if (typeof nameOrNamed === 'object' && nameOrNamed !== null && !Array.isArray(nameOrNamed)) {
-          const na = nameOrNamed as unknown as Record<string, PineValue>;
-          if (typeof na.id === 'string') closeName = na.id;
-          if (typeof na.comment === 'string') comment = na.comment;
-        }
-        this.strategyEngine.close(closeName, comment);
-        return NA;
-      },
-    );
+    this.builtins.set('strategy.close', (nameOrNamed?: PineValue): PineValue => {
+      if (!this.strategyEngine) return NA;
+      let closeName = 'close';
+      let comment: string | undefined;
+      if (typeof nameOrNamed === 'string') {
+        closeName = nameOrNamed;
+      } else if (
+        typeof nameOrNamed === 'object' &&
+        nameOrNamed !== null &&
+        !Array.isArray(nameOrNamed)
+      ) {
+        const na = nameOrNamed as unknown as Record<string, PineValue>;
+        if (typeof na.id === 'string') closeName = na.id;
+        if (typeof na.comment === 'string') comment = na.comment;
+      }
+      this.strategyEngine.close(closeName, comment);
+      return NA;
+    });
 
-    this.builtins.set(
-      'strategy.close_all',
-      (name?: PineValue): PineValue => {
-        if (!this.strategyEngine) return NA;
-        const closeName = typeof name === 'string' ? name : 'close_all';
-        this.strategyEngine.closeAll(closeName);
-        return NA;
-      },
-    );
+    this.builtins.set('strategy.close_all', (name?: PineValue): PineValue => {
+      if (!this.strategyEngine) return NA;
+      const closeName = typeof name === 'string' ? name : 'close_all';
+      this.strategyEngine.closeAll(closeName);
+      return NA;
+    });
 
-    this.builtins.set(
-      'strategy.cancel',
-      (orderId: PineValue): PineValue => {
-        if (!this.strategyEngine) return NA;
-        if (typeof orderId === 'string') {
-          this.strategyEngine.cancel(orderId);
-        }
-        return NA;
-      },
-    );
+    this.builtins.set('strategy.cancel', (orderId: PineValue): PineValue => {
+      if (!this.strategyEngine) return NA;
+      if (typeof orderId === 'string') {
+        this.strategyEngine.cancel(orderId);
+      }
+      return NA;
+    });
 
-    this.builtins.set(
-      'strategy.cancel_all',
-      (): PineValue => {
-        if (!this.strategyEngine) return NA;
-        this.strategyEngine.cancelAll();
-        return NA;
-      },
-    );
+    this.builtins.set('strategy.cancel_all', (): PineValue => {
+      if (!this.strategyEngine) return NA;
+      this.strategyEngine.cancelAll();
+      return NA;
+    });
 
     this.builtins.set(
       'strategy.order',
-      (name: PineValue, direction: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
+      (
+        name: PineValue,
+        direction: PineValue,
+        quantity?: PineValue,
+        price?: PineValue,
+      ): PineValue => {
         if (!this.strategyEngine) return NA;
         const orderName = typeof name === 'string' ? name : 'order';
         const dir: OrderDirection = direction === 'short' ? 'short' : 'long';
@@ -1525,6 +1749,7 @@ export class ExecutionEngine {
     this.smaCallIndex = 0;
     this.emaCallIndex = 0;
     this.hmaCallIndex = 0;
+    this.rsiCallIndex = 0;
 
     try {
       this.createSnapshot();
@@ -1554,7 +1779,7 @@ export class ExecutionEngine {
       const executionTime = performance.now() - startTime;
       this.updateMetrics(true, executionTime);
 
-      const activeLines = [...this.lines.values()].map(l => ({ ...l }));
+      const activeLines = [...this.lines.values()].map((l) => ({ ...l }));
       return {
         success: true,
         version: this.sourceProgram.version,
@@ -1578,7 +1803,7 @@ export class ExecutionEngine {
       this.updateMetrics(false, executionTime);
       this.rollbackToPreviousBar();
 
-      const activeLines = [...this.lines.values()].map(l => ({ ...l }));
+      const activeLines = [...this.lines.values()].map((l) => ({ ...l }));
       return {
         success: false,
         version: this.sourceProgram.version,
@@ -1602,7 +1827,24 @@ export class ExecutionEngine {
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let lastResult: ExecutionResult = { success: true, version: this.sourceProgram.version, overlay: this.compiledScript.overlay, outputs: this.outputs, shapes: this.shapes, fills: this.fills, strategyMarkers: this.getStrategyMarkers(), bgcolor: this.bgcolorData, plotColors: this.plotColors, fillColorData: this.fillColorData, lines: [...this.lines.values()].map(l => ({...l})), labels: [...this.labels], barTimestamps: [...this.barTimestamps], alertConditions: this.alertConditionEntries, alertTriggers: [...this.alertTriggers], barColorData: [...this.barColorData] };
+    let lastResult: ExecutionResult = {
+      success: true,
+      version: this.sourceProgram.version,
+      overlay: this.compiledScript.overlay,
+      outputs: this.outputs,
+      shapes: this.shapes,
+      fills: this.fills,
+      strategyMarkers: this.getStrategyMarkers(),
+      bgcolor: this.bgcolorData,
+      plotColors: this.plotColors,
+      fillColorData: this.fillColorData,
+      lines: [...this.lines.values()].map((l) => ({ ...l })),
+      labels: [...this.labels],
+      barTimestamps: [...this.barTimestamps],
+      alertConditions: this.alertConditionEntries,
+      alertTriggers: [...this.alertTriggers],
+      barColorData: [...this.barColorData],
+    };
 
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
@@ -1628,9 +1870,7 @@ export class ExecutionEngine {
         success: result.success,
         error: result.error,
         overlay: this.compiledScript.overlay,
-        diffOutputs: Object.fromEntries(
-          Array.from(result.outputs).map(([k, s]) => [k, s.last()]),
-        ),
+        diffOutputs: Object.fromEntries(Array.from(result.outputs).map(([k, s]) => [k, s.last()])),
         diffShapes: [...result.shapes],
         diffFills: [...result.fills],
         diffLines: [...(result.lines || [])],
@@ -1888,7 +2128,14 @@ export class ExecutionEngine {
     if (existing) {
       existing.series.push(value);
     } else {
-      const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip, decl.isConst);
+      const binding = declareVariable(
+        scope,
+        decl.name,
+        FLOAT_TYPE,
+        decl.isVar,
+        decl.isVarip,
+        decl.isConst,
+      );
       binding.series.push(value);
     }
 
@@ -1919,17 +2166,22 @@ export class ExecutionEngine {
         const current = binding.series.getRelative(0);
         switch (stmt.operator) {
           case '+=':
-            result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0);
+            result =
+              (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0);
             break;
           case '-=':
-            result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0);
+            result =
+              (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0);
             break;
           case '*=':
-            result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0);
+            result =
+              (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0);
             break;
           case '/=':
-            result = (typeof current === 'number' && typeof value === 'number' && value !== 0)
-              ? current / value : 0;
+            result =
+              typeof current === 'number' && typeof value === 'number' && value !== 0
+                ? current / value
+                : 0;
             break;
           case ':=':
             result = value;
@@ -2081,7 +2333,10 @@ export class ExecutionEngine {
     _scope: RuntimeScope,
     _context: ExecutionContext,
   ): PineValue {
-    this.userTypeFields.set(stmt.name, stmt.fields.map(f => f.name));
+    this.userTypeFields.set(
+      stmt.name,
+      stmt.fields.map((f) => f.name),
+    );
     return NA;
   }
 
@@ -2324,9 +2579,8 @@ export class ExecutionEngine {
       }
 
       if (funcName === 'plot' && !namedArgs.title) {
-        const hasPositionalTitle = expr.arguments.length > 1 && (
-          expr.arguments[1]!.kind === 'StringLiteral'
-        );
+        const hasPositionalTitle =
+          expr.arguments.length > 1 && expr.arguments[1]!.kind === 'StringLiteral';
         if (!hasPositionalTitle && expr.arguments.length > 0) {
           const firstArg = expr.arguments[0];
           if (firstArg.kind === 'Identifier') {
@@ -2395,22 +2649,53 @@ export class ExecutionEngine {
       const obj = this.executeExpression(expr.callee.object, scope, context);
       if (Array.isArray(obj)) {
         switch (methodName) {
-          case 'size': return obj.length;
-          case 'first': return obj.length > 0 ? obj[0] : NA;
-          case 'last': return obj.length > 0 ? obj[obj.length - 1] : NA;
-          case 'shift': return obj.shift() ?? NA;
-          case 'pop': return obj.pop() ?? NA;
-          case 'push': obj.push(args[0] ?? NA); return obj.length;
-          case 'unshift': obj.unshift(args[0] ?? NA); return obj.length;
-          case 'insert': { const idx = (args[0] as number) ?? 0; obj.splice(idx, 0, args[1] ?? NA); return obj.length; }
-          case 'remove': { const ri = (args[0] as number) ?? 0; return obj.splice(ri, 1)[0] ?? NA; }
-          case 'contains': return obj.includes(args[0] ?? NA);
-          case 'fill': { const fv = args[0] ?? NA; for (let fi = 0; fi < obj.length; fi++) obj[fi] = fv; return obj; }
-          case 'set': { const si = (args[0] as number) ?? 0; obj[si] = args[1] ?? NA; return obj; }
-          case 'get': { const gi = (args[0] as number) ?? 0; return obj[gi] ?? NA; }
-          case 'sort': return obj.sort((a: PineValue, b: PineValue) => (a as number) - (b as number));
-          case 'copy': return [...obj];
-          default: return NA;
+          case 'size':
+            return obj.length;
+          case 'first':
+            return obj.length > 0 ? obj[0] : NA;
+          case 'last':
+            return obj.length > 0 ? obj[obj.length - 1] : NA;
+          case 'shift':
+            return obj.shift() ?? NA;
+          case 'pop':
+            return obj.pop() ?? NA;
+          case 'push':
+            obj.push(args[0] ?? NA);
+            return obj.length;
+          case 'unshift':
+            obj.unshift(args[0] ?? NA);
+            return obj.length;
+          case 'insert': {
+            const idx = (args[0] as number) ?? 0;
+            obj.splice(idx, 0, args[1] ?? NA);
+            return obj.length;
+          }
+          case 'remove': {
+            const ri = (args[0] as number) ?? 0;
+            return obj.splice(ri, 1)[0] ?? NA;
+          }
+          case 'contains':
+            return obj.includes(args[0] ?? NA);
+          case 'fill': {
+            const fv = args[0] ?? NA;
+            for (let fi = 0; fi < obj.length; fi++) obj[fi] = fv;
+            return obj;
+          }
+          case 'set': {
+            const si = (args[0] as number) ?? 0;
+            obj[si] = args[1] ?? NA;
+            return obj;
+          }
+          case 'get': {
+            const gi = (args[0] as number) ?? 0;
+            return obj[gi] ?? NA;
+          }
+          case 'sort':
+            return obj.sort((a: PineValue, b: PineValue) => (a as number) - (b as number));
+          case 'copy':
+            return [...obj];
+          default:
+            return NA;
         }
       }
 
@@ -2424,18 +2709,54 @@ export class ExecutionEngine {
       // Line/label methods on returned IDs (lin.shift().delete(), line.get_x2(id), etc.)
       if (typeof obj === 'number') {
         switch (methodName) {
-          case 'delete': this.lines.delete(obj); return true;
-          case 'get_x1': { const ln = this.lines.get(obj); return ln ? ln.x1 : NA; }
-          case 'get_y1': { const ln = this.lines.get(obj); return ln ? ln.y1 : NA; }
-          case 'get_x2': { const ln = this.lines.get(obj); return ln ? ln.x2 : NA; }
-          case 'get_y2': { const ln = this.lines.get(obj); return ln ? ln.y2 : NA; }
-          case 'get_color': { const ln = this.lines.get(obj); return ln ? ln.color : NA; }
-          case 'get_style': { const ln = this.lines.get(obj); return ln ? ln.style : NA; }
-          case 'get_width': { const ln = this.lines.get(obj); return ln ? ln.width : NA; }
-          case 'set_color': { const ln = this.lines.get(obj); if (ln) ln.color = String(args[0] ?? '#2196f3'); return true; }
-          case 'set_style': { const ln = this.lines.get(obj); if (ln) ln.style = String(args[0] ?? 'solid'); return true; }
-          case 'set_width': { const ln = this.lines.get(obj); if (ln) ln.width = (args[0] as number) ?? 1; return true; }
-          default: return NA;
+          case 'delete':
+            this.lines.delete(obj);
+            return true;
+          case 'get_x1': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.x1 : NA;
+          }
+          case 'get_y1': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.y1 : NA;
+          }
+          case 'get_x2': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.x2 : NA;
+          }
+          case 'get_y2': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.y2 : NA;
+          }
+          case 'get_color': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.color : NA;
+          }
+          case 'get_style': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.style : NA;
+          }
+          case 'get_width': {
+            const ln = this.lines.get(obj);
+            return ln ? ln.width : NA;
+          }
+          case 'set_color': {
+            const ln = this.lines.get(obj);
+            if (ln) ln.color = String(args[0] ?? '#2196f3');
+            return true;
+          }
+          case 'set_style': {
+            const ln = this.lines.get(obj);
+            if (ln) ln.style = String(args[0] ?? 'solid');
+            return true;
+          }
+          case 'set_width': {
+            const ln = this.lines.get(obj);
+            if (ln) ln.width = (args[0] as number) ?? 1;
+            return true;
+          }
+          default:
+            return NA;
         }
       }
     }
@@ -2491,11 +2812,24 @@ export class ExecutionEngine {
 
       if (objName === 'color') {
         const colorMap: Record<string, string> = {
-          blue: '#2196F3', red: '#F44336', green: '#4CAF50', orange: '#FF9800',
-          purple: '#9C27B0', yellow: '#FFEB3B', cyan: '#00BCD4', black: '#000000',
-          white: '#FFFFFF', gray: '#9E9E9E', lime: '#8BC34A', teal: '#009688',
-          maroon: '#800000', navy: '#000080', olive: '#808000', aqua: '#00FFFF',
-          fuchsia: '#FF00FF', silver: '#C0C0C0',
+          blue: '#2196F3',
+          red: '#F44336',
+          green: '#4CAF50',
+          orange: '#FF9800',
+          purple: '#9C27B0',
+          yellow: '#FFEB3B',
+          cyan: '#00BCD4',
+          black: '#000000',
+          white: '#FFFFFF',
+          gray: '#9E9E9E',
+          lime: '#8BC34A',
+          teal: '#009688',
+          maroon: '#800000',
+          navy: '#000080',
+          olive: '#808000',
+          aqua: '#00FFFF',
+          fuchsia: '#FF00FF',
+          silver: '#C0C0C0',
         };
         return colorMap[expr.property] || '#' + expr.property;
       }
@@ -2519,7 +2853,13 @@ export class ExecutionEngine {
         }
         return NA;
       }
-      if (objName === 'text' || objName === 'linewidth' || objName === 'linecap' || objName === 'linejoin' || objName === 'textalign') {
+      if (
+        objName === 'text' ||
+        objName === 'linewidth' ||
+        objName === 'linecap' ||
+        objName === 'linejoin' ||
+        objName === 'textalign'
+      ) {
         return expr.property;
       }
       if (objName === 'syminfo') {
