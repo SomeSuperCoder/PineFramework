@@ -209,9 +209,7 @@ export class StrategyEngine {
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      hasStop && hasLimit ? 'stop-limit' :
-      hasStop ? 'stop' :
-      hasLimit ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -279,9 +277,7 @@ export class StrategyEngine {
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      hasStop && hasLimit ? 'stop-limit' :
-      hasStop ? 'stop' :
-      hasLimit ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -337,9 +333,7 @@ export class StrategyEngine {
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
-      hasStop && hasLimit ? 'stop-limit' :
-      hasStop ? 'stop' :
-      hasLimit ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -529,7 +523,8 @@ export class StrategyEngine {
     if (this.position.direction === 'flat' || this.position.quantity === 0) return;
 
     const positionValue = this.currentPrice * this.position.quantity;
-    const marginRate = this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
+    const marginRate =
+      this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
     const maintenanceMargin = positionValue * marginRate;
     const totalEquity = this.equity + this.position.unrealizedPnl;
 
@@ -590,7 +585,11 @@ export class StrategyEngine {
     }
   }
 
-  private getExtremePrice(direction: OrderDirection, high: number, low: number): { maxPrice: number; minPrice: number } {
+  private getExtremePrice(
+    direction: OrderDirection,
+    high: number,
+    low: number,
+  ): { maxPrice: number; minPrice: number } {
     if (direction === 'long') {
       return { maxPrice: high, minPrice: low };
     }
@@ -615,13 +614,15 @@ export class StrategyEngine {
       this.low,
     );
 
-    const mae = this.position.direction === 'long'
-      ? (this.position.avgPrice - minPrice) / this.position.avgPrice * 100
-      : (maxPrice - this.position.avgPrice) / this.position.avgPrice * 100;
+    const mae =
+      this.position.direction === 'long'
+        ? ((this.position.avgPrice - minPrice) / this.position.avgPrice) * 100
+        : ((maxPrice - this.position.avgPrice) / this.position.avgPrice) * 100;
 
-    const mfe = this.position.direction === 'long'
-      ? (maxPrice - this.position.avgPrice) / this.position.avgPrice * 100
-      : (this.position.avgPrice - minPrice) / this.position.avgPrice * 100;
+    const mfe =
+      this.position.direction === 'long'
+        ? ((maxPrice - this.position.avgPrice) / this.position.avgPrice) * 100
+        : ((this.position.avgPrice - minPrice) / this.position.avgPrice) * 100;
 
     const trade: Trade = {
       id: `trade_${this.trades.length + 1}`,
@@ -759,10 +760,7 @@ export class StrategyEngine {
 
     for (const order of stopLimitTriggers) {
       const limitPrice = order.limitPrice ?? order.price;
-      const limitHit =
-        order.action === 'buy'
-          ? low <= limitPrice
-          : high >= limitPrice;
+      const limitHit = order.action === 'buy' ? low <= limitPrice : high >= limitPrice;
       if (limitHit) {
         this.fillOrder(order, limitPrice);
       } else {
@@ -839,7 +837,8 @@ export class StrategyEngine {
   }
 
   getAccount(): Account {
-    const marginRate = this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
+    const marginRate =
+      this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
     const positionValue = this.currentPrice * this.position.quantity;
     const marginUsed = this.position.direction !== 'flat' ? positionValue * marginRate : 0;
     const totalEquity = this.equity + this.position.unrealizedPnl;

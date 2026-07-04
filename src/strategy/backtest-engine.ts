@@ -146,7 +146,8 @@ export class BacktestEngine {
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i]!;
       const matching = this.config.subBars.filter(
-        (sb) => sb.timestamp >= bar.timestamp &&
+        (sb) =>
+          sb.timestamp >= bar.timestamp &&
           (i === bars.length - 1 || sb.timestamp < bars[i + 1]!.timestamp),
       );
       if (matching.length > 0) {
@@ -205,9 +206,8 @@ export class BacktestEngine {
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
       if (!monthly[key]) {
-        monthly[key] = prevMonthEquity > 0
-          ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100
-          : 0;
+        monthly[key] =
+          prevMonthEquity > 0 ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100 : 0;
         prevMonthEquity = point.equity;
       }
     }

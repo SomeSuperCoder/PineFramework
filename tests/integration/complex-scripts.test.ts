@@ -69,7 +69,6 @@ function executeScript(
 }
 
 describe('Complex Script Integration Tests', () => {
-
   // --- 1. Candle Size Classifier ---
   it('1. Candle Size Classifier: if/else chain with bar data', () => {
     const source = `//@version=6

@@ -39,11 +39,26 @@ function barsToContexts(bars: TestBar[]): ExecutionContext[] {
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, index + 1).map(b => b.open)),
-    high: createSeries('high', bars.slice(0, index + 1).map(b => b.high)),
-    low: createSeries('low', bars.slice(0, index + 1).map(b => b.low)),
-    close: createSeries('close', bars.slice(0, index + 1).map(b => b.close)),
-    volume: createSeries('volume', bars.slice(0, index + 1).map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, index + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, index + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, index + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, index + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, index + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -54,11 +69,26 @@ function makeFormingContext(bars: TestBar[], newClose: number): ExecutionContext
     barIndex: index,
     barCount: bars.length,
     timestamp: lastBar.timestamp,
-    open: createSeries('open', bars.map(b => b.open)),
-    high: createSeries('high', bars.map(b => b.high)),
-    low: createSeries('low', bars.map(b => b.low)),
-    close: createSeries('close', bars.map((b, i) => i === index ? newClose : b.close)),
-    volume: createSeries('volume', bars.map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.map((b, i) => (i === index ? newClose : b.close)),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.map((b) => b.volume),
+    ),
   };
 }
 
@@ -156,7 +186,7 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const smaKey = Array.from(fullResult.outputs.keys()).find(k => k.includes('sma'));
+      const smaKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('sma'));
       expect(smaKey).toBeDefined();
       const smaSeries = fullResult.outputs.get(smaKey!)!;
       const prevSmaValue = smaSeries.last();
@@ -311,7 +341,7 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const emaKey = Array.from(fullResult.outputs.keys()).find(k => k.includes('ema'));
+      const emaKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('ema'));
       expect(emaKey).toBeDefined();
 
       const lastBar = bars[bars.length - 1]!;
@@ -394,7 +424,7 @@ plot(x ? 1 : 0, "confirmed")`;
 
       const result = engine.executeRealtimeBar(newBarCtx);
       expect(result.success).toBe(true);
-      const confirmedKey = Array.from(result.outputs.keys()).find(k => k.includes('confirmed'));
+      const confirmedKey = Array.from(result.outputs.keys()).find((k) => k.includes('confirmed'));
       expect(confirmedKey).toBeDefined();
       const series = result.outputs.get(confirmedKey!)!;
       // During real-time bar execution, barstate.isconfirmed should be true → plot value is 1

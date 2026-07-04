@@ -326,7 +326,9 @@ export function getStrategyConfig(config: ScriptConfig): {
 
   const strat = config as StrategyConfig;
 
-  const mapCommissionType = (t?: CommissionType): 'percent' | 'fixed' | 'per_contract' | 'per_order' => {
+  const mapCommissionType = (
+    t?: CommissionType,
+  ): 'percent' | 'fixed' | 'per_contract' | 'per_order' => {
     if (t === 'per_order') return 'per_order';
     if (t === 'per_contract') return 'per_contract';
     if (t === 'percent') return 'percent';

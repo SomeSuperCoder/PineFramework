@@ -1,14 +1,27 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
-  const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
   let price = startPrice;
   let s = seed;
-  const rand = () => { s = (s * 16807 + 0) % 2147483647; return (s / 2147483647); };
+  const rand = () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
   for (let i = 0; i < count; i++) {
     const open = price;
     let drift: number;
@@ -33,11 +46,26 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
     barIndex: i,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-    high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
   }));
   return { engine, bars, result: engine.executeBars(contexts) };
 }
@@ -63,7 +91,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const engine = new ExecutionEngine(compiled);
     const bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
     const ctx: ExecutionContext = {
-      barIndex: 0, barCount: 1, timestamp: bar.timestamp,
+      barIndex: 0,
+      barCount: 1,
+      timestamp: bar.timestamp,
       open: createSeries('open', [bar.open]),
       high: createSeries('high', [bar.high]),
       low: createSeries('low', [bar.low]),
@@ -88,7 +118,7 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     for (const [, series] of result.outputs) {
-      const nonNull = series.values.filter(v => v !== null && v !== undefined);
+      const nonNull = series.values.filter((v) => v !== null && v !== undefined);
       expect(nonNull.length).toBe(series.values.length);
       for (const v of nonNull) {
         expect(typeof v).toBe('number');
@@ -104,7 +134,7 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const series = Array.from(result.outputs.values())[0]!;
     const warmup = 60;
     const tail = 30;
-    const tailClose = bars.slice(-tail).map(b => b.close);
+    const tailClose = bars.slice(-tail).map((b) => b.close);
     const tailFilter = series.values.slice(-tail) as number[];
     const avgClose = tailClose.reduce((a, b) => a + b, 0) / tail;
     const avgFilter = tailFilter.reduce((a, b) => a + b, 0) / tail;
@@ -137,10 +167,10 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(colors.length).toBe(200);
     const unique = new Set(colors);
     expect(unique.size).toBeGreaterThan(5);
-    const lower = colors.map(c => c.toLowerCase());
-    const hasYellow = lower.some(c => c === '#ffeb3b');
-    const hasGreen = lower.some(c => c === '#8bc34a');
-    const hasRed = lower.some(c => c === '#f44336');
+    const lower = colors.map((c) => c.toLowerCase());
+    const hasYellow = lower.some((c) => c === '#ffeb3b');
+    const hasGreen = lower.some((c) => c === '#8bc34a');
+    const hasRed = lower.some((c) => c === '#f44336');
     expect(hasYellow).toBe(true);
     expect(hasGreen).toBe(true);
     expect(hasRed).toBe(true);
@@ -177,9 +207,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     const colors = result.plotColors!.get('Two-Pole Filter__lw:3')!;
-    const lower = colors.map(c => c.toLowerCase());
+    const lower = colors.map((c) => c.toLowerCase());
     const yellowIdx = lower.indexOf('#ffeb3b');
-    const greenIdx = lower.findIndex(c => c === '#8bc34a');
+    const greenIdx = lower.findIndex((c) => c === '#8bc34a');
     expect(yellowIdx).toBeGreaterThanOrEqual(0);
     expect(greenIdx).toBeGreaterThan(yellowIdx);
   });

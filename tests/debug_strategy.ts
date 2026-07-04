@@ -1,6 +1,9 @@
 import { parse } from '../src/language/parser/parser.js';
 import { compile } from '../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../src/language/runtime/execution-engine.js';
 import { createSeries } from '../src/language/runtime/series.js';
 import type { Bar } from '../src/data/bar.js';
 
@@ -47,12 +50,12 @@ let lastResult;
 for (const ctx of contexts) {
   lastResult = engine.executeBar(ctx);
   if (!lastResult.success) {
-    console.error("FAILED:", lastResult.error);
+    console.error('FAILED:', lastResult.error);
     break;
   }
 }
 
-console.log("Strategy markers:");
+console.log('Strategy markers:');
 for (const m of lastResult!.strategyMarkers) {
-  console.log("  type:", m.type, "barIndex:", m.barIndex, "timestamp:", m.timestamp);
+  console.log('  type:', m.type, 'barIndex:', m.barIndex, 'timestamp:', m.timestamp);
 }

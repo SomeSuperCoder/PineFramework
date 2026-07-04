@@ -57,7 +57,9 @@ export class Parser {
       throw new ParseError('Missing //@version=N declaration');
     }
     if (version !== 5 && version !== 6) {
-      throw new ParseError(`Unsupported Pine Script version: ${version}. Only v5 and v6 are supported.`);
+      throw new ParseError(
+        `Unsupported Pine Script version: ${version}. Only v5 and v6 are supported.`,
+      );
     }
 
     this.tokens = new Tokenizer(source).tokenize();
@@ -193,14 +195,22 @@ export class Parser {
     if (this.match(TokenType.Continue)) {
       return this.parseContinueStatement();
     }
-    if ((this.checkTypeKeyword() && (this.checkNext(TokenType.Identifier) || this.checkNextTypeKeyword())) || this.looksLikeUserType()) {
+    if (
+      (this.checkTypeKeyword() &&
+        (this.checkNext(TokenType.Identifier) || this.checkNextTypeKeyword())) ||
+      this.looksLikeUserType()
+    ) {
       return this.parseTypedVariableDeclaration(false, false);
     }
 
     return this.parseExpressionOrAssignmentStatement();
   }
 
-  private parseTypedVariableDeclaration(isVar: boolean, isVarip: boolean, isConst: boolean = false): VariableDeclarationNode {
+  private parseTypedVariableDeclaration(
+    isVar: boolean,
+    isVarip: boolean,
+    isConst: boolean = false,
+  ): VariableDeclarationNode {
     const start = this.peek().span.start;
     const typeAnnotation = this.parseTypeAnnotation();
     const nameToken = this.consume(TokenType.Identifier, 'Expected variable name');
@@ -222,7 +232,11 @@ export class Parser {
     };
   }
 
-  private parseVariableDeclaration(isVar: boolean, isVarip: boolean, isConst: boolean = false): VariableDeclarationNode {
+  private parseVariableDeclaration(
+    isVar: boolean,
+    isVarip: boolean,
+    isConst: boolean = false,
+  ): VariableDeclarationNode {
     const start = this.previous().span.start;
     const nameToken = this.consume(TokenType.Identifier, 'Expected variable name');
     let typeAnnotation: TypeAnnotationNode | undefined;
@@ -605,7 +619,16 @@ export class Parser {
   private parseExpressionOrAssignmentStatement(): StatementNode {
     const expr = this.parseExpression();
 
-    if (this.match(TokenType.ColonAssign, TokenType.Assign, TokenType.PlusAssign, TokenType.MinusAssign, TokenType.StarAssign, TokenType.SlashAssign)) {
+    if (
+      this.match(
+        TokenType.ColonAssign,
+        TokenType.Assign,
+        TokenType.PlusAssign,
+        TokenType.MinusAssign,
+        TokenType.StarAssign,
+        TokenType.SlashAssign,
+      )
+    ) {
       const op = this.previous().type;
       const operatorMap: Record<string, string> = {
         [TokenType.ColonAssign]: ':=',
@@ -868,7 +891,12 @@ export class Parser {
     const namedArguments: ArgumentNode[] = [];
 
     while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
-      if ((this.check(TokenType.Identifier) || this.check(TokenType.ColorType) || this.check(TokenType.StringType)) && this.checkNext(TokenType.Assign)) {
+      if (
+        (this.check(TokenType.Identifier) ||
+          this.check(TokenType.ColorType) ||
+          this.check(TokenType.StringType)) &&
+        this.checkNext(TokenType.Assign)
+      ) {
         namedArguments.push(this.parseNamedArgument());
       } else {
         args.push(this.parseExpression());
@@ -951,7 +979,17 @@ export class Parser {
         value: token.value as string,
       } as ColorLiteralNode;
     }
-    if (this.match(TokenType.Identifier) || this.match(TokenType.ColorType) || this.match(TokenType.StringType) || this.match(TokenType.Strategy) || this.match(TokenType.Indicator) || this.match(TokenType.Library) || this.match(TokenType.Array) || this.match(TokenType.Map) || this.match(TokenType.Matrix)) {
+    if (
+      this.match(TokenType.Identifier) ||
+      this.match(TokenType.ColorType) ||
+      this.match(TokenType.StringType) ||
+      this.match(TokenType.Strategy) ||
+      this.match(TokenType.Indicator) ||
+      this.match(TokenType.Library) ||
+      this.match(TokenType.Array) ||
+      this.match(TokenType.Map) ||
+      this.match(TokenType.Matrix)
+    ) {
       const token = this.previous();
 
       if (this.check(TokenType.Arrow) && this.peek().span.start.line === token.span.start.line) {

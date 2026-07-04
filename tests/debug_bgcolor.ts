@@ -1,6 +1,9 @@
 import { parse } from '../src/language/parser/parser.js';
 import { compile } from '../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../src/language/runtime/execution-engine.js';
 import { createSeries } from '../src/language/runtime/series.js';
 import type { Bar } from '../src/data/bar.js';
 
@@ -44,13 +47,13 @@ let lastResult;
 for (const ctx of contexts) {
   lastResult = engine.executeBar(ctx);
   if (!lastResult.success) {
-    console.error("FAILED:", lastResult.error);
+    console.error('FAILED:', lastResult.error);
     break;
   }
 }
 
-console.log("Success:", lastResult!.success);
-console.log("Bgcolor entries:", lastResult!.bgcolor.length);
+console.log('Success:', lastResult!.success);
+console.log('Bgcolor entries:', lastResult!.bgcolor.length);
 for (const b of lastResult!.bgcolor) {
-  console.log("  time:", b.time, "color:", b.color);
+  console.log('  time:', b.time, 'color:', b.color);
 }

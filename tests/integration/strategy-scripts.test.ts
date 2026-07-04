@@ -68,7 +68,6 @@ function executeScript(
 }
 
 describe('Strategy Script Integration Tests', () => {
-
   // --- 1. Full MA Bias + Parabolic SAR Long Only ---
   it('1. MA Bias + Parabolic SAR Long Only', () => {
     const source = `//@version=6
@@ -124,8 +123,8 @@ bgcolor(bullBias ? color.new(color.green, 92) : color.new(color.red, 92))`;
 
     const outputs = engine.getAllOutputs();
     const outputKeys = Array.from(outputs.keys());
-    expect(outputKeys.some(k => k.startsWith('Moving Average'))).toBe(true);
-    expect(outputKeys.some(k => k.startsWith('Parabolic SAR'))).toBe(true);
+    expect(outputKeys.some((k) => k.startsWith('Moving Average'))).toBe(true);
+    expect(outputKeys.some((k) => k.startsWith('Parabolic SAR'))).toBe(true);
   });
 
   // --- 2. Simple SMA Crossover Strategy ---
@@ -161,8 +160,8 @@ plot(slowMA, "Slow MA")`;
 
     const outputs = engine.getAllOutputs();
     const outputKeys = Array.from(outputs.keys());
-    expect(outputKeys.some(k => k.startsWith('Fast MA'))).toBe(true);
-    expect(outputKeys.some(k => k.startsWith('Slow MA'))).toBe(true);
+    expect(outputKeys.some((k) => k.startsWith('Fast MA'))).toBe(true);
+    expect(outputKeys.some((k) => k.startsWith('Slow MA'))).toBe(true);
   });
 
   // --- 3. Switch expression with three cases ---
@@ -186,7 +185,7 @@ plot(avg, "Average")`;
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
     const outputs = engine.getAllOutputs();
-    expect(Array.from(outputs.keys()).some(k => k.startsWith('Average'))).toBe(true);
+    expect(Array.from(outputs.keys()).some((k) => k.startsWith('Average'))).toBe(true);
   });
 
   // --- 4. PSAR standalone calculation ---
@@ -204,7 +203,7 @@ plot(psar, "PSAR")`;
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
     const outputs = engine.getAllOutputs();
-    expect(Array.from(outputs.keys()).some(k => k.startsWith('PSAR'))).toBe(true);
+    expect(Array.from(outputs.keys()).some((k) => k.startsWith('PSAR'))).toBe(true);
   });
 
   // --- 5. Strategy with pyramiding and take-profit ---
@@ -228,7 +227,7 @@ plot(strategy.position_size, "Position Size")`;
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
     const outputs = engine.getAllOutputs();
-    expect(Array.from(outputs.keys()).some(k => k.startsWith('Position Size'))).toBe(true);
+    expect(Array.from(outputs.keys()).some((k) => k.startsWith('Position Size'))).toBe(true);
   });
 
   // --- 6. Color.new and bgcolor ---
@@ -245,7 +244,7 @@ plot(close, "Close")`;
 
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
-    expect(Array.from(engine.getAllOutputs().keys()).some(k => k.startsWith('Close'))).toBe(true);
+    expect(Array.from(engine.getAllOutputs().keys()).some((k) => k.startsWith('Close'))).toBe(true);
   });
 
   // --- 7. plot.style_cross with linewidth ---
@@ -261,7 +260,7 @@ plot(close, "Close", style=plot.style_cross, linewidth=3)`;
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
     const outputs = engine.getAllOutputs();
-    expect(Array.from(outputs.keys()).some(k => k.startsWith('Close'))).toBe(true);
+    expect(Array.from(outputs.keys()).some((k) => k.startsWith('Close'))).toBe(true);
   });
 
   // --- 8. Switch expression with numeric cases ---
@@ -281,7 +280,9 @@ plot(result, "Result")`;
 
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
-    expect(Array.from(engine.getAllOutputs().keys()).some(k => k.startsWith('Result'))).toBe(true);
+    expect(Array.from(engine.getAllOutputs().keys()).some((k) => k.startsWith('Result'))).toBe(
+      true,
+    );
   });
 
   // --- 9. High bar count with full strategy ---
@@ -333,6 +334,8 @@ plot(result, "Result")`;
 
     expect(result.success).toBe(true);
     expect(engine.getMetrics().failedBars).toBe(0);
-    expect(Array.from(engine.getAllOutputs().keys()).some(k => k.startsWith('Result'))).toBe(true);
+    expect(Array.from(engine.getAllOutputs().keys()).some((k) => k.startsWith('Result'))).toBe(
+      true,
+    );
   });
 });

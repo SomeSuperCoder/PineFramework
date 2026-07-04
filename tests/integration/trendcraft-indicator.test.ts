@@ -1,12 +1,22 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import type { Bar } from '../../src/data/bar.js';
 
 function createBars(count: number, startPrice: number = 100) {
-  const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
   let price = startPrice;
   for (let i = 0; i < count; i++) {
     const open = price;
@@ -14,7 +24,14 @@ function createBars(count: number, startPrice: number = 100) {
     const close = open + change;
     const high = Math.max(open, close) + Math.random() * 2;
     const low = Math.min(open, close) - Math.random() * 2;
-    bars.push({ timestamp: Date.now() + i * 86400000, open, high, low, close, volume: Math.floor(Math.random() * 10000) + 1000 });
+    bars.push({
+      timestamp: Date.now() + i * 86400000,
+      open,
+      high,
+      low,
+      close,
+      volume: Math.floor(Math.random() * 10000) + 1000,
+    });
     price = close;
   }
   return bars;
@@ -43,8 +60,24 @@ plot(x, "ticker")`;
     const { ast } = parse(testSource);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
-    const bar: Bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
-    const ctx: ExecutionContext = { barIndex: 0, barCount: 1, timestamp: bar.timestamp, open: createSeries('open', [bar.open]), high: createSeries('high', [bar.high]), low: createSeries('low', [bar.low]), close: createSeries('close', [bar.close]), volume: createSeries('volume', [bar.volume]) };
+    const bar: Bar = {
+      timestamp: Date.now(),
+      open: 100,
+      high: 101,
+      low: 99,
+      close: 100,
+      volume: 1000,
+    };
+    const ctx: ExecutionContext = {
+      barIndex: 0,
+      barCount: 1,
+      timestamp: bar.timestamp,
+      open: createSeries('open', [bar.open]),
+      high: createSeries('high', [bar.high]),
+      low: createSeries('low', [bar.low]),
+      close: createSeries('close', [bar.close]),
+      volume: createSeries('volume', [bar.volume]),
+    };
     const result = engine.executeBar(ctx);
     expect(result.success).toBe(true);
   });
@@ -53,8 +86,24 @@ plot(x, "ticker")`;
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
-    const bar: Bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
-    const ctx: ExecutionContext = { barIndex: 0, barCount: 1, timestamp: bar.timestamp, open: createSeries('open', [bar.open]), high: createSeries('high', [bar.high]), low: createSeries('low', [bar.low]), close: createSeries('close', [bar.close]), volume: createSeries('volume', [bar.volume]) };
+    const bar: Bar = {
+      timestamp: Date.now(),
+      open: 100,
+      high: 101,
+      low: 99,
+      close: 100,
+      volume: 1000,
+    };
+    const ctx: ExecutionContext = {
+      barIndex: 0,
+      barCount: 1,
+      timestamp: bar.timestamp,
+      open: createSeries('open', [bar.open]),
+      high: createSeries('high', [bar.high]),
+      low: createSeries('low', [bar.low]),
+      close: createSeries('close', [bar.close]),
+      volume: createSeries('volume', [bar.volume]),
+    };
     const result = engine.executeBar(ctx);
     if (!result.success) {
       console.error('Execution error:', result.error);
@@ -71,11 +120,26 @@ plot(x, "ticker")`;
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
     return { engine, bars, result: engine.executeBars(contexts) };
   }
@@ -86,7 +150,7 @@ plot(x, "ticker")`;
     expect(result.outputs.size).toBe(2);
     expect(result.fills.length).toBeGreaterThan(0);
     for (const [key, series] of result.outputs) {
-      const nonNull = series.values.filter(v => v !== null && v !== undefined);
+      const nonNull = series.values.filter((v) => v !== null && v !== undefined);
       expect(nonNull.length).toBeGreaterThan(0);
       console.log(`  ${key}: ${nonNull.length}/${series.values.length} non-null`);
     }
@@ -97,8 +161,8 @@ plot(x, "ticker")`;
 
     // === 1) TWO SMA plot outputs with correct metadata ===
     const plotKeys = [...result.outputs.keys()];
-    const smaLowKey = plotKeys.find(k => k.includes('SMA Low'));
-    const smaHighKey = plotKeys.find(k => k.includes('SMA High'));
+    const smaLowKey = plotKeys.find((k) => k.includes('SMA Low'));
+    const smaHighKey = plotKeys.find((k) => k.includes('SMA High'));
     expect(smaLowKey).toBeDefined();
     expect(smaHighKey).toBeDefined();
     expect(smaLowKey).toContain('__lw:2');
@@ -113,8 +177,8 @@ plot(x, "ticker")`;
     const highColors = result.plotColors!.get(smaHighKey!)!;
     expect(lowColors.length).toBe(50);
     expect(highColors.length).toBe(50);
-    const nonNullLowColors = lowColors.filter(c => c !== null);
-    const nonNullHighColors = highColors.filter(c => c !== null);
+    const nonNullLowColors = lowColors.filter((c) => c !== null);
+    const nonNullHighColors = highColors.filter((c) => c !== null);
     expect(nonNullLowColors.length).toBeGreaterThan(0);
     expect(nonNullHighColors.length).toBeGreaterThan(0);
     for (const c of nonNullLowColors) {
@@ -133,7 +197,7 @@ plot(x, "ticker")`;
     expect(result.fillColorData!.has(fillKey)).toBe(true);
     const fillColors = result.fillColorData!.get(fillKey)!;
     expect(fillColors.length).toBe(50);
-    const nonNullFillColors = fillColors.filter(c => c !== null);
+    const nonNullFillColors = fillColors.filter((c) => c !== null);
     expect(nonNullFillColors.length).toBeGreaterThan(0);
     for (const c of nonNullFillColors) {
       expect(c).toMatch(/^#[0-9a-fA-F]{8}$/);
@@ -141,7 +205,10 @@ plot(x, "ticker")`;
 
     // === SIMULATE FRONTEND buildScriptResult TRANSFORMATIONS ===
     function stripMeta(s: string): string {
-      return s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+      return s
+        .replace(/__lw:\d+/g, '')
+        .replace(/__style:[^_]+/g, '')
+        .trim();
     }
 
     // Build outputs as frontend does
@@ -159,7 +226,9 @@ plot(x, "ticker")`;
 
     // Verify stripped fill keys match plot series titles
     for (const f of frontendFills) {
-      const plotKey = Object.keys(frontendOutputs).find(k => stripMeta(k).trim() === f.from.trim());
+      const plotKey = Object.keys(frontendOutputs).find(
+        (k) => stripMeta(k).trim() === f.from.trim(),
+      );
       expect(plotKey).toBeDefined();
     }
 
@@ -176,8 +245,12 @@ plot(x, "ticker")`;
     // Verify fillColorData fillKey matches the frontend fill's from::to
     const frontendFillKey = `${frontendFills[0]!.from}::${frontendFills[0]!.to}`;
     expect(frontendFillColorData[frontendFillKey]).toBeDefined();
-    console.log(`  frontend fillKey "${frontendFillKey}" found in fillColorData: ${!!frontendFillColorData[frontendFillKey]}`);
-    console.log(`  frontend fillColorData[frontendFillKey] length: ${frontendFillColorData[frontendFillKey]!.length}`);
+    console.log(
+      `  frontend fillKey "${frontendFillKey}" found in fillColorData: ${!!frontendFillColorData[frontendFillKey]}`,
+    );
+    console.log(
+      `  frontend fillColorData[frontendFillKey] length: ${frontendFillColorData[frontendFillKey]!.length}`,
+    );
 
     // === VERIFY OUTPUT VALUES ARE USABLE BY AreaRenderer ===
     // The AreaRenderer builds points from fromData[i]?.value
@@ -189,8 +262,14 @@ plot(x, "ticker")`;
     for (let i = 0; i < smaLowValues.length; i++) {
       const v1 = smaLowValues[i];
       const v2 = smaHighValues[i];
-      if (v1 !== null && v1 !== undefined && typeof v1 === 'number' &&
-          v2 !== null && v2 !== undefined && typeof v2 === 'number') {
+      if (
+        v1 !== null &&
+        v1 !== undefined &&
+        typeof v1 === 'number' &&
+        v2 !== null &&
+        v2 !== undefined &&
+        typeof v2 === 'number'
+      ) {
         validCount++;
       }
     }
@@ -219,7 +298,9 @@ plot(x, "ticker")`;
     console.log(`  labels produced: ${result.labels?.length ?? 0}`);
     if (result.labels && result.labels.length > 0) {
       for (const label of result.labels) {
-        console.log(`    label: text=${label.text}, time=${label.time}, price=${label.price}, color=${label.color}`);
+        console.log(
+          `    label: text=${label.text}, time=${label.time}, price=${label.price}, color=${label.color}`,
+        );
         expect(typeof label.time).toBe('number');
         expect(typeof label.price).toBe('number');
         expect(['Buy', 'Sell']).toContain(label.text);
@@ -242,12 +323,29 @@ plot(close, "c")`;
       const ltEngine = new ExecutionEngine(ltCompiled);
       const ltBars = createBars(5, 100);
       const ltContexts = ltBars.map((bar, i) => ({
-        barIndex: i, barCount: ltBars.length, timestamp: bar.timestamp,
-        open: createSeries('open', ltBars.slice(0, i + 1).map(b => b.open)),
-        high: createSeries('high', ltBars.slice(0, i + 1).map(b => b.high)),
-        low: createSeries('low', ltBars.slice(0, i + 1).map(b => b.low)),
-        close: createSeries('close', ltBars.slice(0, i + 1).map(b => b.close)),
-        volume: createSeries('volume', ltBars.slice(0, i + 1).map(b => b.volume)),
+        barIndex: i,
+        barCount: ltBars.length,
+        timestamp: bar.timestamp,
+        open: createSeries(
+          'open',
+          ltBars.slice(0, i + 1).map((b) => b.open),
+        ),
+        high: createSeries(
+          'high',
+          ltBars.slice(0, i + 1).map((b) => b.high),
+        ),
+        low: createSeries(
+          'low',
+          ltBars.slice(0, i + 1).map((b) => b.low),
+        ),
+        close: createSeries(
+          'close',
+          ltBars.slice(0, i + 1).map((b) => b.close),
+        ),
+        volume: createSeries(
+          'volume',
+          ltBars.slice(0, i + 1).map((b) => b.volume),
+        ),
       }));
       const ltResult = ltEngine.executeBars(ltContexts);
       expect(ltResult.success).toBe(true);
@@ -272,7 +370,9 @@ plot(close, "c")`;
         expect(lb.style).toBe('label.style_label_down');
         expect(lb.size).toBe('size.normal');
       }
-      console.log(`  direct line/label test: ${ltResult.lines!.length} lines, ${ltResult.labels!.length} labels`);
+      console.log(
+        `  direct line/label test: ${ltResult.lines!.length} lines, ${ltResult.labels!.length} labels`,
+      );
     }
 
     // === 7) END-TO-END pivot → line.new pipeline ===
@@ -288,31 +388,68 @@ if not na(lvl) and close > lvl
     const { ast: e2eAst } = parse(e2eSrc);
     const e2eCompiled = compile(e2eAst);
     const e2eEngine = new ExecutionEngine(e2eCompiled);
-    const e2eBars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+    const e2eBars: Array<{
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }> = [];
     const ts = Date.now();
     for (let i = 0; i < 15; i++) {
-      e2eBars.push({ timestamp: ts + i * 86400000, open: 100, high: 100, low: 100, close: 100, volume: 10000 });
+      e2eBars.push({
+        timestamp: ts + i * 86400000,
+        open: 100,
+        high: 100,
+        low: 100,
+        close: 100,
+        volume: 10000,
+      });
     }
-    e2eBars[2]!.high = 130; e2eBars[3]!.high = 140; e2eBars[4]!.high = 150;
-    e2eBars[5]!.high = 142; e2eBars[6]!.high = 136; e2eBars[6]!.close = 155;
+    e2eBars[2]!.high = 130;
+    e2eBars[3]!.high = 140;
+    e2eBars[4]!.high = 150;
+    e2eBars[5]!.high = 142;
+    e2eBars[6]!.high = 136;
+    e2eBars[6]!.close = 155;
     const e2eContexts = e2eBars.map((bar, i) => ({
-      barIndex: i, barCount: e2eBars.length, timestamp: bar.timestamp,
-      open: createSeries('open', e2eBars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', e2eBars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', e2eBars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', e2eBars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', e2eBars.slice(0, i + 1).map(b => b.volume)),
+      barIndex: i,
+      barCount: e2eBars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        e2eBars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        e2eBars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        e2eBars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        e2eBars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        e2eBars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
     const e2eResult = e2eEngine.executeBars(e2eContexts);
     expect(e2eResult.success).toBe(true);
     for (const [key, series] of e2eResult.outputs) {
-      console.log(`  output ${JSON.stringify(key)}: ${series.values.map((v, i) => `[${i}]=${v}`).join(', ')}`);
+      console.log(
+        `  output ${JSON.stringify(key)}: ${series.values.map((v, i) => `[${i}]=${v}`).join(', ')}`,
+      );
     }
     console.log(`  e2e lines: ${e2eResult.lines?.length ?? 0}`);
     if (e2eResult.lines) {
       for (const l of e2eResult.lines) console.log(`    line: y=${l.y1}, color=${l.color}`);
     }
-    const lvlKey = [...e2eResult.outputs.keys()].find(k => k.includes('lvl'));
+    const lvlKey = [...e2eResult.outputs.keys()].find((k) => k.includes('lvl'));
     expect(lvlKey).toBeTruthy();
     expect(e2eResult.outputs.get(lvlKey!)!.values[6]).toBe(150);
     expect(e2eResult.lines?.length ?? 0).toBeGreaterThanOrEqual(1);
@@ -323,42 +460,94 @@ if not na(lvl) and close > lvl
         `//@version=6
 indicator("PivotTest")
 plot(ta.pivothigh(2, 2), "ph")
-plot(ta.pivotlow(2, 2), "pl")`
+plot(ta.pivotlow(2, 2), "pl")`,
       );
       const compiled = compile(ast);
       const engine = new ExecutionEngine(compiled);
       // Create bars with known pivot at index 4
-      const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+      const bars: Array<{
+        timestamp: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+      }> = [];
       for (let i = 0; i < 10; i++) {
-        let h = 110, l = 90;
-        if (i === 2) { h = 130; l = 80; }
-        if (i === 3) { h = 135; l = 85; }
-        if (i === 4) { h = 140; l = 82; }  // pivot high
-        if (i === 5) { h = 132; l = 78; }  // pivot low
-        if (i === 6) { h = 128; l = 88; }
-        if (i === 7) { h = 125; l = 84; }
-        bars.push({ timestamp: Date.now() + i * 86400000, open: 100 + i, high: h, low: l, close: 100 + i + 1, volume: 10000 });
+        let h = 110,
+          l = 90;
+        if (i === 2) {
+          h = 130;
+          l = 80;
+        }
+        if (i === 3) {
+          h = 135;
+          l = 85;
+        }
+        if (i === 4) {
+          h = 140;
+          l = 82;
+        } // pivot high
+        if (i === 5) {
+          h = 132;
+          l = 78;
+        } // pivot low
+        if (i === 6) {
+          h = 128;
+          l = 88;
+        }
+        if (i === 7) {
+          h = 125;
+          l = 84;
+        }
+        bars.push({
+          timestamp: Date.now() + i * 86400000,
+          open: 100 + i,
+          high: h,
+          low: l,
+          close: 100 + i + 1,
+          volume: 10000,
+        });
       }
       const contexts = bars.map((bar, i) => ({
         barIndex: i,
         barCount: bars.length,
         timestamp: bar.timestamp,
-        open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-        high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-        low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-        close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-        volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+        open: createSeries(
+          'open',
+          bars.slice(0, i + 1).map((b) => b.open),
+        ),
+        high: createSeries(
+          'high',
+          bars.slice(0, i + 1).map((b) => b.high),
+        ),
+        low: createSeries(
+          'low',
+          bars.slice(0, i + 1).map((b) => b.low),
+        ),
+        close: createSeries(
+          'close',
+          bars.slice(0, i + 1).map((b) => b.close),
+        ),
+        volume: createSeries(
+          'volume',
+          bars.slice(0, i + 1).map((b) => b.volume),
+        ),
       }));
       const result = engine.executeBars(contexts);
       expect(result.success).toBe(true);
-      const phKey = [...result.outputs.keys()].find(k => k.includes('ph'));
-      const plKey = [...result.outputs.keys()].find(k => k.includes('pl'));
+      const phKey = [...result.outputs.keys()].find((k) => k.includes('ph'));
+      const plKey = [...result.outputs.keys()].find((k) => k.includes('pl'));
       expect(phKey).toBeDefined();
       expect(plKey).toBeDefined();
       const phValues = result.outputs.get(phKey!)!.values;
       const plValues = result.outputs.get(plKey!)!.values;
-      console.log(`  phValues length=${phValues.length}, values: ${phValues.map((v, i) => `[${i}]=${v}`).join(', ')}`);
-      console.log(`  plValues length=${plValues.length}, values: ${plValues.map((v, i) => `[${i}]=${v}`).join(', ')}`);
+      console.log(
+        `  phValues length=${phValues.length}, values: ${phValues.map((v, i) => `[${i}]=${v}`).join(', ')}`,
+      );
+      console.log(
+        `  plValues length=${plValues.length}, values: ${plValues.map((v, i) => `[${i}]=${v}`).join(', ')}`,
+      );
       // At bar 6 (right=2 confirms pivot at bar 4), ph[6] should be 140
       expect(phValues.length).toBeGreaterThan(6);
       expect(phValues[6]).toBe(140);
@@ -369,18 +558,36 @@ plot(ta.pivotlow(2, 2), "pl")`
 
     // === 7) PIYOT DETECTION TEST with fully controlled data ===
     // Build a clean bar sequence where a pivot high is guaranteed
-    const pivotTestBars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+    const pivotTestBars: Array<{
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }> = [];
     const baseTs = Date.now();
     // Create 15 bars with controlled data
     // Pivot high at bar 4 with left=2, right=2 context
     for (let i = 0; i < 15; i++) {
-      let open = 100 + i;
-      let close = open + 1;
+      const open = 100 + i;
+      const close = open + 1;
       let high = close + 2;
-      let low = open - 2;
-      if (i === 4) { high = 150; }        // known pivot high
-      else if (i >= 2 && i <= 6) { high = 120 + i * 2; } // make center 4 the peak
-      pivotTestBars.push({ timestamp: baseTs + i * 86400000, open, high, low, close, volume: 10000 });
+      const low = open - 2;
+      if (i === 4) {
+        high = 150;
+      } // known pivot high
+      else if (i >= 2 && i <= 6) {
+        high = 120 + i * 2;
+      } // make center 4 the peak
+      pivotTestBars.push({
+        timestamp: baseTs + i * 86400000,
+        open,
+        high,
+        low,
+        close,
+        volume: 10000,
+      });
     }
     // Override to make bar 4 the strict maximum
     pivotTestBars[2]!.high = 140;
@@ -407,20 +614,41 @@ plot(ta.pivotlow(2, 2), "pl")`
       barIndex: i,
       barCount: pivotTestBars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', pivotTestBars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', pivotTestBars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', pivotTestBars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', pivotTestBars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', pivotTestBars.slice(0, i + 1).map(b => b.volume)),
+      open: createSeries(
+        'open',
+        pivotTestBars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        pivotTestBars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        pivotTestBars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        pivotTestBars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        pivotTestBars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
     const pivotResult = pivotEngine.executeBars(pivotContexts);
     expect(pivotResult.success).toBe(true);
-    console.log(`  with known pivot data: lines=${pivotResult.lines?.length ?? 0}, labels=${pivotResult.labels?.length ?? 0}`);
+    console.log(
+      `  with known pivot data: lines=${pivotResult.lines?.length ?? 0}, labels=${pivotResult.labels?.length ?? 0}`,
+    );
     if (pivotResult.lines) {
-      for (const l of pivotResult.lines) console.log(`    line: x1=${l.x1}, y1=${l.y1}, x2=${l.x2}, y2=${l.y2}, color=${l.color}`);
+      for (const l of pivotResult.lines)
+        console.log(`    line: x1=${l.x1}, y1=${l.y1}, x2=${l.x2}, y2=${l.y2}, color=${l.color}`);
     }
     if (pivotResult.labels) {
-      for (const lb of pivotResult.labels) console.log(`    label: time=${lb.time}, price=${lb.price}, text=${lb.text}, color=${lb.color}`);
+      for (const lb of pivotResult.labels)
+        console.log(
+          `    label: time=${lb.time}, price=${lb.price}, text=${lb.text}, color=${lb.color}`,
+        );
     }
   });
 });

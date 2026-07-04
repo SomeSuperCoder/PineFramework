@@ -94,11 +94,26 @@ export function barsToContexts(bars: Bar[]): ExecutionContext[] {
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, index + 1).map(b => b.open)),
-    high: createSeries('high', bars.slice(0, index + 1).map(b => b.high)),
-    low: createSeries('low', bars.slice(0, index + 1).map(b => b.low)),
-    close: createSeries('close', bars.slice(0, index + 1).map(b => b.close)),
-    volume: createSeries('volume', bars.slice(0, index + 1).map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, index + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, index + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, index + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, index + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, index + 1).map((b) => b.volume),
+    ),
   }));
 }
 

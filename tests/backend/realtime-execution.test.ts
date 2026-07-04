@@ -67,7 +67,7 @@ describe('Real-Time Execution Pipeline', () => {
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
-        lastCtx.close.getRelative(0) as number + 2,
+        (lastCtx.close.getRelative(0) as number) + 2,
         10,
         11,
         lastCtx.timestamp + 60000,
@@ -85,7 +85,7 @@ describe('Real-Time Execution Pipeline', () => {
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
-        lastCtx.close.getRelative(0) as number + 2,
+        (lastCtx.close.getRelative(0) as number) + 2,
         15,
         16,
         lastCtx.timestamp + 60000,
@@ -104,7 +104,7 @@ describe('Real-Time Execution Pipeline', () => {
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
-        lastCtx.close.getRelative(0) as number + 2,
+        (lastCtx.close.getRelative(0) as number) + 2,
         10,
         11,
         lastCtx.timestamp + 60000,
@@ -125,7 +125,7 @@ describe('Real-Time Execution Pipeline', () => {
 
       const lastCtx = contexts[contexts.length - 1]!;
       const newContext = makeContext(
-        lastCtx.close.getRelative(0) as number + 2,
+        (lastCtx.close.getRelative(0) as number) + 2,
         5,
         6,
         lastCtx.timestamp + 60000,
@@ -159,7 +159,7 @@ plot(counter)
       const lastCtx = contexts[contexts.length - 1]!;
       for (let i = 0; i < 3; i++) {
         const newCtx = makeContext(
-          lastCtx.close.getRelative(0) as number + 2,
+          (lastCtx.close.getRelative(0) as number) + 2,
           5 + i,
           6 + i,
           lastCtx.timestamp + (i + 1) * 60000,

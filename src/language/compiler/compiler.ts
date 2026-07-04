@@ -255,11 +255,17 @@ export class Compiler {
         return alternateType;
       }
       case 'CallExpression': {
-        if (expr.callee.kind === 'MemberExpression' && expr.callee.object.kind === 'Identifier' && expr.callee.object.name === 'array') {
+        if (
+          expr.callee.kind === 'MemberExpression' &&
+          expr.callee.object.kind === 'Identifier' &&
+          expr.callee.object.name === 'array'
+        ) {
           const parts = expr.callee.property.split('_');
           if (parts[0] === 'new' && parts.length > 1) {
             const elementType = parts.slice(1).join('_');
-            return typeFromAnnotation('array', { typeArguments: [typeFromAnnotation(elementType, {})] });
+            return typeFromAnnotation('array', {
+              typeArguments: [typeFromAnnotation(elementType, {})],
+            });
           }
         }
         return seriesOf(FLOAT_TYPE);

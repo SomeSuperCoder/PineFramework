@@ -40,7 +40,9 @@ describe('LayoutManager Indicator Panes', () => {
       const layout = new LayoutManager(70, 30, 0.2, 0.3, 10);
       const regions = layout.calculate(1000, 600, 2);
 
-      const gap = regions.indicatorPanes[1]!.y - (regions.indicatorPanes[0]!.y + regions.indicatorPanes[0]!.height);
+      const gap =
+        regions.indicatorPanes[1]!.y -
+        (regions.indicatorPanes[0]!.y + regions.indicatorPanes[0]!.height);
       expect(gap).toBe(10);
     });
   });

@@ -16,7 +16,7 @@ function createMockCanvas() {
   });
   const removeEventListener = jest.fn((event: string, fn: Function) => {
     if (listeners[event]) {
-      listeners[event] = listeners[event]!.filter(f => f !== fn);
+      listeners[event] = listeners[event]!.filter((f) => f !== fn);
     }
   });
   const styleObj: Record<string, string> = { cursor: 'crosshair' };
@@ -92,13 +92,19 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
   describe('92.1 Ctrl+scroll fine zoom', () => {
     it('should apply reduced zoom factor when ctrlKey is held', () => {
       const initialSpacing = viewport.getBarSpacing();
-      canvas._emit('wheel', createWheelEvent({ deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300 }));
+      canvas._emit(
+        'wheel',
+        createWheelEvent({ deltaY: -100, ctrlKey: true, clientX: 400, clientY: 300 }),
+      );
       const fineSpacing = viewport.getBarSpacing();
       const fineDelta = Math.abs(fineSpacing - initialSpacing);
 
       viewport.fitContent(930);
       const beforeNormal = viewport.getBarSpacing();
-      canvas._emit('wheel', createWheelEvent({ deltaY: -100, ctrlKey: false, clientX: 400, clientY: 300 }));
+      canvas._emit(
+        'wheel',
+        createWheelEvent({ deltaY: -100, ctrlKey: false, clientX: 400, clientY: 300 }),
+      );
       const normalDelta = Math.abs(viewport.getBarSpacing() - beforeNormal);
 
       expect(fineDelta).toBeGreaterThan(0);
@@ -107,7 +113,10 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
 
     it('should apply reduced zoom factor when metaKey (Cmd) is held', () => {
       const initialSpacing = viewport.getBarSpacing();
-      canvas._emit('wheel', createWheelEvent({ deltaY: -100, metaKey: true, clientX: 400, clientY: 300 }));
+      canvas._emit(
+        'wheel',
+        createWheelEvent({ deltaY: -100, metaKey: true, clientX: 400, clientY: 300 }),
+      );
       const fineSpacing = viewport.getBarSpacing();
 
       expect(fineSpacing).not.toBe(initialSpacing);
@@ -138,7 +147,10 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
 
     it('should prevent default on middle mouse down', () => {
       const pd = jest.fn();
-      canvas._emit('mousedown', createMouseEvent({ button: 1, clientX: 400, clientY: 300, preventDefault: pd }));
+      canvas._emit(
+        'mousedown',
+        createMouseEvent({ button: 1, clientX: 400, clientY: 300, preventDefault: pd }),
+      );
       expect(pd).toHaveBeenCalled();
     });
   });
