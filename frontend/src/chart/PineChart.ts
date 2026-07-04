@@ -135,6 +135,7 @@ export class PineChart {
         onVisibleRangeChange: () => {
           this.markDirty();
           const range = this.viewport.getVisibleRange();
+          console.log('[PC] onVisibleRangeChange', range);
           this.eventCallbacks.onVisibleRangeChange?.(range.start, range.end);
         },
         onPriceRangeChange: () => {
@@ -155,6 +156,7 @@ export class PineChart {
   }
 
   private resize(): void {
+    console.log('[PC] resize');
     const dpr = window.devicePixelRatio || 1;
     const rect = this.canvas.parentElement?.getBoundingClientRect();
     if (!rect) return;
@@ -220,6 +222,7 @@ export class PineChart {
     if (this.candles.length === 0) {
       this.ctx.clearRect(0, 0, w, h);
       this.ctx.drawImage(this.offscreen, 0, 0);
+      console.log('[PC] render SKIP (empty candles)', { plotCount: this.plotSeries.size });
       return;
     }
 
@@ -487,6 +490,7 @@ export class PineChart {
   setCandles(data: CandlestickData[]): void {
     const wasPrepended = data.length > this.candles.length && this.candles.length > 0 && data[0]?.time < this.candles[0]?.time;
     const added = data.length - this.candles.length;
+    console.log('[PC] setCandles', { wasPrepended, oldLen: this.candles.length, newLen: data.length, plotSeriesCount: this.plotSeries.size });
     this.candles = data;
     if (wasPrepended) {
       this.viewport.adjustForPrepend(added);
@@ -498,6 +502,7 @@ export class PineChart {
             padding.push({ time: data[i].time, value: null });
           }
           handle.data = [...padding, ...handle.data];
+          console.log('[PC] prepended plot', { name: handle.name, dataLen: handle.data.length, nonNull: handle.data.filter(d => d.value !== null).length });
         }
       }
     } else {
