@@ -20,10 +20,11 @@ interface ChartComponentProps {
   lastCodeRef: React.MutableRefObject<string | null>;
   ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>;
   indicatorLabels?: IndicatorLabel[];
+  indicatorResults?: Map<string, ScriptResult>;
   onRemoveIndicator?: (indicatorId: string) => void;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], onRemoveIndicator }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -112,40 +113,52 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   }, [data]);
 
   const prevScriptResultRef = useRef<ScriptResult | null>(null);
+  const prevIndicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
   useEffect(() => {
-    if (!chartRef.current || !scriptResult) return;
-    if (scriptResult === prevScriptResultRef.current) return;
+    if (!chartRef.current) return;
+    if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) return;
     prevScriptResultRef.current = scriptResult;
+    prevIndicatorResultsRef.current = indicatorResults;
     const chart = chartRef.current;
     chart.beginUpdate();
 
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
-    let colorIndex = 0;
+
+    const allResults: Array<{ result: ScriptResult; key: string }> = [];
+    if (scriptResult) allResults.push({ result: scriptResult, key: 'main' });
+    if (indicatorResults) {
+      for (const [id, res] of indicatorResults) {
+        allResults.push({ result: res, key: id });
+      }
+    }
 
     const currentTitles = new Set<string>();
+    let colorIndex = 0;
 
-    for (const plot of scriptResult.plots) {
-      let title = plot.title || `Plot ${colorIndex + 1}`;
-      let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
-      colorIndex++;
-      currentTitles.add(title);
+    for (const { result } of allResults) {
+      for (const plot of result.plots) {
+        let title = plot.title || `Plot ${colorIndex + 1}`;
+        let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
+        colorIndex++;
+        currentTitles.add(title);
 
-      const seriesData: PlotSeriesData[] = [];
-      for (const d of plot.data) {
-        if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
-          seriesData.push({ time: d.time, value: d.value, color: d.color });
-        } else {
-          seriesData.push({ time: d.time, value: null, color: d.color });
+        const seriesData: PlotSeriesData[] = [];
+        for (const d of plot.data) {
+          if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
+            seriesData.push({ time: d.time, value: d.value, color: d.color });
+          } else {
+            seriesData.push({ time: d.time, value: null, color: d.color });
+          }
         }
-      }
 
-      chart.addPlotSeries(title, {
-        color: plotColor,
-        lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-        style: (plot.type as any) || 'line',
-      }, scriptResult.overlay);
-      seriesNamesRef.current.add(title);
-      chart.setPlotData(title, seriesData);
+        chart.addPlotSeries(title, {
+          color: plotColor,
+          lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
+          style: (plot.type as any) || 'line',
+        }, result.overlay);
+        seriesNamesRef.current.add(title);
+        chart.setPlotData(title, seriesData);
+      }
     }
 
     for (const name of seriesNamesRef.current) {
@@ -158,47 +171,52 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       seriesNamesRef.current.add(title);
     }
 
-    const stratMarkers: StrategyMarkerData[] = (scriptResult.strategyMarkers || []).map((m) => ({
-      type: m.type,
-      name: m.name,
-      direction: m.direction,
-      timestamp: m.timestamp,
-      color: m.color,
-      comment: m.comment,
-      barIndex: m.barIndex,
-    }));
-    chart.setStrategyMarkers(stratMarkers);
+    const allStrategyMarkers: StrategyMarkerData[] = [];
+    const allFills: FillData[] = [];
+    let allFillColorData: Record<string, (string | null)[]> = {};
+    const allDrawingLines: DrawingLineData[] = [];
+    const allChartLabels: LabelData[] = [];
+    const allAlertTriggers: import('../types').AlertTriggerData[] = [];
 
-    chart.setAlertTriggers(scriptResult.alertTriggers || []);
-
-    const fills: FillData[] = (scriptResult.fills || []).map((f) => ({
-      from: f.from,
-      to: f.to,
-      color: f.color,
-    }));
-    chart.setFills(fills);
-    if (scriptResult.fillColorData) {
-      chart.setFillColorData(scriptResult.fillColorData);
+    for (const { result } of allResults) {
+      for (const m of (result.strategyMarkers || [])) {
+        allStrategyMarkers.push({
+          type: m.type, name: m.name, direction: m.direction,
+          timestamp: m.timestamp, color: m.color, comment: m.comment, barIndex: m.barIndex,
+        });
+      }
+      for (const f of (result.fills || [])) {
+        allFills.push({ from: f.from, to: f.to, color: f.color });
+      }
+      if (result.fillColorData) {
+        allFillColorData = { ...allFillColorData, ...result.fillColorData };
+      }
+      for (const l of (result.lines || [])) {
+        allDrawingLines.push({
+          points: l.points, color: l.color || '#2196f3',
+          width: l.width || 1, style: l.style || 'dotted',
+        });
+      }
+      for (const l of (result.labels || [])) {
+        allChartLabels.push({
+          time: l.time, price: l.price, text: l.text,
+          color: l.color || '#2196f3', textColor: l.textColor || '#ffffff',
+          style: l.style, size: l.size,
+        });
+      }
+      for (const t of (result.alertTriggers || [])) {
+        allAlertTriggers.push(t);
+      }
     }
 
-    const drawingLines: DrawingLineData[] = (scriptResult.lines || []).map((l) => ({
-      points: l.points,
-      color: l.color || '#2196f3',
-      width: l.width || 1,
-      style: l.style || 'dotted',
-    }));
-    chart.setDrawingLines(drawingLines);
-
-    const chartLabels: LabelData[] = (scriptResult.labels || []).map((l) => ({
-      time: l.time,
-      price: l.price,
-      text: l.text,
-      color: l.color || '#2196f3',
-      textColor: l.textColor || '#ffffff',
-      style: l.style,
-      size: l.size,
-    }));
-    chart.setLabels(chartLabels);
+    chart.setStrategyMarkers(allStrategyMarkers);
+    chart.setAlertTriggers(allAlertTriggers);
+    chart.setFills(allFills);
+    if (Object.keys(allFillColorData).length > 0) {
+      chart.setFillColorData(allFillColorData);
+    }
+    chart.setDrawingLines(allDrawingLines);
+    chart.setLabels(allChartLabels);
 
     chart.setHLines([]);
     chart.setBarColors(new Map());
@@ -245,7 +263,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setBgColors(bgColorsMap);
 
     chart.endUpdate();
-  }, [scriptResult, data]);
+  }, [scriptResult, indicatorResults, data]);
 
   const handleRemoveIndicator = useCallback((indicatorId: string) => {
     onRemoveIndicator?.(indicatorId);

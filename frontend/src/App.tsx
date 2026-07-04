@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor, DEFAULT_CODE } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
@@ -6,6 +6,7 @@ import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { useChartData } from './hooks/useChartData';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
+import type { ScriptResult } from './types';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
 const INTERVALS = [
@@ -28,8 +29,17 @@ function App() {
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
   const [indicatorsReady, setIndicatorsReady] = useState(false);
+  const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
   const indicatorManager = useIndicatorManager();
+
+  const onIndicatorResult = useCallback((indicatorId: string, result: ScriptResult) => {
+    setIndicatorResults((prev) => {
+      const next = new Map(prev);
+      next.set(indicatorId, result);
+      return next;
+    });
+  }, []);
 
   const {
     candles,
@@ -45,11 +55,16 @@ function App() {
     ohlcvDataRef,
     registerOnIndicatorRemoved,
     wsRef,
-  } = useChartData();
+  } = useChartData(onIndicatorResult);
 
   useEffect(() => {
     registerOnIndicatorRemoved((indicatorIds: string[]) => {
       indicatorManager.handleIndicatorRemoved(indicatorIds);
+      setIndicatorResults((prev) => {
+        const next = new Map(prev);
+        for (const id of indicatorIds) next.delete(id);
+        return next;
+      });
     });
   }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
@@ -157,6 +172,7 @@ function App() {
           lastCodeRef={lastCodeRef}
           ohlcvDataRef={ohlcvDataRef}
           indicatorLabels={overlayIndicatorLabels}
+          indicatorResults={indicatorResults}
           onRemoveIndicator={handleRemoveIndicator}
         />
       </main>

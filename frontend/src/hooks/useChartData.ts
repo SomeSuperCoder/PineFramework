@@ -645,8 +645,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;
 
-      setCandles(toCandleData(barsToExecute));
-      setScriptResult(scriptRes);
+      if (indicatorId) {
+        onIndicatorResult?.(indicatorId, scriptRes);
+      } else {
+        setCandles(toCandleData(barsToExecute));
+        setScriptResult(scriptRes);
+      }
 
       pendingExecuteRef.current = { source: code, symbol, interval };
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -662,7 +666,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         message: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }]);
     }
-  }, [toCandleData]);
+  }, [toCandleData, onIndicatorResult]);
 
   return {
     candles,
