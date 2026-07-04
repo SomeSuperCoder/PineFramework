@@ -537,7 +537,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
               }
             }
           } else if (data.type === 'execution_result' && data.data) {
-            handleExecutionResult(data.data);
+            handleExecutionResult({ ...data.data, indicatorId: data.indicatorId });
           } else if (data.type === 'indicator_removed' && data.data) {
             // Indicator removed by backend cascade (script deleted)
             const removedIds = data.data.indicatorIds as string[] | undefined;
