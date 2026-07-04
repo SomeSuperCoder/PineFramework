@@ -5,6 +5,7 @@ import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { useChartData } from './hooks/useChartData';
+import { useIndicatorManager } from './hooks/useIndicatorManager';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
 const INTERVALS = [
@@ -28,6 +29,8 @@ function App() {
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
 
+  const indicatorManager = useIndicatorManager();
+
   const {
     candles,
     scriptResult,
@@ -35,14 +38,20 @@ function App() {
     isConnected,
     isLoading,
     executeScript,
-    fetchOHLCV,
     fetchOlderOHLCV,
     subscribe,
     setErrors,
     lastCodeRef,
-    prependCountRef,
     ohlcvDataRef,
+    registerOnIndicatorRemoved,
+    wsRef,
   } = useChartData();
+
+  useEffect(() => {
+    registerOnIndicatorRemoved((indicatorIds: string[]) => {
+      indicatorManager.handleIndicatorRemoved(indicatorIds);
+    });
+  }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
   useEffect(() => {
     fetch('/api/scripts/running')
@@ -77,17 +86,38 @@ function App() {
     }
   }, [scriptResult]);
 
-  const handleRun = async (scriptId: string, source: string) => {
+  const handleAddIndicator = async (scriptId: string, source: string) => {
     setEditorOpen(false);
-    setCurrentScriptId(scriptId);
-    setCurrentCode(source);
-    await executeScript(source, symbol, timeframe);
-    fetch('/api/scripts/running', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scriptId }),
-    }).catch(() => {});
+
+    const indicator = await indicatorManager.addIndicator(
+      scriptId,
+      currentScriptId === scriptId ? (currentCode?.match(/indicator\(\s*["'](.+?)["']/)?.[1] || 'Indicator') : 'Indicator',
+      true,
+      source,
+    );
+
+    if (indicator) {
+      await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+    }
   };
+
+  const handleRemoveIndicator = async (indicatorId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
+    }
+    await indicatorManager.removeIndicator(indicatorId);
+  };
+
+  useEffect(() => {
+    const unsub = registerOnIndicatorRemoved(() => {});
+    return unsub;
+  }, [registerOnIndicatorRemoved]);
+
+  const overlayIndicatorLabels = indicatorManager.getOverlayIndicators().map((i) => ({
+    id: i.id,
+    name: i.name,
+    overlay: true,
+  }));
 
   return (
     <div className="app">
@@ -125,8 +155,9 @@ function App() {
           fetchOlderOHLCV={fetchOlderOHLCV}
           executeScript={executeScript}
           lastCodeRef={lastCodeRef}
-          prependCountRef={prependCountRef}
           ohlcvDataRef={ohlcvDataRef}
+          indicatorLabels={overlayIndicatorLabels}
+          onRemoveIndicator={handleRemoveIndicator}
         />
       </main>
 
@@ -139,7 +170,7 @@ function App() {
       <CodeEditor
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
-        onRun={handleRun}
+        onAdd={handleAddIndicator}
         initialScriptId={currentScriptId}
       />
 
@@ -152,7 +183,7 @@ function App() {
         onClose={() => setShowStrategyPopup(false)}
         symbol={symbol}
         timeframe={timeframe}
-        scriptSource={currentCode}
+        scriptSource={currentCode || ''}
       />
     </div>
   );

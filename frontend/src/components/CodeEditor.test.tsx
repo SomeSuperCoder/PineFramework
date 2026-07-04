@@ -44,7 +44,7 @@ describe('CodeEditor', () => {
 
   describe('basic rendering (task 77.5)', () => {
     it('renders nothing when closed', () => {
-      const { container } = render(<CodeEditor isOpen={false} onClose={() => {}} onRun={() => {}} />);
+      const { container } = render(<CodeEditor isOpen={false} onClose={() => {}} onAdd={() => {}} />);
       expect(container.innerHTML).toBe('');
     });
 
@@ -53,7 +53,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: [mockScripts[1]], activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: null } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText(/Pine Script Editor/i)).toBeInTheDocument();
       });
@@ -64,7 +64,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: [], activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: null } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText(/No scripts yet/i)).toBeInTheDocument();
       });
@@ -76,7 +76,7 @@ describe('CodeEditor', () => {
       const fetchPromise = new Promise((resolve) => { resolveFetch = resolve; });
       vi.mocked(fetch).mockImplementation(() => fetchPromise.then(() => new Response(JSON.stringify({scripts: []}), { status: 200 })));
 
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       expect(screen.getByText(/Loading scripts/i)).toBeInTheDocument();
       resolveFetch!(undefined);
     });
@@ -88,7 +88,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[0] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
         expect(screen.getByText('Beta Indicator')).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[0] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
       });
@@ -114,7 +114,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: '2' } },
         { url: '/api/scripts/2', response: { script: mockScripts[1] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} initialScriptId="2" />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} initialScriptId="2" />);
       await waitFor(() => {
         const calls = vi.mocked(fetch).mock.calls;
         const loadCall = calls.find(([url]) => url.toString().includes('/api/scripts/2'));
@@ -129,7 +129,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: [mockScripts[0]], activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[0] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText('strategy')).toBeInTheDocument();
       });
@@ -140,7 +140,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: [mockScripts[1]], activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[1] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText('indicator')).toBeInTheDocument();
       });
@@ -158,7 +158,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: [], activeScriptId: null } },
         { url: '/api/scripts', response: { script: newScript }, status: 201 },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
       await waitFor(() => expect(screen.getByText(/No scripts yet/i)).toBeInTheDocument());
       await user.click(screen.getByText('Create Your First Script'));
       await waitFor(() => {
@@ -175,7 +175,7 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[0] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={onClose} onRun={() => {}} />);
+      render(<CodeEditor isOpen={true} onClose={onClose} onAdd={() => {}} />);
       await waitFor(() => expect(screen.getByText('Alpha Strategy')).toBeInTheDocument());
       await user.click(screen.getByText('Close'));
       expect(onClose).toHaveBeenCalledOnce();
@@ -183,17 +183,17 @@ describe('CodeEditor', () => {
   });
 
   describe('run script (task 79.6)', () => {
-    it('calls onRun when Run button is clicked', async () => {
+    it('calls onAdd when Run button is clicked', async () => {
       const user = userEvent.setup();
-      const onRun = vi.fn();
+      const onAdd = vi.fn();
       mockFetchQueue([
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: null } },
         { url: '/api/scripts/running', response: { script: mockScripts[0] } },
       ]);
-      render(<CodeEditor isOpen={true} onClose={() => {}} onRun={onRun} />);
+      render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={onAdd} />);
       await waitFor(() => expect(screen.getByText('Alpha Strategy')).toBeInTheDocument());
-      await user.click(screen.getByText(/Run/i));
-      expect(onRun).toHaveBeenCalledWith('1', mockScripts[0].source);
+      await user.click(screen.getByText(/Add/i));
+      expect(onAdd).toHaveBeenCalledWith('1', mockScripts[0].source);
     });
   });
 });

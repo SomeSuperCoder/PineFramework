@@ -75,9 +75,11 @@ export class PineChart {
   private chartLabels: LabelData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private lastIndicatorCount: number = 0;
+  private container: HTMLElement;
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.container = container;
 
     this.canvas = document.createElement('canvas');
     this.canvas.style.width = '100%';
@@ -630,6 +632,19 @@ export class PineChart {
     this.interaction.destroy();
     cancelAnimationFrame(this.animFrame);
     this.canvas.parentElement?.removeChild(this.canvas);
+  }
+
+  getContainer(): HTMLElement {
+    return this.container;
+  }
+
+  getCanvasDimensions(): { width: number; height: number; dpr: number } {
+    const dpr = window.devicePixelRatio || 1;
+    return { width: this.canvas.width / dpr, height: this.canvas.height / dpr, dpr };
+  }
+
+  getLayoutRegions(): ReturnType<LayoutManager['getRegions']> {
+    return this.layout.getRegions();
   }
 }
 

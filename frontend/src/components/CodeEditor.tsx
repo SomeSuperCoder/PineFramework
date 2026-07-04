@@ -12,7 +12,7 @@ interface ScriptEntry {
 interface CodeEditorProps {
   isOpen: boolean;
   onClose: () => void;
-  onRun: (scriptId: string, source: string) => void;
+  onAdd: (scriptId: string, source: string) => void;
   initialScriptId?: string | null;
 }
 
@@ -46,7 +46,7 @@ function extractVersion(source: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEditorProps) {
+export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [scripts, setScripts] = useState<ScriptEntry[]>([]);
   const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
@@ -127,7 +127,7 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
         e.preventDefault();
         const id = currentScriptIdRef.current;
         const src = sourceRef.current;
-        if (id) onRun(id, src);
+        if (id) onAdd(id, src);
       }
     };
 
@@ -135,7 +135,7 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, onRun]);
+  }, [isOpen, onAdd]);
 
   const saveSource = useCallback(async (id: string, newSource: string) => {
     try {
@@ -262,11 +262,11 @@ export function CodeEditor({ isOpen, onClose, onRun, initialScriptId }: CodeEdit
                 <button
                   className="primary"
                   onClick={() => {
-                    if (currentScriptId) onRun(currentScriptId, source);
+                    if (currentScriptId) onAdd(currentScriptId, source);
                   }}
                   disabled={!currentScriptId}
                 >
-                  Run (Ctrl+Enter)
+                  Add (Ctrl+Enter)
                 </button>
               </>
             )}

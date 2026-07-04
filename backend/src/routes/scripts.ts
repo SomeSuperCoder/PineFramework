@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import type { ScriptStore } from '../store/ScriptStore.js';
+import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
 
-export function createScriptsRouter(store: ScriptStore): Router {
+export function createScriptsRouter(store: ScriptStore, indicatorsStore?: RunningIndicatorsStore): Router {
   const router = Router();
 
   router.get('/scripts', (req, res) => {
@@ -136,7 +137,16 @@ export function createScriptsRouter(store: ScriptStore): Router {
         res.status(404).json({ error: 'Script not found' });
         return;
       }
-      res.json({ success: true });
+      let removedIndicatorIds: string[] = [];
+      if (indicatorsStore) {
+        const removed = indicatorsStore.removeByScriptId(req.params.id);
+        removedIndicatorIds = removed.map((i) => i.id);
+      }
+      if (removedIndicatorIds.length > 0) {
+        const broadcast = (globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved as ((ids: string[]) => void) | undefined;
+        if (broadcast) broadcast(removedIndicatorIds);
+      }
+      res.json({ success: true, removedIndicatorIds });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete script' });
     }

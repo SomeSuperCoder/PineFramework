@@ -1,7 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { PineChart, createChart } from '../chart';
 import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData } from '../chart';
 import type { ScriptResult } from '../types';
+
+interface IndicatorLabel {
+  id: string;
+  name: string;
+  overlay: boolean;
+}
 
 interface ChartComponentProps {
   data: CandlestickData[];
@@ -10,13 +16,14 @@ interface ChartComponentProps {
   symbol: string;
   interval: string;
   fetchOlderOHLCV: (symbol: string, interval: string) => Promise<number>;
-  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number) => Promise<void>;
+  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>;
   lastCodeRef: React.MutableRefObject<string | null>;
-  prependCountRef: React.MutableRefObject<number>;
   ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>;
+  indicatorLabels?: IndicatorLabel[];
+  onRemoveIndicator?: (indicatorId: string) => void;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, prependCountRef, ohlcvDataRef }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], onRemoveIndicator }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -240,9 +247,72 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.endUpdate();
   }, [scriptResult, data]);
 
+  const handleRemoveIndicator = useCallback((indicatorId: string) => {
+    onRemoveIndicator?.(indicatorId);
+  }, [onRemoveIndicator]);
+
   return (
     <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {indicatorLabels.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '8px',
+          left: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+          zIndex: 10,
+          pointerEvents: 'auto',
+        }}>
+          {indicatorLabels.map((label) => (
+            <div
+              key={label.id}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                background: 'rgba(30, 30, 46, 0.85)',
+                border: `1px solid ${label.overlay ? '#2196f3' : '#ff9800'}`,
+                borderRadius: '4px',
+                fontSize: '11px',
+                color: '#e0e0e0',
+                cursor: 'default',
+                whiteSpace: 'nowrap',
+                pointerEvents: 'auto',
+              }}
+            >
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: label.overlay ? '#2196f3' : '#ff9800',
+                flexShrink: 0,
+              }} />
+              <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {label.name}
+              </span>
+              <button
+                onClick={() => handleRemoveIndicator(label.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#888',
+                  cursor: 'pointer',
+                  padding: '0 2px',
+                  fontSize: '12px',
+                  lineHeight: 1,
+                  pointerEvents: 'auto',
+                }}
+                title="Remove indicator"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

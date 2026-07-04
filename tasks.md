@@ -2549,15 +2549,15 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add simplified MACD tests for independent verification
     - _Requirements: 11.12, 11.13, 11.14_
 
-- [ ] 97. Implement Dynamic Indicator Management UI
-  - [ ] 97.1 Add IndicatorManager state to Frontend
+- [x] 97. Implement Dynamic Indicator Management UI
+  - [x] 97.1 Add IndicatorManager state to Frontend
     - Create `RunningIndicator` type with id, scriptId, name, overlay, source, active fields
     - Create `useIndicatorManager()` hook with addIndicator, removeIndicator, handleIndicatorRemoved, getOverlayIndicators, getPaneIndicators methods
     - Track running indicators in React state
     - On app mount, fetch `GET /api/indicators` to restore persisted indicator list and re-execute each
     - _Requirements: 28.1, 28.2, 28.3, 28.10, 28.11, 28.12_
 
-  - [ ] 97.2 Add multi-session support to Backend WebSocket gateway
+  - [x] 97.2 Add multi-session support to Backend WebSocket gateway
     - Extend ScriptSession to support multiple concurrent execution sessions per WebSocket client
     - Each running indicator gets its own ScriptSession with independent engine instance
     - On `execute` WS message, create a new ScriptSession keyed by indicator ID (not replacing existing sessions)
@@ -2565,13 +2565,13 @@ This implementation plan outlines the step-by-step development of a production-g
     - Add `indicatorId` field to execution_result WebSocket messages
     - _Requirements: 28.1, 28.4, 28.5_
 
-  - [ ] 97.3 Add remove indicator API and WebSocket message
+  - [x] 97.3 Add remove indicator API and WebSocket message
     - Add `DELETE /api/indicators/:id` REST endpoint to stop an indicator's execution session
     - Add `stop_indicator` WebSocket message type `{ type: "stop_indicator", data: { indicatorId } }`
     - Clean up ScriptSession state and remove indicator from backend tracking
     - _Requirements: 28.2, 28.4_
 
-  - [ ] 97.3a Persist running indicator list to backend
+  - [x] 97.3a Persist running indicator list to backend
     - Create `backend/data/indicators.json` with default schema `{ indicators: [] }`
     - Add `RunningIndicatorsStore` class using `JsonStore` infrastructure
     - Add `GET /api/indicators` endpoint to return persisted running indicator list
@@ -2580,14 +2580,14 @@ This implementation plan outlines the step-by-step development of a production-g
     - On add/remove, write through to disk so state survives restarts
     - _Requirements: 28.10, 28.11, 28.12_
 
-  - [ ] 97.3b Auto-remove running indicators when script is deleted from bank
+  - [x] 97.3b Auto-remove running indicators when script is deleted from bank
     - When `DELETE /api/scripts/:id` is called, iterate running indicators and stop any that reference the deleted scriptId
     - Remove auto-stopped indicators from `indicators.json` persistence
     - Send `indicator_removed` WebSocket message to all connected clients with the removed indicator IDs
     - Frontend handles `indicator_removed` by clearing chart data and updating indicator labels
     - _Requirements: 28.13, 28.14, 28.15, 28.16_
 
-  - [ ] 97.4 Render overlay indicator labels on main chart
+  - [x] 97.4 Render overlay indicator labels on main chart
     - In PineChart, render a vertical list of overlay indicator labels in the top-left corner of the main chart area
     - Each label shows the indicator name as a semi-transparent pill with a delete (×) button
     - Click delete button fires an `onRemoveIndicator(indicatorId)` callback
@@ -2595,21 +2595,21 @@ This implementation plan outlines the step-by-step development of a production-g
     - Labels are rendered on the topmost canvas layer (above candlesticks and plots)
     - _Requirements: 28.6, 28.7, 28.8, 28.9, 28.10, 28.11_
 
-  - [ ] 97.5 Render indicator pane labels for non-overlay indicators
+  - [x] 97.5 Render indicator pane labels for non-overlay indicators
     - In PineChart, render a label in the top-left corner of each indicator pane
     - Each label shows the indicator name and an unplot button (−)
     - Click unplot button fires an `onRemoveIndicator(indicatorId)` callback
     - Labels are rendered within the pane's clipped canvas region
     - _Requirements: 28.12, 28.13, 28.14, 28.15, 28.16_
 
-  - [ ] 97.6 Wire indicator management to chart data flow
+  - [x] 97.6 Wire indicator management to chart data flow
     - When addIndicator is called: send execute WS message, add to IndicatorManager state, route execution_result outputs to correct pane based on overlay flag
     - When removeIndicator is called: send stop WS message, clear associated plot series/fills/shapes from PineChart, remove from IndicatorManager state, remove pane if empty
     - Handle multiple overlay indicators merging plots into the same main chart area
     - Handle multiple non-overlay indicators each in their own pane
     - _Requirements: 28.1, 28.2, 28.3, 28.4, 28.5_
 
-  - [ ] 97.7 Wire CodeEditor "Add" button to multi-indicator mode
+  - [x] 97.7 Wire CodeEditor "Add" button to multi-indicator mode
     - Rename the "Run" button to "Add" in the CodeEditor
     - "Add" button adds the current script as a new indicator to the chart (appends to running indicators via POST /api/indicators)
     - "Add" button does NOT replace existing running indicators — it always adds a new one
@@ -2617,7 +2617,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Persist the new indicator to the backend via POST /api/indicators
     - _Requirements: 28.6, 28.7, 28.8, 28.9_
 
-  - [ ]* 97.8 Write tests for dynamic indicator management
+  - [x]* 97.8 Write tests for dynamic indicator management
     - Test addIndicator creates new ScriptSession and routes execution_result to correct pane
     - Test removeIndicator stops session, clears chart data, removes pane if empty
     - Test overlay labels render for overlay indicators and not for pane indicators

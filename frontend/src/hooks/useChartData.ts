@@ -34,6 +34,7 @@ interface ExecutionResultMessage {
   success: boolean;
   error?: string;
   overlay: boolean;
+  indicatorId?: string;
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
@@ -187,7 +188,7 @@ function buildScriptResult(
   };
 }
 
-export function useChartData() {
+export function useChartData(onIndicatorResult?: (indicatorId: string, result: ScriptResult) => void) {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [scriptResult, setScriptResult] = useState<ScriptResult | null>(null);
   const [errors, setErrors] = useState<PineScriptError[]>([]);
@@ -200,6 +201,7 @@ export function useChartData() {
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string } | null>(null);
+  const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -268,6 +270,37 @@ export function useChartData() {
 
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
+
+    // Route indicator-specific results to the callback
+    if (msg.indicatorId && msg.indicatorId !== 'default' && onIndicatorResult) {
+      if (msg.success && msg.outputs) {
+        const result = buildScriptResult(
+          msg.overlay,
+          msg.outputs,
+          msg.shapes || [],
+          msg.fills || [],
+          msg.strategyMarkers || [],
+          ohlcvData,
+          msg.bgcolor,
+          msg.plotColors,
+          msg.fillColorData,
+          msg.lines,
+          msg.labels,
+          msg.barTimestamps,
+          msg.alertConditions,
+          msg.alertTriggers,
+        );
+        onIndicatorResult(msg.indicatorId, result);
+      }
+      if (msg.error) {
+        setErrors((prev) => [...prev, {
+          type: 'error',
+          message: msg.error || 'Execution failed',
+        }]);
+      }
+      return;
+    }
+
     if (msg.success && msg.outputs) {
       if (msg.formingCandle) {
         setScriptResult((prev) => {
@@ -446,7 +479,7 @@ export function useChartData() {
         message: msg.error || 'Execution failed',
       }]);
     }
-  }, []);
+  }, [onIndicatorResult]);
 
   const connectWebSocket = useCallback(() => {
     try {
@@ -505,6 +538,12 @@ export function useChartData() {
             }
           } else if (data.type === 'execution_result' && data.data) {
             handleExecutionResult(data.data);
+          } else if (data.type === 'indicator_removed' && data.data) {
+            // Indicator removed by backend cascade (script deleted)
+            const removedIds = data.data.indicatorIds as string[] | undefined;
+            if (removedIds && onIndicatorRemovedRef.current) {
+              onIndicatorRemovedRef.current(removedIds);
+            }
           } else if (data.type === 'error' && data.data) {
             setErrors((prev) => [...prev, {
               type: 'error',
@@ -551,7 +590,7 @@ export function useChartData() {
     };
   }, [connectWebSocket]);
 
-  const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number) => {
+  const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => {
     setErrors([]);
     lastCodeRef.current = code;
     try {
@@ -613,7 +652,7 @@ export function useChartData() {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
-          data: { source: code, symbol, interval, bars: ohlcvDataRef.current },
+          data: { source: code, symbol, interval, bars: ohlcvDataRef.current, indicatorId: indicatorId || 'default' },
         }));
       }
     } catch (error) {
@@ -639,5 +678,9 @@ export function useChartData() {
     lastCodeRef,
     prependCountRef,
     ohlcvDataRef,
+    registerOnIndicatorRemoved: useCallback((cb: (indicatorIds: string[]) => void) => {
+      onIndicatorRemovedRef.current = cb;
+    }, []),
+    wsRef,
   };
 }

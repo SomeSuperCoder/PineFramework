@@ -4,16 +4,24 @@ import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
+import type { ScriptStore } from '../store/ScriptStore.js';
+import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
 
 interface ClientSubscription {
   ws: WebSocket;
   topics: Set<string>;
-  session: ScriptSession | null;
+  sessions: Map<string, ScriptSession>;
 }
 
 const BYBIT_WS_URL = process.env.BYBIT_WS_URL || 'wss://stream.bybit.com/v5/public/linear';
 
-export function createWSGateway(server: Server, cache: OHLCVCache, telegramService?: TelegramService): void {
+export function createWSGateway(
+  server: Server,
+  cache: OHLCVCache,
+  telegramService?: TelegramService,
+  _scriptStore?: ScriptStore,
+  _indicatorsStore?: RunningIndicatorsStore,
+): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const clients = new Map<WebSocket, ClientSubscription>();
   let bybitWs: WebSocket | null = null;
@@ -115,64 +123,68 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
         console.log(`[WS] reexecuteForTopic: subscriber not found in clients map`);
         continue;
       }
-      if (!sub.session) {
-        console.log(`[WS] reexecuteForTopic: subscriber has NO session! Chart updates work but script won't re-execute.`);
+      if (sub.sessions.size === 0) {
+        console.log(`[WS] reexecuteForTopic: subscriber has NO sessions! Chart updates work but scripts won't re-execute.`);
         continue;
       }
 
-      try {
-        console.log(`[WS] reexecuteForTopic: calling appendOrUpdateBar for ${symbol} ${interval}`);
-        const outputs = sub.session.appendOrUpdateBar(bar, confirmed);
-        console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, isConfirmed=${outputs.isConfirmed}, confirmed=${confirmed}`);
+      for (const [indicatorId, session] of sub.sessions) {
+        try {
+          console.log(`[WS] reexecuteForTopic: calling appendOrUpdateBar for ${symbol} ${interval} indicatorId=${indicatorId}`);
+          const outputs = session.appendOrUpdateBar(bar, confirmed);
+          console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, indicatorId=${indicatorId}, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, isConfirmed=${outputs.isConfirmed}, confirmed=${confirmed}`);
 
-        ws.send(JSON.stringify({
-          type: 'execution_result',
-          data: outputs,
-        }));
+          ws.send(JSON.stringify({
+            type: 'execution_result',
+            indicatorId,
+            data: outputs,
+          }));
 
-        const tgActive = telegramService?.isActive() ?? false;
-        const triggers = outputs.alertTriggers;
-        const hasTriggers = triggers !== undefined && triggers.length > 0;
-        const isConfirmed = outputs.isConfirmed ?? false;
-        console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}`);
+          const tgActive = telegramService?.isActive() ?? false;
+          const triggers = outputs.alertTriggers;
+          const hasTriggers = triggers !== undefined && triggers.length > 0;
+          const isConfirmed = outputs.isConfirmed ?? false;
+          console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}`);
 
-        if (!isConfirmed) {
-          console.log(`[WS] reexecuteForTopic: forming candle (isConfirmed=false), suppressing alert dispatch`);
-        } else if (tgActive && hasTriggers && telegramService) {
-          for (const trigger of triggers) {
-            const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
-            const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
-            const title = condition?.title || trigger.alertId;
-            const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
-            if (recentAlertKeys.has(dedupKey)) {
-              console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
-              continue;
+          if (!isConfirmed) {
+            console.log(`[WS] reexecuteForTopic: forming candle (isConfirmed=false), suppressing alert dispatch`);
+          } else if (tgActive && hasTriggers && telegramService) {
+            for (const trigger of triggers) {
+              const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
+              const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
+              const title = condition?.title || trigger.alertId;
+              const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
+              if (recentAlertKeys.has(dedupKey)) {
+                console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
+                continue;
+              }
+              recentAlertKeys.add(dedupKey);
+              if (recentAlertKeys.size > 100) {
+                const first = recentAlertKeys.values().next().value;
+                if (first) recentAlertKeys.delete(first);
+              }
+              console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
+              telegramService.sendAlertToSubscribers(
+                `*${title}*\n\n${message}`,
+                trigger.alertId,
+                symbol || undefined,
+                interval || undefined,
+              );
             }
-            recentAlertKeys.add(dedupKey);
-            if (recentAlertKeys.size > 100) {
-              const first = recentAlertKeys.values().next().value;
-              if (first) recentAlertKeys.delete(first);
-            }
-            console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
-            telegramService.sendAlertToSubscribers(
-              `*${title}*\n\n${message}`,
-              trigger.alertId,
-              symbol || undefined,
-              interval || undefined,
-            );
+          } else if (!tgActive) {
+            console.log(`[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`);
+          } else if (!hasTriggers) {
+            console.log(`[WS] reexecuteForTopic: no alert triggers in output, nothing to send`);
           }
-        } else if (!tgActive) {
-          console.log(`[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`);
-        } else if (!hasTriggers) {
-          console.log(`[WS] reexecuteForTopic: no alert triggers in output, nothing to send`);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Script re-execution failed';
+          console.error(`[WS] Script re-execution error for indicator ${indicatorId}:`, message);
+          ws.send(JSON.stringify({
+            type: 'error',
+            indicatorId,
+            data: { message },
+          }));
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Script re-execution failed';
-        console.error('[WS] Script re-execution error:', message);
-        ws.send(JSON.stringify({
-          type: 'error',
-          data: { message },
-        }));
       }
     }
   }
@@ -200,9 +212,18 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
     }
   }
 
+  function broadcastToAll(message: object): void {
+    const payload = JSON.stringify(message);
+    for (const sub of clients.values()) {
+      if (sub.ws.readyState === WebSocket.OPEN) {
+        sub.ws.send(payload);
+      }
+    }
+  }
+
   wss.on('connection', (ws: WebSocket) => {
     console.log('[WS] Client connected');
-    const sub: ClientSubscription = { ws, topics: new Set(), session: null };
+    const sub: ClientSubscription = { ws, topics: new Set(), sessions: new Map() };
     clients.set(ws, sub);
 
     ws.send(JSON.stringify({ type: 'connected', data: { connectionId: Math.random().toString(36).slice(2) } }));
@@ -212,7 +233,8 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
         const msg = JSON.parse(data.toString()) as {
           type: string;
           topic?: string;
-          data?: { source?: string; symbol?: string; interval?: string; bars?: Bar[] };
+          indicatorId?: string;
+          data?: { source?: string; symbol?: string; interval?: string; bars?: Bar[]; indicatorId?: string };
         };
 
         if (msg.type === 'subscribe' && msg.topic) {
@@ -234,14 +256,15 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
           sub.topics.delete(msg.topic);
           topicCallbacks.get(msg.topic)?.delete(ws);
         } else if (msg.type === 'execute' && msg.data) {
-          const { source, symbol, interval, bars } = msg.data;
+          const { source, symbol, interval, bars, indicatorId } = msg.data;
           if (!source || !bars || bars.length === 0) {
             ws.send(JSON.stringify({ type: 'error', data: { message: 'Missing source or bars' } }));
             return;
           }
 
+          const sessionIndicatorId = indicatorId || 'default';
+
           try {
-            sub.session = null;
             const session = new ScriptSession(
               source,
               symbol || '',
@@ -249,12 +272,18 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
               bars,
             );
             session.initialize();
-            sub.session = session;
-            ws.send(JSON.stringify({ type: 'session_ready' }));
+            sub.sessions.set(sessionIndicatorId, session);
+            ws.send(JSON.stringify({ type: 'session_ready', indicatorId: sessionIndicatorId }));
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Script compilation or execution failed';
             console.error('[WS] Script execution error:', message);
-            ws.send(JSON.stringify({ type: 'error', data: { message } }));
+            ws.send(JSON.stringify({ type: 'error', indicatorId: sessionIndicatorId, data: { message } }));
+          }
+        } else if (msg.type === 'stop_indicator') {
+          const indicatorId = msg.indicatorId || msg.data?.indicatorId;
+          if (indicatorId) {
+            sub.sessions.delete(indicatorId);
+            ws.send(JSON.stringify({ type: 'indicator_stopped', indicatorId }));
           }
         }
       } catch {
@@ -270,6 +299,11 @@ export function createWSGateway(server: Server, cache: OHLCVCache, telegramServi
       clients.delete(ws);
     });
   });
+
+  // Expose broadcastToAll for cascade removals
+  (globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved = (indicatorIds: string[]) => {
+    broadcastToAll({ type: 'indicator_removed', data: { indicatorIds } });
+  };
 
   connectToBybit();
 }
