@@ -179,13 +179,11 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
           seriesData.length = data.length;
         }
 
-        if (!seriesNamesRef.current.has(title)) {
-          chart.addPlotSeries(title, {
-            color: plotColor,
-            lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-            style: (plot.type as any) || 'line',
-          }, result.overlay);
-        }
+        chart.addPlotSeries(title, {
+          color: plotColor,
+          lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
+          style: (plot.type as any) || 'line',
+        }, result.overlay);
         seriesNamesRef.current.add(title);
         chart.setPlotData(title, seriesData);
       }
