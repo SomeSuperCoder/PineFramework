@@ -21,10 +21,11 @@ interface ChartComponentProps {
   ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>;
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
+  indicatorSources?: Map<string, string>;
   onRemoveIndicator?: (indicatorId: string) => void;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], indicatorResults = new Map(), indicatorSources = new Map(), onRemoveIndicator }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -81,9 +82,20 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       const iv = intervalRef.current;
       try {
         const added = await fetchRef.current(sy, iv);
-        if (added > 0 && codeRef.current.current) {
+        if (added > 0) {
+          const bars = ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>;
           const version = ++executeVersionRef.current;
-          await execRef.current(codeRef.current.current, sy, iv, ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, executeVersionRef, version);
+
+          if (indicatorResults.size > 0) {
+            for (const [id] of indicatorResults) {
+              const src = indicatorSources.get(id);
+              if (src) {
+                await execRef.current(src, sy, iv, bars, executeVersionRef, version, id);
+              }
+            }
+          } else if (codeRef.current.current) {
+            await execRef.current(codeRef.current.current, sy, iv, bars, executeVersionRef, version);
+          }
         }
       } finally {
         if (!isLoadingHistoryRef.current) return;
@@ -92,7 +104,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     };
 
     chart.on('onVisibleRangeChange', onRangeChange);
-  }, []);
+  }, [indicatorResults, indicatorSources]);
 
   useEffect(() => {
     if (!chartRef.current) return;
