@@ -100,12 +100,9 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
   const prevScriptResultRef = useRef<ScriptResult | null>(null);
   const prevIndicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
-  const prevDataRef = useRef<CandlestickData[]>([]);
   useEffect(() => {
     if (!chartRef.current) return;
-    const dataChanged = data !== prevDataRef.current;
-    if (!dataChanged && scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) return;
-    if (dataChanged) prevDataRef.current = data;
+    if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) return;
     prevScriptResultRef.current = scriptResult;
     prevIndicatorResultsRef.current = indicatorResults;
     const chart = chartRef.current;
@@ -142,11 +139,17 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
         if (data.length > seriesData.length) {
           const padCount = data.length - seriesData.length;
-          const padding: PlotSeriesData[] = [];
-          for (let i = 0; i < padCount; i++) {
-            padding.push({ time: data[i].time, value: null });
+          if (seriesData.length > 0 && data[0]?.time < seriesData[0]?.time) {
+            const padding: PlotSeriesData[] = [];
+            for (let i = 0; i < padCount; i++) {
+              padding.push({ time: data[i].time, value: null });
+            }
+            seriesData.unshift(...padding);
+          } else {
+            for (let i = 0; i < padCount; i++) {
+              seriesData.push({ time: data[data.length - padCount + i]?.time ?? 0, value: null });
+            }
           }
-          seriesData.unshift(...padding);
         } else if (seriesData.length > data.length) {
           seriesData.splice(0, seriesData.length - data.length);
         }
@@ -223,7 +226,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setHLines([]);
     chart.setBarColors(new Map());
     chart.endUpdate();
-  }, [scriptResult, indicatorResults, data]);
+  }, [scriptResult, indicatorResults]);
 
   useEffect(() => {
     if (!chartRef.current) return;

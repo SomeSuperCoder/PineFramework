@@ -510,6 +510,8 @@ export class PineChart {
   }
 
   addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true): PlotSeriesHandle {
+    const existing = this.plotSeries.get(name);
+    if (existing) return existing;
     const handle: PlotSeriesHandle = {
       name,
       options: {
