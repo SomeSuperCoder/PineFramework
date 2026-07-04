@@ -110,6 +110,11 @@ function App() {
       wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
     }
     await indicatorManager.removeIndicator(indicatorId);
+    setIndicatorResults((prev) => {
+      const next = new Map(prev);
+      next.delete(indicatorId);
+      return next;
+    });
   };
 
   useEffect(() => {
