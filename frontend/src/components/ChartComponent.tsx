@@ -100,11 +100,22 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
   const prevScriptResultRef = useRef<ScriptResult | null>(null);
   const prevIndicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
+  const activeKeysRef = useRef<Set<string>>(new Set());
+  const keyToTitlesRef = useRef<Map<string, Set<string>>>(new Map());
   useEffect(() => {
     if (!chartRef.current) return;
     if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) return;
     prevScriptResultRef.current = scriptResult;
     prevIndicatorResultsRef.current = indicatorResults;
+
+    const nextKeys = new Set<string>();
+    if (scriptResult) nextKeys.add('main');
+    if (indicatorResults) {
+      for (const [id] of indicatorResults) {
+        nextKeys.add(id);
+      }
+    }
+
     const chart = chartRef.current;
     chart.beginUpdate();
 
@@ -119,14 +130,17 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }
 
     const currentTitles = new Set<string>();
+    const nextKeyToTitles = new Map<string, Set<string>>();
     let colorIndex = 0;
 
-    for (const { result } of allResults) {
+    for (const { result, key } of allResults) {
+      const keyTitles = new Set<string>();
       for (const plot of result.plots) {
         let title = plot.title || `Plot ${colorIndex + 1}`;
         let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
         colorIndex++;
         currentTitles.add(title);
+        keyTitles.add(title);
 
         const seriesData: PlotSeriesData[] = [];
         for (const d of plot.data) {
@@ -164,17 +178,26 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         seriesNamesRef.current.add(title);
         chart.setPlotData(title, seriesData);
       }
+      nextKeyToTitles.set(key, keyTitles);
     }
 
-    for (const name of seriesNamesRef.current) {
-      if (!currentTitles.has(name)) {
-        chart.removeSeries(name);
+    for (const key of activeKeysRef.current) {
+      if (!nextKeys.has(key)) {
+        const removedTitles = keyToTitlesRef.current.get(key);
+        if (removedTitles) {
+          for (const title of removedTitles) {
+            chart.removeSeries(title);
+            seriesNamesRef.current.delete(title);
+          }
+        }
       }
     }
     seriesNamesRef.current.clear();
     for (const title of currentTitles) {
       seriesNamesRef.current.add(title);
     }
+    activeKeysRef.current = nextKeys;
+    keyToTitlesRef.current = nextKeyToTitles;
 
     const allStrategyMarkers: StrategyMarkerData[] = [];
     const allFills: FillData[] = [];
