@@ -532,7 +532,10 @@ export class PineChart {
   setPlotData(name: string, data: PlotSeriesData[]): void {
     const handle = this.plotSeries.get(name);
     if (handle) {
-      if (data.length === 0) console.warn('[PineChart] setPlotData EMPTY', name);
+      if (data.length === 0) {
+        console.warn('[PineChart] setPlotData EMPTY (skipped)', name);
+        return;
+      }
       handle.data = data;
       this.markDirty();
     }
