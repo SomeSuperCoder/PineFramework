@@ -2363,6 +2363,46 @@ This implementation plan outlines the step-by-step development of a production-g
     - Draw border line between volume area and first indicator pane
     - _Requirements: 76_
 
+- [x] 96. Implement Indicator Pane Autoscale on Scroll
+  - [x] 96.1 Add autoscale price range computation for indicator panes
+    - In PineChart, add `updateIndicatorPriceRange()` method that iterates all indicator panes
+    - For each pane, filter indicator output series to only bars within the visible viewport range
+    - Compute min/max from the filtered values with a small vertical padding margin (e.g., 5%)
+    - Call `layout.setIndicatorPriceRange(paneId, min, max)` for each indicator pane
+    - _Requirements: 26.14_
+
+  - [x] 96.2 Hook autoscale into viewport change events
+    - Register the autoscale recomputation as a listener on `onVisibleRangeChange` callback
+    - After any scroll, pan, or zoom, recompute indicator pane price ranges before the next render frame
+    - Ensure the recomputation runs inside `beginUpdate/endUpdate` to batch rendering
+    - _Requirements: 26.14, 26.15_
+
+  - [x] 96.3 Ignore manual price range for indicator panes
+    - In `setIndicatorPriceRange()`, always compute from visible data — never use a cached manual override
+    - Remove any indicator pane from the manual price range tracking in LayoutManager
+    - Ensure double-click on price scale does NOT affect indicator panes (only main chart)
+    - _Requirements: 26.16_
+
+  - [x] 96.4 Handle empty and edge-case viewport ranges
+    - When no indicator values are visible in the viewport, use the last known price range (fallback)
+    - When all visible values are identical (flat line), expand the range by a fixed margin to avoid zero-height rendering
+    - Guard against NaN/Infinity in indicator output values during autoscale computation
+    - _Requirements: 26.14_
+
+  - [x] 96.5 Update axis renderer for autoscaled indicator panes
+    - Ensure AxisRenderer uses the autoscaled indicator price range when rendering pane price labels
+    - Recalculate tick spacing per pane after autoscale recomputation
+    - _Requirements: 26.14_
+
+  - [x]* 96.6 Write tests for indicator pane autoscale
+    - Test autoscale recomputes price range when viewport scrolls horizontally
+    - Test autoscale recomputes when chart zooms in/out
+    - Test indicator pane price range adjusts after lazy loading older bars
+    - Test empty viewport falls back to last known range
+    - Test flat-line indicator (all values equal) renders with expanded margin
+    - Test double-click price scale does NOT reset indicator pane ranges
+    - _Requirements: 26.14, 26.15, 26.16_
+
 - [x] 89. Implement Pine Script v5 Compatibility Layer
   - [x] 89.1 Add v5 grammar rules to Parser
     - Create v5-specific grammar rule set alongside existing v6 rules
@@ -2547,6 +2587,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 93 fixes chart drag and price scale drag behavior: chart area drag now pans both horizontally and vertically (free move), price scale drag now zooms vertically instead of panning, and chart auto-fits all data on initial load using fitContent() instead of scrollTo().
 - Task 94 fixes real-time indicator data alignment: backend permanently advances engine state for confirmed bars via executeBar() when new bars arrive (previously always used computeFormingCandle which saved/restored state), frontend appends new plot data entries for new bars instead of replacing the last entry (previously caused MACD values to appear on genesis candle).
 - Task 95 implements indicator pane independent price scales: AxisRenderer now renders per-indicator-pane price labels on the right side using each pane's own price range, indicator pane rendering is clipped to allocated regions via canvas clipping, and horizontal separator lines are drawn between panes.
+- Task 96 implements indicator pane autoscale on scroll: when the user scrolls, pans, or zooms the chart, each indicator pane automatically recomputes its Y-axis price range from the visible indicator values in the current viewport, providing seamless autoscaling that matches TradingView behavior.
 
 ## Task Dependency Graph
 
@@ -2680,7 +2721,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 124, "tasks": ["92.6"] },
     { "id": 125, "tasks": ["93.1", "93.2", "93.3"] },
     { "id": 126, "tasks": ["94.1", "94.2"] },
-    { "id": 127, "tasks": ["95.1", "95.2", "95.3"] }
+    { "id": 127, "tasks": ["95.1", "95.2", "95.3"] },
+    { "id": 128, "tasks": ["96.1", "96.2", "96.3", "96.4", "96.5"] },
+    { "id": 129, "tasks": ["96.6"] }
   ]
 }
 ```

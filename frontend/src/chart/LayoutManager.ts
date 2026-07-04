@@ -102,9 +102,7 @@ export class LayoutManager {
   setIndicatorPriceRange(paneId: string, min: number, max: number): void {
     const padding = (max - min) * 0.1 || 1;
     this.indicatorAutoPriceRanges.set(paneId, { min: min - padding, max: max + padding });
-    if (!this.indicatorPriceRanges.has(paneId)) {
-      this.indicatorPriceRanges.set(paneId, this.indicatorAutoPriceRanges.get(paneId)!);
-    }
+    this.indicatorPriceRanges.set(paneId, this.indicatorAutoPriceRanges.get(paneId)!);
   }
 
   getIndicatorPriceRange(paneId: string): PriceRange {

@@ -1028,6 +1028,10 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 11. WHERE multiple non-overlay scripts exist, THE Frontend SHALL stack them vertically, each in its own pane with its own price scale
 12. THE MACD indicator (`test_indicators/macd.pine`) SHALL render its histogram, MACD line, and signal line in a separate pane below the price chart
 13. THE Frontend SHALL synchronize horizontal scrolling and zooming across all panes (main + indicator)
+14. THE Frontend SHALL autoscale indicator pane price ranges when the user scrolls or pans the chart horizontally, recomputing the visible min/max from indicator values within the current viewport after each scroll or pan interaction
+15. THE Frontend SHALL autoscale indicator pane price ranges when the chart zooms in or out, adjusting the Y-axis to fit all indicator values visible in the new viewport
+16. WHERE autoscaling is active, THE Frontend SHALL ignore any manual price range setting for indicator panes and recompute from visible data on every viewport change
+17. THE Frontend SHALL provide a smooth transition when autoscaling indicator panes, avoiding flicker or jarring jumps during scroll interactions
 
 ### Requirement 27: Multi-Version Pine Script Support
 

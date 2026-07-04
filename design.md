@@ -1467,6 +1467,7 @@ CompiledScript {
 - Separate price scale rendering for indicator pane
 - `recalculateLayout()` detects overlay count changes (new plot series added/removed) and triggers `resize()` to re-allocate pane space
 - Canvas clipping via `ctx.save()`/`ctx.clip()`/`ctx.restore()` restricts candlestick and overlay plot rendering to the `chartArea` and volume rendering to the `volumeArea`, preventing visual bleed-through into indicator panes below
+- **Indicator Pane Autoscale on Scroll**: When the viewport changes (scroll, pan, or zoom), each indicator pane recomputes its visible price range from the min/max of its indicator values within the current visible bar range. The autoscale fires after every `onVisibleRangeChange` event. For each indicator pane, the engine filters the output series to only bars within the visible range, computes `min`/`max`, and applies a small vertical padding margin (e.g., 5%). This replaces the previous static price range and forces a re-render of the pane's Y-axis and plot positions. Manual price range overrides are ignored for indicator panes — they always autoscale.
 
 ### Backtest Engine Architecture
 
