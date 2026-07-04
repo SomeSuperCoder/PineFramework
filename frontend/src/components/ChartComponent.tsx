@@ -221,11 +221,20 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setHLines([]);
     chart.setBarColors(new Map());
     chart.endUpdate();
-  }, [scriptResult]);
+  }, [scriptResult, indicatorResults]);
 
   useEffect(() => {
-    if (!chartRef.current || !scriptResult) return;
+    if (!chartRef.current) return;
     const chart = chartRef.current;
+
+    const allResults: Array<{ result: ScriptResult; key: string }> = [];
+    if (scriptResult) allResults.push({ result: scriptResult, key: 'main' });
+    if (indicatorResults) {
+      for (const [id, res] of indicatorResults) {
+        allResults.push({ result: res, key: id });
+      }
+    }
+    if (allResults.length === 0) return;
 
     const ohlcvMap = new Map<number, CandlestickData>();
     for (const c of data) {
@@ -234,33 +243,37 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
     chart.beginUpdate();
 
-    const shapeMarkers: ShapeMarkerData[] = (scriptResult.shapes || []).map((s) => {
-      const candle = ohlcvMap.get(s.time);
-      const barIdx = candle ? data.indexOf(candle) : -1;
-      return {
-        time: s.time,
-        position: (s.location || 'abovebar') as ShapeMarkerData['position'],
-        shape: s.type,
-        color: s.color || '#2196f3',
-        text: s.text || undefined,
-        barIndex: barIdx >= 0 ? barIdx : undefined,
-        price: s.price,
-        overlay: s.overlay,
-      };
-    });
-    chart.setMarkers(shapeMarkers);
+    const allShapeMarkers: ShapeMarkerData[] = [];
+    const allBgColorsMap = new Map<number, string>();
 
-    const bgColorsMap = new Map<number, string>();
-    for (const b of (scriptResult.bgcolor || [])) {
-      const candle = ohlcvMap.get(b.time);
-      if (candle) {
-        const barIdx = data.indexOf(candle);
-        if (barIdx >= 0) {
-          bgColorsMap.set(barIdx, b.color);
+    for (const { result } of allResults) {
+      for (const s of (result.shapes || [])) {
+        const candle = ohlcvMap.get(s.time);
+        const barIdx = candle ? data.indexOf(candle) : -1;
+        allShapeMarkers.push({
+          time: s.time,
+          position: (s.location || 'abovebar') as ShapeMarkerData['position'],
+          shape: s.type,
+          color: s.color || '#2196f3',
+          text: s.text || undefined,
+          barIndex: barIdx >= 0 ? barIdx : undefined,
+          price: s.price,
+          overlay: s.overlay,
+        });
+      }
+      for (const b of (result.bgcolor || [])) {
+        const candle = ohlcvMap.get(b.time);
+        if (candle) {
+          const barIdx = data.indexOf(candle);
+          if (barIdx >= 0) {
+            allBgColorsMap.set(barIdx, b.color);
+          }
         }
       }
     }
-    chart.setBgColors(bgColorsMap);
+
+    chart.setMarkers(allShapeMarkers);
+    chart.setBgColors(allBgColorsMap);
 
     chart.endUpdate();
   }, [scriptResult, indicatorResults, data]);
