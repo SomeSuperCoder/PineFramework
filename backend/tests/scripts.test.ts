@@ -133,14 +133,6 @@ describe('ScriptStore', () => {
       store.delete(created.id);
       expect(store.getActiveId()).toBeNull();
     });
-
-    it('clears runningScriptId when deleting running script', () => {
-      const created = store.create('Running', 'indicator("R")\nplot(close)');
-      store.setRunning(created.id);
-      expect(store.getRunningId()).toBe(created.id);
-      store.delete(created.id);
-      expect(store.getRunningId()).toBeNull();
-    });
   });
 
   describe('active script', () => {
@@ -164,24 +156,6 @@ describe('ScriptStore', () => {
     it('returns undefined when no active script', () => {
       expect(store.getActive()).toBeUndefined();
       expect(store.getActiveId()).toBeNull();
-    });
-  });
-
-  describe('running script', () => {
-    it('setRunning returns undefined for missing id', () => {
-      expect(store.setRunning('nonexistent')).toBeUndefined();
-    });
-
-    it('setRunning persists and getRunning retrieves', () => {
-      const created = store.create('Test', 'indicator("T")\nplot(close)');
-      store.setRunning(created.id);
-      expect(store.getRunning()!.id).toBe(created.id);
-      expect(store.getRunningId()).toBe(created.id);
-    });
-
-    it('returns undefined when no running script', () => {
-      expect(store.getRunning()).toBeUndefined();
-      expect(store.getRunningId()).toBeNull();
     });
   });
 
@@ -226,12 +200,10 @@ describe('ScriptStore', () => {
       const s1 = ownedStore(filePath);
       const created = s1.create('Persist', 'indicator("P")\nplot(close)');
       s1.setActive(created.id);
-      s1.setRunning(created.id);
 
       const s2 = ownedStore(filePath);
       expect(s2.getAll()).toHaveLength(1);
       expect(s2.getActive()!.id).toBe(created.id);
-      expect(s2.getRunning()!.id).toBe(created.id);
     });
   });
 });

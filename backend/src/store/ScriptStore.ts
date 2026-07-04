@@ -13,14 +13,12 @@ export interface ScriptEntry {
 export interface ScriptBankData {
   scripts: ScriptEntry[];
   activeScriptId: string | null;
-  runningScriptId: string | null;
   [key: string]: unknown;
 }
 
 const DEFAULT_SCRIPT_BANK_DATA: ScriptBankData = {
   scripts: [],
   activeScriptId: null,
-  runningScriptId: null,
 };
 
 function detectScriptType(source: string): 'strategy' | 'indicator' {
@@ -33,7 +31,6 @@ function validateScriptBankData(data: unknown): data is ScriptBankData {
   const obj = data as Record<string, unknown>;
   if (!Array.isArray(obj.scripts)) return false;
   if (obj.activeScriptId !== null && typeof obj.activeScriptId !== 'string') return false;
-  if (obj.runningScriptId !== null && typeof obj.runningScriptId !== 'string') return false;
   for (const script of obj.scripts) {
     if (!script || typeof script !== 'object') return false;
     const s = script as Record<string, unknown>;
@@ -73,25 +70,6 @@ export class ScriptStore {
 
   getActiveId(): string | null {
     return this.store.read().activeScriptId;
-  }
-
-  getRunning(): ScriptEntry | undefined {
-    const data = this.store.read();
-    if (!data.runningScriptId) return undefined;
-    return data.scripts.find((s) => s.id === data.runningScriptId);
-  }
-
-  getRunningId(): string | null {
-    return this.store.read().runningScriptId;
-  }
-
-  setRunning(id: string): ScriptEntry | undefined {
-    const data = this.store.read();
-    const script = data.scripts.find((s) => s.id === id);
-    if (!script) return undefined;
-    data.runningScriptId = id;
-    this.store.write(data);
-    return script;
   }
 
   setActive(id: string): ScriptEntry | undefined {
@@ -141,9 +119,6 @@ export class ScriptStore {
     data.scripts.splice(idx, 1);
     if (data.activeScriptId === id) {
       data.activeScriptId = null;
-    }
-    if (data.runningScriptId === id) {
-      data.runningScriptId = null;
     }
     this.store.write(data);
     return true;

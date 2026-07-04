@@ -13,7 +13,6 @@ interface CodeEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (scriptId: string, source: string) => void;
-  initialScriptId?: string | null;
 }
 
 export const DEFAULT_CODE = `//@version=6
@@ -46,7 +45,7 @@ function extractVersion(source: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEditorProps) {
+export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [scripts, setScripts] = useState<ScriptEntry[]>([]);
   const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
@@ -58,16 +57,6 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
 
   sourceRef.current = source;
   currentScriptIdRef.current = currentScriptId;
-
-  const fetchScripts = useCallback(async () => {
-    try {
-      const res = await fetch('/api/scripts');
-      const data = await res.json();
-      setScripts(data.scripts || []);
-    } catch {
-      // ignore
-    }
-  }, []);
 
   const loadScript = useCallback(async (id: string) => {
     try {
@@ -82,38 +71,27 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
     }
   }, []);
 
-  const loadRunningScript = useCallback(async () => {
+  const loadFirstScript = useCallback(async () => {
     setLoading(true);
     try {
-      await fetchScripts();
-      const res = await fetch('/api/scripts/running');
-      const data = await res.json();
-      if (data.script) {
-        setCurrentScriptId(data.script.id);
-        setSource(data.script.source);
-      } else {
-        const listRes = await fetch('/api/scripts');
-        const listData = await listRes.json();
-        if (listData.scripts?.length > 0) {
-          await loadScript(listData.scripts[0].id);
-        }
+      const listRes = await fetch('/api/scripts');
+      const listData = await listRes.json();
+      setScripts(listData.scripts || []);
+      if (listData.scripts?.length > 0) {
+        await loadScript(listData.scripts[0].id);
       }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }, [fetchScripts, loadScript]);
+  }, [loadScript]);
 
   useEffect(() => {
     if (isOpen) {
-      if (initialScriptId) {
-        fetchScripts().then(() => loadScript(initialScriptId));
-      } else {
-        loadRunningScript();
-      }
+      loadFirstScript();
     }
-  }, [isOpen, initialScriptId, fetchScripts, loadScript, loadRunningScript]);
+  }, [isOpen, loadFirstScript]);
 
   useEffect(() => {
     if (isOpen && textareaRef.current) {

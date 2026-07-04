@@ -25,9 +25,9 @@ function App() {
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
   const [currentCode, setCurrentCode] = useState<string | null>(null);
-  const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
+  const [indicatorsReady, setIndicatorsReady] = useState(false);
 
   const indicatorManager = useIndicatorManager();
 
@@ -54,17 +54,17 @@ function App() {
   }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
   useEffect(() => {
-    fetch('/api/scripts/running')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.script) {
-          setCurrentScriptId(data.script.id);
-          setCurrentCode(data.script.source);
-        } else {
-          setCurrentCode(DEFAULT_CODE);
+    indicatorManager.fetchIndicators().then((list) => {
+      if (list.length > 0) {
+        setCurrentCode(null);
+        for (const ind of list) {
+          executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
         }
-      })
-      .catch(() => setCurrentCode(DEFAULT_CODE));
+      } else {
+        setCurrentCode(DEFAULT_CODE);
+      }
+      setIndicatorsReady(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -73,9 +73,9 @@ function App() {
   }, [symbol, timeframe, subscribe]);
 
   useEffect(() => {
-    if (!currentCode) return;
+    if (!currentCode || !indicatorsReady) return;
     executeScript(currentCode, symbol, timeframe);
-  }, [symbol, timeframe, executeScript, currentCode]);
+  }, [symbol, timeframe, executeScript, currentCode, indicatorsReady]);
 
   useEffect(() => {
     if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
@@ -91,7 +91,7 @@ function App() {
 
     const indicator = await indicatorManager.addIndicator(
       scriptId,
-      currentScriptId === scriptId ? (currentCode?.match(/indicator\(\s*["'](.+?)["']/)?.[1] || 'Indicator') : 'Indicator',
+      source.match(/indicator\(\s*["'](.+?)["']/)?.[1] || 'Indicator',
       true,
       source,
     );
@@ -171,7 +171,6 @@ function App() {
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
         onAdd={handleAddIndicator}
-        initialScriptId={currentScriptId}
       />
 
       <TelegramConfigPanel

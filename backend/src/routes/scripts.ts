@@ -43,33 +43,6 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
     }
   });
 
-  router.get('/scripts/running', (_req, res) => {
-    try {
-      const running = store.getRunning();
-      res.json({ script: running ?? null });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to get running script' });
-    }
-  });
-
-  router.put('/scripts/running', (req, res) => {
-    try {
-      const { scriptId } = req.body as { scriptId?: string };
-      if (typeof scriptId !== 'string' || scriptId.trim() === '') {
-        res.status(400).json({ error: 'scriptId must be a non-empty string' });
-        return;
-      }
-      const script = store.setRunning(scriptId);
-      if (!script) {
-        res.status(404).json({ error: 'Script not found' });
-        return;
-      }
-      res.json({ script });
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to set running script' });
-    }
-  });
-
   router.get('/scripts/:id', (req, res) => {
     try {
       const script = store.getById(req.params.id);
