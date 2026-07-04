@@ -16,16 +16,12 @@ interface ChartComponentProps {
   symbol: string;
   interval: string;
   fetchOlderOHLCV: (symbol: string, interval: string) => Promise<number>;
-  executeScript: (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>;
-  lastCodeRef: React.MutableRefObject<string | null>;
-  ohlcvDataRef: React.MutableRefObject<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>;
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
-  indicatorSources?: Map<string, string>;
   onRemoveIndicator?: (indicatorId: string) => void;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, executeScript, lastCodeRef, ohlcvDataRef, indicatorLabels = [], indicatorResults = new Map(), indicatorSources = new Map(), onRemoveIndicator }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -57,19 +53,12 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   }, []);
 
   const isLoadingHistoryRef = useRef(false);
-  const executeVersionRef = useRef(0);
   const fetchRef = useRef(fetchOlderOHLCV);
   fetchRef.current = fetchOlderOHLCV;
-  const execRef = useRef(executeScript);
-  execRef.current = executeScript;
-  const codeRef = useRef(lastCodeRef);
-  codeRef.current = lastCodeRef;
   const symbolRef = useRef(symbol);
   symbolRef.current = symbol;
   const intervalRef = useRef(interval);
   intervalRef.current = interval;
-  const ohlcvRef = useRef(ohlcvDataRef);
-  ohlcvRef.current = ohlcvDataRef;
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -81,22 +70,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       const sy = symbolRef.current;
       const iv = intervalRef.current;
       try {
-        const added = await fetchRef.current(sy, iv);
-        if (added > 0) {
-          const bars = ohlcvRef.current.current as unknown as Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>;
-          const version = ++executeVersionRef.current;
-
-          if (indicatorResults.size > 0) {
-            for (const [id] of indicatorResults) {
-              const src = indicatorSources.get(id);
-              if (src) {
-                await execRef.current(src, sy, iv, bars, executeVersionRef, version, id);
-              }
-            }
-          } else if (codeRef.current.current) {
-            await execRef.current(codeRef.current.current, sy, iv, bars, executeVersionRef, version);
-          }
-        }
+        await fetchRef.current(sy, iv);
       } finally {
         if (!isLoadingHistoryRef.current) return;
         isLoadingHistoryRef.current = false;
@@ -104,7 +78,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     };
 
     chart.on('onVisibleRangeChange', onRangeChange);
-  }, [indicatorResults, indicatorSources]);
+  }, []);
 
   useEffect(() => {
     if (!chartRef.current) return;

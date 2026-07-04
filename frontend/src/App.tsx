@@ -28,7 +28,6 @@ function App() {
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
-  const [indicatorSources, setIndicatorSources] = useState<Map<string, string>>(new Map());
 
   const indicatorManager = useIndicatorManager();
 
@@ -60,11 +59,6 @@ function App() {
   useEffect(() => {
     registerOnIndicatorRemoved((indicatorIds: string[]) => {
       indicatorManager.handleIndicatorRemoved(indicatorIds);
-      setIndicatorSources((prev) => {
-        const next = new Map(prev);
-        for (const id of indicatorIds) next.delete(id);
-        return next;
-      });
       setIndicatorResults((prev) => {
         const next = new Map(prev);
         for (const id of indicatorIds) next.delete(id);
@@ -77,7 +71,6 @@ function App() {
     fetchOHLCV(symbol, timeframe);
     indicatorManager.fetchIndicators().then((list) => {
       for (const ind of list) {
-        setIndicatorSources((prev) => new Map(prev).set(ind.id, ind.source));
         executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
       }
     });
@@ -109,7 +102,6 @@ function App() {
     );
 
     if (indicator) {
-      setIndicatorSources((prev) => new Map(prev).set(indicator.id, source));
       await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
     }
   };
@@ -119,11 +111,6 @@ function App() {
       wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
     }
     await indicatorManager.removeIndicator(indicatorId);
-    setIndicatorSources((prev) => {
-      const next = new Map(prev);
-      next.delete(indicatorId);
-      return next;
-    });
     setIndicatorResults((prev) => {
       const next = new Map(prev);
       next.delete(indicatorId);
@@ -176,12 +163,8 @@ function App() {
           symbol={symbol}
           interval={timeframe}
           fetchOlderOHLCV={fetchOlderOHLCV}
-          executeScript={executeScript}
-          lastCodeRef={lastCodeRef}
-          ohlcvDataRef={ohlcvDataRef}
           indicatorLabels={overlayIndicatorLabels}
           indicatorResults={indicatorResults}
-          indicatorSources={indicatorSources}
           onRemoveIndicator={handleRemoveIndicator}
         />
       </main>

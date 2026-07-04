@@ -262,11 +262,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
+      setCandles(toCandleData(ohlcvDataRef.current));
       return addedCount;
     } catch {
       return 0;
     }
-  }, []);
+  }, [toCandleData]);
 
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
