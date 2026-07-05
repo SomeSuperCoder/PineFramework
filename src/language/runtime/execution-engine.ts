@@ -122,6 +122,7 @@ export interface ExecutionResult {
   alertConditions?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
   barColorData?: Array<{ time: number; color: string }>;
+  maxLookback?: number;
 }
 
 export interface FormingCandleResult {
@@ -295,6 +296,48 @@ export class ExecutionEngine {
   > = new Map();
   private rsiCallIndex: number = 0;
   private strategyEngine: StrategyEngine | null = null;
+
+  getMaxLookback(): number {
+    let max = 0;
+    for (const key of this.smaBuffers.keys()) {
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+        const len = parseInt(parts[1], 10);
+        if (len > max) max = len;
+      }
+    }
+    for (const key of this.emaState.keys()) {
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+        const len = parseInt(parts[1], 10);
+        if (len > max) max = len;
+      }
+    }
+    for (const key of this.rsiState.keys()) {
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+        const len = parseInt(parts[1], 10);
+        if (len > max) max = len;
+      }
+    }
+    for (const key of this.hmaBuffers.keys()) {
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+        const len = parseInt(parts[1], 10);
+        const sqrtLen = Math.round(Math.sqrt(len));
+        if (len > max) max = len;
+        if (sqrtLen > max) max = sqrtLen;
+      }
+    }
+    for (const key of this.atrState.keys()) {
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+        const len = parseInt(parts[1], 10);
+        if (len > max) max = len;
+      }
+    }
+    return max;
+  }
 
   setFormingCandle(v: boolean): void {
     this.isFormingCandle = v;
@@ -1847,6 +1890,7 @@ export class ExecutionEngine {
       alertConditions: this.alertConditionEntries,
       alertTriggers: [...this.alertTriggers],
       barColorData: [...this.barColorData],
+      maxLookback: this.getMaxLookback(),
     };
 
     for (const bar of bars) {
@@ -1856,7 +1900,10 @@ export class ExecutionEngine {
       }
     }
 
-    return lastResult;
+    return {
+      ...lastResult,
+      maxLookback: this.getMaxLookback(),
+    };
   }
 
   executeRealtimeBar(context: ExecutionContext): ExecutionResult {

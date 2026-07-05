@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OHLCVCache } from './cache/ohlcv-cache.js';
 import { createOHLCVRouter } from './routes/ohlcv.js';
+import { createBarsRouter } from './routes/bars.js';
 import { executeRouter } from './routes/execute.js';
 import { symbolsRouter } from './routes/symbols.js';
 import { statusRouter } from './routes/status.js';
@@ -40,6 +41,7 @@ app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/api', createOHLCVRouter(cache));
+app.use('/api', createBarsRouter(cache));
 app.use('/api', executeRouter);
 app.use('/api', symbolsRouter);
 app.use('/api', statusRouter);

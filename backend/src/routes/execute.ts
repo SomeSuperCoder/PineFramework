@@ -141,6 +141,7 @@ executeRouter.post('/execute', async (req, res) => {
       lines,
       labels,
       barTimestamps: result.barTimestamps ?? [],
+      maxLookback: result.maxLookback ?? 0,
       alertConditions,
       alertTriggers,
     });

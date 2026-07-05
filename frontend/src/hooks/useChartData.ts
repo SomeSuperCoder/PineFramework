@@ -26,6 +26,7 @@ interface ExecuteResponse {
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   barTimestamps?: number[];
+  maxLookback?: number;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
 }
@@ -99,25 +100,25 @@ function buildScriptResult(
       plotColor = COLORS[colorIndex % COLORS.length];
     }
     colorIndex++;
+    const mappedData: Array<{ time: number; value: number | null; color: string | undefined } | null> = values
+      .map((v, i) => {
+        const ts = getTimestamp(i);
+        if (ts === undefined) return null;
+        let numValue: number | null;
+        if (v === null || v === undefined) {
+          numValue = null;
+        } else if (typeof v === 'boolean') {
+          numValue = v ? 1 : 0;
+        } else if (typeof v === 'number') {
+          numValue = v;
+        } else {
+          numValue = null;
+        }
+        return { time: Math.floor(ts / 1000), value: numValue, color: perBarColors?.[i] ?? undefined };
+      });
     plotData.push({
       type: plotStyle,
-      data: values
-        .map((v, i) => {
-          const ts = getTimestamp(i);
-          if (ts === undefined) return null;
-          let numValue: number | null;
-          if (v === null || v === undefined) {
-            numValue = null;
-          } else if (typeof v === 'boolean') {
-            numValue = v ? 1 : 0;
-          } else if (typeof v === 'number') {
-            numValue = v;
-          } else {
-            numValue = null;
-          }
-          return { time: Math.floor(ts / 1000), value: numValue, color: perBarColors?.[i] ?? undefined };
-        })
-        .filter((d): d is { time: number; value: number | null; color?: string } => d !== null),
+      data: mappedData.filter((d): d is { time: number; value: number | null; color: string | undefined } => d !== null),
       color: plotColor,
       lineWidth,
       title,
@@ -202,6 +203,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string } | null>(null);
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
+  const reexecuteRef = useRef<((code: string, symbol: string, interval: string) => Promise<void>) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -263,6 +265,16 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
+
+      // Auto re-execute script if one was previously executed (progressive indicator computation)
+      const reexecFn = reexecuteRef.current;
+      const lastCode = lastCodeRef.current;
+      if (reexecFn && lastCode) {
+        reexecFn(lastCode, symbol, interval).catch((err) =>
+          console.error('[Progressive] Re-execution failed:', err)
+        );
+      }
+
       return addedCount;
     } catch {
       return 0;
@@ -322,8 +334,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       color: f.color,
     }));
     const mergedFills = diffFills.length > 0
-      ? [...prev.fills.slice(0, -diffFills.length || undefined), ...diffFills]
-      : prev.fills;
+      ? [...(prev.fills || []).slice(0, -diffFills.length || undefined), ...diffFills]
+      : (prev.fills || []);
 
     const diffLines = (msg.lines || []).map((l) => ({
       points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
@@ -609,6 +621,17 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     };
   }, [connectWebSocket]);
 
+  const fetchSeedBars = useCallback(async (symbol: string, interval: string, count: number): Promise<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>> => {
+    if (count <= 0) return [];
+    const oldest = ohlcvDataRef.current[0];
+    if (!oldest) return [];
+    const before = oldest.timestamp;
+    const response = await fetch(`/api/bars?symbol=${symbol}&interval=${interval}&count=${count}&before=${before}`);
+    if (!response.ok) return [];
+    const json = await response.json();
+    return json.data || [];
+  }, []);
+
   const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => {
     setErrors([]);
     lastCodeRef.current = code;
@@ -643,6 +666,63 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           message: result.error || 'Execution failed',
         }]);
         return;
+      }
+
+      const maxLookback = result.maxLookback ?? 0;
+
+      if (maxLookback > 0 && !existingBars) {
+        const neededSeed = maxLookback;
+        const seedBars = await fetchSeedBars(symbol, interval, neededSeed);
+        if (seedBars.length > 0) {
+          barsToExecute = [...seedBars, ...barsToExecute];
+          ohlcvDataRef.current = barsToExecute;
+
+          const seedResponse = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: code, bars: barsToExecute }),
+          });
+
+          if (seedResponse.ok) {
+            const seedResult: ExecuteResponse = await seedResponse.json();
+            if (seedResult.success && !seedResult.error) {
+              const seedScriptRes = buildScriptResult(
+                seedResult.overlay,
+                seedResult.outputs,
+                seedResult.shapes || [],
+                seedResult.fills || [],
+                seedResult.strategyMarkers || [],
+                barsToExecute,
+                seedResult.bgcolor,
+                seedResult.plotColors,
+                seedResult.fillColorData,
+                seedResult.lines,
+                seedResult.labels,
+                seedResult.barTimestamps,
+                seedResult.alertConditions,
+                seedResult.alertTriggers,
+              );
+
+              if (versionRef && version !== undefined && version !== versionRef.current) return;
+
+              if (indicatorId) {
+                onIndicatorResult?.(indicatorId, seedScriptRes);
+              } else {
+                setCandles(toCandleData(barsToExecute));
+                setScriptResult(seedScriptRes);
+              }
+
+              pendingExecuteRef.current = { source: code, symbol, interval };
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                  type: 'execute',
+                  data: { source: code, symbol, interval, bars: ohlcvDataRef.current, indicatorId: indicatorId || 'default' },
+                }));
+              }
+              return;
+            }
+          }
+        }
       }
 
       const scriptRes = buildScriptResult(
@@ -685,7 +765,17 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         message: `Execution error: ${error instanceof Error ? error.message : 'Unknown error'}`,
       }]);
     }
-  }, [toCandleData, onIndicatorResult]);
+  }, [toCandleData, onIndicatorResult, fetchSeedBars]);
+
+  // Set the re-execute ref for progressive loading after bars are fetched
+  useEffect(() => {
+    reexecuteRef.current = async (code: string, symbol: string, interval: string) => {
+      const bars = ohlcvDataRef.current;
+      if (!bars || bars.length === 0) return;
+      await executeScript(code, symbol, interval, bars, undefined, undefined, undefined);
+    };
+    return () => { reexecuteRef.current = null; };
+  }, [executeScript, ohlcvDataRef]);
 
   return {
     candles,
