@@ -8,13 +8,7 @@ export class AreaRenderer {
     for (let i = 0; i < candles.length; i++) {
       if (candles[i].time === targetTime) return i;
     }
-    let lo = 0, hi = candles.length - 1;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (candles[mid].time < targetTime) lo = mid + 1;
-      else hi = mid - 1;
-    }
-    return lo;
+    return -1;
   }
 
   render(
@@ -45,6 +39,7 @@ export class AreaRenderer {
         if (v1 === null || v1 === undefined || v2 === null || v2 === undefined) continue;
         const time = fromData[i].time;
         const barIdx = this.findBarIndex(candles, time);
+        if (barIdx < 0) continue;
         const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
         const upper = layout.priceToPixel(Math.max(v1, v2), chartArea.y, chartArea.height);
         const lower = layout.priceToPixel(Math.min(v1, v2), chartArea.y, chartArea.height);
