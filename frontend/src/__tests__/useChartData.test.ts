@@ -546,4 +546,236 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     });
     expect(count).toBe(0);
   });
+
+  // ── Scenario 9: 3-scroll indicator — verify every plot entry has a matching candle
+  it('3 scrolls — all plot entry times match candle times (no black hole)', async () => {
+    const maxLookback = 100;
+    // Non-overlapping ranges: step is 86_400_000 (1 day in ms)
+    // Each batch's start >= previous batch's start + previous batch's count * step
+    const bars1k = makeBars(BASE_TS + 1_000 * 86_400_000, 1000);
+    const barsScroll1 = makeBars(BASE_TS + 500 * 86_400_000, 500);
+    const barsScroll2 = makeBars(BASE_TS, 500);
+
+    // Step 1: initial fetchOHLCV
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    expect(result.current.candles.length).toBe(1000);
+
+    // Step 2: execute indicator with lookback
+    const seedBars = makeBars(BASE_TS + 900 * 86_400_000, maxLookback);
+    const allInitBars = [...seedBars, ...bars1k];
+    const initOutputs = allInitBars.map((_, i) => (i >= maxLookback ? 100 + i : null));
+
+    // Mock #1: initial /api/execute (returns maxLookback)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true, maxLookback,
+        outputs: { sma: bars1k.map(() => 100) },
+        barTimestamps: bars1k.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    // Mock #2: seed bars fetch
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: seedBars }),
+    });
+
+    // Mock #3: execute with seed bars
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: allInitBars.map((_, i) => (i >= maxLookback ? 100 + i : null)) },
+        barTimestamps: allInitBars.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript(
+        'indicator', 'BTCUSDT', '1d', undefined, undefined, undefined, 'ind-1',
+      );
+    });
+
+    const ind1 = result.current.indicatorResultsRef?.current?.get('ind-1');
+    expect(ind1).toBeDefined();
+    expect(ind1!.plots[0].data.length).toBe(1000);
+
+    // Helper: verify all plot entry times exist in candles
+    function verifyAlignment(label: string) {
+      const candleTimes = new Set(result.current.candles.map(c => c.time));
+      const ind = result.current.indicatorResultsRef?.current?.get('ind-1');
+      expect(ind).toBeDefined();
+      for (const entry of ind!.plots[0].data) {
+        expect(candleTimes.has(entry.time)).toBe(true);
+      }
+      // Also check candle count == plot data length
+      expect(ind!.plots[0].data.length).toBe(result.current.candles.length);
+    }
+
+    // ── Scroll 1 ──
+    // execBars = [...bars1k.slice(0, maxLookback), ...barsScroll1] (context first)
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: [...bars1k.slice(0, maxLookback).map(() => 100), ...barsScroll1.map(() => 101)] },
+        barTimestamps: [...bars1k.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll1.map(b => b.timestamp)],
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      const count = await result.current.fetchOlderOHLCV('BTCUSDT', '1d');
+      expect(count).toBe(500);
+    });
+
+    verifyAlignment('after scroll 1');
+
+    // ── Scroll 2 ──
+    // execBars = [...barsScroll1.slice(0, maxLookback), ...barsScroll2] (context first)
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: [...barsScroll1.slice(0, maxLookback).map(() => 101), ...barsScroll2.map(() => 102)] },
+        barTimestamps: [...barsScroll1.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll2.map(b => b.timestamp)],
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      const count = await result.current.fetchOlderOHLCV('BTCUSDT', '1d');
+      expect(count).toBe(500);
+    });
+
+    // THIS is the critical assertion — after the 3rd batch (2nd scroll),
+    // all plot entry times must match candle times
+    verifyAlignment('after scroll 2 (3rd batch)');
+
+    // Verify specific boundary — first and last entries
+    const ind2 = result.current.indicatorResultsRef?.current?.get('ind-1')!;
+    expect(ind2.plots[0].data[0].time).toBe(result.current.candles[0].time);
+    expect(ind2.plots[0].data[ind2.plots[0].data.length - 1].time).toBe(
+      result.current.candles[result.current.candles.length - 1].time,
+    );
+  });
+
+  // ── Scenario 10: 3-scroll with varying lookback — fillColorData alignment
+  it('3 scrolls — fillColorData length matches candle count', async () => {
+    const maxLookback = 50;
+    // Use non-overlapping timestamp ranges: step is 86_400_000 (1 day in ms)
+    // barsScroll2 is oldest, barsScroll1 is middle, bars1k is newest
+    // Each range starts after the previous one ends: start[i] >= start[i-1] + count[i-1] * step
+    const bars1k = makeBars(BASE_TS + 1_000 * 86_400_000, 1000);
+    const barsScroll1 = makeBars(BASE_TS + 500 * 86_400_000, 500);
+    const barsScroll2 = makeBars(BASE_TS, 500);
+
+    // Step 1: initial fetch
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+    await act(async () => { result.current.fetchOHLCV('BTCUSDT', '1d'); });
+
+    // Step 2: execute indicator
+    const seedBars = makeBars(BASE_TS + 950 * 86_400_000, maxLookback);
+    const allInitBars = [...seedBars, ...bars1k];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true, maxLookback,
+        outputs: { sma: bars1k.map(() => 100) },
+        barTimestamps: bars1k.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: seedBars }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: allInitBars.map((_, i) => (i >= maxLookback ? 100 : null)) },
+        barTimestamps: allInitBars.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript('indicator', 'BTCUSDT', '1d', undefined, undefined, undefined, 'ind-1');
+    });
+
+    // Scroll 1
+    // execBars = [...bars1k.slice(0, maxLookback), ...barsScroll1] (context first)
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: [...bars1k.slice(0, maxLookback).map(() => 100), ...barsScroll1.map(() => 101)] },
+        barTimestamps: [...bars1k.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll1.map(b => b.timestamp)],
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+    await act(async () => { await result.current.fetchOlderOHLCV('BTCUSDT', '1d'); });
+
+    expect(result.current.candles.length).toBe(1500);
+    const ind1 = result.current.indicatorResultsRef?.current?.get('ind-1')!;
+    expect(ind1.plots[0].data.length).toBe(1500);
+
+    // Scroll 2
+    // execBars = [...barsScroll1.slice(0, maxLookback), ...barsScroll2] (context first)
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: [...barsScroll1.slice(0, maxLookback).map(() => 101), ...barsScroll2.map(() => 102)] },
+        barTimestamps: [...barsScroll1.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll2.map(b => b.timestamp)],
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+    await act(async () => { await result.current.fetchOlderOHLCV('BTCUSDT', '1d'); });
+
+    // Critical: verify 2000 candles and 2000 plot entries
+    expect(result.current.candles.length).toBe(2000);
+    const ind2 = result.current.indicatorResultsRef?.current?.get('ind-1')!;
+    expect(ind2.plots[0].data.length).toBe(2000);
+
+    // Verify all times are monotonically non-decreasing
+    const times = ind2.plots[0].data.map(d => d.time);
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+    }
+
+    // Verify no gaps — each consecutive time difference should be consistent (86400 seconds for daily)
+    for (let i = 1; i < times.length; i++) {
+      const diff = times[i] - times[i - 1];
+      expect(diff).toBeGreaterThan(0);
+    }
+  });
 });

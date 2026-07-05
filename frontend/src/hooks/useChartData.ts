@@ -279,7 +279,10 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const maxLookback = ind.maxLookback || 0;
         const contextBars = oldBars.slice(0, maxLookback);
         const actualContextSize = contextBars.length;
-        const execBars = [...newBars, ...contextBars];
+        // Context bars MUST come first so the engine has lookback history
+        // when processing new bars. Without this, the first maxLookback
+        // new bars produce null warmup values (the "black hole" gap).
+        const execBars = [...contextBars, ...newBars];
 
         try {
           const execResponse = await fetch('/api/execute', {
@@ -307,6 +310,26 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.alertConditions,
             execResult.alertTriggers,
           );
+
+          // Trim context bar entries from the result — context bars were
+          // prepended to provide lookback history for the engine but their
+          // outputs are null (warmup) and must not be included in the
+          // indicator data or they'll overlap with existing entries.
+          if (actualContextSize > 0) {
+            for (const plot of newResult.plots) {
+              plot.data = plot.data.slice(actualContextSize);
+            }
+            if (newResult.fillColorData) {
+              for (const key of Object.keys(newResult.fillColorData)) {
+                newResult.fillColorData[key] = newResult.fillColorData[key].slice(actualContextSize);
+              }
+            }
+            if (newResult.plotColors) {
+              for (const key of Object.keys(newResult.plotColors)) {
+                newResult.plotColors[key] = newResult.plotColors[key].slice(actualContextSize);
+              }
+            }
+          }
 
           const prev = indicatorResultsRef.current.get(indId);
           const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize) : newResult;
