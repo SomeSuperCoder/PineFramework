@@ -267,11 +267,16 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
 
-      // Re-execute all indicators in parallel (non-blocking) so candles
+      // Re-execute all indicators via WS (non-blocking) so candles
       // appear immediately and indicator data renders progressively.
-      if (executeScriptRef.current) {
+      // The WS execute handler sends execution_result back, which
+      // handleExecutionResult processes to update each indicator.
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
         for (const [indId, { source, symbol: sy, interval: iv }] of indicatorSourcesRef.current) {
-          executeScriptRef.current(source, sy, iv, ohlcvDataRef.current, undefined, undefined, indId);
+          wsRef.current.send(JSON.stringify({
+            type: 'execute',
+            data: { source, symbol: sy, interval: iv, bars: ohlcvDataRef.current, indicatorId: indId },
+          }));
         }
       }
 

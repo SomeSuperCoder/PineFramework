@@ -271,9 +271,10 @@ export function createWSGateway(
               interval || '',
               bars,
             );
-            session.initialize();
+            const initResult = session.initialize();
             sub.sessions.set(sessionIndicatorId, session);
             ws.send(JSON.stringify({ type: 'session_ready', indicatorId: sessionIndicatorId }));
+            ws.send(JSON.stringify({ type: 'execution_result', indicatorId: sessionIndicatorId, data: initResult }));
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Script compilation or execution failed';
             console.error('[WS] Script execution error:', message);
