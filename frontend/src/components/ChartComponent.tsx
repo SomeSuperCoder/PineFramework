@@ -22,7 +22,6 @@ interface ChartComponentProps {
 }
 
 export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
-  console.log('[CC] render', { dataLen: data.length, hasScript: !!scriptResult, indCount: indicatorResults?.size, indLabelCount: indicatorLabels.length });
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -35,7 +34,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
   }
 
   useEffect(() => {
-    console.log('[CC] MOUNT effect');
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
@@ -49,7 +47,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chartRef.current = chart;
 
     return () => {
-      console.log('[CC] UNMOUNT effect - CHART DESTROYED');
       chart.remove();
       chartRef.current = null;
     };
@@ -101,57 +98,31 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }
   }, [data]);
 
-  const prevScriptResultRef = useRef<ScriptResult | null>(null);
-  const prevIndicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
-  const activeKeysRef = useRef<Set<string>>(new Set());
-  const keyToTitlesRef = useRef<Map<string, Set<string>>>(new Map());
   useEffect(() => {
     if (!chartRef.current) return;
-    if (scriptResult === prevScriptResultRef.current && indicatorResults === prevIndicatorResultsRef.current) {
-      console.log('[CC] plots effect SKIPPED (same refs)');
-      return;
-    }
-    console.log('[CC] plots effect RUNNING', {
-      hasScript: !!scriptResult,
-      indCount: indicatorResults?.size,
-      seriesNames: [...seriesNamesRef.current],
-    });
-    prevScriptResultRef.current = scriptResult;
-    prevIndicatorResultsRef.current = indicatorResults;
+    const chart = chartRef.current;
 
-    const nextKeys = new Set<string>();
-    if (scriptResult) nextKeys.add('main');
+    const allResults: Array<{ result: ScriptResult }> = [];
+    if (scriptResult) allResults.push({ result: scriptResult });
     if (indicatorResults) {
-      for (const [id] of indicatorResults) {
-        nextKeys.add(id);
+      for (const [, res] of indicatorResults) {
+        allResults.push({ result: res });
       }
     }
 
-    const chart = chartRef.current;
     chart.beginUpdate();
 
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
-    const allResults: Array<{ result: ScriptResult; key: string }> = [];
-    if (scriptResult) allResults.push({ result: scriptResult, key: 'main' });
-    if (indicatorResults) {
-      for (const [id, res] of indicatorResults) {
-        allResults.push({ result: res, key: id });
-      }
-    }
-
     const currentTitles = new Set<string>();
-    const nextKeyToTitles = new Map<string, Set<string>>();
     let colorIndex = 0;
 
-    for (const { result, key } of allResults) {
-      const keyTitles = new Set<string>();
+    for (const { result } of allResults) {
       for (const plot of result.plots) {
         let title = plot.title || `Plot ${colorIndex + 1}`;
         let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
         colorIndex++;
         currentTitles.add(title);
-        keyTitles.add(title);
 
         const seriesData: PlotSeriesData[] = [];
         for (const d of plot.data) {
@@ -162,23 +133,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
           }
         }
 
-        if (data.length > 0 && data.length > seriesData.length) {
-          const padCount = data.length - seriesData.length;
-          if (seriesData.length > 0 && data[0]?.time < seriesData[0]?.time) {
-            const padding: PlotSeriesData[] = [];
-            for (let i = 0; i < padCount; i++) {
-              padding.push({ time: data[i].time, value: null });
-            }
-            seriesData.unshift(...padding);
-          } else {
-            for (let i = 0; i < padCount; i++) {
-              seriesData.push({ time: data[data.length - padCount + i]?.time ?? 0, value: null });
-            }
-          }
-        } else if (data.length > 0 && seriesData.length > data.length) {
-          seriesData.length = data.length;
-        }
-
         chart.addPlotSeries(title, {
           color: plotColor,
           lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
@@ -187,26 +141,17 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         seriesNamesRef.current.add(title);
         chart.setPlotData(title, seriesData);
       }
-      nextKeyToTitles.set(key, keyTitles);
     }
 
-    for (const key of activeKeysRef.current) {
-      if (!nextKeys.has(key)) {
-        const removedTitles = keyToTitlesRef.current.get(key);
-        if (removedTitles) {
-          for (const title of removedTitles) {
-            chart.removeSeries(title);
-            seriesNamesRef.current.delete(title);
-          }
-        }
+    for (const name of seriesNamesRef.current) {
+      if (!currentTitles.has(name)) {
+        chart.removeSeries(name);
       }
     }
     seriesNamesRef.current.clear();
     for (const title of currentTitles) {
       seriesNamesRef.current.add(title);
     }
-    activeKeysRef.current = nextKeys;
-    keyToTitlesRef.current = nextKeyToTitles;
 
     const allStrategyMarkers: StrategyMarkerData[] = [];
     const allFills: FillData[] = [];
@@ -264,14 +209,13 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     if (!chartRef.current) return;
     const chart = chartRef.current;
 
-    const allResults: Array<{ result: ScriptResult; key: string }> = [];
-    if (scriptResult) allResults.push({ result: scriptResult, key: 'main' });
+    const allResults: Array<{ result: ScriptResult }> = [];
+    if (scriptResult) allResults.push({ result: scriptResult });
     if (indicatorResults) {
-      for (const [id, res] of indicatorResults) {
-        allResults.push({ result: res, key: id });
+      for (const [, res] of indicatorResults) {
+        allResults.push({ result: res });
       }
     }
-    console.log('[CC] shapes effect', { allResultsLen: allResults.length, dataLen: data.length });
     if (allResults.length === 0) return;
 
     const ohlcvMap = new Map<number, CandlestickData>();

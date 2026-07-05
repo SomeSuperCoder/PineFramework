@@ -416,15 +416,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         // outputs (single value per key). Merge them into the existing result
         // instead of replacing it entirely, which would destroy the plot data.
         const sampleKey = Object.keys(msg.outputs)[0];
-        const isDiff = sampleKey && msg.outputs[sampleKey].length === 1 && msg.barTimestamps && msg.barTimestamps.length > 1;
-        if (isDiff) {
-          const prev = indicatorResultsRef.current.get(msg.indicatorId);
-          if (prev) {
-            const merged = mergeDiffIntoResult(prev, msg);
-            indicatorResultsRef.current.set(msg.indicatorId, merged);
-            onIndicatorResult(msg.indicatorId, merged);
-            return;
-          }
+        const isDiff = msg.formingCandle || (sampleKey && msg.outputs[sampleKey].length === 1 && msg.barTimestamps && msg.barTimestamps.length > 1);
+        const prev = indicatorResultsRef.current.get(msg.indicatorId);
+        if (isDiff && prev) {
+          const merged = mergeDiffIntoResult(prev, msg);
+          indicatorResultsRef.current.set(msg.indicatorId, merged);
+          onIndicatorResult(msg.indicatorId, merged);
+          return;
         }
         const result = buildScriptResult(
           msg.overlay,
