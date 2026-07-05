@@ -326,11 +326,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
       // Now update ALL React state in one synchronous batch — candles and
       // indicator results together so the chart never renders with mismatched data.
-      // IMPORTANT: Only prepend the new bars to the existing candles. ohlcvDataRef.current
-      // may contain seed bars (used for engine lookback context) that have no corresponding
-      // plot data entries, so we must NOT include them in the candle state.
-      const newCandles = toCandleData(newBars);
-      setCandles((prev) => [...newCandles, ...prev]);
+      setCandles(toCandleData(ohlcvDataRef.current));
       for (const { id, result } of indicatorUpdates) {
         indicatorResultsRef.current.set(id, result);
         onIndicatorResult?.(id, result);
@@ -768,11 +764,17 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     try {
       let barsToExecute = existingBars;
       if (!barsToExecute) {
-        const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
-        if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
-        const ohlcvJson = await ohlcvResponse.json();
-        ohlcvDataRef.current = ohlcvJson.data;
-        barsToExecute = ohlcvJson.data as typeof barsToExecute;
+        if (ohlcvDataRef.current.length > 0) {
+          barsToExecute = ohlcvDataRef.current as typeof barsToExecute;
+        } else {
+          const ohlcvResponse = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`);
+          if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
+          const ohlcvJson = await ohlcvResponse.json();
+          ohlcvDataRef.current = ohlcvJson.data;
+          barsToExecute = ohlcvJson.data as typeof barsToExecute;
+        }
+      } else {
+        ohlcvDataRef.current = existingBars;
       }
       if (!barsToExecute) throw new Error('No bars available for execution');
 
@@ -805,13 +807,16 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         if (prev) prev.maxLookback = maxLookback;
       }
 
-      if (maxLookback > 0 && !existingBars) {
+      if (maxLookback > 0) {
         const neededSeed = maxLookback;
         const seedBars = await fetchSeedBars(symbol, interval, neededSeed);
         if (seedBars.length > 0) {
           const originalBars = barsToExecute;
           barsToExecute = [...seedBars, ...barsToExecute];
-          ohlcvDataRef.current = barsToExecute;
+          // NOTE: ohlcvDataRef.current is NOT updated here.
+          // Seed bars are only needed for engine lookback computation.
+          // Keeping them out of ohlcvDataRef ensures candle state stays
+          // in sync with plot data (which has seed entries trimmed).
 
           const seedResponse = await fetch('/api/execute', {
             method: 'POST',
@@ -839,10 +844,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.alertTriggers,
               );
 
-              // Trim seed bar data from plot results — the chart uses array
-              // index for plot positioning, so seed bar entries would shift
-              // lines left of the visible candles. Shapes are time-based
-              // and already correct.
+              // Trim seed bar data from plot results — seed bars are not in
+              // ohlcvDataRef (and thus not in candles), so their plot entries
+              // would have no matching candles and break the line renderer.
               const seedCount = seedBars.length;
               for (const plot of seedScriptRes.plots) {
                 plot.data = plot.data.slice(seedCount);
@@ -939,6 +943,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     lastCodeRef,
     prependCountRef,
     ohlcvDataRef,
+    indicatorResultsRef,
     registerOnIndicatorRemoved: useCallback((cb: (indicatorIds: string[]) => void) => {
       onIndicatorRemovedRef.current = cb;
     }, []),
