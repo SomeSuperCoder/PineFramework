@@ -1,19 +1,33 @@
-import type { FillData, PlotSeriesData } from '../types.js';
+import type { FillData, PlotSeriesData, CandlestickData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
 
 export class AreaRenderer {
+  private findBarIndex(candles: CandlestickData[], time: number): number {
+    const targetTime = Math.floor(time);
+    for (let i = 0; i < candles.length; i++) {
+      if (candles[i].time === targetTime) return i;
+    }
+    let lo = 0, hi = candles.length - 1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (candles[mid].time < targetTime) lo = mid + 1;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
   render(
     ctx: CanvasRenderingContext2D,
     fills: FillData[],
     allPlots: Map<string, PlotSeriesData[]>,
+    candles: CandlestickData[],
     viewport: Viewport,
     layout: LayoutManager,
     fillColorData?: Record<string, (string | null)[]>,
   ): void {
     const regions = layout.getRegions();
     const { chartArea } = regions;
-    const range = viewport.getVisibleRange();
     const barSpacing = viewport.getBarSpacing();
 
     for (const fill of fills) {
@@ -25,11 +39,13 @@ export class AreaRenderer {
       const perBarColors = fillColorData?.[fillKey];
 
       const points: Array<{ x: number; upper: number; lower: number; color?: string }> = [];
-      for (let i = range.start; i < range.end; i++) {
+      for (let i = 0; i < fromData.length; i++) {
         const v1 = fromData[i]?.value;
         const v2 = toData[i]?.value;
         if (v1 === null || v1 === undefined || v2 === null || v2 === undefined) continue;
-        const x = viewport.barIndexToPixel(i) + barSpacing / 2;
+        const time = fromData[i].time;
+        const barIdx = this.findBarIndex(candles, time);
+        const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
         const upper = layout.priceToPixel(Math.max(v1, v2), chartArea.y, chartArea.height);
         const lower = layout.priceToPixel(Math.min(v1, v2), chartArea.y, chartArea.height);
         points.push({ x, upper, lower, color: perBarColors?.[i] ?? undefined });

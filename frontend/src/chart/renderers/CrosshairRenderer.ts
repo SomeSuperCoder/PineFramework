@@ -77,7 +77,7 @@ export class CrosshairRenderer {
       const timeLabel = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
       ctx.fillText(timeLabel, snappedX, timeScale.y + timeScale.height / 2);
 
-      this.renderTooltip(ctx, candle, allPlots, barIndex, snappedX, chartArea, textColor);
+      this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor);
     }
   }
 
@@ -85,7 +85,6 @@ export class CrosshairRenderer {
     ctx: CanvasRenderingContext2D,
     candle: CandlestickData,
     allPlots: Map<string, PlotSeriesData[]>,
-    barIndex: number,
     x: number,
     chartArea: { x: number; y: number; width: number; height: number },
     textColor: string,
@@ -98,9 +97,16 @@ export class CrosshairRenderer {
       `V: ${candle.volume.toFixed(0)}`,
     ];
 
+    const barTime = Math.floor(candle.time);
     let plotIndex = 0;
     for (const [key, data] of allPlots) {
-      const val = data[barIndex]?.value;
+      let val: number | null | undefined = null;
+      for (let j = 0; j < data.length; j++) {
+        if (Math.floor(data[j].time) === barTime) {
+          val = data[j].value;
+          break;
+        }
+      }
       if (val !== null && val !== undefined) {
         const name = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
         lines.push(`${name}: ${typeof val === 'number' ? val.toFixed(2) : val}`);

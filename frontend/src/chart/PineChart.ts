@@ -235,7 +235,7 @@ export class PineChart {
       allPlots.set(key, handle.data);
     }
 
-    this.areaRenderer.render(ctx, this.fills, allPlots, this.viewport, this.layout, this.fillColorData);
+    this.areaRenderer.render(ctx, this.fills, allPlots, this.candles, this.viewport, this.layout, this.fillColorData);
 
     const regions = this.layout.getRegions();
 
@@ -274,7 +274,7 @@ export class PineChart {
       if (handle.overlay) {
         const nonNull = handle.data.filter(d => d.value !== null).length;
         if (nonNull === 0) console.log('[PC] draw overlay plot ALL NULLS', { name: handle.name, dataLen: handle.data.length });
-        this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options);
+        this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options);
       }
     }
 
@@ -293,7 +293,7 @@ export class PineChart {
 
       for (const [_key, handle] of this.plotSeries) {
         if (!handle.overlay) {
-          this.lineRenderer.render(ctx, handle.data, this.viewport, this.layout, handle.options, pane);
+          this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options, pane);
         }
       }
 
