@@ -107,8 +107,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
-    const candleCount = validData.length;
-
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
     const currentTitles = new Set<string>();
@@ -122,14 +120,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         currentTitles.add(title);
 
         const seriesData: PlotSeriesData[] = [];
-        const plotDataLen = plot.data.length;
-
-        if (plotDataLen < candleCount) {
-          const padCount = candleCount - plotDataLen;
-          for (let i = 0; i < padCount; i++) {
-            seriesData.push({ time: validData[i]?.time ?? 0, value: null, color: undefined });
-          }
-        }
 
         for (const d of plot.data) {
           if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
