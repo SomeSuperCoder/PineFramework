@@ -696,6 +696,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
               if (indicatorId) {
                 onIndicatorResult?.(indicatorId, seedScriptRes);
+                const nextMap = new Map(indicatorResultsRef.current);
+                nextMap.set(indicatorId, seedScriptRes);
+                indicatorResultsRef.current = nextMap;
               } else {
                 setCandles(toCandleData(barsToExecute));
                 setScriptResult(seedScriptRes);
@@ -735,6 +738,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
       if (indicatorId) {
         onIndicatorResult?.(indicatorId, scriptRes);
+        const nextMap = new Map(indicatorResultsRef.current);
+        nextMap.set(indicatorId, scriptRes);
+        indicatorResultsRef.current = nextMap;
       } else {
         setCandles(toCandleData(barsToExecute));
         setScriptResult(scriptRes);
