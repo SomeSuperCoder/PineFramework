@@ -203,7 +203,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string } | null>(null);
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
-  const reexecuteRef = useRef<((code: string, symbol: string, interval: string) => Promise<void>) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -265,16 +264,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
-
-      // Auto re-execute script if one was previously executed (progressive indicator computation)
-      const reexecFn = reexecuteRef.current;
-      const lastCode = lastCodeRef.current;
-      if (reexecFn && lastCode) {
-        reexecFn(lastCode, symbol, interval).catch((err) =>
-          console.error('[Progressive] Re-execution failed:', err)
-        );
-      }
-
       return addedCount;
     } catch {
       return 0;
@@ -766,16 +755,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }]);
     }
   }, [toCandleData, onIndicatorResult, fetchSeedBars]);
-
-  // Set the re-execute ref for progressive loading after bars are fetched
-  useEffect(() => {
-    reexecuteRef.current = async (code: string, symbol: string, interval: string) => {
-      const bars = ohlcvDataRef.current;
-      if (!bars || bars.length === 0) return;
-      await executeScript(code, symbol, interval, bars, undefined, undefined, undefined);
-    };
-    return () => { reexecuteRef.current = null; };
-  }, [executeScript, ohlcvDataRef]);
 
   return {
     candles,
