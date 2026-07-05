@@ -269,12 +269,163 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     }
   }, [toCandleData]);
 
+  const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
+
+  const mergeDiffIntoResult = useCallback((prev: ScriptResult, msg: ExecutionResultMessage): ScriptResult => {
+    const mergedPlots = prev.plots.map((plot) => {
+      const diffKey = Object.keys(msg.outputs).find((k) => {
+        const stripped = k.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
+        return stripped === plot.title || k === plot.title;
+      });
+      if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
+        const diffValue = msg.outputs[diffKey]![0];
+        const numValue = diffValue === null || diffValue === undefined ? null
+          : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
+          : typeof diffValue === 'number' ? diffValue : null;
+        const perBarColors = msg.plotColors?.[diffKey];
+        const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
+        const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
+        if (isNewBar) {
+          const lastTime = plot.data[plot.data.length - 1]?.time ?? 0;
+          return {
+            ...plot,
+            data: [...plot.data, { time: lastTime, value: numValue, color }],
+          };
+        }
+        const lastEntry = plot.data[plot.data.length - 1];
+        if (lastEntry) {
+          return {
+            ...plot,
+            data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
+          };
+        }
+      }
+      return plot;
+    });
+
+    const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+    const diffShapes = (msg.shapes || []).map((s) => ({
+      type: s.style as import('../types').ShapeData['type'],
+      time: Math.floor(s.time / 1000),
+      price: 0,
+      color: s.color,
+      text: s.text,
+      location: s.location as import('../types').ShapeData['location'],
+    }));
+    const mergedShapes = diffShapes.length > 0
+      ? [...prev.shapes.slice(0, -diffShapes.length || undefined), ...diffShapes]
+      : prev.shapes;
+
+    const diffFills = (msg.fills || []).map((f) => ({
+      from: stripMeta(f.from),
+      to: stripMeta(f.to),
+      color: f.color,
+    }));
+    const mergedFills = diffFills.length > 0
+      ? [...prev.fills.slice(0, -diffFills.length || undefined), ...diffFills]
+      : prev.fills;
+
+    const diffLines = (msg.lines || []).map((l) => ({
+      points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
+      color: l.color,
+      width: l.width,
+      style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
+    }));
+    const mergedLines = diffLines.length > 0
+      ? [...prev.lines.slice(0, -diffLines.length || undefined), ...diffLines]
+      : prev.lines;
+
+    const diffLabels = (msg.labels || []).map((l) => ({
+      time: Math.floor(l.time / 1000),
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textColor,
+      style: l.style,
+      size: l.size,
+    }));
+    const mergedLabels = diffLabels.length > 0
+      ? [...prev.labels.slice(0, -diffLabels.length || undefined), ...diffLabels]
+      : prev.labels;
+
+    const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
+      type: m.type,
+      name: m.name,
+      direction: m.direction,
+      action: m.action,
+      quantity: m.quantity,
+      price: m.price,
+      barIndex: m.barIndex,
+      timestamp: m.timestamp,
+      color: m.color,
+      comment: m.comment,
+    }));
+    const mergedStrategyMarkers = diffStrategyMarkers.length > 0
+      ? [...(prev.strategyMarkers || []).slice(0, -diffStrategyMarkers.length || undefined), ...diffStrategyMarkers]
+      : prev.strategyMarkers;
+
+    const mergedPlotColors = msg.plotColors
+      ? Object.entries(msg.plotColors).reduce((acc, [key, colors]) => {
+          const prevColors = prev.plotColors?.[key];
+          if (prevColors) {
+            acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
+          } else {
+            acc[key] = colors;
+          }
+          return acc;
+        }, {} as Record<string, (string | null)[]>)
+      : prev.plotColors;
+
+    const mergedFillColorData = msg.fillColorData
+      ? Object.entries(msg.fillColorData).reduce((acc, [key, colors]) => {
+          const prevColors = prev.fillColorData?.[key];
+          if (prevColors) {
+            acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
+          } else {
+            acc[key] = colors;
+          }
+          return acc;
+        }, {} as Record<string, (string | null)[]>)
+      : prev.fillColorData;
+
+    const mergedBgcolor = msg.bgcolor
+      ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor.map((b) => ({ time: Math.floor(b.time / 1000), color: b.color }))]
+      : prev.bgcolor;
+
+    return {
+      ...prev,
+      plots: mergedPlots,
+      shapes: mergedShapes,
+      fills: mergedFills,
+      lines: mergedLines,
+      labels: mergedLabels,
+      strategyMarkers: mergedStrategyMarkers,
+      plotColors: mergedPlotColors,
+      fillColorData: mergedFillColorData,
+      bgcolor: mergedBgcolor,
+    };
+  }, []);
+
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
 
     // Route indicator-specific results to the callback
     if (msg.indicatorId && msg.indicatorId !== 'default' && onIndicatorResult) {
       if (msg.success && msg.outputs) {
+        // Real-time updates (both forming and confirmed candles) carry diff
+        // outputs (single value per key). Merge them into the existing result
+        // instead of replacing it entirely, which would destroy the plot data.
+        const sampleKey = Object.keys(msg.outputs)[0];
+        const isDiff = sampleKey && msg.outputs[sampleKey].length === 1 && msg.barTimestamps && msg.barTimestamps.length > 1;
+        if (isDiff) {
+          const prev = indicatorResultsRef.current.get(msg.indicatorId);
+          if (prev) {
+            const merged = mergeDiffIntoResult(prev, msg);
+            indicatorResultsRef.current.set(msg.indicatorId, merged);
+            onIndicatorResult(msg.indicatorId, merged);
+            return;
+          }
+        }
         const result = buildScriptResult(
           msg.overlay,
           msg.outputs,
@@ -291,6 +442,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           msg.alertConditions,
           msg.alertTriggers,
         );
+        indicatorResultsRef.current.set(msg.indicatorId, result);
         onIndicatorResult(msg.indicatorId, result);
       }
       if (msg.error) {
@@ -306,139 +458,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (msg.formingCandle) {
         setScriptResult((prev) => {
           if (!prev) return prev;
-          const mergedPlots = prev.plots.map((plot) => {
-            const diffKey = Object.keys(msg.outputs).find((k) => {
-              const stripped = k.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
-              return stripped === plot.title || k === plot.title;
-            });
-            if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
-              const diffValue = msg.outputs[diffKey]![0];
-              const numValue = diffValue === null || diffValue === undefined ? null
-                : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
-                : typeof diffValue === 'number' ? diffValue : null;
-              const perBarColors = msg.plotColors?.[diffKey];
-              const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
-              // New bar: barIndex >= data length → append; same bar tick → replace last entry
-              const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
-              if (isNewBar) {
-                const lastTime = plot.data[plot.data.length - 1]?.time ?? 0;
-                return {
-                  ...plot,
-                  data: [...plot.data, { time: lastTime, value: numValue, color }],
-                };
-              }
-              const lastEntry = plot.data[plot.data.length - 1];
-              if (lastEntry) {
-                return {
-                  ...plot,
-                  data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
-                };
-              }
-            }
-            return plot;
-          });
-
-          const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
-          const diffShapes = (msg.shapes || []).map((s) => ({
-            type: s.style as import('../types').ShapeData['type'],
-            time: Math.floor(s.time / 1000),
-            price: 0,
-            color: s.color,
-            text: s.text,
-            location: s.location as import('../types').ShapeData['location'],
-          }));
-          const mergedShapes = diffShapes.length > 0
-            ? [...prev.shapes.slice(0, -diffShapes.length || undefined), ...diffShapes]
-            : prev.shapes;
-
-          const diffFills = (msg.fills || []).map((f) => ({
-            from: stripMeta(f.from),
-            to: stripMeta(f.to),
-            color: f.color,
-          }));
-          const mergedFills = diffFills.length > 0
-            ? [...prev.fills.slice(0, -diffFills.length || undefined), ...diffFills]
-            : prev.fills;
-
-          const diffLines = (msg.lines || []).map((l) => ({
-            points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
-            color: l.color,
-            width: l.width,
-            style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
-          }));
-          const mergedLines = diffLines.length > 0
-            ? [...prev.lines.slice(0, -diffLines.length || undefined), ...diffLines]
-            : prev.lines;
-
-          const diffLabels = (msg.labels || []).map((l) => ({
-            time: Math.floor(l.time / 1000),
-            price: l.price,
-            text: l.text,
-            color: l.color,
-            textColor: l.textColor,
-            style: l.style,
-            size: l.size,
-          }));
-          const mergedLabels = diffLabels.length > 0
-            ? [...prev.labels.slice(0, -diffLabels.length || undefined), ...diffLabels]
-            : prev.labels;
-
-          const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
-            type: m.type,
-            name: m.name,
-            direction: m.direction,
-            action: m.action,
-            quantity: m.quantity,
-            price: m.price,
-            barIndex: m.barIndex,
-            timestamp: m.timestamp,
-            color: m.color,
-            comment: m.comment,
-          }));
-          const mergedStrategyMarkers = diffStrategyMarkers.length > 0
-            ? [...prev.strategyMarkers?.slice(0, -diffStrategyMarkers.length || undefined), ...diffStrategyMarkers]
-            : prev.strategyMarkers;
-
-          const mergedPlotColors = msg.plotColors
-            ? Object.entries(msg.plotColors).reduce((acc, [key, colors]) => {
-                const prevColors = prev.plotColors?.[key];
-                if (prevColors) {
-                  acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
-                } else {
-                  acc[key] = colors;
-                }
-                return acc;
-              }, {} as Record<string, (string | null)[]>)
-            : prev.plotColors;
-
-          const mergedFillColorData = msg.fillColorData
-            ? Object.entries(msg.fillColorData).reduce((acc, [key, colors]) => {
-                const prevColors = prev.fillColorData?.[key];
-                if (prevColors) {
-                  acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
-                } else {
-                  acc[key] = colors;
-                }
-                return acc;
-              }, {} as Record<string, (string | null)[]>)
-            : prev.fillColorData;
-
-          const mergedBgcolor = msg.bgcolor
-            ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor.map((b) => ({ time: Math.floor(b.time / 1000), color: b.color }))]
-            : prev.bgcolor;
-
-          return {
-            ...prev,
-            plots: mergedPlots,
-            shapes: mergedShapes,
-            fills: mergedFills,
-            lines: mergedLines,
-            labels: mergedLabels,
-            strategyMarkers: mergedStrategyMarkers,
-            plotColors: mergedPlotColors,
-            fillColorData: mergedFillColorData,
-            bgcolor: mergedBgcolor,
-          };
+          return mergeDiffIntoResult(prev, msg);
         });
         return;
       }
@@ -480,7 +500,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         message: msg.error || 'Execution failed',
       }]);
     }
-  }, [onIndicatorResult]);
+  }, [onIndicatorResult, mergeDiffIntoResult]);
 
   const connectWebSocket = useCallback(() => {
     try {
