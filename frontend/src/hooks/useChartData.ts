@@ -340,24 +340,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
 
-  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, contextSize: number): ScriptResult => {
+  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, _contextSize: number): ScriptResult => {
     const mergedPlots = prev.plots.map((plot) => {
       const newPlot = newResult.plots.find((p) => p.title === plot.title);
       if (newPlot) {
-        const newPlotData = newPlot.data;
-        const newBarCount = Math.min(addedCount, newPlotData.length);
-        const newBarData = newPlotData.slice(0, newBarCount);
-        const contextBarData = newPlotData.slice(newBarCount);
-
-        const oldData = [...plot.data];
-        if (contextBarData.length > 0) {
-          const replaceCount = Math.min(contextBarData.length, oldData.length);
-          contextBarData.forEach((entry, i) => {
-            if (i < replaceCount) oldData[i] = entry;
-          });
-        }
-
-        return { ...plot, data: [...newBarData, ...oldData] };
+        const newBarData = newPlot.data.slice(0, addedCount);
+        return { ...plot, data: [...newBarData, ...plot.data] };
       }
       return plot;
     });
@@ -374,44 +362,22 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     const mergedLabels = [...newResult.labels, ...prev.labels];
     const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
 
-    // Prepend fillColorData entries, replacing boundary values
+    // Prepend fillColorData entries
     const mergedFillColorData: Record<string, (string | null)[]> = {};
     const allFillKeys = new Set([...Object.keys(prev.fillColorData || {}), ...Object.keys(newResult.fillColorData || {})]);
     for (const key of allFillKeys) {
       const newColors = newResult.fillColorData?.[key] || [];
       const prevColors = prev.fillColorData?.[key] || [];
-      const newColorCount = Math.min(addedCount, newColors.length);
-      const contextColors = newColors.slice(newColorCount);
-      if (contextColors.length > 0) {
-        const merged = [...newColors.slice(0, newColorCount), ...prevColors];
-        const replaceCount = Math.min(contextColors.length, prevColors.length);
-        for (let i = 0; i < replaceCount; i++) {
-          merged[newColorCount + i] = contextColors[i];
-        }
-        mergedFillColorData[key] = merged;
-      } else {
-        mergedFillColorData[key] = [...newColors, ...prevColors];
-      }
+      mergedFillColorData[key] = [...newColors.slice(0, addedCount), ...prevColors];
     }
 
-    // Prepend plotColors entries, replacing boundary values
+    // Prepend plotColors entries
     const mergedPlotColors: Record<string, (string | null)[]> = {};
     const allColorKeys = new Set([...Object.keys(prev.plotColors || {}), ...Object.keys(newResult.plotColors || {})]);
     for (const key of allColorKeys) {
       const newColors = newResult.plotColors?.[key] || [];
       const prevColors = prev.plotColors?.[key] || [];
-      const newColorCount = Math.min(addedCount, newColors.length);
-      const contextColors = newColors.slice(newColorCount);
-      if (contextColors.length > 0) {
-        const merged = [...newColors.slice(0, newColorCount), ...prevColors];
-        const replaceCount = Math.min(contextColors.length, prevColors.length);
-        for (let i = 0; i < replaceCount; i++) {
-          merged[newColorCount + i] = contextColors[i];
-        }
-        mergedPlotColors[key] = merged;
-      } else {
-        mergedPlotColors[key] = [...newColors, ...prevColors];
-      }
+      mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...prevColors];
     }
 
     const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];
