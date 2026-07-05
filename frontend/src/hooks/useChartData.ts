@@ -265,14 +265,16 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
 
-      // Save old bars before prepend for context slicing
       const oldBars = ohlcvDataRef.current;
       const newBars = json.data as typeof ohlcvDataRef.current;
       ohlcvDataRef.current = [...newBars, ...oldBars];
-      setCandles(toCandleData(ohlcvDataRef.current));
 
-      // Re-execute indicators incrementally: only new bars + context window
-      // for lookback, then prepend results to existing indicator data.
+      // Execute all indicators FIRST — compute everything before touching
+      // any React state. This prevents intermediate renders where candles
+      // are updated but indicator data is stale (causes Y-axis jumping
+      // on lines which are array-index positioned).
+      const indicatorUpdates: Array<{ id: string; result: ScriptResult }> = [];
+
       for (const [indId, ind] of indicatorSourcesRef.current) {
         const contextSize = ind.maxLookback || 0;
         const contextBars = oldBars.slice(0, contextSize);
@@ -307,16 +309,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.alertTriggers,
           );
 
-          // Prepend new data to existing indicator result
           const prev = indicatorResultsRef.current.get(indId);
-          if (prev) {
-            const merged = prependIndicatorResult(prev, newResult);
-            indicatorResultsRef.current.set(indId, merged);
-            onIndicatorResult?.(indId, merged);
-          } else {
-            indicatorResultsRef.current.set(indId, newResult);
-            onIndicatorResult?.(indId, newResult);
-          }
+          const merged = prev ? prependIndicatorResult(prev, newResult) : newResult;
+          indicatorUpdates.push({ id: indId, result: merged });
 
           // Create WS session with full bar set for real-time updates
           if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -328,6 +323,14 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         } catch {
           // Skip failed indicators
         }
+      }
+
+      // Now update ALL React state in one synchronous batch — candles and
+      // indicator results together so the chart never renders with mismatched data.
+      setCandles(toCandleData(ohlcvDataRef.current));
+      for (const { id, result } of indicatorUpdates) {
+        indicatorResultsRef.current.set(id, result);
+        onIndicatorResult?.(id, result);
       }
 
       return addedCount;
