@@ -135,7 +135,6 @@ export class PineChart {
         onVisibleRangeChange: () => {
           this.markDirty();
           const range = this.viewport.getVisibleRange();
-          console.log('[PC] onVisibleRangeChange', range);
           this.eventCallbacks.onVisibleRangeChange?.(range.start, range.end);
         },
         onPriceRangeChange: () => {
@@ -490,21 +489,9 @@ export class PineChart {
   setCandles(data: CandlestickData[]): void {
     const wasPrepended = data.length > this.candles.length && this.candles.length > 0 && data[0]?.time < this.candles[0]?.time;
     const added = data.length - this.candles.length;
-    console.log('[PC] setCandles', { wasPrepended, oldLen: this.candles.length, newLen: data.length, plotSeriesCount: this.plotSeries.size });
     this.candles = data;
     if (wasPrepended) {
       this.viewport.adjustForPrepend(added);
-      for (const [, handle] of this.plotSeries) {
-        if (handle.data.length < data.length) {
-          const padCount = data.length - handle.data.length;
-          const padding: PlotSeriesData[] = [];
-          for (let i = 0; i < padCount; i++) {
-            padding.push({ time: data[i].time, value: null });
-          }
-          handle.data = [...padding, ...handle.data];
-          console.log('[PC] prepended plot', { name: handle.name, dataLen: handle.data.length, nonNull: handle.data.filter(d => d.value !== null).length });
-        }
-      }
     } else {
       this.viewport.setTotalBars(data.length);
     }

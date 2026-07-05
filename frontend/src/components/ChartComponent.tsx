@@ -92,11 +92,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
-    // Use beginUpdate/endUpdate to ensure candles, plot data, shapes,
-    // fills, and labels are all applied atomically. Without this,
-    // setCandles triggers an immediate re-render with stale plot data,
-    // causing Y-axis jumping on lines (which are repositioned by the
-    // chart library on each render).
     chart.beginUpdate();
 
     const validData = data.filter(
@@ -112,6 +107,8 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
+    const candleCount = validData.length;
+
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
     const currentTitles = new Set<string>();
@@ -125,6 +122,15 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         currentTitles.add(title);
 
         const seriesData: PlotSeriesData[] = [];
+        const plotDataLen = plot.data.length;
+
+        if (plotDataLen < candleCount) {
+          const padCount = candleCount - plotDataLen;
+          for (let i = 0; i < padCount; i++) {
+            seriesData.push({ time: validData[i]?.time ?? 0, value: null, color: undefined });
+          }
+        }
+
         for (const d of plot.data) {
           if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
             seriesData.push({ time: d.time, value: d.value, color: d.color });
@@ -239,8 +245,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.setHLines([]);
     chart.setBarColors(new Map());
 
-    // All chart state updated — endUpdate triggers a single re-render
-    // with candles, plot data, shapes, fills, and labels all consistent.
     chart.endUpdate();
   }, [data, scriptResult, indicatorResults]);
 
