@@ -201,7 +201,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
-  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string; indicatorId?: string } | null>(null);
+  const pendingExecuteRef = useRef<Map<string, { source: string; symbol: string; interval: string; bars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> }>>(new Map());
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
   const indicatorSourcesRef = useRef<Map<string, { source: string; symbol: string; interval: string }>>(new Map());
   const executeScriptRef = useRef<((code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>) | null>(null);
@@ -267,16 +267,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
 
-      // Re-execute all indicators via WS (non-blocking) so candles
-      // appear immediately and indicator data renders progressively.
-      // The WS execute handler sends execution_result back, which
-      // handleExecutionResult processes to update each indicator.
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
+      // Re-execute all indicators via HTTP so their plot data updates
+      // to match the new candle set. This uses the same executeScript
+      // path as initial load, which produces correct full results.
+      if (executeScriptRef.current) {
         for (const [indId, { source, symbol: sy, interval: iv }] of indicatorSourcesRef.current) {
-          wsRef.current.send(JSON.stringify({
-            type: 'execute',
-            data: { source, symbol: sy, interval: iv, bars: ohlcvDataRef.current, indicatorId: indId },
-          }));
+          executeScriptRef.current(source, sy, iv, ohlcvDataRef.current, undefined, undefined, indId);
         }
       }
 
@@ -529,11 +525,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         if (subscribedTopicRef.current) {
           ws.send(JSON.stringify({ type: 'subscribe', topic: subscribedTopicRef.current }));
         }
-        if (pendingExecuteRef.current) {
-          ws.send(JSON.stringify({
-            type: 'execute',
-            data: { ...pendingExecuteRef.current, bars: ohlcvDataRef.current },
-          }));
+        if (pendingExecuteRef.current.size > 0) {
+          for (const [indId, data] of pendingExecuteRef.current) {
+            ws.send(JSON.stringify({
+              type: 'execute',
+              data: { ...data, bars: data.bars || ohlcvDataRef.current, indicatorId: indId },
+            }));
+          }
         }
       };
 
@@ -746,7 +744,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 setScriptResult(seedScriptRes);
               }
 
-              pendingExecuteRef.current = { source: code, symbol, interval, indicatorId };
+              pendingExecuteRef.current.set(indicatorId || 'default', { source: code, symbol, interval, bars: barsToExecute });
               if (wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                   type: 'execute',
@@ -788,7 +786,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         setScriptResult(scriptRes);
       }
 
-      pendingExecuteRef.current = { source: code, symbol, interval, indicatorId };
+      pendingExecuteRef.current.set(indicatorId || 'default', { source: code, symbol, interval, bars: barsToExecute });
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
