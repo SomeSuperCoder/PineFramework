@@ -666,6 +666,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const neededSeed = maxLookback;
         const seedBars = await fetchSeedBars(symbol, interval, neededSeed);
         if (seedBars.length > 0) {
+          const originalBars = barsToExecute;
           barsToExecute = [...seedBars, ...barsToExecute];
           ohlcvDataRef.current = barsToExecute;
 
@@ -695,6 +696,20 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.alertTriggers,
               );
 
+              // Trim seed bar data from plot results — the chart uses array
+              // index for plot positioning, so seed bar entries would shift
+              // lines left of the visible candles. Shapes are time-based
+              // and already correct.
+              const seedCount = seedBars.length;
+              for (const plot of seedScriptRes.plots) {
+                plot.data = plot.data.slice(seedCount);
+              }
+              if (seedScriptRes.fillColorData) {
+                for (const key of Object.keys(seedScriptRes.fillColorData)) {
+                  seedScriptRes.fillColorData[key] = seedScriptRes.fillColorData[key].slice(seedCount);
+                }
+              }
+
               if (versionRef && version !== undefined && version !== versionRef.current) return;
 
               if (indicatorId) {
@@ -703,7 +718,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 nextMap.set(indicatorId, seedScriptRes);
                 indicatorResultsRef.current = nextMap;
               } else {
-                setCandles(toCandleData(barsToExecute));
+                setCandles(toCandleData(originalBars));
                 setScriptResult(seedScriptRes);
               }
 
