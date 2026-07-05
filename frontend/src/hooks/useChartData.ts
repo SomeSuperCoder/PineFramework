@@ -203,6 +203,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string; indicatorId?: string } | null>(null);
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
+  const indicatorSourcesRef = useRef<Map<string, { source: string; symbol: string; interval: string }>>(new Map());
+  const executeScriptRef = useRef<((code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
     const data: CandlestickData[] = bars.map((bar) => ({
@@ -264,6 +266,15 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       prependCountRef.current += addedCount;
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
+
+      // Re-execute all indicators with the updated bar set so plot data
+      // stays aligned with the candle array.
+      if (executeScriptRef.current) {
+        for (const [indId, { source, symbol: sy, interval: iv }] of indicatorSourcesRef.current) {
+          executeScriptRef.current(source, sy, iv, ohlcvDataRef.current, undefined, undefined, indId);
+        }
+      }
+
       return addedCount;
     } catch {
       return 0;
@@ -564,8 +575,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           } else if (data.type === 'indicator_removed' && data.data) {
             // Indicator removed by backend cascade (script deleted)
             const removedIds = data.data.indicatorIds as string[] | undefined;
-            if (removedIds && onIndicatorRemovedRef.current) {
-              onIndicatorRemovedRef.current(removedIds);
+            if (removedIds) {
+              for (const id of removedIds) {
+                indicatorSourcesRef.current.delete(id);
+              }
+              if (onIndicatorRemovedRef.current) {
+                onIndicatorRemovedRef.current(removedIds);
+              }
             }
           } else if (data.type === 'error' && data.data) {
             setErrors((prev) => [...prev, {
@@ -627,6 +643,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => {
     setErrors([]);
     lastCodeRef.current = code;
+    if (indicatorId) {
+      indicatorSourcesRef.current.set(indicatorId, { source: code, symbol, interval });
+    }
     try {
       let barsToExecute = existingBars;
       if (!barsToExecute) {
@@ -779,6 +798,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }]);
     }
   }, [toCandleData, onIndicatorResult, fetchSeedBars]);
+
+  executeScriptRef.current = executeScript;
 
   return {
     candles,
