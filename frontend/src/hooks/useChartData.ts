@@ -201,7 +201,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
   const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
-  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string } | null>(null);
+  const pendingExecuteRef = useRef<{ source: string; symbol: string; interval: string; indicatorId?: string } | null>(null);
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
@@ -704,7 +704,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 setScriptResult(seedScriptRes);
               }
 
-              pendingExecuteRef.current = { source: code, symbol, interval };
+              pendingExecuteRef.current = { source: code, symbol, interval, indicatorId };
               if (wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                   type: 'execute',
@@ -746,7 +746,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         setScriptResult(scriptRes);
       }
 
-      pendingExecuteRef.current = { source: code, symbol, interval };
+      pendingExecuteRef.current = { source: code, symbol, interval, indicatorId };
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
