@@ -1084,6 +1084,12 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 26. The unplot option SHALL NOT delete the script from the indicator bank
 27. THE indicator pane labels SHALL be rendered within the pane's clipped region, ensuring they do not bleed into adjacent panes
 
+**Multi-Indicator Rendering:**
+
+28. THE Frontend SHALL iterate all results (main scriptResult + indicatorResults) in a single flat pass to add plots, fills, and shapes to the chart
+29. THE Frontend SHALL NOT attempt to track per-indicator key-to-plot-title ownership — instead it SHALL add all plot series from all results and remove any series not present in the current combined title set
+30. THE Frontend SHALL route indicator forming candle updates using the `formingCandle` flag (same as the main script) — WHEN `msg.formingCandle` is true, the indicator result SHALL be merged into existing chart data rather than replacing it
+
 ### Requirement 27: Multi-Version Pine Script Support
 
 **User Story:** As a Pine Script developer, I want the engine to dynamically detect and support both Pine Script v5 and v6, so that I can use scripts from either version without manual configuration.

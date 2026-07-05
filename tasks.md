@@ -2634,7 +2634,17 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test auto-remove: verify persistence file is updated after cascade delete
     - _Requirements: 28.1-28.27_
 
-- [ ] 98. Checkpoint - Dynamic Indicator Management Validation
+- [x] 98. Checkpoint - Dynamic Indicator Management Validation
+  - Validation revealed a multi-indicator rendering bug: plots disappeared (MACD) and a blue line grew when adding multiple indicators
+  - Root cause: `ChartComponent.tsx` used complex `activeKeysRef`/`keyToTitlesRef`/`prevIndicatorResultsRef` key-tracking system that incorrectly removed plot series during add/realtime cycles
+  - Fix committed as `d5f0fad` — see Task 99
+
+- [x] 99. Fix Multi-Indicator Rendering (Simplify to Add-All-Remove-Stale Pattern)
+  - Study the old working commit `aad6e63` — it used a simple "iterate all results, add plots, remove stale" pattern with no key-tracking refs
+  - Restore the old simple pattern in `ChartComponent.tsx`: remove all key-tracking refs, use a single flat iteration over all results (main + indicatorResults), addPlotSeries for each title, remove any series not in the current combined title set
+  - Fix `useChartData.ts` indicator routing: add `msg.formingCandle` to the `isDiff` check so forming-candle updates merge instead of replacing the entire result
+  - Committed as `d5f0fad`
+  - _Requirements: 28.28, 28.29, 28.30_
   - Add multiple overlay indicators (SMA, EMA, Bollinger) — verify labels appear in top-left and all plot on chart
   - Remove an overlay indicator via delete button — verify its plots disappear and label is removed
   - Add a non-overlay indicator (MACD) — verify label appears in pane top-left
@@ -2689,6 +2699,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 95 implements indicator pane independent price scales: AxisRenderer now renders per-indicator-pane price labels on the right side using each pane's own price range, indicator pane rendering is clipped to allocated regions via canvas clipping, and horizontal separator lines are drawn between panes.
 - Task 96 implements indicator pane autoscale on scroll: when the user scrolls, pans, or zooms the chart, each indicator pane automatically recomputes its Y-axis price range from the visible indicator values in the current viewport, providing seamless autoscaling that matches TradingView behavior.
 - Task 97 implements dynamic indicator management UI: users can add and remove multiple indicators from the chart independently. The "Add" button (renamed from "Run") appends indicators to the chart. Running indicator lists are persisted to `backend/data/indicators.json` and restored on restart. If a script is deleted from the bank, all its running indicators are automatically removed from the chart via cascade delete. Overlay indicators show labels with delete buttons in the top-left corner of the main chart. Non-overlay indicators show labels with unplot buttons in the top-left corner of their respective panes.
+- Task 99 fixes the multi-indicator rendering bug discovered during validation: the complex `activeKeysRef`/`keyToTitlesRef` diffing system in ChartComponent was fragile and incorrectly removed plot series. The fix simplifies to the proven "add all, remove stale" pattern from `aad6e63` — iterate all results in a flat pass, add all plot series (idempotent via Linear chart), remove any not in the current title set. Also fixes indicator forming-candle routing by checking `msg.formingCandle` in `useChartData.ts`.
 
 ## Task Dependency Graph
 
@@ -2824,7 +2835,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 126, "tasks": ["94.1", "94.2"] },
     { "id": 127, "tasks": ["95.1", "95.2", "95.3"] },
     { "id": 128, "tasks": ["96.1", "96.2", "96.3", "96.4", "96.5"] },
-    { "id": 129, "tasks": ["96.6"] }
+    { "id": 129, "tasks": ["96.6"] },
+    { "id": 130, "tasks": ["97"] },
+    { "id": 131, "tasks": ["99"] }
   ]
 }
 ```

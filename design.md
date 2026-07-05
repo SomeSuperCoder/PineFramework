@@ -1557,16 +1557,17 @@ IndicatorState: {
   └──────────────────────────────────────────┘
   ```
 
-#### 7. Multi-Indicator Rendering Pipeline
+#### 7. Multi-Indicator Rendering Pipeline (Simplified)
 ```
-For each running indicator:
-  1. PineChart receives scriptResult with overlay flag
-  2. If overlay=true → merge plots into main chart area
-  3. If overlay=false → create/reuse indicator pane, render plots in pane coordinate space
-  4. Render overlay labels in top-left corner of main chart
-  5. Render pane labels in top-left corner of each indicator pane
-  6. On remove: clear associated plot series, fills, shapes from PineChart; remove pane if empty
+For each rendering cycle (triggered by scriptResult or indicatorResults change):
+  1. Collect all plot titles from all results (main + indicators)
+  2. Call addPlotSeries for each title — idempotent, returns existing handle if already present
+  3. Remove any plot series whose title is not in the collected set (stale indicators)
+  4. Repeat for fills and shapes
+  5. On indicator remove: pane is cleared by the add-all-remove-stale loop; pane removal if empty is triggered by LayoutManager
 ```
+
+No per-indicator key-tracking refs (`activeKeysRef`, `keyToTitlesRef`, `prevIndicatorResultsRef`) are used. The rendering is entirely driven by the merged set of current result titles in a flat pass. Indicator forming-candle updates use the `formingCandle` flag (same heuristic as the main script).
 
 #### 8. Interaction with Existing Systems
 - **Script Bank**: Running indicators reference scripts by `scriptId` — removing from chart does NOT affect the script bank entry
