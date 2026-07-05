@@ -267,8 +267,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
       setCandles(toCandleData(ohlcvDataRef.current));
 
-      // Re-execute all indicators with the updated bar set so plot data
-      // stays aligned with the candle array.
+      // Re-execute all indicators in parallel (non-blocking) so candles
+      // appear immediately and indicator data renders progressively.
       if (executeScriptRef.current) {
         for (const [indId, { source, symbol: sy, interval: iv }] of indicatorSourcesRef.current) {
           executeScriptRef.current(source, sy, iv, ohlcvDataRef.current, undefined, undefined, indId);
