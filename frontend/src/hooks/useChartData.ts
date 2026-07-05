@@ -287,10 +287,10 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
         const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
         if (isNewBar) {
-          const lastTime = plot.data[plot.data.length - 1]?.time ?? 0;
+          const newTime = msg.barTimestamps?.[msg.barIndex] ?? (plot.data[plot.data.length - 1]?.time ?? 0);
           return {
             ...plot,
-            data: [...plot.data, { time: lastTime, value: numValue, color }],
+            data: [...plot.data, { time: newTime, value: numValue, color }],
           };
         }
         const lastEntry = plot.data[plot.data.length - 1];
@@ -419,7 +419,10 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const sampleKey = Object.keys(msg.outputs)[0];
         const isDiff = msg.formingCandle || (sampleKey && msg.outputs[sampleKey].length === 1 && msg.barTimestamps && msg.barTimestamps.length > 1);
         const prev = indicatorResultsRef.current.get(msg.indicatorId);
-        if (isDiff && prev) {
+        if (isDiff) {
+          // If prev doesn't exist yet (WS update arrived before HTTP result),
+          // skip the update — the HTTP result will provide the full data.
+          if (!prev) return;
           const merged = mergeDiffIntoResult(prev, msg);
           indicatorResultsRef.current.set(msg.indicatorId, merged);
           onIndicatorResult(msg.indicatorId, merged);
@@ -708,7 +711,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
               if (wsRef.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                   type: 'execute',
-                  data: { source: code, symbol, interval, bars: ohlcvDataRef.current, indicatorId: indicatorId || 'default' },
+                  data: { source: code, symbol, interval, bars: barsToExecute, indicatorId: indicatorId || 'default' },
                 }));
               }
               return;
@@ -750,7 +753,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           type: 'execute',
-          data: { source: code, symbol, interval, bars: ohlcvDataRef.current, indicatorId: indicatorId || 'default' },
+          data: { source: code, symbol, interval, bars: barsToExecute, indicatorId: indicatorId || 'default' },
         }));
       }
     } catch (error) {
