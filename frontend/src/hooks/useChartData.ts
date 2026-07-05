@@ -203,7 +203,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<Map<string, { source: string; symbol: string; interval: string; bars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> }>>(new Map());
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
-  const indicatorSourcesRef = useRef<Map<string, { source: string; symbol: string; interval: string }>>(new Map());
+  const indicatorSourcesRef = useRef<Map<string, { source: string; symbol: string; interval: string; maxLookback: number }>>(new Map());
   const executeScriptRef = useRef<((code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
@@ -264,15 +264,69 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       const addedCount = json.data.length;
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
-      ohlcvDataRef.current = [...json.data, ...ohlcvDataRef.current];
+
+      // Save old bars before prepend for context slicing
+      const oldBars = ohlcvDataRef.current;
+      const newBars = json.data as typeof ohlcvDataRef.current;
+      ohlcvDataRef.current = [...newBars, ...oldBars];
       setCandles(toCandleData(ohlcvDataRef.current));
 
-      // Re-execute all indicators via HTTP so their plot data updates
-      // to match the new candle set. This uses the same executeScript
-      // path as initial load, which produces correct full results.
-      if (executeScriptRef.current) {
-        for (const [indId, { source, symbol: sy, interval: iv }] of indicatorSourcesRef.current) {
-          executeScriptRef.current(source, sy, iv, ohlcvDataRef.current, undefined, undefined, indId);
+      // Re-execute indicators incrementally: only new bars + context window
+      // for lookback, then prepend results to existing indicator data.
+      for (const [indId, ind] of indicatorSourcesRef.current) {
+        const contextSize = ind.maxLookback || 0;
+        const contextBars = oldBars.slice(0, contextSize);
+        const execBars = [...newBars, ...contextBars];
+
+        try {
+          const execResponse = await fetch('/api/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: ind.source, bars: execBars, offset: contextSize }),
+          });
+          if (!execResponse.ok) continue;
+          const execResult: ExecuteResponse = await execResponse.json();
+          if (!execResult.success || execResult.error) continue;
+
+          const newBarTimestamps = execResult.barTimestamps?.slice(0, addedCount);
+
+          const newResult = buildScriptResult(
+            execResult.overlay,
+            execResult.outputs,
+            execResult.shapes || [],
+            execResult.fills || [],
+            execResult.strategyMarkers || [],
+            newBars,
+            execResult.bgcolor,
+            execResult.plotColors,
+            execResult.fillColorData,
+            execResult.lines,
+            execResult.labels,
+            newBarTimestamps,
+            execResult.alertConditions,
+            execResult.alertTriggers,
+          );
+
+          // Prepend new data to existing indicator result
+          const prev = indicatorResultsRef.current.get(indId);
+          if (prev) {
+            const merged = prependIndicatorResult(prev, newResult);
+            indicatorResultsRef.current.set(indId, merged);
+            onIndicatorResult?.(indId, merged);
+          } else {
+            indicatorResultsRef.current.set(indId, newResult);
+            onIndicatorResult?.(indId, newResult);
+          }
+
+          // Create WS session with full bar set for real-time updates
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'execute',
+              data: { source: ind.source, symbol: ind.symbol, interval: ind.interval, bars: ohlcvDataRef.current, indicatorId: indId },
+            }));
+          }
+        } catch {
+          // Skip failed indicators
         }
       }
 
@@ -280,9 +334,65 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     } catch {
       return 0;
     }
-  }, [toCandleData]);
+  }, [toCandleData, onIndicatorResult]);
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
+
+  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult): ScriptResult => {
+    // Prepend new plot data entries to existing plots (matched by title)
+    const mergedPlots = prev.plots.map((plot) => {
+      const newPlot = newResult.plots.find((p) => p.title === plot.title);
+      if (newPlot) {
+        return { ...plot, data: [...newPlot.data, ...plot.data] };
+      }
+      return plot;
+    });
+    // Add any entirely new plots from newResult
+    for (const newPlot of newResult.plots) {
+      if (!mergedPlots.find((p) => p.title === newPlot.title)) {
+        mergedPlots.push(newPlot);
+      }
+    }
+
+    const mergedShapes = [...newResult.shapes, ...prev.shapes];
+    const mergedFills = [...(newResult.fills || []), ...(prev.fills || [])];
+    const mergedLines = [...newResult.lines, ...prev.lines];
+    const mergedLabels = [...newResult.labels, ...prev.labels];
+    const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
+
+    // Prepend fillColorData entries
+    const mergedFillColorData: Record<string, (string | null)[]> = {};
+    const allFillKeys = new Set([...Object.keys(prev.fillColorData || {}), ...Object.keys(newResult.fillColorData || {})]);
+    for (const key of allFillKeys) {
+      const newColors = newResult.fillColorData?.[key] || [];
+      const prevColors = prev.fillColorData?.[key] || [];
+      mergedFillColorData[key] = [...newColors, ...prevColors];
+    }
+
+    // Prepend plotColors entries
+    const mergedPlotColors: Record<string, (string | null)[]> = {};
+    const allColorKeys = new Set([...Object.keys(prev.plotColors || {}), ...Object.keys(newResult.plotColors || {})]);
+    for (const key of allColorKeys) {
+      const newColors = newResult.plotColors?.[key] || [];
+      const prevColors = prev.plotColors?.[key] || [];
+      mergedPlotColors[key] = [...newColors, ...prevColors];
+    }
+
+    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];
+
+    return {
+      ...prev,
+      plots: mergedPlots,
+      shapes: mergedShapes,
+      fills: mergedFills,
+      lines: mergedLines,
+      labels: mergedLabels,
+      strategyMarkers: mergedStrategyMarkers,
+      fillColorData: mergedFillColorData,
+      plotColors: mergedPlotColors,
+      bgcolor: mergedBgcolor,
+    };
+  }, []);
 
   const mergeDiffIntoResult = useCallback((prev: ScriptResult, msg: ExecutionResultMessage): ScriptResult => {
     const mergedPlots = prev.plots.map((plot) => {
@@ -647,7 +757,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     setErrors([]);
     lastCodeRef.current = code;
     if (indicatorId) {
-      indicatorSourcesRef.current.set(indicatorId, { source: code, symbol, interval });
+      indicatorSourcesRef.current.set(indicatorId, { source: code, symbol, interval, maxLookback: 0 });
     }
     try {
       let barsToExecute = existingBars;
@@ -683,6 +793,11 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }
 
       const maxLookback = result.maxLookback ?? 0;
+
+      if (indicatorId) {
+        const prev = indicatorSourcesRef.current.get(indicatorId);
+        if (prev) prev.maxLookback = maxLookback;
+      }
 
       if (maxLookback > 0 && !existingBars) {
         const neededSeed = maxLookback;
