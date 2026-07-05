@@ -84,24 +84,6 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     if (!chartRef.current) return;
     const chart = chartRef.current;
 
-    const validData = data.filter(
-      (d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close),
-    );
-
-    if (validData.length === 0) return;
-
-    chart.setCandles(validData);
-
-    if (shouldFitRef.current) {
-      chart.timeScale().fitContent();
-      shouldFitRef.current = false;
-    }
-  }, [data]);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-    const chart = chartRef.current;
-
     const allResults: Array<{ result: ScriptResult }> = [];
     if (scriptResult) allResults.push({ result: scriptResult });
     if (indicatorResults) {
@@ -110,7 +92,25 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
+    // Use beginUpdate/endUpdate to ensure candles, plot data, shapes,
+    // fills, and labels are all applied atomically. Without this,
+    // setCandles triggers an immediate re-render with stale plot data,
+    // causing Y-axis jumping on lines (which are repositioned by the
+    // chart library on each render).
     chart.beginUpdate();
+
+    const validData = data.filter(
+      (d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close),
+    );
+
+    if (validData.length > 0) {
+      chart.setCandles(validData);
+
+      if (shouldFitRef.current) {
+        chart.timeScale().fitContent();
+        shouldFitRef.current = false;
+      }
+    }
 
     const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
@@ -193,47 +193,17 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
-    chart.setStrategyMarkers(allStrategyMarkers);
-    chart.setAlertTriggers(allAlertTriggers);
-    chart.setFills(allFills);
-    if (Object.keys(allFillColorData).length > 0) {
-      chart.setFillColorData(allFillColorData);
-    }
-    chart.setDrawingLines(allDrawingLines);
-    chart.setLabels(allChartLabels);
-
-    chart.setHLines([]);
-    chart.setBarColors(new Map());
-    chart.endUpdate();
-  }, [scriptResult, indicatorResults]);
-
-  useEffect(() => {
-    if (!chartRef.current) return;
-    const chart = chartRef.current;
-
-    const allResults: Array<{ result: ScriptResult }> = [];
-    if (scriptResult) allResults.push({ result: scriptResult });
-    if (indicatorResults) {
-      for (const [, res] of indicatorResults) {
-        allResults.push({ result: res });
-      }
-    }
-    if (allResults.length === 0) return;
-
-    const ohlcvMap = new Map<number, CandlestickData>();
-    for (const c of data) {
-      ohlcvMap.set(c.time, c);
-    }
-
-    chart.beginUpdate();
-
     const allShapeMarkers: ShapeMarkerData[] = [];
     const allBgColorsMap = new Map<number, string>();
+    const ohlcvMap = new Map<number, CandlestickData>();
+    for (const c of validData) {
+      ohlcvMap.set(c.time, c);
+    }
 
     for (const { result } of allResults) {
       for (const s of (result.shapes || [])) {
         const candle = ohlcvMap.get(s.time);
-        const barIdx = candle ? data.indexOf(candle) : -1;
+        const barIdx = candle ? validData.indexOf(candle) : -1;
         allShapeMarkers.push({
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
@@ -248,7 +218,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       for (const b of (result.bgcolor || [])) {
         const candle = ohlcvMap.get(b.time);
         if (candle) {
-          const barIdx = data.indexOf(candle);
+          const barIdx = validData.indexOf(candle);
           if (barIdx >= 0) {
             allBgColorsMap.set(barIdx, b.color);
           }
@@ -256,11 +226,23 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
     }
 
+    chart.setStrategyMarkers(allStrategyMarkers);
+    chart.setAlertTriggers(allAlertTriggers);
+    chart.setFills(allFills);
+    if (Object.keys(allFillColorData).length > 0) {
+      chart.setFillColorData(allFillColorData);
+    }
+    chart.setDrawingLines(allDrawingLines);
+    chart.setLabels(allChartLabels);
     chart.setMarkers(allShapeMarkers);
     chart.setBgColors(allBgColorsMap);
+    chart.setHLines([]);
+    chart.setBarColors(new Map());
 
+    // All chart state updated — endUpdate triggers a single re-render
+    // with candles, plot data, shapes, fills, and labels all consistent.
     chart.endUpdate();
-  }, [scriptResult, indicatorResults, data]);
+  }, [data, scriptResult, indicatorResults]);
 
   const handleRemoveIndicator = useCallback((indicatorId: string) => {
     onRemoveIndicator?.(indicatorId);
