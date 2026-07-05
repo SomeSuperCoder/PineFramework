@@ -1106,3 +1106,39 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 8. WHEN a script does not declare a version, THE Engine SHALL default to v6 (the latest version)
 9. THE Frontend SHALL display the detected Pine Script version in the code editor or status bar
 10. THE Backend SHALL forward the detected version in execution responses for debugging and display purposes
+
+### Requirement 29: Progressive Indicator Computation
+
+**User Story:** As a trader, I want indicator computation to feel hyper-smooth and continuous regardless of how I navigate the chart, so that I never see uncomputed or missing indicator data.
+
+#### Acceptance Criteria
+
+**Lookback Seed Data:**
+
+1. THE Engine SHALL determine the maximum lookback period across all running indicators before beginning computation
+2. WHEN an indicator with lookback N (e.g., 20-period EMA) is loaded, THE Engine SHALL load at least N candles of historical data BEFORE the visible range as seed data before computing any indicator values
+3. THE Engine SHALL NOT display indicator values for the first N bars (the warm-up period where the indicator has not yet converged)
+
+**Per-Candle and Batch Computation:**
+
+4. THE Engine SHALL support computing indicators one candle at a time for realtime updates (the forming candle)
+5. THE Engine SHALL support computing indicators in batches when the user scrolls to a new historical region
+6. WHEN the user scrolls or pans the chart, THE Engine SHALL compute indicator values for newly visible candles in progressive batches
+7. THE batches SHALL be small enough that the user never notices a stall or freeze during computation
+
+**Progressive Loading on Scroll:**
+
+8. AS the user scrolls backward through chart history, THE Engine SHALL progressively compute indicator data for newly revealed candles
+9. THE progressive computation SHALL be fast enough that the user physically cannot scroll fast enough to reach uncomputed candles
+10. IF the user somehow reaches a region with uncomputed indicator data despite progressive loading, THE Engine SHALL compute it immediately and render it without delay
+
+**Realtime Forming Candle:**
+
+11. WHEN a new market tick arrives for the forming candle, THE Engine SHALL recompute all indicator values for only that candle
+12. THE forming candle indicator values SHALL be plotted immediately after computation without blocking the UI thread
+
+**Smoothness and Continuity:**
+
+13. THE indicator computation system SHALL feel hyper-smooth and continuous — indicator values SHALL appear as if they were always present
+14. THE Engine SHALL NOT show "loading" or "computing" indicators for computed regions — computation SHALL be invisible to the user
+15. THE progressive computation SHALL be interruptible — if the user scrolls to a different region mid-computation, the old computation SHALL be cancelled and the new region SHALL take priority

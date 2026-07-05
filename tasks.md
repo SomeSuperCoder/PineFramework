@@ -2645,6 +2645,19 @@ This implementation plan outlines the step-by-step development of a production-g
   - Fix `useChartData.ts` indicator routing: add `msg.formingCandle` to the `isDiff` check so forming-candle updates merge instead of replacing the entire result
   - Committed as `d5f0fad`
   - _Requirements: 28.28, 28.29, 28.30_
+
+- [ ] 100. Implement Progressive Indicator Computation
+  - Rethink the indicator computation model from "compute everything upfront" to lazy/progressive per-viewport
+  - Design lookback seed data management: max lookback detection, pre-visible candle loading, warm-up period suppression
+  - Build interruptible batch queue with priority levels (immediate tick > scroll catch-up > scroll progressive > prefetch)
+  - Implement progressive batch computation on `onVisibleRangeChange` — compute 10–50 candles per animation frame
+  - Add `useIndicatorData` hook managing per-indicator computed ranges, seed state, and stale tracking
+  - Add instant catch-up path: if user scrolls past uncomputed region, compute it immediately in one pass
+  - Ensure realtime forming candle remains per-candle computation (no batch needed)
+  - Wire `GET /api/bars?range=` endpoint for fetching raw OHLCV data by index range
+  - Ensure rendering pipeline (Task 99) is compatible — it receives computed arrays and renders unchanged
+  - Test: scroll far back and verify progressive fill, test instant catch-up by artificially slowing computation, test interrupt on mid-scroll direction change, test forming candle tick recalc
+  - _Requirements: 29.1–29.15_
   - Add multiple overlay indicators (SMA, EMA, Bollinger) — verify labels appear in top-left and all plot on chart
   - Remove an overlay indicator via delete button — verify its plots disappear and label is removed
   - Add a non-overlay indicator (MACD) — verify label appears in pane top-left
@@ -2700,6 +2713,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 96 implements indicator pane autoscale on scroll: when the user scrolls, pans, or zooms the chart, each indicator pane automatically recomputes its Y-axis price range from the visible indicator values in the current viewport, providing seamless autoscaling that matches TradingView behavior.
 - Task 97 implements dynamic indicator management UI: users can add and remove multiple indicators from the chart independently. The "Add" button (renamed from "Run") appends indicators to the chart. Running indicator lists are persisted to `backend/data/indicators.json` and restored on restart. If a script is deleted from the bank, all its running indicators are automatically removed from the chart via cascade delete. Overlay indicators show labels with delete buttons in the top-left corner of the main chart. Non-overlay indicators show labels with unplot buttons in the top-left corner of their respective panes.
 - Task 99 fixes the multi-indicator rendering bug discovered during validation: the complex `activeKeysRef`/`keyToTitlesRef` diffing system in ChartComponent was fragile and incorrectly removed plot series. The fix simplifies to the proven "add all, remove stale" pattern from `aad6e63` — iterate all results in a flat pass, add all plot series (idempotent via Linear chart), remove any not in the current title set. Also fixes indicator forming-candle routing by checking `msg.formingCandle` in `useChartData.ts`.
+- Task 100 implements the Progressive Indicator Computation system: a full rework of the indicator computation model from "compute everything upfront" to lazy/progressive per-viewport computation. Indicators are computed for the visible range (plus lookback seed data) and progressively filled as the user scrolls. The system uses an interruptible batch queue with priority levels, instant catch-up for fast scrolling, and per-candle realtime forming-candle recomputation. The rendering pipeline remains unchanged — it consumes computed arrays from the new `useIndicatorData` hook.
 
 ## Task Dependency Graph
 
@@ -2837,7 +2851,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 128, "tasks": ["96.1", "96.2", "96.3", "96.4", "96.5"] },
     { "id": 129, "tasks": ["96.6"] },
     { "id": 130, "tasks": ["97"] },
-    { "id": 131, "tasks": ["99"] }
+    { "id": 131, "tasks": ["99"] },
+    { "id": 132, "tasks": ["100.1", "100.2", "100.3", "100.4", "100.5", "100.6", "100.7", "100.8", "100.9"] }
   ]
 }
 ```
