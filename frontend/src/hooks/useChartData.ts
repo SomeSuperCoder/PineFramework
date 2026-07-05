@@ -326,7 +326,11 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
       // Now update ALL React state in one synchronous batch — candles and
       // indicator results together so the chart never renders with mismatched data.
-      setCandles(toCandleData(ohlcvDataRef.current));
+      // IMPORTANT: Only prepend the new bars to the existing candles. ohlcvDataRef.current
+      // may contain seed bars (used for engine lookback context) that have no corresponding
+      // plot data entries, so we must NOT include them in the candle state.
+      const newCandles = toCandleData(newBars);
+      setCandles((prev) => [...newCandles, ...prev]);
       for (const { id, result } of indicatorUpdates) {
         indicatorResultsRef.current.set(id, result);
         onIndicatorResult?.(id, result);
