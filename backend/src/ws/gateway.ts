@@ -265,6 +265,9 @@ export function createWSGateway(
           const sessionIndicatorId = indicatorId || 'default';
 
           try {
+            // Delete old session first to prevent reexecuteForTopic from
+            // using a stale session during initialization.
+            sub.sessions.delete(sessionIndicatorId);
             const session = new ScriptSession(
               source,
               symbol || '',
