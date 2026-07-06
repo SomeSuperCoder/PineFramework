@@ -146,19 +146,19 @@ export class Parser {
 
   private parseStatement(): StatementNode {
     if (this.match(TokenType.Var)) {
-      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
+      if (this.checkTypeKeyword() || this.looksLikeUserTypeDecl()) {
         return this.parseTypedVariableDeclaration(true, false);
       }
       return this.parseVariableDeclaration(true, false);
     }
     if (this.match(TokenType.Varip)) {
-      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
+      if (this.checkTypeKeyword() || this.looksLikeUserTypeDecl()) {
         return this.parseTypedVariableDeclaration(true, true);
       }
       return this.parseVariableDeclaration(true, true);
     }
     if (this.match(TokenType.Const)) {
-      if (this.checkTypeKeyword() || this.looksLikeUserType()) {
+      if (this.checkTypeKeyword() || this.looksLikeUserTypeDecl()) {
         return this.parseTypedVariableDeclaration(false, false, true);
       }
       return this.parseVariableDeclaration(false, false, true);
@@ -1262,6 +1262,16 @@ export class Parser {
     if (isSingleType && !/^[A-Z]/.test(firstLexeme)) {
       return false;
     }
+    return isArrayType || isSingleType;
+  }
+
+  private looksLikeUserTypeDecl(): boolean {
+    if (!this.check(TokenType.Identifier)) return false;
+    const saved = this.current;
+    this.advance();
+    const isArrayType = this.check(TokenType.LBracket) && this.checkNext(TokenType.RBracket);
+    const isSingleType = this.check(TokenType.Identifier);
+    this.current = saved;
     return isArrayType || isSingleType;
   }
 
