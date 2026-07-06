@@ -279,10 +279,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const maxLookback = ind.maxLookback || 0;
         const contextBars = oldBars.slice(0, maxLookback);
         const actualContextSize = contextBars.length;
-        // Context bars MUST come first so the engine has lookback history
-        // when processing new bars. Without this, the first maxLookback
-        // new bars produce null warmup values (the "black hole" gap).
-        const execBars = [...contextBars, ...newBars];
+        // Bars must be in chronological order: newBars (older) first,
+        // contextBars (newer) last. The engine processes sequentially,
+        // so newBars get history from preceding bars in the array.
+        // The contextBars at the end provide lookback for newBars that
+        // need more history than available within newBars alone.
+        const execBars = [...newBars, ...contextBars];
 
         try {
           const execResponse = await fetch('/api/execute', {
@@ -310,26 +312,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.alertConditions,
             execResult.alertTriggers,
           );
-
-          // Trim context bar entries from the result — context bars were
-          // prepended to provide lookback history for the engine but their
-          // outputs are null (warmup) and must not be included in the
-          // indicator data or they'll overlap with existing entries.
-          if (actualContextSize > 0) {
-            for (const plot of newResult.plots) {
-              plot.data = plot.data.slice(actualContextSize);
-            }
-            if (newResult.fillColorData) {
-              for (const key of Object.keys(newResult.fillColorData)) {
-                newResult.fillColorData[key] = newResult.fillColorData[key].slice(actualContextSize);
-              }
-            }
-            if (newResult.plotColors) {
-              for (const key of Object.keys(newResult.plotColors)) {
-                newResult.plotColors[key] = newResult.plotColors[key].slice(actualContextSize);
-              }
-            }
-          }
 
           const prev = indicatorResultsRef.current.get(indId);
           const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize) : newResult;
@@ -363,12 +345,24 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
 
-  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, _contextSize: number): ScriptResult => {
+  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, contextSize: number): ScriptResult => {
+    // The execution result contains entries for BOTH newBars and contextBars.
+    // - First addedCount entries: newBars (some may have null warmup)
+    // - Last contextSize entries: contextBars recomputed with newBars as history
+    //
+    // We prepend the newBar entries and REPLACE the first contextSize entries
+    // of the previous result with the recomputed boundary values. This fixes
+    // the "hill" discontinuity: previously, the first maxLookback bars of each
+    // batch had null warmup values that were never updated when older data
+    // arrived. Now they get properly recomputed.
     const mergedPlots = prev.plots.map((plot) => {
       const newPlot = newResult.plots.find((p) => p.title === plot.title);
       if (newPlot) {
         const newBarData = newPlot.data.slice(0, addedCount);
-        return { ...plot, data: [...newBarData, ...plot.data] };
+        const boundaryData = newPlot.data.slice(addedCount, addedCount + contextSize);
+        // Replace the first contextSize entries of prev with recomputed boundary
+        const replacedPrev = [...boundaryData, ...plot.data.slice(contextSize)];
+        return { ...plot, data: [...newBarData, ...replacedPrev] };
       }
       return plot;
     });
@@ -385,22 +379,24 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     const mergedLabels = [...newResult.labels, ...prev.labels];
     const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
 
-    // Prepend fillColorData entries
+    // Prepend fillColorData entries and recompute boundary
     const mergedFillColorData: Record<string, (string | null)[]> = {};
     const allFillKeys = new Set([...Object.keys(prev.fillColorData || {}), ...Object.keys(newResult.fillColorData || {})]);
     for (const key of allFillKeys) {
       const newColors = newResult.fillColorData?.[key] || [];
       const prevColors = prev.fillColorData?.[key] || [];
-      mergedFillColorData[key] = [...newColors.slice(0, addedCount), ...prevColors];
+      const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
+      mergedFillColorData[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
     }
 
-    // Prepend plotColors entries
+    // Prepend plotColors entries and recompute boundary
     const mergedPlotColors: Record<string, (string | null)[]> = {};
     const allColorKeys = new Set([...Object.keys(prev.plotColors || {}), ...Object.keys(newResult.plotColors || {})]);
     for (const key of allColorKeys) {
       const newColors = newResult.plotColors?.[key] || [];
       const prevColors = prev.plotColors?.[key] || [];
-      mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...prevColors];
+      const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
+      mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
     }
 
     const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];

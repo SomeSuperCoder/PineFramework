@@ -624,7 +624,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     }
 
     // ── Scroll 1 ──
-    // execBars = [...bars1k.slice(0, maxLookback), ...barsScroll1] (context first)
+    // execBars = [...barsScroll1, ...bars1k.slice(0, maxLookback)] (chronological)
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
     });
@@ -632,8 +632,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...bars1k.slice(0, maxLookback).map(() => 100), ...barsScroll1.map(() => 101)] },
-        barTimestamps: [...bars1k.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll1.map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, maxLookback).map(() => 100)] },
+        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, maxLookback).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
@@ -646,7 +646,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     verifyAlignment('after scroll 1');
 
     // ── Scroll 2 ──
-    // execBars = [...barsScroll1.slice(0, maxLookback), ...barsScroll2] (context first)
+    // execBars = [...barsScroll2, ...barsScroll1.slice(0, maxLookback)] (chronological)
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
     });
@@ -654,8 +654,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll1.slice(0, maxLookback).map(() => 101), ...barsScroll2.map(() => 102)] },
-        barTimestamps: [...barsScroll1.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll2.map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, maxLookback).map(() => 101)] },
+        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, maxLookback).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
@@ -726,7 +726,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     });
 
     // Scroll 1
-    // execBars = [...bars1k.slice(0, maxLookback), ...barsScroll1] (context first)
+    // execBars = [...barsScroll1, ...bars1k.slice(0, maxLookback)] (chronological)
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
     });
@@ -734,8 +734,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...bars1k.slice(0, maxLookback).map(() => 100), ...barsScroll1.map(() => 101)] },
-        barTimestamps: [...bars1k.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll1.map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, maxLookback).map(() => 100)] },
+        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, maxLookback).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
@@ -746,7 +746,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     expect(ind1.plots[0].data.length).toBe(1500);
 
     // Scroll 2
-    // execBars = [...barsScroll1.slice(0, maxLookback), ...barsScroll2] (context first)
+    // execBars = [...barsScroll2, ...barsScroll1.slice(0, maxLookback)] (chronological)
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
     });
@@ -754,8 +754,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll1.slice(0, maxLookback).map(() => 101), ...barsScroll2.map(() => 102)] },
-        barTimestamps: [...barsScroll1.slice(0, maxLookback).map(b => b.timestamp), ...barsScroll2.map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, maxLookback).map(() => 101)] },
+        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, maxLookback).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
