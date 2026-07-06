@@ -2728,6 +2728,136 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
 
+- [x] 101. Implement Time-Based Renderer Positioning
+  - [x] 101.1 Add `findBarIndex` helper to PineChart
+    - Create `findBarIndex(candles, time)` that returns the index of the candle with matching `Math.floor(time)`, or -1 if no match
+    - Linear scan over visible bars (overscan buffer is small enough for O(n) to be acceptable)
+    - Returns -1 on no match — renderers skip the data point rather than drawing diagonal lines
+    - _Requirements: 30.1, 30.2, 30.3, 30.4_
+  
+  - [x] 101.2 Update LineRenderer to use time-based positioning
+    - For each plot data point, call `findBarIndex(candles, point.time)` to get the x-coordinate
+    - If `findBarIndex` returns -1, skip the point (break the line at gaps)
+    - Remove sequential index assumption from line path construction
+    - _Requirements: 30.1, 30.5_
+  
+  - [x] 101.3 Update AreaRenderer to use time-based positioning
+    - Fill polygon vertices computed from `findBarIndex` results for both upper and lower lines
+    - Skip vertices where `findBarIndex` returns -1
+    - _Requirements: 30.1, 30.5_
+  
+  - [x] 101.4 Update CrosshairRenderer to use time-based matching
+    - Tooltip OHLCV values matched via `Math.floor(candle.time)` to the hovered bar's time
+    - Ensures correct values even when candles and indicator data have slightly different bar counts
+    - _Requirements: 30.1, 30.6_
+  
+  - [x]* 101.5 Write tests for time-based positioning
+    - Test `findBarIndex` with exact match, no match, and multiple matches
+    - Test LineRenderer with prepended data (index shift) — verify no diagonal lines
+    - Test CrosshairRenderer with mismatched candle/indicator bar counts
+    - _Requirements: 30.1-30.6_
+
+- [x] 102. Darken Chart and UI Theme
+  - [x] 102.1 Update CSS color palette in index.css
+    - Background: `#1a1a2e` → `#0d0d18`
+    - Grid: `#2a2a4e` → `#181830`
+    - Borders: `#0f3460` → `#111128`
+    - Panel backgrounds: `#16213e` → `#0f1520`
+    - _Requirements: 31.1, 31.2, 31.3, 31.4_
+  
+  - [x] 102.2 Update canvas renderer background fills
+    - AxisRenderer background fill: `#0d0d18`
+    - CrosshairRenderer tooltip background: `rgba(15,15,35,0.95)`
+    - CrosshairRenderer crosshair background: `rgba(12,12,30,0.95)`
+    - _Requirements: 31.5_
+  
+  - [x] 102.3 Update component inline styles
+    - BacktestPanel, BacktestResults, CodeEditor, ErrorConsole, StrategyResultsPopup, TelegramConfigPanel
+    - Replace all inline color references to match dark theme
+    - _Requirements: 31.5, 31.6_
+  
+  - [x]* 102.4 Write tests for dark theme consistency
+    - Verify all CSS color variables are updated
+    - Verify canvas renderers use correct dark theme colors
+    - Verify no stale lighter color references remain in components
+    - _Requirements: 31.1-31.6_
+
+- [x] 103. Add Auto-Scale Toggle to Footer Bar
+  - [x] 103.1 Add `forceAutoScale` flag to LayoutManager
+    - Add `forceAutoScale: boolean` field (default `true`)
+    - `setManualPriceRange()` — no-op when `forceAutoScale` is true
+    - `zoomPrice()` — no-op when `forceAutoScale` is true
+    - `panPrice()` — no-op when `forceAutoScale` is true
+    - Add `setForceAutoScale(v)` and `isForceAutoScale()` methods
+    - _Requirements: 32.3_
+  
+  - [x] 103.2 Add `setForceAutoScale` to PineChart
+    - Delegate to `layout.setForceAutoScale(v)`
+    - _Requirements: 32.6, 32.7_
+  
+  - [x] 103.3 Add `forceAutoScale` prop to ChartComponent
+    - Accept `forceAutoScale` boolean prop
+    - Add useEffect that syncs prop to `chart.setForceAutoScale()` on change
+    - _Requirements: 32.5_
+  
+  - [x] 103.4 Add footer bar UI to App.tsx
+    - Add `autoScale` state (default `true`)
+    - Render `.footer-bar` div between `<main>` and `<ErrorConsole>`
+    - Add `.auto-scale-toggle` button that toggles `autoScale` state
+    - Button shows green when active, dim when inactive
+    - Pass `forceAutoScale={autoScale}` to ChartComponent
+    - _Requirements: 32.1, 32.2, 32.5, 32.8_
+  
+  - [x]* 103.5 Write tests for auto-scale toggle
+    - Test auto-scale default is true on page load
+    - Test toggle button changes autoScale state
+    - Test LayoutManager blocks price range operations when autoScale is true
+    - Test LayoutManager allows price range operations when autoScale is false
+    - _Requirements: 32.1-32.8_
+
+- [x] 104. Fix Scroll Re-Execution and Indicator Boundary Recomputation
+  - [x] 104.1 Fix execBars chronological ordering in fetchOlderOHLCV
+    - Change execBars from `[...contextBars, ...newBars]` to `[...newBars, ...contextBars]` (chronological order)
+    - Context bars are the last `maxLookback` bars from the previous batch
+    - Context bars are NOT added to `ohlcvDataRef.current`
+    - _Requirements: 33.1, 33.2, 33.3_
+  
+  - [x] 104.2 Implement boundary recomputation in prependIndicatorResult
+    - Split newResult into newBarData (bars not in indicator state) and boundaryData (first `maxLookback` bars of previous batch)
+    - Merge: `[...newBarData, ...boundaryData, ...remainingPrev]` where remainingPrev skips the first K entries from prevResult
+    - Prevents incorrect indicator values at the boundary between old and new data
+    - _Requirements: 33.4, 33.5_
+  
+  - [x] 104.3 Ensure beginUpdate/endUpdate batching for scroll re-execution
+    - Wrap scroll re-execution result application in `beginUpdate`/`endUpdate` to batch all chart updates into a single frame
+    - _Requirements: 33.6_
+  
+  - [x]* 104.4 Write tests for scroll re-execution and boundary recomputation
+    - Test execBars is chronological (new bars before context bars)
+    - Test context bars do not leak into ohlcvDataRef
+    - Test boundary recomputation produces smooth indicator transition
+    - Test beginUpdate/endUpdate batching prevents visual flicker
+    - _Requirements: 33.1-33.6_
+
+- [x] 105. Fix TrendCraft Lowercase User-Defined Type Parsing
+  - [x] 105.1 Add `looksLikeUserTypeDecl()` method to Parser
+    - Same logic as `looksLikeUserType()` but without the PascalCase check (`/^[A-Z]/`)
+    - Used only in `var`/`varip`/`const` contexts where the declaration keyword already commits to a declaration
+    - _Requirements: 34.1, 34.2_
+  
+  - [x] 105.2 Update `parseStatement` to use `looksLikeUserTypeDecl` for var/varip/const
+    - At line ~149 (`var`), line ~155 (`varip`), line ~161 (`const`): use `looksLikeUserTypeDecl()` instead of `looksLikeUserType()`
+    - Standalone context (line ~201) keeps `looksLikeUserType()` with PascalCase check to prevent `val\nx` misparse
+    - _Requirements: 34.2, 34.3, 34.4_
+  
+  - [x] 105.3 Write tests for TrendCraft parser fix
+    - Test `var piv pH = na` parses as VariableDeclarationNode with typeAnnotation="piv", name="pH"
+    - Test `var int x = 1` still works (PascalCase types in var context)
+    - Test standalone `int x = 1` still requires PascalCase (prevents `val\nx` misparse)
+    - Test TrendCraft ICT SwiftEdge indicator executes without `Variable 'pH' is not defined` error
+    - All 6 TrendCraft integration tests pass
+    - _Requirements: 34.1-34.5_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2770,6 +2900,11 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 97 implements dynamic indicator management UI: users can add and remove multiple indicators from the chart independently. The "Add" button (renamed from "Run") appends indicators to the chart. Running indicator lists are persisted to `backend/data/indicators.json` and restored on restart. If a script is deleted from the bank, all its running indicators are automatically removed from the chart via cascade delete. Overlay indicators show labels with delete buttons in the top-left corner of the main chart. Non-overlay indicators show labels with unplot buttons in the top-left corner of their respective panes.
 - Task 99 fixes the multi-indicator rendering bug discovered during validation: the complex `activeKeysRef`/`keyToTitlesRef` diffing system in ChartComponent was fragile and incorrectly removed plot series. The fix simplifies to the proven "add all, remove stale" pattern from `aad6e63` — iterate all results in a flat pass, add all plot series (idempotent via Linear chart), remove any not in the current title set. Also fixes indicator forming-candle routing by checking `msg.formingCandle` in `useChartData.ts`.
 - Task 100 implements the Progressive Indicator Computation system: adds `maxLookback` detection to the execution engine (scans TA buffers after execution to determine maximum lookback period), a `GET /api/bars` endpoint for index-range-based bar fetching, frontend lookback seed loading (auto-fetches seed bars when maxLookback > 0), auto re-execution on scroll (triggers script re-execution after `fetchOlderOHLCV` completes), and a progressive reveal hook for smooth indicator data appearance. Existing lazy loading and realtime forming candle computation remain unchanged, ensuring backward compatibility.: a full rework of the indicator computation model from "compute everything upfront" to lazy/progressive per-viewport computation. Indicators are computed for the visible range (plus lookback seed data) and progressively filled as the user scrolls. The system uses an interruptible batch queue with priority levels, instant catch-up for fast scrolling, and per-candle realtime forming-candle recomputation. The rendering pipeline remains unchanged — it consumes computed arrays from the new `useIndicatorData` hook.
+- Task 101 implements time-based renderer positioning: all chart renderers (LineRenderer, AreaRenderer, CrosshairRenderer) now use `findBarIndex(candles, time)` to match data points to candles by timestamp rather than sequential index. This makes rendering immune to index shifts from data prepending, WS session drift, and multiple data sources with different bar counts. Commit `dd4daa0`.
+- Task 102 darkens the chart and UI theme: background `#1a1a2e` → `#0d0d18`, grid `#2a2a4e` → `#181830`, borders `#0f3460` → `#111128`, panels `#16213e` → `#0f1520`. Updated across 15 files (CSS, canvas renderers, component inline styles). Commit `78b788f`.
+- Task 103 adds an auto-scale toggle to the footer bar: `LayoutManager.forceAutoScale` flag blocks `setManualPriceRange`, `zoomPrice`, and `panPrice` when active; PineChart delegates `setForceAutoScale()` to LayoutManager; ChartComponent accepts `forceAutoScale` prop; App.tsx manages `autoScale` state (default `true`) with toggle button in footer bar. Commit `6491d57`.
+- Task 104 fixes scroll re-execution and indicator boundary recomputation: execBars changed to chronological `[...newBars, ...contextBars]`; `prependIndicatorResult` splits newResult into newBarData + boundaryData, merges with remaining prev data; context bars no longer leak into `ohlcvDataRef`; `beginUpdate`/`endUpdate` batching prevents flicker. Commits `39224a0` (corrected ordering) and `78b788f` (boundary recomputation).
+- Task 105 fixes TrendCraft `Variable 'pH' is not defined` error: added `looksLikeUserTypeDecl()` (no PascalCase check) used only in `var`/`varip`/`const` contexts; standalone context keeps PascalCase to prevent `val\nx` misparse. All 1047 backend tests pass. Commit `12e78a4`.
 
 ## Task Dependency Graph
 
@@ -2908,7 +3043,17 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 129, "tasks": ["96.6"] },
     { "id": 130, "tasks": ["97"] },
     { "id": 131, "tasks": ["99"] },
-    { "id": 132, "tasks": ["100.1", "100.2", "100.3", "100.4", "100.5", "100.6", "100.7", "100.8", "100.9"] }
+    { "id": 132, "tasks": ["100.1", "100.2", "100.3", "100.4", "100.5", "100.6", "100.7", "100.8", "100.9"] },
+    { "id": 133, "tasks": ["101.1", "101.2", "101.3", "101.4"] },
+    { "id": 134, "tasks": ["101.5"] },
+    { "id": 135, "tasks": ["102.1", "102.2", "102.3"] },
+    { "id": 136, "tasks": ["102.4"] },
+    { "id": 137, "tasks": ["103.1", "103.2", "103.3", "103.4"] },
+    { "id": 138, "tasks": ["103.5"] },
+    { "id": 139, "tasks": ["104.1", "104.2", "104.3"] },
+    { "id": 140, "tasks": ["104.4"] },
+    { "id": 141, "tasks": ["105.1", "105.2"] },
+    { "id": 142, "tasks": ["105.3"] }
   ]
 }
 ```

@@ -1663,6 +1663,121 @@ BatchQueue:
 - Indicator computation can happen either on the backend (for complex indicators) or on the frontend (for simple indicators) — the architecture supports both via a computation worker abstraction
 - Seed data is fetched once during indicator add and cached; subsequent scroll-based computations reuse the same data source
 
+### Time-Based Renderer Positioning
+
+#### 1. Overview
+All chart renderers (LineRenderer, AreaRenderer, CrosshairRenderer) use time-based positioning instead of sequential index alignment. Each renderer finds the candle whose `time` field matches the data point's time via a `findBarIndex(candles, time)` helper, making the rendering immune to index shifts caused by data prepending or real-time updates.
+
+#### 2. `findBarIndex` Helper
+```typescript
+function findBarIndex(candles: CandleData[], time: number): number {
+  for (let i = 0; i < candles.length; i++) {
+    if (Math.floor(candles[i].time) === Math.floor(time)) return i;
+  }
+  return -1; // No exact match — skip this data point
+}
+```
+- Uses `Math.floor()` comparison to handle floating-point timestamp precision differences
+- Returns -1 on no match — renderers skip the data point rather than drawing diagonal lines
+- Linear scan is acceptable because renderers only process visible bars (overscan buffer is small)
+
+#### 3. Renderer Integration
+- **LineRenderer**: For each plot data point, calls `findBarIndex(candles, point.time)` to get the x-coordinate. If -1, skips the point (breaks the line at gaps).
+- **AreaRenderer**: Same approach — fill polygon vertices are computed from `findBarIndex` results for both upper and lower lines.
+- **CrosshairRenderer**: Tooltip OHLCV values are matched via `Math.floor(candle.time)` to the hovered bar's time, ensuring correct values even when candles and indicator data have slightly different bar counts.
+
+#### 4. Why Time-Based Over Index-Based
+- **Prepend safety**: When older bars are prepended to `ohlcvDataRef`, all existing candles shift right by N indices. Index-based renderers would draw diagonal lines connecting old indices to new positions. Time-based renderers are unaffected.
+- **WS session drift**: During real-time updates, the frontend's candle array and the backend's execution result may have slightly different bar counts (±1 due to kline timing). Time-based matching handles this gracefully.
+- **Multiple data sources**: Indicator results and candle data come from different pipelines (REST fetch vs WebSocket execution_result). Time-based alignment ensures they always match correctly.
+
+### Dark Theme Architecture
+
+#### 1. Color System
+The chart and UI use a unified dark theme with the following color palette:
+
+| Element | Previous Color | Dark Theme Color |
+|---------|---------------|-----------------|
+| Background | `#1a1a2e` | `#0d0d18` |
+| Grid lines | `#2a2a4e` | `#181830` |
+| Borders | `#0f3460` | `#111128` |
+| Panel backgrounds | `#16213e` | `#0f1520` |
+| Text | `#e0e0e0` | `#e0e0e0` (unchanged) |
+
+#### 2. Implementation Locations
+- **CSS**: `frontend/src/index.css` — all CSS custom properties and class-based colors updated
+- **Canvas renderers**: `AxisRenderer` background fill (`#0d0d18`), `CrosshairRenderer` tooltip/crosshair backgrounds (`rgba(15,15,35,0.95)` / `rgba(12,12,30,0.95)`)
+- **React components**: Inline `style` objects in `BacktestPanel`, `BacktestResults`, `CodeEditor`, `ErrorConsole`, `StrategyResultsPopup`, `TelegramConfigPanel` updated to match
+
+#### 3. Design Rationale
+The darker background (`#0d0d18` vs `#1a1a2e`) increases contrast between candlestick bodies (green `#4caf50` / red `#e94560`) and the chart background, making price action easier to read during extended analysis sessions.
+
+### Auto-Scale Toggle Architecture
+
+#### 1. Overview
+An auto-scale toggle in the footer bar allows users to switch between automatic price range computation (default) and manual price range control. When auto-scale is active, manual price range operations (drag, Shift+scroll) are blocked.
+
+#### 2. Data Flow
+```
+App.tsx (autoScale state, default: true)
+  → Footer bar toggle button
+  → ChartComponent (forceAutoScale prop)
+  → useEffect syncs to PineChart.setForceAutoScale()
+  → LayoutManager.forceAutoScale flag
+  → InteractionHandler checks flag before price range operations
+```
+
+#### 3. LayoutManager Integration
+- `LayoutManager` gains a `forceAutoScale: boolean` flag (default `true`)
+- `setManualPriceRange()` — no-op when `forceAutoScale` is true
+- `zoomPrice()` — no-op when `forceAutoScale` is true
+- `panPrice()` — no-op when `forceAutoScale` is true
+- `setForceAutoScale(v: boolean)` — sets the flag
+- `isForceAutoScale()` — returns current state
+
+#### 4. PineChart Integration
+- `PineChart.setForceAutoScale(v)` delegates to `layout.setForceAutoScale(v)`
+- Called from `ChartComponent` via useEffect when `forceAutoScale` prop changes
+
+#### 5. Footer Bar UI
+- positioned between `<main>` and `<ErrorConsole>` in `App.tsx`
+- CSS class: `.footer-bar` with dark theme styling
+- Toggle button: `.auto-scale-toggle` with green background when active, dim when inactive
+
+### Scroll Re-Execution with Boundary Recomputation
+
+#### 1. Overview
+When the user scrolls backward to load older candles, the frontend fetches them via `fetchOlderOHLCV` and re-executes the active script on the combined bar set. The key challenge is that indicator values at the boundary between old and new data may be incorrect without recomputation — the first `maxLookback` bars of the previous batch need to be recomputed with access to the newly loaded older context bars.
+
+#### 2. execBars Construction
+```typescript
+// In fetchOlderOHLCV:
+const contextBars = previousBars.slice(-maxLookback); // last N bars from previous batch
+const execBars = [...newBars, ...contextBars];         // chronological: new first, context after
+```
+- `newBars`: the freshly fetched older bars (not yet in `ohlcvDataRef`)
+- `contextBars`: the last `maxLookback` bars from the previous batch (for indicator warm-up)
+- execBars are chronological — the engine processes them bar-by-bar in order
+- Context bars are NOT added to `ohlcvDataRef.current` — they are execution-only
+
+#### 3. prependIndicatorResult Boundary Recomputation
+```
+newResult: [newBar1, newBar2, ..., newBarN, context1, context2, ..., contextK]
+           |<--- newBarData --->|         |<--- boundaryData --->|
+
+prevResult: [old1, old2, ..., oldM]
+
+mergedResult: [newBar1..N, boundary1..K, oldK+1..M]
+              |<--- new + boundary --->|  |<--- remaining prev --->|
+```
+- `newBarData`: first N bars of newResult (bars not yet in indicator state)
+- `boundaryData`: next K bars of newResult (overlapping with previous batch's last K bars — these are the recomputed boundary values)
+- `remainingPrev`: skip first K entries from prevResult (they were recomputed), keep the rest
+- Final merged result: `[...newBarData, ...boundaryData, ...remainingPrev]`
+
+#### 4. Why Not Just Prepend
+Simply prepending new indicator data to the old data would leave the boundary incorrect — the first few bars of the old batch were computed without access to the now-available older context bars. Boundary recomputation ensures the transition is seamless.
+
 ### Backtest Engine Architecture
 
 #### 1. Overview

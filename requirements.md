@@ -1142,3 +1142,69 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 13. THE indicator computation system SHALL feel hyper-smooth and continuous — indicator values SHALL appear as if they were always present
 14. THE Engine SHALL NOT show "loading" or "computing" indicators for computed regions — computation SHALL be invisible to the user
 15. THE progressive computation SHALL be interruptible — if the user scrolls to a different region mid-computation, the old computation SHALL be cancelled and the new region SHALL take priority
+
+### Requirement 30: Time-Based Chart Rendering
+
+**User Story:** As a chart analyst, I want plot lines, fills, and crosshair to stay aligned with candles when the chart scrolls or receives real-time updates, so that indicator values never desync from the price data they represent.
+
+#### Acceptance Criteria
+
+1. THE Chart_Library SHALL use time-based positioning for all plot renderers (LineRenderer, AreaRenderer, CrosshairRenderer) — each renderer SHALL find the candle whose `time` field matches the plot data point's time, using a `findBarIndex(candles, time)` helper, rather than relying on sequential index alignment
+2. WHEN `findBarIndex` finds an exact time match, THE Chart_Library SHALL use that candle's index for pixel positioning
+3. WHEN `findBarIndex` finds no exact match, THE Chart_Library SHALL return -1 and the renderer SHALL skip that data point, preventing diagonal lines from mismatched candles
+4. THE Chart_Library SHALL NOT fall back to binary search or sequential index assumption when no exact time match is found
+5. THE Chart_Library SHALL support prepend operations (older bars added to the front) without breaking time-based alignment — the `findBarIndex` approach is inherently immune to index shifts caused by data prepending
+6. THE Chart_Library SHALL maintain correct plot-to-candle alignment during real-time candle updates (forming candle wick updates, new bar confirmation) via the same time-based matching
+
+### Requirement 31: Dark Theme
+
+**User Story:** As a chart analyst, I want a darker chart and UI theme so that candlestick colors are more visible and the overall chart is easier to read during extended analysis sessions.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL use a darkened chart background color (`#0d0d18`) replacing the previous lighter background (`#1a1a2e`)
+2. THE Frontend SHALL use a darkened grid color (`#181830`) replacing the previous lighter grid (`#2a2a4e`)
+3. THE Frontend SHALL use darkened border colors (`#111128`) replacing the previous lighter borders (`#0f3460`)
+4. THE Frontend SHALL use darkened panel/background colors (`#0f1520`) for sidebar, backtest panel, code editor, and error console backgrounds
+5. THE Frontend SHALL update the AxisRenderer background fill, CrosshairRenderer tooltip/crosshair backgrounds, and all inline color references in components (BacktestPanel, BacktestResults, CodeEditor, ErrorConsole, StrategyResultsPopup, TelegramConfigPanel) to match the darker theme
+6. THE darkened theme SHALL be applied consistently across all CSS styles (index.css) and component inline styles to prevent visual inconsistency
+
+### Requirement 32: Auto-Scale Toggle
+
+**User Story:** As a chart analyst, I want an auto-scale toggle in the footer bar so that I can quickly switch between automatic price range computation and manual price range control without needing to double-click the price scale.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL display a footer bar between the chart and the error console containing an auto-scale toggle button
+2. THE auto-scale toggle button SHALL show "Auto Scale" with a visual indicator (green when active, default state)
+3. WHEN auto-scale is active (default: true), THE LayoutManager SHALL block manual price range operations: `setManualPriceRange`, `zoomPrice` (via Shift+scroll on price scale), and `panPrice` (via price scale drag) SHALL be no-ops
+4. WHEN auto-scale is inactive, THE LayoutManager SHALL allow manual price range operations as normal
+5. THE auto-scale state SHALL be managed in `App.tsx` and passed as a `forceAutoScale` prop to `ChartComponent`
+6. THE `ChartComponent` SHALL sync the `forceAutoScale` prop to the PineChart instance via a `setForceAutoScale()` method and a corresponding useEffect
+7. THE `PineChart` SHALL delegate `setForceAutoScale()` to the `LayoutManager`
+8. THE auto-scale toggle SHALL be persisted in component state (not across restarts) and default to `true` on page load
+
+### Requirement 33: Scroll Re-Execution with Boundary Recomputation
+
+**User Story:** As a chart analyst, I want indicator values to be recomputed with full context when I scroll to load older candles, so that indicator lines stay smooth and correct at the boundary between old and new data.
+
+#### Acceptance Criteria
+
+1. WHEN the user scrolls backward and older candles are fetched via `fetchOlderOHLCV`, THE Frontend SHALL re-execute the active script on the full combined bar set (newer bars + older context bars) via the existing scroll re-execution mechanism
+2. THE execBars array passed to the engine SHALL be chronological: `[...newBars, ...contextBars]` — newer bars first, older context bars appended after, maintaining correct time order for bar-by-bar execution
+3. THE Frontend SHALL NOT add context bars to `ohlcvDataRef.current` — context bars are execution-only and shall not leak into the candle state
+4. WHEN `prependIndicatorResult` receives new indicator results from scroll re-execution, THE Frontend SHALL split the results into newBarData (bars not yet in the indicator state) and boundaryData (first `maxLookback` bars of the previous batch that need recomputation), then merge them with the remaining previous data
+5. THE Frontend SHALL NOT replace old indicator data with context-bar recomputation — it SHALL only update the new bars and the boundary overlap region
+6. THE Frontend SHALL execute `beginUpdate`/`endUpdate` around the scroll re-execution result application to batch all chart updates into a single frame
+
+### Requirement 34: Parser Support for Lowercase User-Defined Types
+
+**User Story:** As a Pine Script developer, I want to declare variables with lowercase user-defined type names (e.g., `var piv pH = na`) so that my code compiles without the parser rejecting valid type annotations.
+
+#### Acceptance Criteria
+
+1. THE Parser SHALL recognize lowercase user-defined type names in `var`, `varip`, and `const` declaration contexts without requiring PascalCase
+2. THE Parser SHALL use a separate `looksLikeUserTypeDecl()` method (without the PascalCase check) when parsing type annotations in `var`/`varip`/`const` contexts
+3. THE existing `looksLikeUserType()` method SHALL retain its PascalCase check for standalone typed declarations (e.g., `int x = 1`) to prevent false positives where `val\nx` is misread as a typed declaration
+4. THE Parser SHALL correctly distinguish between `var typeName varName = value` (typed declaration with user type) and `variableName\nnextLine` (expression followed by new statement) by using the declaration keyword as context
+5. WHEN a user-defined type like `piv` is used as a type annotation in a `var` declaration, THE Parser SHALL parse it as a `VariableDeclarationNode` with `typeAnnotation: "piv"` and `name: "pH"`, not as a standalone expression
