@@ -192,7 +192,7 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
           right: '20px',
           zIndex: 100,
           padding: '10px 16px',
-          background: '#0f3460',
+          background: '#111128',
           color: '#e0e0e0',
           border: '1px solid #2196f3',
           borderRadius: '6px',
@@ -212,8 +212,8 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
             width: '420px',
             maxHeight: 'calc(100vh - 180px)',
             overflowY: 'auto',
-            background: '#16213e',
-            border: '1px solid #0f3460',
+            background: '#0f1520',
+            border: '1px solid #111128',
             borderRadius: '8px',
             padding: '20px',
             zIndex: 99,
@@ -238,9 +238,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                     style={{
                       flex: 1,
                       padding: '6px',
-                      background: '#1a1a2e',
+                      background: '#0d0d18',
                       color: '#e0e0e0',
-                      border: '1px solid #0f3460',
+                      border: '1px solid #111128',
                       borderRadius: '4px',
                     }}
                   />
@@ -286,7 +286,7 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                 </button>
               </div>
 
-              <div style={{ marginBottom: '16px', borderTop: '1px solid #0f3460', paddingTop: '12px' }}>
+              <div style={{ marginBottom: '16px', borderTop: '1px solid #111128', paddingTop: '12px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>
                   SOCKS5 Proxy (optional)
                 </label>
@@ -299,9 +299,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                     style={{
                       flex: 1,
                       padding: '6px',
-                      background: '#1a1a2e',
+                      background: '#0d0d18',
                       color: '#e0e0e0',
-                      border: '1px solid #0f3460',
+                      border: '1px solid #111128',
                       borderRadius: '4px',
                       fontSize: '12px',
                     }}
@@ -316,9 +316,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                     style={{
                       width: '80px',
                       padding: '6px',
-                      background: '#1a1a2e',
+                      background: '#0d0d18',
                       color: '#e0e0e0',
-                      border: '1px solid #0f3460',
+                      border: '1px solid #111128',
                       borderRadius: '4px',
                       fontSize: '12px',
                     }}
@@ -333,9 +333,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                     style={{
                       flex: 1,
                       padding: '6px',
-                      background: '#1a1a2e',
+                      background: '#0d0d18',
                       color: '#e0e0e0',
-                      border: '1px solid #0f3460',
+                      border: '1px solid #111128',
                       borderRadius: '4px',
                       fontSize: '12px',
                     }}
@@ -350,9 +350,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                         width: '100%',
                         padding: '6px',
                         paddingRight: '28px',
-                        background: '#1a1a2e',
+                        background: '#0d0d18',
                         color: '#e0e0e0',
-                        border: '1px solid #0f3460',
+                        border: '1px solid #111128',
                         borderRadius: '4px',
                         fontSize: '12px',
                         boxSizing: 'border-box',
@@ -420,7 +420,7 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                       style={{
                         padding: '6px 8px',
                         marginTop: '4px',
-                        background: '#1a1a2e',
+                        background: '#0d0d18',
                         borderRadius: '4px',
                         fontSize: '12px',
                       }}
@@ -442,9 +442,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
                       style={{
                         padding: '8px',
                         marginBottom: '6px',
-                        background: '#1a1a2e',
+                        background: '#0d0d18',
                         borderRadius: '4px',
-                        border: '1px solid #0f3460',
+                        border: '1px solid #111128',
                       }}
                     >
                       <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#e0e0e0' }}>

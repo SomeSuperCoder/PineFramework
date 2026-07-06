@@ -96,10 +96,10 @@ export interface ChartOptions {
 }
 
 export const DEFAULT_OPTIONS: Required<ChartOptions> = {
-  background: '#1a1a2e',
-  textColor: '#e0e0e0',
-  gridColor: '#2a2a4e',
-  borderColor: '#0f3460',
+  background: '#0d0d18',
+  textColor: '#c8c8d0',
+  gridColor: '#181830',
+  borderColor: '#151530',
   fontSize: 12,
   fontFamily: 'Arial, sans-serif',
   barSpacing: 8,

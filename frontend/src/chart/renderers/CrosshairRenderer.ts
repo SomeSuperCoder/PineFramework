@@ -57,7 +57,7 @@ export class CrosshairRenderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(30,30,60,0.9)';
+    ctx.fillStyle = 'rgba(15,15,35,0.95)';
     ctx.fillRect(priceScale.x + 2, this.mouseY - 10, priceScale.width - 4, 20);
     ctx.fillStyle = textColor;
     ctx.font = '11px Arial, sans-serif';
@@ -67,7 +67,7 @@ export class CrosshairRenderer {
 
     if (barIndex >= 0 && barIndex < candles.length) {
       const candle = candles[barIndex];
-      ctx.fillStyle = 'rgba(30,30,60,0.9)';
+      ctx.fillStyle = 'rgba(15,15,35,0.95)';
       const labelWidth = 80;
       ctx.fillRect(snappedX - labelWidth / 2, timeScale.y + 2, labelWidth, timeScale.height - 4);
       ctx.fillStyle = textColor;
@@ -125,7 +125,7 @@ export class CrosshairRenderer {
       tooltipX = x - tooltipWidth - 12;
     }
 
-    ctx.fillStyle = 'rgba(20,20,50,0.92)';
+    ctx.fillStyle = 'rgba(12,12,30,0.95)';
     ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.lineWidth = 1;
     ctx.beginPath();

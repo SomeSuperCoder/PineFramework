@@ -213,9 +213,9 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
                 style={{
                   flex: 1,
                   padding: '4px 8px',
-                  background: '#1a1a2e',
+                  background: '#0d0d18',
                   color: '#e0e0e0',
-                  border: '1px solid #0f3460',
+                  border: '1px solid #111128',
                   borderRadius: '4px',
                   fontSize: '13px',
                   minWidth: 0,
@@ -247,7 +247,7 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
           </div>
         </div>
         {currentScript && (
-          <div style={{ padding: '4px 16px', background: '#1a1a2e', fontSize: '11px', color: '#888', borderBottom: '1px solid #0f3460' }}>
+          <div style={{ padding: '4px 16px', background: '#0d0d18', fontSize: '11px', color: '#888', borderBottom: '1px solid #111128' }}>
             <span style={{
               padding: '1px 5px',
               background: currentScript.scriptType === 'strategy' ? '#1a3a2e' : '#2e2a1a',

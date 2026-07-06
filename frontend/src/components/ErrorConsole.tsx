@@ -14,9 +14,9 @@ export function ErrorConsole({ errors, onClear }: ErrorConsoleProps) {
           onClick={onClear}
           style={{
             padding: '4px 8px',
-            border: '1px solid #0f3460',
+            border: '1px solid #111128',
             borderRadius: '4px',
-            backgroundColor: '#1a1a2e',
+            backgroundColor: '#0d0d18',
             color: '#e0e0e0',
             fontSize: '11px',
             cursor: 'pointer',

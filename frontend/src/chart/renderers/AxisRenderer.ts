@@ -13,7 +13,7 @@ export class AxisRenderer {
     const { priceScale, chartArea, volumeArea, indicatorPanes } = regions;
     const mainHeight = chartArea.height + volumeArea.height;
 
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = '#0d0d18';
     ctx.fillRect(priceScale.x, priceScale.y, priceScale.width, priceScale.height);
 
     // Main chart + volume price labels
@@ -80,7 +80,7 @@ export class AxisRenderer {
     const regions = layout.getRegions();
     const { timeScale, chartArea } = regions;
 
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = '#0d0d18';
     ctx.fillRect(timeScale.x, timeScale.y, timeScale.width, timeScale.height);
 
     ctx.strokeStyle = borderColor;

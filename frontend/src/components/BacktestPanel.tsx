@@ -70,7 +70,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
           right: '20px',
           zIndex: 100,
           padding: '10px 16px',
-          background: '#0f3460',
+          background: '#111128',
           color: '#e0e0e0',
           border: '1px solid #2196f3',
           borderRadius: '6px',
@@ -90,8 +90,8 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
             width: '380px',
             maxHeight: 'calc(100vh - 100px)',
             overflowY: 'auto',
-            background: '#16213e',
-            border: '1px solid #0f3460',
+            background: '#0f1520',
+            border: '1px solid #111128',
             borderRadius: '8px',
             padding: '20px',
             zIndex: 99,
@@ -120,7 +120,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              style={{ width: '100%', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
             />
           </div>
 
@@ -130,11 +130,11 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              style={{ width: '100%', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+              style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
             />
           </div>
 
-          <fieldset style={{ border: '1px solid #0f3460', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
+          <fieldset style={{ border: '1px solid #111128', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
             <legend style={{ color: '#2196f3', padding: '0 6px' }}>Broker Emulator</legend>
 
             <div style={{ marginBottom: '8px' }}>
@@ -143,7 +143,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                 type="number"
                 value={config.initialCapital}
                 onChange={(e) => setConfig({ ...config, initialCapital: Number(e.target.value) })}
-                style={{ width: '100%', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
               />
             </div>
 
@@ -154,12 +154,12 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                   type="number"
                   value={config.commission}
                   onChange={(e) => setConfig({ ...config, commission: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 />
                 <select
                   value={config.commissionType}
                   onChange={(e) => setConfig({ ...config, commissionType: e.target.value as BacktestConfig['commissionType'] })}
-                  style={{ width: '120px', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ width: '120px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 >
                   <option value="percent">Percent</option>
                   <option value="fixed">Fixed</option>
@@ -176,12 +176,12 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                   type="number"
                   value={config.slippage}
                   onChange={(e) => setConfig({ ...config, slippage: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 />
                 <select
                   value={config.slippageType}
                   onChange={(e) => setConfig({ ...config, slippageType: e.target.value as BacktestConfig['slippageType'] })}
-                  style={{ width: '120px', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ width: '120px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 >
                   <option value="ticks">Ticks</option>
                   <option value="points">Points</option>
@@ -197,12 +197,12 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                   type="number"
                   value={config.defaultQty}
                   onChange={(e) => setConfig({ ...config, defaultQty: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 />
                 <select
                   value={config.defaultQtyType}
                   onChange={(e) => setConfig({ ...config, defaultQtyType: e.target.value as BacktestConfig['defaultQtyType'] })}
-                  style={{ width: '160px', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ width: '160px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 >
                   <option value="contracts">Contracts</option>
                   <option value="percent_of_equity">% of Equity</option>
@@ -217,7 +217,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                 type="number"
                 value={config.pyramiding}
                 onChange={(e) => setConfig({ ...config, pyramiding: Number(e.target.value) })}
-                style={{ width: '100%', padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
               />
             </div>
 
@@ -228,14 +228,14 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
                   type="number"
                   value={config.marginLong}
                   onChange={(e) => setConfig({ ...config, marginLong: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                   placeholder="Long"
                 />
                 <input
                   type="number"
                   value={config.marginShort}
                   onChange={(e) => setConfig({ ...config, marginShort: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#1a1a2e', color: '#e0e0e0', border: '1px solid #0f3460', borderRadius: '4px' }}
+                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                   placeholder="Short"
                 />
               </div>
@@ -265,7 +265,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
               <div style={{
                 width: '100%',
                 height: '8px',
-                background: '#1a1a2e',
+                background: '#0d0d18',
                 borderRadius: '4px',
                 overflow: 'hidden',
               }}>

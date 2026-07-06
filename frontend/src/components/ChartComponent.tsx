@@ -37,10 +37,10 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      background: '#1a1a2e',
+      background: '#0d0d18',
       textColor: '#e0e0e0',
       gridColor: '#2a2a4e',
-      borderColor: '#0f3460',
+      borderColor: '#111128',
       barSpacing: 8,
     });
 
@@ -264,7 +264,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
                 alignItems: 'center',
                 gap: '4px',
                 padding: '2px 8px',
-                background: 'rgba(30, 30, 46, 0.85)',
+                background: 'rgba(12, 15, 30, 0.9)',
                 border: `1px solid ${label.overlay ? '#2196f3' : '#ff9800'}`,
                 borderRadius: '4px',
                 fontSize: '11px',
