@@ -20,7 +20,9 @@ export class DatabaseFileSync {
   onScriptCreated(script: ScriptEntry): FileScriptEntry {
     const existingFilenames = this.manifestStore.getExistingFilenames();
     const filename = uniqueFilename(script.name, existingFilenames) + '.pine';
-    const filePath = path.join(this.scriptsDir, filename);
+    const subdir = script.scriptType === 'strategy' ? 'strategies' : 'indicators';
+    const filePath = path.join(this.scriptsDir, subdir, filename);
+    const relativePath = path.relative(this.scriptsDir, filePath);
 
     this.ensureDirectoryExists(filePath);
     fs.writeFileSync(filePath, script.source, 'utf-8');
@@ -28,7 +30,7 @@ export class DatabaseFileSync {
     const checksum = computeChecksum(script.source);
     const entry = this.manifestStore.add({
       id: script.id,
-      filename,
+      filename: relativePath,
       name: script.name,
       scriptType: script.scriptType,
       filePath,

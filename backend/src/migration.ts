@@ -38,13 +38,14 @@ export function migrateLegacyScripts(
 
     const subdir = script.scriptType === 'strategy' ? 'strategies' : 'indicators';
     const filePath = path.join(scriptsDir, subdir, filename);
+    const relativePath = path.relative(scriptsDir, filePath);
 
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, script.source, 'utf-8');
 
     manifestStore.add({
       id: script.id,
-      filename,
+      filename: relativePath,
       name: script.name,
       scriptType: script.scriptType,
       filePath,

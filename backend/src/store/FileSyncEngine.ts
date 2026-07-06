@@ -22,8 +22,8 @@ export class FileSyncEngine {
   async syncFile(filePath: string): Promise<void> {
     const content = fs.readFileSync(filePath, 'utf-8');
     const checksum = computeChecksum(content);
-    const filename = path.basename(filePath);
-    const name = this.extractNameFromContent(content) || this.nameFromFilename(filename);
+    const filename = path.relative(this.scriptsDir, filePath);
+    const name = this.extractNameFromContent(content) || this.nameFromFilename(path.basename(filePath));
     const scriptType = this.detectScriptType(content);
 
     const existing = this.manifestStore.getByFilename(filename);
@@ -62,7 +62,7 @@ export class FileSyncEngine {
   }
 
   async removeFile(filePath: string): Promise<void> {
-    const filename = path.basename(filePath);
+    const filename = path.relative(this.scriptsDir, filePath);
     const entry = this.manifestStore.getByFilename(filename);
     if (entry) {
       this.scriptStore.delete(entry.id);
