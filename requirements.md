@@ -564,16 +564,16 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 
 #### Acceptance Criteria
 
-1. THE project SHALL use pnpm workspaces with a root `pnpm-workspace.yaml` declaring all packages
+1. THE project SHALL use pnpm workspaces with a root `pnpm-workspace.yaml` declaring the `frontend` and `backend` packages (the engine library is the root package, not a workspace member)
 2. THE root `package.json` SHALL define workspace-level scripts (`dev`, `build`, `test`, `lint`) that orchestrate all packages
-3. THE engine (`pine-framework`) SHALL be a workspace package exportable as a library
+3. THE engine (`pine-framework`) SHALL be the root package, exportable as a library via `exports` field in the root `package.json`
 4. THE frontend SHALL declare `pine-framework` as a workspace dependency (`"pine-framework": "workspace:*"`)
 5. THE backend SHALL declare `pine-framework` as a workspace dependency (`"pine-framework": "workspace:*"`)
 6. THE root `pnpm-lock.yaml` SHALL be the single lockfile for the entire project
 7. Running `pnpm install` at the root SHALL install all dependencies for all packages
 8. Running `pnpm dev` at the root SHALL start both frontend and backend concurrently
 9. Running `pnpm build` at the root SHALL build all packages in dependency order
-10. Running `pnpm test` at the root SHALL run tests across all packages
+10. Running `pnpm test` at the root SHALL run the engine integration tests (Jest, `tests/**/*.test.ts`). Backend and frontend have their own test runners.
 11. Each package SHALL have its own `package.json` with package-specific scripts
 12. No nested `pnpm-lock.yaml` or `node_modules` SHALL exist in subdirectories
 
@@ -831,7 +831,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 **Styling and Theming:**
 
 124. THE Chart_Library SHALL support configurable background color, text color, grid color, and border colors via options
-125. THE Chart_Library SHALL support a dark theme by default (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+125. THE Chart_Library SHALL support a dark theme by default (background #0d0d18, text #e0e0e0, grid #181830, border #111128)
 126. THE Chart_Library SHALL support configurable font family and size for axis labels and tooltips
 
 **Frontend Requirements:**

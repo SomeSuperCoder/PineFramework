@@ -40,7 +40,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     const chart = createChart(containerRef.current, {
       background: '#0d0d18',
       textColor: '#e0e0e0',
-      gridColor: '#2a2a4e',
+      gridColor: '#181830',
       borderColor: '#111128',
       barSpacing: 8,
     });

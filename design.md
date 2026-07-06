@@ -627,6 +627,9 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Server sends: `{ type: "connected", data: { connectionId } }`
   - Server sends: `{ type: "error", data: { message, code } }`
    - Server sends: `{ type: "execution_result", data: { outputs, shapes, fills, strategyMarkers, lines, labels, bgcolors, plotColors, fillColors, barTimestamps, barIndex } }` — updated script results after each new kline
+  - Server sends: `{ type: "session_ready", indicatorId }` — session initialized and ready for real-time updates
+  - Server sends: `{ type: "indicator_stopped", indicatorId }` — session stopped (e.g., user removed indicator)
+  - Server sends: `{ type: "indicator_removed", data: { indicatorIds } }` — broadcast when indicators are removed (cascade delete)
 - **Key Features**:
   - Manages Bybit API connections (REST + WebSocket)
   - Relays realtime market data to connected frontend clients
@@ -1313,13 +1316,12 @@ User Input (Code) → Code Editor → POST /api/execute → Backend (Pine Engine
 ```
 pine-framework/
 ├── pnpm-workspace.yaml         # Declares workspace packages
-├── package.json                 # Root scripts (dev, build, test, lint)
+├── package.json                 # Root package: "pine-framework" (engine library)
 ├── pnpm-lock.yaml              # Single lockfile for all packages
 ├── tsconfig.json               # Base TypeScript config
 │
-├── src/                         # pine-framework engine library
-│   ├── package.json             # Name: "pine-framework"
-│   └── ...                      # Engine source code
+├── src/                         # Engine source code (part of root package)
+│   └── ...
 │
 ├── frontend/                    # React frontend application
 │   ├── package.json             # Name: "pine-framework-frontend"
@@ -1335,14 +1337,14 @@ pine-framework/
 ```yaml
 # pnpm-workspace.yaml
 packages:
-  - "src"        # engine library
   - "frontend"   # React app
   - "backend"    # Express server
+# Note: engine library is the root package, not a workspace member
 ```
 
 #### 3. Dependency Graph
 ```
-pine-framework (engine)
+pine-framework (root package — engine library)
     ↑ workspace:*
     ├── frontend ── uses engine types + API
     └── backend  ── uses engine for script execution + Bybit adapter
@@ -1352,9 +1354,9 @@ pine-framework (engine)
 ```json
 {
   "scripts": {
-    "dev": "concurrently \"pnpm --filter backend dev\" \"pnpm --filter frontend dev\"",
-    "build": "pnpm --filter pine-framework build && pnpm --filter pine-framework-backend build && pnpm --filter pine-framework-frontend build",
-    "test": "pnpm -r test",
+    "dev": "concurrently \"pnpm --filter pine-framework-backend dev\" \"pnpm --filter pine-framework-frontend dev\"",
+    "build": "pnpm --filter pine-framework run build:lib && pnpm --filter pine-framework-backend run build && pnpm --filter pine-framework-frontend run build",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck"
   }

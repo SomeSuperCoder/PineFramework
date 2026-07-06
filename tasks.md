@@ -582,7 +582,7 @@ This implementation plan outlines the step-by-step development of a production-g
 
   - [x] 21.14 Implement theming and styling options
     - Support configurable background color, text color, grid color, border colors
-    - Default dark theme (background #1a1a2e, text #e0e0e0, grid #2a2a4e, border #0f3460)
+    - Default dark theme (background #0d0d18, text #e0e0e0, grid #181830, border #111128)
     - Support configurable font family and size for labels and tooltips
     - _Requirements: 21.95, 21.96, 21.97_
 
@@ -708,7 +708,7 @@ This implementation plan outlines the step-by-step development of a production-g
 
 - [x] 23. Restructure project as pnpm monorepo
   - [x] 23.1 Create root `pnpm-workspace.yaml`
-    - Declare workspace packages: `src` (engine), `frontend`, `backend`
+    - Declare workspace packages: `frontend`, `backend` (engine library is the root package)
     - _Requirements: 18.1_
   
   - [x] 23.2 Restructure root `package.json`
@@ -734,7 +734,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Run `pnpm install` from root — all dependencies hoisted correctly
     - Run `pnpm build` — engine builds first, then backend, then frontend
     - Run `pnpm dev` — both frontend (3000) and backend (8080) start
-    - Run `pnpm test` — tests run across all packages
+    - Run `pnpm test` — engine integration tests run (Jest, `tests/**/*.test.ts`). Backend and frontend have separate test runners.
     - _Requirements: 18.6, 18.7, 18.8, 18.9, 18.10_
 
 - [x] 24. Checkpoint - Monorepo validation
