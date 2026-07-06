@@ -81,10 +81,10 @@ export class ScriptStore {
     return script;
   }
 
-  create(name: string, source: string): ScriptEntry {
+  create(name: string, source: string, id?: string): ScriptEntry {
     const now = Date.now();
     const script: ScriptEntry = {
-      id: randomUUID(),
+      id: id || randomUUID(),
       name: name.trim(),
       source,
       scriptType: detectScriptType(source),

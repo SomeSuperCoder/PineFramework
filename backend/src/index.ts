@@ -12,11 +12,15 @@ import { statusRouter } from './routes/status.js';
 import { createBacktestRouter } from './routes/backtest.js';
 import { createSettingsRouter } from './routes/settings.js';
 import { createScriptsRouter } from './routes/scripts.js';
+import { createScriptFilesRouter } from './routes/scriptFiles.js';
 import { createIndicatorsRouter } from './routes/indicators.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
 import { ScriptStore } from './store/ScriptStore.js';
 import { RunningIndicatorsStore } from './store/RunningIndicatorsStore.js';
+import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
+import { FileSyncEngine } from './store/FileSyncEngine.js';
+import { ScriptFileWatcher } from './store/ScriptFileWatcher.js';
 import { TelegramService } from './telegram/TelegramService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +28,8 @@ const DATA_DIR = path.resolve(__dirname, '..', 'data');
 const TELEGRAM_JSON_PATH = path.join(DATA_DIR, 'telegram.json');
 const SCRIPTS_JSON_PATH = path.join(DATA_DIR, 'scripts.json');
 const INDICATORS_JSON_PATH = path.join(DATA_DIR, 'indicators.json');
+const SCRIPTS_DIR = path.join(DATA_DIR, 'scripts');
+const SCRIPTS_MANIFEST_PATH = path.join(SCRIPTS_DIR, 'manifest.json');
 
 const app = express();
 const server = createServer(app);
@@ -36,6 +42,9 @@ const telegramService = new TelegramService({ configStore: telegramConfig });
 
 const scriptStore = new ScriptStore(SCRIPTS_JSON_PATH);
 const indicatorsStore = new RunningIndicatorsStore(INDICATORS_JSON_PATH);
+const manifestStore = new ScriptsManifestStore(SCRIPTS_MANIFEST_PATH);
+const syncEngine = new FileSyncEngine(SCRIPTS_DIR, manifestStore, scriptStore);
+const fileWatcher = new ScriptFileWatcher(SCRIPTS_DIR, syncEngine);
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -117,6 +126,7 @@ app.use('/api', createSettingsRouter({
 }));
 
 app.use('/api', createScriptsRouter(scriptStore, indicatorsStore));
+app.use('/api', createScriptFilesRouter(manifestStore, syncEngine, SCRIPTS_DIR));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 
 createWSGateway(server, cache, telegramService, scriptStore, indicatorsStore);
@@ -125,11 +135,16 @@ server.listen(PORT, async () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
   console.log(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
   console.log(`Data directory: ${DATA_DIR}`);
+  console.log(`Scripts directory: ${SCRIPTS_DIR}`);
   await telegramService.start();
+  await syncEngine.fullSync();
+  fileWatcher.start();
+  console.log(`[FileSync] Initial sync complete, file watcher started`);
 });
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`\n[Server] Received ${signal}, shutting down gracefully...`);
+  await fileWatcher.stop();
   await telegramService.stop();
   server.close(() => {
     console.log('[Server] Closed');

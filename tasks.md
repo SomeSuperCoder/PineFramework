@@ -2858,6 +2858,128 @@ This implementation plan outlines the step-by-step development of a production-g
     - All 6 TrendCraft integration tests pass
     - _Requirements: 34.1-34.5_
 
+- [x] 106. Implement File-Based Script Storage with AI Agent Integration
+  - [x] 106.1 Create scripts directory structure
+    - Create `backend/data/scripts/` directory on backend startup (auto-create if missing)
+    - Create optional subdirectories: `indicators/`, `strategies/`, `libraries/`
+    - Add `backend/data/scripts/` to `.gitignore` (user-local data, not committed)
+    - _Requirements: 26.6, 27.1, 27.2_
+
+  - [x] 106.2 Implement filename sanitization utility
+    - Create `sanitizeFilename(name: string): string` function
+    - Convert to lowercase, replace spaces with underscores, remove special characters
+    - Truncate to 64 characters (excluding extension)
+    - Append numeric suffix for conflicts: `my_script.pine` → `my_script_1.pine`
+    - Preserve UTF-8 characters for international names
+    - _Requirements: 27.2, 27.15_
+
+  - [x] 106.3 Create ScriptsManifest data structure
+    - Define `FileScriptEntry` interface with id, filename, name, source, scriptType, filePath, createdAt, updatedAt, checksum
+    - Define `ScriptsManifest` interface with scripts array, lastSyncAt, version
+    - Create `ScriptsManifestStore` class using `JsonStore` infrastructure
+    - Auto-create `backend/data/scripts/manifest.json` on first launch
+    - _Requirements: 27.5, 27.16_
+
+  - [x] 106.4 Implement File → Database sync engine
+    - Create `FileSyncEngine` class with methods: `syncFile(filePath)`, `removeFile(filePath)`, `fullSync()`
+    - On file creation: read content, validate syntax, detect script type, extract name, generate ID, register in manifest and database
+    - On file modification: read updated content, validate syntax, update timestamp, recompute checksum, update manifest and database
+    - On file deletion: remove from manifest and database, stop any running indicators
+    - _Requirements: 26.3, 26.4, 26.5, 27.9, 27.10, 27.11_
+
+  - [x] 106.5 Implement Database → File sync engine
+    - When script is created via API (`POST /api/scripts`): generate sanitized filename, write `.pine` file, create manifest entry
+    - When script is updated via API (`PUT /api/scripts/:id`): update corresponding `.pine` file, update manifest entry
+    - When script is deleted via API (`DELETE /api/scripts/:id`): delete corresponding `.pine` file, remove manifest entry
+    - _Requirements: 26.8, 27.6, 27.7, 27.8_
+
+  - [x] 106.6 Implement file watcher using chokidar
+    - Install `chokidar` dependency in backend
+    - Watch `backend/data/scripts/**/*.pine` recursively
+    - Handle events: `add`, `change`, `unlink`
+    - Debounce events by 100ms to batch rapid changes
+    - Log all file operations for auditing
+    - Handle watcher errors gracefully (permission issues, etc.)
+    - _Requirements: 26.12, 27.12_
+
+  - [x] 106.7 Implement conflict resolution and race condition handling
+    - Last-write-wins for simultaneous API and file changes
+    - API writes acquire a file lock before writing
+    - Checksum comparison prevents unnecessary updates
+    - Handle edge cases: file watcher delay, API timeout, partial writes
+    - _Requirements: 26.13, 27.13_
+
+  - [x] 106.8 Add REST API endpoints for file metadata
+    - `GET /api/scripts/files` — list all scripts with file metadata
+    - `GET /api/scripts/files/:id` — get file metadata for a script
+    - `GET /api/scripts/files/:id/content` — get raw file content
+    - `POST /api/scripts/files/sync` — force sync from filesystem
+    - `GET /api/scripts/files/status` — get sync status and last sync time
+    - _Requirements: 26.14, 27.14_
+
+  - [x] 106.9 Implement script type auto-detection
+    - Parse script content to detect `indicator()`, `strategy()`, or `library()` calls
+    - Extract script name from declaration
+    - Handle edge cases: multiple declarations, missing declarations, malformed code
+    - _Requirements: 26.13, 26.3_
+
+  - [x] 106.10 Add bulk import support
+    - Support importing multiple `.pine` files at once
+    - Process files sequentially with progress logging
+    - Errors logged but don't block other files
+    - Summary report available via `/api/scripts/files/status`
+    - _Requirements: 26.16_
+
+  - [x] 106.11 Add security and validation
+    - Validate file paths to prevent directory traversal
+    - Enforce file size limits (max 1MB per script)
+    - Rate limiting on sync operations
+    - Audit logging for all file operations
+    - _Requirements: 26.14, 27.14_
+
+  - [x] 106.12 Update Script Bank to use file-based storage
+    - Modify `ScriptStore` to read/write from filesystem instead of just `scripts.json`
+    - Maintain backward compatibility with existing `scripts.json` format
+    - Add migration script to convert existing scripts to file-based format
+    - _Requirements: 26.1, 27.1_
+
+  - [x]* 106.13 Write tests for file-based storage
+    - Test filename sanitization with various inputs
+    - Test file creation via API creates corresponding `.pine` file
+    - Test file modification via API updates corresponding `.pine` file
+    - Test file deletion via API deletes corresponding `.pine` file
+    - Test file watcher detects external file creation and syncs to database
+    - Test file watcher detects external file modification and updates database
+    - Test file watcher detects external file deletion and removes from database
+    - Test conflict resolution with simultaneous API and file changes
+    - Test bulk import of multiple files
+    - Test security validation (path traversal, file size limits)
+    - Test REST API endpoints for file metadata
+    - Test script type auto-detection
+    - _Requirements: 26.1-26.16, 27.1-27.16_
+
+  - [x]* 106.14 Write integration tests for AI agent workflow
+    - Test AI agent creates script file → appears in editor dropdown
+    - Test AI agent modifies script file → changes reflected in editor
+    - Test AI agent deletes script file → removed from editor
+    - Test multiple AI agents creating scripts simultaneously
+    - Test AI agent script execution on chart
+    - _Requirements: 26.1-26.16, 27.1-27.16_
+
+- [x] 107. Checkpoint - File-Based Storage and AI Agent Integration Validation
+  - Create a script file manually in `backend/data/scripts/` → verify it appears in editor
+  - Modify the file directly → verify changes reflected in editor
+  - Delete the file → verify it's removed from editor
+  - Create a script via API → verify `.pine` file is created
+  - Update a script via API → verify `.pine` file is updated
+  - Delete a script via API → verify `.pine` file is deleted
+  - Test AI agent workflow: create file → appears in editor → execute on chart
+  - Verify file watcher detects changes promptly (< 200ms)
+  - Verify conflict resolution works correctly
+  - Verify bulk import works
+  - Run all existing tests to confirm no regressions
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -2905,6 +3027,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 103 adds an auto-scale toggle to the footer bar: `LayoutManager.forceAutoScale` flag blocks `setManualPriceRange`, `zoomPrice`, and `panPrice` when active; PineChart delegates `setForceAutoScale()` to LayoutManager; ChartComponent accepts `forceAutoScale` prop; App.tsx manages `autoScale` state (default `true`) with toggle button in footer bar. Commit `6491d57`.
 - Task 104 fixes scroll re-execution and indicator boundary recomputation: execBars changed to chronological `[...newBars, ...contextBars]`; `prependIndicatorResult` splits newResult into newBarData + boundaryData, merges with remaining prev data; context bars no longer leak into `ohlcvDataRef`; `beginUpdate`/`endUpdate` batching prevents flicker. Commits `39224a0` (corrected ordering) and `78b788f` (boundary recomputation).
 - Task 105 fixes TrendCraft `Variable 'pH' is not defined` error: added `looksLikeUserTypeDecl()` (no PascalCase check) used only in `var`/`varip`/`const` contexts; standalone context keeps PascalCase to prevent `val\nx` misparse. All 1047 backend tests pass. Commit `12e78a4`.
+- Tasks 106-107 implement AI Agent Integration and File-Based Storage: external AI coding agents can create scripts by writing `.pine` files to `backend/data/scripts/`. A file watcher (chokidar) detects changes and syncs them into the Script Bank database. Bidirectional sync ensures API-created scripts create files and file-created scripts register in the database. Features include filename sanitization, script type auto-detection, bulk import, conflict resolution, and comprehensive REST API endpoints for file metadata.
 
 ## Task Dependency Graph
 
@@ -3053,7 +3176,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 139, "tasks": ["104.1", "104.2", "104.3"] },
     { "id": 140, "tasks": ["104.4"] },
     { "id": 141, "tasks": ["105.1", "105.2"] },
-    { "id": 142, "tasks": ["105.3"] }
+    { "id": 142, "tasks": ["105.3"] },
+    { "id": 143, "tasks": ["106.1", "106.2", "106.3", "106.4", "106.5", "106.6", "106.7", "106.8", "106.9", "106.10", "106.11", "106.12"] },
+    { "id": 144, "tasks": ["106.13", "106.14"] },
+    { "id": 145, "tasks": ["107"] }
   ]
 }
 ```

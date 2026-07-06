@@ -1009,7 +1009,53 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 13. THE Database SHALL persist data across application restarts
 14. THE Database SHALL support read and write operations from both the Backend and the Frontend configuration UI
 
-### Requirement 26: Separate Indicator Panes
+### Requirement 26: AI Agent Integration for Script Creation
+
+**User Story:** As a developer using AI coding agents, I want to create indicators and strategies via external AI agents that automatically place them into the project's file-based database, so that AI-generated scripts are immediately available in the editor without manual import.
+
+#### Acceptance Criteria
+
+1. THE System SHALL support script creation via external AI coding agents by providing a well-defined file-based storage interface
+2. THE System SHALL store scripts as individual files in a designated directory with the script's name as the filename (e.g., `my_strategy.pine`)
+3. WHEN a file is created in the scripts directory, THE System SHALL automatically detect and register it in the Script Bank database
+4. WHEN a file is modified in the scripts directory, THE System SHALL automatically sync the changes to the Script Bank database
+5. WHEN a file is deleted from the scripts directory, THE System SHALL automatically remove it from the Script Bank database
+6. THE scripts directory SHALL be located at `backend/data/scripts/` within the project structure
+7. THE System SHALL support both manual script creation via the editor AND AI agent file creation simultaneously
+8. THE System SHALL maintain bidirectional sync: changes via the editor API update the file, and changes to the file update the database
+9. THE System SHALL validate script content when syncing from files to ensure it contains valid Pine Script syntax
+10. THE System SHALL generate unique script IDs for AI-created scripts based on a hash of the filename or content
+11. THE System SHALL support subdirectories within the scripts folder for organizing scripts by category (e.g., `backend/data/scripts/indicators/`, `backend/data/scripts/strategies/`)
+12. THE System SHALL provide a file watcher that monitors the scripts directory for changes and triggers automatic sync
+13. WHEN an AI agent creates a script file, THE System SHALL auto-detect the script type (indicator/strategy/library) from the source content
+14. THE System SHALL log all file-based script operations for auditing and debugging
+15. THE System SHALL handle filename conflicts by appending a numeric suffix (e.g., `my_strategy_1.pine`)
+16. THE System SHALL support bulk import of scripts by placing multiple files in the scripts directory
+
+### Requirement 27: File-Based Script Storage with Direct Sync
+
+**User Story:** As a developer, I want the Script Bank to use a file-based storage system where each script is a file with the script name as the filename, so that I can manage scripts directly via the filesystem and AI agents can create scripts by simply writing files.
+
+#### Acceptance Criteria
+
+1. THE Script Bank SHALL store each script as a separate file in the `backend/data/scripts/` directory
+2. THE filename SHALL be derived from the script's name (sanitized for filesystem safety: special characters replaced, spaces converted to underscores)
+3. THE file extension SHALL be `.pine` for all Pine Script files
+4. THE file content SHALL be the complete Pine Script source code
+5. THE System SHALL maintain a `scripts.json` manifest file that maps filenames to script metadata (id, name, scriptType, createdAt, updatedAt)
+6. WHEN a script is created via the API, THE System SHALL create a corresponding `.pine` file in the scripts directory
+7. WHEN a script is updated via the API, THE System SHALL update the corresponding `.pine` file
+8. WHEN a script is deleted via the API, THE System SHALL delete the corresponding `.pine` file
+9. WHEN a `.pine` file is created directly in the scripts directory, THE System SHALL register it in the Script Bank with auto-detected metadata
+10. WHEN a `.pine` file is modified directly, THE System SHALL update the Script Bank metadata (updatedAt timestamp)
+11. WHEN a `.pine` file is deleted directly, THE System SHALL remove it from the Script Bank
+12. THE System SHALL use file system watching (e.g., `chokidar` or `fs.watch`) to detect external file changes
+13. THE System SHALL handle race conditions between API writes and file watcher events
+14. THE System SHALL provide a REST endpoint to list all scripts in the directory with their file metadata
+15. THE System SHALL support script filenames with UTF-8 characters for international script names
+16. THE manifest file SHALL be updated atomically to prevent corruption during concurrent operations
+
+### Requirement 29: Separate Indicator Panes
 
 **User Story:** As a Pine Script developer, I want non-overlay indicators (like MACD, RSI, Stochastic) to render in a separate pane below the main price chart, so that their values don't distort the price scale and they display correctly as oscillators.
 
@@ -1033,7 +1079,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 16. WHERE autoscaling is active, THE Frontend SHALL ignore any manual price range setting for indicator panes and recompute from visible data on every viewport change
 17. THE Frontend SHALL provide a smooth transition when autoscaling indicator panes, avoiding flicker or jarring jumps during scroll interactions
 
-### Requirement 28: Dynamic Indicator Management UI
+### Requirement 30: Dynamic Indicator Management UI
 
 **User Story:** As a trader, I want to dynamically add and remove multiple indicators from the chart, so that I can compose my chart with only the indicators I need and manage them without touching the indicator bank.
 
@@ -1090,7 +1136,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 29. THE Frontend SHALL NOT attempt to track per-indicator key-to-plot-title ownership — instead it SHALL add all plot series from all results and remove any series not present in the current combined title set
 30. THE Frontend SHALL route indicator forming candle updates using the `formingCandle` flag (same as the main script) — WHEN `msg.formingCandle` is true, the indicator result SHALL be merged into existing chart data rather than replacing it
 
-### Requirement 27: Multi-Version Pine Script Support
+### Requirement 31: Multi-Version Pine Script Support
 
 **User Story:** As a Pine Script developer, I want the engine to dynamically detect and support both Pine Script v5 and v6, so that I can use scripts from either version without manual configuration.
 
@@ -1107,7 +1153,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 9. THE Frontend SHALL display the detected Pine Script version in the code editor or status bar
 10. THE Backend SHALL forward the detected version in execution responses for debugging and display purposes
 
-### Requirement 29: Progressive Indicator Computation
+### Requirement 32: Progressive Indicator Computation
 
 **User Story:** As a trader, I want indicator computation to feel hyper-smooth and continuous regardless of how I navigate the chart, so that I never see uncomputed or missing indicator data.
 
@@ -1143,7 +1189,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 14. THE Engine SHALL NOT show "loading" or "computing" indicators for computed regions — computation SHALL be invisible to the user
 15. THE progressive computation SHALL be interruptible — if the user scrolls to a different region mid-computation, the old computation SHALL be cancelled and the new region SHALL take priority
 
-### Requirement 30: Time-Based Chart Rendering
+### Requirement 33: Time-Based Chart Rendering
 
 **User Story:** As a chart analyst, I want plot lines, fills, and crosshair to stay aligned with candles when the chart scrolls or receives real-time updates, so that indicator values never desync from the price data they represent.
 
@@ -1156,7 +1202,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 5. THE Chart_Library SHALL support prepend operations (older bars added to the front) without breaking time-based alignment — the `findBarIndex` approach is inherently immune to index shifts caused by data prepending
 6. THE Chart_Library SHALL maintain correct plot-to-candle alignment during real-time candle updates (forming candle wick updates, new bar confirmation) via the same time-based matching
 
-### Requirement 31: Dark Theme
+### Requirement 34: Dark Theme
 
 **User Story:** As a chart analyst, I want a darker chart and UI theme so that candlestick colors are more visible and the overall chart is easier to read during extended analysis sessions.
 
@@ -1169,7 +1215,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 5. THE Frontend SHALL update the AxisRenderer background fill, CrosshairRenderer tooltip/crosshair backgrounds, and all inline color references in components (BacktestPanel, BacktestResults, CodeEditor, ErrorConsole, StrategyResultsPopup, TelegramConfigPanel) to match the darker theme
 6. THE darkened theme SHALL be applied consistently across all CSS styles (index.css) and component inline styles to prevent visual inconsistency
 
-### Requirement 32: Auto-Scale Toggle
+### Requirement 35: Auto-Scale Toggle
 
 **User Story:** As a chart analyst, I want an auto-scale toggle in the footer bar so that I can quickly switch between automatic price range computation and manual price range control without needing to double-click the price scale.
 
@@ -1184,7 +1230,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 7. THE `PineChart` SHALL delegate `setForceAutoScale()` to the `LayoutManager`
 8. THE auto-scale toggle SHALL be persisted in component state (not across restarts) and default to `true` on page load
 
-### Requirement 33: Scroll Re-Execution with Boundary Recomputation
+### Requirement 36: Scroll Re-Execution with Boundary Recomputation
 
 **User Story:** As a chart analyst, I want indicator values to be recomputed with full context when I scroll to load older candles, so that indicator lines stay smooth and correct at the boundary between old and new data.
 
@@ -1197,7 +1243,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 5. THE Frontend SHALL NOT replace old indicator data with context-bar recomputation — it SHALL only update the new bars and the boundary overlap region
 6. THE Frontend SHALL execute `beginUpdate`/`endUpdate` around the scroll re-execution result application to batch all chart updates into a single frame
 
-### Requirement 34: Parser Support for Lowercase User-Defined Types
+### Requirement 37: Parser Support for Lowercase User-Defined Types
 
 **User Story:** As a Pine Script developer, I want to declare variables with lowercase user-defined type names (e.g., `var piv pH = na`) so that my code compiles without the parser rejecting valid type annotations.
 

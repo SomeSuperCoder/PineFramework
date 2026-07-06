@@ -2065,6 +2065,210 @@ DELETE /api/indicators/:id           → Remove running indicator from chart
 - The "currently running" script ID is stored separately from the "selected in editor" script ID
 - When a script is deleted from the bank, all running indicators referencing it are automatically removed from the chart and the persisted indicator list
 
+### AI Agent Integration and File-Based Storage Architecture
+
+#### 1. Overview
+The AI Agent Integration system enables external AI coding agents to create indicators and strategies by writing `.pine` files directly to a designated scripts directory. The system automatically detects these files and syncs them into the Script Bank database, making AI-generated scripts immediately available in the editor without manual import.
+
+#### 2. Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AI Agent Integration                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐    │
+│  │  AI Coding Agent │────→│  Scripts Directory│────→│  File Watcher    │    │
+│  │  (External)      │     │  (backend/data/   │     │  (chokidar)      │    │
+│  │                  │     │   scripts/)       │     │                  │    │
+│  └──────────────────┘     └──────────────────┘     └──────────────────┘    │
+│                                                                             │
+│         ┌─────────────────────────────────────────────────────────────┐     │
+│         │                    Sync Engine                              │     │
+│         │  - File → Database sync (on file change)                   │     │
+│         │  - Database → File sync (on API change)                    │     │
+│         │  - Conflict resolution                                     │     │
+│         │  - Filename sanitization                                   │     │
+│         └─────────────────────────────────────────────────────────────┘     │
+│                                     │                                       │
+│                                     ▼                                       │
+│  ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐    │
+│  │  Script Bank     │←────│  Scripts.json    │←────│  .pine Files     │    │
+│  │  Database        │     │  Manifest        │     │  (Individual)    │    │
+│  └──────────────────┘     └──────────────────┘     └──────────────────┘    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3. File System Structure
+```
+backend/data/
+├── scripts.json                    # Manifest: maps filenames to metadata
+├── indicators/                     # Optional subdirectory for indicators
+│   ├── sma_crossover.pine
+│   └── rsi_divergence.pine
+├── strategies/                     # Optional subdirectory for strategies
+│   ├── mean_reversion.pine
+│   └── momentum_breakout.pine
+└── libraries/                      # Optional subdirectory for libraries
+    └── math_utils.pine
+```
+
+#### 4. Data Model
+
+**File-Based Script Entry:**
+```typescript
+interface FileScriptEntry {
+  id: string;                    // UUID or hash-based ID
+  filename: string;              // Sanitized filename (e.g., "sma_crossover.pine")
+  name: string;                  // Human-readable name (e.g., "SMA Crossover")
+  source: string;                // Complete Pine Script source code
+  scriptType: "indicator" | "strategy" | "library";
+  filePath: string;              // Relative path from backend/data/scripts/
+  createdAt: number;             // Timestamp
+  updatedAt: number;             // Timestamp
+  checksum: string;              // MD5/SHA256 of source for change detection
+}
+```
+
+**Scripts Directory Manifest:**
+```typescript
+interface ScriptsManifest {
+  scripts: FileScriptEntry[];
+  lastSyncAt: number;            // Last sync timestamp
+  version: number;               // Manifest version for migration
+}
+```
+
+#### 5. Sync Engine
+
+**5.1 File → Database Sync:**
+- File watcher detects `.pine` file creation/modification/deletion
+- On creation:
+  1. Read file content
+  2. Validate Pine Script syntax (basic parse check)
+  3. Auto-detect script type from `indicator()`, `strategy()`, or `library()` calls
+  4. Extract script name from declaration
+  5. Generate unique ID (SHA256 hash of filename + first 100 chars of source)
+  6. Register in `scripts.json` manifest
+  7. Register in Script Bank database via API
+- On modification:
+  1. Read updated content
+  2. Validate syntax
+  3. Update `updatedAt` timestamp
+  4. Recompute checksum
+  5. Update manifest and database
+- On deletion:
+  1. Remove from manifest
+  2. Remove from Script Bank database
+  3. Stop any running indicators using this script
+
+**5.2 Database → File Sync:**
+- When script is created via API (`POST /api/scripts`):
+  1. Generate sanitized filename from script name
+  2. Write `.pine` file to scripts directory
+  3. Create manifest entry
+- When script is updated via API (`PUT /api/scripts/:id`):
+  1. Update corresponding `.pine` file
+  2. Update manifest entry
+- When script is deleted via API (`DELETE /api/scripts/:id`):
+  1. Delete corresponding `.pine` file
+  2. Remove manifest entry
+
+**5.3 Conflict Resolution:**
+- Last-write-wins for simultaneous API and file changes
+- File watcher events are debounced (100ms) to batch rapid changes
+- API writes acquire a file lock before writing
+- Checksum comparison prevents unnecessary updates
+
+#### 6. Filename Sanitization Rules
+1. Convert to lowercase
+2. Replace spaces with underscores
+3. Remove special characters except hyphens and underscores
+4. Truncate to 64 characters (excluding extension)
+5. Append numeric suffix for conflicts: `my_script.pine` → `my_script_1.pine`
+6. Preserve UTF-8 characters for international names
+
+#### 7. File Watcher Implementation
+- Use `chokidar` library for cross-platform file system watching
+- Watch `backend/data/scripts/**/*.pine` recursively
+- Events: `add`, `change`, `unlink`, `addDir`, `unlinkDir`
+- Debounce events by 100ms to batch rapid changes
+- Log all file operations for auditing
+- Handle watcher errors gracefully (permission issues, etc.)
+
+#### 8. REST API Extensions
+
+**File Metadata Endpoints:**
+```
+GET    /api/scripts/files                  → List all scripts with file metadata
+GET    /api/scripts/files/:id              → Get file metadata for a script
+GET    /api/scripts/files/:id/content      → Get raw file content
+POST   /api/scripts/files/sync             → Force sync from filesystem
+GET    /api/scripts/files/status           → Get sync status and last sync time
+```
+
+**Response Format:**
+```json
+{
+  "id": "abc123",
+  "filename": "sma_crossover.pine",
+  "name": "SMA Crossover",
+  "scriptType": "indicator",
+  "filePath": "indicators/sma_crossover.pine",
+  "size": 1024,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z",
+  "checksum": "a1b2c3d4e5f6..."
+}
+```
+
+#### 9. AI Agent Integration Workflow
+
+**Step 1: Agent creates script file**
+```bash
+# AI agent writes .pine file
+echo "//@version=6
+indicator('Custom RSI Divergence')
+// ... script code ..." > backend/data/scripts/indicators/rsi_divergence.pine
+```
+
+**Step 2: File watcher detects change**
+- File watcher triggers `add` event
+- Sync Engine reads file content
+- Validates syntax
+- Extracts metadata
+
+**Step 3: Script registered in database**
+- Creates entry in `scripts.json`
+- Registers via Script Bank API
+- Script appears in editor dropdown
+
+**Step 4: User loads script**
+- User selects script from dropdown
+- Source loads into editor
+- User can execute on chart
+
+#### 10. Bulk Import Support
+- Drop multiple `.pine` files in scripts directory
+- File watcher processes each file sequentially
+- Progress logged for each file
+- Errors logged but don't block other files
+- Summary report available via `/api/scripts/files/status`
+
+#### 11. Error Handling
+- Invalid syntax: file is skipped, error logged, file remains in directory
+- Filename conflict: numeric suffix appended automatically
+- File watcher failure: falls back to manual sync via API
+- Database write failure: file remains, retry on next sync
+- Permission errors: logged, file skipped
+
+#### 12. Security Considerations
+- Scripts are executed in sandboxed environment (existing)
+- File paths validated to prevent directory traversal
+- File size limits enforced (max 1MB per script)
+- Rate limiting on sync operations
+- Audit logging for all file operations
+
 ### Future Extensibility
 
 #### 1. Language Evolution
