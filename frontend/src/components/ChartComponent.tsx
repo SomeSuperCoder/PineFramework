@@ -19,9 +19,10 @@ interface ChartComponentProps {
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
   onRemoveIndicator?: (indicatorId: string) => void;
+  forceAutoScale?: boolean;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, forceAutoScale = false }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -51,6 +52,10 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       chartRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    chartRef.current?.setForceAutoScale(forceAutoScale);
+  }, [forceAutoScale]);
 
   const isLoadingHistoryRef = useRef(false);
   const fetchRef = useRef(fetchOlderOHLCV);

@@ -619,6 +619,11 @@ export class PineChart {
     this.markDirty();
   }
 
+  setForceAutoScale(enabled: boolean): void {
+    this.layout.setForceAutoScale(enabled);
+    this.markDirty();
+  }
+
   on(event: string, callback: (...args: any[]) => void): void {
     if (event === 'onCrosshairMove') {
       this.eventCallbacks.onCrosshairMove = callback;

@@ -24,6 +24,7 @@ export class LayoutManager {
   private priceRange: PriceRange = { min: 0, max: 100 };
   private autoPriceRange: PriceRange = { min: 0, max: 100 };
   private manualPriceRange: boolean = false;
+  private forceAutoScale: boolean = false;
   private volumeMax: number = 1;
   private indicatorPriceRanges: Map<string, PriceRange> = new Map();
   private indicatorAutoPriceRanges: Map<string, PriceRange> = new Map();
@@ -95,6 +96,7 @@ export class LayoutManager {
   }
 
   setManualPriceRange(min: number, max: number): void {
+    if (this.forceAutoScale) return;
     this.manualPriceRange = true;
     this.priceRange = { min, max };
   }
@@ -110,7 +112,7 @@ export class LayoutManager {
   }
 
   zoomPrice(factor: number, centerPixelY: number): void {
-    if (!this.regions) return;
+    if (!this.regions || this.forceAutoScale) return;
     const { chartArea } = this.regions;
     const centerPrice = this.pixelToPrice(centerPixelY, chartArea.y, chartArea.height);
     const { min, max } = this.priceRange;
@@ -124,7 +126,7 @@ export class LayoutManager {
   }
 
   panPrice(deltaPixels: number): void {
-    if (!this.regions) return;
+    if (!this.regions || this.forceAutoScale) return;
     const { chartArea } = this.regions;
     const { min, max } = this.priceRange;
     const range = max - min;
@@ -137,6 +139,18 @@ export class LayoutManager {
   resetAutoPriceRange(): void {
     this.manualPriceRange = false;
     this.priceRange = { ...this.autoPriceRange };
+  }
+
+  setForceAutoScale(enabled: boolean): void {
+    this.forceAutoScale = enabled;
+    if (enabled) {
+      this.manualPriceRange = false;
+      this.priceRange = { ...this.autoPriceRange };
+    }
+  }
+
+  isForceAutoScale(): boolean {
+    return this.forceAutoScale;
   }
 
   setVolumeMax(max: number): void {

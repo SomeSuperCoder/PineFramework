@@ -27,6 +27,7 @@ function App() {
   const [dataVersion, setDataVersion] = useState(0);
   const [showStrategyPopup, setShowStrategyPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
+  const [autoScale, setAutoScale] = useState(true);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
   const indicatorManager = useIndicatorManager();
@@ -166,8 +167,18 @@ function App() {
           indicatorLabels={overlayIndicatorLabels}
           indicatorResults={indicatorResults}
           onRemoveIndicator={handleRemoveIndicator}
+          forceAutoScale={autoScale}
         />
       </main>
+
+      <div className="footer-bar">
+        <button
+          className={`auto-scale-toggle ${autoScale ? 'active' : ''}`}
+          onClick={() => setAutoScale(!autoScale)}
+        >
+          {autoScale ? '⊡ Auto Scale' : '⊞ Manual Scale'}
+        </button>
+      </div>
 
       <ErrorConsole errors={errors} onClear={() => setErrors([])} />
 
