@@ -22,6 +22,7 @@ import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
 import { FileSyncEngine } from './store/FileSyncEngine.js';
 import { ScriptFileWatcher } from './store/ScriptFileWatcher.js';
 import { TelegramService } from './telegram/TelegramService.js';
+import { migrateLegacyScripts } from './migration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
@@ -137,6 +138,13 @@ server.listen(PORT, async () => {
   console.log(`Data directory: ${DATA_DIR}`);
   console.log(`Scripts directory: ${SCRIPTS_DIR}`);
   await telegramService.start();
+
+  // Migrate legacy scripts from scripts.json to file-based storage
+  const migration = migrateLegacyScripts(DATA_DIR, SCRIPTS_DIR, manifestStore);
+  if (migration.migrated > 0) {
+    console.log(`[Migration] Migrated ${migration.migrated} legacy scripts to file-based storage`);
+  }
+
   await syncEngine.fullSync();
   fileWatcher.start();
   console.log(`[FileSync] Initial sync complete, file watcher started`);
