@@ -86,6 +86,12 @@ export class FileSyncEngine {
         if (existing.checksum !== checksum) {
           await this.syncFile(filePath);
           updated++;
+        } else {
+          const script = this.scriptStore.getById(existing.id);
+          if (!script) {
+            const name = this.extractNameFromContent(content) || this.nameFromFilename(path.basename(filePath));
+            this.scriptStore.create(name, content, existing.id);
+          }
         }
         manifestFiles.delete(file);
       } else {
