@@ -352,7 +352,7 @@ x = 1 + 2
       expect(ir.globals[0]?.type.name).toBe('float');
     });
 
-    it('infers float type for comparison expressions (current implementation)', () => {
+    it('infers bool type for comparison expressions', () => {
       const source = `//@version=6
 indicator("Test")
 x = 1 < 2
@@ -360,7 +360,7 @@ x = 1 < 2
       const { ast } = parse(source);
       const { ir } = compile(ast);
 
-      expect(ir.globals[0]?.type.name).toBe('float');
+      expect(ir.globals[0]?.type.name).toBe('bool');
     });
 
     it('infers bool type for logical expressions', () => {

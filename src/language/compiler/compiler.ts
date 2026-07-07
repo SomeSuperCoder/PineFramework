@@ -8,6 +8,7 @@ import type {
 } from '../parser/ast/nodes.js';
 import {
   ANY_TYPE,
+  BOOL_TYPE,
   FLOAT_TYPE,
   NA_TYPE,
   typeFromAnnotation,
@@ -237,11 +238,17 @@ export class Compiler {
           return inferLiteralType('');
         }
 
+        const isComparison =
+          expr.operator === '>' ||
+          expr.operator === '<' ||
+          expr.operator === '>=' ||
+          expr.operator === '<=';
+
         if (leftType.isSeries || rightType.isSeries) {
-          return seriesOf(FLOAT_TYPE);
+          return isComparison ? seriesOf(BOOL_TYPE) : seriesOf(FLOAT_TYPE);
         }
 
-        return FLOAT_TYPE;
+        return isComparison ? BOOL_TYPE : FLOAT_TYPE;
       }
       case 'UnaryExpression':
         return this.inferExpressionType(expr.operand);

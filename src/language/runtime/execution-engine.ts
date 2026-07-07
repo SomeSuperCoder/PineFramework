@@ -92,6 +92,15 @@ export interface LabelEntry {
   size: string;
 }
 
+export interface BoxEntry {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  border_color: string;
+  bgcolor: string;
+}
+
 export interface AlertConditionEntry {
   id: string;
   title: string;
@@ -118,6 +127,7 @@ export interface ExecutionResult {
   fillColorData?: Map<string, (string | null)[]>;
   lines?: LineEntry[];
   labels?: LabelEntry[];
+  boxes?: BoxEntry[];
   barTimestamps?: number[];
   alertConditions?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
@@ -283,12 +293,16 @@ export class ExecutionEngine {
   private lines: Map<number, LineEntry> = new Map();
   private lineIdCounter: number = 0;
   private labels: LabelEntry[] = [];
+  private boxes: Map<number, BoxEntry> = new Map();
+  private boxIdCounter: number = 0;
   private userTypeFields: Map<string, string[]> = new Map();
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossCallIndex: number = 0;
   private crossPrevValues: Array<{ src: number; cmp: number }> = [];
+  private changeCallIndex: number = 0;
+  private changePrevValues: number[] = [];
   private atrState: Map<string, { prev: number; count: number }> = new Map();
   private rsiState: Map<
     string,
@@ -1370,6 +1384,39 @@ export class ExecutionEngine {
       return isNa(value);
     });
 
+    this.builtins.set('box', (_arg?: PineValue): PineValue => {
+      return NA;
+    });
+
+    this.builtins.set(
+      'box.new',
+      (
+        left: PineValue,
+        top: PineValue,
+        right: PineValue,
+        bottom: PineValue,
+        namedArgs?: Record<string, PineValue>,
+      ): PineValue => {
+        if (isNa(left) || isNa(top) || isNa(right) || isNa(bottom)) return NA;
+        let borderColor = '#00000000';
+        let bgcolor = '#2196f380';
+        if (typeof namedArgs === 'object' && namedArgs !== null) {
+          if (typeof namedArgs.border_color === 'string') borderColor = namedArgs.border_color;
+          if (typeof namedArgs.bgcolor === 'string') bgcolor = namedArgs.bgcolor;
+        }
+        const id = ++this.boxIdCounter;
+        this.boxes.set(id, {
+          left: left as number,
+          top: top as number,
+          right: right as number,
+          bottom: bottom as number,
+          border_color: borderColor,
+          bgcolor,
+        });
+        return id;
+      },
+    );
+
     this.builtins.set('nz', (value: PineValue, fallback?: PineValue): PineValue => {
       if (isNa(value)) return fallback !== undefined ? fallback : 0;
       return value;
@@ -1404,6 +1451,19 @@ export class ExecutionEngine {
       const result = prev.src >= prev.cmp && (source as number) < (compare as number);
       prev.src = source as number;
       prev.cmp = compare as number;
+      return result;
+    });
+
+    this.builtins.set('ta.change', (source: PineValue): PineValue => {
+      if (isNa(source)) return NA;
+      const idx = this.changeCallIndex++;
+      const prev = this.changePrevValues[idx];
+      if (prev === undefined) {
+        this.changePrevValues[idx] = source as number;
+        return NA;
+      }
+      const result = (source as number) - prev;
+      this.changePrevValues[idx] = source as number;
       return result;
     });
 
@@ -1796,6 +1856,7 @@ export class ExecutionEngine {
     this.emaCallIndex = 0;
     this.hmaCallIndex = 0;
     this.rsiCallIndex = 0;
+    this.changeCallIndex = 0;
 
     try {
       this.createSnapshot();
@@ -1839,6 +1900,7 @@ export class ExecutionEngine {
         fillColorData: this.fillColorData,
         lines: activeLines,
         labels: [...this.labels],
+        boxes: [...this.boxes.values()],
         barTimestamps: [...this.barTimestamps],
         alertConditions: [...this.alertConditionEntries],
         alertTriggers: [...this.alertTriggers],
@@ -1864,6 +1926,7 @@ export class ExecutionEngine {
         fillColorData: this.fillColorData,
         lines: activeLines,
         labels: [...this.labels],
+        boxes: [...this.boxes.values()],
         barTimestamps: [...this.barTimestamps],
         alertConditions: [...this.alertConditionEntries],
         alertTriggers: [...this.alertTriggers],
@@ -1942,6 +2005,7 @@ export class ExecutionEngine {
     const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, [...v]]));
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
     const preCrossPrevValues = [...this.crossPrevValues];
+    const preChangePrevValues = [...this.changePrevValues];
     const prePlotColors = new Map([...this.plotColors].map(([k, v]) => [k, [...v]]));
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
@@ -1966,6 +2030,7 @@ export class ExecutionEngine {
     this.smaBuffers = preSmaBuffers;
     this.emaState = preEmaState;
     this.crossPrevValues = preCrossPrevValues;
+    this.changePrevValues = preChangePrevValues;
     this.plotColors = prePlotColors;
     this.fillColorData = preFillColorData;
     this.bgcolorData.length = preBgcolorDataLen;
@@ -2651,7 +2716,13 @@ export class ExecutionEngine {
 
       const func = this.functions.get(funcName);
       if (func) {
-        return this.executeFunctionCall(func, args, scope, context);
+        return this.executeFunctionCall(
+          func,
+          args,
+          scope,
+          context,
+          `${funcName}@${expr.span.start.offset}`,
+        );
       }
     }
 
@@ -2753,7 +2824,13 @@ export class ExecutionEngine {
       // Check before line/label dispatch so user methods on numbers (e.g. close.two_pole_filter) work
       const methodFunc = this.functions.get(methodName);
       if (methodFunc) {
-        return this.executeFunctionCall(methodFunc, [obj, ...args], scope, context);
+        return this.executeFunctionCall(
+          methodFunc,
+          [obj, ...args],
+          scope,
+          context,
+          `${methodName}@${expr.span.start.offset}`,
+        );
       }
 
       // Line/label methods on returned IDs (lin.shift().delete(), line.get_x2(id), etc.)
@@ -2806,7 +2883,47 @@ export class ExecutionEngine {
             return true;
           }
           default:
-            return NA;
+            break;
+        }
+      }
+
+      // Box methods on returned IDs
+      if (typeof obj === 'number') {
+        const bx = this.boxes.get(obj);
+        if (bx) {
+          switch (methodName) {
+            case 'set_left':
+              bx.left = (args[0] as number) ?? bx.left;
+              return true;
+            case 'set_top':
+              bx.top = (args[0] as number) ?? bx.top;
+              return true;
+            case 'set_right':
+              bx.right = (args[0] as number) ?? bx.right;
+              return true;
+            case 'set_bottom':
+              bx.bottom = (args[0] as number) ?? bx.bottom;
+              return true;
+            case 'set_border_color':
+              bx.border_color = String(args[0] ?? '#00000000');
+              return true;
+            case 'set_bgcolor':
+              bx.bgcolor = String(args[0] ?? '#2196f380');
+              return true;
+            case 'get_left':
+              return bx.left;
+            case 'get_top':
+              return bx.top;
+            case 'get_right':
+              return bx.right;
+            case 'get_bottom':
+              return bx.bottom;
+            case 'delete':
+              this.boxes.delete(obj);
+              return true;
+            default:
+              return NA;
+          }
         }
       }
     }
@@ -2820,24 +2937,32 @@ export class ExecutionEngine {
     args: PineValue[],
     scope: RuntimeScope,
     context: ExecutionContext,
+    scopeKey?: string,
   ): PineValue {
     // Reuse persistent function scope across bars so var variables inside
     // methods (e.g., var float f1 = na) retain their values between bars.
-    const funcName = func.name;
+    // Use scopeKey (typically the call site's source position) so that
+    // multiple calls to the same function get independent scopes.
+    const key = scopeKey ?? func.name ?? `anon_${func.span.start.offset}`;
     let funcScope: RuntimeScope;
-    if (funcName && this.functionPersistentScopes.has(funcName)) {
-      funcScope = this.functionPersistentScopes.get(funcName)!;
+    if (this.functionPersistentScopes.has(key)) {
+      funcScope = this.functionPersistentScopes.get(key)!;
       pushBarValues(funcScope);
     } else {
       funcScope = createRuntimeScope(scope);
-      if (funcName) {
-        this.functionPersistentScopes.set(funcName, funcScope);
-      }
+      this.functionPersistentScopes.set(key, funcScope);
     }
 
     for (let i = 0; i < func.parameters.length; i++) {
       const param = func.parameters[i]!;
-      const value = i < args.length ? args[i] : NA;
+      let value: PineValue;
+      if (i < args.length) {
+        value = args[i]!;
+      } else if (param.defaultValue) {
+        value = this.executeExpression(param.defaultValue, scope, context);
+      } else {
+        value = NA;
+      }
       if (!resolveVariable(funcScope, param.name)) {
         declareVariable(funcScope, param.name, FLOAT_TYPE);
       }
