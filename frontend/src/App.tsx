@@ -85,13 +85,19 @@ function App() {
   }, [symbol, timeframe, subscribe, fetchOHLCV]);
 
   useEffect(() => {
-    if (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) {
+    const hasStrategyMarkers =
+      (scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0) ||
+      Array.from(indicatorResults.values()).some(
+        (r) => r.strategyMarkers && r.strategyMarkers.length > 0,
+      );
+
+    if (hasStrategyMarkers) {
       setIsStrategy(true);
     } else {
       setIsStrategy(false);
       setShowStrategyPopup(false);
     }
-  }, [scriptResult]);
+  }, [scriptResult, indicatorResults]);
 
   const handleAddIndicator = async (scriptId: string, source: string) => {
     setEditorOpen(false);
@@ -123,6 +129,18 @@ function App() {
       return next;
     });
   };
+
+  const strategySource = (() => {
+    const fromMain = scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0;
+    if (fromMain) return lastCodeRef.current || '';
+    for (const [id, res] of indicatorResults) {
+      if (res.strategyMarkers && res.strategyMarkers.length > 0) {
+        const ind = indicatorManager.indicators.find((i) => i.id === id);
+        return ind?.source || '';
+      }
+    }
+    return '';
+  })();
 
   const overlayIndicatorLabels = indicatorManager.getOverlayIndicators().map((i) => ({
     id: i.id,
@@ -201,7 +219,7 @@ function App() {
         onClose={() => setShowStrategyPopup(false)}
         symbol={symbol}
         timeframe={timeframe}
-        scriptSource={''}
+        scriptSource={strategySource}
       />
     </div>
   );
