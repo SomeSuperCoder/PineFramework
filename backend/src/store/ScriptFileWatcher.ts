@@ -1,5 +1,4 @@
 import * as chokidar from 'chokidar';
-import * as path from 'node:path';
 import { FileSyncEngine } from './FileSyncEngine.js';
 
 export class ScriptFileWatcher {
@@ -15,10 +14,11 @@ export class ScriptFileWatcher {
   }
 
   start(): void {
-    const pattern = path.join(this.scriptsDir, '**', '*.pine');
-    this.watcher = chokidar.watch(pattern, {
+    this.watcher = chokidar.watch(this.scriptsDir, {
       persistent: true,
       ignoreInitial: true,
+      ignored: (filePath: string, stats?: import('node:fs').Stats) =>
+        !!stats && stats.isFile() && !filePath.endsWith('.pine'),
       awaitWriteFinish: {
         stabilityThreshold: 50,
         pollInterval: 10,
@@ -32,7 +32,7 @@ export class ScriptFileWatcher {
       console.error('[ScriptFileWatcher] Error:', error);
     });
 
-    console.log(`[ScriptFileWatcher] Watching ${pattern}`);
+    console.log(`[ScriptFileWatcher] Watching ${this.scriptsDir} for *.pine files`);
   }
 
   async stop(): Promise<void> {
