@@ -95,6 +95,10 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
       setBuiltInScripts(builtInData.scripts || []);
       if (listData.scripts?.length > 0) {
         await loadScript(listData.scripts[0].id);
+      } else if (builtInData.scripts?.length > 0) {
+        const first = builtInData.scripts[0];
+        setCurrentScriptId(first.id);
+        setSource(first.source);
       }
     } catch {
       // ignore
@@ -193,8 +197,15 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
         if (next.length > 0) {
           loadScript(next[0].id);
         } else {
-          setCurrentScriptId(null);
-          setSource(DEFAULT_CODE);
+          const builtInList = builtInScriptsRef.current;
+          if (builtInList.length > 0) {
+            const first = builtInList[0];
+            setCurrentScriptId(first.id);
+            setSource(first.source);
+          } else {
+            setCurrentScriptId(null);
+            setSource(DEFAULT_CODE);
+          }
         }
         return next;
       });
@@ -262,21 +273,19 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
             )}
           </div>
           <div className="editor-actions">
-            {scripts.length > 0 && (
-              <>
-                <button onClick={handleNewScript}>New</button>
-                <button onClick={handleDelete} disabled={!currentScriptId || isBuiltIn}>Delete</button>
-                <button
-                  className="primary"
-                  onClick={() => {
-                    if (currentScriptId) onAdd(currentScriptId, source);
-                  }}
-                  disabled={!currentScriptId}
-                >
-                  Add (Ctrl+Enter)
-                </button>
-              </>
+            <button onClick={handleNewScript}>New</button>
+            {currentScript && (
+              <button onClick={handleDelete}>Delete</button>
             )}
+            <button
+              className="primary"
+              onClick={() => {
+                if (currentScriptId) onAdd(currentScriptId, source);
+              }}
+              disabled={!currentScriptId}
+            >
+              Add (Ctrl+Enter)
+            </button>
             <button onClick={onClose}>Close</button>
           </div>
         </div>
