@@ -128,9 +128,9 @@ app.use('/api', createSettingsRouter({
   },
 }));
 
+app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptStore, indicatorsStore));
 app.use('/api', createScriptFilesRouter(manifestStore, syncEngine, SCRIPTS_DIR));
-app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 
 createWSGateway(server, cache, telegramService, scriptStore, indicatorsStore);
