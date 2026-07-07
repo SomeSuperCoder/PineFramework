@@ -57,13 +57,15 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentScriptIdRef = useRef<string | null>(null);
   const sourceRef = useRef(source);
+  const builtInScriptsRef = useRef<BuiltInScript[]>([]);
 
   sourceRef.current = source;
   currentScriptIdRef.current = currentScriptId;
+  builtInScriptsRef.current = builtInScripts;
 
   const loadScript = useCallback(async (id: string) => {
     try {
-      const builtIn = builtInScripts.find((s) => s.id === id);
+      const builtIn = builtInScriptsRef.current.find((s) => s.id === id);
       if (builtIn) {
         setCurrentScriptId(builtIn.id);
         setSource(builtIn.source);
@@ -78,7 +80,7 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
     } catch {
       // ignore
     }
-  }, [builtInScripts]);
+  }, []);
 
   const loadFirstScript = useCallback(async () => {
     setLoading(true);
