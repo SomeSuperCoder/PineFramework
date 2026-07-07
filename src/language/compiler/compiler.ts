@@ -45,12 +45,10 @@ export class Compiler {
       this.compileStatement(stmt);
     }
 
-    let overlay = false;
-    if (program.scriptKind === 'indicator') {
-      for (const arg of program.scriptArgs) {
-        if (arg.name === 'overlay' && arg.value.kind === 'BooleanLiteral') {
-          overlay = arg.value.value;
-        }
+    let overlay = program.scriptKind === 'strategy';
+    for (const arg of program.scriptArgs) {
+      if (arg.name === 'overlay' && arg.value.kind === 'BooleanLiteral') {
+        overlay = arg.value.value;
       }
     }
 

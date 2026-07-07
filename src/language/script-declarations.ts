@@ -272,7 +272,7 @@ export function getDefaultConfig(type: ScriptType): ScriptConfig {
       return {
         type: 'strategy',
         title: 'Strategy',
-        overlay: false,
+        overlay: true,
         format: 'inherit',
         precision: 4,
         scale: 'inherit',
