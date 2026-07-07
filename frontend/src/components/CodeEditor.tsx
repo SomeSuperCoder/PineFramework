@@ -9,6 +9,13 @@ interface ScriptEntry {
   updatedAt: number;
 }
 
+interface BuiltInScript {
+  id: string;
+  name: string;
+  source: string;
+  type: 'strategy' | 'indicator';
+}
+
 interface CodeEditorProps {
   isOpen: boolean;
   onClose: () => void;
@@ -43,6 +50,7 @@ function extractVersion(source: string): number | null {
 export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [scripts, setScripts] = useState<ScriptEntry[]>([]);
+  const [builtInScripts, setBuiltInScripts] = useState<BuiltInScript[]>([]);
   const [currentScriptId, setCurrentScriptId] = useState<string | null>(null);
   const [source, setSource] = useState(DEFAULT_CODE);
   const [loading, setLoading] = useState(false);
@@ -55,6 +63,12 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
 
   const loadScript = useCallback(async (id: string) => {
     try {
+      const builtIn = builtInScripts.find((s) => s.id === id);
+      if (builtIn) {
+        setCurrentScriptId(builtIn.id);
+        setSource(builtIn.source);
+        return;
+      }
       const res = await fetch(`/api/scripts/${id}`);
       const data = await res.json();
       if (data.script) {
@@ -64,14 +78,19 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
     } catch {
       // ignore
     }
-  }, []);
+  }, [builtInScripts]);
 
   const loadFirstScript = useCallback(async () => {
     setLoading(true);
     try {
-      const listRes = await fetch('/api/scripts');
+      const [listRes, builtInRes] = await Promise.all([
+        fetch('/api/scripts'),
+        fetch('/api/scripts/built-in'),
+      ]);
       const listData = await listRes.json();
+      const builtInData = await builtInRes.json();
       setScripts(listData.scripts || []);
+      setBuiltInScripts(builtInData.scripts || []);
       if (listData.scripts?.length > 0) {
         await loadScript(listData.scripts[0].id);
       }
@@ -197,6 +216,8 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
   };
 
   const currentScript = scripts.find((s) => s.id === currentScriptId);
+  const currentBuiltIn = builtInScripts.find((s) => s.id === currentScriptId);
+  const isBuiltIn = !!currentBuiltIn;
 
   if (!isOpen) return null;
 
@@ -206,7 +227,7 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
         <div className="editor-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
             <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>Pine Script Editor</h2>
-            {scripts.length > 0 && (
+            {(scripts.length > 0 || builtInScripts.length > 0) && (
               <select
                 value={currentScriptId || ''}
                 onChange={handleDropdownChange}
@@ -221,9 +242,20 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
                   minWidth: 0,
                 }}
               >
-                {scripts.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
+                {scripts.length > 0 && (
+                  <optgroup label="My Scripts">
+                    {scripts.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {builtInScripts.length > 0 && (
+                  <optgroup label="Built-In Tests">
+                    {builtInScripts.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             )}
           </div>
@@ -231,7 +263,7 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
             {scripts.length > 0 && (
               <>
                 <button onClick={handleNewScript}>New</button>
-                <button onClick={handleDelete} disabled={!currentScriptId}>Delete</button>
+                <button onClick={handleDelete} disabled={!currentScriptId || isBuiltIn}>Delete</button>
                 <button
                   className="primary"
                   onClick={() => {
@@ -277,10 +309,33 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
             </span>
           </div>
         )}
+        {currentBuiltIn && (
+          <div style={{ padding: '4px 16px', background: '#0d0d18', fontSize: '11px', color: '#888', borderBottom: '1px solid #111128' }}>
+            <span style={{
+              padding: '1px 5px',
+              background: currentBuiltIn.type === 'strategy' ? '#1a3a2e' : '#2e2a1a',
+              color: currentBuiltIn.type === 'strategy' ? '#4caf50' : '#ff9800',
+              borderRadius: '3px',
+              fontSize: '10px',
+            }}>
+              {currentBuiltIn.type}
+            </span>
+            <span style={{
+              marginLeft: '6px',
+              padding: '1px 5px',
+              background: '#3e2a1a',
+              color: '#ffb74d',
+              borderRadius: '3px',
+              fontSize: '10px',
+            }}>
+              Built-In
+            </span>
+          </div>
+        )}
         <div className="editor-content">
           {loading ? (
             <div style={{ padding: '16px', color: '#888' }}>Loading scripts...</div>
-          ) : scripts.length === 0 ? (
+          ) : scripts.length === 0 && builtInScripts.length === 0 ? (
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -316,11 +371,12 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
               value={source}
               onChange={(e) => handleSourceChange(e.target.value)}
               onKeyDown={handleKeyDown}
+              readOnly={isBuiltIn}
               style={{
                 width: '100%',
                 height: '100%',
-                backgroundColor: '#1e1e1e',
-                color: '#d4d4d4',
+                backgroundColor: isBuiltIn ? '#151520' : '#1e1e1e',
+                color: isBuiltIn ? '#999' : '#d4d4d4',
                 border: 'none',
                 padding: '16px',
                 fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
@@ -329,6 +385,7 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
                 resize: 'none',
                 outline: 'none',
                 tabSize: 2,
+                cursor: isBuiltIn ? 'not-allowed' : 'text',
               }}
               spellCheck={false}
             />

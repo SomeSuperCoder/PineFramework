@@ -14,6 +14,7 @@ import { createSettingsRouter } from './routes/settings.js';
 import { createScriptsRouter } from './routes/scripts.js';
 import { createScriptFilesRouter } from './routes/scriptFiles.js';
 import { createIndicatorsRouter } from './routes/indicators.js';
+import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
 import { ScriptStore } from './store/ScriptStore.js';
@@ -31,6 +32,7 @@ const SCRIPTS_JSON_PATH = path.join(DATA_DIR, 'scripts.json');
 const INDICATORS_JSON_PATH = path.join(DATA_DIR, 'indicators.json');
 const SCRIPTS_DIR = path.join(DATA_DIR, 'scripts');
 const SCRIPTS_MANIFEST_PATH = path.join(SCRIPTS_DIR, 'manifest.json');
+const TEST_INDICATORS_DIR = path.resolve(__dirname, '..', '..', 'test_indicators');
 
 const app = express();
 const server = createServer(app);
@@ -128,6 +130,7 @@ app.use('/api', createSettingsRouter({
 
 app.use('/api', createScriptsRouter(scriptStore, indicatorsStore));
 app.use('/api', createScriptFilesRouter(manifestStore, syncEngine, SCRIPTS_DIR));
+app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 
 createWSGateway(server, cache, telegramService, scriptStore, indicatorsStore);
