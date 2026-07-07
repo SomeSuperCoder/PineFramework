@@ -2262,6 +2262,50 @@ indicator('Custom RSI Divergence')
 - Database write failure: file remains, retry on next sync
 - Permission errors: logged, file skipped
 
+### Built-In Test Indicators
+
+#### Overview
+
+The `test_indicators/` directory contains production-ready Pine Script indicator files that are loaded at startup and made available in the script editor as built-in, undeletable resources. These serve as reference implementations and allow quick validation of the engine's capabilities.
+
+#### Architecture
+
+- **Static assets**: Scripts live in `test_indicators/` as `.pine` files
+- **Backend API**: A new endpoint serves the list of built-in indicators
+- **Frontend**: Built-in indicators appear in a "Built-In" category in the script editor
+- **Execution**: Built-in scripts use the same execution path as user scripts
+
+#### API Design
+
+```
+GET /api/scripts/built-in
+Response: Array<{
+  id: string,           // "builtin_<filename>"
+  name: string,         // Display name from filename
+  source: string,       // Full script source
+  type: "indicator" | "strategy"
+}>
+```
+
+#### Frontend Behavior
+
+- Built-in scripts loaded on startup via `GET /api/scripts/built-in`
+- Displayed with a "Built-In" label and locked icon
+- Delete button hidden/disabled for built-in scripts
+- Edit mode read-only for built-in scripts
+- Add to chart button enabled — executes script normally
+- Built-in scripts NOT synced to manifest or file storage
+
+#### Script ID Convention
+
+Built-in script IDs follow the pattern `builtin_<filename>` (e.g., `builtin_macd`, `builtin_trendcraft-ict-swiftedge`) to distinguish them from user scripts.
+
+#### Security Considerations
+
+- Built-in scripts are read-only at the API level
+- No write/delete endpoints for built-in scripts
+- Source validation on load to prevent malformed scripts
+
 #### 12. Security Considerations
 - Scripts are executed in sandboxed environment (existing)
 - File paths validated to prevent directory traversal

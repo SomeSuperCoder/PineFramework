@@ -2977,8 +2977,19 @@ This implementation plan outlines the step-by-step development of a production-g
   - Verify file watcher detects changes promptly (< 200ms)
   - Verify conflict resolution works correctly
   - Verify bulk import works
-  - Run all existing tests to confirm no regressions
-  - Ask the user if questions arise.
+   - Run all existing tests to confirm no regressions
+   - Ask the user if questions arise.
+
+- [ ] 108. Built-In Test Indicators in Script Editor
+  - [ ] 108.1. Create backend endpoint `GET /api/scripts/built-in` that reads `test_indicators/*.pine` and returns script list with `id: "builtin_<filename>"`, name, source, and type
+  - [ ] 108.2. Add frontend type for built-in scripts and API call to fetch them
+  - [ ] 108.3. Display built-in scripts in a "Built-In" category in the script editor with a "Built-In" label and locked icon
+  - [ ] 108.4. Disable delete action for built-in scripts (button hidden or disabled)
+  - [ ] 108.5. Make built-in scripts read-only in the editor (no source editing)
+  - [ ] 108.6. Enable "Add to Chart" for built-in scripts — clicking executes the script on the active chart
+  - [ ] 108.7. Ensure built-in scripts are NOT synced to manifest or file-based storage
+  - [ ] 108.8. Write tests for built-in indicator API, display, and chart execution
+  - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5, 38.6, 38.7, 38.8_
 
 ## Notes
 
@@ -3179,7 +3190,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 142, "tasks": ["105.3"] },
     { "id": 143, "tasks": ["106.1", "106.2", "106.3", "106.4", "106.5", "106.6", "106.7", "106.8", "106.9", "106.10", "106.11", "106.12"] },
     { "id": 144, "tasks": ["106.13", "106.14"] },
-    { "id": 145, "tasks": ["107"] }
+    { "id": 145, "tasks": ["107"] },
+    { "id": 146, "tasks": ["108.1", "108.2", "108.3", "108.4", "108.5", "108.6", "108.7", "108.8"] }
   ]
 }
 ```

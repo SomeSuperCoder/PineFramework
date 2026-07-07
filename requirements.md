@@ -1254,3 +1254,18 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. THE existing `looksLikeUserType()` method SHALL retain its PascalCase check for standalone typed declarations (e.g., `int x = 1`) to prevent false positives where `val\nx` is misread as a typed declaration
 4. THE Parser SHALL correctly distinguish between `var typeName varName = value` (typed declaration with user type) and `variableName\nnextLine` (expression followed by new statement) by using the declaration keyword as context
 5. WHEN a user-defined type like `piv` is used as a type annotation in a `var` declaration, THE Parser SHALL parse it as a `VariableDeclarationNode` with `typeAnnotation: "piv"` and `name: "pH"`, not as a standalone expression
+
+### Requirement 38: Built-In Test Indicators in Script Editor
+
+**User Story:** As a chart analyst, I want the test indicators from `test_indicators/` to be available in the script editor as built-in, undeletable scripts that I can add to the chart, so that I can quickly test and validate indicator behavior without manually creating scripts.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL load scripts from `test_indicators/` on startup and display them in the script editor as a distinct "Built-In" category
+2. THE built-in scripts SHALL be visually distinguishable from user scripts (e.g., locked icon, different background color, or "Built-In" label)
+3. THE built-in scripts SHALL be undeletable — the delete action SHALL be disabled or hidden for built-in scripts
+4. THE built-in scripts SHALL be addable to the chart — clicking a built-in script SHALL execute it on the active chart
+5. THE built-in scripts SHALL be read-only — the editor SHALL not allow editing of built-in script source code
+6. WHEN a built-in script is added to the chart, THE system SHALL treat it the same as any user script (same rendering, same execution path)
+7. THE built-in scripts SHALL be reloaded on page refresh to reflect any updates to the `test_indicators/` directory
+8. THE built-in scripts SHALL NOT be synced to the manifest or file-based storage — they exist only in the `test_indicators/` directory as static resources
