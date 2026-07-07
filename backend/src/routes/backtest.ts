@@ -77,11 +77,11 @@ export function createBacktestRouter() {
         barIndex: i,
         barCount: bars.length,
         timestamp: bar.timestamp,
-        open: createSeries('open', [bar.open]),
-        high: createSeries('high', [bar.high]),
-        low: createSeries('low', [bar.low]),
-        close: createSeries('close', [bar.close]),
-        volume: createSeries('volume', [bar.volume]),
+        open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
+        high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
+        low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
+        close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
+        volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
       }));
 
       updateProgress(job.jobId, 20);
@@ -114,19 +114,21 @@ export function createBacktestRouter() {
 
       updateProgress(job.jobId, 90);
 
+      const sanitize = (v: number) => Number.isFinite(v) ? v : 0;
+
       job.result = {
         metrics: {
           totalTrades: metrics.totalTrades,
           winningTrades: metrics.winningTrades,
           losingTrades: metrics.losingTrades,
           winRate: metrics.winRate,
-          profitFactor: metrics.profitFactor,
+          profitFactor: sanitize(metrics.profitFactor),
           totalPnl: metrics.totalPnl,
           totalPnlPercent: metrics.totalPnlPercent,
           maxDrawdown: metrics.maxDrawdown,
           maxDrawdownPercent: metrics.maxDrawdownPercent,
-          sharpeRatio: metrics.sharpeRatio,
-          sortinoRatio: metrics.sortinoRatio,
+          sharpeRatio: sanitize(metrics.sharpeRatio),
+          sortinoRatio: sanitize(metrics.sortinoRatio),
           averageWin: metrics.averageWin,
           averageLoss: metrics.averageLoss,
           largestWin: metrics.largestWin,
@@ -359,7 +361,7 @@ async function fetchBars(
     });
 
     allBars = allBars.concat(filtered);
-    cursor = parseInt(raw[0][0], 10);
+    cursor = bars[0]!.timestamp;
     if (bars.length < limit) break;
   }
 

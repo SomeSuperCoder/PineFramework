@@ -51,7 +51,7 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
       hasSubmittedRef.current = false;
       reset();
     }
-  }, [isOpen]);
+  }, [isOpen, symbol, timeframe, scriptSource, submitBacktest, reset]);
 
   const handleRun = useCallback(() => {
     submitBacktest(
