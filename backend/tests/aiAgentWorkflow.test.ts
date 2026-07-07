@@ -6,6 +6,25 @@ import { ScriptsManifestStore } from '../src/store/ScriptsManifestStore.js';
 import { FileSyncEngine } from '../src/store/FileSyncEngine.js';
 import { DatabaseFileSync } from '../src/store/DatabaseFileSync.js';
 
+function walkDir(dir: string): string[] {
+  const files: string[] = [];
+  if (!fs.existsSync(dir)) return files;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...walkDir(fullPath));
+    } else if (entry.name.endsWith('.pine')) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function findPineFiles(dir: string): string[] {
+  return walkDir(dir);
+}
+
 function tmpDir(): string {
   const dir = path.join(os.tmpdir(), `ai-agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -95,10 +114,10 @@ describe('AI Agent Workflow Integration', () => {
     const script = scriptStore.create('API Script', '//@version=5\nindicator("API Script")');
     dbFileSync.onScriptCreated(script);
 
-    const files = fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.pine'));
+    const files = findPineFiles(scriptsDir);
     expect(files).toHaveLength(1);
 
-    const content = fs.readFileSync(path.join(scriptsDir, files[0]!), 'utf-8');
+    const content = fs.readFileSync(files[0]!, 'utf-8');
     expect(content).toContain('indicator("API Script")');
   });
 
@@ -110,8 +129,8 @@ describe('AI Agent Workflow Integration', () => {
     const updated = scriptStore.getById(script.id)!;
     dbFileSync.onScriptUpdated(updated);
 
-    const files = fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.pine'));
-    const content = fs.readFileSync(path.join(scriptsDir, files[0]!), 'utf-8');
+    const files = findPineFiles(scriptsDir);
+    const content = fs.readFileSync(files[0]!, 'utf-8');
     expect(content).toContain('indicator("Modified")');
   });
 
@@ -119,13 +138,13 @@ describe('AI Agent Workflow Integration', () => {
     const script = scriptStore.create('Delete Test', '//@version=5\nindicator("Delete Me")');
     dbFileSync.onScriptCreated(script);
 
-    const filesBefore = fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.pine'));
+    const filesBefore = findPineFiles(scriptsDir);
     expect(filesBefore).toHaveLength(1);
 
     scriptStore.delete(script.id);
     dbFileSync.onScriptDeleted(script.id);
 
-    const filesAfter = fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.pine'));
+    const filesAfter = findPineFiles(scriptsDir);
     expect(filesAfter).toHaveLength(0);
   });
 

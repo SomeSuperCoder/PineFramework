@@ -2144,23 +2144,33 @@ interface ScriptsManifest {
 **5.1 File → Database Sync:**
 - File watcher detects `.pine` file creation/modification/deletion
 - On creation:
-  1. Read file content
-  2. Validate Pine Script syntax (basic parse check)
-  3. Auto-detect script type from `indicator()`, `strategy()`, or `library()` calls
-  4. Extract script name from declaration
-  5. Generate unique ID (SHA256 hash of filename + first 100 chars of source)
-  6. Register in `scripts.json` manifest
-  7. Register in Script Bank database via API
+   1. Read file content
+   2. Validate Pine Script syntax (basic parse check)
+   3. Auto-detect script type from `indicator()`, `strategy()`, or `library()` calls
+   4. Extract script name from declaration
+   5. Generate unique ID (SHA256 hash of filename + first 100 chars of source)
+   6. Register in `scripts.json` manifest
+   7. Register in Script Bank database via API
 - On modification:
-  1. Read updated content
-  2. Validate syntax
-  3. Update `updatedAt` timestamp
-  4. Recompute checksum
-  5. Update manifest and database
+   1. Read updated content
+   2. Validate syntax
+   3. Update `updatedAt` timestamp
+   4. Recompute checksum
+   5. Update manifest and database
 - On deletion:
-  1. Remove from manifest
-  2. Remove from Script Bank database
-  3. Stop any running indicators using this script
+   1. Remove from manifest
+   2. Remove from Script Bank database
+   3. Stop any running indicators using this script
+
+**5.1a Full Sync (Startup / Manual):**
+- The `FileSyncEngine.fullSync()` method runs on backend startup and on-demand via `POST /api/scripts/files/sync`
+- Iterates every `.pine` file in the scripts directory (walking subdirectories recursively) and compares against the manifest
+- For each file:
+  - **New** (not in manifest): creates manifest entry + ScriptStore entry (same logic as file creation above)
+  - **Changed** (mismatched checksum): updates manifest + ScriptStore with new content/timestamp
+  - **Unchanged** (matching checksum): if the ScriptStore entry is missing (e.g., after restart), repopulates it — this is critical for database consistency after a full restart
+  - **Stale** (in manifest but file missing): removes manifest entry
+- After all files are processed, any manifest entries whose files no longer exist are purged
 
 **5.2 Database → File Sync:**
 - When script is created via API (`POST /api/scripts`):
@@ -2271,8 +2281,8 @@ The `test_indicators/` directory contains production-ready Pine Script indicator
 #### Architecture
 
 - **Static assets**: Scripts live in `test_indicators/` as `.pine` files
-- **Backend API**: A new endpoint serves the list of built-in indicators
-- **Frontend**: Built-in indicators appear in a "Built-In Tests" category in the script editor dropdown
+- **Backend API**: A dedicated endpoint `GET /api/scripts/built-in` serves the list of built-in indicators; the built-in router is registered **before** the generic scripts router to prevent the `/:id` catch-all from swallowing built-in requests
+- **Frontend**: Built-in indicators appear in a "Built-In Tests" optgroup in the script editor dropdown
 - **Execution**: Built-in scripts use the same execution path as user scripts
 - **Immutability**: Built-in scripts are not synced to manifest, cannot be edited, and cannot be deleted
 
@@ -2282,19 +2292,26 @@ The `test_indicators/` directory contains production-ready Pine Script indicator
 GET /api/scripts/built-in
 Response: Array<{
   id: string,           // "builtin_<filename>"
-  name: string,         // Display name from filename
+  name: string,         // Extracted from indicator("...")/strategy("...") source; falls back to basename
   source: string,       // Full script source
   type: "indicator" | "strategy"
 }>
 ```
 
+The `extractNameFromContent(source)` helper parses the `indicator("Name")` or `strategy("Name")` declaration via regex `/\b(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/` to extract the human-readable name from source, falling back to the filename's basename if no match is found.
+
 #### Frontend Behavior
 
-- Built-in scripts loaded on startup via `GET /api/scripts/built-in`
-- Displayed with "Built-In Tests" label in the script dropdown
-- Delete button hidden/disabled for built-in scripts
-- Editor disabled (read-only) for built-in scripts — source cannot be modified
-- Run button enabled — clicking executes script on active chart
+- Built-in scripts fetched on startup alongside user scripts via `Promise.all([fetch('/api/scripts'), fetch('/api/scripts/built-in')])`
+- Stored in a separate `builtInScripts` state array and mirrored in a `builtInScriptsRef` ref (the ref prevents stale closure / dependency cycles in `loadScript`)
+- The `loadScript` callback checks the built-in scripts ref first; if the target ID matches a built-in, it sets source directly from memory rather than making an API call
+- Displayed under a `"Built-In Tests"` `<optgroup>` in the script dropdown, with user scripts in a separate `"My Scripts"` optgroup
+- Active built-in script shows a type badge (indicator → amber, strategy → green) and a `"Built-In"` label below the editor header
+- **Delete button**: shown only when a user script is selected (`currentScript &&`); hidden for built-in scripts (no need to disable — the button simply does not render)
+- **Action buttons**: New, Add (Ctrl+Enter), and Close buttons are always visible regardless of whether any scripts exist — the empty state only shows when both user and built-in lists are empty
+- **Editor**: textarea is `readOnly` with darker background (`#151520`), dimmer text (`#999`), and `not-allowed` cursor for built-in scripts
+- **Auto-select on empty state**: when no user scripts exist, the first built-in script is loaded on startup (source set directly from fetched data, not via the ref-based `loadScript`, to avoid stale-ref timing issues)
+- **Delete fallback**: after deleting the last user script, the editor selects the first built-in script rather than showing the default template
 - Built-in scripts NOT synced to manifest or file storage
 
 #### Script ID Convention
