@@ -97,7 +97,10 @@ function App() {
 
     const indicator = await indicatorManager.addIndicator(
       scriptId,
-      source.match(/indicator\(\s*["'](.+?)["']/)?.[1] || 'Indicator',
+      source.match(/strategy\(\s*["'](.+?)["']/)?.[1]
+        || source.match(/indicator\(\s*["'](.+?)["']/)?.[1]
+        || source.match(/study\(\s*["'](.+?)["']/)?.[1]
+        || 'Indicator',
       true,
       source,
     );
