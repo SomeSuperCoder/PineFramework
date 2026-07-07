@@ -740,10 +740,19 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             if (removedIds) {
               for (const id of removedIds) {
                 indicatorSourcesRef.current.delete(id);
+                indicatorResultsRef.current.delete(id);
+                pendingExecuteRef.current.delete(id);
               }
               if (onIndicatorRemovedRef.current) {
                 onIndicatorRemovedRef.current(removedIds);
               }
+            }
+          } else if (data.type === 'indicator_stopped' && data.data) {
+            const stoppedId = data.data.indicatorId as string | undefined;
+            if (stoppedId) {
+              indicatorSourcesRef.current.delete(stoppedId);
+              indicatorResultsRef.current.delete(stoppedId);
+              pendingExecuteRef.current.delete(stoppedId);
             }
           } else if (data.type === 'error' && data.data) {
             setErrors((prev) => [...prev, {
@@ -995,6 +1004,11 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     indicatorResultsRef,
     registerOnIndicatorRemoved: useCallback((cb: (indicatorIds: string[]) => void) => {
       onIndicatorRemovedRef.current = cb;
+    }, []),
+    removeIndicatorData: useCallback((indicatorId: string) => {
+      indicatorResultsRef.current.delete(indicatorId);
+      indicatorSourcesRef.current.delete(indicatorId);
+      pendingExecuteRef.current.delete(indicatorId);
     }, []),
     wsRef,
   };

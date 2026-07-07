@@ -54,6 +54,7 @@ function App() {
     lastCodeRef,
     ohlcvDataRef,
     registerOnIndicatorRemoved,
+    removeIndicatorData,
     wsRef,
   } = useChartData(onIndicatorResult);
 
@@ -115,17 +116,13 @@ function App() {
       wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
     }
     await indicatorManager.removeIndicator(indicatorId);
+    removeIndicatorData(indicatorId);
     setIndicatorResults((prev) => {
       const next = new Map(prev);
       next.delete(indicatorId);
       return next;
     });
   };
-
-  useEffect(() => {
-    const unsub = registerOnIndicatorRemoved(() => {});
-    return unsub;
-  }, [registerOnIndicatorRemoved]);
 
   const overlayIndicatorLabels = indicatorManager.getOverlayIndicators().map((i) => ({
     id: i.id,
