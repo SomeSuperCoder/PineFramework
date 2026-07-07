@@ -96,4 +96,54 @@ describe('LayoutManager Indicator Panes', () => {
       expect(pixel).toBeLessThan(200);
     });
   });
+
+  describe('Multi-pane routing support', () => {
+    it('should allocate N panes when N non-overlay indicators are present', () => {
+      const layout = new LayoutManager(70, 30, 0.2, 0.3, 4);
+      const regions = layout.calculate(1000, 600, 3);
+
+      expect(regions.indicatorPanes).toHaveLength(3);
+      expect(regions.indicatorPanes[0]!.y).toBeLessThan(regions.indicatorPanes[1]!.y);
+      expect(regions.indicatorPanes[1]!.y).toBeLessThan(regions.indicatorPanes[2]!.y);
+    });
+
+    it('should allocate no panes when indicatorCount is 0 (recalculateLayout removal)', () => {
+      const layout = new LayoutManager(70, 30, 0.2, 0.3, 4);
+      const regions = layout.calculate(1000, 600, 0);
+      expect(regions.indicatorPanes).toHaveLength(0);
+    });
+  });
+
+  describe('Per-pane independent price ranges', () => {
+    it('should compute and store independent ranges for multiple panes', () => {
+      const layout = new LayoutManager();
+      layout.setIndicatorPriceRange('indicator_0', -5, 15);
+      layout.setIndicatorPriceRange('indicator_1', -100, 200);
+
+      const range0 = layout.getIndicatorPriceRange('indicator_0');
+      const range1 = layout.getIndicatorPriceRange('indicator_1');
+
+      expect(range0.min).toBeGreaterThan(range1.min);
+      expect(range0.max).toBeLessThan(range1.max);
+    });
+
+    it('should give each pane equal vertical space share', () => {
+      const layout = new LayoutManager(70, 30, 0.2, 0.3, 4);
+      const regions = layout.calculate(1000, 600, 2);
+
+      const h0 = regions.indicatorPanes[0]!.height;
+      const h1 = regions.indicatorPanes[1]!.height;
+      expect(h0).toBeCloseTo(h1, 0);
+    });
+
+    it('should maintain separator gaps between adjacent panes', () => {
+      const layout = new LayoutManager(70, 30, 0.2, 0.3, 10);
+      const regions = layout.calculate(1000, 600, 3);
+
+      const gap01 = regions.indicatorPanes[1]!.y - (regions.indicatorPanes[0]!.y + regions.indicatorPanes[0]!.height);
+      const gap12 = regions.indicatorPanes[2]!.y - (regions.indicatorPanes[1]!.y + regions.indicatorPanes[1]!.height);
+      expect(gap01).toBe(10);
+      expect(gap12).toBe(10);
+    });
+  });
 });

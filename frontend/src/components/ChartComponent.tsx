@@ -116,8 +116,10 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
     const currentTitles = new Set<string>();
     let colorIndex = 0;
+    let nonOverlayPaneIndex = 0;
 
     for (const { result } of allResults) {
+      const paneIndex = result.overlay ? undefined : nonOverlayPaneIndex++;
       for (const plot of result.plots) {
         let title = plot.title || `Plot ${colorIndex + 1}`;
         let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
@@ -139,7 +141,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
             color: plotColor,
             lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
             style: (plot.type as any) || 'line',
-          }, result.overlay);
+          }, result.overlay, paneIndex);
         }
         seriesNamesRef.current.add(title);
         chart.setPlotData(title, seriesData);

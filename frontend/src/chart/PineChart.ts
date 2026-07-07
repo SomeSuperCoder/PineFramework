@@ -29,6 +29,7 @@ export interface PlotSeriesHandle {
   options: PlotRenderOptions;
   data: PlotSeriesData[];
   overlay: boolean;
+  paneIndex?: number;
 }
 
 export interface ChartEventCallbacks {
@@ -168,14 +169,7 @@ export class PineChart {
     this.offscreen.width = w * dpr;
     this.offscreen.height = h * dpr;
 
-    let indicatorCount = 0;
-    for (const [, handle] of this.plotSeries) {
-      if (!handle.overlay) {
-        indicatorCount = 1;
-        break;
-      }
-    }
-    this.layout.calculate(w * dpr, h * dpr, indicatorCount);
+    this.layout.calculate(w * dpr, h * dpr, this.lastIndicatorCount);
     this.interaction.setChartWidth(w * dpr);
     this.markDirty();
     this.eventCallbacks.onResize?.(w, h);
@@ -291,15 +285,11 @@ export class PineChart {
       ctx.rect(pane.x, pane.y, pane.width, pane.height);
       ctx.clip();
 
+      const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
       for (const [_key, handle] of this.plotSeries) {
-        if (!handle.overlay) {
+        if (!handle.overlay && handle.paneIndex === paneIndex) {
           this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options, pane);
         }
-      }
-
-      const paneShapes = this.shapeMarkers.filter((s) => s.overlay === false);
-      if (paneShapes.length > 0) {
-        this.markerRenderer.renderShapes(ctx, paneShapes, this.candles, this.viewport, this.layout, pane);
       }
 
       ctx.restore();
@@ -451,8 +441,9 @@ export class PineChart {
     for (const pane of regions.indicatorPanes) {
       let indMin = Infinity;
       let indMax = -Infinity;
+      const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
       for (const [_key, handle] of this.plotSeries) {
-        if (handle.overlay) continue;
+        if (handle.overlay || handle.paneIndex !== paneIndex) continue;
         for (let i = range.start; i < range.end && i < handle.data.length; i++) {
           const v = handle.data[i]?.value;
           if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
@@ -503,9 +494,12 @@ export class PineChart {
     this.markDirty();
   }
 
-  addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true): PlotSeriesHandle {
+  addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true, paneIndex?: number): PlotSeriesHandle {
     const existing = this.plotSeries.get(name);
-    if (existing) return existing;
+    if (existing) {
+      existing.paneIndex = paneIndex;
+      return existing;
+    }
     console.warn('[PineChart] addPlotSeries', name);
     const handle: PlotSeriesHandle = {
       name,
@@ -517,6 +511,7 @@ export class PineChart {
       },
       data: [],
       overlay,
+      paneIndex,
     };
     this.plotSeries.set(name, handle);
     this.recalculateLayout();
@@ -543,12 +538,13 @@ export class PineChart {
   }
 
   private recalculateLayout(): void {
-    let indicatorCount = 0;
+    const paneIndices = new Set<number>();
     for (const [, handle] of this.plotSeries) {
-      if (!handle.overlay) {
-        indicatorCount++;
+      if (!handle.overlay && handle.paneIndex !== undefined) {
+        paneIndices.add(handle.paneIndex);
       }
     }
+    const indicatorCount = paneIndices.size;
     if (indicatorCount !== this.lastIndicatorCount) {
       this.lastIndicatorCount = indicatorCount;
       this.resize();

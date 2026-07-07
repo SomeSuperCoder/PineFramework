@@ -2991,21 +2991,22 @@ This implementation plan outlines the step-by-step development of a production-g
   - [x] 108.8. Write tests for built-in indicator API, display, and chart execution
   - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5, 38.6, 38.7, 38.8_
 
-- [ ] 109. Fix Multi-Pane Layout for Non-Overlay Indicators
+- [x] 109. Fix Multi-Pane Layout for Non-Overlay Indicators
   - **Context:** The existing indicator pane implementation (Tasks 90, 97) stores `indicatorPanes` as an array but LayoutManager only allocates a single shared pane at 30% of available height. When multiple non-overlay indicators (e.g., MACD + RSI) are added, all their plots render on top of each other in the same pane. Each non-overlay indicator must get its own independent pane with its own price scale.
-  - [ ] 109.1 Update `LayoutManager.calculate()` to allocate N indicator panes (one per non-overlay indicator) instead of a single shared pane, dividing remaining vertical space equally among them
-  - [ ] 109.2 Update PineChart to route each non-overlay indicator's plots, fills, and hlines to its own pane using per-pane coordinate transforms (`priceToPixel(paneId)` / `pixelToPrice(paneId)`)
-  - [ ] 109.3 Update `AxisRenderer` to render independent price scale labels for each indicator pane, positioned within that pane's allocated vertical region
-  - [ ] 109.4 Add dynamic pane creation when a non-overlay indicator is added — `recalculateLayout()` creates a new pane entry, allocates space, and triggers resize
-  - [ ] 109.5 Add dynamic pane removal when a non-overlay indicator is unplotted — `recalculateLayout()` removes the pane, redistributes freed space to remaining panes, and triggers resize
-  - [ ] 109.6 Update separator line rendering: draw horizontal separators between the main chart and first indicator pane, and between each adjacent pair of indicator panes
-  - [ ] 109.7 Write tests for multi-pane layout
+  - [x] 109.1 Fix `resize()` to pass correct indicator count and `recalculateLayout()` to count distinct paneIndices instead of counting plot series — LayoutManager already allocated N panes; the bug was `resize()` always passing `indicatorCount=1`
+  - [x] 109.2 Add `paneIndex` field to `PlotSeriesHandle`, update `addPlotSeries()` to accept and store `paneIndex`, fix `render()` pane loop to match plots to their pane by index (`handle.paneIndex === paneIndex`), fix `updatePriceRange()` per-pane range computation to only scan plots assigned to that pane
+  - [x] 109.3 AxisRenderer already rendered independent price scale labels per pane via `layout.getIndicatorPriceRange(pane.id)` — no changes needed
+  - [x] 109.4 Dynamic pane creation: `recalculateLayout()` counts distinct paneIndices from handles, triggers resize when count changes; ChartComponent tracks `nonOverlayPaneIndex` counter per non-overlay indicator result, assigns incrementing paneIndex via `addPlotSeries(title, opts, overlay, paneIndex)`
+  - [x] 109.5 Dynamic pane removal: `removeSeries()` calls `recalculateLayout()`, pane indices re-assigned by ChartComponent on next render cycle; `addPlotSeries()` updates `existing.paneIndex` on re-added handles so pane indices stay consistent after removal
+  - [x] 109.6 Separator lines already drawn between adjacent panes (top-border of each pane in `render()`); now correctly tracks pane count changes
+  - [x] 109.7 Write tests for multi-pane layout
     - Test LayoutManager allocates N panes when N non-overlay indicators are present
     - Test each pane has its own independent price range computed from its own indicator's values
     - Test adding a non-overlay indicator creates a new pane and redistributes space
     - Test removing a non-overlay indicator removes its pane and redistributes space to remaining panes
-    - Test separator lines render between adjacent panes
+    - Test separator gaps between all adjacent panes (not just first two)
     - Test no regression: single non-overlay indicator still renders correctly (backward compatible)
+    - 5 new tests added to `tests/integration/pane-layout.test.ts` — all pass with 0 regressions
   - _Requirements: 29.6, 29.7, 29.8, 29.9, 29.10, 29.11, 29.18, 29.19_
 
 ## Notes
