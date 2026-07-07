@@ -2,6 +2,11 @@ import { Router } from 'express';
 import { readdirSync, readFileSync } from 'fs';
 import { join, basename } from 'path';
 
+function extractNameFromContent(source: string): string | null {
+  const match = source.match(/\b(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/);
+  return match ? match[1] : null;
+}
+
 export function createBuiltInScriptsRouter(testIndicatorsDir: string): Router {
   const router = Router();
 
@@ -10,9 +15,9 @@ export function createBuiltInScriptsRouter(testIndicatorsDir: string): Router {
       const files = readdirSync(testIndicatorsDir).filter((f) => f.endsWith('.pine'));
       const scripts = files.map((file) => {
         const source = readFileSync(join(testIndicatorsDir, file), 'utf-8');
-        const name = basename(file, '.pine');
+        const name = extractNameFromContent(source) || basename(file, '.pine');
         return {
-          id: `builtin_${name}`,
+          id: `builtin_${basename(file, '.pine')}`,
           name,
           source,
           type: source.includes('strategy(') ? 'strategy' as const : 'indicator' as const,

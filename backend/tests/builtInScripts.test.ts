@@ -67,13 +67,13 @@ describe('createBuiltInScriptsRouter', () => {
     expect(res._json.scripts[0].id).toBe('builtin_macd');
   });
 
-  it('extracts name from filename', () => {
+  it('extracts name from indicator() call in source', () => {
     fs.writeFileSync(path.join(dir, 'my-indicator.pine'), '//@version=6\nindicator("My Indicator")');
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
     router.handle(mockReq('GET', '/scripts/built-in'), res);
-    expect(res._json.scripts[0].name).toBe('my-indicator');
+    expect(res._json.scripts[0].name).toBe('My Indicator');
   });
 
   it('detects indicator type', () => {
