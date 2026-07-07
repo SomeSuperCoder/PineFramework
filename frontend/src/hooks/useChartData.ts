@@ -25,6 +25,7 @@ interface ExecuteResponse {
   bgcolor?: Array<{ time: number; color: string }>;
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
   barTimestamps?: number[];
   maxLookback?: number;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
@@ -56,6 +57,7 @@ interface ExecutionResultMessage {
   bgcolor?: Array<{ time: number; color: string }>;
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
   barTimestamps?: number[];
   formingCandle?: boolean;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
@@ -80,6 +82,7 @@ function buildScriptResult(
   barTimestamps?: number[],
   alertConditions?: Array<{ id: string; title: string; message: string }>,
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>,
+  boxes?: ExecutionResultMessage['boxes'],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -158,7 +161,14 @@ function buildScriptResult(
       width: l.width,
       style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
     })),
-    boxes: [],
+    boxes: (boxes || []).map((b) => ({
+      startTime: Math.floor(b.startTime / 1000),
+      startPrice: b.startPrice,
+      endTime: Math.floor(b.endTime / 1000),
+      endPrice: b.endPrice,
+      borderColor: b.borderColor,
+      backgroundColor: b.backgroundColor,
+    })),
     labels: (labels || []).map((l) => ({
       time: Math.floor(l.time / 1000),
       price: l.price,
@@ -311,6 +321,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.barTimestamps,
             execResult.alertConditions,
             execResult.alertTriggers,
+            execResult.boxes,
           );
 
           const prev = indicatorResultsRef.current.get(indId);
@@ -400,6 +411,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     }
 
     const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];
+    const mergedBoxes = [...(newResult.boxes || []), ...(prev.boxes || [])];
 
     return {
       ...prev,
@@ -412,6 +424,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       fillColorData: mergedFillColorData,
       plotColors: mergedPlotColors,
       bgcolor: mergedBgcolor,
+      boxes: mergedBoxes,
     };
   }, []);
 
@@ -536,6 +549,18 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor.map((b) => ({ time: Math.floor(b.time / 1000), color: b.color }))]
       : prev.bgcolor;
 
+    const diffBoxes = (msg.boxes || []).map((b) => ({
+      startTime: Math.floor(b.startTime / 1000),
+      startPrice: b.startPrice,
+      endTime: Math.floor(b.endTime / 1000),
+      endPrice: b.endPrice,
+      borderColor: b.borderColor,
+      backgroundColor: b.backgroundColor,
+    }));
+    const mergedBoxes = diffBoxes.length > 0
+      ? [...(prev.boxes || []).slice(0, -diffBoxes.length || undefined), ...diffBoxes]
+      : (prev.boxes || []);
+
     return {
       ...prev,
       plots: mergedPlots,
@@ -547,6 +572,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       plotColors: mergedPlotColors,
       fillColorData: mergedFillColorData,
       bgcolor: mergedBgcolor,
+      boxes: mergedBoxes,
     };
   }, []);
 
@@ -586,6 +612,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           msg.barTimestamps,
           msg.alertConditions,
           msg.alertTriggers,
+          msg.boxes,
         );
         indicatorResultsRef.current.set(msg.indicatorId, result);
         onIndicatorResult(msg.indicatorId, result);
@@ -636,6 +663,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         barTimestamps,
         msg.alertConditions,
         msg.alertTriggers,
+        msg.boxes,
       );
       setScriptResult(result);
     }
@@ -861,6 +889,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.barTimestamps,
                 seedResult.alertConditions,
                 seedResult.alertTriggers,
+                seedResult.boxes,
               );
 
               // Trim seed bar data from plot results — seed bars are not in
@@ -916,6 +945,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         result.barTimestamps,
         result.alertConditions,
         result.alertTriggers,
+        result.boxes,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;

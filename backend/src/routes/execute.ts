@@ -109,6 +109,16 @@ executeRouter.post('/execute', async (req, res) => {
       size: l.size,
     }));
 
+    const barTimestampsForBoxes = result.barTimestamps ?? [];
+    const boxes = (result.boxes || []).map((b) => ({
+      startTime: b.left < barTimestampsForBoxes.length ? (barTimestampsForBoxes[b.left] ?? 0) : 0,
+      startPrice: b.top,
+      endTime: b.right < barTimestampsForBoxes.length ? (barTimestampsForBoxes[b.right] ?? 0) : 0,
+      endPrice: b.bottom,
+      borderColor: b.border_color,
+      backgroundColor: b.bgcolor,
+    }));
+
     const resultAny = result as unknown as Record<string, unknown>;
     const alertConditions: Array<{ id: string; title: string; message: string }> = [];
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
@@ -140,6 +150,7 @@ executeRouter.post('/execute', async (req, res) => {
       strategyMarkers,
       lines,
       labels,
+      boxes,
       barTimestamps: result.barTimestamps ?? [],
       maxLookback: result.maxLookback ?? 0,
       alertConditions,

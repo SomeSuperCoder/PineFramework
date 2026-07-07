@@ -164,6 +164,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     const allDrawingLines: DrawingLineData[] = [];
     const allChartLabels: LabelData[] = [];
     const allAlertTriggers: import('../types').AlertTriggerData[] = [];
+    const allBoxes: import('../types').BoxData[] = [];
 
     for (const { result } of allResults) {
       for (const m of (result.strategyMarkers || [])) {
@@ -193,6 +194,9 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       }
       for (const t of (result.alertTriggers || [])) {
         allAlertTriggers.push(t);
+      }
+      for (const b of (result.boxes || [])) {
+        allBoxes.push(b);
       }
     }
 
@@ -237,6 +241,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }
     chart.setDrawingLines(allDrawingLines);
     chart.setLabels(allChartLabels);
+    chart.setBoxes(allBoxes);
     chart.setMarkers(allShapeMarkers);
     chart.setBgColors(allBgColorsMap);
     chart.setHLines([]);

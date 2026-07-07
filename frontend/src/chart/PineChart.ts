@@ -7,6 +7,7 @@ import type {
   HLineData,
   DrawingLineData,
   LabelData,
+  BoxData,
   ChartOptions,
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
@@ -74,6 +75,7 @@ export class PineChart {
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
   private chartLabels: LabelData[] = [];
+  private boxes: BoxData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private lastIndicatorCount: number = 0;
   private container: HTMLElement;
@@ -307,6 +309,7 @@ export class PineChart {
     this.markerRenderer.renderAlertTriggers(ctx, this.alertTriggers, this.candles, this.viewport, this.layout);
 
     this.renderLabels(ctx);
+    this.renderBoxes(ctx);
 
     this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
     this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
@@ -383,6 +386,35 @@ export class PineChart {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, x, by + bh / 2);
+      ctx.restore();
+    }
+  }
+
+  private renderBoxes(ctx: CanvasRenderingContext2D): void {
+    if (this.boxes.length === 0) return;
+    const regions = this.layout.getRegions();
+    const { chartArea } = regions;
+    for (const box of this.boxes) {
+      const startIdx = this.findBarIndex(box.startTime);
+      const endIdx = this.findBarIndex(box.endTime);
+      const x1 = this.viewport.barIndexToPixel(startIdx);
+      const x2 = this.viewport.barIndexToPixel(endIdx) + this.viewport.getBarSpacing();
+      const y1 = this.layout.priceToPixel(box.startPrice, chartArea.y, chartArea.height);
+      const y2 = this.layout.priceToPixel(box.endPrice, chartArea.y, chartArea.height);
+      const top = Math.min(y1, y2);
+      const bottom = Math.max(y1, y2);
+      const left = Math.min(x1, x2);
+      const right = Math.max(x1, x2);
+      ctx.save();
+      if (box.backgroundColor && box.backgroundColor !== 'rgba(0,0,0,0)' && box.backgroundColor !== 'transparent') {
+        ctx.fillStyle = this.cssColor(box.backgroundColor);
+        ctx.fillRect(left, top, right - left, bottom - top);
+      }
+      if (box.borderColor) {
+        ctx.strokeStyle = this.cssColor(box.borderColor);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left, top, right - left, bottom - top);
+      }
       ctx.restore();
     }
   }
@@ -474,6 +506,11 @@ export class PineChart {
 
   setLabels(labels: LabelData[]): void {
     this.chartLabels = labels;
+    this.markDirty();
+  }
+
+  setBoxes(boxes: BoxData[]): void {
+    this.boxes = boxes;
     this.markDirty();
   }
 

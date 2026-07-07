@@ -33,6 +33,7 @@ export interface ScriptOutputs {
   bgcolor?: Array<{ time: number; color: string }>;
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
+  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
   barTimestamps?: number[];
   barIndex: number;
   formingCandle?: boolean;
@@ -200,6 +201,16 @@ export class ScriptSession {
       size: l.size,
     }));
 
+    const barTimestampsForBoxes = result.barTimestamps ?? [];
+    const boxes = (result.boxes || []).map((b) => ({
+      startTime: b.left < barTimestampsForBoxes.length ? (barTimestampsForBoxes[b.left] ?? 0) : 0,
+      startPrice: b.top,
+      endTime: b.right < barTimestampsForBoxes.length ? (barTimestampsForBoxes[b.right] ?? 0) : 0,
+      endPrice: b.bottom,
+      borderColor: b.border_color,
+      backgroundColor: b.bgcolor,
+    }));
+
     const resultAny = result as unknown as Record<string, unknown>;
     const alertConditions: Array<{ id: string; title: string; message: string }> = [];
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
@@ -235,6 +246,7 @@ export class ScriptSession {
       bgcolor: result.bgcolor,
       lines,
       labels,
+      boxes,
       barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
       isConfirmed: true,
