@@ -2983,10 +2983,10 @@ This implementation plan outlines the step-by-step development of a production-g
 - [ ] 108. Built-In Test Indicators in Script Editor
   - [ ] 108.1. Create backend endpoint `GET /api/scripts/built-in` that reads `test_indicators/*.pine` and returns script list with `id: "builtin_<filename>"`, name, source, and type
   - [ ] 108.2. Add frontend type for built-in scripts and API call to fetch them
-  - [ ] 108.3. Display built-in scripts in a "Built-In" category in the script editor with a "Built-In" label and locked icon
+  - [ ] 108.3. Display built-in scripts in a "Built-In Tests" category in the script editor dropdown
   - [ ] 108.4. Disable delete action for built-in scripts (button hidden or disabled)
-  - [ ] 108.5. Make built-in scripts read-only in the editor (no source editing)
-  - [ ] 108.6. Enable "Add to Chart" for built-in scripts — clicking executes the script on the active chart
+  - [ ] 108.5. Make built-in scripts uneditable — editor disabled/read-only for built-in scripts
+  - [ ] 108.6. Enable "Run on Chart" for built-in scripts — clicking executes the script on the active chart
   - [ ] 108.7. Ensure built-in scripts are NOT synced to manifest or file-based storage
   - [ ] 108.8. Write tests for built-in indicator API, display, and chart execution
   - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5, 38.6, 38.7, 38.8_

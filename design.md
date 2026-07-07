@@ -2266,14 +2266,15 @@ indicator('Custom RSI Divergence')
 
 #### Overview
 
-The `test_indicators/` directory contains production-ready Pine Script indicator files that are loaded at startup and made available in the script editor as built-in, undeletable resources. These serve as reference implementations and allow quick validation of the engine's capabilities.
+The `test_indicators/` directory contains production-ready Pine Script indicator files that are loaded at startup and made available in the script editor as built-in, uneditable, undeletable resources. These serve as reference implementations and allow quick validation of the engine's capabilities. Users can only run them on the chart — they cannot modify or remove them.
 
 #### Architecture
 
 - **Static assets**: Scripts live in `test_indicators/` as `.pine` files
 - **Backend API**: A new endpoint serves the list of built-in indicators
-- **Frontend**: Built-in indicators appear in a "Built-In" category in the script editor
+- **Frontend**: Built-in indicators appear in a "Built-In Tests" category in the script editor dropdown
 - **Execution**: Built-in scripts use the same execution path as user scripts
+- **Immutability**: Built-in scripts are not synced to manifest, cannot be edited, and cannot be deleted
 
 #### API Design
 
@@ -2290,10 +2291,10 @@ Response: Array<{
 #### Frontend Behavior
 
 - Built-in scripts loaded on startup via `GET /api/scripts/built-in`
-- Displayed with a "Built-In" label and locked icon
+- Displayed with "Built-In Tests" label in the script dropdown
 - Delete button hidden/disabled for built-in scripts
-- Edit mode read-only for built-in scripts
-- Add to chart button enabled — executes script normally
+- Editor disabled (read-only) for built-in scripts — source cannot be modified
+- Run button enabled — clicking executes script on active chart
 - Built-in scripts NOT synced to manifest or file storage
 
 #### Script ID Convention
