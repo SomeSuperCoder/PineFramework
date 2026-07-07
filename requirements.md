@@ -1066,16 +1066,16 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. THE Execution Engine SHALL include `overlay: boolean` in `ExecutionResult` so downstream layers know which pane the script belongs to
 4. THE Backend SHALL include `overlay` in both REST `/api/execute` and WebSocket `execution_result` responses
 5. THE Frontend SHALL separate plots into overlay plots (rendered on main chart) and non-overlay plots (rendered in a separate pane below)
-6. THE Frontend `LayoutManager` SHALL allocate vertical space for an indicator pane below the main chart area when non-overlay indicators are present
-7. THE Frontend indicator pane SHALL have its own independent price scale (Y-axis) computed from the indicator's output values
-8. THE Frontend SHALL render non-overlay plot lines, histograms, fills, and hlines within the indicator pane's coordinate space
-9. THE Frontend SHALL render the indicator pane's own price scale labels on the right side
-10. THE Frontend SHALL maintain a horizontal separator line between the main chart and indicator panes
+6. THE Frontend `LayoutManager` SHALL allocate vertical space for one indicator pane per non-overlay indicator below the main chart area
+7. THE Frontend SHALL give each indicator pane its own independent price scale (Y-axis) computed from its respective indicator's output values
+8. THE Frontend SHALL render each non-overlay indicator's plot lines, histograms, fills, and hlines within its own pane's coordinate space
+9. THE Frontend SHALL render each indicator pane's own price scale labels on the right side, positioned within that pane's allocated vertical region
+10. THE Frontend SHALL maintain horizontal separator lines between the main chart and the first indicator pane, and between adjacent indicator panes
 11. WHERE multiple non-overlay scripts exist, THE Frontend SHALL stack them vertically, each in its own pane with its own price scale
 12. THE MACD indicator (`test_indicators/macd.pine`) SHALL render its histogram, MACD line, and signal line in a separate pane below the price chart
 13. THE Frontend SHALL synchronize horizontal scrolling and zooming across all panes (main + indicator)
-14. THE Frontend SHALL autoscale indicator pane price ranges when the user scrolls or pans the chart horizontally, recomputing the visible min/max from indicator values within the current viewport after each scroll or pan interaction
-15. THE Frontend SHALL autoscale indicator pane price ranges when the chart zooms in or out, adjusting the Y-axis to fit all indicator values visible in the new viewport
+14. THE Frontend SHALL autoscale each indicator pane's price range when the user scrolls or pans the chart horizontally, recomputing the visible min/max from indicator values within the current viewport after each scroll or pan interaction
+15. THE Frontend SHALL autoscale each indicator pane's price range when the chart zooms in or out, adjusting the Y-axis to fit all indicator values visible in the new viewport
 16. WHERE autoscaling is active, THE Frontend SHALL ignore any manual price range setting for indicator panes and recompute from visible data on every viewport change
 17. THE Frontend SHALL provide a smooth transition when autoscaling indicator panes, avoiding flicker or jarring jumps during scroll interactions
 

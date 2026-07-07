@@ -2991,6 +2991,23 @@ This implementation plan outlines the step-by-step development of a production-g
   - [x] 108.8. Write tests for built-in indicator API, display, and chart execution
   - _Requirements: 38.1, 38.2, 38.3, 38.4, 38.5, 38.6, 38.7, 38.8_
 
+- [ ] 109. Fix Multi-Pane Layout for Non-Overlay Indicators
+  - **Context:** The existing indicator pane implementation (Tasks 90, 97) stores `indicatorPanes` as an array but LayoutManager only allocates a single shared pane at 30% of available height. When multiple non-overlay indicators (e.g., MACD + RSI) are added, all their plots render on top of each other in the same pane. Each non-overlay indicator must get its own independent pane with its own price scale.
+  - [ ] 109.1 Update `LayoutManager.calculate()` to allocate N indicator panes (one per non-overlay indicator) instead of a single shared pane, dividing remaining vertical space equally among them
+  - [ ] 109.2 Update PineChart to route each non-overlay indicator's plots, fills, and hlines to its own pane using per-pane coordinate transforms (`priceToPixel(paneId)` / `pixelToPrice(paneId)`)
+  - [ ] 109.3 Update `AxisRenderer` to render independent price scale labels for each indicator pane, positioned within that pane's allocated vertical region
+  - [ ] 109.4 Add dynamic pane creation when a non-overlay indicator is added — `recalculateLayout()` creates a new pane entry, allocates space, and triggers resize
+  - [ ] 109.5 Add dynamic pane removal when a non-overlay indicator is unplotted — `recalculateLayout()` removes the pane, redistributes freed space to remaining panes, and triggers resize
+  - [ ] 109.6 Update separator line rendering: draw horizontal separators between the main chart and first indicator pane, and between each adjacent pair of indicator panes
+  - [ ] 109.7 Write tests for multi-pane layout
+    - Test LayoutManager allocates N panes when N non-overlay indicators are present
+    - Test each pane has its own independent price range computed from its own indicator's values
+    - Test adding a non-overlay indicator creates a new pane and redistributes space
+    - Test removing a non-overlay indicator removes its pane and redistributes space to remaining panes
+    - Test separator lines render between adjacent panes
+    - Test no regression: single non-overlay indicator still renders correctly (backward compatible)
+  - _Requirements: 29.6, 29.7, 29.8, 29.9, 29.10, 29.11, 29.18, 29.19_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3191,7 +3208,8 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 143, "tasks": ["106.1", "106.2", "106.3", "106.4", "106.5", "106.6", "106.7", "106.8", "106.9", "106.10", "106.11", "106.12"] },
     { "id": 144, "tasks": ["106.13", "106.14"] },
     { "id": 145, "tasks": ["107"] },
-    { "id": 146, "tasks": ["108.1", "108.2", "108.3", "108.4", "108.5", "108.6", "108.7", "108.8"] }
+    { "id": 146, "tasks": ["108.1", "108.2", "108.3", "108.4", "108.5", "108.6", "108.7", "108.8"] },
+    { "id": 147, "tasks": ["109.1", "109.2", "109.3", "109.4", "109.5", "109.6", "109.7"] }
   ]
 }
 ```
