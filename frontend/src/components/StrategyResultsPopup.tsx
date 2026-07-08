@@ -39,7 +39,7 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
       const scriptParams = extractStrategyParams(scriptSource);
       const merged = { ...defaultConfig, ...scriptParams };
       setConfig(merged);
-      if (!hasSubmittedRef.current) {
+      if (!hasSubmittedRef.current && scriptSource) {
         hasSubmittedRef.current = true;
         submitBacktest(
           symbol,
