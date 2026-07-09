@@ -89,6 +89,9 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           flex: 1,
           overflowY: 'auto',
           padding: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}>
           {(status === null || status === 'queued' || status === 'running') && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>

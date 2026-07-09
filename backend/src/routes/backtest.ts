@@ -34,6 +34,7 @@ export function createBacktestRouter() {
 
   async function runBacktest(job: BacktestJob): Promise<void> {
     try {
+      job.status = 'running';
       console.log('[backtest] runBacktest starting: jobId=%s, symbol=%s, script length=%d', job.jobId, job.symbol, (job.config.script as string)?.length || 0);
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
