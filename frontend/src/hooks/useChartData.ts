@@ -813,9 +813,10 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const executeScript = useCallback(async (code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => {
     setErrors([]);
-    lastCodeRef.current = code;
     if (indicatorId) {
       indicatorSourcesRef.current.set(indicatorId, { source: code, symbol, interval, maxLookback: 0 });
+    } else {
+      lastCodeRef.current = code;
     }
     try {
       let barsToExecute = existingBars;
@@ -1010,6 +1011,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       indicatorSourcesRef.current.delete(indicatorId);
       pendingExecuteRef.current.delete(indicatorId);
     }, []),
+    indicatorSourcesRef,
     wsRef,
   };
 }

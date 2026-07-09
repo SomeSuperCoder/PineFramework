@@ -39,7 +39,10 @@ export function useIndicatorManager() {
     source: string,
   ): Promise<RunningIndicator | null> => {
     const existing = indicators.find((i) => i.scriptId === scriptId);
-    if (existing) return existing;
+    if (existing) {
+      setIndicators((prev) => prev.map((i) => i.scriptId === scriptId ? { ...i, source } : i));
+      return { ...existing, source };
+    }
 
     try {
       const res = await fetch('/api/indicators', {

@@ -52,9 +52,9 @@ function App() {
     subscribe,
     setErrors,
     lastCodeRef,
-    ohlcvDataRef,
     registerOnIndicatorRemoved,
     removeIndicatorData,
+    indicatorSourcesRef,
     wsRef,
   } = useChartData(onIndicatorResult);
 
@@ -136,7 +136,10 @@ function App() {
     for (const [id, res] of indicatorResults) {
       if (res.strategyMarkers && res.strategyMarkers.length > 0) {
         const ind = indicatorManager.indicators.find((i) => i.id === id);
-        return ind?.source || '';
+        if (ind?.source) return ind.source;
+        const fromRef = indicatorSourcesRef.current.get(id);
+        if (fromRef?.source) return fromRef.source;
+        return '';
       }
     }
     return '';

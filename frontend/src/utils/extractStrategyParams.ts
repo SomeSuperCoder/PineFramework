@@ -3,6 +3,8 @@ import type { BacktestConfig } from '../types';
 export function extractStrategyParams(source: string): Partial<BacktestConfig> {
   const params: Partial<BacktestConfig> = {};
 
+  if (!source) return params;
+
   const strategyMatch = source.match(/strategy\s*\(([\s\S]*?)\)/i);
   if (!strategyMatch) return params;
 
