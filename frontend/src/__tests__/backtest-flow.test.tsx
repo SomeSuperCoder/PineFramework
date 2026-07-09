@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrategyResultsPopup } from '../components/StrategyResultsPopup';
+import { BacktestSettingsPopup } from '../components/BacktestSettingsPopup';
 import { BacktestResults } from '../components/BacktestResults';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestResultResponse } from '../types';
@@ -85,18 +86,11 @@ const MOCK_RESULT: BacktestResultResponse = {
 };
 
 describe('Backtest Flow Integration', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
-    fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    vi.useFakeTimers({ shouldAdvanceTime: true });
     try { localStorage.clear(); } catch { /* jsdom no localStorage */ }
   });
 
   afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
     try { localStorage.clear(); } catch { /* jsdom no localStorage */ }
   });
 
@@ -122,86 +116,53 @@ describe('Backtest Flow Integration', () => {
     });
   });
 
-  describe('StrategyResultsPopup', () => {
+  describe('BacktestSettingsPopup', () => {
     it('does not render when isOpen is false', () => {
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={false}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
         />
       );
-      expect(screen.queryByText('Backtest Results')).not.toBeInTheDocument();
+      expect(screen.queryByText('Backtest Settings')).not.toBeInTheDocument();
     });
 
-    it('renders settings panel when opened', () => {
+    it('renders settings when opened', () => {
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
         />
       );
-      expect(screen.getByText('Backtest Results')).toBeInTheDocument();
+      expect(screen.getByText('Backtest Settings')).toBeInTheDocument();
       expect(screen.getByText('Run Backtest')).toBeInTheDocument();
+      expect(screen.getByText('Cancel')).toBeInTheDocument();
     });
 
-    it('does NOT auto-submit backtest on open', async () => {
+    it('pre-populates settings from strategy declaration', () => {
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
         />
       );
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
-      });
-
-      expect(fetchMock).not.toHaveBeenCalledWith('/api/backtest', expect.anything());
+      const inputs = document.querySelectorAll('input[type="number"]');
+      expect(inputs.length).toBeGreaterThan(0);
     });
 
-    it('does not submit when scriptSource is empty', async () => {
+    it('calls onRun with config when Run Backtest is clicked', async () => {
+      const onRun = vi.fn();
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource=""
-        />
-      );
-
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1000);
-      });
-
-      expect(fetchMock).not.toHaveBeenCalledWith('/api/backtest', expect.anything());
-    });
-
-    it('submits backtest when Run Backtest button is clicked', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ job_id: 'test-job-123' }),
-      });
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'queued', progress: 0 }),
-      });
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={onRun}
           scriptSource={STRATEGY_SOURCE}
         />
       );
@@ -209,140 +170,37 @@ describe('Backtest Flow Integration', () => {
       const runButton = screen.getByText('Run Backtest');
       await userEvent.click(runButton);
 
-      await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledWith('/api/backtest', expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        }));
-      });
-
-      const call = fetchMock.mock.calls.find((c: any[]) => c[0] === '/api/backtest');
-      const body = JSON.parse(call![1].body);
-      expect(body.symbol).toBe('BTCUSDT');
-      expect(body.timeframe).toBe('1h');
-      expect(body.script).toBe(STRATEGY_SOURCE);
-      expect(body.initialCapital).toBe(10000);
-      expect(body.commission).toBe(0.1);
-      expect(body.pyramiding).toBe(2);
+      expect(onRun).toHaveBeenCalledTimes(1);
+      const [config] = onRun.mock.calls[0];
+      expect(config.initialCapital).toBe(10000);
+      expect(config.commission).toBe(0.1);
+      expect(config.pyramiding).toBe(2);
     });
 
-    it('shows loading state during backtest', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ job_id: 'test-job-123' }),
-      });
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: async () => ({ status: 'running', progress: 50 }),
-      });
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      const runButton = screen.getByText('Run Backtest');
-      await userEvent.click(runButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Running backtest/)).toBeInTheDocument();
-      });
-    });
-
-    it('displays results when backtest completes', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ job_id: 'test-job-123' }),
-      });
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'completed', progress: 100 }),
-      });
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => MOCK_RESULT,
-      });
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      const runButton = screen.getByText('Run Backtest');
-      await userEvent.click(runButton);
-
-      await waitFor(() => {
-        expect(screen.getByText('Net Profit')).toBeInTheDocument();
-      });
-    });
-
-    it('shows error when backtest fails', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ job_id: 'test-job-123' }),
-      });
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'failed', progress: 0, error: 'Script error' }),
-      });
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      const runButton = screen.getByText('Run Backtest');
-      await userEvent.click(runButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/Backtest failed/)).toBeInTheDocument();
-      });
-    });
-
-    it('shows error when submission fails', async () => {
-      fetchMock.mockRejectedValueOnce(new Error('Network error'));
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      const runButton = screen.getByText('Run Backtest');
-      await userEvent.click(runButton);
-
-      await waitFor(() => {
-        expect(screen.getByText(/failed/i)).toBeInTheDocument();
-      });
-    });
-
-    it('calls onClose when close button is clicked', async () => {
+    it('calls onClose when Cancel is clicked', async () => {
       const onClose = vi.fn();
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={onClose}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={vi.fn()}
+          scriptSource={STRATEGY_SOURCE}
+        />
+      );
+
+      const cancelButton = screen.getByText('Cancel');
+      await userEvent.click(cancelButton);
+
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('calls onClose when ✕ is clicked', async () => {
+      const onClose = vi.fn();
+      render(
+        <BacktestSettingsPopup
+          isOpen={true}
+          onClose={onClose}
+          onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
         />
       );
@@ -353,27 +211,12 @@ describe('Backtest Flow Integration', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('shows read-only warning when no backtest has been run', () => {
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      expect(screen.getByText('Settings are read-only until you run your first backtest.')).toBeInTheDocument();
-    });
-
     it('shows days back input by default', () => {
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
         />
       );
@@ -382,48 +225,13 @@ describe('Backtest Flow Integration', () => {
       expect(screen.getByText('days back from today')).toBeInTheDocument();
     });
 
-    it('persists settings to localStorage', async () => {
+    it('converts days back to start/end dates on run', async () => {
+      const onRun = vi.fn();
       render(
-        <StrategyResultsPopup
+        <BacktestSettingsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource={STRATEGY_SOURCE}
-        />
-      );
-
-      try {
-        const saved = localStorage.getItem('pine-backtest-settings');
-        if (saved !== null) {
-          const parsed = JSON.parse(saved);
-          expect(parsed.config).toBeDefined();
-          expect(parsed.daysBack).toBe(30);
-          expect(parsed.dateRangeMode).toBe('days_back');
-        }
-      } catch {
-        // localStorage not available in test env, skip persistence check
-      }
-    });
-  });
-
-  describe('strategySource resolution', () => {
-    it('sends script in POST body when Run Backtest is clicked', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ job_id: 'job-1' }),
-      });
-      fetchMock.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'queued', progress: 0 }),
-      });
-
-      render(
-        <StrategyResultsPopup
-          isOpen={true}
-          onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
+          onRun={onRun}
           scriptSource={STRATEGY_SOURCE}
         />
       );
@@ -431,31 +239,129 @@ describe('Backtest Flow Integration', () => {
       const runButton = screen.getByText('Run Backtest');
       await userEvent.click(runButton);
 
-      await waitFor(() => {
-        const call = fetchMock.mock.calls.find((c: any[]) => c[0] === '/api/backtest');
-        expect(call).toBeDefined();
-        const body = JSON.parse(call![1].body);
-        expect(body.script).toBe(STRATEGY_SOURCE);
-        expect(body.script.length).toBeGreaterThan(0);
-      });
+      const [, startDate, endDate] = onRun.mock.calls[0];
+      expect(startDate).toBeDefined();
+      expect(endDate).toBeDefined();
+      expect(new Date(endDate).getTime()).toBeLessThanOrEqual(Date.now());
+      expect(new Date(startDate).getTime()).toBeLessThan(new Date(endDate).getTime());
+    });
+  });
+
+  describe('StrategyResultsPopup', () => {
+    it('does not render when isOpen is false', () => {
+      render(
+        <StrategyResultsPopup
+          isOpen={false}
+          onClose={vi.fn()}
+          onOpenSettings={vi.fn()}
+          status={null}
+          progress={0}
+          result={null}
+          error={null}
+        />
+      );
+      expect(screen.queryByText('Backtest Results')).not.toBeInTheDocument();
     });
 
-    it('does NOT submit when scriptSource is empty', async () => {
+    it('renders when isOpen is true', () => {
       render(
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          symbol="BTCUSDT"
-          timeframe="1h"
-          scriptSource=""
+          onOpenSettings={vi.fn()}
+          status={null}
+          progress={0}
+          result={null}
+          error={null}
+        />
+      );
+      expect(screen.getByText('Backtest Results')).toBeInTheDocument();
+    });
+
+    it('shows loading state when status is running', () => {
+      render(
+        <StrategyResultsPopup
+          isOpen={true}
+          onClose={vi.fn()}
+          onOpenSettings={vi.fn()}
+          status="running"
+          progress={50}
+          result={null}
+          error={null}
+        />
+      );
+      expect(screen.getByText(/Running backtest/)).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    it('shows error when status is failed', () => {
+      render(
+        <StrategyResultsPopup
+          isOpen={true}
+          onClose={vi.fn()}
+          onOpenSettings={vi.fn()}
+          status="failed"
+          progress={0}
+          result={null}
+          error="Script error"
+        />
+      );
+      expect(screen.getByText(/Backtest failed/)).toBeInTheDocument();
+    });
+
+    it('shows results when status is completed', () => {
+      render(
+        <StrategyResultsPopup
+          isOpen={true}
+          onClose={vi.fn()}
+          onOpenSettings={vi.fn()}
+          status="completed"
+          progress={100}
+          result={MOCK_RESULT}
+          error={null}
+        />
+      );
+      expect(screen.getByText('Net Profit')).toBeInTheDocument();
+    });
+
+    it('calls onClose when close button is clicked', async () => {
+      const onClose = vi.fn();
+      render(
+        <StrategyResultsPopup
+          isOpen={true}
+          onClose={onClose}
+          onOpenSettings={vi.fn()}
+          status="completed"
+          progress={100}
+          result={MOCK_RESULT}
+          error={null}
         />
       );
 
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(2000);
-      });
+      const closeButton = screen.getByText('✕');
+      await userEvent.click(closeButton);
 
-      expect(fetchMock).not.toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it('calls onOpenSettings when gear button is clicked', async () => {
+      const onOpenSettings = vi.fn();
+      render(
+        <StrategyResultsPopup
+          isOpen={true}
+          onClose={vi.fn()}
+          onOpenSettings={onOpenSettings}
+          status="completed"
+          progress={100}
+          result={MOCK_RESULT}
+          error={null}
+        />
+      );
+
+      const gearButton = screen.getByTitle('Backtest Settings');
+      await userEvent.click(gearButton);
+
+      expect(onOpenSettings).toHaveBeenCalled();
     });
   });
 

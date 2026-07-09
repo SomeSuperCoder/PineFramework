@@ -3,10 +3,12 @@ import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
+import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { useChartData } from './hooks/useChartData';
+import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
-import type { ScriptResult } from './types';
+import type { ScriptResult, BacktestConfig } from './types';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
 const INTERVALS = [
@@ -25,11 +27,13 @@ function App() {
   const [timeframe, setTimeframe] = useState('1');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [dataVersion, setDataVersion] = useState(0);
-  const [showStrategyPopup, setShowStrategyPopup] = useState(false);
+  const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+  const [showResultsPopup, setShowResultsPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
+  const { status, progress, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
 
   const onIndicatorResult = useCallback((indicatorId: string, result: ScriptResult) => {
@@ -95,7 +99,8 @@ function App() {
       setIsStrategy(true);
     } else {
       setIsStrategy(false);
-      setShowStrategyPopup(false);
+      setShowSettingsPopup(false);
+      setShowResultsPopup(false);
     }
   }, [scriptResult, indicatorResults]);
 
@@ -156,6 +161,28 @@ function App() {
     overlay: true,
   }));
 
+  const handleRunBacktest = useCallback((config: BacktestConfig, startDate?: string, endDate?: string) => {
+    setShowSettingsPopup(false);
+    setShowResultsPopup(true);
+    submitBacktest(
+      symbol,
+      timeframe,
+      { ...config, script: strategySource },
+      startDate,
+      endDate,
+    );
+  }, [symbol, timeframe, strategySource, submitBacktest]);
+
+  const handleOpenSettings = useCallback(() => {
+    setShowResultsPopup(false);
+    setShowSettingsPopup(true);
+  }, []);
+
+  const handleCloseResults = useCallback(() => {
+    setShowResultsPopup(false);
+    reset();
+  }, [reset]);
+
   return (
     <div className="app">
       <header className="header">
@@ -172,15 +199,7 @@ function App() {
             ))}
           </select>
           {isStrategy && (
-            <button className="view-results-button" onClick={() => {
-              console.log('[App] Run Backtest clicked. strategySource=%o, indicatorResults=%o, indicators=%o, sourcesRef=%o',
-                strategySource?.substring(0, 50),
-                Array.from(indicatorResults.entries()).map(([k, v]) => ({ id: k, hasMarkers: !!(v.strategyMarkers?.length) })),
-                indicatorManager.indicators.map(i => ({ id: i.id, scriptId: i.scriptId, hasSource: !!i.source })),
-                Array.from(indicatorSourcesRef.current.entries()).map(([k, v]) => ({ id: k, hasSource: !!v.source }))
-              );
-              setShowStrategyPopup(true);
-            }}>
+            <button className="view-results-button" onClick={() => setShowSettingsPopup(true)}>
               Run Backtest
             </button>
           )}
@@ -230,12 +249,21 @@ function App() {
         alertConditions={scriptResult?.alertConditions || []}
       />
 
-      <StrategyResultsPopup
-        isOpen={showStrategyPopup}
-        onClose={() => setShowStrategyPopup(false)}
-        symbol={symbol}
-        timeframe={timeframe}
+      <BacktestSettingsPopup
+        isOpen={showSettingsPopup}
+        onClose={() => setShowSettingsPopup(false)}
+        onRun={handleRunBacktest}
         scriptSource={strategySource}
+      />
+
+      <StrategyResultsPopup
+        isOpen={showResultsPopup}
+        onClose={handleCloseResults}
+        onOpenSettings={handleOpenSettings}
+        status={status}
+        progress={progress}
+        result={result}
+        error={error}
       />
     </div>
   );
