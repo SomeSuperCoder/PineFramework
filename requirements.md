@@ -63,6 +63,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 8. THE Type_System SHALL support generic array operations (size, first, last, shift, pop, push, unshift, insert, remove, contains, fill, set, get, sort, copy)
 9. THE Type_System SHALL support method dispatch on numeric IDs for line and label objects enabling chained operations (e.g., lin.shift().delete(), line.get_x2(lin.first()))
 10. THE Type_System SHALL support the `simple` type qualifier (e.g., `simple string`) as a prefix to type declarations, similar to the `series` qualifier
+11. THE Type_System SHALL infer comparison operators (>, <, >=, <=) as returning `bool` type instead of `float`, matching Pine Script semantics where comparisons produce boolean results
 
 ### Requirement 3: Execution Engine
 
@@ -118,6 +119,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 11. THE TA_Engine SHALL implement ta.sar() with correct 2-bar initialization, parabolic SAR EP/AF tracking, and reversal logic matching TradingView
 12. THE TA_Engine SHALL use per-call-site state isolation for ta.sma() and ta.ema() so multiple calls with different source series (e.g., ta.sma(high, 20) and ta.sma(low, 20)) do not share internal buffers
 13. THE TA_Engine SHALL implement ta.hma() using a WMA-based Hull Moving Average algorithm with per-call-site buffer isolation (half-length WMA, full-length WMA, diff WMA with sqrt(length) period), returning NA until sufficient data is accumulated
+14. THE TA_Engine SHALL implement ta.change(source) with per-call-site state tracking, returning the difference between the current source value and the previous source value (source - source[1]), returning NA on the first call
 
 ### Requirement 5: Multi-Symbol and Multi-Timeframe Data Access
 
@@ -329,6 +331,8 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 26. WHEN strategy.exit() is called with a comment parameter, THE Strategy_Engine SHALL use the comment text as the exit marker name instead of the default format
 27. THE Strategy_Engine SHALL support named arguments (comment, stop, limit) for strategy.entry() and strategy.exit() calls
 28. WHEN strategy.close() is called, THE Strategy_Engine SHALL format the close marker name as "Exit {name}" matching the exit marker convention
+29. THE Strategy_Engine SHALL extract `qty` from named arguments in strategy.entry() when not provided as a positional argument
+30. WHEN strategy.exit() is called while the position is flat but a pending market entry order exists, THE Strategy_Engine SHALL allow creation of the exit order targeting the pending entry direction
 
 ### Requirement 9: Extensibility and Plugin Architecture
 
@@ -492,6 +496,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 4. THE System SHALL support all indicator() parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
 5. THE System SHALL support all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
 6. THE System SHALL validate script type compatibility with available functions
+7. WHEN strategy() is called without an explicit overlay parameter, THE System SHALL default overlay to `true` (strategies render on the main chart pane by default)
 
 ### Requirement 17: Frontend Web Application with Canvas Charting
 
@@ -536,6 +541,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 33. WHEN the user modifies settings and clicks "Run Backtest", THE Frontend SHALL send a backtest request to the Backend with the updated parameters
 34. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
 35. THE Strategy Results popup SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
+36. THE Frontend SHALL strip `strategy.` prefix from enum values when extracting strategy parameters (e.g., `strategy.percent_of_equity` → `percent_of_equity`) to ensure correct comparison against bare enum names
 
 **Lazy Loading and Re-Execution:**
 36. THE Frontend SHALL support lazy loading of historical OHLCV data when scrolling the chart backwards, fetching older bars on demand from the Backend via an `end` timestamp parameter
@@ -723,6 +729,12 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 50. THE Chart_Library SHALL support extend modes for drawing lines (none, left, right, both) extending the line beyond endpoint coordinates
 51. THE Chart_Library SHALL render labels (label.new objects) as rounded rectangular boxes with configurable background color, text color, border, font size, and text alignment
 52. THE Chart_Library SHALL support all label styles (label_up, label_down, label_left, label_right, label_center, square, diamond, circle, cross) with correct visual rendering
+
+**Box Rendering:**
+
+53. THE Chart_Library SHALL render boxes (box.new objects) as filled rectangles with configurable background color and border color
+54. THE Chart_Library SHALL render boxes on a layer above drawing lines but below shape markers
+55. THE Chart_Library SHALL update box positions when the chart is zoomed or panned
 
 **Crosshair:**
 

@@ -179,6 +179,10 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `display` namespace: `display.data_window`, `display.pane`, `display.none` resolved as builtin constants via `executeMemberExpression()`. When `display` is `none` or `0`, the plot is suppressed.
   - `plot()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs object. Reads color from `positionalArgs[2]`, linewidth from `[3]`, style from `[4]`, display from `[11]`. Named args override positional when both present. Pushes `positionalArgs[0]` (the series) to output, not the `value` parameter.
   - `fill()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs. Reads `top_color` from `positionalArgs[4]` and `bottom_color` from `positionalArgs[5]`. Stores one color per bar in `fillColorData` for per-bar segment rendering.
+  - `ta.change(source)`: Returns the difference between current and previous source values (source - source[1]). Per-call-site state tracking via `changeCallIndex` and `changePrevValues` arrays. Returns NA on first call. State reset each bar.
+  - `box.new(left, top, right, bottom, border_color, bgcolor)`: Creates box drawing objects stored in `boxes` Map. Returns numeric ID. BoxEntry includes left, top, right, bottom coordinates and border/background colors.
+  - Comparison operators (>, <, >=, <=): Compiler infers `BOOL_TYPE` instead of `FLOAT_TYPE` for comparison expressions, matching Pine Script semantics where comparisons produce boolean results.
+  - `strategy.entry()` namedArgs qty: Extracts `qty` from named arguments when not provided as a positional argument, supporting `strategy.entry("Long", "long", qty=0.1)` syntax.
 
 #### 5. Data Engine
 - **Responsibility**: Manage OHLCV data and data requests
@@ -371,13 +375,14 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Per-bar fill color overlay: when fillColorData exists, skip the base fill polygon entirely and draw only per-bar color segments with their actual colors to prevent base polygon color bleeding through transparent segments
   - Drawing line rendering (solid, dotted, dashed, extend modes: none/left/right/both)
   - Label rendering (rounded boxes, all label styles, configurable text/background/border colors)
+  - Box rendering (filled rectangles with configurable border_color and bgcolor, rendered on layer above drawing lines)
   - ResizeObserver for responsive container handling
   - Event system: onCrosshairMove, onVisibleRangeChange, onResize, onPriceRangeChange
 - **API**:
   - `createChart(container, options)` → chart instance
   - `chart.setCandles(data)`, `chart.setVolume(data)`
   - `chart.addPlotSeries(name, options)` → series handle
-  - `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setLabels(labels)`, `chart.setHLines(hlines)`, `chart.setDrawingLines(drawingLines)`
+  - `chart.setMarkers(markers)`, `chart.setFills(fills)`, `chart.setLines(lines)`, `chart.setLabels(labels)`, `chart.setHLines(hlines)`, `chart.setDrawingLines(drawingLines)`, `chart.setBoxes(boxes)`
   - `chart.removeSeries(name)`
   - `chart.timeScale()` → { fitContent(), scrollTo(), scrollToDate() }
   - `chart.applyOptions(options)`, `chart.remove()`
@@ -437,6 +442,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Entry marker naming: defaults to capitalized direction ("Long"/"Short"), overridden by comment parameter
   - Exit marker naming: defaults to "Exit {id}" format, overridden by comment parameter
   - Close marker naming: formatted as "Exit {name}" matching exit marker convention
+  - strategy.exit() allows creation when position is flat but pending market entry exists (entry+exit on same bar support)
 
 #### 11. Plugin Registry
 - **Responsibility**: Manage extensibility through plugins

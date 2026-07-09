@@ -3009,6 +3009,137 @@ This implementation plan outlines the step-by-step development of a production-g
     - 5 new tests added to `tests/integration/pane-layout.test.ts` — all pass with 0 regressions
   - _Requirements: 29.6, 29.7, 29.8, 29.9, 29.10, 29.11, 29.18, 29.19_
 
+- [x] 110. Add Kalman Trend Levels Indicator Support
+  - [x] 110.1 Add Kalman Trend Levels test indicator
+    - Create `test_indicators/kalman-trend-levels.pine` with Kalman filter-based trend detection
+    - Implement Kalman filter state tracking (estimate, error covariance, gain)
+    - Add trend line plotting with adaptive smoothing
+    - _Requirements: 11.10_
+  
+  - [x] 110.2 Write integration tests for Kalman Trend Levels
+    - Create `tests/integration/kalman-trend-levels.test.ts` with 20 tests
+    - Test parse/compile without errors
+    - Test output keys match expected plot names
+    - Test non-null values after warmup period
+    - Test Kalman filter convergence behavior
+    - Test trend detection accuracy
+    - _Requirements: 11.10_
+
+- [x] 111. Add Box Rendering Support
+  - [x] 111.1 Add BoxEntry interface to ExecutionEngine
+    - Define `BoxEntry` interface with left, top, right, bottom, border_color, bgcolor fields
+    - Add `boxes` Map and `boxIdCounter` to engine state
+    - Include `boxes` in ExecutionResult and snapshot/rollback state
+    - _Requirements: 7.25, 21.53_
+  
+  - [x] 111.2 Implement box.new builtin
+    - Register `box.new(left, top, right, bottom, border_color, bgcolor)` as builtin
+    - Handle named args for border_color and bgcolor
+    - Return numeric ID for created box
+    - _Requirements: 7.25_
+  
+  - [x] 111.3 Add box rendering to PineChart
+    - Implement `renderBoxes()` method in PineChart
+    - Render filled rectangles with configurable border_color and bgcolor
+    - Use `findBarIndex()` for time-based positioning
+    - Add `setBoxes()` API method
+    - _Requirements: 21.53, 21.54, 21.55_
+  
+  - [x] 111.4 Wire box data through backend responses
+    - Include `boxes` in POST /api/execute response
+    - Include `boxes` in WebSocket execution_result messages
+    - _Requirements: 19.25_
+
+- [x] 112. Add ta.change() Builtin
+  - [x] 112.1 Implement ta.change(source) with per-call-site state
+    - Add `changeCallIndex` and `changePrevValues` arrays to engine state
+    - Return `source - source[1]` on subsequent calls
+    - Return NA on first call
+    - Reset state each bar
+    - _Requirements: 4.14_
+
+- [x] 113. Fix Compiler Bool Type for Comparisons
+  - [x] 113.1 Fix comparison operator type inference
+    - Change compiler to return `BOOL_TYPE` for `>`, `<`, `>=`, `<=` operators
+    - Previously returned `FLOAT_TYPE` which caused type mismatches in conditional expressions
+    - _Requirements: 2.11_
+
+- [x] 114. Fix Strategy Overlay Default
+  - [x] 114.1 Default strategy overlay to true
+    - Change compiler to set `overlay = true` for strategies by default
+    - Previously only set overlay for indicators, leaving strategies with `false`
+    - Strategies now render on the main chart pane by default
+    - _Requirements: 16.7_
+
+- [x] 115. Fix strategy.entry NamedArgs qty Extraction
+  - [x] 115.1 Extract qty from named arguments
+    - Modify strategy.entry builtin to check `namedArgs?.qty` when positional qty is not provided
+    - Support `strategy.entry("Long", "long", qty=0.1)` syntax
+    - _Requirements: 8.29_
+
+- [x] 116. Fix strategy.exit Flat Position with Pending Entry
+  - [x] 116.1 Allow exit creation when position is flat but pending entry exists
+    - Modify strategy.exit to check for pending market orders when position is flat
+    - Extract direction and quantity from pending entry order
+    - Enable entry+exit on same bar support
+    - _Requirements: 8.30_
+
+- [x] 117. Fix extractStrategyParams strategy.* Prefix Stripping
+  - [x] 117.1 Strip strategy.* prefix from enum values
+    - Add `.replace(/^strategy\./, '')` to strip prefix from `default_qty_type` and `commission_type`
+    - Fix: `strategy.percent_of_equity` → `percent_of_equity` for correct comparison
+    - _Requirements: 17.36_
+
+- [x] 118. Fix Backtest Flow Issues
+  - [x] 118.1 Fix strategySource resolution with indicatorSourcesRef fallback
+    - Add `indicatorSourcesRef` to useChartData exports
+    - Check indicatorSourcesRef first for strategy source, then fall back to indicatorManager.indicators
+    - _Requirements: 17.27_
+  
+  - [x] 118.2 Fix isStrategy detection for indicator strategies
+    - Check both scriptResult and indicatorResults for strategy markers
+    - Set isStrategy=true when any indicator has strategy markers
+    - _Requirements: 17.29_
+  
+  - [x] 118.3 Fix strategy name regex to match strategy()
+    - Update regex to match both `strategy("...")` and `indicator("...")`
+    - Previously only matched indicator(), causing strategy name to show as "Indicator"
+    - _Requirements: 17.30_
+  
+  - [x] 118.4 Fix indicator removal cleanup
+    - Add `removeIndicatorData()` call on indicator removal
+    - Clean up indicatorSourcesRef on removal
+    - _Requirements: 28.2_
+  
+  - [x] 118.5 Fix lastCodeRef only for non-indicator executions
+    - Only set lastCodeRef when execution is not from an indicator
+    - Prevent indicator code from overwriting strategy source
+    - _Requirements: 17.27_
+
+- [x] 119. Fix ScriptFileWatcher chokidar v5 Compatibility
+  - [x] 119.1 Fix file watcher not detecting new .pine files
+    - Update chokidar watcher to use array of paths instead of glob pattern
+    - chokidar v5 dropped glob support, causing watcher to be a no-op
+    - _Requirements: 26.12_
+
+- [x] 120. Add Frontend Integration Tests for Backtest Flow
+  - [x] 120.1 Create backtest flow test suite
+    - Create `frontend/src/__tests__/backtest-flow.test.tsx` with 20 tests
+    - Test strategy detection, backtest button visibility, settings extraction
+    - Test backtest submission, progress tracking, result display
+    - Test error handling and edge cases
+    - _Requirements: 11.10_
+
+- [x] 121. Fix Backtest 0 Trades Root Cause
+  - [x] 121.1 Fix extractStrategyParams strategy.* prefix comparison
+    - Root cause: `extractStrategyParams` compared `"strategy.percent_of_equity"` against bare `'percent_of_equity'`
+    - Fell through to `'contracts'` as default qtyType
+    - `calculateQty` returned raw 100 contracts instead of ~0.16 BTC
+    - `canOpenPosition` rejected all entries due to margin check
+    - Fix: Strip `strategy.` prefix before comparison
+    - Committed as `61227e4`
+    - _Requirements: 17.36_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3057,6 +3188,20 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 104 fixes scroll re-execution and indicator boundary recomputation: execBars changed to chronological `[...newBars, ...contextBars]`; `prependIndicatorResult` splits newResult into newBarData + boundaryData, merges with remaining prev data; context bars no longer leak into `ohlcvDataRef`; `beginUpdate`/`endUpdate` batching prevents flicker. Commits `39224a0` (corrected ordering) and `78b788f` (boundary recomputation).
 - Task 105 fixes TrendCraft `Variable 'pH' is not defined` error: added `looksLikeUserTypeDecl()` (no PascalCase check) used only in `var`/`varip`/`const` contexts; standalone context keeps PascalCase to prevent `val\nx` misparse. All 1047 backend tests pass. Commit `12e78a4`.
 - Tasks 106-107 implement AI Agent Integration and File-Based Storage: external AI coding agents can create scripts by writing `.pine` files to `backend/data/scripts/`. A file watcher (chokidar) detects changes and syncs them into the Script Bank database. Bidirectional sync ensures API-created scripts create files and file-created scripts register in the database. Features include filename sanitization, script type auto-detection, bulk import, conflict resolution, and comprehensive REST API endpoints for file metadata.
+- Task 108 implements Built-In Test Indicators in the Script Editor: test indicators from `test_indicators/` are available as built-in, uneditable, undeletable scripts that can be run on the chart. The backend serves them via `GET /api/scripts/built-in`, and the frontend displays them in a distinct "Built-In Tests" category in the script editor dropdown.
+- Task 109 fixes multi-pane layout for non-overlay indicators: when multiple non-overlay indicators (e.g., MACD + RSI) are added, each gets its own independent pane with its own price scale. The fix counts distinct paneIndices instead of plot series, assigns incrementing paneIndex per non-overlay indicator, and dynamically creates/removes panes.
+- Task 110 adds Kalman Trend Levels indicator support: creates a test indicator with Kalman filter-based trend detection and 20 integration tests.
+- Task 111 adds box rendering support: implements BoxEntry interface, box.new builtin, and canvas rendering for rectangles with configurable border_color and bgcolor. Used for support/resistance zones.
+- Task 112 adds ta.change() builtin: returns the difference between current and previous source values with per-call-site state tracking.
+- Task 113 fixes compiler bool type for comparisons: comparison operators (>, <, >=, <=) now return BOOL_TYPE instead of FLOAT_TYPE, matching Pine Script semantics.
+- Task 114 fixes strategy overlay default: strategies now default to overlay=true (render on main chart pane) instead of false.
+- Task 115 fixes strategy.entry namedArgs qty extraction: now extracts qty from named arguments when not provided as a positional argument.
+- Task 116 fixes strategy.exit flat position with pending entry: allows exit creation when position is flat but a pending market entry exists, enabling entry+exit on same bar.
+- Task 117 fixes extractStrategyParams strategy.* prefix stripping: strips `strategy.` prefix from enum values (e.g., `strategy.percent_of_equity` → `percent_of_equity`) for correct comparison.
+- Task 118 fixes backtest flow issues: strategySource resolution with indicatorSourcesRef fallback, isStrategy detection for indicator strategies, strategy name regex to match strategy(), indicator removal cleanup, and lastCodeRef only for non-indicator executions.
+- Task 119 fixes ScriptFileWatcher chokidar v5 compatibility: updates watcher to use array of paths instead of glob pattern (chokidar v5 dropped glob support).
+- Task 120 adds frontend integration tests for backtest flow: 20 tests covering strategy detection, backtest button visibility, settings extraction, submission, progress tracking, result display, and error handling.
+- Task 121 fixes backtest 0 trades root cause: extractStrategyParams compared `"strategy.percent_of_equity"` against bare `'percent_of_equity'`, fell through to `'contracts'` as default, causing calculateQty to return raw 100 contracts instead of ~0.16 BTC, and canOpenPosition to reject all entries. Fixed by stripping `strategy.` prefix. Commit `61227e4`.
 
 ## Task Dependency Graph
 
