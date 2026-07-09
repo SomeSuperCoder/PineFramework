@@ -90,7 +90,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           overflowY: 'auto',
           padding: '20px',
         }}>
-          {(status === null || status === 'running') && (
+          {(status === null || status === 'queued' || status === 'running') && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
               <div style={{ width: '60%', margin: '0 auto 12px', height: '8px', background: '#0d0d18', borderRadius: '4px', overflow: 'hidden' }}>
                 {status === 'running' ? (
