@@ -14,6 +14,9 @@ interface StrategyResultsPopupProps {
 export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, progress, result, error }: StrategyResultsPopupProps) {
   if (!isOpen) return null;
 
+  const isLoading = status === null || status === 'queued' || status === 'running';
+  const displayProgress = status === 'completed' ? 100 : progress;
+
   return (
     <div className="strategy-popup-overlay" onClick={onClose} style={{
       position: 'fixed',
@@ -50,7 +53,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           <h2 style={{ margin: 0, color: '#2196f3', fontSize: '18px' }}>Backtest Results</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {status === 'running' && (
-              <span style={{ fontSize: '12px', color: '#ff9800' }}>{progress}%</span>
+              <span style={{ fontSize: '12px', color: '#ff9800' }}>{displayProgress}%</span>
             )}
             <button
               onClick={onOpenSettings}
@@ -89,21 +92,19 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           flex: 1,
           overflowY: 'auto',
           padding: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          ...(isLoading && { display: 'flex', alignItems: 'center', justifyContent: 'center' }),
         }}>
-          {(status === null || status === 'queued' || status === 'running') && (
+          {isLoading && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
               <div style={{ width: '60%', margin: '0 auto 12px', height: '8px', background: '#0d0d18', borderRadius: '4px', overflow: 'hidden' }}>
                 {status === 'running' ? (
-                  <div style={{ width: `${progress}%`, height: '100%', background: '#2196f3', borderRadius: '4px', transition: 'width 0.3s ease' }} />
+                  <div style={{ width: `${displayProgress}%`, height: '100%', background: '#2196f3', borderRadius: '4px', transition: 'width 0.3s ease' }} />
                 ) : (
                   <div style={{ width: '30%', height: '100%', background: '#2196f3', borderRadius: '4px', animation: 'backtest-indeterminate 1.5s ease-in-out infinite' }} />
                 )}
               </div>
               <div style={{ fontSize: '14px', color: '#aaa' }}>
-                {status === 'running' ? `Running backtest... ${progress}%` : 'Starting backtest...'}
+                {status === 'running' ? `Running backtest... ${displayProgress}%` : 'Starting backtest...'}
               </div>
             </div>
           )}
