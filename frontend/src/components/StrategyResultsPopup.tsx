@@ -90,12 +90,18 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           overflowY: 'auto',
           padding: '20px',
         }}>
-          {status === 'running' && (
+          {(status === null || status === 'running') && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
               <div style={{ width: '60%', margin: '0 auto 12px', height: '8px', background: '#0d0d18', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: `${progress}%`, height: '100%', background: '#2196f3', borderRadius: '4px', transition: 'width 0.3s ease' }} />
+                {status === 'running' ? (
+                  <div style={{ width: `${progress}%`, height: '100%', background: '#2196f3', borderRadius: '4px', transition: 'width 0.3s ease' }} />
+                ) : (
+                  <div style={{ width: '30%', height: '100%', background: '#2196f3', borderRadius: '4px', animation: 'backtest-indeterminate 1.5s ease-in-out infinite' }} />
+                )}
               </div>
-              <div style={{ fontSize: '14px', color: '#aaa' }}>Running backtest... {progress}%</div>
+              <div style={{ fontSize: '14px', color: '#aaa' }}>
+                {status === 'running' ? `Running backtest... ${progress}%` : 'Starting backtest...'}
+              </div>
             </div>
           )}
           {status === 'failed' && error && (
@@ -105,14 +111,6 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           )}
           {status === 'completed' && result && (
             <BacktestResults result={result} onClose={() => {}} />
-          )}
-          {status === null && (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
-              <div style={{ width: '60%', margin: '0 auto 12px', height: '8px', background: '#0d0d18', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '30%', height: '100%', background: '#2196f3', borderRadius: '4px', animation: 'backtest-indeterminate 1.5s ease-in-out infinite' }} />
-              </div>
-              <div style={{ fontSize: '14px', color: '#aaa' }}>Starting backtest...</div>
-            </div>
           )}
         </div>
       </div>
