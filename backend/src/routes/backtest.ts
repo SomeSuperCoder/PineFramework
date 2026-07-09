@@ -102,6 +102,9 @@ export function createBacktestRouter() {
         }
         const batchProgress = 20 + Math.round(((i + batch.length) / contexts.length) * 60);
         updateProgress(job.jobId, batchProgress);
+        if (i + batchSize < contexts.length) {
+          await new Promise(r => setTimeout(r, 50));
+        }
       }
 
       if (!execResult || !execResult.success) {
@@ -358,11 +361,11 @@ async function fetchBars(
   endDate?: number,
 ): Promise<Bar[]> {
   const bybitSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
-  const limit = 200;
+  const limit = 1000;
   let allBars: Bar[] = [];
   let cursor: number | undefined;
 
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 200; attempt++) {
     let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
     if (cursor) url += `&end=${cursor}`;
 
@@ -395,8 +398,10 @@ async function fetchBars(
     });
 
     allBars = allBars.concat(filtered);
+    console.log('[backtest] fetchBars attempt=%d got=%d filtered=%d total=%d cursor=%d', attempt, raw.length, filtered.length, allBars.length, bars[0]!.timestamp);
     cursor = bars[0]!.timestamp;
     if (bars.length < limit) break;
+    if (startDate && cursor <= startDate) break;
   }
 
   return allBars;
