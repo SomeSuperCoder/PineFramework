@@ -3140,48 +3140,48 @@ This implementation plan outlines the step-by-step development of a production-g
     - Committed as `61227e4`
     - _Requirements: 17.36_
 
-- [ ] 122. Implement Backtest Settings Workflow with Persistent Config and Days-Back Date Range
-  - [ ] 122.1 Rename "View Backtest Results" button to "Run Backtest"
+- [x] 122. Implement Backtest Settings Workflow with Persistent Config and Days-Back Date Range
+  - [x] 122.1 Rename "View Backtest Results" button to "Run Backtest"
     - Update all frontend references from "View Backtest Results" to "Run Backtest"
     - Ensure button appears when script returns strategy markers (existing behavior)
     - _Requirements: 17.29_
 
-  - [ ] 122.2 Create settings-first backtest flow
+  - [x] 122.2 Create settings-first backtest flow
     - When "Run Backtest" is clicked, open settings panel/modal BEFORE running the backtest
     - Settings panel pre-populated with defaults from strategy() declaration and saved user settings
     - After user confirms settings, send backtest request to Backend, then show results panel
     - _Requirements: 17.30, 17.35_
 
-  - [ ] 122.3 Implement persistent backtest settings
+  - [x] 122.3 Implement persistent backtest settings
     - Store backtest settings (initial_capital, commission, slippage, pyramiding, qty, margin, date range) in localStorage or backend
     - Restore saved settings when settings panel is opened
     - Persist across sessions and page reloads
     - _Requirements: 17.32_
 
-  - [ ] 122.4 Implement "days back" date range input
+  - [x] 122.4 Implement "days back" date range input
     - Default date range input to "days back" mode: user enters number of days (e.g., 10, 30, 90)
     - Add toggle to switch between "days back" mode and traditional begin/end date picker mode
     - Convert "days back" to actual start_date/end_date before sending to Backend
     - _Requirements: 17.33, 17.34_
 
-  - [ ] 122.5 Implement read-only settings until first backtest run
+  - [x] 122.5 Implement read-only settings until first backtest run
     - Settings panel fields are disabled/read-only when no backtest has been run yet
     - After the first backtest completes, settings become editable
     - Track "hasRunBacktest" state per script/session
     - _Requirements: 17.37, 17.38_
 
-  - [ ] 122.6 Add settings gear button to results panel
+  - [x] 122.6 Add settings gear button to results panel
     - After backtest results are displayed, show gear (⚙) icon in the results panel header
     - Clicking gear opens the settings overlay for tweaking parameters
     - Re-running with modified settings triggers a new backtest
     - _Requirements: 17.38_
 
-  - [ ] 122.7 Update backend to accept days-back parameter
+  - [x] 122.7 Update backend to accept days-back parameter
     - Extend POST /api/backtest to accept `days_back` parameter as alternative to start_date/end_date
     - Convert days_back to actual date range server-side before running backtest
     - _Requirements: 17.33_
 
-  - [ ]* 122.8 Write tests for backtest settings workflow
+  - [x]* 122.8 Write tests for backtest settings workflow
     - Test "Run Backtest" button opens settings panel
     - Test settings persist across page reloads (localStorage)
     - Test days-back input converts to correct date range

@@ -18,6 +18,36 @@ const defaultConfig: BacktestConfig = {
   currency: 'USD',
 };
 
+type DateRangeMode = 'days_back' | 'traditional';
+
+interface SavedSettings {
+  config: BacktestConfig;
+  daysBack: number;
+  dateRangeMode: DateRangeMode;
+  startDate: string;
+  endDate: string;
+}
+
+const STORAGE_KEY = 'pine-backtest-settings';
+
+function loadSavedSettings(): SavedSettings | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SavedSettings;
+  } catch {
+    return null;
+  }
+}
+
+function saveSettings(settings: SavedSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
 interface StrategyResultsPopupProps {
   isOpen: boolean;
   onClose: () => void;
@@ -27,10 +57,17 @@ interface StrategyResultsPopupProps {
 }
 
 export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scriptSource }: StrategyResultsPopupProps) {
-  const [config, setConfig] = useState<BacktestConfig>({ ...defaultConfig });
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
+  const saved = loadSavedSettings();
+  const [config, setConfig] = useState<BacktestConfig>(() => {
+    if (saved) return { ...defaultConfig, ...saved.config };
+    return { ...defaultConfig };
+  });
+  const [daysBack, setDaysBack] = useState<number>(() => saved?.daysBack ?? 30);
+  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>(() => saved?.dateRangeMode ?? 'days_back');
+  const [startDate, setStartDate] = useState(() => saved?.startDate ?? '');
+  const [endDate, setEndDate] = useState(() => saved?.endDate ?? '');
+  const [showSettings, setShowSettings] = useState(true);
+  const [hasRunBacktest, setHasRunBacktest] = useState(false);
   const { status, progress, result, error, loading, submitBacktest, reset } = useBacktest();
   const hasSubmittedRef = useRef(false);
 
@@ -39,35 +76,81 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
       const scriptParams = extractStrategyParams(scriptSource);
       const merged = { ...defaultConfig, ...scriptParams };
       setConfig(merged);
-      console.log('[StrategyResultsPopup] isOpen=true, scriptSource length=%d, hasSubmitted=%o', scriptSource?.length || 0, hasSubmittedRef.current);
-      if (!hasSubmittedRef.current && scriptSource) {
-        hasSubmittedRef.current = true;
-        console.log('[StrategyResultsPopup] Submitting backtest with script length=%d', scriptSource.length);
-        submitBacktest(
-          symbol,
-          timeframe,
-          { ...merged, script: scriptSource },
-        );
-      } else if (!scriptSource) {
-        console.warn('[StrategyResultsPopup] scriptSource is empty, NOT submitting');
+      setShowSettings(true);
+      hasSubmittedRef.current = false;
+
+      const savedSettings = loadSavedSettings();
+      if (savedSettings) {
+        setDaysBack(savedSettings.daysBack);
+        setDateRangeMode(savedSettings.dateRangeMode);
+        setStartDate(savedSettings.startDate);
+        setEndDate(savedSettings.endDate);
+        setHasRunBacktest(false);
       }
     } else {
       hasSubmittedRef.current = false;
+      setHasRunBacktest(false);
       reset();
     }
-  }, [isOpen, symbol, timeframe, scriptSource, submitBacktest, reset]);
+  }, [isOpen, scriptSource, reset]);
+
+  const persistSettings = useCallback((newConfig: BacktestConfig, newDaysBack: number, newMode: DateRangeMode, newStartDate: string, newEndDate: string) => {
+    saveSettings({ config: newConfig, daysBack: newDaysBack, dateRangeMode: newMode, startDate: newStartDate, endDate: newEndDate });
+  }, []);
+
+  const handleConfigChange = useCallback((updated: BacktestConfig) => {
+    setConfig(updated);
+    persistSettings(updated, daysBack, dateRangeMode, startDate, endDate);
+  }, [daysBack, dateRangeMode, startDate, endDate, persistSettings]);
+
+  const handleDaysBackChange = useCallback((val: number) => {
+    setDaysBack(val);
+    persistSettings(config, val, dateRangeMode, startDate, endDate);
+  }, [config, dateRangeMode, startDate, endDate, persistSettings]);
+
+  const handleModeChange = useCallback((mode: DateRangeMode) => {
+    setDateRangeMode(mode);
+    persistSettings(config, daysBack, mode, startDate, endDate);
+  }, [config, daysBack, startDate, endDate, persistSettings]);
+
+  const handleStartDateChange = useCallback((val: string) => {
+    setStartDate(val);
+    persistSettings(config, daysBack, dateRangeMode, val, endDate);
+  }, [config, daysBack, dateRangeMode, endDate, persistSettings]);
+
+  const handleEndDateChange = useCallback((val: string) => {
+    setEndDate(val);
+    persistSettings(config, daysBack, dateRangeMode, startDate, val);
+  }, [config, daysBack, dateRangeMode, startDate, persistSettings]);
 
   const handleRun = useCallback(() => {
+    hasSubmittedRef.current = true;
+    setShowSettings(false);
+    setHasRunBacktest(true);
+
+    let effectiveStartDate = startDate || undefined;
+    let effectiveEndDate = endDate || undefined;
+
+    if (dateRangeMode === 'days_back' && daysBack > 0) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+      effectiveStartDate = start.toISOString().split('T')[0];
+      effectiveEndDate = end.toISOString().split('T')[0];
+    }
+
     submitBacktest(
       symbol,
       timeframe,
       { ...config, script: scriptSource },
-      startDate || undefined,
-      endDate || undefined,
+      effectiveStartDate,
+      effectiveEndDate,
     );
-  }, [symbol, timeframe, config, scriptSource, startDate, endDate, submitBacktest]);
+  }, [symbol, timeframe, config, scriptSource, startDate, endDate, dateRangeMode, daysBack, submitBacktest]);
 
   if (!isOpen) return null;
+
+  const settingsDisabled = !hasRunBacktest;
 
   return (
     <div className="strategy-popup-overlay" onClick={onClose} style={{
@@ -149,16 +232,21 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
             maxHeight: '40vh',
             overflowY: 'auto',
           }}>
+            {settingsDisabled && (
+              <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#1a1a0d', border: '1px solid #ff9800', borderRadius: '4px', color: '#ff9800', fontSize: '12px' }}>
+                Settings are read-only until you run your first backtest.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Initial Capital</label>
-                <input type="number" value={config.initialCapital} onChange={(e) => setConfig({ ...config, initialCapital: Number(e.target.value) })} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
+                <input type="number" value={config.initialCapital} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, initialCapital: Number(e.target.value) })} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Commission</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input type="number" value={config.commission} onChange={(e) => setConfig({ ...config, commission: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
-                  <select value={config.commissionType} onChange={(e) => setConfig({ ...config, commissionType: e.target.value as BacktestConfig['commissionType'] })} style={{ width: '100px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}>
+                  <input type="number" value={config.commission} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, commission: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
+                  <select value={config.commissionType} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, commissionType: e.target.value as BacktestConfig['commissionType'] })} style={{ width: '100px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }}>
                     <option value="percent">%</option>
                     <option value="fixed">Fixed</option>
                     <option value="per_contract">/Contract</option>
@@ -169,8 +257,8 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Slippage</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input type="number" value={config.slippage} onChange={(e) => setConfig({ ...config, slippage: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
-                  <select value={config.slippageType} onChange={(e) => setConfig({ ...config, slippageType: e.target.value as BacktestConfig['slippageType'] })} style={{ width: '100px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}>
+                  <input type="number" value={config.slippage} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, slippage: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
+                  <select value={config.slippageType} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, slippageType: e.target.value as BacktestConfig['slippageType'] })} style={{ width: '100px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }}>
                     <option value="ticks">Ticks</option>
                     <option value="points">Points</option>
                     <option value="percent">%</option>
@@ -180,8 +268,8 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Default Qty</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input type="number" value={config.defaultQty} onChange={(e) => setConfig({ ...config, defaultQty: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
-                  <select value={config.defaultQtyType} onChange={(e) => setConfig({ ...config, defaultQtyType: e.target.value as BacktestConfig['defaultQtyType'] })} style={{ width: '120px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}>
+                  <input type="number" value={config.defaultQty} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, defaultQty: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
+                  <select value={config.defaultQtyType} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, defaultQtyType: e.target.value as BacktestConfig['defaultQtyType'] })} style={{ width: '120px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }}>
                     <option value="contracts">Contracts</option>
                     <option value="percent_of_equity">% Equity</option>
                     <option value="cash">Cash</option>
@@ -190,24 +278,79 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Pyramiding</label>
-                <input type="number" value={config.pyramiding} onChange={(e) => setConfig({ ...config, pyramiding: Number(e.target.value) })} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
+                <input type="number" value={config.pyramiding} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, pyramiding: Number(e.target.value) })} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Margin (Long / Short)</label>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <input type="number" value={config.marginLong} onChange={(e) => setConfig({ ...config, marginLong: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} placeholder="Long" />
-                  <input type="number" value={config.marginShort} onChange={(e) => setConfig({ ...config, marginShort: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} placeholder="Short" />
+                  <input type="number" value={config.marginLong} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, marginLong: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} placeholder="Long" />
+                  <input type="number" value={config.marginShort} disabled={settingsDisabled} onChange={(e) => handleConfigChange({ ...config, marginShort: Number(e.target.value) })} style={{ flex: 1, padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} placeholder="Short" />
                 </div>
               </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Start Date</label>
-                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
-              </div>
-              <div>
-                <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>End Date</label>
-                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
-              </div>
             </div>
+
+            <div style={{ marginTop: '12px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Date Range</label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => handleModeChange('days_back')}
+                  disabled={settingsDisabled}
+                  style={{
+                    padding: '4px 12px',
+                    background: dateRangeMode === 'days_back' ? '#2196f3' : '#111128',
+                    color: '#e0e0e0',
+                    border: '1px solid #111128',
+                    borderRadius: '4px',
+                    cursor: settingsDisabled ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    opacity: settingsDisabled ? 0.5 : 1,
+                  }}
+                >
+                  Days Back
+                </button>
+                <button
+                  onClick={() => handleModeChange('traditional')}
+                  disabled={settingsDisabled}
+                  style={{
+                    padding: '4px 12px',
+                    background: dateRangeMode === 'traditional' ? '#2196f3' : '#111128',
+                    color: '#e0e0e0',
+                    border: '1px solid #111128',
+                    borderRadius: '4px',
+                    cursor: settingsDisabled ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    opacity: settingsDisabled ? 0.5 : 1,
+                  }}
+                >
+                  Begin / End
+                </button>
+              </div>
+              {dateRangeMode === 'days_back' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min={1}
+                    value={daysBack}
+                    disabled={settingsDisabled}
+                    onChange={(e) => handleDaysBackChange(Number(e.target.value) || 1)}
+                    style={{ width: '80px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }}
+                  />
+                  <span style={{ color: '#aaa', fontSize: '12px' }}>days back from today</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>Start Date</label>
+                    <input type="date" value={startDate} disabled={settingsDisabled} onChange={(e) => handleStartDateChange(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>End Date</label>
+                    <input type="date" value={endDate} disabled={settingsDisabled} onChange={(e) => handleEndDateChange(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', opacity: settingsDisabled ? 0.5 : 1 }} />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleRun}
               disabled={loading}

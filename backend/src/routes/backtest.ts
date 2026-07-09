@@ -192,8 +192,8 @@ export function createBacktestRouter() {
 
   router.post('/backtest', async (req, res) => {
     try {
-      const { symbol, timeframe, script, startDate, endDate, ...config } = req.body as Record<string, unknown>;
-      console.log('[backtest] POST received: symbol=%s, timeframe=%s, script length=%d', symbol, timeframe, typeof script === 'string' ? script.length : 0);
+      const { symbol, timeframe, script, startDate, endDate, days_back, ...config } = req.body as Record<string, unknown>;
+      console.log('[backtest] POST received: symbol=%s, timeframe=%s, script length=%d, days_back=%s', symbol, timeframe, typeof script === 'string' ? script.length : 0, days_back);
 
       if (!symbol || typeof symbol !== 'string') {
         res.status(400).json({ error: 'Missing or invalid "symbol" field' });
@@ -204,6 +204,17 @@ export function createBacktestRouter() {
         return;
       }
 
+      let effectiveStartDate = startDate as string | undefined;
+      let effectiveEndDate = endDate as string | undefined;
+
+      if (days_back && typeof days_back === 'number' && days_back > 0) {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - days_back);
+        effectiveStartDate = start.toISOString().split('T')[0];
+        effectiveEndDate = end.toISOString().split('T')[0];
+      }
+
       const jobId = randomUUID();
       const job: BacktestJob = {
         jobId,
@@ -211,8 +222,8 @@ export function createBacktestRouter() {
         progress: 0,
         symbol,
         timeframe,
-        startDate: startDate as string | undefined,
-        endDate: endDate as string | undefined,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
         config: { ...config, script } as Record<string, unknown>,
         createdAt: Date.now(),
       };

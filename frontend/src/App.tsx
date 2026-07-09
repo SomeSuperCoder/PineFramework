@@ -173,7 +173,7 @@ function App() {
           </select>
           {isStrategy && (
             <button className="view-results-button" onClick={() => {
-              console.log('[App] View Backtest clicked. strategySource=%o, indicatorResults=%o, indicators=%o, sourcesRef=%o',
+              console.log('[App] Run Backtest clicked. strategySource=%o, indicatorResults=%o, indicators=%o, sourcesRef=%o',
                 strategySource?.substring(0, 50),
                 Array.from(indicatorResults.entries()).map(([k, v]) => ({ id: k, hasMarkers: !!(v.strategyMarkers?.length) })),
                 indicatorManager.indicators.map(i => ({ id: i.id, scriptId: i.scriptId, hasSource: !!i.source })),
@@ -181,7 +181,7 @@ function App() {
               );
               setShowStrategyPopup(true);
             }}>
-              View Backtest Results
+              Run Backtest
             </button>
           )}
           <span style={{ fontSize: '12px', color: isConnected ? '#4caf50' : '#e94560' }}>
