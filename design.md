@@ -559,11 +559,16 @@ Key insights from Pine Script v6 and TradingView architecture research:
   2. User writes/modifies code and clicks "Run" or presses Ctrl+Enter
   3. Script is sent to Backend `/api/execute` for compilation and execution
   4. Execution results (plots, shapes, fills, strategy markers) are rendered on the chart
-  5. If the script returned `strategyMarkers` (indicating a strategy, not an indicator), a "View Backtest Results" button appears in the header area
-  6. Clicking "View Backtest Results" opens a nearly full-screen popup (~90% viewport)
-  7. The popup shows key metrics, equity/drawdown chart, and sortable trade list
-  8. A settings gear button opens a compact overlay where the user can tweak strategy parameters (initial capital, commission, slippage, etc.) — these auto-load from the `strategy()` declaration
-  9. Changing settings and clicking "Run Backtest" triggers a new backtest via the Backend
+  5. If the script returned `strategyMarkers` (indicating a strategy, not an indicator), a "Run Backtest" button appears in the header area
+  6. Clicking "Run Backtest" opens a settings panel where the user configures backtest parameters before running
+  7. The settings panel is pre-populated with defaults from the `strategy()` declaration and any previously saved user settings
+  8. Settings persist across sessions and page reloads — previously used values are restored when the panel reopens
+  9. The date range input defaults to a "days back" mode (e.g., "10 days", "30 days") with a toggle to switch to traditional begin/end date picker mode
+  10. Settings are read-only until the backtest has been run at least once
+  11. After the first run, settings become editable for subsequent backtests
+  12. When the user confirms settings and clicks "Confirm" (or "Run"), the backtest runs and the results panel is displayed
+  13. The results panel shows key metrics, equity/drawdown chart, and sortable trade list
+  14. A settings gear button in the results panel opens the settings overlay for tweaking parameters (after the first backtest)
 - **Key Features**:
   - Realtime candlestick chart rendered entirely on HTML5 Canvas
   - Popup code editor for Pine Script entry
@@ -607,7 +612,9 @@ Key insights from Pine Script v6 and TradingView architecture research:
     - Metrics grid: 8 tiles (Net Profit, Win Rate, Profit Factor, Sharpe, Max DD, Sortino, Total Trades, Commission)
     - Equity/Drawdown chart: canvas-rendered equity curve (blue line) and drawdown (red line), dual-panel layout
     - Trades table: sortable columns (Direction, Entry, Exit, PnL, Return, MAE, MFE, Bars), green/red coloring
-  - Settings overlay: compact popup within the main popup containing fields: initial capital, commission (value + type), slippage (value + type), default quantity (value + type), pyramiding, margin (long/short), start date, end date
+  - Settings panel: initially shown before results, containing fields: initial capital, commission (value + type), slippage (value + type), default quantity (value + type), pyramiding, margin (long/short), date range (days back input with toggle to begin/end date picker)
+  - Settings are read-only until the first backtest has run; after the first run, settings become editable
+  - Settings persist across sessions and page reloads (stored in localStorage or backend)
   - Auto-extracts default values from `strategy()` declaration in the script source
   - Backtest runs asynchronously via `/api/backtest` with progress polling
 

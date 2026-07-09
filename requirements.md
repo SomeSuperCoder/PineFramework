@@ -534,14 +534,18 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 28. THE Frontend SHALL update indicator overlays (plots, shapes, fills, strategy markers) on the chart automatically when new execution results arrive via WebSocket
 
 **Strategy Results Popup:**
-29. WHEN the user clicks Run and the script returned strategy markers (indicating a strategy, not an indicator), THE Frontend SHALL display a "View Backtest Results" button on the chart
-30. WHEN the user clicks "View Backtest Results", THE Frontend SHALL open a nearly full-screen popup overlay (centered, ~90% viewport) showing the strategy backtest results
-31. THE Strategy Results popup SHALL use default settings auto-extracted from the strategy() declaration (initial_capital, commission_value, slippage, pyramiding, default_qty_value, default_qty_type, margin_long, margin_short)
-32. THE Strategy Results popup SHALL provide a settings button (gear icon) that opens a compact settings overlay within the popup for tweaking strategy parameters
-33. WHEN the user modifies settings and clicks "Run Backtest", THE Frontend SHALL send a backtest request to the Backend with the updated parameters
-34. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
-35. THE Strategy Results popup SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
-36. THE Frontend SHALL strip `strategy.` prefix from enum values when extracting strategy parameters (e.g., `strategy.percent_of_equity` → `percent_of_equity`) to ensure correct comparison against bare enum names
+29. WHEN the user clicks Run and the script returned strategy markers (indicating a strategy, not an indicator), THE Frontend SHALL display a "Run Backtest" button on the chart
+30. WHEN the user clicks "Run Backtest", THE Frontend SHALL open a settings panel (either a modal or an inline panel within the popup) where the user can configure backtest parameters before running the backtest
+31. THE settings panel SHALL be pre-populated with default values auto-extracted from the strategy() declaration (initial_capital, commission_value, slippage, pyramiding, default_qty_value, default_qty_type, margin_long, margin_short) and any previously saved user settings
+32. THE backtest settings SHALL persist across sessions and page reloads — when the user reopens the settings panel, previously used values SHALL be restored
+33. THE settings panel SHALL default the date range input to a "days back" mode where the user enters the number of days to look back (e.g., "10 days", "30 days", "90 days") instead of separate begin/end date fields
+34. THE settings panel SHALL provide a toggle to switch between "days back" mode and a traditional begin/end date picker mode
+35. WHEN the user confirms settings and clicks a "Confirm" or "Run" button in the settings panel, THE Frontend SHALL send a backtest request to the Backend with the selected parameters and then display the backtest results panel
+36. THE backtest results panel SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
+37. THE backtest settings SHALL be read-only (non-editable) until the backtest has been run at least once — the settings panel SHALL prevent modifications before the first backtest run
+38. AFTER the first backtest has run, THE backtest settings SHALL become editable — the user SHALL be able to modify parameters and re-run the backtest
+39. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
+40. THE Frontend SHALL strip `strategy.` prefix from enum values when extracting strategy parameters (e.g., `strategy.percent_of_equity` → `percent_of_equity`) to ensure correct comparison against bare enum names
 
 **Lazy Loading and Re-Execution:**
 36. THE Frontend SHALL support lazy loading of historical OHLCV data when scrolling the chart backwards, fetching older bars on demand from the Backend via an `end` timestamp parameter

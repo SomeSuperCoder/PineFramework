@@ -3140,6 +3140,58 @@ This implementation plan outlines the step-by-step development of a production-g
     - Committed as `61227e4`
     - _Requirements: 17.36_
 
+- [ ] 122. Implement Backtest Settings Workflow with Persistent Config and Days-Back Date Range
+  - [ ] 122.1 Rename "View Backtest Results" button to "Run Backtest"
+    - Update all frontend references from "View Backtest Results" to "Run Backtest"
+    - Ensure button appears when script returns strategy markers (existing behavior)
+    - _Requirements: 17.29_
+
+  - [ ] 122.2 Create settings-first backtest flow
+    - When "Run Backtest" is clicked, open settings panel/modal BEFORE running the backtest
+    - Settings panel pre-populated with defaults from strategy() declaration and saved user settings
+    - After user confirms settings, send backtest request to Backend, then show results panel
+    - _Requirements: 17.30, 17.35_
+
+  - [ ] 122.3 Implement persistent backtest settings
+    - Store backtest settings (initial_capital, commission, slippage, pyramiding, qty, margin, date range) in localStorage or backend
+    - Restore saved settings when settings panel is opened
+    - Persist across sessions and page reloads
+    - _Requirements: 17.32_
+
+  - [ ] 122.4 Implement "days back" date range input
+    - Default date range input to "days back" mode: user enters number of days (e.g., 10, 30, 90)
+    - Add toggle to switch between "days back" mode and traditional begin/end date picker mode
+    - Convert "days back" to actual start_date/end_date before sending to Backend
+    - _Requirements: 17.33, 17.34_
+
+  - [ ] 122.5 Implement read-only settings until first backtest run
+    - Settings panel fields are disabled/read-only when no backtest has been run yet
+    - After the first backtest completes, settings become editable
+    - Track "hasRunBacktest" state per script/session
+    - _Requirements: 17.37, 17.38_
+
+  - [ ] 122.6 Add settings gear button to results panel
+    - After backtest results are displayed, show gear (⚙) icon in the results panel header
+    - Clicking gear opens the settings overlay for tweaking parameters
+    - Re-running with modified settings triggers a new backtest
+    - _Requirements: 17.38_
+
+  - [ ] 122.7 Update backend to accept days-back parameter
+    - Extend POST /api/backtest to accept `days_back` parameter as alternative to start_date/end_date
+    - Convert days_back to actual date range server-side before running backtest
+    - _Requirements: 17.33_
+
+  - [ ]* 122.8 Write tests for backtest settings workflow
+    - Test "Run Backtest" button opens settings panel
+    - Test settings persist across page reloads (localStorage)
+    - Test days-back input converts to correct date range
+    - Test toggle switches between days-back and date picker modes
+    - Test settings are read-only before first backtest run
+    - Test settings become editable after first backtest run
+    - Test gear button in results panel opens settings
+    - Test re-run with modified settings triggers new backtest
+    - _Requirements: 17.29-17.40_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3202,6 +3254,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 119 fixes ScriptFileWatcher chokidar v5 compatibility: updates watcher to use array of paths instead of glob pattern (chokidar v5 dropped glob support).
 - Task 120 adds frontend integration tests for backtest flow: 20 tests covering strategy detection, backtest button visibility, settings extraction, submission, progress tracking, result display, and error handling.
 - Task 121 fixes backtest 0 trades root cause: extractStrategyParams compared `"strategy.percent_of_equity"` against bare `'percent_of_equity'`, fell through to `'contracts'` as default, causing calculateQty to return raw 100 contracts instead of ~0.16 BTC, and canOpenPosition to reject all entries. Fixed by stripping `strategy.` prefix. Commit `61227e4`.
+- Task 122 implements backtest settings workflow changes: renames "View Backtest Results" to "Run Backtest", adds settings-first flow where settings panel opens before backtest runs, makes settings persistent across sessions, replaces date range with days-back input (with toggle to traditional mode), makes settings read-only until first backtest run, and adds settings gear to results panel for re-running with modified parameters.
 
 ## Task Dependency Graph
 
@@ -3355,7 +3408,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 144, "tasks": ["106.13", "106.14"] },
     { "id": 145, "tasks": ["107"] },
     { "id": 146, "tasks": ["108.1", "108.2", "108.3", "108.4", "108.5", "108.6", "108.7", "108.8"] },
-    { "id": 147, "tasks": ["109.1", "109.2", "109.3", "109.4", "109.5", "109.6", "109.7"] }
+    { "id": 147, "tasks": ["109.1", "109.2", "109.3", "109.4", "109.5", "109.6", "109.7"] },
+    { "id": 148, "tasks": ["122.1", "122.2", "122.3", "122.4", "122.5", "122.6", "122.7"] },
+    { "id": 149, "tasks": ["122.8"] }
   ]
 }
 ```
