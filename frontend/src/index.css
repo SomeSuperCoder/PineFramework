@@ -255,3 +255,9 @@ body {
   height: 3px;
   border-radius: 2px;
 }
+
+@keyframes backtest-indeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(250%); }
+  100% { transform: translateX(-100%); }
+}

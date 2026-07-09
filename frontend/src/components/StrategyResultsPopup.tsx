@@ -108,7 +108,10 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           )}
           {status === null && (
             <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
-              Starting backtest...
+              <div style={{ width: '60%', margin: '0 auto 12px', height: '8px', background: '#0d0d18', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: '30%', height: '100%', background: '#2196f3', borderRadius: '4px', animation: 'backtest-indeterminate 1.5s ease-in-out infinite' }} />
+              </div>
+              <div style={{ fontSize: '14px', color: '#aaa' }}>Starting backtest...</div>
             </div>
           )}
         </div>
