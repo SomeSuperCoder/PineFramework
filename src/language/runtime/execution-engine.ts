@@ -1671,11 +1671,19 @@ export class ExecutionEngine {
 
         if (typeof directionOrQty === 'string') {
           dir = directionOrQty === 'short' ? 'short' : 'long';
-          qty = typeof restArgs[0] === 'number' ? restArgs[0] : undefined;
+          qty = typeof restArgs[0] === 'number'
+            ? restArgs[0]
+            : typeof namedArgs?.qty === 'number'
+              ? namedArgs.qty
+              : undefined;
           pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
         } else {
           dir = 'long';
-          qty = typeof directionOrQty === 'number' ? directionOrQty : undefined;
+          qty = typeof directionOrQty === 'number'
+            ? directionOrQty
+            : typeof namedArgs?.qty === 'number'
+              ? namedArgs.qty
+              : undefined;
           pr = typeof restArgs[0] === 'number' ? restArgs[0] : 0;
         }
 

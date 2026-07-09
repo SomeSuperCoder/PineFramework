@@ -39,13 +39,17 @@ export function StrategyResultsPopup({ isOpen, onClose, symbol, timeframe, scrip
       const scriptParams = extractStrategyParams(scriptSource);
       const merged = { ...defaultConfig, ...scriptParams };
       setConfig(merged);
+      console.log('[StrategyResultsPopup] isOpen=true, scriptSource length=%d, hasSubmitted=%o', scriptSource?.length || 0, hasSubmittedRef.current);
       if (!hasSubmittedRef.current && scriptSource) {
         hasSubmittedRef.current = true;
+        console.log('[StrategyResultsPopup] Submitting backtest with script length=%d', scriptSource.length);
         submitBacktest(
           symbol,
           timeframe,
           { ...merged, script: scriptSource },
         );
+      } else if (!scriptSource) {
+        console.warn('[StrategyResultsPopup] scriptSource is empty, NOT submitting');
       }
     } else {
       hasSubmittedRef.current = false;

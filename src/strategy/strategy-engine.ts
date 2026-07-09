@@ -326,8 +326,20 @@ export class StrategyEngine {
     limitPrice?: number,
     comment?: string,
   ): Order | undefined {
-    if (this.position.direction === 'flat' || this.position.quantity === 0) {
-      return undefined;
+    let exitDirection: OrderDirection;
+    let exitQuantity: number;
+    let exitAction: 'buy' | 'sell';
+
+    if (this.position.direction !== 'flat' && this.position.quantity > 0) {
+      exitDirection = this.position.direction;
+      exitQuantity = Math.min(quantity, this.position.quantity);
+      exitAction = this.position.direction === 'long' ? 'sell' : 'buy';
+    } else {
+      const pendingEntry = this.pendingOrders.find((o) => o.type === 'market');
+      if (!pendingEntry) return undefined;
+      exitDirection = pendingEntry.direction;
+      exitQuantity = quantity || pendingEntry.quantity;
+      exitAction = pendingEntry.action === 'buy' ? 'sell' : 'buy';
     }
 
     const hasStop = stopPrice !== undefined && stopPrice > 0;
@@ -342,10 +354,10 @@ export class StrategyEngine {
     const order: Order = {
       id: generateOrderId(),
       symbol: this.position.symbol,
-      direction: this.position.direction === 'long' ? 'long' : 'short',
-      action: this.position.direction === 'long' ? 'sell' : 'buy',
+      direction: exitDirection,
+      action: exitAction,
       type: orderType,
-      quantity: Math.min(quantity, this.position.quantity),
+      quantity: exitQuantity,
       price,
       stopPrice,
       limitPrice,

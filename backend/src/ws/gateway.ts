@@ -56,7 +56,6 @@ export function createWSGateway(
           const close = parseFloat(String(d.close || '0'));
           const volume = parseFloat(String(d.volume || '0'));
           const confirmed = d.confirm === true || d.confirm === 'true';
-          console.log(`[WS] Bybit kline: confirm=${JSON.stringify(d.confirm)} parsed=${confirmed}`);
 
           if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
             return;
@@ -107,32 +106,25 @@ export function createWSGateway(
       if (cb.readyState !== WebSocket.OPEN) subscribers.delete(cb);
     }
 
-    console.log(`[WS] reexecuteForTopic: ${subscribers.size} subscriber(s) for topic "${topic}"`);
-
     const topicParts = topic.split('.');
     const symbol = topicParts[2] || '';
     const interval = topicParts[1] || '';
 
     for (const ws of subscribers) {
       if (ws.readyState !== WebSocket.OPEN) {
-        console.log(`[WS] reexecuteForTopic: skipping non-open WS connection`);
         continue;
       }
       const sub = clients.get(ws);
       if (!sub) {
-        console.log(`[WS] reexecuteForTopic: subscriber not found in clients map`);
         continue;
       }
       if (sub.sessions.size === 0) {
-        console.log(`[WS] reexecuteForTopic: subscriber has NO sessions! Chart updates work but scripts won't re-execute.`);
         continue;
       }
 
       for (const [indicatorId, session] of sub.sessions) {
         try {
-          console.log(`[WS] reexecuteForTopic: calling appendOrUpdateBar for ${symbol} ${interval} indicatorId=${indicatorId}`);
           const outputs = session.appendOrUpdateBar(bar, confirmed);
-          console.log(`[WS] reexecuteForTopic: appendOrUpdateBar done, indicatorId=${indicatorId}, alertTriggers=${outputs.alertTriggers?.length}, alertConditions=${outputs.alertConditions?.length}, isConfirmed=${outputs.isConfirmed}, confirmed=${confirmed}`);
 
           ws.send(JSON.stringify({
             type: 'execution_result',
@@ -144,10 +136,8 @@ export function createWSGateway(
           const triggers = outputs.alertTriggers;
           const hasTriggers = triggers !== undefined && triggers.length > 0;
           const isConfirmed = outputs.isConfirmed ?? false;
-          console.log(`[WS] reexecuteForTopic: telegramService.isActive()=${tgActive}, hasTriggers=${hasTriggers}, isConfirmed=${isConfirmed}`);
 
           if (!isConfirmed) {
-            console.log(`[WS] reexecuteForTopic: forming candle (isConfirmed=false), suppressing alert dispatch`);
           } else if (tgActive && hasTriggers && telegramService) {
             for (const trigger of triggers) {
               const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);

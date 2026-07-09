@@ -34,6 +34,7 @@ export function createBacktestRouter() {
 
   async function runBacktest(job: BacktestJob): Promise<void> {
     try {
+      console.log('[backtest] runBacktest starting: jobId=%s, symbol=%s, script length=%d', job.jobId, job.symbol, (job.config.script as string)?.length || 0);
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
         job.endDate ? new Date(job.endDate).getTime() : undefined,
@@ -116,6 +117,9 @@ export function createBacktestRouter() {
 
       const sanitize = (v: number) => Number.isFinite(v) ? v : 0;
 
+      console.log('[backtest] Metrics: totalTrades=%d, totalPnl=%d, winRate=%d, profitFactor=%d', metrics.totalTrades, metrics.totalPnl, metrics.winRate, metrics.profitFactor);
+      console.log('[backtest] Equity curve length=%d, trades=%d', equityCurve.length, trades.length);
+
       job.result = {
         metrics: {
           totalTrades: metrics.totalTrades,
@@ -185,6 +189,7 @@ export function createBacktestRouter() {
   router.post('/backtest', async (req, res) => {
     try {
       const { symbol, timeframe, script, startDate, endDate, ...config } = req.body as Record<string, unknown>;
+      console.log('[backtest] POST received: symbol=%s, timeframe=%s, script length=%d', symbol, timeframe, typeof script === 'string' ? script.length : 0);
 
       if (!symbol || typeof symbol !== 'string') {
         res.status(400).json({ error: 'Missing or invalid "symbol" field' });
@@ -254,6 +259,7 @@ export function createBacktestRouter() {
       return;
     }
 
+    console.log('[backtest] Result requested for jobId=%s, hasResult=%o, metrics=%o', jobId, !!job.result, job.result?.metrics ? Object.fromEntries(Object.entries(job.result.metrics).map(([k, v]) => [k, typeof v === 'number' ? Math.round(v * 100) / 100 : v])) : null);
     res.json(job.result);
   });
 

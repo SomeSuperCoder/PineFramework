@@ -37,10 +37,12 @@ export function useBacktest() {
     setStatus('queued');
 
     try {
+      const body = JSON.stringify({ symbol, timeframe, startDate, endDate, ...config });
+      console.log('[useBacktest] POST /api/backtest body script length=%d', config.script?.length || 0);
       const response = await fetch('/api/backtest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol, timeframe, startDate, endDate, ...config }),
+        body,
       });
 
       if (!response.ok) {

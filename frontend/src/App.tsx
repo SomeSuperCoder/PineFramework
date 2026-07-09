@@ -135,12 +135,17 @@ function App() {
     if (fromMain) return lastCodeRef.current || '';
     for (const [id, res] of indicatorResults) {
       if (res.strategyMarkers && res.strategyMarkers.length > 0) {
-        const ind = indicatorManager.indicators.find((i) => i.id === id);
-        if (ind?.source) return ind.source;
         const fromRef = indicatorSourcesRef.current.get(id);
         if (fromRef?.source) return fromRef.source;
+        const ind = indicatorManager.indicators.find((i) => i.id === id);
+        if (ind?.source) return ind.source;
+        console.error('[strategySource] MISS: id=%s has strategyMarkers but source not in sourcesRef (%d entries) or indicators (%d entries)',
+          id, indicatorSourcesRef.current.size, indicatorManager.indicators.length);
         return '';
       }
+    }
+    if (indicatorResults.size > 0) {
+      console.log('[strategySource] No strategyMarkers in any of %d indicatorResults', indicatorResults.size);
     }
     return '';
   })();
@@ -167,7 +172,15 @@ function App() {
             ))}
           </select>
           {isStrategy && (
-            <button className="view-results-button" onClick={() => setShowStrategyPopup(true)}>
+            <button className="view-results-button" onClick={() => {
+              console.log('[App] View Backtest clicked. strategySource=%o, indicatorResults=%o, indicators=%o, sourcesRef=%o',
+                strategySource?.substring(0, 50),
+                Array.from(indicatorResults.entries()).map(([k, v]) => ({ id: k, hasMarkers: !!(v.strategyMarkers?.length) })),
+                indicatorManager.indicators.map(i => ({ id: i.id, scriptId: i.scriptId, hasSource: !!i.source })),
+                Array.from(indicatorSourcesRef.current.entries()).map(([k, v]) => ({ id: k, hasSource: !!v.source }))
+              );
+              setShowStrategyPopup(true);
+            }}>
               View Backtest Results
             </button>
           )}
