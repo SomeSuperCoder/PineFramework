@@ -39,8 +39,9 @@ export function createBacktestRouter() {
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
         job.endDate ? new Date(job.endDate).getTime() : undefined,
+        (p) => updateProgress(job.jobId, p),
       );
-      updateProgress(job.jobId, 10);
+      updateProgress(job.jobId, 20);
 
       if (bars.length === 0) {
         throw new Error('No bar data available for the specified symbol and timeframe');
@@ -359,11 +360,13 @@ async function fetchBars(
   timeframe: string,
   startDate?: number,
   endDate?: number,
+  onProgress?: (progress: number) => void,
 ): Promise<Bar[]> {
   const bybitSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
   const limit = 1000;
   let allBars: Bar[] = [];
   let cursor: number | undefined;
+  const totalSpan = startDate && endDate ? endDate - startDate : undefined;
 
   for (let attempt = 0; attempt < 200; attempt++) {
     let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
@@ -398,8 +401,18 @@ async function fetchBars(
     });
 
     allBars = allBars.concat(filtered);
-    console.log('[backtest] fetchBars attempt=%d got=%d filtered=%d total=%d cursor=%d', attempt, raw.length, filtered.length, allBars.length, bars[0]!.timestamp);
     cursor = bars[0]!.timestamp;
+
+    if (onProgress) {
+      if (totalSpan && totalSpan > 0) {
+        const fetched = endDate && cursor ? endDate - cursor : 0;
+        onProgress(Math.min(19, Math.round((fetched / totalSpan) * 19)));
+      } else {
+        onProgress(Math.min(19, attempt + 1));
+      }
+    }
+
+    console.log('[backtest] fetchBars attempt=%d got=%d filtered=%d total=%d cursor=%d', attempt, raw.length, filtered.length, allBars.length, cursor);
     if (bars.length < limit) break;
     if (startDate && cursor <= startDate) break;
   }
