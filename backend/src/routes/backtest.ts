@@ -29,7 +29,6 @@ export function createBacktestRouter() {
     const job = jobs.get(jobId);
     if (job) {
       job.progress = progress;
-      console.log('[backtest] progress=%d status=%s jobId=%s', progress, job.status, jobId);
     }
   }
 
@@ -272,7 +271,6 @@ export function createBacktestRouter() {
       error: job.error,
       result_url: job.status === 'completed' ? `/api/backtest/${jobId}/result` : undefined,
     });
-    console.log('[backtest] poll response: status=%s progress=%d jobId=%s', job.status, job.progress, jobId);
   });
 
   router.get('/backtest/:jobId/result', (req, res) => {
