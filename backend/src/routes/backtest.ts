@@ -87,10 +87,14 @@ export function createBacktestRouter() {
 
       updateProgress(job.jobId, 20);
 
+      console.log('[backtest] Executing %d bars', contexts.length);
+      console.log('[backtest] First bar: open=%d, high=%d, low=%d, close=%d', contexts[0]?.open.get(0), contexts[0]?.high.get(0), contexts[0]?.low.get(0), contexts[0]?.close.get(0));
+      console.log('[backtest] Last bar: open=%d, high=%d, low=%d, close=%d', contexts[contexts.length-1]?.open.get(contexts.length-1), contexts[contexts.length-1]?.high.get(contexts.length-1), contexts[contexts.length-1]?.low.get(contexts.length-1), contexts[contexts.length-1]?.close.get(contexts.length-1));
       const execResult = execEngine.executeBars(contexts);
       if (!execResult.success) {
         throw new Error(execResult.error || 'Execution failed');
       }
+      console.log('[backtest] Execution complete. success=%o, markers=%d', execResult.success, execResult.strategyMarkers?.length || 0);
 
       updateProgress(job.jobId, 80);
 

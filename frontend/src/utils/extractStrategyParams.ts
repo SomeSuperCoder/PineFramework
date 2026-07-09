@@ -28,13 +28,13 @@ export function extractStrategyParams(source: string): Partial<BacktestConfig> {
     params.defaultQty = parseFloat(args.default_qty_value);
   }
   if (args.default_qty_type !== undefined) {
-    const qt = args.default_qty_type.replace(/['"]/g, '').trim();
+    const qt = args.default_qty_type.replace(/['"]/g, '').trim().replace(/^strategy\./, '');
     if (qt === 'percent_of_equity') params.defaultQtyType = 'percent_of_equity';
     else if (qt === 'currency') params.defaultQtyType = 'cash';
     else params.defaultQtyType = 'contracts';
   }
   if (args.commission_type !== undefined) {
-    const ct = args.commission_type.replace(/['"]/g, '').trim();
+    const ct = args.commission_type.replace(/['"]/g, '').trim().replace(/^strategy\./, '');
     if (ct === 'per_order') params.commissionType = 'per_order';
     else if (ct === 'per_contract') params.commissionType = 'per_contract';
     else if (ct === 'percent') params.commissionType = 'percent';

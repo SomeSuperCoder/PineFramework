@@ -1917,6 +1917,7 @@ export class ExecutionEngine {
     } catch (error) {
       const executionTime = performance.now() - startTime;
       this.updateMetrics(false, executionTime);
+      console.error(`[ExecutionEngine] Error at bar ${context.barIndex}: ${error instanceof Error ? error.message : String(error)}`);
       this.rollbackToPreviousBar();
 
       const activeLines = [...this.lines.values()].map((l) => ({ ...l }));

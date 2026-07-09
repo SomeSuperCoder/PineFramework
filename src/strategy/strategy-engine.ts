@@ -223,6 +223,7 @@ export class StrategyEngine {
       if (this.position.direction !== 'flat' && this.position.direction !== direction) {
         this.close(`${name}_reverse`);
       } else {
+        console.log(`[StrategyEngine] entry REJECTED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} pos=${this.position.direction} entries=${this.entries} pyramiding=${this.config.pyramiding}`);
         return undefined;
       }
     }
@@ -246,6 +247,7 @@ export class StrategyEngine {
 
     this.pendingOrders.push(order);
     this.entries++;
+    console.log(`[StrategyEngine] entry CREATED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} orderId=${order.id}`);
 
     this.markers.push({
       type: 'entry',
@@ -722,7 +724,11 @@ export class StrategyEngine {
     this.pendingOrders = this.pendingOrders.filter((o) => o.type !== 'market');
 
     for (const order of marketOrders) {
+      console.log(`[StrategyEngine] fillMarketOrder: orderId=${order.id} action=${order.action} qty=${order.quantity} open=${open}`);
       this.fillOrder(order, open);
+    }
+    if (marketOrders.length > 0) {
+      console.log(`[StrategyEngine] after fill: pos=${this.position.direction} qty=${this.position.quantity}`);
     }
   }
 
