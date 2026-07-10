@@ -7,11 +7,12 @@ interface StrategyResultsPopupProps {
   onOpenSettings: () => void;
   status: BacktestStatusResponse['status'] | null;
   progress: number;
+  phase: string;
   result: BacktestResultResponse | null;
   error: string | null;
 }
 
-export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, progress, result, error }: StrategyResultsPopupProps) {
+export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, progress, phase, result, error }: StrategyResultsPopupProps) {
   if (!isOpen) return null;
 
   const isLoading = status === null || status === 'queued' || status === 'running';
@@ -104,7 +105,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
                 )}
               </div>
               <div style={{ fontSize: '14px', color: '#aaa' }}>
-                {status === 'running' ? `Running backtest... ${displayProgress}%` : 'Starting backtest...'}
+                {status === 'running' ? `${phase}... ${displayProgress}%` : `${phase || 'Starting backtest'}...`}
               </div>
             </div>
           )}

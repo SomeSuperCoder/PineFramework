@@ -10,6 +10,7 @@ export function useBacktest() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<BacktestStatusResponse['status'] | null>(null);
   const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<string>('');
   const [result, setResult] = useState<BacktestResultResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,6 +35,7 @@ export function useBacktest() {
     setError(null);
     setResult(null);
     setProgress(0);
+    setPhase('Queued');
     setStatus('queued');
 
     try {
@@ -65,6 +67,7 @@ export function useBacktest() {
           const statusData: BacktestStatusResponse = await statusResponse.json();
           setStatus(statusData.status);
           setProgress(statusData.progress);
+          if (statusData.phase) setPhase(statusData.phase);
 
           if (statusData.status === 'completed') {
             stopPolling();
@@ -95,6 +98,7 @@ export function useBacktest() {
     jobId,
     status,
     progress,
+    phase,
     result,
     error,
     loading,
@@ -104,6 +108,7 @@ export function useBacktest() {
       setJobId(null);
       setStatus(null);
       setProgress(0);
+      setPhase('');
       setResult(null);
       setError(null);
     }, [stopPolling]),

@@ -33,7 +33,7 @@ function App() {
   const [autoScale, setAutoScale] = useState(true);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
-  const { status, progress, result, error, submitBacktest, reset } = useBacktest();
+  const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
 
   const onIndicatorResult = useCallback((indicatorId: string, result: ScriptResult) => {
@@ -262,6 +262,7 @@ function App() {
         onOpenSettings={handleOpenSettings}
         status={status}
         progress={progress}
+        phase={phase}
         result={result}
         error={error}
       />

@@ -256,6 +256,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status={null}
           progress={0}
+          phase=""
           result={null}
           error={null}
         />
@@ -271,6 +272,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status={null}
           progress={0}
+          phase=""
           result={null}
           error={null}
         />
@@ -286,11 +288,12 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status="running"
           progress={50}
+          phase="Executing bars"
           result={null}
           error={null}
         />
       );
-      expect(screen.getByText(/Running backtest/)).toBeInTheDocument();
+      expect(screen.getByText(/Executing bars/)).toBeInTheDocument();
       expect(screen.getByText('50%')).toBeInTheDocument();
     });
 
@@ -302,6 +305,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status="failed"
           progress={0}
+          phase=""
           result={null}
           error="Script error"
         />
@@ -317,6 +321,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status="completed"
           progress={100}
+          phase=""
           result={MOCK_RESULT}
           error={null}
         />
@@ -333,6 +338,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={vi.fn()}
           status="completed"
           progress={100}
+          phase=""
           result={MOCK_RESULT}
           error={null}
         />
@@ -353,6 +359,7 @@ describe('Backtest Flow Integration', () => {
           onOpenSettings={onOpenSettings}
           status="completed"
           progress={100}
+          phase=""
           result={MOCK_RESULT}
           error={null}
         />

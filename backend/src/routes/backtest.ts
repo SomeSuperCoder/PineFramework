@@ -10,6 +10,7 @@ export interface BacktestJob {
   jobId: string;
   status: JobStatus;
   progress: number;
+  phase: string;
   symbol: string;
   timeframe: string;
   startDate?: string;
@@ -32,9 +33,17 @@ export function createBacktestRouter() {
     }
   }
 
+  function setPhase(jobId: string, phase: string): void {
+    const job = jobs.get(jobId);
+    if (job) {
+      job.phase = phase;
+    }
+  }
+
   async function runBacktest(job: BacktestJob): Promise<void> {
     try {
       job.status = 'running';
+      setPhase(job.jobId, 'Fetching market data');
       console.log('[backtest] runBacktest starting: jobId=%s, symbol=%s, script length=%d', job.jobId, job.symbol, (job.config.script as string)?.length || 0);
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
@@ -53,6 +62,7 @@ export function createBacktestRouter() {
         throw new Error('No Pine Script source provided. Set "script" in the request body.');
       }
 
+      setPhase(job.jobId, 'Compiling script');
       const parseResult = parse(script);
       const compileResult = compile(parseResult.ast);
 
@@ -76,6 +86,7 @@ export function createBacktestRouter() {
 
       const execEngine = new ExecutionEngine(compileResult, Object.keys(configOverride).length > 0 ? configOverride : undefined);
 
+      setPhase(job.jobId, 'Preparing bars');
       const contexts = bars.map((bar, i) => ({
         barIndex: i,
         barCount: bars.length,
@@ -88,6 +99,7 @@ export function createBacktestRouter() {
       }));
 
       updateProgress(job.jobId, 20);
+      setPhase(job.jobId, 'Executing bars');
 
       console.log('[backtest] Executing %d bars', contexts.length);
       console.log('[backtest] First bar: open=%d, high=%d, low=%d, close=%d', contexts[0]?.open.get(0), contexts[0]?.high.get(0), contexts[0]?.low.get(0), contexts[0]?.close.get(0));
@@ -114,6 +126,7 @@ export function createBacktestRouter() {
       console.log('[backtest] Execution complete. success=%o, markers=%d', execResult.success, execResult.strategyMarkers?.length || 0);
 
       updateProgress(job.jobId, 80);
+      setPhase(job.jobId, 'Computing metrics');
 
       const strategyEngine = execEngine.getStrategyEngine();
 
@@ -135,6 +148,7 @@ export function createBacktestRouter() {
         : 0;
 
       updateProgress(job.jobId, 90);
+      setPhase(job.jobId, 'Building results');
 
       const sanitize = (v: number) => Number.isFinite(v) ? v : 0;
 
@@ -237,6 +251,7 @@ export function createBacktestRouter() {
         jobId,
         status: 'queued',
         progress: 0,
+        phase: 'Queued',
         symbol,
         timeframe,
         startDate: effectiveStartDate,
@@ -272,6 +287,7 @@ export function createBacktestRouter() {
     res.json({
       status: job.status,
       progress: job.progress,
+      phase: job.phase,
       error: job.error,
       result_url: job.status === 'completed' ? `/api/backtest/${jobId}/result` : undefined,
     });
