@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig } from '../types';
 
-const MAX_BARS = 1000;
+const MAX_BARS = 500;
 
 const BARS_PER_DAY: Record<string, number> = {
   '1': 1440,
@@ -24,6 +24,11 @@ function estimateBars(timeframe: string, days: number): number {
   const barsPerDay = BARS_PER_DAY[timeframe] ?? 24;
   return Math.ceil(barsPerDay * days);
 }
+
+const TIMEFRAME_LABELS: Record<string, string> = {
+  '1': '1m', '5': '5m', '15': '15m', '30': '30m',
+  '60': '1h', '240': '4h', 'D': '1D', 'W': '1W',
+};
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -275,7 +280,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               border: `1px solid ${exceedsLimit ? '#e94560' : '#4caf50'}`,
             }}>
               {exceedsLimit
-                ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${MAX_BARS}. Reduce to ~${maxDays} days for ${timeframe === '1' ? '1m' : timeframe === '5' ? '5m' : timeframe === '15' ? '15m' : timeframe === '30' ? '30m' : timeframe === '60' ? '1h' : timeframe === '240' ? '4h' : timeframe === 'D' ? '1D' : '1W'}.`
+                ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${MAX_BARS}. Max for ${TIMEFRAME_LABELS[timeframe] ?? timeframe} is ~${maxDays} day${maxDays !== 1 ? 's' : ''}.`
                 : `~${estimatedBars.toLocaleString()} bars (max ${MAX_BARS})`}
             </div>
           )}

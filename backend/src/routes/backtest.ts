@@ -56,8 +56,8 @@ export function createBacktestRouter() {
         throw new Error('No bar data available for the specified symbol and timeframe');
       }
 
-      if (bars.length > 1000) {
-        throw new Error(`Too many bars (${bars.length}). Maximum is 1000. Use a shorter date range or larger timeframe.`);
+      if (bars.length > 500) {
+        throw new Error(`Too many bars (${bars.length}). Maximum is 500. Use a shorter date range or larger timeframe.`);
       }
 
       const script = job.config.script as string | undefined;
