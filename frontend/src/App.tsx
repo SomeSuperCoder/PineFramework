@@ -31,6 +31,7 @@ function App() {
   const [showResultsPopup, setShowResultsPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
+  const [telegramOpen, setTelegramOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -198,11 +199,6 @@ function App() {
               <option key={i.value} value={i.value}>{i.label}</option>
             ))}
           </select>
-          {isStrategy && (
-            <button className="view-results-button" onClick={() => setShowSettingsPopup(true)}>
-              Run Backtest
-            </button>
-          )}
           <span style={{ fontSize: '12px', color: isConnected ? '#4caf50' : '#e94560' }}>
             {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
           </span>
@@ -224,20 +220,61 @@ function App() {
         />
       </main>
 
-      <div className="footer-bar">
+      <div className="footer-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 16px' }}>
+        <button className="editor-button" onClick={() => setEditorOpen(true)} style={{
+          padding: '6px 14px',
+          background: '#111128',
+          color: '#e0e0e0',
+          border: '1px solid #111128',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+        }}>
+          Open Editor
+        </button>
+        {isStrategy && (
+          <button className="run-backtest-button" onClick={() => setShowSettingsPopup(true)} style={{
+            padding: '6px 14px',
+            background: '#2196f3',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: 'bold',
+          }}>
+            Run Backtest
+          </button>
+        )}
+        <button className="telegram-toggle-button" onClick={() => setTelegramOpen(!telegramOpen)} style={{
+          padding: '6px 14px',
+          background: telegramOpen ? '#3a1a1a' : '#111128',
+          color: telegramOpen ? '#e94560' : '#e0e0e0',
+          border: `1px solid ${telegramOpen ? '#e94560' : '#111128'}`,
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+        }}>
+          {telegramOpen ? 'Close Telegram' : 'Telegram'}
+        </button>
         <button
           className={`auto-scale-toggle ${autoScale ? 'active' : ''}`}
           onClick={() => setAutoScale(!autoScale)}
+          style={{
+            padding: '6px 14px',
+            background: autoScale ? '#4caf50' : '#111128',
+            color: '#e0e0e0',
+            border: '1px solid #111128',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+          }}
         >
-          {autoScale ? '⊡ Auto Scale' : '⊞ Manual Scale'}
+          {autoScale ? 'Auto Scale' : 'Manual Scale'}
         </button>
       </div>
 
       <ErrorConsole errors={errors} onClear={() => setErrors([])} />
-
-      <button className="editor-button" onClick={() => setEditorOpen(true)}>
-        Open Editor
-      </button>
 
       <CodeEditor
         isOpen={editorOpen}
@@ -247,6 +284,8 @@ function App() {
 
       <TelegramConfigPanel
         alertConditions={scriptResult?.alertConditions || []}
+        isOpen={telegramOpen}
+        onToggle={() => setTelegramOpen(!telegramOpen)}
       />
 
       <BacktestSettingsPopup

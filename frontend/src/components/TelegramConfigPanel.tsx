@@ -3,6 +3,8 @@ import type { TelegramConfig, AlertConditionData, ProxyConfig } from '../types';
 
 interface TelegramConfigPanelProps {
   alertConditions: AlertConditionData[];
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 async function fetchTelegramConfig(): Promise<TelegramConfig> {
@@ -50,8 +52,7 @@ async function saveProxyConfig(proxy: { host: string; port: number; username?: s
   });
 }
 
-export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function TelegramConfigPanel({ alertConditions, isOpen, onToggle }: TelegramConfigPanelProps) {
   const [config, setConfig] = useState<TelegramConfig | null>(null);
   const [botToken, setBotToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -181,30 +182,9 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
     }
   };
 
-  return (
-    <>
-      <button
-        className="telegram-button"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          bottom: '140px',
-          right: '20px',
-          zIndex: 100,
-          padding: '10px 16px',
-          background: '#111128',
-          color: '#e0e0e0',
-          border: '1px solid #2196f3',
-          borderRadius: '6px',
-          cursor: 'pointer',
-        }}
-      >
-        {isOpen ? '✕ Close Telegram' : '🔔 Telegram'}
-      </button>
-
-      {isOpen && (
-        <div
-          className="telegram-panel"
+  return isOpen ? (
+    <div
+      className="telegram-panel"
           style={{
             position: 'fixed',
             top: '60px',
@@ -484,7 +464,5 @@ export function TelegramConfigPanel({ alertConditions }: TelegramConfigPanelProp
             </>
           )}
         </div>
-      )}
-    </>
-  );
+      ) : null;
 }
