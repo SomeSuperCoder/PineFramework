@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig } from '../types';
 
-const MAX_BARS = 500;
+const MAX_BARS = 1500;
 
 const BARS_PER_DAY: Record<string, number> = {
   '1': 1440,
