@@ -24,8 +24,15 @@ const INTERVALS = [
 
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
-  const [timeframe, setTimeframe] = useState('1');
-  const [symbol, setSymbol] = useState('BTCUSDT');
+
+  const [timeframe, setTimeframe] = useState(() => {
+    const saved = localStorage.getItem('pine-timeframe');
+    return INTERVALS.some(i => i.value === saved) ? saved : '1';
+  });
+  const [symbol, setSymbol] = useState(() => {
+    const saved = localStorage.getItem('pine-symbol');
+    return SYMBOLS.includes(saved) ? saved : 'BTCUSDT';
+  });
   const [dataVersion, setDataVersion] = useState(0);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
@@ -189,12 +196,12 @@ function App() {
       <header className="header">
         <h1>Pine Script Engine</h1>
         <div className="header-controls">
-          <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
+          <select value={symbol} onChange={(e) => { const v = e.target.value; setSymbol(v); localStorage.setItem('pine-symbol', v); }}>
             {SYMBOLS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+          <select value={timeframe} onChange={(e) => { const v = e.target.value; setTimeframe(v); localStorage.setItem('pine-timeframe', v); }}>
             {INTERVALS.map((i) => (
               <option key={i.value} value={i.value}>{i.label}</option>
             ))}
