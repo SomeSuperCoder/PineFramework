@@ -254,6 +254,7 @@ function App() {
         onClose={() => setShowSettingsPopup(false)}
         onRun={handleRunBacktest}
         scriptSource={strategySource}
+        timeframe={timeframe}
       />
 
       <StrategyResultsPopup

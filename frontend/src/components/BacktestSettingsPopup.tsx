@@ -2,6 +2,29 @@ import { useState, useCallback } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig } from '../types';
 
+const MAX_BARS = 1000;
+
+const BARS_PER_DAY: Record<string, number> = {
+  '1': 1440,
+  '5': 288,
+  '15': 96,
+  '30': 48,
+  '60': 24,
+  '240': 6,
+  'D': 1,
+  'W': Math.round(1 / 7 * 100) / 100,
+};
+
+function getMaxDays(timeframe: string): number {
+  const barsPerDay = BARS_PER_DAY[timeframe] ?? 24;
+  return Math.floor(MAX_BARS / barsPerDay);
+}
+
+function estimateBars(timeframe: string, days: number): number {
+  const barsPerDay = BARS_PER_DAY[timeframe] ?? 24;
+  return Math.ceil(barsPerDay * days);
+}
+
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
   commission: 0,
@@ -61,9 +84,10 @@ export interface BacktestSettingsPopupProps {
   onClose: () => void;
   onRun: (config: BacktestConfig, startDate?: string, endDate?: string) => void;
   scriptSource: string;
+  timeframe: string;
 }
 
-export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource }: BacktestSettingsPopupProps) {
+export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, timeframe }: BacktestSettingsPopupProps) {
   const saved = loadUserSettings();
   const scriptParams = extractStrategyParams(scriptSource);
 
@@ -73,6 +97,17 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource }: 
   const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>(() => saved?.dateRangeMode ?? 'days_back');
   const [startDate, setStartDate] = useState(() => saved?.startDate ?? '');
   const [endDate, setEndDate] = useState(() => saved?.endDate ?? '');
+
+  const maxDays = getMaxDays(timeframe);
+  const estimatedDays = dateRangeMode === 'days_back' ? daysBack : (() => {
+    if (startDate && endDate) {
+      const diff = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
+      return Math.max(0, Math.ceil(diff));
+    }
+    return 0;
+  })();
+  const estimatedBars = estimateBars(timeframe, estimatedDays);
+  const exceedsLimit = estimatedBars > MAX_BARS;
 
   const persist = useCallback((updates: Partial<UserSettings>) => {
     const current: UserSettings = { initialCapital, commission, daysBack, dateRangeMode, startDate, endDate, ...updates };
@@ -229,16 +264,33 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource }: 
             </div>
           </div>
 
+          {estimatedDays > 0 && (
+            <div style={{
+              marginTop: '12px',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              background: exceedsLimit ? '#3a1a1a' : '#1a2a1a',
+              color: exceedsLimit ? '#e94560' : '#4caf50',
+              border: `1px solid ${exceedsLimit ? '#e94560' : '#4caf50'}`,
+            }}>
+              {exceedsLimit
+                ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${MAX_BARS}. Reduce to ~${maxDays} days for ${timeframe === '1' ? '1m' : timeframe === '5' ? '5m' : timeframe === '15' ? '15m' : timeframe === '30' ? '30m' : timeframe === '60' ? '1h' : timeframe === '240' ? '4h' : timeframe === 'D' ? '1D' : '1W'}.`
+                : `~${estimatedBars.toLocaleString()} bars (max ${MAX_BARS})`}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
             <button
               onClick={handleRun}
+              disabled={exceedsLimit}
               style={{
                 padding: '8px 24px',
-                background: '#2196f3',
+                background: exceedsLimit ? '#555' : '#2196f3',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
+                cursor: exceedsLimit ? 'not-allowed' : 'pointer',
                 fontSize: '13px',
                 fontWeight: 'bold',
               }}
