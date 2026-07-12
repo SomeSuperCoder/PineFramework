@@ -2018,6 +2018,19 @@ export class ExecutionEngine {
     const prePlotColors = new Map([...this.plotColors].map(([k, v]) => [k, [...v]]));
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
+    const preRsiState = new Map([...this.rsiState].map(([k, v]) => [k, { ...v }]));
+    const preAtrState = new Map([...this.atrState].map(([k, v]) => [k, { ...v }]));
+    const preHmaBuffers = new Map(
+      [...this.hmaBuffers].map(([k, v]) => [k, { half: [...v.half], full: [...v.full], diff: [...v.diff] }]),
+    );
+    const preSarState = new Map([...this.sarState].map(([k, v]) => [k, { ...v }]));
+    const preFunctionPersistentScopes = new Map(
+      [...this.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]),
+    );
+    const preBarColorDataLen = this.barColorData.length;
+    const preBoxesSize = this.boxes.size;
+    const preBoxIdCounter = this.boxIdCounter;
+    const preStrategyState = this.strategyEngine ? this.strategyEngine.saveState() : null;
 
     const result = this.executeBar(context);
 
@@ -2043,6 +2056,23 @@ export class ExecutionEngine {
     this.plotColors = prePlotColors;
     this.fillColorData = preFillColorData;
     this.bgcolorData.length = preBgcolorDataLen;
+    this.rsiState = preRsiState;
+    this.atrState = preAtrState;
+    this.hmaBuffers = preHmaBuffers;
+    this.sarState = preSarState;
+    this.functionPersistentScopes = preFunctionPersistentScopes;
+    this.barColorData.length = preBarColorDataLen;
+    if (this.boxes.size > preBoxesSize) {
+      for (const [id] of this.boxes) {
+        if (id >= preBoxesSize) {
+          this.boxes.delete(id);
+        }
+      }
+    }
+    this.boxIdCounter = preBoxIdCounter;
+    if (this.strategyEngine && preStrategyState) {
+      this.strategyEngine.restoreState(preStrategyState);
+    }
 
     const diffOutputs: Record<string, PineValue> = {};
     for (const [key, series] of this.outputs) {

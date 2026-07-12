@@ -482,6 +482,43 @@ export class StrategyEngine {
     return [...this.markers];
   }
 
+  saveState(): object {
+    return {
+      position: { ...this.position },
+      pendingOrders: this.pendingOrders.map(o => ({ ...o })),
+      filledOrders: this.filledOrders.map(o => ({ ...o })),
+      trades: this.trades.map(t => ({ ...t })),
+      markers: this.markers.map(m => ({ ...m })),
+      equity: this.equity,
+      peakEquity: this.peakEquity,
+      maxDrawdown: this.maxDrawdown,
+      entries: this.entries,
+    };
+  }
+
+  restoreState(state: object): void {
+    const s = state as {
+      position: Position;
+      pendingOrders: Order[];
+      filledOrders: FilledOrder[];
+      trades: Trade[];
+      markers: StrategyMarker[];
+      equity: number;
+      peakEquity: number;
+      maxDrawdown: number;
+      entries: number;
+    };
+    this.position = { ...s.position };
+    this.pendingOrders = s.pendingOrders.map(o => ({ ...o }));
+    this.filledOrders = s.filledOrders.map(o => ({ ...o }));
+    this.trades = s.trades.map(t => ({ ...t }));
+    this.markers = s.markers.map(m => ({ ...m }));
+    this.equity = s.equity;
+    this.peakEquity = s.peakEquity;
+    this.maxDrawdown = s.maxDrawdown;
+    this.entries = s.entries;
+  }
+
   private canOpenPosition(direction: OrderDirection, quantity: number): boolean {
     if (this.position.direction === 'flat') {
       const marginRate = direction === 'long' ? this.config.marginLong : this.config.marginShort;

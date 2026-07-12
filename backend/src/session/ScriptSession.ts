@@ -76,10 +76,12 @@ export class ScriptSession {
       return this.initialize();
     }
 
-    // When Bybit confirms the kline (bar close), execute with isFormingCandle=false
-    // so barstate.isconfirmed=true and alert triggers are produced.
-    // Uses computeFormingCandle (not executeRealtimeBar) to avoid state advancement
-    // since the bar was already processed during initialize().
+    // When Bybit confirms the kline (bar close), permanently commit the bar with
+    // executeBar (isFormingCandle=false) so barstate.isconfirmed=true and alert
+    // triggers are produced. We return full outputs via toOutputs — using
+    // computeFormingCandle + toFormingCandleOutputs would emit single-value diff
+    // outputs that the frontend rejects (output length vs barTimestamps length
+    // mismatch), causing the confirmed bar data to be silently dropped.
     if (confirmed) {
       // Dedup: skip re-execution if we already confirmed this bar timestamp
       if (bar.timestamp <= this.lastConfirmedTimestamp) {
@@ -97,8 +99,8 @@ export class ScriptSession {
       this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
       const context = this.contexts[this.contexts.length - 1]!;
       this.engine.setFormingCandle(false);
-      const result = this.engine.computeFormingCandle(context);
-      return this.toFormingCandleOutputs(result);
+      const execResult = this.engine.executeBar(context);
+      return this.toOutputs(execResult);
     }
 
     const lastBar = this.bars[this.bars.length - 1];
@@ -249,6 +251,7 @@ export class ScriptSession {
       boxes,
       barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
+      formingCandle: false,
       isConfirmed: true,
       alertConditions,
       alertTriggers,
