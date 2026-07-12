@@ -114,11 +114,6 @@ export class ScriptSession {
       const result = this.engine.computeFormingCandle(context);
       return this.toFormingCandleOutputs(result);
     } else {
-      // New bar arrived — permanently advance engine state for the previous bar first
-      if (this.contexts.length > 0) {
-        this.engine.setFormingCandle(false);
-        this.engine.executeBar(this.contexts[this.contexts.length - 1]!);
-      }
       this.bars.push(bar);
       const fullContexts = barsToContext(this.bars);
       this.contexts.push(fullContexts[fullContexts.length - 1]!);
@@ -281,7 +276,13 @@ export class ScriptSession {
 
     const strategyMarkers: ScriptOutputs['strategyMarkers'] = [];
 
-    const barTimestamps = result.barTimestamps ?? [];
+    const barTimestamps = [...(result.barTimestamps ?? [])];
+    // Engine's barTimestamps may not include uncommitted new bars. Pad with actual
+    // session bar timestamps so the frontend can look up barTimestamps[barIndex].
+    while (barTimestamps.length < this.bars.length) {
+      const bar = this.bars[barTimestamps.length];
+      barTimestamps.push(bar?.timestamp ?? 0);
+    }
     const lines = (result.diffLines || []).map((l) => ({
       points: [
         { time: l.xloc === 'bar_index' ? (barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
@@ -317,7 +318,7 @@ export class ScriptSession {
       lines,
       labels,
       barTimestamps,
-      barIndex: result.barIndex,
+      barIndex: this.bars.length - 1,
       formingCandle: !(result.isConfirmed ?? false),
       isConfirmed: result.isConfirmed ?? false,
       alertConditions: this.cachedAlertConditions,
