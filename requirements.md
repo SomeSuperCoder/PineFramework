@@ -1340,3 +1340,28 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 10. THE quick adder popup SHALL display the script type (indicator or strategy) as a badge next to each option
 11. THE quick adder popup SHALL filter the list in real-time as the user types in the search bar
 12. THE quick adder popup SHALL show an empty state message when no scripts match the search query
+
+### Requirement 43: CLI Backtest Tool for Multi-Symbol Strategy Validation
+
+**User Story:** As an AI agent creating or merging indicators into a strategy, I want a CLI tool that runs backtests across multiple trading pairs so that I can validate the strategy is not overfitted to a single symbol and can adjust settings to improve cross-pair performance.
+
+#### Acceptance Criteria
+
+1. THE CLI Backtest Tool SHALL be invokable from the command line with a Pine Script strategy file as the primary argument
+2. THE CLI Backtest Tool SHALL accept an optional `--timeframe` argument (default: `"60"` i.e. 1h)
+3. THE CLI Backtest Tool SHALL accept an optional `--symbols` argument as a comma-separated list (default: `"BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT"`)
+4. THE CLI Backtest Tool SHALL accept an optional `--days-back` argument for the lookback period (default: `90`)
+5. THE CLI Backtest Tool SHALL accept optional `--start-date` and `--end-date` arguments in `YYYY-MM-DD` format; when provided, these override `--days-back`
+6. THE CLI Backtest Tool SHALL accept optional strategy configuration arguments (`--initial-capital`, `--commission`, `--slippage`, `--default-qty`, `--pyramiding`)
+7. THE CLI Backtest Tool SHALL execute the strategy independently on each specified symbol using the Bybit data source
+8. THE CLI Backtest Tool SHALL output a JSON result containing per-symbol metrics including: net profit, profit factor, max drawdown, win rate, Sharpe ratio, total trades, and buy-and-hold return
+9. THE CLI Backtest Tool SHALL compute a cross-pair summary including: average net profit, median profit factor, coefficient of variation of returns, and a worst-pair / best-pair identification
+10. THE CLI Backtest Tool SHALL compute an overfitting risk score based on the variance of performance across symbols — high variance indicates overfitting
+11. THE CLI Backtest Tool SHALL also output a human-readable summary table to stdout showing key metrics per symbol
+12. THE CLI Backtest Tool SHALL exit with code 0 on successful completion and non-zero on failure
+13. THE CLI Backtest Tool SHALL write the full JSON result to a file when `--output` is specified
+14. THE CLI Backtest Tool SHALL display progress indicators showing which symbol is currently being backtested
+15. THE CLI Backtest Tool SHALL handle and gracefully report errors for individual symbols (e.g., data unavailable, compilation failure) without aborting the entire run
+16. THE CLI Backtest Tool SHALL be usable by an AI agent to iteratively adjust strategy input parameters and re-run backtests to optimize cross-pair performance
+17. WHEN a backtest for a symbol fails, THE CLI Backtest Tool SHALL report the error for that symbol and continue with the remaining symbols
+18. THE CLI Backtest Tool SHALL reuse the existing backtest execution engine (ExecutionEngine + Bybit data fetcher) rather than reimplementing the backtest pipeline

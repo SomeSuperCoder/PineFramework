@@ -201,6 +201,104 @@ After saving, run a full sync to register the file in the manifest:
 POST /api/scripts/files/sync
 ```
 
+### Step 7: Multi-Pair Backtest Validation
+
+After writing the strategy, you MUST validate it across multiple trading pairs to detect overfitting. A strategy that works well on only one symbol is likely curve-fitted and will fail in live trading.
+
+#### 7.1 Run the Backtest Tool
+
+Run the CLI backtest tool on the merged strategy across the default symbol set:
+
+```bash
+pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+  --timeframe 60 \
+  --days-back 90 \
+  --output backtest_results.json
+```
+
+You can specify custom symbols and timeframe:
+```bash
+pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+  --timeframe 240 \
+  --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT \
+  --days-back 180 \
+  --output backtest_results.json
+```
+
+#### 7.2 Interpret the Results
+
+The tool produces two outputs:
+1. **JSON file** (machine-readable) — parse this for programmatic analysis
+2. **Summary table** (stdout) — human-readable overview
+
+Key metrics to examine:
+- **Net Profit %** — should be positive across most pairs
+- **Profit Factor** — should be > 1.0 across most pairs (> 1.5 is good)
+- **Max Drawdown %** — should be reasonable (< 20% is preferred)
+- **Win Rate** — should be consistent across pairs
+- **Sharpe Ratio** — > 1.0 is acceptable, > 1.5 is good
+
+#### 7.3 Evaluate Overfitting Risk
+
+The tool computes an overfitting risk score based on the coefficient of variation (CV) of returns across pairs:
+
+| CV of Returns | Risk Level | Meaning |
+|---|---|---|
+| < 0.5 | LOW | Strategy performs consistently across pairs — good |
+| 0.5 – 1.5 | MODERATE | Some variance — may need tuning |
+| > 1.5 | HIGH | Likely overfitted — needs significant rework |
+
+**Warning signs of overfitting:**
+- One pair has +30% return while others are negative
+- Win rate varies wildly (e.g., 70% on BTCUSDT but 40% on ETHUSDT)
+- Profit factor > 3.0 on one pair but < 1.0 on others
+- Very few trades on some pairs (< 10 trades is statistically unreliable)
+
+#### 7.4 Iterate and Optimize
+
+If the overfitting risk is MODERATE or HIGH, or if performance is poor on key pairs:
+
+1. **Identify the weakest pairs** — which symbols have the worst performance?
+2. **Analyze why** — are the entry/exit conditions too tightly coupled to one pair's behavior?
+3. **Adjust input parameters** — modify thresholds, lengths, or multipliers to be more general
+4. **Re-run the backtest**:
+   ```bash
+   pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+     --output backtest_results_v2.json
+   ```
+5. **Compare results** — the new run should show improved consistency across pairs
+6. **Repeat** until overfitting risk is LOW and all target pairs are profitable
+
+**Optimization guidelines:**
+- Prefer widely-used indicator settings (e.g., RSI length 14, SMA 20) over exotic values
+- Avoid optimizing for the best possible return on one pair — aim for consistent returns across all
+- If a strategy cannot be profitable on at least 3 out of 5 pairs, reconsider the core logic
+- Use the `--output` flag to save each iteration's results for comparison
+
+#### 7.5 Example Iteration Session
+
+**Iteration 1** — Initial merged strategy:
+```
+Symbol       Net PnL%   PF     MaxDD%   WinRate  Trades
+BTCUSDT      +25.30%    2.80    5.10%    65.0%    38
+ETHUSDT       -3.20%    0.85   18.50%    42.1%    40
+SOLUSDT      +42.10%    3.50    3.20%    72.0%    35
+Overfitting Risk: HIGH (CV = 1.85)
+→ SOLUSDT and BTCUSDT are great, but ETHUSDT loses money. Overfitted.
+```
+
+**Action:** Widen RSI oversold/overbought thresholds from 20/80 to 25/75 to catch more general conditions.
+
+**Iteration 2** — Adjusted thresholds:
+```
+Symbol       Net PnL%   PF     MaxDD%   WinRate  Trades
+BTCUSDT      +12.50%    1.82    8.30%    58.3%    42
+ETHUSDT       +5.20%    1.45   12.10%    52.1%    38
+SOLUSDT      +15.30%    2.10    6.50%    61.2%    35
+Overfitting Risk: LOW (CV = 0.42)
+→ All pairs profitable, consistent performance. Ready for deployment.
+```
+
 ## Conflict Resolution Rules
 
 When indicators conflict:
@@ -369,3 +467,8 @@ Before delivering the strategy file:
 - [ ] No compilation errors
 - [ ] Warmup periods are handled correctly
 - [ ] No missing variable references
+- [ ] Multi-pair backtest completed across 5+ symbols using `pine-backtest`
+- [ ] Overfitting risk is LOW (CV < 0.5)
+- [ ] All target symbols show positive net profit
+- [ ] Profit factor > 1.0 on every tested pair
+- [ ] Results saved to JSON file for comparison

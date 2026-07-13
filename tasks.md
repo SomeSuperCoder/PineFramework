@@ -3326,6 +3326,103 @@ This implementation plan outlines the step-by-step development of a production-g
   - Run all existing tests to confirm no regressions
   - Ask the user if questions arise.
 
+- [ ] 129. Implement CLI Backtest Tool for Multi-Symbol Strategy Validation
+  - [ ] 129.1 Create CLI entry point with argument parsing
+    - Create `backend/src/cli/backtest-cli.ts` as the CLI entry point
+    - Use a lightweight argument parser (no external dependencies — parse `process.argv` directly)
+    - Accept: script path (positional), --timeframe, --symbols, --days-back, --start-date, --end-date, --output, --initial-capital, --commission, --slippage, --default-qty, --pyramiding
+    - Validate required arguments (script path must exist)
+    - Validate enum arguments (timeframe must be valid)
+    - Print usage/help text on `--help`
+    - Register as `pine-backtest` bin entry in `backend/package.json`
+    - _Requirements: 43.1, 43.2, 43.3, 43.4, 43.5, 43.6_
+
+  - [ ] 129.2 Implement per-symbol backtest execution
+    - Create `backend/src/cli/symbol-runner.ts` — runs a single backtest for one symbol
+    - Reuse the existing execution pipeline: `parse()`, `compile()`, `ExecutionEngine`, `createSeries()` from `pine-framework`
+    - Reuse the existing Bybit data fetcher (`fetchBars()` from backtest route) for OHLCV data
+    - Reuse `strategyEngine.getTrades()` and `strategyEngine.getMetrics()` for result extraction
+    - Return a structured result object per symbol (metrics or error)
+    - Handle compilation errors, data fetch failures, and execution errors gracefully
+    - _Requirements: 43.7, 43.15, 43.17, 43.18_
+
+  - [ ] 129.3 Implement multi-symbol runner with progress reporting
+    - Create `backend/src/cli/multi-symbol-runner.ts` — orchestrates backtests across all symbols
+    - Run symbols sequentially (avoid Bybit API rate limits)
+    - Print progress to stderr: `[2/5] Backtesting ETHUSDT...`
+    - Collect per-symbol results into an array
+    - Skip failed symbols (do not abort entire run)
+    - _Requirements: 43.14, 43.15, 43.17_
+
+  - [ ] 129.4 Implement result aggregation and overfitting analysis
+    - Create `backend/src/cli/result-aggregator.ts`
+    - Compute cross-pair summary: average net profit, median profit factor, coefficient of variation of returns
+    - Compute overfitting risk score: CV < 0.5 = LOW, 0.5-1.5 = MODERATE, > 1.5 = HIGH
+    - Identify best-pair and worst-pair
+    - Count successful vs failed symbols
+    - _Requirements: 43.8, 43.9, 43.10_
+
+  - [ ] 129.5 Implement output formatting
+    - Create `backend/src/cli/output-formatter.ts`
+    - JSON output: full structured result with per-symbol metrics and cross-pair summary
+    - Human-readable table output to stdout (aligned columns, sign-prefixed percentages)
+    - Write JSON to file when `--output` is specified
+    - Exit code 0 on success, 1 on script error, 2 on argument error
+    - _Requirements: 43.8, 43.11, 43.12, 43.13_
+
+  - [ ]* 129.6 Write tests for CLI backtest tool
+    - Test argument parsing (valid, missing, invalid)
+    - Test per-symbol backtest execution with mock data
+    - Test multi-symbol runner skips failed symbols
+    - Test result aggregation computes correct CV and overfitting risk
+    - Test JSON output format matches schema
+    - Test human-readable table formatting
+    - Test exit codes for different error scenarios
+    - _Requirements: 43.1-43.18_
+
+  - [ ] 129.7 Wire CLI entry point to backend package.json
+    - Add `"bin": { "pine-backtest": "./dist/cli/backtest-cli.js" }` to backend/package.json
+    - Add `"cli:build"` script to compile CLI entry point
+    - Verify the CLI can be invoked via `pnpm pine-backtest` or `npx pine-backtest`
+    - _Requirements: 43.1_
+
+  - [ ] 129.8 Checkpoint - CLI Backtest Tool Validation
+    - Run the CLI tool on a test strategy across 3+ symbols
+    - Verify JSON output is valid and contains all required fields
+    - Verify human-readable table is correctly formatted
+    - Verify failed symbols are skipped gracefully
+    - Verify overfitting risk computation is correct
+    - Verify exit codes are correct for success and failure cases
+    - Run all existing tests to confirm no regressions
+    - Ask the user if questions arise.
+
+- [ ] 130. Add Multi-Pair Backtest Tutorial to Merge Prompt
+  - [ ] 130.1 Add Step 7 (Multi-Pair Backtest Validation) to merge workflow
+    - After Step 6 (Output the File), add a new Step 7 that instructs the agent to run the CLI backtest tool
+    - Include the exact command to run: `pine-backtest <strategy.pine> --output results.json`
+    - Explain how to interpret the cross-pair summary and overfitting risk score
+    - Explain the iteration loop: run → analyze → adjust settings → re-run
+    - _Requirements: 43.16_
+
+  - [ ] 130.2 Add overfitting prevention guidelines
+    - Document the overfitting risk thresholds (LOW/MODERATE/HIGH)
+    - Explain that strategies performing well on only one pair are likely overfitted
+    - Provide guidance on adjusting input parameters based on cross-pair results
+    - Add example of a complete iteration session with before/after results
+    - _Requirements: 43.10, 43.16_
+
+  - [ ] 130.3 Update checklist with multi-pair validation
+    - Add checklist items for running the backtest tool
+    - Add checklist items for verifying overfitting risk is LOW
+    - Add checklist items for confirming results across all target pairs
+    - _Requirements: 43.16_
+
+  - [ ] 130.4 Checkpoint - Merge Prompt Tutorial Validation
+    - Verify the tutorial section is clear and complete
+    - Verify the example command works end-to-end
+    - Verify the iteration workflow is actionable for an AI agent
+    - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3394,6 +3491,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 125 implements the FormingCandleManager module, extracting forming candle lifecycle management from ScriptSession into a dedicated module for better separation of concerns. Handles tick/confirm lifecycle, barTimestamps padding, and output conversion.
 - Tasks 126-127 implement the Quick Indicator/Strategy Adder: a small, centered popup accessible via footer bar button or "/" keyboard shortcut that lets users rapidly add indicators and strategies to the chart. The popup includes a search bar, merged list of user + built-in scripts with type badges, and stays open for multiple additions.
 - Task 128 is the checkpoint validating the quick adder works correctly end-to-end.
+- Tasks 129-130 implement the CLI Backtest Tool for multi-symbol strategy validation: CLI entry point with argument parsing (129.1), per-symbol backtest execution reusing existing engine (129.2), multi-symbol runner with progress (129.3), result aggregation and overfitting analysis (129.4), output formatting (129.5), tests (129.6), bin entry wiring (129.7), and a tutorial section in merge-indicators-to-strategy.md (130). The tool enables AI agents to validate merged strategies across multiple trading pairs to detect overfitting.
+- Task 131 is the checkpoint validating the CLI tool and merge prompt tutorial work end-to-end.
 
 ## Task Dependency Graph
 
@@ -3557,7 +3656,14 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 154, "tasks": ["126.7"] },
     { "id": 155, "tasks": ["127.1", "127.2"] },
     { "id": 156, "tasks": ["127.3"] },
-    { "id": 157, "tasks": ["128"] }
+    { "id": 157, "tasks": ["128"] },
+    { "id": 158, "tasks": ["129.1", "129.2"] },
+    { "id": 159, "tasks": ["129.3", "129.4"] },
+    { "id": 160, "tasks": ["129.5", "129.6"] },
+    { "id": 161, "tasks": ["129.7", "129.8"] },
+    { "id": 162, "tasks": ["130.1", "130.2", "130.3"] },
+    { "id": 163, "tasks": ["130.4"] },
+    { "id": 164, "tasks": ["131"] }
   ]
 }
 ```
