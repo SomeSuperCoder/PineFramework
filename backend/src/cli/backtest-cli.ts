@@ -118,9 +118,9 @@ function validateOptions(options: CliOptions): string | null {
 async function main(): Promise<void> {
   const options = parseArgs(process.argv);
 
-  if (options.help) {
+  if (options.help || !options.scriptPath) {
     printUsage();
-    process.exit(0);
+    process.exit(options.scriptPath ? 0 : 2);
   }
 
   const validationError = validateOptions(options);
