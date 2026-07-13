@@ -8,6 +8,9 @@ export class AreaRenderer {
     for (let i = 0; i < candles.length; i++) {
       if (candles[i].time === targetTime) return i;
     }
+    if (candles.length > 0 && targetTime >= candles[candles.length - 1]!.time) {
+      return candles.length;
+    }
     return -1;
   }
 

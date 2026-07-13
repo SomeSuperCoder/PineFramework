@@ -443,7 +443,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
         const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
         if (isNewBar) {
-          const newTime = msg.barTimestamps?.[msg.barIndex] ?? (plot.data[plot.data.length - 1]?.time ?? 0);
+          const rawTime = msg.barTimestamps?.[msg.barIndex] ?? (plot.data[plot.data.length - 1]?.time ?? 0);
+          const newTime = Math.floor(rawTime / 1000);
           return {
             ...plot,
             data: [...plot.data, { time: newTime, value: numValue, color }],
@@ -456,6 +457,14 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
           };
         }
+      } else if ((msg.barIndex ?? 0) >= plot.data.length && plot.data.length > 0) {
+        const lastEntry = plot.data[plot.data.length - 1];
+        const rawTime = msg.barTimestamps?.[msg.barIndex] ?? (lastEntry?.time ?? 0);
+        const newTime = Math.floor(rawTime / 1000);
+        return {
+          ...plot,
+          data: [...plot.data, { time: newTime, value: lastEntry?.value ?? null, color: lastEntry?.color }],
+        };
       }
       return plot;
     });
