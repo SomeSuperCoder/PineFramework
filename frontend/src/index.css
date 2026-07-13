@@ -261,3 +261,139 @@ body {
   50% { transform: translateX(250%); }
   100% { transform: translateX(-100%); }
 }
+
+.quick-adder-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 300;
+}
+
+.quick-adder-modal {
+  width: 340px;
+  max-height: 400px;
+  background-color: #0d0d18;
+  border: 1px solid #111128;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.quick-adder-header {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid #111128;
+}
+
+.quick-adder-search {
+  flex: 1;
+  padding: 6px 10px;
+  background-color: #1e1e2e;
+  color: #e0e0e0;
+  border: 1px solid #111128;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+}
+
+.quick-adder-search::placeholder {
+  color: #666;
+}
+
+.quick-adder-search:focus {
+  border-color: #e94560;
+}
+
+.quick-adder-close {
+  width: 28px;
+  height: 28px;
+  margin-left: 6px;
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.quick-adder-close:hover {
+  color: #e94560;
+  background-color: #1e1e2e;
+}
+
+.quick-adder-list {
+  overflow-y: auto;
+  max-height: 340px;
+}
+
+.quick-adder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #e0e0e0;
+}
+
+.quick-adder-item:hover,
+.quick-adder-item.highlighted {
+  background-color: #1e1e2e;
+}
+
+.quick-adder-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.quick-adder-item-badges {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-indicator {
+  background-color: #2e2a1a;
+  color: #ff9800;
+}
+
+.badge-strategy {
+  background-color: #1a3a2e;
+  color: #4caf50;
+}
+
+.badge-built-in {
+  background-color: #3e2a1a;
+  color: #ffb74d;
+}
+
+.quick-adder-loading,
+.quick-adder-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}

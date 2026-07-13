@@ -5,6 +5,7 @@ import { ErrorConsole } from './components/ErrorConsole';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
+import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
@@ -39,6 +40,7 @@ function App() {
   const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
   const [telegramOpen, setTelegramOpen] = useState(false);
+  const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -95,6 +97,19 @@ function App() {
     subscribe(symbol, timeframe);
     fetchOHLCV(symbol, timeframe);
   }, [symbol, timeframe, subscribe, fetchOHLCV]);
+
+  useEffect(() => {
+    const handleSlashKey = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if ((e.target as HTMLElement).closest('.editor-modal, .CodeMirror, [contenteditable]')) return;
+      e.preventDefault();
+      setQuickAdderOpen(true);
+    };
+    window.addEventListener('keydown', handleSlashKey);
+    return () => window.removeEventListener('keydown', handleSlashKey);
+  }, []);
 
   useEffect(() => {
     const hasStrategyMarkers =
@@ -239,6 +254,17 @@ function App() {
         }}>
           Open Editor
         </button>
+        <button className="quick-adder-button" onClick={() => setQuickAdderOpen(true)} style={{
+          padding: '6px 14px',
+          background: '#111128',
+          color: '#e0e0e0',
+          border: '1px solid #111128',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '12px',
+        }}>
+          Add Script
+        </button>
         {isStrategy && (
           <button className="run-backtest-button" onClick={() => setShowSettingsPopup(true)} style={{
             padding: '6px 14px',
@@ -286,6 +312,12 @@ function App() {
       <CodeEditor
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
+        onAdd={handleAddIndicator}
+      />
+
+      <QuickAdderPopup
+        isOpen={quickAdderOpen}
+        onClose={() => setQuickAdderOpen(false)}
         onAdd={handleAddIndicator}
       />
 

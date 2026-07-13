@@ -3240,8 +3240,8 @@ This implementation plan outlines the step-by-step development of a production-g
     - All 45 test suites (1121 tests) pass
     - _Requirements: 11.1_
 
-- [ ] 126. Implement Quick Indicator/Strategy Adder Popup
-  - [ ] 126.1 Create QuickAdderPopup React component
+- [x] 126. Implement Quick Indicator/Strategy Adder Popup
+  - [x] 126.1 Create QuickAdderPopup React component
     - Build a small, centered modal overlay component
     - Render close button (X) in header
     - Render search input at top, auto-focused on open
@@ -3249,38 +3249,38 @@ This implementation plan outlines the step-by-step development of a production-g
     - Style with dark theme matching existing UI
     - _Requirements: 42.1, 42.2, 42.3_
 
-  - [ ] 126.2 Fetch and merge user scripts + built-in scripts
+  - [x] 126.2 Fetch and merge user scripts + built-in scripts
     - On popup open, fetch `GET /api/scripts` and `GET /api/scripts/built-in` in parallel
     - Merge into a single list with source metadata (scriptId, name, type, isBuiltIn)
     - Store in component state for client-side filtering
     - _Requirements: 42.4, 42.5_
 
-  - [ ] 126.3 Implement search filtering
+  - [x] 126.3 Implement search filtering
     - Filter the merged script list by name as the user types
     - Case-insensitive substring match
     - Show empty state message when no scripts match
     - _Requirements: 42.3, 42.11, 42.12_
 
-  - [ ] 126.4 Implement script add on click
+  - [x] 126.4 Implement script add on click
     - When user clicks a script option, call `addIndicator(scriptId, source)` via existing IndicatorManager
     - Do NOT close the popup after adding — allow multiple adds
     - Show brief visual feedback (e.g., checkmark flash) on the clicked option
     - _Requirements: 42.6, 42.7_
 
-  - [ ] 126.5 Implement close behaviors
+  - [x] 126.5 Implement close behaviors
     - Close on X button click
     - Close on ESC keypress
     - Close on clicking the backdrop (outside the popup)
     - Clear search bar when popup closes
     - _Requirements: 42.8_
 
-  - [ ] 126.6 Add type badges to script options
+  - [x] 126.6 Add type badges to script options
     - Show `[IND]` badge for indicators, `[STG]` badge for strategies
     - Show `Built-In` badge for test indicators/strategies
     - Use distinct colors for each badge type
     - _Requirements: 42.5, 42.10_
 
-  - [ ]* 126.7 Write tests for QuickAdderPopup
+  - [x]* 126.7 Write tests for QuickAdderPopup
     - Test popup opens on button click
     - Test popup opens on "/" keypress
     - Test popup closes on ESC keypress
@@ -3293,27 +3293,27 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test user scripts show without built-in badge
     - _Requirements: 42.1-42.12_
 
-- [ ] 127. Wire Quick Adder to Footer Bar and Keyboard
-  - [ ] 127.1 Add Quick Adder button to footer bar
+- [x] 127. Wire Quick Adder to Footer Bar and Keyboard
+  - [x] 127.1 Add Quick Adder button to footer bar
     - Add a button next to the existing auto-scale toggle in the footer bar
     - Button label: "Add Indicator" or "+" icon
     - Clicking opens the QuickAdderPopup
     - _Requirements: 42.1_
 
-  - [ ] 127.2 Add "/" keyboard shortcut to open Quick Adder
+  - [x] 127.2 Add "/" keyboard shortcut to open Quick Adder
     - Register global keydown listener for "/" key
     - Only trigger when not focused on input, textarea, or code editor
     - Toggle popup open/close
     - _Requirements: 42.9_
 
-  - [ ]* 127.3 Write tests for footer bar button and keyboard shortcut
+  - [x]* 127.3 Write tests for footer bar button and keyboard shortcut
     - Test footer bar button opens popup
     - Test "/" key opens popup when not in input
     - Test "/" key does NOT open popup when in textarea/input
     - Test keyboard shortcut toggles popup
     - _Requirements: 42.1, 42.9_
 
-- [ ] 128. Checkpoint - Quick Adder Validation
+- [x] 128. Checkpoint - Quick Adder Validation
   - Verify popup opens via footer bar button
   - Verify popup opens via "/" keypress
   - Verify popup closes via ESC and X button
