@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from 'fs';
+import { resolve } from 'path';
 import type { CliOptions } from './types.js';
 import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, DEFAULT_DAYS_BACK } from './types.js';
 import { runMultiSymbolBacktest } from './multi-symbol-runner.js';
@@ -96,7 +97,15 @@ function validateOptions(options: CliOptions): string | null {
     return 'Missing required argument: script path';
   }
 
-  if (!existsSync(options.scriptPath)) {
+  const scriptPath = resolve(options.scriptPath);
+  const monorepoRoot = resolve(process.cwd(), '..');
+  const monorepoPath = resolve(monorepoRoot, options.scriptPath);
+
+  if (existsSync(scriptPath)) {
+    options.scriptPath = scriptPath;
+  } else if (existsSync(monorepoPath)) {
+    options.scriptPath = monorepoPath;
+  } else {
     return `Script file not found: ${options.scriptPath}`;
   }
 
