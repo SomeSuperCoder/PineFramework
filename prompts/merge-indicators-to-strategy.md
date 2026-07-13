@@ -66,8 +66,8 @@ Parse the user's indicator settings (if provided):
 ### Step 3: Plan the Merge
 
 Before writing code:
-1. Determine which indicator outputs are needed for the strategy
-2. Determine which plots are purely visual and can be removed
+1. Determine which indicator outputs are needed for the strategy logic
+2. Catalog ALL visual features from each indicator (plots, lines, labels, boxes, bgcolor, barcolor, fill, hlines, markers, dots, etc.) — these MUST be preserved in the merged strategy
 3. Identify naming conflicts between indicators
 4. Plan variable prefixing to avoid collisions (e.g., `rsi_`, `macd_`, `bb_`)
 5. Determine if any indicators conflict (e.g., both use the same variable name)
@@ -154,7 +154,9 @@ if (shortCondition)
 // Based on user rules
 
 // ─── PLOTS ──────────────────────────────────────────────
-// Only essential plots — remove purely visual clutter
+// Preserve all visual features from source indicators
+// Lines, areas, labels, bgcolor, barcolor, fill, hlines, markers, etc.
+// Only remove a visual element if the user explicitly asks to
 plot(ind2_upper, "Upper Band", color=color.red)
 plot(ind2_lower, "Lower Band", color=color.green)
 bgcolor(longCondition ? color.new(color.green, 90) : na)
@@ -175,6 +177,7 @@ Before outputting:
 9. **Input groups are organized** — Each indicator's inputs are grouped
 10. **Strategy rules are correctly mapped** — Entry/exit logic matches user rules
 11. **User-specified settings applied** — All user-provided values used as input defaults
+12. **All visual features preserved** — Every plot, line, label, bgcolor, fill, barcolor, hline, box, and marker from source indicators is present unless user explicitly requested removal
 
 ### Step 6: Output the File
 
@@ -320,6 +323,31 @@ bgcolor(longCondition ? color.new(color.green, 90) : na)
 bgcolor(exitCondition ? color.new(color.red, 90) : na)
 ```
 
+#### Visual Feature Preservation
+
+All visual features from source indicators MUST be preserved in the merged strategy unless the user explicitly requests their removal. This includes:
+
+- `plot()` — lines, histograms, area fills
+- `plotshape()` — markers, labels on bars
+- `plotchar()` — character markers
+- `plotarrow()` — arrow markers
+- `line.new()` / `line()` — drawing lines
+- `label.new()` / `label()` — text labels
+- `box.new()` / `box()` — rectangles
+- `fill()` — area fills between plots/lines
+- `bgcolor()` — background color highlights
+- `barcolor()` — bar coloring
+- `hline()` — horizontal reference lines
+- `polyline()` — multi-point lines
+- `table` — data tables on chart
+
+When merging:
+1. Preserve the original colors, styles, widths, and visibility of each visual element
+2. Prefix visual variable names if there are conflicts (e.g., `rsi_upperBand`, `bb_upperBand`)
+3. Keep `display=` parameters intact (e.g., `display=display.data_window`)
+4. Only remove a visual element if the user explicitly says to remove it
+5. Document any visual elements that were removed and why
+
 ## Checklist
 
 Before delivering the strategy file:
@@ -337,7 +365,7 @@ Before delivering the strategy file:
 - [ ] All `alertcondition()` calls replaced with strategy orders
 - [ ] Entry/exit logic matches user rules exactly
 - [ ] Input groups are organized by source indicator
-- [ ] Plots are clean and non-redundant
+- [ ] All visual features from source indicators are preserved (plots, lines, labels, bgcolor, fill, etc.)
 - [ ] No compilation errors
 - [ ] Warmup periods are handled correctly
 - [ ] No missing variable references
