@@ -55,4 +55,20 @@ export const VALID_TIMEFRAMES = ['1', '3', '5', '15', '30', '60', '120', '240', 
 
 export const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
 
-export const DEFAULT_DAYS_BACK = 90;
+const DAYS_BACK_BY_TIMEFRAME: Record<string, number> = {
+  '1': 3,
+  '3': 7,
+  '5': 14,
+  '15': 45,
+  '30': 90,
+  '60': 180,
+  '120': 365,
+  '240': 730,
+  'D': 1825,
+  'W': 1825,
+  'M': 1825,
+};
+
+export function getDefaultDaysBack(timeframe: string): number {
+  return DAYS_BACK_BY_TIMEFRAME[timeframe] ?? 90;
+}

@@ -3,7 +3,7 @@
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 import type { CliOptions } from './types.js';
-import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, DEFAULT_DAYS_BACK } from './types.js';
+import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, getDefaultDaysBack } from './types.js';
 import { runMultiSymbolBacktest } from './multi-symbol-runner.js';
 import { aggregateResults } from './result-aggregator.js';
 import { printSummaryTable, writeJsonOutput } from './output-formatter.js';
@@ -15,7 +15,7 @@ Usage: pine-backtest <script.pine> [options]
 Options:
   --timeframe <tf>        Timeframe: 1,3,5,15,30,60,120,240,D,W,M (default: 60)
   --symbols <list>        Comma-separated symbols (default: BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT)
-  --days-back <n>         Lookback period in days (default: 90)
+  --days-back <n>         Lookback period in days (default: varies by timeframe)
   --start-date <date>     Start date YYYY-MM-DD (overrides --days-back)
   --end-date <date>       End date YYYY-MM-DD
   --output <path>         Write JSON results to file
@@ -34,11 +34,12 @@ function parseArgs(argv: string[]): CliOptions {
     scriptPath: '',
     timeframe: '60',
     symbols: [...DEFAULT_SYMBOLS],
-    daysBack: DEFAULT_DAYS_BACK,
+    daysBack: 0,
     help: false,
   };
 
   let positionalCount = 0;
+  let daysBackExplicit = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
@@ -56,7 +57,8 @@ function parseArgs(argv: string[]): CliOptions {
       options.symbols = (args[i] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     } else if (arg === '--days-back') {
       i++;
-      options.daysBack = parseInt(args[i] ?? '', 10) || DEFAULT_DAYS_BACK;
+      options.daysBack = parseInt(args[i] ?? '', 10) || 0;
+      daysBackExplicit = true;
     } else if (arg === '--start-date') {
       i++;
       options.startDate = args[i];
@@ -87,6 +89,10 @@ function parseArgs(argv: string[]): CliOptions {
         positionalCount++;
       }
     }
+  }
+
+  if (!daysBackExplicit) {
+    options.daysBack = getDefaultDaysBack(options.timeframe);
   }
 
   return options;
