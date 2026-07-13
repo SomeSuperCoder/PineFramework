@@ -1285,3 +1285,39 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 6. WHEN a built-in script is added to the chart, THE system SHALL treat it the same as any user script (same rendering, same execution path)
 7. THE built-in scripts SHALL be reloaded on page refresh to reflect any updates to the `test_indicators/` directory
 8. THE built-in scripts SHALL NOT be synced to the manifest or file-based storage — they exist only in the `test_indicators/` directory as static resources
+
+### Requirement 39: Forming Candle Lifecycle Management
+
+**User Story:** As a framework developer, I want a dedicated module for managing the forming candle lifecycle (tick, confirm, next tick), so that the forming candle computation is well-separated from the main ScriptSession logic.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide a `FormingCandleManager` module that encapsulates the forming candle lifecycle management
+2. THE `FormingCandleManager` SHALL handle tick processing (intra-bar updates) and confirm processing (bar close)
+3. THE `FormingCandleManager` SHALL manage barTimestamps padding to ensure correct time alignment
+4. THE `FormingCandleManager` SHALL provide `toOutputs()` and `toFormingCandleOutputs()` methods for converting computation results to the appropriate output format
+5. THE `ScriptSession` SHALL delegate forming candle operations to the `FormingCandleManager` for better separation of concerns
+6. THE `FormingCandleManager` SHALL maintain correct state across forming candle computations, including plotColors, fillColorData, and bgcolorData
+
+### Requirement 40: Index-Based Rendering Pipeline
+
+**User Story:** As a chart analyst, I want plot lines and fills to render correctly without visual discontinuities when the chart receives real-time updates, so that indicator data stays aligned with the price data it represents.
+
+#### Acceptance Criteria
+
+1. THE Chart_Library SHALL use direct index-based rendering for plot data points and fill polygon vertices, assuming 1:1 correspondence between plot data and candle data
+2. THE Chart_Library SHALL NOT use time-based `findBarIndex()` for plot rendering — instead, it SHALL use the data index directly as the bar index for pixel positioning
+3. WHEN plot data and candle data have the same length, THE Chart_Library SHALL render plot points at the same x-coordinate as their corresponding candle
+4. THE Chart_Library SHALL maintain correct plot-to-candle alignment during real-time updates by preserving the 1:1 index correspondence
+5. THE Frontend SHALL NOT apply filters that break the 1:1 index correspondence between candle data and indicator plot data
+
+### Requirement 41: Forming Candle Color Updates
+
+**User Story:** As a chart analyst, I want bgcolor, fill, and plot color changes to update correctly on the forming candle, so that the chart background and fill colors reflect the current indicator state.
+
+#### Acceptance Criteria
+
+1. THE Execution Engine SHALL compute bgcolor, fillColorData, and plotColors diffs AFTER restoring the pre-execution state, not before
+2. WHEN the forming candle computation produces new color data, THE Execution Engine SHALL include the diffs in the forming candle result
+3. THE Frontend SHALL merge forming candle color updates into the existing chart data rather than replacing it
+4. THE Frontend SHALL always append a forming candle data point even when the value is unchanged, using the last known value as a fallback to prevent indicator plot lines from disappearing during intra-bar updates

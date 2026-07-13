@@ -747,17 +747,14 @@ Bybit WebSocket → Backend (WS Gateway)
               ├── ScriptSession.appendOrUpdateBar(bar, confirmed)
               │     │
               │     ├── if confirmed && timestamp <= lastConfirmedTimestamp
-              │     │     → dedup: setFormingCandle(true), computeFormingCandle()
-              │     │     → forming result, isConfirmed=false → alerts SUPPRESSED
+              │     │     → dedup: FormingCandleManager.tick(bar), isConfirmed=false → alerts SUPPRESSED
               │     │
               │     ├── if confirmed && timestamp > lastConfirmedTimestamp
-              │     │     → setFormingCandle(false), computeFormingCandle()
-              │     │     → confirmed result, isConfirmed=true → alerts GENERATED
+              │     │     → FormingCandleManager.confirm(bar), isConfirmed=true → alerts GENERATED
               │     │     (dedup via recentAlertKeys Set before Telegram dispatch)
               │     │
               │     └── if !confirmed (forming tick)
-              │           → setFormingCandle(true), computeFormingCandle()
-              │           → forming result, isConfirmed=false → alerts SUPPRESSED
+              │           → FormingCandleManager.tick(bar), isConfirmed=false → alerts SUPPRESSED
               │
               ├── execution_result sent to WS client (plots, shapes, fills, etc.)
               │
@@ -858,6 +855,7 @@ pine-framework (engine library)
   - Trigger alerts if conditions met
   - Repeat for each tick/kline update within the candle's lifetime
 - Repeat for each realtime update
+- **FormingCandleManager delegation**: `ScriptSession` delegates forming candle operations to `FormingCandleManager` for tick/confirm lifecycle management, barTimestamps padding, and output conversion
 
 #### 4. Cleanup Phase
 - Save final state
@@ -1692,33 +1690,87 @@ BatchQueue:
 - Indicator computation can happen either on the backend (for complex indicators) or on the frontend (for simple indicators) — the architecture supports both via a computation worker abstraction
 - Seed data is fetched once during indicator add and cached; subsequent scroll-based computations reuse the same data source
 
-### Time-Based Renderer Positioning
+### Index-Based Renderer Positioning
 
 #### 1. Overview
-All chart renderers (LineRenderer, AreaRenderer, CrosshairRenderer) use time-based positioning instead of sequential index alignment. Each renderer finds the candle whose `time` field matches the data point's time via a `findBarIndex(candles, time)` helper, making the rendering immune to index shifts caused by data prepending or real-time updates.
+All chart renderers (LineRenderer, AreaRenderer) use direct index-based positioning instead of time-based `findBarIndex()` matching. Since plot data and candle data maintain a 1:1 index correspondence in the data pipeline, using the data index directly as the bar index eliminates O(n²) time-based scanning and prevents visual discontinuities during forming candle updates.
 
-#### 2. `findBarIndex` Helper
+#### 2. Index-Based Rendering
+- **LineRenderer**: For each plot data point at index `i`, uses `i` directly as the bar index for pixel positioning via `indexToPixel(i)`
+- **AreaRenderer**: Same approach — fill polygon vertices use data index `i` directly as the bar index
+- **No findBarIndex()**: The time-based `findBarIndex(candles, time)` helper is NOT used for plot rendering; it was removed to prevent O(n²) performance and visual discontinuities
+
+#### 3. Why Index-Based Over Time-Based
+- **1:1 correspondence guarantee**: Plot data and candle data are always the same length in the data pipeline; each plot data point at index `i` corresponds to the candle at the same index
+- **No index drift**: The data pipeline ensures candle data and indicator data are aligned by construction — no time-matching needed
+- **Forming candle support**: When forming candle data is appended to existing data arrays, the 1:1 correspondence is preserved by design
+- **Performance**: Eliminates O(n²) time-based scanning per render cycle
+- **Simplicity**: Direct index access is simpler and more predictable than time-based matching
+
+### Forming Candle Lifecycle Management
+
+#### 1. Overview
+The `FormingCandleManager` module encapsulates the forming candle lifecycle management (tick processing, confirm processing, barTimestamps padding) to separate it from the main `ScriptSession` logic. This improves separation of concerns and makes the forming candle computation easier to test and maintain.
+
+#### 2. Module Interface
 ```typescript
-function findBarIndex(candles: CandleData[], time: number): number {
-  for (let i = 0; i < candles.length; i++) {
-    if (Math.floor(candles[i].time) === Math.floor(time)) return i;
-  }
-  return -1; // No exact match — skip this data point
+class FormingCandleManager {
+  constructor(engine: ExecutionEngine, bars: Bar[], barTimestamps: number[])
+  
+  tick(bar: Bar): FormingCandleResult
+  confirm(bar: Bar): FormingCandleResult
+  toOutputs(result: ExecutionResult): ScriptOutputs
+  toFormingCandleOutputs(result: ExecutionResult): ScriptOutputs
+  getBarTimestamps(): number[]
 }
 ```
-- Uses `Math.floor()` comparison to handle floating-point timestamp precision differences
-- Returns -1 on no match — renderers skip the data point rather than drawing diagonal lines
-- Linear scan is acceptable because renderers only process visible bars (overscan buffer is small)
 
-#### 3. Renderer Integration
-- **LineRenderer**: For each plot data point, calls `findBarIndex(candles, point.time)` to get the x-coordinate. If -1, skips the point (breaks the line at gaps).
-- **AreaRenderer**: Same approach — fill polygon vertices are computed from `findBarIndex` results for both upper and lower lines.
-- **CrosshairRenderer**: Tooltip OHLCV values are matched via `Math.floor(candle.time)` to the hovered bar's time, ensuring correct values even when candles and indicator data have slightly different bar counts.
+#### 3. Responsibilities
+- **tick()**: Process intra-bar updates (forming candle ticks)
+- **confirm()**: Process bar close (confirmed bar)
+- **toOutputs()**: Convert computation results to the output format for confirmed bars
+- **toFormingCandleOutputs()**: Convert computation results to the output format for forming candle updates
+- **barTimestamps padding**: Ensure barTimestamps includes uncommitted new bars for correct time alignment
 
-#### 4. Why Time-Based Over Index-Based
-- **Prepend safety**: When older bars are prepended to `ohlcvDataRef`, all existing candles shift right by N indices. Index-based renderers would draw diagonal lines connecting old indices to new positions. Time-based renderers are unaffected.
-- **WS session drift**: During real-time updates, the frontend's candle array and the backend's execution result may have slightly different bar counts (±1 due to kline timing). Time-based matching handles this gracefully.
-- **Multiple data sources**: Indicator results and candle data come from different pipelines (REST fetch vs WebSocket execution_result). Time-based alignment ensures they always match correctly.
+#### 4. Integration with ScriptSession
+The `ScriptSession` delegates forming candle operations to the `FormingCandleManager`:
+```typescript
+class ScriptSession {
+  private formingCandleManager: FormingCandleManager
+  
+  tick(bar: Bar): ScriptOutputs {
+    this.engine.setFormingCandle(true)
+    const result = this.formingCandleManager.tick(bar)
+    return this.formingCandleManager.toFormingCandleOutputs(result)
+  }
+  
+  confirm(bar: Bar): ScriptOutputs {
+    this.engine.setFormingCandle(false)
+    const result = this.formingCandleManager.confirm(bar)
+    return this.formingCandleManager.toOutputs(result)
+  }
+}
+```
+
+### Forming Candle Color Updates
+
+#### 1. Overview
+The forming candle computation must produce correct bgcolor, fillColorData, and plotColors diffs. Previously, these diffs were computed before restoring the pre-execution state, resulting in empty diffs because the restored state matched the snapshot. The fix moves the restoration to AFTER diff computation.
+
+#### 2. Diff Computation Order
+```
+1. Execute script for forming candle
+2. Compute bgcolor diff (newBgcolorData vs this.bgcolorData)
+3. Compute fillColorData diff (newFillColorData vs this.fillColorData)
+4. Compute plotColors diff (newPlotColors vs this.plotColors)
+5. Restore pre-execution state (barTimestamps, outputSeriesLength)
+6. Apply diffs to the forming candle result
+```
+
+#### 3. Why This Order Matters
+- Before the fix: restoration happened at step 1, making all diffs perpetually empty (restored state matched snapshot)
+- After the fix: restoration happens at step 5, so diffs capture actual changes during forming candle execution
+- This ensures bgcolor, fill, and plot color changes are correctly reflected on the forming candle
 
 ### Dark Theme Architecture
 

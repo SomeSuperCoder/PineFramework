@@ -3192,6 +3192,54 @@ This implementation plan outlines the step-by-step development of a production-g
     - Test re-run with modified settings triggers new backtest
     - _Requirements: 17.29-17.40_
 
+- [x] 123. Fix bgcolor/fill not updating on forming candles
+  - [x] 123.1 Move plotColors/fillColorData/bgcolorData restoration after diff computation
+    - Root cause: `computeFormingCandle()` restored `this.plotColors = prePlotColors` BEFORE diff computation. Diff loops compared restored Map against identical snapshot → `colors.length > preColors.length` always false → diffs perpetually empty
+    - Fix: moved restoration of `this.plotColors`, `this.fillColorData`, `this.bgcolorData` to AFTER the diff computation in `execution-engine.ts`
+    - _Requirements: 3.24, 6.37_
+
+  - [x] 123.2 Fix mergeDiffIntoResult else-if branch to always append forming candle data
+    - In `useChartData.ts`, the else-if branch now always appends a forming candle data point even when value is unchanged, using last known value as fallback
+    - Prevents indicator plot lines from disappearing during intra-bar updates when value hasn't changed yet
+    - _Requirements: 17.28_
+
+  - [x] 123.3 Add regression tests for diffBgcolor and diffPlotColors
+    - Added tests in `tests/backend/forming-candle.test.ts` verifying that bgcolor and plotColors diffs are non-empty during forming candle computation
+    - All 45 test suites (1121 tests) pass
+    - _Requirements: 11.1_
+
+- [x] 124. Simplify rendering pipeline with index-based positioning
+  - [x] 124.1 Replace findBarIndex with direct index-based rendering in LineRenderer
+    - Plot data and candles are 1:1 indexed by data pipeline; using index directly eliminates O(n²) linear scanning and time-matching fragility
+    - Removed findBarIndex calls from LineRenderer.ts — now uses data index `i` directly as bar index
+    - _Requirements: 21.20, 21.21_
+
+  - [x] 124.2 Replace findBarIndex with direct index-based rendering in AreaRenderer
+    - Same index-based approach as LineRenderer for fill polygon vertices
+    - Removed findBarIndex calls from AreaRenderer.ts
+    - _Requirements: 21.37, 21.38_
+
+  - [x] 124.3 Remove validData filter in ChartComponent that broke index alignment
+    - The `validData` filter removed invalid candles but not plot data, breaking 1:1 index correspondence between candle and indicator data
+    - Now uses `data` directly for rendering, maintaining index alignment
+    - _Requirements: 17.13, 17.28_
+
+- [x] 125. Implement FormingCandleManager module
+  - [x] 125.1 Create FormingCandleManager class
+    - Extracted forming candle lifecycle management from ScriptSession into dedicated module
+    - Handles tick/confirm lifecycle, barTimestamps padding, toOutputs/toFormingCandleOutputs
+    - ScriptSession delegates to FormingCandleManager for all forming candle operations
+    - _Requirements: 3.24, 19.19_
+
+  - [x] 125.2 Fix ms→seconds conversion in mergeDiffIntoResult
+    - Fixed timestamp comparison in `useChartData.ts:446` that was converting milliseconds to seconds incorrectly
+    - _Requirements: 17.28_
+
+  - [x] 125.3 Write tests for FormingCandleManager
+    - Added regression tests verifying forming candle lifecycle operations
+    - All 45 test suites (1121 tests) pass
+    - _Requirements: 11.1_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3255,6 +3303,9 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 120 adds frontend integration tests for backtest flow: 20 tests covering strategy detection, backtest button visibility, settings extraction, submission, progress tracking, result display, and error handling.
 - Task 121 fixes backtest 0 trades root cause: extractStrategyParams compared `"strategy.percent_of_equity"` against bare `'percent_of_equity'`, fell through to `'contracts'` as default, causing calculateQty to return raw 100 contracts instead of ~0.16 BTC, and canOpenPosition to reject all entries. Fixed by stripping `strategy.` prefix. Commit `61227e4`.
 - Task 122 implements backtest settings workflow changes: renames "View Backtest Results" to "Run Backtest", adds settings-first flow where settings panel opens before backtest runs, makes settings persistent across sessions, replaces date range with days-back input (with toggle to traditional mode), makes settings read-only until first backtest run, and adds settings gear to results panel for re-running with modified parameters.
+- Task 123 fixes bgcolor/fill not updating on forming candles: root cause was restoration of plotColors/fillColorData/bgcolorData BEFORE diff computation in computeFormingCandle(), causing diffs to be perpetually empty. Fix moves restoration to AFTER diff computation. Also fixes mergeDiffIntoResult to always append forming candle data points even when value unchanged.
+- Task 124 simplifies the rendering pipeline by replacing time-based findBarIndex with direct index-based rendering in LineRenderer and AreaRenderer. Plot data and candles are 1:1 indexed by the data pipeline, so using index directly eliminates O(n²) scanning and time-matching fragility. Also removes the validData filter that broke index alignment.
+- Task 125 implements the FormingCandleManager module, extracting forming candle lifecycle management from ScriptSession into a dedicated module for better separation of concerns. Handles tick/confirm lifecycle, barTimestamps padding, and output conversion.
 
 ## Task Dependency Graph
 
@@ -3410,7 +3461,10 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 146, "tasks": ["108.1", "108.2", "108.3", "108.4", "108.5", "108.6", "108.7", "108.8"] },
     { "id": 147, "tasks": ["109.1", "109.2", "109.3", "109.4", "109.5", "109.6", "109.7"] },
     { "id": 148, "tasks": ["122.1", "122.2", "122.3", "122.4", "122.5", "122.6", "122.7"] },
-    { "id": 149, "tasks": ["122.8"] }
+    { "id": 149, "tasks": ["122.8"] },
+    { "id": 150, "tasks": ["123.1", "123.2", "123.3"] },
+    { "id": 151, "tasks": ["124.1", "124.2", "124.3"] },
+    { "id": 152, "tasks": ["125.1", "125.2", "125.3"] }
   ]
 }
 ```
