@@ -2053,9 +2053,6 @@ export class ExecutionEngine {
     this.emaState = preEmaState;
     this.crossPrevValues = preCrossPrevValues;
     this.changePrevValues = preChangePrevValues;
-    this.plotColors = prePlotColors;
-    this.fillColorData = preFillColorData;
-    this.bgcolorData.length = preBgcolorDataLen;
     this.rsiState = preRsiState;
     this.atrState = preAtrState;
     this.hmaBuffers = preHmaBuffers;
@@ -2145,6 +2142,10 @@ export class ExecutionEngine {
     if (this.bgcolorData.length > preBgcolorDataLen) {
       diffBgcolor = this.bgcolorData.slice(preBgcolorDataLen);
     }
+
+    this.plotColors = prePlotColors;
+    this.fillColorData = preFillColorData;
+    this.bgcolorData.length = preBgcolorDataLen;
 
     const isDiff =
       Object.keys(diffOutputs).length > 0 ||

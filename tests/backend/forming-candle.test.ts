@@ -458,6 +458,49 @@ plot(x ? 1 : 0, "confirmed")`;
       expect(triggers!.length).toBeGreaterThan(0);
     });
 
+    it('should include diffBgcolor in forming candle result when script uses bgcolor()', () => {
+      const bgcolorScript = `//@version=6
+indicator("Bgcolor Test")
+isUp = close > open
+bgcolor(isUp ? color.new(color.green, 95) : color.new(color.red, 95))
+plot(close)
+`;
+      const engine = compileScript(bgcolorScript);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+      expect(result.diffOutputs).toBeDefined();
+      expect(Object.keys(result.diffOutputs).length).toBeGreaterThan(0);
+      expect(result.diffBgcolor).toBeDefined();
+      expect(result.diffBgcolor!.length).toBeGreaterThan(0);
+    });
+
+    it('should include diffPlotColors in forming candle result when plot uses per-bar colors', () => {
+      const colorScript = `//@version=6
+indicator("Plot Color Test")
+isUp = close > open
+plot(close, color=isUp ? color.green : color.red)
+`;
+      const engine = compileScript(colorScript);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const formingCtx = makeFormingContext(bars, lastBar.close + 5);
+
+      const result = engine.computeFormingCandle(formingCtx);
+      expect(result.success).toBe(true);
+      expect(result.diffPlotColors).toBeDefined();
+      expect(Object.keys(result.diffPlotColors!).length).toBeGreaterThan(0);
+    });
+
     it('should return correct error on execution failure', () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(3, 100, 1000000);

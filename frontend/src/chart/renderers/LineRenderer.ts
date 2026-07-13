@@ -55,17 +55,6 @@ export class LineRenderer {
     }
   }
 
-  private findBarIndex(candles: CandlestickData[], time: number): number {
-    const targetTime = Math.floor(time);
-    for (let i = 0; i < candles.length; i++) {
-      if (candles[i].time === targetTime) return i;
-    }
-    if (candles.length > 0 && targetTime >= candles[candles.length - 1]!.time) {
-      return candles.length;
-    }
-    return -1;
-  }
-
   private renderLine(
     ctx: CanvasRenderingContext2D,
     data: PlotSeriesData[],
@@ -79,20 +68,15 @@ export class LineRenderer {
   ): void {
     let prevX: number | undefined;
     let prevY: number | undefined;
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) {
         prevX = undefined;
         prevY = undefined;
         continue;
       }
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) {
-        prevX = undefined;
-        prevY = undefined;
-        continue;
-      }
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
         ctx.strokeStyle = d.color ?? options.color;
@@ -119,20 +103,15 @@ export class LineRenderer {
   ): void {
     let prevX: number | undefined;
     let prevY: number | undefined;
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) {
         prevX = undefined;
         prevY = undefined;
         continue;
       }
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) {
-        prevX = undefined;
-        prevY = undefined;
-        continue;
-      }
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
         const segmentColor = d.color ?? options.color;
@@ -164,12 +143,11 @@ export class LineRenderer {
     paneId?: string,
   ): void {
     const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height, paneId);
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) continue;
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.strokeStyle = d.color ?? options.color;
       ctx.beginPath();
@@ -192,12 +170,11 @@ export class LineRenderer {
   ): void {
     const baseY = layout.priceToPixel(options.histbase ?? 0, chartArea.y, chartArea.height, paneId);
     const colWidth = Math.max(1, barSpacing * 0.5);
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) continue;
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       const top = Math.min(baseY, y);
       const height = Math.max(1, Math.abs(y - baseY));
@@ -219,12 +196,11 @@ export class LineRenderer {
   ): void {
     const radius = Math.max(2, barSpacing * 0.2);
     ctx.beginPath();
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) continue;
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.moveTo(x + radius, y);
       ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -244,12 +220,11 @@ export class LineRenderer {
     paneId?: string,
   ): void {
     const size = Math.max(3, barSpacing * 0.25);
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) continue;
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.beginPath();
       ctx.moveTo(x - size, y - size);
@@ -272,12 +247,11 @@ export class LineRenderer {
     paneId?: string,
   ): void {
     const points: Array<{ x: number; y: number }> = [];
-    for (let i = 0; i < data.length; i++) {
+    const limit = Math.min(data.length, candles.length);
+    for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
-      const barIdx = this.findBarIndex(candles, d.time);
-      if (barIdx < 0) continue;
-      const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+      const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       points.push({ x, y });
     }

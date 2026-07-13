@@ -99,12 +99,8 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
 
     chart.beginUpdate();
 
-    const validData = data.filter(
-      (d) => d.time > 0 && isFinite(d.open) && isFinite(d.high) && isFinite(d.low) && isFinite(d.close),
-    );
-
-    if (validData.length > 0) {
-      chart.setCandles(validData);
+    if (data.length > 0) {
+      chart.setCandles(data);
 
       if (shouldFitRef.current) {
         chart.timeScale().fitContent();
@@ -133,6 +129,17 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
             seriesData.push({ time: d.time, value: d.value, color: d.color });
           } else {
             seriesData.push({ time: d.time, value: null, color: d.color });
+          }
+        }
+
+        if (data.length > seriesData.length && seriesData.length > 0) {
+          const lastPoint = seriesData[seriesData.length - 1];
+          for (let j = seriesData.length; j < data.length; j++) {
+            seriesData.push({
+              time: data[j].time,
+              value: lastPoint.value,
+              color: lastPoint.color,
+            });
           }
         }
 
@@ -203,14 +210,19 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     const allShapeMarkers: ShapeMarkerData[] = [];
     const allBgColorsMap = new Map<number, string>();
     const ohlcvMap = new Map<number, CandlestickData>();
-    for (const c of validData) {
-      ohlcvMap.set(c.time, c);
+    for (let i = 0; i < data.length; i++) {
+      ohlcvMap.set(data[i].time, data[i]);
     }
 
     for (const { result } of allResults) {
       for (const s of (result.shapes || [])) {
         const candle = ohlcvMap.get(s.time);
-        const barIdx = candle ? validData.indexOf(candle) : -1;
+        let barIdx = -1;
+        if (candle) {
+          for (let i = 0; i < data.length; i++) {
+            if (data[i] === candle) { barIdx = i; break; }
+          }
+        }
         allShapeMarkers.push({
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
@@ -225,9 +237,11 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       for (const b of (result.bgcolor || [])) {
         const candle = ohlcvMap.get(b.time);
         if (candle) {
-          const barIdx = validData.indexOf(candle);
-          if (barIdx >= 0) {
-            allBgColorsMap.set(barIdx, b.color);
+          for (let i = 0; i < data.length; i++) {
+            if (data[i] === candle) {
+              allBgColorsMap.set(i, b.color);
+              break;
+            }
           }
         }
       }
