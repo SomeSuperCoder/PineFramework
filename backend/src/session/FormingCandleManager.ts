@@ -1,5 +1,5 @@
 import { type Bar, type ExecutionContext, ExecutionEngine, barsToContext, type FormingCandleResult, type ExecutionResult } from 'pine-framework';
-import type { ScriptOutputs } from './ScriptSession';
+import type { ScriptOutputs } from './ScriptSession.js';
 
 function pineValueToJSON(v: unknown): number | string | boolean | null {
   if (v === null || v === undefined) return null;

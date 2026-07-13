@@ -1,5 +1,5 @@
 import { parseAndCompile, barsToContext, ExecutionEngine, type Bar } from 'pine-framework';
-import { FormingCandleManager } from './FormingCandleManager';
+import { FormingCandleManager } from './FormingCandleManager.js';
 
 export interface ScriptOutputs {
   success: boolean;
