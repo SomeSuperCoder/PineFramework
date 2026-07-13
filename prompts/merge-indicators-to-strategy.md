@@ -210,7 +210,7 @@ After writing the strategy, you MUST validate it across multiple trading pairs t
 Run the CLI backtest tool on the merged strategy across the default symbol set:
 
 ```bash
-pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+pnpm run backtest -- backend/data/scripts/strategies/[your_strategy].pine \
   --timeframe 60 \
   --days-back 90 \
   --output backtest_results.json
@@ -218,7 +218,7 @@ pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
 
 You can specify custom symbols and timeframe:
 ```bash
-pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+pnpm run backtest -- backend/data/scripts/strategies/[your_strategy].pine \
   --timeframe 240 \
   --symbols BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT \
   --days-back 180 \
@@ -263,7 +263,7 @@ If the overfitting risk is MODERATE or HIGH, or if performance is poor on key pa
 3. **Adjust input parameters** — modify thresholds, lengths, or multipliers to be more general
 4. **Re-run the backtest**:
    ```bash
-   pine-backtest backend/data/scripts/strategies/[your_strategy].pine \
+   pnpm run backtest -- backend/data/scripts/strategies/[your_strategy].pine \
      --output backtest_results_v2.json
    ```
 5. **Compare results** — the new run should show improved consistency across pairs
