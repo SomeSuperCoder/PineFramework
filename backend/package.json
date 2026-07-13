@@ -9,6 +9,7 @@
     "dev": "tsx watch --conditions=source src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "cli:build": "tsc -p tsconfig.build.json",
+    "backtest": "node dist/cli/backtest-cli.js",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },

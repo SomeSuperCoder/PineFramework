@@ -29,7 +29,8 @@
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "typecheck": "tsc --noEmit",
-    "typecheck:all": "pnpm -r typecheck"
+    "typecheck:all": "pnpm -r typecheck",
+    "backtest": "pnpm --filter pine-framework-backend backtest"
   },
   "keywords": [
     "pine-script",
