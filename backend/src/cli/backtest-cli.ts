@@ -120,7 +120,7 @@ async function main(): Promise<void> {
 
   if (options.help || !options.scriptPath) {
     printUsage();
-    process.exit(options.scriptPath ? 0 : 2);
+    process.exit(0);
   }
 
   const validationError = validateOptions(options);
