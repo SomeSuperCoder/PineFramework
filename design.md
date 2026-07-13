@@ -2410,6 +2410,70 @@ Built-in script IDs follow the pattern `builtin_<filename>` (e.g., `builtin_macd
 - Rate limiting on sync operations
 - Audit logging for all file operations
 
+### Quick Indicator/Strategy Adder
+
+#### 1. Overview
+The Quick Adder provides a fast, keyboard-driven way to add indicators and strategies to the chart without opening the full code editor. It is a small, centered popup overlay accessible via a footer bar button or the "/" keyboard shortcut.
+
+#### 2. UI Layout
+```
+┌─────────────────────────────────────────┐
+│  [X]  Add Indicator/Strategy            │
+├─────────────────────────────────────────┤
+│  🔍 Search...                           │
+├─────────────────────────────────────────┤
+│  ┌─────────────────────────────────┐    │
+│  │  SMA Crossover          [IND]  │    │
+│  │  MACD                    [IND]  │    │
+│  │  Kalman Trend Filter     [IND]  │    │
+│  │  Two-Pole Trend Filter   [IND]  │    │
+│  │  Volatility Trail        [IND]  │    │
+│  │  Kalman Trend Levels     [IND]  │    │
+│  │  Kalman Trend Strategy   [STG]  │    │
+│  │  ● MACD (Built-In)      [IND]  │    │
+│  │  ● RSI (Built-In)       [IND]  │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+#### 3. Component Architecture
+```
+QuickAdderPopup (React component)
+├── Search bar (input, auto-focused on open)
+├── Script list (filtered by search query)
+│   ├── User scripts (from GET /api/scripts)
+│   └── Built-in scripts (from GET /api/scripts/built-in)
+│       └── Marked with "Built-In" badge
+├── Close button (X)
+└── Keyboard handler (ESC to close)
+```
+
+#### 4. Data Flow
+```
+Footer bar button click OR "/" keypress
+  → Set quickAdderOpen = true
+  → Fetch GET /api/scripts + GET /api/scripts/built-in (parallel)
+  → Render popup with combined script list
+  → User types in search bar → filter list client-side
+  → User clicks a script
+    → Call addIndicator(scriptId, source) (same as CodeEditor "Add")
+    → Popup remains open for additional adds
+  → User clicks X or presses ESC
+    → Set quickAdderOpen = false
+```
+
+#### 5. Keyboard Shortcuts
+- `/` — Open quick adder (when not focused on input/textarea)
+- `ESC` — Close quick adder
+- Arrow keys — Navigate script list (optional enhancement)
+- `Enter` — Add highlighted script (optional enhancement)
+
+#### 6. Integration with Existing Systems
+- **IndicatorManager**: Uses existing `addIndicator()` method — no new backend APIs needed
+- **Script Bank**: Reads from existing `GET /api/scripts` and `GET /api/scripts/built-in` endpoints
+- **Footer Bar**: New button placed alongside the existing auto-scale toggle
+- **Code Editor**: The quick adder is an alternative entry point — does NOT replace the code editor's "Add" button
+
 ### Future Extensibility
 
 #### 1. Language Evolution

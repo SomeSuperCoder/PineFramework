@@ -1321,3 +1321,22 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 2. WHEN the forming candle computation produces new color data, THE Execution Engine SHALL include the diffs in the forming candle result
 3. THE Frontend SHALL merge forming candle color updates into the existing chart data rather than replacing it
 4. THE Frontend SHALL always append a forming candle data point even when the value is unchanged, using the last known value as a fallback to prevent indicator plot lines from disappearing during intra-bar updates
+
+### Requirement 42: Quick Indicator/Strategy Adder
+
+**User Story:** As a chart analyst, I want a quick-access popup to add indicators and strategies to the chart without opening the full code editor, so that I can rapidly compose multi-indicator layouts.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL display a button on the footer bar that opens the quick adder popup
+2. THE quick adder popup SHALL be a small, centered modal overlay on top of the chart view
+3. THE quick adder popup SHALL contain a search bar at the top for filtering scripts by name
+4. THE quick adder popup SHALL list all available scripts (user scripts AND built-in test indicators/strategies) as clickable options
+5. Built-in test scripts SHALL be visually marked (e.g., with a "Built-In" badge or label) to distinguish them from user scripts
+6. WHEN the user clicks a script option, THE Frontend SHALL add that indicator/strategy to the chart as a new running indicator
+7. THE quick adder popup SHALL NOT auto-close after adding a script — the user shall be able to add multiple scripts in sequence
+8. THE quick adder popup SHALL close when the user clicks the X button or presses the ESC key
+9. THE quick adder popup SHALL open when the user presses the "/" key on the keyboard
+10. THE quick adder popup SHALL display the script type (indicator or strategy) as a badge next to each option
+11. THE quick adder popup SHALL filter the list in real-time as the user types in the search bar
+12. THE quick adder popup SHALL show an empty state message when no scripts match the search query

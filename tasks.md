@@ -3240,6 +3240,92 @@ This implementation plan outlines the step-by-step development of a production-g
     - All 45 test suites (1121 tests) pass
     - _Requirements: 11.1_
 
+- [ ] 126. Implement Quick Indicator/Strategy Adder Popup
+  - [ ] 126.1 Create QuickAdderPopup React component
+    - Build a small, centered modal overlay component
+    - Render close button (X) in header
+    - Render search input at top, auto-focused on open
+    - Render scrollable script list below search bar
+    - Style with dark theme matching existing UI
+    - _Requirements: 42.1, 42.2, 42.3_
+
+  - [ ] 126.2 Fetch and merge user scripts + built-in scripts
+    - On popup open, fetch `GET /api/scripts` and `GET /api/scripts/built-in` in parallel
+    - Merge into a single list with source metadata (scriptId, name, type, isBuiltIn)
+    - Store in component state for client-side filtering
+    - _Requirements: 42.4, 42.5_
+
+  - [ ] 126.3 Implement search filtering
+    - Filter the merged script list by name as the user types
+    - Case-insensitive substring match
+    - Show empty state message when no scripts match
+    - _Requirements: 42.3, 42.11, 42.12_
+
+  - [ ] 126.4 Implement script add on click
+    - When user clicks a script option, call `addIndicator(scriptId, source)` via existing IndicatorManager
+    - Do NOT close the popup after adding — allow multiple adds
+    - Show brief visual feedback (e.g., checkmark flash) on the clicked option
+    - _Requirements: 42.6, 42.7_
+
+  - [ ] 126.5 Implement close behaviors
+    - Close on X button click
+    - Close on ESC keypress
+    - Close on clicking the backdrop (outside the popup)
+    - Clear search bar when popup closes
+    - _Requirements: 42.8_
+
+  - [ ] 126.6 Add type badges to script options
+    - Show `[IND]` badge for indicators, `[STG]` badge for strategies
+    - Show `Built-In` badge for test indicators/strategies
+    - Use distinct colors for each badge type
+    - _Requirements: 42.5, 42.10_
+
+  - [ ]* 126.7 Write tests for QuickAdderPopup
+    - Test popup opens on button click
+    - Test popup opens on "/" keypress
+    - Test popup closes on ESC keypress
+    - Test popup closes on X button click
+    - Test search filtering narrows the list
+    - Test empty state shows when no matches
+    - Test clicking a script calls addIndicator
+    - Test popup remains open after adding a script
+    - Test built-in scripts show with badge
+    - Test user scripts show without built-in badge
+    - _Requirements: 42.1-42.12_
+
+- [ ] 127. Wire Quick Adder to Footer Bar and Keyboard
+  - [ ] 127.1 Add Quick Adder button to footer bar
+    - Add a button next to the existing auto-scale toggle in the footer bar
+    - Button label: "Add Indicator" or "+" icon
+    - Clicking opens the QuickAdderPopup
+    - _Requirements: 42.1_
+
+  - [ ] 127.2 Add "/" keyboard shortcut to open Quick Adder
+    - Register global keydown listener for "/" key
+    - Only trigger when not focused on input, textarea, or code editor
+    - Toggle popup open/close
+    - _Requirements: 42.9_
+
+  - [ ]* 127.3 Write tests for footer bar button and keyboard shortcut
+    - Test footer bar button opens popup
+    - Test "/" key opens popup when not in input
+    - Test "/" key does NOT open popup when in textarea/input
+    - Test keyboard shortcut toggles popup
+    - _Requirements: 42.1, 42.9_
+
+- [ ] 128. Checkpoint - Quick Adder Validation
+  - Verify popup opens via footer bar button
+  - Verify popup opens via "/" keypress
+  - Verify popup closes via ESC and X button
+  - Verify search filters scripts in real-time
+  - Verify clicking a script adds it to the chart
+  - Verify popup stays open after adding
+  - Verify built-in scripts are marked with badge
+  - Verify type badges show correctly (IND/STG)
+  - Verify multiple indicators can be added in sequence
+  - Run all existing tests to confirm no regressions
+  - Ask the user if questions arise.
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3306,6 +3392,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 123 fixes bgcolor/fill not updating on forming candles: root cause was restoration of plotColors/fillColorData/bgcolorData BEFORE diff computation in computeFormingCandle(), causing diffs to be perpetually empty. Fix moves restoration to AFTER diff computation. Also fixes mergeDiffIntoResult to always append forming candle data points even when value unchanged.
 - Task 124 simplifies the rendering pipeline by replacing time-based findBarIndex with direct index-based rendering in LineRenderer and AreaRenderer. Plot data and candles are 1:1 indexed by the data pipeline, so using index directly eliminates O(n²) scanning and time-matching fragility. Also removes the validData filter that broke index alignment.
 - Task 125 implements the FormingCandleManager module, extracting forming candle lifecycle management from ScriptSession into a dedicated module for better separation of concerns. Handles tick/confirm lifecycle, barTimestamps padding, and output conversion.
+- Tasks 126-127 implement the Quick Indicator/Strategy Adder: a small, centered popup accessible via footer bar button or "/" keyboard shortcut that lets users rapidly add indicators and strategies to the chart. The popup includes a search bar, merged list of user + built-in scripts with type badges, and stays open for multiple additions.
+- Task 128 is the checkpoint validating the quick adder works correctly end-to-end.
 
 ## Task Dependency Graph
 
@@ -3464,7 +3552,12 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 149, "tasks": ["122.8"] },
     { "id": 150, "tasks": ["123.1", "123.2", "123.3"] },
     { "id": 151, "tasks": ["124.1", "124.2", "124.3"] },
-    { "id": 152, "tasks": ["125.1", "125.2", "125.3"] }
+    { "id": 152, "tasks": ["125.1", "125.2", "125.3"] },
+    { "id": 153, "tasks": ["126.1", "126.2", "126.3", "126.4", "126.5", "126.6"] },
+    { "id": 154, "tasks": ["126.7"] },
+    { "id": 155, "tasks": ["127.1", "127.2"] },
+    { "id": 156, "tasks": ["127.3"] },
+    { "id": 157, "tasks": ["128"] }
   ]
 }
 ```
