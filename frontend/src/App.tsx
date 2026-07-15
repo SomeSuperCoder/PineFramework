@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartComponent } from './components/ChartComponent';
 import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
@@ -72,6 +72,11 @@ function App() {
     wsRef,
   } = useChartData(onIndicatorResult);
 
+  const executeScriptRef = useRef(executeScript);
+  executeScriptRef.current = executeScript;
+  const indicatorManagerRef = useRef(indicatorManager);
+  indicatorManagerRef.current = indicatorManager;
+
   useEffect(() => {
     registerOnIndicatorRemoved((indicatorIds: string[]) => {
       indicatorManager.handleIndicatorRemoved(indicatorIds);
@@ -95,7 +100,14 @@ function App() {
   useEffect(() => {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
-    fetchOHLCV(symbol, timeframe);
+    setIndicatorResults(new Map());
+    fetchOHLCV(symbol, timeframe).then(() => {
+      indicatorManagerRef.current.fetchIndicators().then((list) => {
+        for (const ind of list) {
+          executeScriptRef.current(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
+        }
+      });
+    });
   }, [symbol, timeframe, subscribe, fetchOHLCV]);
 
   useEffect(() => {

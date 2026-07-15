@@ -778,4 +778,129 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       expect(diff).toBeGreaterThan(0);
     }
   });
+
+  // ── Scenario: timeframe switch clears stale plot data ──────────────
+  it('switching timeframe clears scriptResult so stale plots are not displayed', async () => {
+    const bars1d = makeBars(BASE_TS + 1_000_000, 1000, 86400_000);
+    const bars1h = makeBars(BASE_TS + 1_000_000, 1000, 3600_000);
+
+    // Step 1: load daily data
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1d }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    expect(result.current.candles.length).toBe(1000);
+
+    // Step 2: execute a script — produces plot data for daily timeframe
+    const dailyOutputs = { sma: bars1d.map((_b, i) => (i >= 100 ? 100 : null)) };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        overlay: true,
+        outputs: dailyOutputs,
+        barTimestamps: bars1d.map(b => b.timestamp),
+        shapes: [],
+        fills: [],
+        strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript(
+        '//@version=6\nindicator("SMA")',
+        'BTCUSDT',
+        '1d',
+      );
+    });
+
+    // Script result should exist with daily plot data
+    expect(result.current.scriptResult).not.toBeNull();
+    expect(result.current.scriptResult!.plots[0].data.length).toBe(1000);
+
+    // Step 3: switch to hourly timeframe
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1h }),
+    });
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1h');
+    });
+
+    // BUG: scriptResult should be cleared (null) after timeframe switch
+    // because the old daily plot data is stale and doesn't match hourly candles
+    expect(result.current.scriptResult).toBeNull();
+
+    // Candles should be hourly data
+    expect(result.current.candles.length).toBe(1000);
+  });
+
+  // ── Scenario: timeframe switch + indicator re-execution ──────────
+  it('after timeframe switch, indicator results from old timeframe are stale', async () => {
+    const bars1d = makeBars(BASE_TS + 1_000_000, 1000, 86400_000);
+    const bars1h = makeBars(BASE_TS + 1_000_000, 1000, 3600_000);
+
+    // Step 1: load daily data
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1d }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    // Step 2: execute indicator on daily
+    const dailyOutputs = { sma: bars1d.map((_b, i) => (i >= 100 ? 100 : null)) };
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        overlay: true,
+        outputs: dailyOutputs,
+        barTimestamps: bars1d.map(b => b.timestamp),
+        shapes: [],
+        fills: [],
+        strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript(
+        '//@version=6\nindicator("SMA")',
+        'BTCUSDT',
+        '1d',
+        undefined,
+        undefined,
+        undefined,
+        'ind-1',
+      );
+    });
+
+    const indResult = result.current.indicatorResultsRef?.current?.get('ind-1');
+    expect(indResult).toBeDefined();
+    expect(indResult!.plots[0].data.length).toBe(1000);
+
+    // Step 3: switch to hourly — indicator data should NOT persist
+    // (it's from daily and doesn't match hourly candles)
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1h }),
+    });
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1h');
+    });
+
+    // The indicator result from daily should be cleared
+    // because it's stale and doesn't match the new hourly timeframe
+    const staleResult = result.current.indicatorResultsRef?.current?.get('ind-1');
+    expect(staleResult).toBeUndefined();
+  });
 });

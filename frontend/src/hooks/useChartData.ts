@@ -233,6 +233,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const fetchOHLCV = useCallback(async (symbol: string, interval: string, limit = 1000) => {
     setIsLoading(true);
     setCandles([]);
+    setScriptResult(null);
+    indicatorResultsRef.current.clear();
     ohlcvDataRef.current = [];
     historicalDataLoadedRef.current = false;
     try {
@@ -593,6 +595,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
     // Route indicator-specific results to the callback
     if (msg.indicatorId && msg.indicatorId !== 'default' && onIndicatorResult) {
+      // If the indicator was already removed, discard stale results
+      if (!indicatorSourcesRef.current.has(msg.indicatorId)) return;
       if (msg.success && msg.outputs) {
         // Real-time updates (both forming and confirmed candles) carry diff
         // outputs (single value per key). Merge them into the existing result
