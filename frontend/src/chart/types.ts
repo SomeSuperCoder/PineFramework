@@ -19,6 +19,7 @@ export interface ShapeMarkerData {
   shape: string;
   color: string;
   text?: string;
+  textcolor?: string;
   barIndex?: number;
   price?: number;
   overlay?: boolean;

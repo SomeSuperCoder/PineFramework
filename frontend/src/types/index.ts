@@ -23,11 +23,12 @@ export interface PlotData {
 }
 
 export interface ShapeData {
-  type: 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'triangleup' | 'triangledown';
+  type: 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'triangleup' | 'triangledown' | 'labelup' | 'labeldown';
   time: number;
   price: number;
   color?: string;
   text?: string;
+  textcolor?: string;
   location?: 'abovebar' | 'belowbar' | 'top' | 'middle' | 'bottom' | 'absolute';
   overlay?: boolean;
 }

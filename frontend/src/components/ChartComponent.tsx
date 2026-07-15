@@ -229,6 +229,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
           shape: s.type,
           color: s.color || '#2196f3',
           text: s.text || undefined,
+          textcolor: s.textcolor,
           barIndex: barIdx >= 0 ? barIdx : undefined,
           price: s.price,
           overlay: s.overlay,

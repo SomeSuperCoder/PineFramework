@@ -36,13 +36,17 @@ export class MarkerRenderer {
         y = layout.priceToPixel(candle.high, area.y, area.height, paneId) - margin;
       }
 
-      this.drawShape(ctx, x, y, marker.shape, marker.color, barSpacing);
+      if (marker.shape === 'labelup' || marker.shape === 'labeldown') {
+        this.drawLabel(ctx, x, y, marker.shape, marker.color, marker.text, marker.textcolor, barSpacing);
+      } else {
+        this.drawShape(ctx, x, y, marker.shape, marker.color, barSpacing);
 
-      if (marker.text) {
-        ctx.fillStyle = marker.color;
-        ctx.font = `${Math.max(9, barSpacing * 1.2)}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.fillText(marker.text, x, y + (marker.position === 'belowbar' ? 12 : -6));
+        if (marker.text) {
+          ctx.fillStyle = marker.textcolor || marker.color;
+          ctx.font = `${Math.max(9, barSpacing * 1.2)}px Arial`;
+          ctx.textAlign = 'center';
+          ctx.fillText(marker.text, x, y + (marker.position === 'belowbar' ? 12 : -6));
+        }
       }
     }
   }
@@ -212,6 +216,57 @@ export class MarkerRenderer {
         ctx.fill();
         break;
     }
+  }
+
+  private drawLabel(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    shape: string,
+    bgColor: string,
+    text: string | undefined,
+    textColor: string | undefined,
+    barSpacing: number,
+  ): void {
+    if (!text) return;
+    const fontSize = Math.max(9, barSpacing * 1.1);
+    ctx.font = `bold ${fontSize}px Arial`;
+    const metrics = ctx.measureText(text);
+    const padX = Math.max(4, barSpacing * 0.4);
+    const padY = Math.max(3, barSpacing * 0.25);
+    const bw = metrics.width + padX * 2;
+    const bh = fontSize + padY * 2;
+    const radius = Math.max(3, barSpacing * 0.25);
+    const pointerSize = Math.max(3, barSpacing * 0.3);
+
+    let rectY: number;
+    let pointerY: number;
+    if (shape === 'labeldown') {
+      rectY = y - bh - pointerSize;
+      pointerY = rectY + bh;
+    } else {
+      rectY = y + pointerSize;
+      pointerY = rectY;
+    }
+    const rectX = x - bw / 2;
+
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.roundRect(rectX, rectY, bw, bh, radius);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x, pointerY);
+    ctx.lineTo(x - pointerSize, shape === 'labeldown' ? pointerY + pointerSize : pointerY - pointerSize);
+    ctx.lineTo(x + pointerSize, shape === 'labeldown' ? pointerY + pointerSize : pointerY - pointerSize);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = textColor || '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, rectY + bh / 2);
+    ctx.textBaseline = 'alphabetic';
   }
 
   private findBarIndex(candles: CandlestickData[], time: number): number {

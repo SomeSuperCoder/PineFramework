@@ -67,6 +67,7 @@ export interface ShapeEntry {
   color: string;
   time: number;
   text: string;
+  textcolor?: string;
   price?: number;
   overlay: boolean;
 }
@@ -973,10 +974,12 @@ export class ExecutionEngine {
       let locationStr: string = 'abovebar';
       let colorStr: string = '#2196f3';
       let textStr: string = '';
+      let textColorStr: string = '#ffffff';
       if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
       if (typeof namedArgs.location === 'string') locationStr = namedArgs.location;
       if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
       if (typeof namedArgs.text === 'string') textStr = namedArgs.text;
+      if (typeof namedArgs.textcolor === 'string') textColorStr = namedArgs.textcolor;
       // Positional args: (series, title, style, location, color, text, ...)
       // title (arg 1) is internal only — do NOT use it as display text
       for (let i = 1; i < args.length - (Object.keys(namedArgs).length > 0 ? 1 : 0) && i < 5; i++) {
@@ -997,6 +1000,7 @@ export class ExecutionEngine {
         color: colorStr,
         time: this.currentTimestamp,
         text: textStr,
+        textcolor: textColorStr,
         price: typeof value === 'number' && !isLocationBool ? value : undefined,
         overlay: this.compiledScript.overlay,
       });

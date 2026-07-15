@@ -140,6 +140,7 @@ function buildScriptResult(
     price: s.price ?? 0,
     color: s.color,
     text: s.text,
+    textcolor: s.textcolor,
     location: s.location as import('../types').ShapeData['location'],
     overlay: s.overlay,
   }));
