@@ -1592,6 +1592,18 @@ export class ExecutionEngine {
       }
       return NA;
     });
+
+    this.builtins.set('alert', (...args: PineValue[]): PineValue => {
+      const message = typeof args[0] === 'string' ? args[0] : 'Alert triggered';
+      if (this.currentContext) {
+        this.alertTriggers.push({
+          alertId: message,
+          barIndex: this.currentContext.barIndex,
+          timestamp: this.currentContext.timestamp,
+        });
+      }
+      return NA;
+    });
   }
 
   private initializeGlobals(): void {
@@ -3134,6 +3146,9 @@ export class ExecutionEngine {
         return expr.property;
       }
       if (objName === 'display') {
+        return expr.property;
+      }
+      if (objName === 'alert') {
         return expr.property;
       }
       if (objName === 'math') {
