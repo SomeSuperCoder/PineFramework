@@ -214,6 +214,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const pendingExecuteRef = useRef<Map<string, { source: string; symbol: string; interval: string; bars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> }>>(new Map());
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
   const indicatorSourcesRef = useRef<Map<string, { source: string; symbol: string; interval: string; maxLookback: number }>>(new Map());
+  const historicalDataLoadedRef = useRef(false);
   const executeScriptRef = useRef<((code: string, symbol: string, interval: string, existingBars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>, versionRef?: React.MutableRefObject<number>, version?: number, indicatorId?: string) => Promise<void>) | null>(null);
 
   const toCandleData = useCallback((bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>): CandlestickData[] => {
@@ -233,6 +234,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     setIsLoading(true);
     setCandles([]);
     ohlcvDataRef.current = [];
+    historicalDataLoadedRef.current = false;
     try {
       const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`);
       if (!response.ok) {
@@ -240,6 +242,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }
       const json = await response.json();
       ohlcvDataRef.current = json.data;
+      historicalDataLoadedRef.current = true;
       setCandles(toCandleData(json.data));
     } catch (err) {
       console.error('Failed to fetch OHLCV:', err);
@@ -723,6 +726,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
               volume: k.volume,
             };
             setCandles((prev) => {
+              if (!historicalDataLoadedRef.current) return prev;
               const newCandles = [...prev];
               const last = newCandles[newCandles.length - 1];
               if (last && last.time === candle.time) {
