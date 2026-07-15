@@ -1772,6 +1772,68 @@ The forming candle computation must produce correct bgcolor, fillColorData, and 
 - After the fix: restoration happens at step 5, so diffs capture actual changes during forming candle execution
 - This ensures bgcolor, fill, and plot color changes are correctly reflected on the forming candle
 
+### Chart Viewport Auto-Fit on Initial Load
+
+#### 1. Overview
+When the chart first loads, there is a race condition between WebSocket kline data and REST API historical data. WebSocket ticks can arrive before the REST response, causing the chart to render a single candle before the full dataset loads. This creates a brief flash of one large candle that quickly snaps to the full view.
+
+#### 2. Race Condition Timeline
+```
+1. Page loads → shouldFitRef = true
+2. fetchOHLCV starts async REST request (clears candles)
+3. WebSocket connects, subscribes to kline topic
+4. Bybit WS kline tick arrives (faster than REST)
+5. WS handler pushes one candle → candles = [oneBar]
+6. ChartComponent effect runs → fitContent() called with totalBars=1
+7. shouldFitRef consumed (set to false)
+8. REST API response arrives → setCandles(1000 bars)
+9. setCandles detects prepend → adjustForPrepend(999)
+10. Viewport shifts to bar 999-1000 → only 1 candle visible
+11. shouldFitRef = false → fitContent NOT called
+12. User sees ONE candle → bug
+```
+
+#### 3. Fix: Two-Part Solution
+
+**Part A: Auto-fit when REST data arrives (PineChart.setCandles)**
+```typescript
+setCandles(data: CandlestickData[]): void {
+  const prevLength = this.candles.length;
+  // ... prepend/append detection ...
+  this.candles = data;
+  // ... viewport adjustment ...
+  
+  // Auto-fit when candle count jumps from 0/1 to many
+  if (prevLength <= 1 && data.length > 1) {
+    const regions = this.layout.getRegions();
+    this.viewport.fitContent(regions.chartArea.width);
+  }
+  this.markDirty();
+}
+```
+
+**Part B: Suppress WS updates until REST loads (useChartData)**
+```typescript
+const historicalDataLoadedRef = useRef(false);
+
+// In fetchOHLCV:
+historicalDataLoadedRef.current = false;
+// ... after REST response:
+historicalDataLoadedRef.current = true;
+
+// In WS kline handler:
+setCandles((prev) => {
+  if (!historicalDataLoadedRef.current) return prev;  // Skip WS update
+  // ... normal candle update logic ...
+});
+```
+
+#### 4. Result
+- Chart shows a blank/loading state briefly, then renders all historical candles at once
+- No flash of a single large candle
+- WebSocket updates begin only after historical data is loaded
+- Viewport automatically fits to show all available data
+
 ### Dark Theme Architecture
 
 #### 1. Color System
@@ -2515,9 +2577,9 @@ The CLI Backtest Tool enables AI agents (and human developers) to validate tradi
 pine-backtest <script.pine> [options]
 
 Options:
-  --timeframe <tf>        Timeframe: 1,5,15,30,60,240,D,W (default: 60)
+  --timeframe <tf>        Timeframe: 1,3,5,15,30,60,120,240,D,W,M (default: 60)
   --symbols <list>        Comma-separated symbols (default: BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT)
-  --days-back <n>         Lookback period in days (default: 90)
+  --days-back <n>         Lookback period in days (default: varies by timeframe)
   --start-date <date>     Start date YYYY-MM-DD (overrides --days-back)
   --end-date <date>       End date YYYY-MM-DD
   --output <path>         Write JSON results to file
@@ -2527,6 +2589,22 @@ Options:
   --default-qty <n>       Default order quantity (default: 1)
   --pyramiding <n>        Max pyramiding entries (default: 0)
 ```
+
+The `--days-back` default varies by timeframe to prevent memory issues with smaller timeframes that generate more bars per day:
+
+| Timeframe | Default Days Back |
+|-----------|-------------------|
+| 1m        | 3                 |
+| 3m        | 7                 |
+| 5m        | 14                |
+| 15m       | 45                |
+| 30m       | 90                |
+| 60m       | 180               |
+| 120m      | 365               |
+| 240m      | 730               |
+| D/W/M     | 1825              |
+
+The tool resolves script paths from both the current working directory and the monorepo root, allowing scripts to be specified as `backend/data/scripts/strategies/name.pine` when run from any workspace directory. It can be invoked via `pnpm run backtest` from the monorepo root.
 
 #### 4. Multi-Symbol Runner
 - **Sequential execution** — runs one symbol at a time to avoid API rate limits on Bybit

@@ -1350,7 +1350,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 1. THE CLI Backtest Tool SHALL be invokable from the command line with a Pine Script strategy file as the primary argument
 2. THE CLI Backtest Tool SHALL accept an optional `--timeframe` argument (default: `"60"` i.e. 1h)
 3. THE CLI Backtest Tool SHALL accept an optional `--symbols` argument as a comma-separated list (default: `"BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT"`)
-4. THE CLI Backtest Tool SHALL accept an optional `--days-back` argument for the lookback period (default: `90`)
+4. THE CLI Backtest Tool SHALL accept an optional `--days-back` argument for the lookback period; the default varies by timeframe to prevent memory issues (3 days for 1m, 7 for 3m, 14 for 5m, 45 for 15m, 90 for 30m, 180 for 60m, 365 for 120m, 730 for 240m, 1825 for D/W/M)
 5. THE CLI Backtest Tool SHALL accept optional `--start-date` and `--end-date` arguments in `YYYY-MM-DD` format; when provided, these override `--days-back`
 6. THE CLI Backtest Tool SHALL accept optional strategy configuration arguments (`--initial-capital`, `--commission`, `--slippage`, `--default-qty`, `--pyramiding`)
 7. THE CLI Backtest Tool SHALL execute the strategy independently on each specified symbol using the Bybit data source
@@ -1365,3 +1365,17 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 16. THE CLI Backtest Tool SHALL be usable by an AI agent to iteratively adjust strategy input parameters and re-run backtests to optimize cross-pair performance
 17. WHEN a backtest for a symbol fails, THE CLI Backtest Tool SHALL report the error for that symbol and continue with the remaining symbols
 18. THE CLI Backtest Tool SHALL reuse the existing backtest execution engine (ExecutionEngine + Bybit data fetcher) rather than reimplementing the backtest pipeline
+19. THE CLI Backtest Tool SHALL resolve script paths from both the current working directory and the monorepo root, allowing scripts to be specified as `backend/data/scripts/strategies/name.pine` when run from any workspace directory
+20. THE CLI Backtest Tool SHALL be invokable via `pnpm run backtest` from the monorepo root
+
+### Requirement 44: Chart Viewport Auto-Fit on Initial Load
+
+**User Story:** As a chart analyst, I want the chart to display historical candles immediately when I open it, rather than seeing a single large candle that quickly snaps to the full dataset, so that the chart feels responsive and ready for analysis.
+
+#### Acceptance Criteria
+
+1. THE Chart_Library SHALL automatically fit the viewport to display all available candles when historical data first loads
+2. WHEN the candle count jumps from 0 or 1 to a larger number (indicating initial REST data load), THE Chart_Library SHALL call `fitContent()` to adjust the viewport to show all candles
+3. THE Chart_Library SHALL suppress WebSocket candle updates until the initial historical REST data has loaded, preventing a brief flash of a single candle before the full dataset appears
+4. THE Chart_Library SHALL track a `historicalDataLoadedRef` flag that is set to `false` when a new data fetch begins and `true` when the REST response is received
+5. WHEN `historicalDataLoadedRef` is `false`, THE Chart_Library SHALL ignore incoming WebSocket kline data for candle updates

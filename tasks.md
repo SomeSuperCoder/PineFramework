@@ -3423,6 +3423,50 @@ This implementation plan outlines the step-by-step development of a production-g
     - Verify the iteration workflow is actionable for an AI agent
     - Ask the user if questions arise.
 
+- [x] 131. CLI Backtest Tool Refinements
+  - [x] 131.1 Dynamic days-back based on timeframe
+    - Replace fixed default (90 days) with timeframe-aware lookup table
+    - 1m: 3d, 3m: 7d, 5m: 14d, 15m: 45d, 30m: 90d, 60m: 180d, 120m: 365d, 240m: 730d, D/W/M: 1825d
+    - Target ~4000 bars per symbol to prevent OOM errors
+    - _Requirements: 43.4_
+
+  - [x] 131.2 Monorepo path resolution
+    - Resolve script paths from both CWD and monorepo root
+    - Allow `backend/data/scripts/strategies/name.pine` when run from any workspace directory
+    - _Requirements: 43.19_
+
+  - [x] 131.3 Default help when no script provided
+    - Show usage text when invoked without arguments
+    - Exit with code 0 (not error) for default help
+    - _Requirements: 43.1_
+
+  - [x] 131.4 Add pnpm run backtest convenience script
+    - Add `"backtest": "pnpm --filter pine-framework-backend backtest"` to root package.json
+    - Add `"backtest": "node dist/cli/backtest-cli.js"` to backend package.json
+    - _Requirements: 43.20_
+
+  - [x] 131.5 Update merge prompt to use pnpm run backtest
+    - Replace `pine-backtest` with `pnpm run backtest --` in prompts/merge-indicators-to-strategy.md
+    - _Requirements: 43.16_
+
+- [x] 132. Chart Viewport Auto-Fit on Initial Load
+  - [x] 132.1 Auto-fit viewport when REST data arrives after WS tick
+    - In PineChart.setCandles(), detect when candle count jumps from 0/1 to many
+    - Call fitContent() automatically to show all historical candles
+    - _Requirements: 44.1, 44.2_
+
+  - [x] 132.2 Suppress WS candle updates until REST data loads
+    - Add historicalDataLoadedRef to track initial data load state
+    - Set to false when fetchOHLCV starts, true when REST response arrives
+    - Skip WS kline updates when flag is false
+    - _Requirements: 44.3, 44.4, 44.5_
+
+- [x] 133. Fix node16 module resolution
+  - [x] 133.1 Add .js extensions to relative imports
+    - Fix FormingCandleManager.ts and ScriptSession.ts imports
+    - Required for node16/nodenext module resolution
+    - _Requirements: N/A (build fix)_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3463,6 +3507,7 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 95 implements indicator pane independent price scales: AxisRenderer now renders per-indicator-pane price labels on the right side using each pane's own price range, indicator pane rendering is clipped to allocated regions via canvas clipping, and horizontal separator lines are drawn between panes.
 - Task 96 implements indicator pane autoscale on scroll: when the user scrolls, pans, or zooms the chart, each indicator pane automatically recomputes its Y-axis price range from the visible indicator values in the current viewport, providing seamless autoscaling that matches TradingView behavior.
 - Task 97 implements dynamic indicator management UI: users can add and remove multiple indicators from the chart independently. The "Add" button (renamed from "Run") appends indicators to the chart. Running indicator lists are persisted to `backend/data/indicators.json` and restored on restart. If a script is deleted from the bank, all its running indicators are automatically removed from the chart via cascade delete. Overlay indicators show labels with delete buttons in the top-left corner of the main chart. Non-overlay indicators show labels with unplot buttons in the top-left corner of their respective panes.
+- Tasks 129-133 implement CLI backtest tool refinements and chart viewport auto-fit: dynamic days-back based on timeframe (131.1), monorepo path resolution (131.2), default help (131.3), pnpm run backtest convenience script (131.4), merge prompt update (131.5), chart viewport auto-fit when REST data arrives after WS tick (132.1), suppress WS candle updates until REST loads (132.2), and node16 module resolution fix (133.1).
 - Task 99 fixes the multi-indicator rendering bug discovered during validation: the complex `activeKeysRef`/`keyToTitlesRef` diffing system in ChartComponent was fragile and incorrectly removed plot series. The fix simplifies to the proven "add all, remove stale" pattern from `aad6e63` — iterate all results in a flat pass, add all plot series (idempotent via Linear chart), remove any not in the current title set. Also fixes indicator forming-candle routing by checking `msg.formingCandle` in `useChartData.ts`.
 - Task 100 implements the Progressive Indicator Computation system: adds `maxLookback` detection to the execution engine (scans TA buffers after execution to determine maximum lookback period), a `GET /api/bars` endpoint for index-range-based bar fetching, frontend lookback seed loading (auto-fetches seed bars when maxLookback > 0), auto re-execution on scroll (triggers script re-execution after `fetchOlderOHLCV` completes), and a progressive reveal hook for smooth indicator data appearance. Existing lazy loading and realtime forming candle computation remain unchanged, ensuring backward compatibility.: a full rework of the indicator computation model from "compute everything upfront" to lazy/progressive per-viewport computation. Indicators are computed for the visible range (plus lookback seed data) and progressively filled as the user scrolls. The system uses an interruptible batch queue with priority levels, instant catch-up for fast scrolling, and per-candle realtime forming-candle recomputation. The rendering pipeline remains unchanged — it consumes computed arrays from the new `useIndicatorData` hook.
 - Task 101 implements time-based renderer positioning: all chart renderers (LineRenderer, AreaRenderer, CrosshairRenderer) now use `findBarIndex(candles, time)` to match data points to candles by timestamp rather than sequential index. This makes rendering immune to index shifts from data prepending, WS session drift, and multiple data sources with different bar counts. Commit `dd4daa0`.
@@ -3663,7 +3708,9 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 161, "tasks": ["129.7", "129.8"] },
     { "id": 162, "tasks": ["130.1", "130.2", "130.3"] },
     { "id": 163, "tasks": ["130.4"] },
-    { "id": 164, "tasks": ["131"] }
+    { "id": 164, "tasks": ["131.1", "131.2", "131.3", "131.4", "131.5"] },
+    { "id": 165, "tasks": ["132.1", "132.2"] },
+    { "id": 166, "tasks": ["133.1"] }
   ]
 }
 ```
