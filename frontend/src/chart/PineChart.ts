@@ -515,13 +515,18 @@ export class PineChart {
   }
 
   setCandles(data: CandlestickData[]): void {
-    const wasPrepended = data.length > this.candles.length && this.candles.length > 0 && data[0]?.time < this.candles[0]?.time;
-    const added = data.length - this.candles.length;
+    const prevLength = this.candles.length;
+    const wasPrepended = data.length > prevLength && prevLength > 0 && data[0]?.time < this.candles[0]?.time;
+    const added = data.length - prevLength;
     this.candles = data;
     if (wasPrepended) {
       this.viewport.adjustForPrepend(added);
     } else {
       this.viewport.setTotalBars(data.length);
+    }
+    if (prevLength <= 1 && data.length > 1) {
+      const regions = this.layout.getRegions();
+      this.viewport.fitContent(regions.chartArea.width);
     }
     this.markDirty();
   }
