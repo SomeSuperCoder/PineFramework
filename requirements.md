@@ -312,7 +312,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 7. WHEN strategy.cancel() is called, THE Strategy_Engine SHALL update displayed orders on chart
 8. WHEN strategy.cancel_all() is called, THE Strategy_Engine SHALL update displayed orders on chart
 9. THE Strategy_Engine SHALL calculate performance metrics (profit, drawdown, Sharpe ratio)
-10. THE Strategy_Engine SHALL handle order fills with configurable slippage and commission
+10. THE Strategy_Engine SHALL handle order fills with configurable slippage and a pluggable commission calculation method
 11. THE Strategy_Engine SHALL support all Pine strategy functions and parameters
 12. THE Strategy_Engine SHALL provide backtesting reports with trade-by-trade analysis
 13. WHEN strategy.entry() is called with an opposite direction to current position, THE Strategy_Engine SHALL reverse the position (close existing and open new in opposite direction)
@@ -320,7 +320,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 15. THE Strategy_Engine SHALL render exit markers with optional comment text on the chart
 16. THE Strategy_Engine SHALL return strategy markers (entry, exit, close, order) as part of the execution result
 17. THE Strategy_Engine SHALL support strategy.position_size builtin to query current position quantity
-18. THE Strategy_Engine SHALL support strategy.commission.percent commission type
+18. THE Strategy_Engine SHALL support pluggable commission calculation methods selectable at backtest runtime
 19. THE Strategy_Engine SHALL support strategy.close() with named arguments (id, comment)
 20. THE Strategy_Engine SHALL support strategy.close_all() to close all open positions at once
 21. THE Strategy_Engine SHALL support strategy.entry() with comment, stop, and limit parameters in addition to existing parameters
@@ -495,6 +495,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. WHEN library() is called, THE System SHALL configure script as a reusable library
 4. THE System SHALL support all indicator() parameters (title, shorttitle, overlay, format, precision, scale, max_labels_count, max_lines_count, max_boxes_count, max_polylines_count, max_bars_back, calc_on_every_tick, max_lines_left, max_labels_left, max_boxes_left, explicit_plot_zorder)
 5. THE System SHALL support all strategy() parameters (title, shorttitle, overlay, format, precision, scale, pyramiding, calc_on_every_tick, backtest_fill_limits_assumption, default_qty_type, default_qty_value, initial_capital, commission_type, commission_value, slippage, process_orders_on_close, close_entries_rule, margin_long, margin_short, max_boxes_count, max_lines_count, max_labels_count, risk_free_rate)
+  - THE System SHALL accept `commission_type` and `commission_value` from strategy() declarations for backward compatibility, but the backtest runtime commission calculation SHALL be overridden by the selected Commission Calculation Method when a method is chosen in the backtest settings
 6. THE System SHALL validate script type compatibility with available functions
 7. WHEN strategy() is called without an explicit overlay parameter, THE System SHALL default overlay to `true` (strategies render on the main chart pane by default)
 
@@ -536,12 +537,12 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 **Strategy Results Popup:**
 29. WHEN the user clicks Run and the script returned strategy markers (indicating a strategy, not an indicator), THE Frontend SHALL display a "Run Backtest" button on the chart
 30. WHEN the user clicks "Run Backtest", THE Frontend SHALL open a settings panel (either a modal or an inline panel within the popup) where the user can configure backtest parameters before running the backtest
-31. THE settings panel SHALL be pre-populated with default values auto-extracted from the strategy() declaration (initial_capital, commission_value, slippage, pyramiding, default_qty_value, default_qty_type, margin_long, margin_short) and any previously saved user settings
+31. THE settings panel SHALL be pre-populated with default values auto-extracted from the strategy() declaration (initial_capital, commission_value, slippage, pyramiding, default_qty_value, default_qty_type, margin_long, margin_short) and any previously saved user settings, including the selected Commission Calculation Method and its initial settings
 32. THE backtest settings SHALL persist across sessions and page reloads — when the user reopens the settings panel, previously used values SHALL be restored
 33. THE settings panel SHALL default the date range input to a "days back" mode where the user enters the number of days to look back (e.g., "10 days", "30 days", "90 days") instead of separate begin/end date fields
 34. THE settings panel SHALL provide a toggle to switch between "days back" mode and a traditional begin/end date picker mode
 35. WHEN the user confirms settings and clicks a "Confirm" or "Run" button in the settings panel, THE Frontend SHALL send a backtest request to the Backend with the selected parameters and then display the backtest results panel
-36. THE backtest results panel SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list
+36. THE backtest results panel SHALL display key performance metrics (net profit, win rate, profit factor, Sharpe, max drawdown, Sortino, total trades, commission), an equity/drawdown chart, and a sortable trade list — where commission reflects the total computed by the selected Commission Calculation Method
 37. THE backtest settings SHALL be read-only (non-editable) until the backtest has been run at least once — the settings panel SHALL prevent modifications before the first backtest run
 38. AFTER the first backtest has run, THE backtest settings SHALL become editable — the user SHALL be able to modify parameters and re-run the backtest
 39. THE Backend SHALL run the backtest asynchronously, returning progress updates and a final result with metrics, trades, and equity curve
@@ -864,7 +865,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 **FR-1: Pine Script Backtest Compatibility**
 
 1. THE Backtest_Engine SHALL parse and execute Pine Script v5/v6 strategy code using the existing execution runtime
-2. THE Backtest_Engine SHALL respect strategy-specific parameters: `initial_capital`, `default_qty_value`, `default_qty_type`, `currency`, `pyramiding`, `commission_type/value`, `slippage`, `margin_long/short`
+2. THE Backtest_Engine SHALL respect strategy-specific parameters: `initial_capital`, `default_qty_value`, `default_qty_type`, `currency`, `pyramiding`, `commission_type/value`, `slippage`, `margin_long/short` — where commission is further governed by the selected Commission Calculation Method
 3. THE Backtest_Engine SHALL support multi-timeframe data via `request.security()` within backtest execution
 4. THE Backtest_Engine SHALL emit `OrderRequest` events from strategy.*() functions instead of placing orders directly
 
@@ -887,7 +888,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 13. THE Backtest_Engine SHALL support order types: market, limit, stop, stop-limit
 14. THE Backtest_Engine SHALL simulate order lifecycle: placement, acceptance, fill, expiry, cancellation
 15. THE Backtest_Engine SHALL implement fill logic based on bar OHLC (intrabar) or bar close (next bar)
-16. THE Backtest_Engine SHALL account for commission (per trade, per contract, percentage)
+16. THE Backtest_Engine SHALL compute commission using the selected Commission Calculation Method (see Commission Calculation Methods section below)
 17. THE Backtest_Engine SHALL implement slippage model: fixed ticks/percentage, limit-order slippage, market-order slippage
 18. THE Backtest_Engine SHALL support margin trading with initial and maintenance margin checks; liquidate positions when equity falls below maintenance margin
 19. THE Backtest_Engine SHALL support pyramiding with configurable maximum entries in same direction
@@ -948,17 +949,33 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 
 **Broker Emulator Properties**
 
-56. Commission SHALL be configurable via `commission_type` (percent, cash per contract, cash per order) and `commission_value`
+56. Commission SHALL be governed by the selected Commission Calculation Method (see below), with `commission_type` and `commission_value` from strategy() used as fallback defaults when no method is selected
 57. Slippage SHALL be configurable in ticks, points, or percent
 58. Margin SHALL be configurable via `initial_margin_rate` and `maintenance_margin_rate`; liquidation at `maintenance_margin_rate * position_value`
 59. Default quantity SHALL support `contracts`, `percent_of_equity`, and `cash` modes
 60. Currency SHALL be configurable for P&L denomination (e.g., USD)
 
+**Commission Calculation Methods**
+
+61. THE Backtest_Engine SHALL support pluggable Commission Calculation Methods, each implementing a `CommissionCalculator` interface that computes commission for a given trade
+62. THE Backtest_Engine SHALL include the following built-in Commission Calculation Methods:
+  - **percent_fixed**: Applies a fixed percentage of trade value (replaces legacy `commission_type: 'percent'`)
+  - **per_order_fixed**: Applies a fixed cash amount per order (replaces legacy `commission_type: 'per_order'`)
+  - **jupiter_ultra**: Models Jupiter DEX Ultra Mode swap fees — commission varies by pair volatility and token type (typically 0–0.5% of trade value, ~5–10 bps typical), determined at quote time
+  - **jupiter_manual**: Models Jupiter DEX Market Swap (manual routing) — zero Jupiter commission
+  - **none**: No commission applied
+63. A Commission Calculation Method MAY enforce long-only trading by filtering out short trades when the method is selected
+64. THE Commission Calculation Method SHALL be selectable in the Run Backtest popup settings panel via a dropdown or similar control
+65. THE selected Commission Calculation Method SHALL expose initial settings (e.g., percentage rate for `percent_fixed`, fixed fee for `per_order_fixed`) as configurable fields in the backtest settings panel
+66. THE Backtest_Engine SHALL persist the selected Commission Calculation Method and its settings across sessions and page reloads
+67. THE Backtest_Engine SHALL auto-extract commission defaults from the `strategy()` declaration when a Commission Calculation Method is not explicitly selected
+68. THE `CommissionCalculator` interface SHALL define: `calculateCommission(trade: Trade, config: CommissionConfig): number` returning the commission amount in the account currency
+
 **REST API Specification**
 
-61. `POST /api/backtest` SHALL accept `{ script, symbol, timeframe, start_date, end_date, initial_capital, commission_type, commission_value, slippage, pyramiding, bar_magnifier, inputs }` and return `{ job_id }`
-62. `GET /api/backtest/{job_id}` SHALL return `{ status (running/completed/failed), progress (0-100), result_url }`
-63. `GET /api/backtest/{job_id}/result` SHALL return `{ metrics, equity_curve, trades, orders }`
+69. `POST /api/backtest` SHALL accept `{ script, symbol, timeframe, start_date, end_date, initial_capital, commission_type, commission_value, commission_method, commission_method_settings, slippage, pyramiding, bar_magnifier, inputs }` and return `{ job_id }`
+70. `GET /api/backtest/{job_id}` SHALL return `{ status (running/completed/failed), progress (0-100), result_url }`
+71. `GET /api/backtest/{job_id}/result` SHALL return `{ metrics, equity_curve, trades, orders }`
 
 ### Requirement 24: Script Bank Management
 
@@ -1352,7 +1369,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. THE CLI Backtest Tool SHALL accept an optional `--symbols` argument as a comma-separated list (default: `"BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT"`)
 4. THE CLI Backtest Tool SHALL accept an optional `--days-back` argument for the lookback period; the default varies by timeframe to prevent memory issues (3 days for 1m, 7 for 3m, 14 for 5m, 45 for 15m, 90 for 30m, 180 for 60m, 365 for 120m, 730 for 240m, 1825 for D/W/M)
 5. THE CLI Backtest Tool SHALL accept optional `--start-date` and `--end-date` arguments in `YYYY-MM-DD` format; when provided, these override `--days-back`
-6. THE CLI Backtest Tool SHALL accept optional strategy configuration arguments (`--initial-capital`, `--commission`, `--slippage`, `--default-qty`, `--pyramiding`)
+6. THE CLI Backtest Tool SHALL accept optional strategy configuration arguments (`--initial-capital`, `--commission`, `--commission-method`, `--slippage`, `--default-qty`, `--pyramiding`)
 7. THE CLI Backtest Tool SHALL execute the strategy independently on each specified symbol using the Bybit data source
 8. THE CLI Backtest Tool SHALL output a JSON result containing per-symbol metrics including: net profit, profit factor, max drawdown, win rate, Sharpe ratio, total trades, and buy-and-hold return
 9. THE CLI Backtest Tool SHALL compute a cross-pair summary including: average net profit, median profit factor, coefficient of variation of returns, and a worst-pair / best-pair identification

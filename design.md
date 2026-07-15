@@ -436,7 +436,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - Exit markers rendered with comment text
   - Strategy markers returned as part of execution result
   - strategy.position_size builtin for querying current position quantity
-  - strategy.commission.percent commission type support
+  - Pluggable Commission Calculation Methods via `CommissionCalculator` interface
   - getConfig() method for accessing strategy configuration
   - strategy.entry() and strategy.exit() accept stop, limit, and comment parameters for advanced order configuration
   - Entry marker naming: defaults to capitalized direction ("Long"/"Short"), overridden by comment parameter
@@ -612,7 +612,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
     - Metrics grid: 8 tiles (Net Profit, Win Rate, Profit Factor, Sharpe, Max DD, Sortino, Total Trades, Commission)
     - Equity/Drawdown chart: canvas-rendered equity curve (blue line) and drawdown (red line), dual-panel layout
     - Trades table: sortable columns (Direction, Entry, Exit, PnL, Return, MAE, MFE, Bars), green/red coloring
-  - Settings panel: initially shown before results, containing fields: initial capital, commission (value + type), slippage (value + type), default quantity (value + type), pyramiding, margin (long/short), date range (days back input with toggle to begin/end date picker)
+  - Settings panel: initially shown before results, containing fields: initial capital, commission calculation method (dropdown selecting from percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none), commission method settings (method-specific fields), slippage (value + type), default quantity (value + type), pyramiding, margin (long/short), date range (days back input with toggle to begin/end date picker)
   - Settings are read-only until the first backtest has run; after the first run, settings become editable
   - Settings persist across sessions and page reloads (stored in localStorage or backend)
   - Auto-extracts default values from `strategy()` declaration in the script source
@@ -2003,10 +2003,18 @@ The Backtest Engine extends the existing Strategy Engine to provide a complete h
 - Supports pyramiding: configurable maximum entries in same direction (0 = single entry, N = up to N entries)
 - Handles position reversal: opposite-direction entry closes existing position first, then opens new position
 
-**4.5 Commission & Slippage:**
-- Commission types: percent of trade value, cash per contract, cash per order
+**4.5 Commission Calculation Methods:**
+- Pluggable `CommissionCalculator` interface: `calculateCommission(trade: Trade, config: CommissionConfig): number`
+- Built-in methods:
+  - **percent_fixed**: Fixed percentage of trade value (legacy `commission_type: 'percent'`)
+  - **per_order_fixed**: Fixed cash amount per order (legacy `commission_type: 'per_order'`)
+  - **jupiter_ultra**: Models Jupiter DEX Ultra Mode swap fees — varies by pair volatility and token type (typically 0–0.5%, ~5–10 bps typical), fee amount determined at quote time by Jupiter backend; for backtesting a representative percentage or tiered model is used
+  - **jupiter_manual**: Models Jupiter DEX Market Swap (manual routing) — zero commission
+  - **none**: No commission
+- A commission method MAY enforce long-only trading by filtering short trades when selected
+- Method selected via UI dropdown in backtest settings panel; method-specific settings exposed as configurable fields
 - Slippage modes: fixed ticks, fixed points, percentage of price
-- Configurable via strategy() declaration parameters
+- Configurable via strategy() declaration parameters as fallback defaults
 
 #### 5. Bar Processing Loop
 ```
@@ -2086,6 +2094,8 @@ Request: {
   "start_date": "2020-01-01",
   "end_date": "2023-01-01",
   "initial_capital": 10000,
+  "commission_method": "jupiter_ultra",
+  "commission_method_settings": {},
   "commission_type": "percent",
   "commission_value": 0.1,
   "slippage": 1,
@@ -2114,8 +2124,10 @@ Response: {
 ```
 
 #### 10. Broker Emulator Properties
-- `commission_type`: "percent" | "cash_per_contract" | "cash_per_order"
-- `commission_value`: number (percentage or absolute amount)
+- `commission_method`: "percent_fixed" | "per_order_fixed" | "jupiter_ultra" | "jupiter_manual" | "none"
+- `commission_method_settings`: object (method-specific settings, e.g., `{ rate: 0.001 }` for percent_fixed)
+- `commission_type`: "percent" | "cash_per_contract" | "cash_per_order" (legacy, used as fallback when no method selected)
+- `commission_value`: number (legacy fallback)
 - `slippage`: number in ticks/points/percent (configurable mode)
 - `initial_margin`: percentage (e.g., 50 for 2x leverage)
 - `maintenance_margin`: percentage (e.g., 25)
@@ -2127,7 +2139,7 @@ Response: {
 #### 11. Testing Strategy
 - Unit tests for fill logic (market, limit, stop, stop-limit)
 - Unit tests for margin calculations and liquidation
-- Unit tests for commission and slippage calculations
+- Unit tests for commission calculation methods (percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none)
 - Unit tests for each performance metric formula
 - Integration tests: run standard Pine strategies (SMA crossover, etc.) and compare metrics to TradingView output within 0.1% tolerance
 - Regression tests: curated library of scripts with known expected results

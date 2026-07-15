@@ -3467,6 +3467,113 @@ This implementation plan outlines the step-by-step development of a production-g
     - Required for node16/nodenext module resolution
     - _Requirements: N/A (build fix)_
 
+- [ ] 134. Implement Pluggable Commission Calculation Methods
+  - [ ] 134.1 Define CommissionCalculator interface and CommissionConfig types
+    - Create `CommissionCalculator` interface with `calculateCommission(trade: Trade, config: CommissionConfig): number`
+    - Create `CommissionConfig` type with method identifier and method-specific settings
+    - Create `CommissionMethodDescriptor` for UI metadata (name, description, settings schema)
+    - Define built-in method identifiers: `percent_fixed`, `per_order_fixed`, `jupiter_ultra`, `jupiter_manual`, `none`
+    - _Requirements: 22.61, 22.68_
+
+  - [ ] 134.2 Implement percent_fixed commission method
+    - Fixed percentage of trade value (replaces legacy `commission_type: 'percent'`)
+    - Settings: `rate` (number, e.g., 0.001 for 0.1%)
+    - Calculate: `abs(tradeValue) * rate`
+    - _Requirements: 22.62_
+
+  - [ ] 134.3 Implement per_order_fixed commission method
+    - Fixed cash amount per order (replaces legacy `commission_type: 'per_order'`)
+    - Settings: `amount` (number, e.g., 0.5 for $0.50 per order)
+    - Calculate: `amount`
+    - _Requirements: 22.62_
+
+  - [ ] 134.4 Implement jupiter_ultra commission method
+    - Models Jupiter DEX Ultra Mode swap fees
+    - Settings: `rate` (number, default 0.001 for ~10 bps typical)
+    - Calculate: `abs(tradeValue) * rate` (representative percentage for backtesting)
+    - Document that real Jupiter Ultra fees vary by pair volatility and token type (0–0.5%)
+    - _Requirements: 22.62_
+
+  - [ ] 134.5 Implement jupiter_manual commission method
+    - Models Jupiter DEX Market Swap (manual routing)
+    - No settings — always zero commission
+    - Calculate: `0`
+    - _Requirements: 22.62_
+
+  - [ ] 134.6 Implement none commission method
+    - No commission applied
+    - No settings
+    - Calculate: `0`
+    - _Requirements: 22.62_
+
+  - [ ] 134.7 Implement long-only enforcement for commission methods
+    - When a commission method has `enforceLongOnly: true`, filter out short trades
+    - Add `enforceLongOnly` flag to CommissionMethodDescriptor
+    - Integration with strategy engine order processing
+    - _Requirements: 22.63_
+
+  - [ ]* 134.8 Write unit tests for commission calculation methods
+    - Test percent_fixed with various rates and trade values
+    - Test per_order_fixed with various amounts
+    - Test jupiter_ultra with representative rates
+    - Test jupiter_manual returns zero
+    - Test none returns zero
+    - Test long-only enforcement filters short trades
+    - _Requirements: 22.61-22.68_
+
+- [ ] 135. Integrate Commission Methods into Backtest Engine
+  - [ ] 135.1 Wire CommissionCalculator into Broker Simulator fill engine
+    - Replace direct commission calculation in fill engine with CommissionCalculator
+    - Accept commission_method and commission_method_settings in backtest config
+    - Fall back to legacy commission_type/commission_value when no method selected
+    - _Requirements: 22.16, 22.56_
+
+  - [ ] 135.2 Update Backend REST API for commission methods
+    - Extend POST /api/backtest to accept `commission_method` and `commission_method_settings`
+    - Pass commission config through to Broker Simulator
+    - _Requirements: 22.69_
+
+  - [ ] 135.3 Update CLI Backtest Tool for commission methods
+    - Add `--commission-method` CLI argument
+    - Pass method to backtest config
+    - _Requirements: 43.6_
+
+  - [ ]* 135.4 Write integration tests for commission methods in backtest
+    - Test backtest with each commission method
+    - Verify commission amounts in trade results
+    - Test fallback to legacy commission_type when no method selected
+    - _Requirements: 22.16, 22.62_
+
+- [ ] 136. Implement Commission Method UI in Backtest Settings
+  - [ ] 136.1 Add commission method dropdown to BacktestSettingsPopup
+    - Render dropdown with options: percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none
+    - Default to jupiter_ultra for new backtests
+    - Persist selection in localStorage alongside other backtest settings
+    - _Requirements: 17.31, 22.64, 22.66_
+
+  - [ ] 136.2 Add method-specific settings fields
+    - Render dynamic settings fields based on selected method
+    - percent_fixed: rate input (percentage)
+    - per_order_fixed: amount input (cash)
+    - jupiter_ultra: rate input (percentage, default 0.001)
+    - jupiter_manual: no fields
+    - none: no fields
+    - Persist method settings in localStorage
+    - _Requirements: 22.65, 22.66_
+
+  - [ ] 136.3 Auto-extract commission defaults from strategy() declaration
+    - When no method is explicitly selected, use strategy() commission_type/commission_value as fallback
+    - Map legacy commission_type to equivalent method (percent → percent_fixed, per_order → per_order_fixed)
+    - Pre-populate method settings from strategy() values
+    - _Requirements: 22.67_
+
+  - [ ]* 136.4 Write tests for commission method UI
+    - Test dropdown renders all methods
+    - Test method selection persists across reloads
+    - Test settings fields change based on method
+    - Test auto-extraction from strategy() declaration
+    - _Requirements: 17.31, 22.64-22.67_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
@@ -3538,6 +3645,8 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 128 is the checkpoint validating the quick adder works correctly end-to-end.
 - Tasks 129-130 implement the CLI Backtest Tool for multi-symbol strategy validation: CLI entry point with argument parsing (129.1), per-symbol backtest execution reusing existing engine (129.2), multi-symbol runner with progress (129.3), result aggregation and overfitting analysis (129.4), output formatting (129.5), tests (129.6), bin entry wiring (129.7), and a tutorial section in merge-indicators-to-strategy.md (130). The tool enables AI agents to validate merged strategies across multiple trading pairs to detect overfitting.
 - Task 131 is the checkpoint validating the CLI tool and merge prompt tutorial work end-to-end.
+- Tasks 132-133 implement chart viewport auto-fit on initial load (suppress WS updates until REST loads, auto-fit when data arrives) and fix node16 module resolution (add .js extensions to relative imports).
+- Tasks 134-136 implement Pluggable Commission Calculation Methods: defines CommissionCalculator interface and CommissionConfig types (134.1), implements five built-in methods — percent_fixed (134.2), per_order_fixed (134.3), jupiter_ultra modeling Jupiter DEX Ultra Mode fees (134.4), jupiter_manual modeling zero-commission Jupiter Market Swap (134.5), none (134.6), long-only enforcement (134.7), wires methods into Broker Simulator and REST API (135.1-135.3), and adds commission method dropdown + method-specific settings to the backtest settings UI (136.1-136.3). Legacy commission_type/commission_value from strategy() serves as fallback when no method is selected.
 
 ## Task Dependency Graph
 
@@ -3710,7 +3819,13 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 163, "tasks": ["130.4"] },
     { "id": 164, "tasks": ["131.1", "131.2", "131.3", "131.4", "131.5"] },
     { "id": 165, "tasks": ["132.1", "132.2"] },
-    { "id": 166, "tasks": ["133.1"] }
+    { "id": 166, "tasks": ["133.1"] },
+    { "id": 167, "tasks": ["134.1", "134.2", "134.3", "134.4", "134.5", "134.6", "134.7"] },
+    { "id": 168, "tasks": ["134.8"] },
+    { "id": 169, "tasks": ["135.1", "135.2", "135.3"] },
+    { "id": 170, "tasks": ["135.4"] },
+    { "id": 171, "tasks": ["136.1", "136.2", "136.3"] },
+    { "id": 172, "tasks": ["136.4"] }
   ]
 }
 ```
