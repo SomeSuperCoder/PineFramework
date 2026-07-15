@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
-import type { BacktestConfig } from '../types';
+import type { BacktestConfig, CommissionMethodId } from '../types';
 
 const MAX_BARS = 1500;
 
@@ -30,6 +30,14 @@ const TIMEFRAME_LABELS: Record<string, string> = {
   '60': '1h', '240': '4h', 'D': '1D', 'W': '1W',
 };
 
+const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
+  { id: 'jupiter_ultra', label: 'Jupiter Ultra (DEX)', description: 'Model Jupiter DEX Ultra Mode fees' },
+  { id: 'percent_fixed', label: 'Percent (Fixed)', description: 'Percentage of trade value' },
+  { id: 'per_order_fixed', label: 'Per Order (Fixed)', description: 'Fixed amount per order' },
+  { id: 'jupiter_manual', label: 'Jupiter Manual (Swap)', description: 'Zero-commission Jupiter Market Swap' },
+  { id: 'none', label: 'None', description: 'No commission' },
+];
+
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
   commission: 0,
@@ -53,6 +61,8 @@ interface UserSettings {
   dateRangeMode: DateRangeMode;
   startDate: string;
   endDate: string;
+  commissionMethod?: CommissionMethodId;
+  commissionMethodSettings?: Record<string, unknown> | null;
 }
 
 const STORAGE_KEY = 'pine-backtest-settings';
@@ -76,12 +86,33 @@ function saveUserSettings(settings: UserSettings): void {
 }
 
 function buildConfig(scriptParams: Partial<BacktestConfig>, user: UserSettings): BacktestConfig {
-  return {
+  const base = {
     ...defaultConfig,
     ...scriptParams,
     initialCapital: user.initialCapital,
     commission: user.commission,
   };
+
+  if (user.commissionMethod) {
+    return {
+      ...base,
+      commissionMethod: user.commissionMethod,
+      commissionMethodSettings: user.commissionMethodSettings ?? null,
+    };
+  }
+
+  return base;
+}
+
+function getDefaultMethodSettings(method: CommissionMethodId): Record<string, unknown> | null {
+  switch (method) {
+    case 'percent_fixed': return { rate: 0.001 };
+    case 'per_order_fixed': return { amount: 1 };
+    case 'jupiter_ultra': return { rate: 0.001 };
+    case 'jupiter_manual': return null;
+    case 'none': return null;
+    default: return null;
+  }
 }
 
 export interface BacktestSettingsPopupProps {
@@ -103,6 +134,13 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
   const [startDate, setStartDate] = useState(() => saved?.startDate ?? '');
   const [endDate, setEndDate] = useState(() => saved?.endDate ?? '');
 
+  const [commissionMethod, setCommissionMethod] = useState<CommissionMethodId | undefined>(
+    () => saved?.commissionMethod ?? undefined,
+  );
+  const [commissionMethodSettings, setCommissionMethodSettings] = useState<Record<string, unknown> | null>(
+    () => saved?.commissionMethodSettings ?? null,
+  );
+
   const maxDays = getMaxDays(timeframe);
   const estimatedDays = dateRangeMode === 'days_back' ? daysBack : (() => {
     if (startDate && endDate) {
@@ -115,9 +153,26 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
   const exceedsLimit = estimatedBars > MAX_BARS;
 
   const persist = useCallback((updates: Partial<UserSettings>) => {
-    const current: UserSettings = { initialCapital, commission, daysBack, dateRangeMode, startDate, endDate, ...updates };
+    const current: UserSettings = {
+      initialCapital, commission, daysBack, dateRangeMode, startDate, endDate,
+      commissionMethod, commissionMethodSettings,
+      ...updates,
+    };
     saveUserSettings(current);
-  }, [initialCapital, commission, daysBack, dateRangeMode, startDate, endDate]);
+  }, [initialCapital, commission, daysBack, dateRangeMode, startDate, endDate, commissionMethod, commissionMethodSettings]);
+
+  const handleMethodChange = useCallback((method: CommissionMethodId) => {
+    setCommissionMethod(method);
+    const settings = getDefaultMethodSettings(method);
+    setCommissionMethodSettings(settings);
+    persist({ commissionMethod: method, commissionMethodSettings: settings });
+  }, [persist]);
+
+  const handleSettingChange = useCallback((key: string, value: unknown) => {
+    const updated = { ...(commissionMethodSettings ?? {}), [key]: value };
+    setCommissionMethodSettings(updated);
+    persist({ commissionMethodSettings: updated });
+  }, [commissionMethodSettings, persist]);
 
   const handleRun = useCallback(() => {
     let effectiveStartDate = startDate || undefined;
@@ -131,9 +186,12 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
       effectiveEndDate = end.toISOString().split('T')[0];
     }
 
-    const config = buildConfig(scriptParams, { initialCapital, commission, daysBack, dateRangeMode, startDate, endDate });
+    const config = buildConfig(scriptParams, {
+      initialCapital, commission, daysBack, dateRangeMode, startDate, endDate,
+      commissionMethod, commissionMethodSettings,
+    });
     onRun(config, effectiveStartDate, effectiveEndDate);
-  }, [scriptParams, initialCapital, commission, startDate, endDate, dateRangeMode, daysBack, onRun]);
+  }, [scriptParams, initialCapital, commission, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
 
   if (!isOpen) return null;
 
@@ -203,14 +261,83 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Commission</label>
-              <input
-                type="number"
-                value={commission}
-                onChange={(e) => { const v = Number(e.target.value); setCommission(v); persist({ commission: v }); }}
+              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Commission Method</label>
+              <select
+                value={commissionMethod ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value as CommissionMethodId | '';
+                  if (val) {
+                    handleMethodChange(val);
+                  } else {
+                    setCommissionMethod(undefined);
+                    setCommissionMethodSettings(null);
+                    persist({ commissionMethod: undefined, commissionMethodSettings: null });
+                  }
+                }}
                 style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-              />
+              >
+                <option value="">Legacy (from strategy)</option>
+                {COMMISSION_METHODS.map((m) => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </select>
+              {commissionMethod && (
+                <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                  {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
+                </div>
+              )}
             </div>
+            {commissionMethod && (commissionMethod === 'percent_fixed' || commissionMethod === 'jupiter_ultra') && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+                  Rate ({commissionMethod === 'jupiter_ultra' ? 'Jupiter Ultra' : 'Percent Fixed'})
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  max="1"
+                  value={(commissionMethodSettings as Record<string, unknown>)?.rate as number ?? 0.001}
+                  onChange={(e) => handleSettingChange('rate', Number(e.target.value))}
+                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                />
+                <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                  {commissionMethod === 'jupiter_ultra'
+                    ? 'Representative rate for Jupiter DEX Ultra Mode (e.g. 0.001 = 10 bps)'
+                    : 'Percentage of trade value (e.g. 0.001 = 0.1%)'}
+                </div>
+              </div>
+            )}
+            {commissionMethod === 'per_order_fixed' && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Fixed Amount per Order</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={(commissionMethodSettings as Record<string, unknown>)?.amount as number ?? 1}
+                  onChange={(e) => handleSettingChange('amount', Number(e.target.value))}
+                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                />
+                <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                  Flat commission amount per order fill
+                </div>
+              </div>
+            )}
+            {!commissionMethod && (
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Legacy Commission Value</label>
+                <input
+                  type="number"
+                  value={commission}
+                  onChange={(e) => { const v = Number(e.target.value); setCommission(v); persist({ commission: v }); }}
+                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                />
+                <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                  Used with commission_type from strategy() declaration
+                </div>
+              </div>
+            )}
             <div>
               <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Date Range</label>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>

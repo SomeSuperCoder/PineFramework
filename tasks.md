@@ -3512,7 +3512,7 @@ This implementation plan outlines the step-by-step development of a production-g
     - Integration with strategy engine order processing
     - _Requirements: 22.63_
 
-  - [ ]* 134.8 Write unit tests for commission calculation methods
+  - [x]* 134.8 Write unit tests for commission calculation methods
     - Test percent_fixed with various rates and trade values
     - Test per_order_fixed with various amounts
     - Test jupiter_ultra with representative rates
@@ -3522,36 +3522,36 @@ This implementation plan outlines the step-by-step development of a production-g
     - _Requirements: 22.61-22.68_
 
 - [ ] 135. Integrate Commission Methods into Backtest Engine
-  - [ ] 135.1 Wire CommissionCalculator into Broker Simulator fill engine
+  - [x] 135.1 Wire CommissionCalculator into Broker Simulator fill engine
     - Replace direct commission calculation in fill engine with CommissionCalculator
     - Accept commission_method and commission_method_settings in backtest config
     - Fall back to legacy commission_type/commission_value when no method selected
     - _Requirements: 22.16, 22.56_
 
-  - [ ] 135.2 Update Backend REST API for commission methods
+  - [x] 135.2 Update Backend REST API for commission methods
     - Extend POST /api/backtest to accept `commission_method` and `commission_method_settings`
     - Pass commission config through to Broker Simulator
     - _Requirements: 22.69_
 
-  - [ ] 135.3 Update CLI Backtest Tool for commission methods
+  - [x] 135.3 Update CLI Backtest Tool for commission methods
     - Add `--commission-method` CLI argument
     - Pass method to backtest config
     - _Requirements: 43.6_
 
-  - [ ]* 135.4 Write integration tests for commission methods in backtest
+  - [x]* 135.4 Write integration tests for commission methods in backtest
     - Test backtest with each commission method
     - Verify commission amounts in trade results
     - Test fallback to legacy commission_type when no method selected
     - _Requirements: 22.16, 22.62_
 
 - [ ] 136. Implement Commission Method UI in Backtest Settings
-  - [ ] 136.1 Add commission method dropdown to BacktestSettingsPopup
+  - [x] 136.1 Add commission method dropdown to BacktestSettingsPopup
     - Render dropdown with options: percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none
     - Default to jupiter_ultra for new backtests
     - Persist selection in localStorage alongside other backtest settings
     - _Requirements: 17.31, 22.64, 22.66_
 
-  - [ ] 136.2 Add method-specific settings fields
+  - [x] 136.2 Add method-specific settings fields
     - Render dynamic settings fields based on selected method
     - percent_fixed: rate input (percentage)
     - per_order_fixed: amount input (cash)
@@ -3561,13 +3561,13 @@ This implementation plan outlines the step-by-step development of a production-g
     - Persist method settings in localStorage
     - _Requirements: 22.65, 22.66_
 
-  - [ ] 136.3 Auto-extract commission defaults from strategy() declaration
+  - [x] 136.3 Auto-extract commission defaults from strategy() declaration
     - When no method is explicitly selected, use strategy() commission_type/commission_value as fallback
     - Map legacy commission_type to equivalent method (percent → percent_fixed, per_order → per_order_fixed)
     - Pre-populate method settings from strategy() values
     - _Requirements: 22.67_
 
-  - [ ]* 136.4 Write tests for commission method UI
+  - [x]* 136.4 Write tests for commission method UI
     - Test dropdown renders all methods
     - Test method selection persists across reloads
     - Test settings fields change based on method

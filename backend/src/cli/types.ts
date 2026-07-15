@@ -1,3 +1,6 @@
+export type CliCommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
+export type CliCommissionMethod = 'percent_fixed' | 'per_order_fixed' | 'jupiter_ultra' | 'jupiter_manual' | 'none';
+
 export interface CliOptions {
   scriptPath: string;
   timeframe: string;
@@ -8,6 +11,9 @@ export interface CliOptions {
   output?: string;
   initialCapital?: number;
   commission?: number;
+  commissionType?: CliCommissionType;
+  commissionMethod?: CliCommissionMethod;
+  commissionMethodSettings?: Record<string, unknown>;
   slippage?: number;
   defaultQty?: number;
   pyramiding?: number;

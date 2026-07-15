@@ -208,6 +208,8 @@ export interface BacktestResultResponse {
   buyHoldReturn: number;
 }
 
+export type CommissionMethodId = 'percent_fixed' | 'per_order_fixed' | 'jupiter_ultra' | 'jupiter_manual' | 'none';
+
 export interface BacktestConfig {
   initialCapital: number;
   commission: number;
@@ -220,4 +222,6 @@ export interface BacktestConfig {
   marginLong: number;
   marginShort: number;
   currency: string;
+  commissionMethod?: CommissionMethodId;
+  commissionMethodSettings?: Record<string, unknown> | null;
 }

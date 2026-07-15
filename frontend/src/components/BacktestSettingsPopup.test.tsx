@@ -1,0 +1,185 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { BacktestSettingsPopup } from './BacktestSettingsPopup';
+
+const defaultProps = {
+  isOpen: true,
+  onClose: vi.fn(),
+  onRun: vi.fn(),
+  scriptSource: '//@version=6\nstrategy("Test", commission_value=0.1, commission_type=strategy.percent)',
+  timeframe: '60',
+};
+
+const storage = new Map<string, string>();
+const mockStorage = {
+  getItem: (key: string) => storage.get(key) ?? null,
+  setItem: (key: string, value: string) => { storage.set(key, value); },
+  removeItem: (key: string) => { storage.delete(key); },
+  clear: () => { storage.clear(); },
+  get length() { return storage.size; },
+  key: (index: number) => Array.from(storage.keys())[index] ?? null,
+};
+
+beforeEach(() => {
+  storage.clear();
+  vi.clearAllMocks();
+  Object.defineProperty(globalThis, 'localStorage', { value: mockStorage, writable: true, configurable: true });
+});
+
+function selectMethod(container: HTMLElement, value: string) {
+  const select = container.querySelector('select') as HTMLSelectElement;
+  fireEvent.change(select, { target: { value } });
+}
+
+describe('BacktestSettingsPopup', () => {
+  describe('commission method dropdown', () => {
+    it('should render commission method dropdown', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      expect(screen.getByText('Commission Method')).toBeDefined();
+      const select = container.querySelector('select') as HTMLSelectElement;
+      expect(select).toBeDefined();
+    });
+
+    it('should render all commission method options', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      const options = Array.from(select.options).map((o) => o.text);
+      expect(options).toContain('Jupiter Ultra (DEX)');
+      expect(options).toContain('Percent (Fixed)');
+      expect(options).toContain('Per Order (Fixed)');
+      expect(options).toContain('Jupiter Manual (Swap)');
+      expect(options).toContain('None');
+      expect(options).toContain('Legacy (from strategy)');
+    });
+
+    it('should default to legacy when no saved settings', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      expect(select.value).toBe('');
+    });
+
+    it('should restore saved method from localStorage', () => {
+      localStorage.setItem('pine-backtest-settings', JSON.stringify({
+        initialCapital: 10000,
+        commission: 0,
+        daysBack: 30,
+        dateRangeMode: 'days_back',
+        startDate: '',
+        endDate: '',
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { rate: 0.001 },
+      }));
+
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      expect(select.value).toBe('jupiter_ultra');
+    });
+  });
+
+  describe('method-specific settings fields', () => {
+    it('should show rate input for percent_fixed method', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'percent_fixed');
+
+      expect(screen.getByText('Rate (Percent Fixed)')).toBeDefined();
+      expect(screen.getByText('Percentage of trade value (e.g. 0.001 = 0.1%)')).toBeDefined();
+    });
+
+    it('should show amount input for per_order_fixed method', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'per_order_fixed');
+
+      expect(screen.getByText('Fixed Amount per Order')).toBeDefined();
+      expect(screen.getByText('Flat commission amount per order fill')).toBeDefined();
+    });
+
+    it('should show rate input for jupiter_ultra method', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'jupiter_ultra');
+
+      expect(screen.getByText('Rate (Jupiter Ultra)')).toBeDefined();
+      expect(screen.getByText('Representative rate for Jupiter DEX Ultra Mode (e.g. 0.001 = 10 bps)')).toBeDefined();
+    });
+
+    it('should show no settings for jupiter_manual method', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'jupiter_manual');
+
+      expect(screen.queryByText('Rate')).toBeNull();
+      expect(screen.queryByText('Fixed Amount')).toBeNull();
+    });
+
+    it('should show no settings for none method', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'none');
+
+      expect(screen.queryByText('Rate')).toBeNull();
+      expect(screen.queryByText('Fixed Amount')).toBeNull();
+    });
+
+    it('should show legacy commission value when no method selected', () => {
+      render(<BacktestSettingsPopup {...defaultProps} />);
+      expect(screen.getByText('Legacy Commission Value')).toBeDefined();
+    });
+
+    it('should hide legacy commission when method is selected', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'percent_fixed');
+
+      expect(screen.queryByText('Legacy Commission Value')).toBeNull();
+    });
+  });
+
+  describe('persistence', () => {
+    it('should persist commission method to localStorage', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'jupiter_ultra');
+
+      const saved = JSON.parse(localStorage.getItem('pine-backtest-settings') ?? '{}');
+      expect(saved.commissionMethod).toBe('jupiter_ultra');
+      expect(saved.commissionMethodSettings).toEqual({ rate: 0.001 });
+    });
+
+    it('should persist method settings changes to localStorage', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'percent_fixed');
+
+      const rateInput = screen.getByDisplayValue(0.001) as HTMLInputElement;
+      fireEvent.change(rateInput, { target: { value: '0.005' } });
+
+      const saved = JSON.parse(localStorage.getItem('pine-backtest-settings') ?? '{}');
+      expect(saved.commissionMethodSettings).toEqual(expect.objectContaining({ rate: 0.005 }));
+    });
+  });
+
+  describe('buildConfig output', () => {
+    it('should include commissionMethod in config when selected', async () => {
+      const user = userEvent.setup();
+      const onRun = vi.fn();
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} onRun={onRun} />);
+      selectMethod(container, 'jupiter_ultra');
+
+      const runButton = screen.getByText('Run Backtest');
+      await user.click(runButton);
+
+      expect(onRun).toHaveBeenCalledTimes(1);
+      const config = onRun.mock.calls[0][0];
+      expect(config.commissionMethod).toBe('jupiter_ultra');
+      expect(config.commissionMethodSettings).toEqual({ rate: 0.001 });
+    });
+
+    it('should not include commissionMethod when legacy is selected', async () => {
+      const user = userEvent.setup();
+      const onRun = vi.fn();
+      render(<BacktestSettingsPopup {...defaultProps} onRun={onRun} />);
+
+      const runButton = screen.getByText('Run Backtest');
+      await user.click(runButton);
+
+      expect(onRun).toHaveBeenCalledTimes(1);
+      const config = onRun.mock.calls[0][0];
+      expect(config.commissionMethod).toBeUndefined();
+    });
+  });
+});

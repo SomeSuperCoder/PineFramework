@@ -80,6 +80,7 @@ export function createBacktestRouter() {
         'commissionType', 'slippageType',
         'defaultQty', 'defaultQtyType',
         'pyramiding', 'marginLong', 'marginShort',
+        'commissionMethod', 'commissionMethodSettings',
       ];
       for (const field of configFields) {
         const val = job.config[field];

@@ -28,3 +28,25 @@ export type {
   AlertFrequency,
   AlertBarData,
 } from './alert-system.js';
+
+export {
+  getCommissionCalculator,
+  getCommissionMethodDescriptor,
+  getAllCommissionMethodDescriptors,
+  isLongOnlyEnforced,
+  computeCommission,
+  buildTradeContextFromFill,
+  buildTradeContextFromTrade,
+} from './commission-calculator.js';
+export type {
+  CommissionCalculator,
+  CommissionConfig,
+  CommissionMethodId,
+  CommissionMethodSettings,
+  CommissionMethodDescriptor,
+  SettingsFieldDescriptor,
+  TradeContext,
+  PercentFixedSettings,
+  PerOrderFixedSettings,
+  JupiterUltraSettings,
+} from './commission-calculator.js';

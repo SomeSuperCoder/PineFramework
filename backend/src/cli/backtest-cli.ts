@@ -2,7 +2,7 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
-import type { CliOptions } from './types.js';
+import type { CliOptions, CliCommissionType, CliCommissionMethod } from './types.js';
 import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, getDefaultDaysBack } from './types.js';
 import { runMultiSymbolBacktest } from './multi-symbol-runner.js';
 import { aggregateResults } from './result-aggregator.js';
@@ -21,6 +21,9 @@ Options:
   --output <path>         Write JSON results to file
   --initial-capital <n>   Starting capital (default: 10000)
   --commission <n>        Commission value (default: 0)
+  --commission-type <t>   Commission type: percent, fixed, per_contract, per_order (default: percent)
+  --commission-method <m> Commission method: percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none
+  --commission-method-settings <json>  JSON string of method-specific settings (e.g. '{"rate":0.001}')
   --slippage <n>          Slippage value (default: 0)
   --default-qty <n>       Default order quantity (default: 1)
   --pyramiding <n>        Max pyramiding entries (default: 0)
@@ -74,6 +77,20 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--commission') {
       i++;
       options.commission = parseFloat(args[i] ?? '');
+    } else if (arg === '--commission-type') {
+      i++;
+      options.commissionType = args[i] as CliCommissionType;
+    } else if (arg === '--commission-method') {
+      i++;
+      options.commissionMethod = args[i] as CliCommissionMethod;
+    } else if (arg === '--commission-method-settings') {
+      i++;
+      try {
+        options.commissionMethodSettings = JSON.parse(args[i] ?? '{}');
+      } catch {
+        process.stderr.write(`Error: --commission-method-settings must be valid JSON\n`);
+        process.exit(2);
+      }
     } else if (arg === '--slippage') {
       i++;
       options.slippage = parseFloat(args[i] ?? '');

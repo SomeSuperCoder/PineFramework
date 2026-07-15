@@ -53,6 +53,9 @@ function buildConfig(options: CliOptions): Record<string, unknown> {
   const config: Record<string, unknown> = {};
   if (options.initialCapital !== undefined) config.initialCapital = options.initialCapital;
   if (options.commission !== undefined) config.commission = options.commission;
+  if (options.commissionType !== undefined) config.commissionType = options.commissionType;
+  if (options.commissionMethod !== undefined) config.commissionMethod = options.commissionMethod;
+  if (options.commissionMethodSettings !== undefined) config.commissionMethodSettings = options.commissionMethodSettings;
   if (options.slippage !== undefined) config.slippage = options.slippage;
   if (options.defaultQty !== undefined) config.defaultQty = options.defaultQty;
   if (options.pyramiding !== undefined) config.pyramiding = options.pyramiding;

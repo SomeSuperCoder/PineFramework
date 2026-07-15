@@ -5,6 +5,18 @@ export type PositionDirection = 'long' | 'short' | 'flat';
 export type QtyType = 'contracts' | 'percent_of_equity' | 'cash';
 export type CommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
 
+import type {
+  CommissionCalculator,
+  CommissionConfig,
+  CommissionMethodId,
+  CommissionMethodSettings,
+} from './commission-calculator.js';
+import {
+  getCommissionCalculator,
+  isLongOnlyEnforced,
+  buildTradeContextFromFill,
+} from './commission-calculator.js';
+
 export interface Account {
   initialCapital: number;
   balance: number;
@@ -107,6 +119,10 @@ export interface StrategyConfig {
   marginLong: number;
   marginShort: number;
   currency: string;
+  /** Pluggable commission method ID. When set, overrides legacy commissionType/commission. */
+  commissionMethod?: CommissionMethodId;
+  /** Settings for the pluggable commission method. */
+  commissionMethodSettings?: CommissionMethodSettings;
 }
 
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
@@ -167,9 +183,20 @@ export class StrategyEngine {
   private high: number;
   private low: number;
   private entries: number;
+  private commissionCalculator: CommissionCalculator | undefined;
+  private commissionConfig: CommissionConfig | undefined;
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
+
+    // Initialize pluggable commission calculator if method is specified
+    if (this.config.commissionMethod) {
+      this.commissionCalculator = getCommissionCalculator(this.config.commissionMethod);
+      this.commissionConfig = {
+        method: this.config.commissionMethod,
+        settings: this.config.commissionMethodSettings ?? null,
+      };
+    }
     this.position = {
       symbol: '',
       direction: 'flat',
@@ -217,6 +244,11 @@ export class StrategyEngine {
 
     if (quantity === undefined) {
       quantity = this.calculateQty(direction);
+    }
+
+    // Long-only enforcement: reject short entries when commission method requires it
+    if (this.config.commissionMethod && isLongOnlyEnforced(this.config.commissionMethod) && direction === 'short') {
+      return undefined;
     }
 
     if (!this.canOpenPosition(direction, quantity)) {
@@ -276,6 +308,12 @@ export class StrategyEngine {
     if (quantity === undefined) {
       quantity = this.calculateQty(direction);
     }
+
+    // Long-only enforcement: reject short orders when commission method requires it
+    if (this.config.commissionMethod && isLongOnlyEnforced(this.config.commissionMethod) && direction === 'short') {
+      return undefined;
+    }
+
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
     const orderType: OrderType =
@@ -595,6 +633,17 @@ export class StrategyEngine {
   }
 
   private calculateCommission(order: Order, price: number): number {
+    // Use pluggable commission calculator if configured
+    if (this.commissionCalculator && this.commissionConfig) {
+      const context = buildTradeContextFromFill({
+        direction: order.direction,
+        fillPrice: price,
+        quantity: order.quantity,
+      });
+      return this.commissionCalculator.calculate(context, this.commissionConfig);
+    }
+
+    // Legacy commission calculation
     if (this.config.commission === 0) return 0;
 
     if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
