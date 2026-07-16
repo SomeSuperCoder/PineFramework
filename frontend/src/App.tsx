@@ -89,15 +89,6 @@ function App() {
   }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
   useEffect(() => {
-    fetchOHLCV(symbol, timeframe);
-    indicatorManager.fetchIndicators().then((list) => {
-      for (const ind of list) {
-        executeScript(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
     setIndicatorResults(new Map());
