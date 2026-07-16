@@ -17,6 +17,7 @@ export interface ScriptsManifest {
   scripts: FileScriptEntry[];
   lastSyncAt: number;
   version: number;
+  activeScriptId: string | null;
   [key: string]: unknown;
 }
 
@@ -24,6 +25,7 @@ const DEFAULT_MANIFEST: ScriptsManifest = {
   scripts: [],
   lastSyncAt: 0,
   version: 1,
+  activeScriptId: null,
 };
 
 function validateManifest(data: unknown): data is ScriptsManifest {
@@ -32,6 +34,7 @@ function validateManifest(data: unknown): data is ScriptsManifest {
   if (!Array.isArray(obj.scripts)) return false;
   if (typeof obj.lastSyncAt !== 'number') return false;
   if (typeof obj.version !== 'number') return false;
+  if (obj.activeScriptId !== undefined && obj.activeScriptId !== null && typeof obj.activeScriptId !== 'string') return false;
   for (const entry of obj.scripts) {
     if (!entry || typeof entry !== 'object') return false;
     const e = entry as Record<string, unknown>;
@@ -104,6 +107,9 @@ export class ScriptsManifestStore {
     if (idx === -1) return false;
 
     data.scripts.splice(idx, 1);
+    if (data.activeScriptId === id) {
+      data.activeScriptId = null;
+    }
     data.lastSyncAt = Date.now();
     this.store.write(data);
     return true;
@@ -114,7 +120,11 @@ export class ScriptsManifestStore {
     const idx = data.scripts.findIndex((s) => s.filename === filename);
     if (idx === -1) return false;
 
+    const removed = data.scripts[idx];
     data.scripts.splice(idx, 1);
+    if (data.activeScriptId === removed.id) {
+      data.activeScriptId = null;
+    }
     data.lastSyncAt = Date.now();
     this.store.write(data);
     return true;
@@ -133,5 +143,18 @@ export class ScriptsManifestStore {
   getExistingFilenames(): Set<string> {
     const scripts = this.store.read().scripts;
     return new Set(scripts.map((s) => s.filename));
+  }
+
+  getActiveId(): string | null {
+    return this.store.read().activeScriptId ?? null;
+  }
+
+  setActive(id: string): boolean {
+    const data = this.store.read();
+    const entry = data.scripts.find((s) => s.id === id);
+    if (!entry) return false;
+    data.activeScriptId = id;
+    this.store.write(data);
+    return true;
   }
 }

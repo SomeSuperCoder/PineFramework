@@ -4,8 +4,6 @@ import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
-import type { ScriptStore } from '../store/ScriptStore.js';
-import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -19,8 +17,6 @@ export function createWSGateway(
   server: Server,
   cache: OHLCVCache,
   telegramService?: TelegramService,
-  _scriptStore?: ScriptStore,
-  _indicatorsStore?: RunningIndicatorsStore,
 ): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const clients = new Map<WebSocket, ClientSubscription>();

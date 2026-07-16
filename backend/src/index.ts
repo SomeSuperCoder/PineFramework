@@ -12,23 +12,19 @@ import { statusRouter } from './routes/status.js';
 import { createBacktestRouter } from './routes/backtest.js';
 import { createSettingsRouter } from './routes/settings.js';
 import { createScriptsRouter } from './routes/scripts.js';
-import { createScriptFilesRouter } from './routes/scriptFiles.js';
 import { createIndicatorsRouter } from './routes/indicators.js';
 import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
-import { ScriptStore } from './store/ScriptStore.js';
+import { ScriptFileManager } from './store/ScriptFileManager.js';
 import { RunningIndicatorsStore } from './store/RunningIndicatorsStore.js';
 import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
-import { FileSyncEngine } from './store/FileSyncEngine.js';
-import { ScriptFileWatcher } from './store/ScriptFileWatcher.js';
 import { TelegramService } from './telegram/TelegramService.js';
 import { migrateLegacyScripts } from './migration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
 const TELEGRAM_JSON_PATH = path.join(DATA_DIR, 'telegram.json');
-const SCRIPTS_JSON_PATH = path.join(DATA_DIR, 'scripts.json');
 const INDICATORS_JSON_PATH = path.join(DATA_DIR, 'indicators.json');
 const SCRIPTS_DIR = path.join(DATA_DIR, 'scripts');
 const SCRIPTS_MANIFEST_PATH = path.join(SCRIPTS_DIR, 'manifest.json');
@@ -43,11 +39,9 @@ const cache = new OHLCVCache(100, 60_000);
 const telegramConfig = new TelegramConfigStore(TELEGRAM_JSON_PATH);
 const telegramService = new TelegramService({ configStore: telegramConfig });
 
-const scriptStore = new ScriptStore(SCRIPTS_JSON_PATH);
 const indicatorsStore = new RunningIndicatorsStore(INDICATORS_JSON_PATH);
 const manifestStore = new ScriptsManifestStore(SCRIPTS_MANIFEST_PATH);
-const syncEngine = new FileSyncEngine(SCRIPTS_DIR, manifestStore, scriptStore);
-const fileWatcher = new ScriptFileWatcher(SCRIPTS_DIR, syncEngine);
+const scriptFileManager = new ScriptFileManager(SCRIPTS_DIR, manifestStore);
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -129,11 +123,10 @@ app.use('/api', createSettingsRouter({
 }));
 
 app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
-app.use('/api', createScriptsRouter(scriptStore, indicatorsStore));
-app.use('/api', createScriptFilesRouter(manifestStore, syncEngine, SCRIPTS_DIR));
+app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 
-createWSGateway(server, cache, telegramService, scriptStore, indicatorsStore);
+createWSGateway(server, cache, telegramService);
 
 server.listen(PORT, async () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
@@ -147,15 +140,10 @@ server.listen(PORT, async () => {
   if (migration.migrated > 0) {
     console.log(`[Migration] Migrated ${migration.migrated} legacy scripts to file-based storage`);
   }
-
-  await syncEngine.fullSync();
-  fileWatcher.start();
-  console.log(`[FileSync] Initial sync complete, file watcher started`);
 });
 
 async function shutdown(signal: string): Promise<void> {
   console.log(`\n[Server] Received ${signal}, shutting down gracefully...`);
-  await fileWatcher.stop();
   await telegramService.stop();
   server.close(() => {
     console.log('[Server] Closed');

@@ -1,24 +1,24 @@
 import { Router } from 'express';
-import type { ScriptStore } from '../store/ScriptStore.js';
+import type { ScriptFileManager } from '../store/ScriptFileManager.js';
 import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
 
-export function createScriptsRouter(store: ScriptStore, indicatorsStore?: RunningIndicatorsStore): Router {
+export function createScriptsRouter(fileManager: ScriptFileManager, indicatorsStore?: RunningIndicatorsStore): Router {
   const router = Router();
 
-  router.get('/scripts', (req, res) => {
+  router.get('/scripts', async (req, res) => {
     try {
       const q = req.query.q;
-      const scripts = typeof q === 'string' ? store.search(q) : store.getAll();
-      const activeId = store.getActiveId();
+      const scripts = typeof q === 'string' ? await fileManager.search(q) : await fileManager.getAll();
+      const activeId = fileManager.getActiveId();
       res.json({ scripts, activeScriptId: activeId });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to list scripts' });
     }
   });
 
-  router.get('/scripts/active', (_req, res) => {
+  router.get('/scripts/active', async (_req, res) => {
     try {
-      const active = store.getActive();
+      const active = await fileManager.getActive();
       res.json({ script: active ?? null });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to get active script' });
@@ -32,7 +32,7 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
         res.status(400).json({ error: 'scriptId must be a non-empty string' });
         return;
       }
-      const script = store.setActive(scriptId);
+      const script = fileManager.setActive(scriptId);
       if (!script) {
         res.status(404).json({ error: 'Script not found' });
         return;
@@ -43,9 +43,9 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
     }
   });
 
-  router.get('/scripts/:id', (req, res) => {
+  router.get('/scripts/:id', async (req, res) => {
     try {
-      const script = store.getById(req.params.id);
+      const script = await fileManager.getById(req.params.id);
       if (!script) {
         res.status(404).json({ error: 'Script not found' });
         return;
@@ -56,7 +56,7 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
     }
   });
 
-  router.post('/scripts', (req, res) => {
+  router.post('/scripts', async (req, res) => {
     try {
       const { name, source } = req.body as { name?: string; source?: string };
       if (typeof name !== 'string' || name.trim() === '') {
@@ -67,14 +67,14 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
         res.status(400).json({ error: 'source must be a string' });
         return;
       }
-      const script = store.create(name, source);
+      const script = await fileManager.create(name, source);
       res.status(201).json({ script });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to create script' });
     }
   });
 
-  router.put('/scripts/:id', (req, res) => {
+  router.put('/scripts/:id', async (req, res) => {
     try {
       const { name, source } = req.body as { name?: string; source?: string };
       const updates: { name?: string; source?: string } = {};
@@ -92,7 +92,7 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
         }
         updates.source = source;
       }
-      const script = store.update(req.params.id, updates);
+      const script = await fileManager.update(req.params.id, updates);
       if (!script) {
         res.status(404).json({ error: 'Script not found' });
         return;
@@ -103,9 +103,9 @@ export function createScriptsRouter(store: ScriptStore, indicatorsStore?: Runnin
     }
   });
 
-  router.delete('/scripts/:id', (req, res) => {
+  router.delete('/scripts/:id', async (req, res) => {
     try {
-      const deleted = store.delete(req.params.id);
+      const deleted = await fileManager.delete(req.params.id);
       if (!deleted) {
         res.status(404).json({ error: 'Script not found' });
         return;
