@@ -256,9 +256,15 @@ export class MarkerRenderer {
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(x, pointerY);
-    ctx.lineTo(x - pointerSize, shape === 'labeldown' ? pointerY + pointerSize : pointerY - pointerSize);
-    ctx.lineTo(x + pointerSize, shape === 'labeldown' ? pointerY + pointerSize : pointerY - pointerSize);
+    if (shape === 'labeldown') {
+      ctx.moveTo(x, pointerY + pointerSize);
+      ctx.lineTo(x - pointerSize, pointerY);
+      ctx.lineTo(x + pointerSize, pointerY);
+    } else {
+      ctx.moveTo(x, pointerY - pointerSize);
+      ctx.lineTo(x - pointerSize, pointerY);
+      ctx.lineTo(x + pointerSize, pointerY);
+    }
     ctx.closePath();
     ctx.fill();
 
