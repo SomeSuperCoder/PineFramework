@@ -186,6 +186,7 @@ export class StrategyEngine {
   private entries: number;
   private commissionCalculator: CommissionCalculator | undefined;
   private commissionConfig: CommissionConfig | undefined;
+  private _lastMarkerCount: number = 0;
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -520,6 +521,13 @@ export class StrategyEngine {
 
   getMarkers(): StrategyMarker[] {
     return [...this.markers];
+  }
+
+  getNewMarkers(): StrategyMarker[] {
+    const prev = this._lastMarkerCount || 0;
+    const newMarkers = this.markers.slice(prev);
+    this._lastMarkerCount = this.markers.length;
+    return newMarkers;
   }
 
   saveState(): object {
@@ -1053,6 +1061,7 @@ export class StrategyEngine {
     this.filledOrders = [];
     this.trades = [];
     this.markers = [];
+    this._lastMarkerCount = 0;
     this.equity = this.config.initialCapital;
     this.peakEquity = this.equity;
     this.maxDrawdown = 0;

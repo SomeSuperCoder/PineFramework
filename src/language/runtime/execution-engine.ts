@@ -1961,6 +1961,7 @@ export class ExecutionEngine {
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
+    let allMarkers: StrategyMarkerEntry[] = [];
     let lastResult: ExecutionResult = {
       success: true,
       version: this.sourceProgram.version,
@@ -1968,7 +1969,7 @@ export class ExecutionEngine {
       outputs: this.outputs,
       shapes: [...this.shapes],
       fills: this.fills,
-      strategyMarkers: this.getStrategyMarkers(),
+      strategyMarkers: allMarkers,
       bgcolor: this.bgcolorData,
       plotColors: this.plotColors,
       fillColorData: this.fillColorData,
@@ -1986,10 +1987,12 @@ export class ExecutionEngine {
       if (!lastResult.success) {
         break;
       }
+      allMarkers.push(...lastResult.strategyMarkers);
     }
 
     return {
       ...lastResult,
+      strategyMarkers: allMarkers,
       maxLookback: this.getMaxLookback(),
     };
   }
@@ -2225,7 +2228,7 @@ export class ExecutionEngine {
 
   private getStrategyMarkers(): StrategyMarkerEntry[] {
     if (!this.strategyEngine) return [];
-    return this.strategyEngine.getMarkers().map((m: StrategyMarker) => ({
+    return this.strategyEngine.getNewMarkers().map((m: StrategyMarker) => ({
       type: m.type,
       name: m.name,
       direction: m.direction,

@@ -532,9 +532,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       color: m.color,
       comment: m.comment,
     }));
-    const mergedStrategyMarkers = diffStrategyMarkers.length > 0
-      ? [...(prev.strategyMarkers || []).slice(0, -diffStrategyMarkers.length || undefined), ...diffStrategyMarkers]
-      : prev.strategyMarkers;
+    const mergedStrategyMarkers = [...(prev.strategyMarkers || []), ...diffStrategyMarkers];
 
     const mergedPlotColors = msg.plotColors
       ? Object.entries(msg.plotColors).reduce((acc, [key, colors]) => {

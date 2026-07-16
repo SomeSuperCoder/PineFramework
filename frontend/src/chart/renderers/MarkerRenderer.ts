@@ -89,11 +89,11 @@ export class MarkerRenderer {
 
       this.drawShape(ctx, x, y, shape, color, barSpacing);
 
-      if (marker.comment || marker.name) {
+      const label = marker.name || (marker.comment && marker.comment !== 'reverse' ? marker.comment : undefined);
+      if (label) {
         ctx.fillStyle = color;
         ctx.font = `bold ${Math.max(9, barSpacing * 1.1)}px Arial`;
         ctx.textAlign = 'center';
-        const label = marker.comment || marker.name;
         ctx.fillText(label, x, y + (isEntry ? 14 : -8));
       }
     }
