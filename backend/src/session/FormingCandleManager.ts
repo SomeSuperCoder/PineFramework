@@ -21,6 +21,7 @@ export class FormingCandleManager {
     this.contexts = contexts;
     this.engine = engine;
     this.version = version;
+    this.lastConfirmedTimestamp = bars.length > 0 ? bars[bars.length - 1].timestamp : 0;
   }
 
   /**

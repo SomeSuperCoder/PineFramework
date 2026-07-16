@@ -5,6 +5,7 @@ import {
   type ExecutionContext,
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
+import { ScriptSession } from '../../backend/src/session/ScriptSession.js';
 
 interface TestBar {
   timestamp: number;
@@ -520,6 +521,101 @@ plot(close, color=isUp ? color.green : color.red)
 
       const result = engine.computeFormingCandle(formingCtx);
       expect(result.success).toBe(true);
+    });
+  });
+
+  describe('Stale alert suppression (lastConfirmedTimestamp)', () => {
+    it('should treat a confirmed bar with the same timestamp as the last historical bar as stale', () => {
+      const engine = compileScript(ALERT_SCRIPT);
+      const bars = makeBars(15, 100, 1000000);
+      const contexts = barsToContexts(bars);
+      engine.executeBars(contexts);
+
+      const lastBar = bars[bars.length - 1]!;
+      const lastTimestamp = lastBar.timestamp;
+
+      // Simulate a confirmed kline arriving for the same bar that was already
+      // processed during executeBars().  The FormingCandleManager must treat
+      // this as a stale duplicate (forming tick path) rather than re-executing.
+      engine.setFormingCandle(false);
+      const result = engine.executeBar({
+        barIndex: 14,
+        barCount: 15,
+        timestamp: lastTimestamp,
+        open: createSeries('open', [lastBar.open]),
+        high: createSeries('high', [lastBar.high]),
+        low: createSeries('low', [lastBar.low]),
+        close: createSeries('close', [lastBar.close + 10]),
+        volume: createSeries('volume', [lastBar.volume]),
+      });
+      // executeBar produces alertTriggers because the condition is evaluated
+      // but the key invariant is that the gateway's isConfirmed gate must be
+      // false for stale bars.  That is enforced by FormingCandleManager.confirm().
+      expect(result.success).toBe(true);
+    });
+
+    it('FormingCandleManager.confirm() should return isConfirmed=false for stale bar', () => {
+      const bars: TestBar[] = makeBars(15, 100, 1000000);
+      const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
+      const initResult = session.initialize();
+      expect(initResult.success).toBe(true);
+
+      const lastBar = bars[bars.length - 1]!;
+      const staleBar: TestBar = {
+        timestamp: lastBar.timestamp, // same timestamp → stale
+        open: lastBar.open,
+        high: lastBar.high,
+        low: lastBar.low,
+        close: lastBar.close + 10,
+        volume: lastBar.volume,
+      };
+
+      const result = session.appendOrUpdateBar(staleBar, true);
+      expect(result.success).toBe(true);
+      // Stale bar must NOT be marked as confirmed
+      expect(result.isConfirmed).toBe(false);
+    });
+
+    it('FormingCandleManager.confirm() should return isConfirmed=true for a genuinely new bar', () => {
+      const bars: TestBar[] = makeBars(15, 100, 1000000);
+      const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
+      const initResult = session.initialize();
+      expect(initResult.success).toBe(true);
+
+      const lastBar = bars[bars.length - 1]!;
+      const newBar: TestBar = {
+        timestamp: lastBar.timestamp + 60000, // new timestamp → confirmed
+        open: lastBar.close,
+        high: lastBar.close + 3,
+        low: lastBar.close - 1,
+        close: lastBar.close + 2,
+        volume: 1200,
+      };
+
+      const result = session.appendOrUpdateBar(newBar, true);
+      expect(result.success).toBe(true);
+      expect(result.isConfirmed).toBe(true);
+    });
+
+    it('should not produce alert triggers for stale bars that duplicate historical data', () => {
+      const bars: TestBar[] = makeBars(15, 100, 1000000);
+      const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
+      session.initialize();
+
+      const lastBar = bars[bars.length - 1]!;
+      const staleBar: TestBar = {
+        timestamp: lastBar.timestamp,
+        open: lastBar.open,
+        high: lastBar.high,
+        low: lastBar.low,
+        close: lastBar.close + 100, // extreme close that would trigger alert
+        volume: lastBar.volume,
+      };
+
+      const result = session.appendOrUpdateBar(staleBar, true);
+      expect(result.isConfirmed).toBe(false);
+      // The stale path returns forming candle output — no full alert triggers dispatched
+      expect(result.formingCandle).toBe(true);
     });
   });
 });

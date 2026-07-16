@@ -57,8 +57,8 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
     const initVals = initResult.outputs[outputKey]!;
     expect(initVals.length).toBe(60);
 
-    // Phase 2: Simulate 5 forming candle ticks (same timestamp as last bar)
-    // Each tick has a different close price
+    // Phase 2: Simulate 5 forming candle ticks for the last historical bar
+    // (same timestamp as last bar).  These are forming-tick updates only.
     const lastHistBar = histBars[histBars.length - 1]!;
     const lastTimestamp = lastHistBar.timestamp;
 
@@ -86,33 +86,16 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       lastDiffValue = diffValue;
     }
 
-    // Phase 3: Confirm the bar (final close)
+    // Phase 3: A new bar arrives (next interval) — this is a genuinely new bar
+    // that was not part of the historical data, so its confirmation takes the
+    // confirmed path.
     const confirmClose = lastHistBar.close + 3 * 10; // = +30
-    const confirmBar: Bar = {
-      timestamp: lastTimestamp,
-      open: lastHistBar.open,
-      high: Math.max(lastHistBar.high, confirmClose),
-      low: Math.min(lastHistBar.low, confirmClose),
-      close: confirmClose,
-      volume: lastHistBar.volume,
-    };
-
-    const confirmResult = session.appendOrUpdateBar(confirmBar, true);
-    expect(confirmResult.success).toBe(true);
-    // Confirmed bar should NOT be marked as forming candle
-    expect(confirmResult.formingCandle).toBe(false);
-
-    // The confirmed result should have full outputs (all bars + this one)
-    const confirmVals = confirmResult.outputs[outputKey]!;
-    expect(confirmVals.length).toBeGreaterThanOrEqual(61);
-
-    // Phase 4: New bar arrives — forming candle for the next bar
-    const newTimestamp = lastTimestamp + 3600000;
+    const newBarTimestamp = lastTimestamp + 60000;
     const newBar: Bar = {
-      timestamp: newTimestamp,
+      timestamp: newBarTimestamp,
       open: confirmClose,
-      high: confirmClose + 3,
-      low: confirmClose - 2,
+      high: Math.max(lastHistBar.high, confirmClose) + 3,
+      low: Math.min(lastHistBar.low, confirmClose) - 1,
       close: confirmClose + 1,
       volume: 1200,
     };
@@ -121,27 +104,60 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
     expect(newBarResult.success).toBe(true);
     expect(newBarResult.formingCandle).toBe(true);
 
-    const newBarValue = getLastValue(newBarResult, outputKey);
-    expect(newBarValue).not.toBeNull();
+    // Phase 4: Confirm the new bar
+    const confirmBar: Bar = {
+      timestamp: newBarTimestamp,
+      open: newBar.open,
+      high: Math.max(newBar.high, confirmClose + 2),
+      low: Math.min(newBar.low, confirmClose - 1),
+      close: confirmClose + 2,
+      volume: newBar.volume,
+    };
 
-    // Phase 5: Another forming tick for the new bar
-    const newBarTick: Bar = {
-      timestamp: newTimestamp,
-      open: confirmClose,
+    const confirmResult = session.appendOrUpdateBar(confirmBar, true);
+    expect(confirmResult.success).toBe(true);
+    expect(confirmResult.formingCandle).toBe(false);
+
+    // The confirmed result should have full outputs (all bars + the new one)
+    const confirmVals = confirmResult.outputs[outputKey]!;
+    expect(confirmVals.length).toBeGreaterThanOrEqual(61);
+
+    // Phase 5: Another new bar arrives — forming candle for the next bar
+    const nextTimestamp = newBarTimestamp + 60000;
+    const nextBar: Bar = {
+      timestamp: nextTimestamp,
+      open: confirmClose + 2,
       high: confirmClose + 5,
-      low: confirmClose - 3,
-      close: confirmClose + 4,
+      low: confirmClose,
+      close: confirmClose + 3,
+      volume: 1300,
+    };
+
+    const nextBarResult = session.appendOrUpdateBar(nextBar);
+    expect(nextBarResult.success).toBe(true);
+    expect(nextBarResult.formingCandle).toBe(true);
+
+    const nextBarValue = getLastValue(nextBarResult, outputKey);
+    expect(nextBarValue).not.toBeNull();
+
+    // Phase 6: Another forming tick for the next bar
+    const nextBarTick: Bar = {
+      timestamp: nextTimestamp,
+      open: nextBar.open,
+      high: nextBar.high + 2,
+      low: nextBar.low - 1,
+      close: nextBar.close + 1,
       volume: 1500,
     };
 
-    const tickResult = session.appendOrUpdateBar(newBarTick);
+    const tickResult = session.appendOrUpdateBar(nextBarTick);
     expect(tickResult.success).toBe(true);
     expect(tickResult.formingCandle).toBe(true);
 
     const tickValue = getLastValue(tickResult, outputKey);
     // Should differ from the previous forming value (close changed)
-    if (tickValue !== null && newBarValue !== null) {
-      expect(tickValue).not.toBe(newBarValue);
+    if (tickValue !== null && nextBarValue !== null) {
+      expect(tickValue).not.toBe(nextBarValue);
     }
   });
 
@@ -155,7 +171,9 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
     const initVals = initResult.outputs[outputKey]!;
     const initLen = initVals.length;
 
-    let currentTimestamp = histBars[histBars.length - 1]!.timestamp;
+    // Start the first real-time bar AFTER the historical data so that
+    // confirmations always take the confirmed path (not the stale guard).
+    let currentTimestamp = histBars[histBars.length - 1]!.timestamp + 3600000;
     let lastClose = histBars[histBars.length - 1]!.close;
 
     // Run 3 complete cycles: forming → confirm → new bar
