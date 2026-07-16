@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join, dirname, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ScriptsManifestStore, computeChecksum } from './ScriptsManifestStore.js';
 import { sanitizeFilename, uniqueFilename } from '../utils/filename.js';
@@ -26,12 +26,16 @@ export class ScriptFileManager {
     this.manifest = manifest;
   }
 
+  private resolveFilePath(filePath: string): string {
+    return isAbsolute(filePath) ? filePath : join(this.scriptsDir, filePath);
+  }
+
   async getAll(): Promise<ScriptEntry[]> {
     const entries = this.manifest.getAll();
     const results: ScriptEntry[] = [];
     for (const entry of entries) {
       try {
-        const source = await readFile(join(this.scriptsDir, entry.filePath), 'utf-8');
+        const source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
         results.push({
           id: entry.id,
           name: entry.name,
@@ -51,7 +55,7 @@ export class ScriptFileManager {
     const entry = this.manifest.getById(id);
     if (!entry) return undefined;
     try {
-      const source = await readFile(join(this.scriptsDir, entry.filePath), 'utf-8');
+      const source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
       return {
         id: entry.id,
         name: entry.name,
@@ -135,10 +139,10 @@ export class ScriptFileManager {
     let newFilePath = entry.filePath;
 
     if (source !== undefined) {
-      await writeFile(join(this.scriptsDir, entry.filePath), source, 'utf-8');
+      await writeFile(this.resolveFilePath(entry.filePath), source, 'utf-8');
     } else {
       try {
-        source = await readFile(join(this.scriptsDir, entry.filePath), 'utf-8');
+        source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
       } catch {
         return null;
       }
@@ -151,7 +155,7 @@ export class ScriptFileManager {
       const newFilename = `${baseFilename}.pine`;
       newFilePath = join(subDir, newFilename);
 
-      const oldPath = join(this.scriptsDir, entry.filePath);
+      const oldPath = this.resolveFilePath(entry.filePath);
       const newPath = join(this.scriptsDir, newFilePath);
       await writeFile(newPath, source, 'utf-8');
       if (oldPath !== newPath) {
@@ -186,7 +190,7 @@ export class ScriptFileManager {
     const entry = this.manifest.getById(id);
     if (!entry) return false;
 
-    await unlink(join(this.scriptsDir, entry.filePath)).catch(() => {});
+    await unlink(this.resolveFilePath(entry.filePath)).catch(() => {});
     this.manifest.remove(id);
     return true;
   }
@@ -204,7 +208,7 @@ export class ScriptFileManager {
         entry.scriptType.toLowerCase().includes(q)
       ) {
         try {
-          const source = await readFile(join(this.scriptsDir, entry.filePath), 'utf-8');
+          const source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
           results.push({
             id: entry.id,
             name: entry.name,
@@ -220,7 +224,7 @@ export class ScriptFileManager {
       }
 
       try {
-        const source = await readFile(join(this.scriptsDir, entry.filePath), 'utf-8');
+        const source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
         if (source.toLowerCase().includes(q)) {
           results.push({
             id: entry.id,
