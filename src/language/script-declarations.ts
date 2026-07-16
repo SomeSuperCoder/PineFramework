@@ -287,8 +287,8 @@ export function getDefaultConfig(type: ScriptType): ScriptConfig {
         slippage: 0,
         process_orders_on_close: false,
         close_entries_rule: 'FIFO',
-        margin_long: 100,
-        margin_short: 100,
+        margin_long: 0,
+        margin_short: 0,
         max_boxes_count: 500,
         max_lines_count: 500,
         max_labels_count: 500,
@@ -355,8 +355,8 @@ export function getStrategyConfig(config: ScriptConfig): {
     calcOnEveryTick: strat.calc_on_every_tick ?? false,
     processOrdersOnClose: strat.process_orders_on_close ?? false,
     maxBarsBack: 0,
-    marginLong: (strat.margin_long ?? 100) / 100,
-    marginShort: (strat.margin_short ?? 100) / 100,
+    marginLong: (strat.margin_long ?? 0) / 100,
+    marginShort: (strat.margin_short ?? 0) / 100,
   };
 }
 

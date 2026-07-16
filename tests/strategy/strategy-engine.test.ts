@@ -556,4 +556,129 @@ describe('StrategyEngine', () => {
       expect(markers[3]!.type).toBe('cancel_all');
     });
   });
+
+  describe('liquidation', () => {
+    it('should not produce liquidation markers with default config (marginLong=0)', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 100);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+
+      const markers = engine.getMarkers();
+      const liquidationMarkers = markers.filter(
+        (m) => m.comment === 'Margin liquidation' || m.name.includes('liquidation'),
+      );
+      expect(liquidationMarkers.length).toBe(0);
+    });
+
+    it('should produce liquidation markers when margin is explicitly configured', () => {
+      const engine = new StrategyEngine({ marginLong: 0.5 });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 100);
+
+      engine.updateBar(1, 1001, 102, 105, 1, 3, 1000);
+
+      const markers = engine.getMarkers();
+      const liquidationMarkers = markers.filter(
+        (m) => m.comment === 'Margin liquidation',
+      );
+      expect(liquidationMarkers.length).toBeGreaterThan(0);
+    });
+
+    it('should skip liquidation check when marginRate is 0', () => {
+      const engine = new StrategyEngine({ marginLong: 0, marginShort: 0 });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 50);
+
+      engine.updateBar(1, 1001, 50, 55, 45, 48, 1000);
+
+      const markers = engine.getMarkers();
+      const liquidationMarkers = markers.filter(
+        (m) => m.comment === 'Margin liquidation',
+      );
+      expect(liquidationMarkers.length).toBe(0);
+    });
+  });
+
+  describe('reversal markers', () => {
+    it('should produce close marker with entry name (no _reverse suffix)', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.entry('Short', 'short', 1);
+
+      const markers = engine.getMarkers();
+      const closeMarker = markers.find(
+        (m) => m.type === 'close' && m.direction === 'long',
+      );
+      expect(closeMarker).toBeDefined();
+      expect(closeMarker!.name).toBe('Exit Long');
+      expect(closeMarker!.name).not.toContain('_reverse');
+    });
+
+    it('should set comment to reverse on reversal close markers', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.entry('Short', 'short', 1);
+
+      const markers = engine.getMarkers();
+      const closeMarker = markers.find(
+        (m) => m.type === 'close' && m.direction === 'long',
+      );
+      expect(closeMarker).toBeDefined();
+      expect(closeMarker!.comment).toBe('reverse');
+    });
+
+    it('should produce both close and entry markers on reversal', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 108, 1000);
+      engine.entry('Short', 'short', 1);
+
+      const markers = engine.getMarkers();
+      expect(markers.length).toBe(3);
+
+      const closeMarker = markers.find((m) => m.type === 'close');
+      const entryMarker = markers.find((m) => m.type === 'entry' && m.direction === 'short');
+
+      expect(closeMarker).toBeDefined();
+      expect(closeMarker!.name).toBe('Exit Long');
+      expect(closeMarker!.comment).toBe('reverse');
+
+      expect(entryMarker).toBeDefined();
+      expect(entryMarker!.name).toBe('Short');
+    });
+
+    it('should produce correct reversal markers for short-to-long', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Short', 'short', 1);
+
+      engine.updateBar(1, 1001, 102, 110, 100, 98, 1000);
+      engine.entry('Long', 'long', 1);
+
+      const markers = engine.getMarkers();
+      const closeMarker = markers.find(
+        (m) => m.type === 'close' && m.direction === 'short',
+      );
+      expect(closeMarker).toBeDefined();
+      expect(closeMarker!.name).toBe('Exit Short');
+      expect(closeMarker!.comment).toBe('reverse');
+    });
+  });
 });

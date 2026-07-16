@@ -308,8 +308,8 @@ describe('Script Declarations', () => {
       expect(stratConfig!.defaultQtyType).toBe('percent_of_equity');
       expect(stratConfig!.defaultQty).toBe(20);
       expect(stratConfig!.commissionType).toBe('percent');
-      expect(stratConfig!.marginLong).toBe(1);
-      expect(stratConfig!.marginShort).toBe(1);
+      expect(stratConfig!.marginLong).toBe(0);
+      expect(stratConfig!.marginShort).toBe(0);
     });
   });
 

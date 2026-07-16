@@ -57,8 +57,8 @@ export class BacktestEngine {
       calcOnEveryTick: false,
       processOrdersOnClose: false,
       maxBarsBack: 0,
-      marginLong: 1,
-      marginShort: 1,
+      marginLong: 0,
+      marginShort: 0,
       currency: 'USD',
       ...config,
     };

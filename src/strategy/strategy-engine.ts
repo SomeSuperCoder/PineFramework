@@ -56,6 +56,7 @@ export interface Position {
   avgPrice: number;
   entryTime: number;
   entryBarIndex: number;
+  entryName: string;
   pnl: number;
   pnlPercent: number;
   commission: number;
@@ -138,8 +139,8 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   calcOnEveryTick: false,
   processOrdersOnClose: false,
   maxBarsBack: 0,
-  marginLong: 1,
-  marginShort: 1,
+  marginLong: 0,
+  marginShort: 0,
   currency: 'USD',
 };
 
@@ -204,6 +205,7 @@ export class StrategyEngine {
       avgPrice: 0,
       entryTime: 0,
       entryBarIndex: 0,
+      entryName: '',
       pnl: 0,
       pnlPercent: 0,
       commission: 0,
@@ -253,7 +255,7 @@ export class StrategyEngine {
 
     if (!this.canOpenPosition(direction, quantity)) {
       if (this.position.direction !== 'flat' && this.position.direction !== direction) {
-        this.close(`${name}_reverse`);
+        this.close(this.position.entryName || name, 'reverse');
       } else {
         console.log(`[StrategyEngine] entry REJECTED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} pos=${this.position.direction} entries=${this.entries} pyramiding=${this.config.pyramiding}`);
         return undefined;
@@ -592,13 +594,13 @@ export class StrategyEngine {
 
     if (order.action === 'buy') {
       if (isFlat) {
-        this.openOrAddPosition('long', order.quantity, adjustedPrice, commission);
+        this.openOrAddPosition('long', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
       }
     } else {
       if (isFlat) {
-        this.openOrAddPosition('short', order.quantity, adjustedPrice, commission);
+        this.openOrAddPosition('short', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
       }
@@ -611,9 +613,11 @@ export class StrategyEngine {
   private checkLiquidation(): void {
     if (this.position.direction === 'flat' || this.position.quantity === 0) return;
 
-    const positionValue = this.currentPrice * this.position.quantity;
     const marginRate =
       this.position.direction === 'long' ? this.config.marginLong : this.config.marginShort;
+    if (marginRate <= 0) return;
+
+    const positionValue = this.currentPrice * this.position.quantity;
     const maintenanceMargin = positionValue * marginRate;
     const totalEquity = this.equity + this.position.unrealizedPnl;
 
@@ -662,6 +666,7 @@ export class StrategyEngine {
     quantity: number,
     price: number,
     commission: number,
+    entryName: string = '',
   ): void {
     if (this.position.direction === 'flat') {
       this.position = {
@@ -671,6 +676,7 @@ export class StrategyEngine {
         avgPrice: price,
         entryTime: this.timestamp,
         entryBarIndex: this.barIndex,
+        entryName,
         pnl: 0,
         pnlPercent: 0,
         commission,
@@ -763,6 +769,7 @@ export class StrategyEngine {
         avgPrice: 0,
         entryTime: 0,
         entryBarIndex: 0,
+        entryName: '',
         pnl: 0,
         pnlPercent: 0,
         commission: 0,
@@ -1036,6 +1043,7 @@ export class StrategyEngine {
       avgPrice: 0,
       entryTime: 0,
       entryBarIndex: 0,
+      entryName: '',
       pnl: 0,
       pnlPercent: 0,
       commission: 0,
