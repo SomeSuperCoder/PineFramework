@@ -931,6 +931,15 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 }
               }
 
+              // Trim seed bar strategy markers — their barIndex is relative to
+              // the combined [seedBars, ...originalBars] array, so offset by
+              // seedCount and drop any that fall within the seed range.
+              if (seedScriptRes.strategyMarkers) {
+                seedScriptRes.strategyMarkers = seedScriptRes.strategyMarkers
+                  .filter((m) => m.barIndex >= seedCount)
+                  .map((m) => ({ ...m, barIndex: m.barIndex - seedCount }));
+              }
+
               if (versionRef && version !== undefined && version !== versionRef.current) return;
 
               if (indicatorId) {
