@@ -5,7 +5,6 @@ import {
   ExecutionEngine,
   type ExecutionContext,
   type StrategyMarkerEntry,
-  type ShapeEntry,
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import type { Bar } from '../../src/data/bar.js';
@@ -61,18 +60,30 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, index + 1).map(b => b.open)),
-    high: createSeries('high', bars.slice(0, index + 1).map(b => b.high)),
-    low: createSeries('low', bars.slice(0, index + 1).map(b => b.low)),
-    close: createSeries('close', bars.slice(0, index + 1).map(b => b.close)),
-    volume: createSeries('volume', bars.slice(0, index + 1).map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, index + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, index + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, index + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, index + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, index + 1).map((b) => b.volume),
+    ),
   }));
 }
 
-const strategySource = fs.readFileSync(
-  './backend/data/scripts/strategies/simple_ema_cross_strategy.pine',
-  'utf-8',
-);
+const strategySource = fs.readFileSync('./test_indicators/simple_ema_cross_strategy.pine', 'utf-8');
 
 describe('Simple EMA Cross Strategy – marker analysis', () => {
   let incrementalMarkers: StrategyMarkerEntry[];
@@ -92,7 +103,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     for (const ctx of contexts1) {
       allResults.push(engine1.executeBar(ctx));
     }
-    incrementalMarkers = allResults.flatMap(r => r.strategyMarkers ?? []);
+    incrementalMarkers = allResults.flatMap((r) => r.strategyMarkers ?? []);
 
     // --- Batch execution via executeBars() ---
     const engine2 = new ExecutionEngine(compiled);
@@ -104,7 +115,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // --- Basic sanity --------------------------------------------------------
 
   it('compiles and executes all 90 bars without errors', () => {
-    const failures = allResults.filter(r => !r.success);
+    const failures = allResults.filter((r) => !r.success);
     expect(failures).toEqual([]);
     expect(allResults).toHaveLength(90);
   });
@@ -134,7 +145,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // --- Entry marker correctness -------------------------------------------
 
   it('Long entry markers have correct name and direction', () => {
-    const entries = incrementalMarkers.filter(m => m.type === 'entry' && m.direction === 'long');
+    const entries = incrementalMarkers.filter((m) => m.type === 'entry' && m.direction === 'long');
     expect(entries.length).toBeGreaterThanOrEqual(1);
     for (const e of entries) {
       expect(e.name).toBe('Long');
@@ -148,7 +159,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   });
 
   it('Short entry markers have correct name and direction', () => {
-    const entries = incrementalMarkers.filter(m => m.type === 'entry' && m.direction === 'short');
+    const entries = incrementalMarkers.filter((m) => m.type === 'entry' && m.direction === 'short');
     expect(entries.length).toBeGreaterThanOrEqual(1);
     for (const e of entries) {
       expect(e.name).toBe('Short');
@@ -162,7 +173,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // --- Close marker correctness (reversal closes) -------------------------
 
   it('close markers use entry name and have reverse comment', () => {
-    const closes = incrementalMarkers.filter(m => m.type === 'close');
+    const closes = incrementalMarkers.filter((m) => m.type === 'close');
     expect(closes.length).toBe(2);
     for (const c of closes) {
       expect(c.name).toMatch(/^Exit (Long|Short)$/);
@@ -174,7 +185,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // --- Marker sequence correctness ----------------------------------------
 
   it('entries alternate: Long, then Short, then Long', () => {
-    const entries = incrementalMarkers.filter(m => m.type === 'entry');
+    const entries = incrementalMarkers.filter((m) => m.type === 'entry');
     expect(entries).toHaveLength(3);
     expect(entries[0].direction).toBe('long');
     expect(entries[1].direction).toBe('short');
@@ -182,12 +193,12 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   });
 
   it('each reversal entry is preceded by a close', () => {
-    const entries = incrementalMarkers.filter(m => m.type === 'entry');
-    const closes = incrementalMarkers.filter(m => m.type === 'close');
+    const entries = incrementalMarkers.filter((m) => m.type === 'entry');
+    const closes = incrementalMarkers.filter((m) => m.type === 'close');
 
     // Second and third entries should have a preceding close
     for (let i = 1; i < entries.length; i++) {
-      const prevClose = closes.find(c => c.barIndex <= entries[i].barIndex);
+      const prevClose = closes.find((c) => c.barIndex <= entries[i].barIndex);
       expect(prevClose).toBeDefined();
     }
   });
@@ -195,12 +206,12 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // --- No spurious markers ------------------------------------------------
 
   it('no liquidation markers (margin rate is 0 by default)', () => {
-    const liquidations = incrementalMarkers.filter(m => m.comment === 'Margin liquidation');
+    const liquidations = incrementalMarkers.filter((m) => m.comment === 'Margin liquidation');
     expect(liquidations).toHaveLength(0);
   });
 
   it('no order markers (only market entries, no limit/stop)', () => {
-    const orders = incrementalMarkers.filter(m => m.type === 'order');
+    const orders = incrementalMarkers.filter((m) => m.type === 'order');
     expect(orders).toHaveLength(0);
   });
 
@@ -208,7 +219,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   // Note: plot() writes to outputs, not shapes. Shapes are only from plotshape/plotchar.
 
   it('no shapes from plot() calls (plot writes to outputs, not shapes)', () => {
-    const allShapes = allResults.flatMap(r => r.shapes ?? []);
+    const allShapes = allResults.flatMap((r) => r.shapes ?? []);
     expect(allShapes).toHaveLength(0);
   });
 

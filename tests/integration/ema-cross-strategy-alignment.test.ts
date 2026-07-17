@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
@@ -6,35 +7,7 @@ import type { Bar } from '../../src/data/bar.js';
 import type { ExecutionContext } from '../../src/language/runtime/execution-engine.js';
 
 // ─── Strategy Source ────────────────────────────────────────────────────────
-const strategySource = `
-//@version=5
-strategy("Simple EMA Cross Strategy", overlay=true, initial_capital=10000)
-
-fastLength = input.int(9, title="Fast EMA Length")
-slowLength = input.int(21, title="Slow EMA Length")
-
-fastEMA = ta.ema(close, fastLength)
-slowEMA = ta.ema(close, slowLength)
-
-longCondition = ta.crossover(fastEMA, slowEMA)
-shortCondition = ta.crossunder(fastEMA, slowEMA)
-
-if longCondition
-    strategy.entry("Long", strategy.long)
-
-if shortCondition
-    strategy.entry("Short", strategy.short)
-
-if longCondition
-    label.new(bar_index, low, "Long Cross",
-              color=color.green, textcolor=color.white,
-              style=label.style_label_up, size=size.small)
-
-if shortCondition
-    label.new(bar_index, high, "Short Cross",
-              color=color.red, textcolor=color.white,
-              style=label.style_label_down, size=size.small)
-`;
+const strategySource = fs.readFileSync('./test_indicators/simple_ema_cross_strategy.pine', 'utf-8');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
