@@ -470,7 +470,7 @@ describe('StrategyEngine', () => {
       engine.entry('MyEntry', 'short', 1);
 
       const markers = engine.getMarkers();
-      expect(markers[0]!.name).toBe('Short');
+      expect(markers[0]!.name).toBe('MyEntry');
     });
 
     it('should track exit markers', () => {
@@ -488,7 +488,7 @@ describe('StrategyEngine', () => {
       expect(markers[1]!.name).toBe('Exit Long');
     });
 
-    it('should use comment as entry marker name if provided', () => {
+    it('should store comment on entry marker without overriding name', () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
@@ -496,10 +496,11 @@ describe('StrategyEngine', () => {
 
       const markers = engine.getMarkers();
       expect(markers.length).toBe(1);
-      expect(markers[0]!.name).toBe('Buy Signal');
+      expect(markers[0]!.name).toBe('Long');
+      expect(markers[0]!.comment).toBe('Buy Signal');
     });
 
-    it('should use comment as exit marker name if provided', () => {
+    it('should store comment on exit marker without overriding name', () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
@@ -510,7 +511,8 @@ describe('StrategyEngine', () => {
 
       const markers = engine.getMarkers();
       expect(markers.length).toBe(2);
-      expect(markers[1]!.name).toBe('TP Hit');
+      expect(markers[1]!.name).toBe('Exit Long');
+      expect(markers[1]!.comment).toBe('TP Hit');
     });
 
     it('should track close markers', () => {

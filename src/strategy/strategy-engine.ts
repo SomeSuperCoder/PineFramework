@@ -287,7 +287,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'entry',
       orderId: order.id,
-      name: comment || (direction === 'long' ? 'Long' : 'Short'),
+      name: name || (direction === 'long' ? 'Long' : 'Short'),
       direction,
       action: order.action,
       quantity,
@@ -295,6 +295,7 @@ export class StrategyEngine {
       barIndex: this.barIndex,
       timestamp: this.timestamp,
       color: direction === 'long' ? '#00FF00' : '#FF0000',
+      comment,
     });
 
     return order;
@@ -420,7 +421,7 @@ export class StrategyEngine {
     this.markers.push({
       type: 'exit',
       orderId: order.id,
-      name: comment || `Exit ${name}`,
+      name: `Exit ${name}`,
       direction: order.direction,
       action: order.action,
       quantity: order.quantity,
@@ -428,6 +429,7 @@ export class StrategyEngine {
       barIndex: this.barIndex,
       timestamp: this.timestamp,
       color: order.direction === 'long' ? '#FF6600' : '#FF6600',
+      comment,
     });
 
     return order;

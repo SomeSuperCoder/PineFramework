@@ -63,7 +63,9 @@ export class MarkerRenderer {
     const barSpacing = viewport.getBarSpacing();
     const margin = barSpacing * 1.2;
 
-    for (const marker of markers) {
+    const merged = this.mergeReversals(markers);
+
+    for (const marker of merged) {
       if (marker.type === 'cancel' || marker.type === 'cancel_all') continue;
 
       const barIdx = marker.barIndex ?? this.findBarIndexByTimestamp(candles, marker.timestamp);
@@ -97,6 +99,35 @@ export class MarkerRenderer {
         ctx.fillText(label, x, y + (isEntry ? 14 : -8));
       }
     }
+  }
+
+  private mergeReversals(markers: StrategyMarkerData[]): StrategyMarkerData[] {
+    const byBar = new Map<number, StrategyMarkerData[]>();
+    for (const m of markers) {
+      const barIdx = m.barIndex ?? -1;
+      if (barIdx < 0) {
+        byBar.set(-1, [...(byBar.get(-1) || []), m]);
+        continue;
+      }
+      byBar.set(barIdx, [...(byBar.get(barIdx) || []), m]);
+    }
+
+    const result: StrategyMarkerData[] = [];
+    for (const [, barMarkers] of byBar) {
+      if (barMarkers.length === 2) {
+        const close = barMarkers.find(m => m.type === 'close' && m.comment === 'reverse');
+        const entry = barMarkers.find(m => m.type === 'entry');
+        if (close && entry) {
+          result.push({
+            ...entry,
+            name: `Reverse ${entry.direction === 'long' ? 'Long' : 'Short'}`,
+          });
+          continue;
+        }
+      }
+      result.push(...barMarkers);
+    }
+    return result;
   }
 
   renderAlertTriggers(
