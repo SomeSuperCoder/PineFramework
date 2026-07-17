@@ -33,13 +33,15 @@ export class Compiler {
   private functions: CompiledScript['functions'] = [];
   private types = new Map<string, PineType>();
   private builder = createIRBuilder();
+  private callIdCounter = 0;
 
   compile(program: ProgramNode): CompileResult {
     this.scope = createScope();
     this.globals = [];
     this.functions = [];
     this.types = new Map();
-    this.builder = createIRBuilder();
+    this.callIdCounter = 0;
+    this.assignCallIds(program);
 
     for (const stmt of program.body) {
       this.compileStatement(stmt);
@@ -69,6 +71,21 @@ export class Compiler {
     };
 
     return { ir, source: program };
+  }
+
+  private assignCallIds(node: any): void {
+    if (!node || typeof node !== 'object') return;
+    if (node.kind === 'CallExpression') {
+      node.callId = this.callIdCounter++;
+    }
+    for (const key of Object.keys(node)) {
+      const child = node[key];
+      if (Array.isArray(child)) {
+        for (const item of child) this.assignCallIds(item);
+      } else if (child && typeof child === 'object') {
+        this.assignCallIds(child);
+      }
+    }
   }
 
   private compileStatement(stmt: StatementNode): void {

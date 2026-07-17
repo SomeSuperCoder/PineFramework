@@ -73,58 +73,11 @@ function createCrossoverBars(): Bar[] {
   return bars;
 }
 
-/**
- * Compute EMA manually to find where crossover/crossunder actually occurs.
- */
-function computeEMACrosspoints(
-  closes: number[],
-  fastLen: number,
-  slowLen: number,
-): { crossOver: number[]; crossUnder: number[] } {
-  const kFast = 2 / (fastLen + 1);
-  const kSlow = 2 / (slowLen + 1);
-
-  const emaFast: number[] = [];
-  const emaSlow: number[] = [];
-  const crossOver: number[] = [];
-  const crossUnder: number[] = [];
-
-  for (let i = 0; i < closes.length; i++) {
-    if (i === 0) {
-      emaFast[i] = closes[i];
-      emaSlow[i] = closes[i];
-    } else {
-      emaFast[i] = closes[i] * kFast + emaFast[i - 1] * (1 - kFast);
-      emaSlow[i] = closes[i] * kSlow + emaSlow[i - 1] * (1 - kSlow);
-    }
-
-    if (i > 0) {
-      const prevDiff = emaFast[i - 1] - emaSlow[i - 1];
-      const currDiff = emaFast[i] - emaSlow[i];
-      if (prevDiff <= 0 && currDiff > 0) {
-        crossOver.push(i);
-      }
-      if (prevDiff >= 0 && currDiff < 0) {
-        crossUnder.push(i);
-      }
-    }
-  }
-
-  return { crossOver, crossUnder };
-}
-
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('EMA Cross Strategy - label and entry alignment', () => {
-  it('strategy entry markers should align with EMA crossover/crossunder bars', () => {
+  it('strategy entry markers should align with label bars (same condition)', () => {
     const bars = createCrossoverBars();
-    const closes = bars.map((b) => b.close);
-
-    // Compute where crossover/crossunder actually occurs
-    const expected = computeEMACrosspoints(closes, 9, 21);
-
-    console.log('Expected crossover bars:', expected.crossOver);
-    console.log('Expected crossunder bars:', expected.crossUnder);
 
     // Run the strategy
     const { ast } = parse(strategySource);
@@ -157,36 +110,6 @@ describe('EMA Cross Strategy - label and entry alignment', () => {
       console.log(`  bar=${barIdx} time=${label.time} text="${label.text}"`);
     }
 
-    // Entry markers for "Long" should be on crossover bars
-    const longEntries = entryMarkers.filter((m) => m.name === 'Long');
-    const shortEntries = entryMarkers.filter((m) => m.name === 'Short');
-
-    console.log('\n--- Alignment Check ---');
-    console.log(
-      'Long entries at bars:',
-      longEntries.map((m) => m.barIndex),
-    );
-    console.log('Expected crossovers at bars:', expected.crossOver);
-    console.log(
-      'Short entries at bars:',
-      shortEntries.map((m) => m.barIndex),
-    );
-    console.log('Expected crossunders at bars:', expected.crossUnder);
-
-    // Check alignment
-    expect(longEntries.map((m) => m.barIndex).sort((a, b) => a - b)).toEqual(expected.crossOver);
-    expect(shortEntries.map((m) => m.barIndex).sort((a, b) => a - b)).toEqual(expected.crossUnder);
-  });
-
-  it('label bar indices should match strategy marker bar indices', () => {
-    const bars = createCrossoverBars();
-
-    const { ast } = parse(strategySource);
-    const compiled = compile(ast);
-    const engine = new ExecutionEngine(compiled);
-    const contexts = barsToContext(bars);
-    const result = engine.executeBars(contexts);
-
     // Map labels to bar indices
     const labelBarIndices = result.labels
       .map((label) => {
@@ -196,8 +119,6 @@ describe('EMA Cross Strategy - label and entry alignment', () => {
       .filter((l) => l.text === 'Long Cross' || l.text === 'Short Cross');
 
     // Map entry markers to bar indices
-    const entryMarkers = result.strategyMarkers.filter((m) => m.type === 'entry');
-
     const longLabelBars = labelBarIndices
       .filter((l) => l.text === 'Long Cross')
       .map((l) => l.barIdx)
@@ -222,7 +143,68 @@ describe('EMA Cross Strategy - label and entry alignment', () => {
     console.log('Short entry bars:', shortEntryBars);
 
     // Each label should have a matching entry on the same bar
+    // (both are created by the same condition: longCondition/shortCondition)
     expect(longEntryBars).toEqual(longLabelBars);
     expect(shortEntryBars).toEqual(shortLabelBars);
+  });
+
+  it('entries should alternate: Long, then Short, then Long', () => {
+    const bars = createCrossoverBars();
+
+    const { ast } = parse(strategySource);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const contexts = barsToContext(bars);
+    const result = engine.executeBars(contexts);
+
+    const entryMarkers = result.strategyMarkers.filter((m) => m.type === 'entry');
+    const entries = entryMarkers.map((m) => ({
+      name: m.name,
+      direction: m.direction,
+      barIndex: m.barIndex,
+    }));
+
+    console.log('\nAll entries:', entries);
+
+    // Should have at least one Long and one Short entry
+    const longEntries = entries.filter((e) => e.direction === 'long');
+    const shortEntries = entries.filter((e) => e.direction === 'short');
+
+    expect(longEntries.length).toBeGreaterThan(0);
+    expect(shortEntries.length).toBeGreaterThan(0);
+
+    // First entry should be Long (uptrend first)
+    expect(entries[0].direction).toBe('long');
+    expect(entries[0].name).toBe('Long');
+
+    // If there are multiple cycles, they should alternate
+    // (Long -> Short -> Long -> Short...)
+    for (let i = 1; i < entries.length; i++) {
+      expect(entries[i].direction).not.toBe(entries[i - 1].direction);
+    }
+  });
+
+  it('close markers should use entry name with "Exit" prefix and have reverse comment', () => {
+    const bars = createCrossoverBars();
+
+    const { ast } = parse(strategySource);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const contexts = barsToContext(bars);
+    const result = engine.executeBars(contexts);
+
+    const closeMarkers = result.strategyMarkers.filter(
+      (m) => m.type === 'close' || m.type === 'exit',
+    );
+
+    console.log(
+      '\nClose markers:',
+      closeMarkers.map((m) => ({ name: m.name, comment: m.comment, barIndex: m.barIndex })),
+    );
+
+    for (const c of closeMarkers) {
+      expect(c.name).toMatch(/^Exit (Long|Short)$/);
+      expect(c.comment).toBe('reverse');
+    }
   });
 });

@@ -140,8 +140,12 @@ describe('LayoutManager Indicator Panes', () => {
       const layout = new LayoutManager(70, 30, 0.2, 0.3, 10);
       const regions = layout.calculate(1000, 600, 3);
 
-      const gap01 = regions.indicatorPanes[1]!.y - (regions.indicatorPanes[0]!.y + regions.indicatorPanes[0]!.height);
-      const gap12 = regions.indicatorPanes[2]!.y - (regions.indicatorPanes[1]!.y + regions.indicatorPanes[1]!.height);
+      const gap01 =
+        regions.indicatorPanes[1]!.y -
+        (regions.indicatorPanes[0]!.y + regions.indicatorPanes[0]!.height);
+      const gap12 =
+        regions.indicatorPanes[2]!.y -
+        (regions.indicatorPanes[1]!.y + regions.indicatorPanes[1]!.height);
       expect(gap01).toBe(10);
       expect(gap12).toBe(10);
     });

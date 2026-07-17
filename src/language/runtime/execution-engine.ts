@@ -265,11 +265,8 @@ export class ExecutionEngine {
   }
 
   private smaBuffers: Map<string, number[]> = new Map();
-  private smaCallIndex: number = 0;
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
-  private emaCallIndex: number = 0;
   private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
-  private hmaCallIndex: number = 0;
   private sarState: Map<
     string,
     {
@@ -300,20 +297,16 @@ export class ExecutionEngine {
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
-  private crossCallIndex: number = 0;
-  private crossPrevValues: Array<{ src: number; cmp: number }> = [];
-  private changeCallIndex: number = 0;
-  private changePrevValues: number[] = [];
-  private atrState: Map<string, { prev: number; count: number }> = new Map();
+  private crossPrevValues: Map<string, { src: number; cmp: number }> = new Map();
+  private changePrevValues: Map<string, number> = new Map();
+  private atrState: Map<string, { prev: number; count: number; values: number[] }> = new Map();
   private highestBuffers: Map<string, number[]> = new Map();
-  private highestCallIndex: number = 0;
   private lowestBuffers: Map<string, number[]> = new Map();
-  private lowestCallIndex: number = 0;
+  private currentCallSiteId = 0;
   private rsiState: Map<
     string,
     { prevAvgGain: number; prevAvgLoss: number; count: number; prevSource: number }
   > = new Map();
-  private rsiCallIndex: number = 0;
   private strategyEngine: StrategyEngine | null = null;
 
   getMaxLookback(): number {
@@ -368,7 +361,7 @@ export class ExecutionEngine {
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
 
-      const key = `sma_${len}_${this.smaCallIndex++}`;
+      const key = `sma_${len}_${this.currentCallSiteId}`;
       if (!this.smaBuffers.has(key)) {
         this.smaBuffers.set(key, []);
       }
@@ -392,7 +385,7 @@ export class ExecutionEngine {
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
 
-      const key = `ema_${len}_${this.emaCallIndex++}`;
+      const key = `ema_${len}_${this.currentCallSiteId}`;
       const k = 2 / (len + 1);
       if (!this.emaState.has(key)) {
         this.emaState.set(key, { prev: source as number, initialized: false });
@@ -410,7 +403,7 @@ export class ExecutionEngine {
       const val = source as number;
       if (isNaN(val)) return NA;
 
-      const key = `rsi_${len}_${this.rsiCallIndex++}`;
+      const key = `rsi_${len}_${this.currentCallSiteId}`;
       if (!this.rsiState.has(key)) {
         this.rsiState.set(key, { prevAvgGain: 0, prevAvgLoss: 0, count: 0, prevSource: val });
         return NA;
@@ -580,18 +573,23 @@ export class ExecutionEngine {
         Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
         Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
       );
-      const key = `atr_${len}`;
+      const key = `atr_${len}_${this.currentCallSiteId}`;
       if (!this.atrState.has(key)) {
-        this.atrState.set(key, { prev: tr, count: 1 });
+        this.atrState.set(key, { prev: tr, count: 1, values: [] });
+        this.atrState.get(key)!.values.push(NA);
         return NA;
       }
       const state = this.atrState.get(key)!;
       state.count++;
       if (state.count <= len) {
         state.prev = (state.prev * (state.count - 1) + tr) / state.count;
+        state.values.push(state.prev);
         return NA;
       }
       state.prev = (state.prev * (len - 1) + tr) / len;
+      state.values.push(state.prev);
+      // Return the current ATR value, which can be indexed with [1] for previous bar
+      // Create a temporary array-like object that supports getRelative
       return state.prev;
     });
 
@@ -599,7 +597,7 @@ export class ExecutionEngine {
       if (isNa(source) || isNa(length)) return NA;
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
-      const key = `highest_${len}_${this.highestCallIndex++}`;
+      const key = `highest_${len}_${this.currentCallSiteId}`;
       if (!this.highestBuffers.has(key)) {
         this.highestBuffers.set(key, []);
       }
@@ -618,7 +616,7 @@ export class ExecutionEngine {
       if (isNa(source) || isNa(length)) return NA;
       const len = Math.trunc(length as number);
       if (len <= 0) return NA;
-      const key = `lowest_${len}_${this.lowestCallIndex++}`;
+      const key = `lowest_${len}_${this.currentCallSiteId}`;
       if (!this.lowestBuffers.has(key)) {
         this.lowestBuffers.set(key, []);
       }
@@ -640,7 +638,7 @@ export class ExecutionEngine {
       const halfLen = Math.floor(len / 2);
       const sqrtLen = Math.floor(Math.sqrt(len));
 
-      const key = `hma_${len}_${this.hmaCallIndex++}`;
+      const key = `hma_${len}_${this.currentCallSiteId}`;
       if (!this.hmaBuffers.has(key)) {
         this.hmaBuffers.set(key, { half: [], full: [], diff: [] });
       }
@@ -1277,10 +1275,16 @@ export class ExecutionEngine {
 
     this.builtins.set('input', (...args: PineValue[]): PineValue => {
       let defaultVal: PineValue = args[0] ?? 0;
-      if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0])) {
+      if (
+        args.length > 0 &&
+        typeof args[0] === 'object' &&
+        args[0] !== null &&
+        !Array.isArray(args[0])
+      ) {
         const na = args[0] as unknown as Record<string, PineValue>;
         if (na.defval !== undefined) defaultVal = na.defval;
-        if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'source', default: defaultVal });
+        if (typeof na.title === 'string')
+          this.inputs.set(na.title, { type: 'source', default: defaultVal });
       }
       return isNa(defaultVal) ? 0 : defaultVal;
     });
@@ -1484,10 +1488,10 @@ export class ExecutionEngine {
 
     this.builtins.set('ta.crossover', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
-      const idx = this.crossCallIndex++;
-      const prev = this.crossPrevValues[idx];
+      const key = `cross_${this.currentCallSiteId}`;
+      const prev = this.crossPrevValues[key];
       if (!prev) {
-        this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
         return false;
       }
       const result = prev.src <= prev.cmp && (source as number) > (compare as number);
@@ -1498,10 +1502,10 @@ export class ExecutionEngine {
 
     this.builtins.set('ta.crossunder', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
-      const idx = this.crossCallIndex++;
-      const prev = this.crossPrevValues[idx];
+      const key = `cross_${this.currentCallSiteId}`;
+      const prev = this.crossPrevValues[key];
       if (!prev) {
-        this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
         return false;
       }
       const result = prev.src >= prev.cmp && (source as number) < (compare as number);
@@ -1512,10 +1516,10 @@ export class ExecutionEngine {
 
     this.builtins.set('ta.cross', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
-      const idx = this.crossCallIndex++;
-      const prev = this.crossPrevValues[idx];
+      const key = `cross_${this.currentCallSiteId}`;
+      const prev = this.crossPrevValues[key];
       if (!prev) {
-        this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
         return false;
       }
       const crossed =
@@ -1528,14 +1532,14 @@ export class ExecutionEngine {
 
     this.builtins.set('ta.change', (source: PineValue): PineValue => {
       if (isNa(source)) return NA;
-      const idx = this.changeCallIndex++;
-      const prev = this.changePrevValues[idx];
+      const key = `change_${this.currentCallSiteId}`;
+      const prev = this.changePrevValues[key];
       if (prev === undefined) {
-        this.changePrevValues[idx] = source as number;
+        this.changePrevValues[key] = source as number;
         return NA;
       }
       const result = (source as number) - prev;
-      this.changePrevValues[idx] = source as number;
+      this.changePrevValues[key] = source as number;
       return result;
     });
 
@@ -1755,19 +1759,21 @@ export class ExecutionEngine {
 
         if (typeof directionOrQty === 'string') {
           dir = directionOrQty === 'short' ? 'short' : 'long';
-          qty = typeof restArgs[0] === 'number'
-            ? restArgs[0]
-            : typeof namedArgs?.qty === 'number'
-              ? namedArgs.qty
-              : undefined;
+          qty =
+            typeof restArgs[0] === 'number'
+              ? restArgs[0]
+              : typeof namedArgs?.qty === 'number'
+                ? namedArgs.qty
+                : undefined;
           pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
         } else {
           dir = 'long';
-          qty = typeof directionOrQty === 'number'
-            ? directionOrQty
-            : typeof namedArgs?.qty === 'number'
-              ? namedArgs.qty
-              : undefined;
+          qty =
+            typeof directionOrQty === 'number'
+              ? directionOrQty
+              : typeof namedArgs?.qty === 'number'
+                ? namedArgs.qty
+                : undefined;
           pr = typeof restArgs[0] === 'number' ? restArgs[0] : 0;
         }
 
@@ -1943,12 +1949,6 @@ export class ExecutionEngine {
     this.currentTimestamp = context.timestamp;
     this.currentContext = context;
     this.barTimestamps.push(context.timestamp);
-    this.crossCallIndex = 0;
-    this.smaCallIndex = 0;
-    this.emaCallIndex = 0;
-    this.hmaCallIndex = 0;
-    this.rsiCallIndex = 0;
-    this.changeCallIndex = 0;
 
     try {
       this.createSnapshot();
@@ -2001,7 +2001,9 @@ export class ExecutionEngine {
     } catch (error) {
       const executionTime = performance.now() - startTime;
       this.updateMetrics(false, executionTime);
-      console.error(`[ExecutionEngine] Error at bar ${context.barIndex}: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `[ExecutionEngine] Error at bar ${context.barIndex}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       this.rollbackToPreviousBar();
 
       const activeLines = [...this.lines.values()].map((l) => ({ ...l }));
@@ -2029,7 +2031,7 @@ export class ExecutionEngine {
   }
 
   executeBars(bars: ExecutionContext[]): ExecutionResult {
-    let allMarkers: StrategyMarkerEntry[] = [];
+    const allMarkers: StrategyMarkerEntry[] = [];
     let lastResult: ExecutionResult = {
       success: true,
       version: this.sourceProgram.version,
@@ -2100,8 +2102,8 @@ export class ExecutionEngine {
     const preAlertTriggersLen = this.alertTriggers.length;
     const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, [...v]]));
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
-    const preCrossPrevValues = [...this.crossPrevValues];
-    const preChangePrevValues = [...this.changePrevValues];
+    const preCrossPrevValues = new Map(this.crossPrevValues);
+    const preChangePrevValues = new Map(this.changePrevValues);
     const preHighestBuffers = new Map([...this.highestBuffers].map(([k, v]) => [k, [...v]]));
     const preLowestBuffers = new Map([...this.lowestBuffers].map(([k, v]) => [k, [...v]]));
     const prePlotColors = new Map([...this.plotColors].map(([k, v]) => [k, [...v]]));
@@ -2110,7 +2112,10 @@ export class ExecutionEngine {
     const preRsiState = new Map([...this.rsiState].map(([k, v]) => [k, { ...v }]));
     const preAtrState = new Map([...this.atrState].map(([k, v]) => [k, { ...v }]));
     const preHmaBuffers = new Map(
-      [...this.hmaBuffers].map(([k, v]) => [k, { half: [...v.half], full: [...v.full], diff: [...v.diff] }]),
+      [...this.hmaBuffers].map(([k, v]) => [
+        k,
+        { half: [...v.half], full: [...v.full], diff: [...v.diff] },
+      ]),
     );
     const preSarState = new Map([...this.sarState].map(([k, v]) => [k, { ...v }]));
     const preFunctionPersistentScopes = new Map(
@@ -2434,7 +2439,13 @@ export class ExecutionEngine {
             break;
         }
       }
-      binding.series.push(result);
+      // For reassignment operators (:=, +=, -=, *=, /=), overwrite the current bar's value
+      // instead of pushing a new value, to maintain one value per bar in the series.
+      if (stmt.operator !== '=' && binding.series.length > 0) {
+        binding.series.values[binding.series.values.length - 1] = result;
+      } else {
+        binding.series.push(result);
+      }
       return result;
     }
 
@@ -2838,6 +2849,8 @@ export class ExecutionEngine {
       if (this.builtins.has(funcName)) {
         const builtin = this.builtins.get(funcName);
         if (builtin) {
+          // Set call site ID for TA functions that need stable keys across bars
+          this.currentCallSiteId = expr.callId;
           // Only pass namedArgs when there are actual named arguments,
           // otherwise an empty {} object gets passed as a positional arg to builtins like nz()
           const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
@@ -2847,13 +2860,7 @@ export class ExecutionEngine {
 
       const func = this.functions.get(funcName);
       if (func) {
-        return this.executeFunctionCall(
-          func,
-          args,
-          scope,
-          context,
-          `${funcName}@${expr.span.start.offset}`,
-        );
+        return this.executeFunctionCall(func, args, scope, context, `${funcName}@${expr.callId}`);
       }
     }
 
@@ -2865,6 +2872,7 @@ export class ExecutionEngine {
       }
       const builtin = this.builtins.get('na');
       if (builtin) {
+        this.currentCallSiteId = expr.callId;
         const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
         return builtin(...builtinArgs);
       }
@@ -2883,6 +2891,7 @@ export class ExecutionEngine {
 
       const builtin = this.builtins.get(fullName);
       if (builtin) {
+        this.currentCallSiteId = expr.callId;
         const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
         return builtin(...builtinArgs);
       }
@@ -2960,7 +2969,7 @@ export class ExecutionEngine {
           [obj, ...args],
           scope,
           context,
-          `${methodName}@${expr.span.start.offset}`,
+          `${methodName}@${expr.callId}`,
         );
       }
 
@@ -3299,6 +3308,30 @@ export class ExecutionEngine {
       const binding = resolveVariable(scope, objName);
       if (binding) {
         return binding.series.getRelative(index as number);
+      }
+    }
+
+    // Handle indexing on TA function calls like ta.atr(14)[1]
+    if (expr.object.kind === 'CallExpression' && expr.object.callee.kind === 'MemberExpression') {
+      const member = expr.object.callee;
+      if (
+        member.object.kind === 'Identifier' &&
+        member.object.name === 'ta' &&
+        member.property === 'atr'
+      ) {
+        const args = expr.object.arguments.map((arg) =>
+          this.executeExpression(arg, scope, context),
+        );
+        const len = Math.trunc(typeof args[0] === 'number' ? args[0] : 14);
+        if (len > 0) {
+          const key = `atr_${len}_${this.currentCallSiteId}`;
+          const state = this.atrState.get(key);
+          if (state && state.values && state.values.length > (index as number)) {
+            const idx = state.values.length - 1 - (index as number);
+            if (idx >= 0) return state.values[idx]!;
+          }
+        }
+        return NA;
       }
     }
 

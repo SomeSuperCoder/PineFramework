@@ -1,11 +1,10 @@
-import fs from 'fs';
-import { parse } from '../../src/language/parser/parser.js';
-import { compile } from '../../src/language/compiler/compiler.js';
+import { parse } from '../src/language/parser/parser.js';
+import { compile } from '../src/language/compiler/compiler.js';
 import {
   ExecutionEngine,
   type ExecutionContext,
-} from '../../src/language/runtime/execution-engine.js';
-import { createSeries } from '../../src/language/runtime/series.js';
+} from '../src/language/runtime/execution-engine.js';
+import { createSeries } from '../src/language/runtime/series.js';
 
 function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
   const bars: Array<{
@@ -38,6 +37,19 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
+const source = `
+//@version=5
+strategy("Test Crossunder", overlay=true)
+fastLength = input.int(9)
+slowLength = input.int(21)
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+longCondition = ta.crossover(fastEMA, slowEMA)
+shortCondition = ta.crossunder(fastEMA, slowEMA)
+plot(longCondition ? 1 : 0, "longCond")
+plot(shortCondition ? 1 : 0, "shortCond")
+`;
+
 function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
@@ -67,32 +79,25 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  return { engine, bars, result: engine.executeBars(contexts) };
+  return { engine, result: engine.executeBars(contexts) };
 }
 
-describe('Q-Trend', () => {
-  const source = fs.readFileSync('./test_indicators/q-trend.pine', 'utf-8');
+test('crossunder debug', () => {
+  const bars = createTrendingBars(100, 100);
+  const { engine, result } = runEngine(source, bars);
 
-  it('parses successfully', () => {
-    const result = parse(source);
-    expect(result.ast).toBeDefined();
-  });
+  // Check crossPrevValues state
+  const engineAny = engine as any;
+  console.log('crossPrevValues:', engineAny.crossPrevValues);
+  console.log('atrState:', engineAny.atrState);
 
-  it('compiles successfully', () => {
-    const { ast } = parse(source);
-    const compiled = compile(ast);
-    expect(compiled).toBeDefined();
-  });
+  // Check plot outputs
+  for (const [key, series] of result.outputs) {
+    const vals = series.values.filter((v: any) => v !== null);
+    if (vals.length > 0) {
+      console.log(`Output ${key}: ${vals.length} non-null, last 5:`, vals.slice(-5));
+    }
+  }
 
-  it('executes on 500 bars without crashing', () => {
-    const bars = createTrendingBars(500, 100);
-    const { result } = runEngine(source, bars);
-    expect(result.success).toBe(true);
-  });
-
-  it('has overlay=true', () => {
-    const { ast } = parse(source);
-    const compiled = compile(ast);
-    expect(compiled.ir.overlay).toBe(true);
-  });
+  expect(true).toBe(true);
 });

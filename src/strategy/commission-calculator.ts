@@ -288,10 +288,7 @@ export function isLongOnlyEnforced(methodId: CommissionMethodId): boolean {
  * This is the main entry point that the StrategyEngine should call
  * when a commissionMethod is configured. Falls back to 0 for unknown methods.
  */
-export function computeCommission(
-  context: TradeContext,
-  config: CommissionConfig,
-): number {
+export function computeCommission(context: TradeContext, config: CommissionConfig): number {
   const calculator = CALCULATORS[config.method];
   if (!calculator) return 0;
   return calculator.calculate(context, config);

@@ -226,7 +226,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
 
     // After 3 cycles, the output should have grown by at least 3 entries
     // (one per cycle from the confirmed bar) — cycles also add new bars
-    const finalResult = session.initialize(); // re-init to get final state... 
+    const finalResult = session.initialize(); // re-init to get final state...
     // Actually just check appendOrUpdateBar still works
     const finalBar: Bar = {
       timestamp: currentTimestamp,

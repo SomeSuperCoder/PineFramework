@@ -50,6 +50,7 @@ export interface ParseResult {
 export class Parser {
   private tokens: Token[] = [];
   private current = 0;
+  private callIdCounter = 0;
 
   parse(source: string): ParseResult {
     const version = extractVersion(source);
@@ -64,6 +65,7 @@ export class Parser {
 
     this.tokens = new Tokenizer(source).tokenize();
     this.current = 0;
+    this.callIdCounter = 0;
 
     const ast = this.parseProgram(version);
     return { ast, tokens: this.tokens };
@@ -915,6 +917,7 @@ export class Parser {
       callee,
       arguments: args,
       namedArguments,
+      callId: this.callIdCounter++,
     };
   }
 

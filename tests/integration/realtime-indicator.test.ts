@@ -39,11 +39,26 @@ function barsToContexts(bars: TestBar[]): ExecutionContext[] {
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, index + 1).map((b) => b.open)),
-    high: createSeries('high', bars.slice(0, index + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, index + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, index + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, index + 1).map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, index + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, index + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, index + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, index + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, index + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -54,11 +69,26 @@ function makeFormingContext(bars: TestBar[], newClose: number): ExecutionContext
     barIndex: index,
     barCount: bars.length,
     timestamp: lastBar.timestamp,
-    open: createSeries('open', bars.map((b) => b.open)),
-    high: createSeries('high', bars.map((b) => b.high)),
-    low: createSeries('low', bars.map((b) => b.low)),
-    close: createSeries('close', bars.map((b, i) => (i === index ? newClose : b.close))),
-    volume: createSeries('volume', bars.map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.map((b, i) => (i === index ? newClose : b.close)),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.map((b) => b.volume),
+    ),
   };
 }
 
@@ -82,7 +112,9 @@ plot(rsiValue, "RSI")
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) => k.toUpperCase().includes('RSI'))!;
+      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
+        k.toUpperCase().includes('RSI'),
+      )!;
       expect(rsiKey).toBeDefined();
 
       const rsiSeries = fullResult.outputs.get(rsiKey)!;
@@ -133,7 +165,9 @@ plot(rsiValue, "RSI")
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) => k.toUpperCase().includes('RSI'))!;
+      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
+        k.toUpperCase().includes('RSI'),
+      )!;
       const rsiSeries = fullResult.outputs.get(rsiKey)!;
       const beforeRsi = rsiSeries.last();
       const totalBarsBefore = engine.getMetrics().totalBars;
@@ -172,7 +206,9 @@ plot(rsiValue, "RSI")
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) => k.toUpperCase().includes('RSI'))!;
+      const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
+        k.toUpperCase().includes('RSI'),
+      )!;
       const beforeRsi = engine.getOutput(rsiKey)!.last();
       const totalBarsBefore = engine.getMetrics().totalBars;
 
@@ -187,26 +223,11 @@ plot(rsiValue, "RSI")
         barIndex: totalBarsBefore,
         barCount: totalBarsBefore + 1,
         timestamp: newTimestamp,
-        open: createSeries(
-          'open',
-          bars.map((b) => b.open).concat(lastBar.close + 5),
-        ),
-        high: createSeries(
-          'high',
-          bars.map((b) => b.high).concat(lastBar.close + 10),
-        ),
-        low: createSeries(
-          'low',
-          bars.map((b) => b.low).concat(lastBar.close + 3),
-        ),
-        close: createSeries(
-          'close',
-          bars.map((b) => b.close).concat(lastBar.close + 8),
-        ),
-        volume: createSeries(
-          'volume',
-          bars.map((b) => b.volume).concat(1000),
-        ),
+        open: createSeries('open', bars.map((b) => b.open).concat(lastBar.close + 5)),
+        high: createSeries('high', bars.map((b) => b.high).concat(lastBar.close + 10)),
+        low: createSeries('low', bars.map((b) => b.low).concat(lastBar.close + 3)),
+        close: createSeries('close', bars.map((b) => b.close).concat(lastBar.close + 8)),
+        volume: createSeries('volume', bars.map((b) => b.volume).concat(1000)),
       };
 
       const newBarResult = engine.executeRealtimeBar(newContext);

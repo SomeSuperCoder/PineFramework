@@ -266,7 +266,9 @@ export class StrategyEngine {
       if (this.position.direction !== 'flat' && this.position.direction !== direction) {
         this.close(this.position.entryName || name, 'reverse');
       } else {
-        console.log(`[StrategyEngine] entry REJECTED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} pos=${this.position.direction} entries=${this.entries} pyramiding=${this.config.pyramiding}`);
+        console.log(
+          `[StrategyEngine] entry REJECTED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} pos=${this.position.direction} entries=${this.entries} pyramiding=${this.config.pyramiding}`,
+        );
         return undefined;
       }
     }
@@ -290,7 +292,9 @@ export class StrategyEngine {
 
     this.pendingOrders.push(order);
     this.entries++;
-    console.log(`[StrategyEngine] entry CREATED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} orderId=${order.id}`);
+    console.log(
+      `[StrategyEngine] entry CREATED: name=${name} dir=${direction} qty=${quantity} price=${this.currentPrice} orderId=${order.id}`,
+    );
 
     this.markers.push({
       type: 'entry',
@@ -550,10 +554,10 @@ export class StrategyEngine {
   saveState(): object {
     return {
       position: { ...this.position },
-      pendingOrders: this.pendingOrders.map(o => ({ ...o })),
-      filledOrders: this.filledOrders.map(o => ({ ...o })),
-      trades: this.trades.map(t => ({ ...t })),
-      markers: this.markers.map(m => ({ ...m })),
+      pendingOrders: this.pendingOrders.map((o) => ({ ...o })),
+      filledOrders: this.filledOrders.map((o) => ({ ...o })),
+      trades: this.trades.map((t) => ({ ...t })),
+      markers: this.markers.map((m) => ({ ...m })),
       equity: this.equity,
       peakEquity: this.peakEquity,
       maxDrawdown: this.maxDrawdown,
@@ -574,10 +578,10 @@ export class StrategyEngine {
       entries: number;
     };
     this.position = { ...s.position };
-    this.pendingOrders = s.pendingOrders.map(o => ({ ...o }));
-    this.filledOrders = s.filledOrders.map(o => ({ ...o }));
-    this.trades = s.trades.map(t => ({ ...t }));
-    this.markers = s.markers.map(m => ({ ...m }));
+    this.pendingOrders = s.pendingOrders.map((o) => ({ ...o }));
+    this.filledOrders = s.filledOrders.map((o) => ({ ...o }));
+    this.trades = s.trades.map((t) => ({ ...t }));
+    this.markers = s.markers.map((m) => ({ ...m }));
     this.equity = s.equity;
     this.peakEquity = s.peakEquity;
     this.maxDrawdown = s.maxDrawdown;
@@ -842,11 +846,15 @@ export class StrategyEngine {
     this.pendingOrders = this.pendingOrders.filter((o) => o.type !== 'market');
 
     for (const order of marketOrders) {
-      console.log(`[StrategyEngine] fillMarketOrder: orderId=${order.id} action=${order.action} qty=${order.quantity} open=${open}`);
+      console.log(
+        `[StrategyEngine] fillMarketOrder: orderId=${order.id} action=${order.action} qty=${order.quantity} open=${open}`,
+      );
       this.fillOrder(order, open);
     }
     if (marketOrders.length > 0) {
-      console.log(`[StrategyEngine] after fill: pos=${this.position.direction} qty=${this.position.quantity}`);
+      console.log(
+        `[StrategyEngine] after fill: pos=${this.position.direction} qty=${this.position.quantity}`,
+      );
     }
   }
 

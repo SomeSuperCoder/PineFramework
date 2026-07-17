@@ -584,9 +584,7 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 102, 105, 1, 3, 1000);
 
       const markers = engine.getMarkers();
-      const liquidationMarkers = markers.filter(
-        (m) => m.comment === 'Margin liquidation',
-      );
+      const liquidationMarkers = markers.filter((m) => m.comment === 'Margin liquidation');
       expect(liquidationMarkers.length).toBeGreaterThan(0);
     });
 
@@ -599,9 +597,7 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 50, 55, 45, 48, 1000);
 
       const markers = engine.getMarkers();
-      const liquidationMarkers = markers.filter(
-        (m) => m.comment === 'Margin liquidation',
-      );
+      const liquidationMarkers = markers.filter((m) => m.comment === 'Margin liquidation');
       expect(liquidationMarkers.length).toBe(0);
     });
   });
@@ -617,9 +613,7 @@ describe('StrategyEngine', () => {
       engine.entry('Short', 'short', 1);
 
       const markers = engine.getMarkers();
-      const closeMarker = markers.find(
-        (m) => m.type === 'close' && m.direction === 'long',
-      );
+      const closeMarker = markers.find((m) => m.type === 'close' && m.direction === 'long');
       expect(closeMarker).toBeDefined();
       expect(closeMarker!.name).toBe('Exit Long');
       expect(closeMarker!.name).not.toContain('_reverse');
@@ -635,9 +629,7 @@ describe('StrategyEngine', () => {
       engine.entry('Short', 'short', 1);
 
       const markers = engine.getMarkers();
-      const closeMarker = markers.find(
-        (m) => m.type === 'close' && m.direction === 'long',
-      );
+      const closeMarker = markers.find((m) => m.type === 'close' && m.direction === 'long');
       expect(closeMarker).toBeDefined();
       expect(closeMarker!.comment).toBe('reverse');
     });
@@ -675,9 +667,7 @@ describe('StrategyEngine', () => {
       engine.entry('Long', 'long', 1);
 
       const markers = engine.getMarkers();
-      const closeMarker = markers.find(
-        (m) => m.type === 'close' && m.direction === 'short',
-      );
+      const closeMarker = markers.find((m) => m.type === 'close' && m.direction === 'short');
       expect(closeMarker).toBeDefined();
       expect(closeMarker!.name).toBe('Exit Short');
       expect(closeMarker!.comment).toBe('reverse');

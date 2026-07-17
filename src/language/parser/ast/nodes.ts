@@ -244,6 +244,7 @@ export interface CallExpressionNode {
   callee: ExpressionNode;
   arguments: ExpressionNode[];
   namedArguments: ArgumentNode[];
+  callId: number;
 }
 
 export interface MemberExpressionNode {
