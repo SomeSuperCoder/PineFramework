@@ -299,7 +299,7 @@ export class ExecutionEngine {
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
   private crossPrevValues: Map<string, { src: number; cmp: number }> = new Map();
   private changePrevValues: Map<string, number> = new Map();
-  private atrState: Map<string, { prev: number; count: number; values: number[] }> = new Map();
+  private atrState: Map<string, { prev: number; count: number; values: PineValue[] }> = new Map();
   private highestBuffers: Map<string, number[]> = new Map();
   private lowestBuffers: Map<string, number[]> = new Map();
   private currentCallSiteId = 0;
@@ -1489,9 +1489,9 @@ export class ExecutionEngine {
     this.builtins.set('ta.crossover', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
       const key = `cross_${this.currentCallSiteId}`;
-      const prev = this.crossPrevValues[key];
+      const prev = this.crossPrevValues.get(key);
       if (!prev) {
-        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
         return false;
       }
       const result = prev.src <= prev.cmp && (source as number) > (compare as number);
@@ -1503,9 +1503,9 @@ export class ExecutionEngine {
     this.builtins.set('ta.crossunder', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
       const key = `cross_${this.currentCallSiteId}`;
-      const prev = this.crossPrevValues[key];
+      const prev = this.crossPrevValues.get(key);
       if (!prev) {
-        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
         return false;
       }
       const result = prev.src >= prev.cmp && (source as number) < (compare as number);
@@ -1517,9 +1517,9 @@ export class ExecutionEngine {
     this.builtins.set('ta.cross', (source: PineValue, compare: PineValue): PineValue => {
       if (isNa(source) || isNa(compare)) return false;
       const key = `cross_${this.currentCallSiteId}`;
-      const prev = this.crossPrevValues[key];
+      const prev = this.crossPrevValues.get(key);
       if (!prev) {
-        this.crossPrevValues[key] = { src: source as number, cmp: compare as number };
+        this.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
         return false;
       }
       const crossed =
@@ -1533,13 +1533,13 @@ export class ExecutionEngine {
     this.builtins.set('ta.change', (source: PineValue): PineValue => {
       if (isNa(source)) return NA;
       const key = `change_${this.currentCallSiteId}`;
-      const prev = this.changePrevValues[key];
+      const prev = this.changePrevValues.get(key);
       if (prev === undefined) {
-        this.changePrevValues[key] = source as number;
+        this.changePrevValues.set(key, source as number);
         return NA;
       }
       const result = (source as number) - prev;
-      this.changePrevValues[key] = source as number;
+      this.changePrevValues.set(key, source as number);
       return result;
     });
 
