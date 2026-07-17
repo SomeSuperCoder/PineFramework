@@ -16,11 +16,26 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, index + 1).map(b => b.open)),
-    high: createSeries('high', bars.slice(0, index + 1).map(b => b.high)),
-    low: createSeries('low', bars.slice(0, index + 1).map(b => b.low)),
-    close: createSeries('close', bars.slice(0, index + 1).map(b => b.close)),
-    volume: createSeries('volume', bars.slice(0, index + 1).map(b => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, index + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, index + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, index + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, index + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, index + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -56,12 +71,12 @@ describe('Strategy Marker Contract', () => {
         engine.entry(i % 2 === 0 ? 'Long' : 'Short', dir as 'long' | 'short', 1);
 
         const markers = engine.getNewMarkers();
-        const entries = markers.filter(m => m.type === 'entry');
+        const entries = markers.filter((m) => m.type === 'entry');
         const count = entriesPerBar.get(i) || 0;
         entriesPerBar.set(i, count + entries.length);
       }
 
-      for (const [_bar, count] of entriesPerBar) {
+      for (const [, count] of entriesPerBar) {
         expect(count).toBeLessThanOrEqual(1);
       }
     });
@@ -85,9 +100,9 @@ describe('Strategy Marker Contract', () => {
       engine.updateBar(3, 1003, 98, 105, 95, 98, 1000);
       engine.close('Short');
 
-      const closeMarkers = engine.getNewMarkers().filter(
-        m => m.type === 'close' || m.type === 'exit',
-      );
+      const closeMarkers = engine
+        .getNewMarkers()
+        .filter((m) => m.type === 'close' || m.type === 'exit');
       // On bar 3, there should be exactly one close marker
       expect(closeMarkers).toHaveLength(1);
     });
@@ -105,8 +120,8 @@ describe('Strategy Marker Contract', () => {
       engine.entry('Short', 'short', 1);
 
       const markers = engine.getNewMarkers();
-      const closes = markers.filter(m => m.type === 'close');
-      const entries = markers.filter(m => m.type === 'entry');
+      const closes = markers.filter((m) => m.type === 'close');
+      const entries = markers.filter((m) => m.type === 'entry');
 
       expect(closes).toHaveLength(1);
       expect(entries).toHaveLength(1);
@@ -135,13 +150,13 @@ describe('Strategy Marker Contract', () => {
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
       engine.entry('Long', 'long', 1);
-      const longMarker = engine.getNewMarkers().find(m => m.type === 'entry');
+      const longMarker = engine.getNewMarkers().find((m) => m.type === 'entry');
       expect(longMarker).toBeDefined();
       expect(longMarker!.name).toBe('Long');
 
       engine.updateBar(1, 1001, 102, 105, 100, 102, 1000);
       engine.entry('Short', 'short', 1);
-      const shortMarker = engine.getNewMarkers().find(m => m.type === 'entry');
+      const shortMarker = engine.getNewMarkers().find((m) => m.type === 'entry');
       expect(shortMarker).toBeDefined();
       expect(shortMarker!.name).toBe('Short');
     });
@@ -155,7 +170,7 @@ describe('Strategy Marker Contract', () => {
 
       engine.updateBar(1, 1001, 102, 105, 100, 102, 1000);
       engine.close('Long');
-      const closeMarkers = engine.getNewMarkers().filter(m => m.type === 'close');
+      const closeMarkers = engine.getNewMarkers().filter((m) => m.type === 'close');
 
       expect(closeMarkers).toHaveLength(1);
       expect(closeMarkers[0].name).toBe('Exit Long');
@@ -170,7 +185,7 @@ describe('Strategy Marker Contract', () => {
 
       engine.updateBar(1, 1001, 102, 105, 100, 102, 1000);
       engine.exit('Long');
-      const exitMarkers = engine.getNewMarkers().filter(m => m.type === 'exit');
+      const exitMarkers = engine.getNewMarkers().filter((m) => m.type === 'exit');
 
       expect(exitMarkers).toHaveLength(1);
       expect(exitMarkers[0].name).toBe('Exit Long');
@@ -186,7 +201,7 @@ describe('Strategy Marker Contract', () => {
       engine.updateBar(1, 1001, 102, 105, 100, 102, 1000);
       engine.entry('Short', 'short', 1);
       const markers = engine.getNewMarkers();
-      const close = markers.find(m => m.type === 'close');
+      const close = markers.find((m) => m.type === 'close');
 
       expect(close).toBeDefined();
       expect(close!.name).toBe('Exit Long');
@@ -318,7 +333,7 @@ describe('Strategy Marker Contract', () => {
 
       expect(markers).toHaveLength(2);
 
-      const close = markers.find(m => m.type === 'close');
+      const close = markers.find((m) => m.type === 'close');
       expect(close).toMatchObject({
         type: 'close',
         name: 'Exit Long',
@@ -327,7 +342,7 @@ describe('Strategy Marker Contract', () => {
         comment: 'reverse',
       });
 
-      const entry = markers.find(m => m.type === 'entry');
+      const entry = markers.find((m) => m.type === 'entry');
       expect(entry).toMatchObject({
         type: 'entry',
         name: 'Short',
@@ -355,7 +370,7 @@ describe('Strategy Marker Contract', () => {
 
       expect(markers).toHaveLength(2);
 
-      const close = markers.find(m => m.type === 'close');
+      const close = markers.find((m) => m.type === 'close');
       expect(close).toMatchObject({
         type: 'close',
         name: 'Exit Short',
@@ -364,7 +379,7 @@ describe('Strategy Marker Contract', () => {
         comment: 'reverse',
       });
 
-      const entry = markers.find(m => m.type === 'entry');
+      const entry = markers.find((m) => m.type === 'entry');
       expect(entry).toMatchObject({
         type: 'entry',
         name: 'Long',
@@ -460,25 +475,25 @@ if bar_index == 50 and strategy.position_size < 0
       byBar.set(m.barIndex, arr);
     }
 
-    for (const [_barIndex, barMarkers] of byBar) {
-      const entries = barMarkers.filter(m => m.type === 'entry');
-      const closes = barMarkers.filter(m => m.type === 'close' || m.type === 'exit');
+    for (const [, barMarkers] of byBar) {
+      const entries = barMarkers.filter((m) => m.type === 'entry');
+      const closes = barMarkers.filter((m) => m.type === 'close' || m.type === 'exit');
       expect(entries.length).toBeLessThanOrEqual(1);
       expect(closes.length).toBeLessThanOrEqual(1);
     }
 
     // --- Verify all entries have clear names ---
-    for (const m of markers.filter(m => m.type === 'entry')) {
+    for (const m of markers.filter((m) => m.type === 'entry')) {
       expect(['Long', 'Short']).toContain(m.name);
     }
 
     // --- Verify all closes have "Exit <name>" format ---
-    for (const m of markers.filter(m => m.type === 'close' || m.type === 'exit')) {
+    for (const m of markers.filter((m) => m.type === 'close' || m.type === 'exit')) {
       expect(m.name).toMatch(/^Exit (Long|Short)$/);
     }
 
     // --- Verify reversals have comment 'reverse' ---
-    for (const m of markers.filter(m => m.type === 'close')) {
+    for (const m of markers.filter((m) => m.type === 'close')) {
       if (m.comment !== undefined) {
         expect(m.comment).toBe('reverse');
       }
