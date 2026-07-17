@@ -1,90 +1,157 @@
-# AGENTS.md
+# Bug Fixing Protocol (Mandatory)
 
-## Bug Fixing Protocol (MANDATORY)
+The fundamental principle of bug fixing is:
 
-When fixing **any** bug, defect, regression, or unexpected behavior, you **MUST** follow this process exactly. Never skip steps, never guess, and never declare a bug fixed until it has been verified by automated tests.
+> **No reproduction → no investigation.
+> No investigation → no fix.**
+
+Until a bug has been reliably reproduced, every theory about its cause is speculation. Speculation without evidence wastes tokens, time, and often leads to incorrect fixes.
+
+The purpose of this protocol is to ensure every bug is solved using evidence rather than assumptions.
 
 ---
 
-# Step 1 — Reproduce the Bug
+# Guiding Principle
 
-The first objective is to create a deterministic reproduction.
+A bug report is **not** evidence of the root cause.
+
+Before the bug can be explained, you must first prove that it exists under controlled conditions.
+
+**Do not attempt to reason about possible causes before a deterministic reproduction exists.**
+
+Without a reproduction:
+
+* you do not know which code path is executing
+* you do not know which dependency is involved
+* you do not know which configuration matters
+* you do not know whether the report is accurate
+* you do not know whether multiple bugs are being confused
+
+Therefore, any discussion of possible causes before reproduction is largely guessing and provides little value.
+
+**Reproduce first. Think second. Fix third.**
+
+---
+
+# Step 1 — Create a Deterministic Reproduction
+
+This step is mandatory.
+
+The first objective is **not** understanding the bug.
+
+The first objective is **making the bug happen on demand.**
 
 Prefer:
 
-- Integration tests
-- End-to-end tests (if appropriate)
+* integration tests
+* end-to-end tests
 
-Only use a unit test when an integration test is impossible or would provide less confidence.
+Only use unit tests when they provide equal or greater confidence.
 
-The reproduction test MUST:
+The reproduction test must:
 
-- Fail before any code changes
-- Reproduce the exact issue reported
-- Be deterministic
-- Be minimal while still covering the bug
-- Clearly document the expected behavior
+* fail before any production changes
+* reproduce the exact reported behavior
+* be deterministic
+* be minimal
+* clearly describe the expected behavior
 
-Do **NOT** modify production code until a failing test exists unless creating the test is literally impossible.
+If a deterministic reproduction cannot yet be created:
+
+* gather additional information
+* inspect logs
+* inspect inputs
+* inspect configuration
+* add temporary instrumentation if necessary
+
+Continue working toward a deterministic reproduction.
+
+**Do not modify production code while the bug still cannot be reproduced unless creating the reproduction is literally impossible.**
+
+---
+
+# Absolutely No Root-Cause Analysis Before Reproduction
+
+Until a failing reproduction exists:
+
+* do **not** generate theories
+* do **not** speculate
+* do **not** suggest likely causes
+* do **not** discuss suspicious code
+* do **not** recommend fixes
+
+At this stage, none of those are evidence-based.
+
+Doing so wastes reasoning effort because the actual execution path is still unknown.
+
+Only once the bug can be reproduced is there enough information to begin meaningful investigation.
 
 ---
 
 # Step 2 — Generate Hypotheses
 
-After the failing test exists:
+Once—and only once—a deterministic failing reproduction exists:
 
-Analyze the codebase and identify every plausible root cause.
+Analyze the codebase and enumerate every plausible root cause.
 
-Do **NOT** immediately start changing code.
+Consider:
 
-Instead:
+* related modules
+* recent changes
+* dependencies
+* lifecycle
+* concurrency
+* configuration
+* state management
+* edge cases
+* serialization
+* caching
+* networking
+* timing
+* resource ownership
+* error handling
 
-- inspect related modules
-- inspect recent changes
-- inspect dependencies
-- inspect edge cases
-- inspect concurrency/state/lifecycle issues
-- inspect configuration
-- inspect error handling
+Treat every hypothesis as unproven.
 
-Treat each hypothesis as unconfirmed until proven.
-
----
-
-# Step 3 — Find the Actual Root Cause
-
-Systematically verify each hypothesis.
-
-Use:
-
-- code inspection
-- logging
-- debugging
-- tracing
-- binary search through code paths
-- additional temporary tests if necessary
-
-Never "fix" code simply because it looks suspicious.
-
-Only modify code after identifying the actual cause of the failure.
-
-If multiple independent bugs exist, identify each separately.
+Do not change production code yet.
 
 ---
 
-# Step 4 — Implement the Fix
+# Step 3 — Identify the Actual Root Cause
 
-Implement the **smallest correct change** that eliminates the root cause.
+Systematically verify every hypothesis.
 
-The fix should:
+Use evidence:
 
-- preserve existing behavior
-- avoid unnecessary refactoring
-- avoid introducing technical debt
-- avoid speculative improvements
-- maintain backward compatibility when appropriate
+* debugging
+* tracing
+* logging
+* code inspection
+* binary search through execution paths
+* temporary instrumentation
+* additional focused tests
 
-Do not mix unrelated refactors with the bug fix.
+Reject hypotheses that do not match observed behavior.
+
+Only modify production code once the true cause has been identified.
+
+If multiple independent defects exist, isolate each one separately.
+
+---
+
+# Step 4 — Implement the Minimal Correct Fix
+
+Fix only the verified root cause.
+
+The implementation should:
+
+* be as small as possible
+* preserve existing behavior
+* avoid unnecessary refactoring
+* avoid speculative improvements
+* maintain compatibility where appropriate
+
+Do not mix unrelated cleanup with the bug fix.
 
 ---
 
@@ -94,79 +161,105 @@ Run the reproduction test.
 
 If it still fails:
 
-- DO NOT guess
-- Return to **Step 3**
-- Continue investigating until the true cause is found
+Return immediately to **Step 3**.
 
-If the test passes:
+Do **not** guess.
 
-Run all relevant tests, including:
+Continue investigating until the verified root cause has been eliminated.
 
-- integration tests
-- unit tests
-- regression tests
-- affected package/module tests
+If the reproduction passes:
 
-The bug is considered fixed **only after all relevant automated tests pass**.
+Run all relevant automated tests, including:
+
+* integration tests
+* unit tests
+* regression tests
+* affected package tests
+
+A bug is **not fixed** until all relevant automated tests pass.
 
 ---
 
 # Regression Prevention
 
-Whenever reasonable:
+Whenever practical:
 
-- leave the reproduction test in the repository
-- expand existing tests to cover the scenario
-- ensure the bug cannot silently return
+* keep the reproduction test
+* convert it into a permanent regression test
+* expand surrounding coverage if appropriate
 
-Every bug fixed should become a permanent regression test.
+Every bug fixed should make the test suite stronger.
 
 ---
 
-# Rules
+# Never
 
-## Never
+* Never speculate before reproducing.
+* Never guess a fix.
+* Never patch symptoms.
+* Never skip creating a failing test.
+* Never delete a failing test because it is inconvenient.
+* Never disable tests to satisfy CI.
+* Never claim success without automated verification.
+* Never mix unrelated refactors into a bug fix.
 
-- Never guess the fix.
-- Never patch symptoms.
-- Never skip writing a failing test.
-- Never remove a failing test because it is inconvenient.
-- Never disable tests to make CI pass.
-- Never claim success without verification.
-- Never introduce unrelated changes.
+---
 
-## Always
+# Always
 
-- Reproduce first.
-- Understand before changing code.
-- Fix the root cause, not the symptoms.
-- Verify with automated tests.
-- Leave behind regression protection.
+* Reproduce first.
+* Think only after reproduction exists.
+* Verify every hypothesis.
+* Fix the verified root cause.
+* Prove the fix with automated tests.
+* Leave permanent regression protection.
 
 ---
 
 # Decision Loop
 
-```
-Create failing reproduction test
-            ↓
-Generate root-cause hypotheses
-            ↓
-Investigate until the actual cause is identified
-            ↓
-Implement the minimal correct fix
-            ↓
-Run tests
-      ↓
-Still failing?
-      │
-   Yes ───────────────► Return to root-cause investigation
-      │
-      No
-      ↓
-Run full affected test suite
-      ↓
-Done
+```text
+bug report
+     │
+     ▼
+create deterministic failing reproduction
+     │
+     ├───────────────┐
+     │               │
+     ▼               │
+cannot reproduce? ───┘
+     │
+collect more evidence
+instrument
+inspect logs
+clarify inputs
+repeat
+     │
+     ▼
+reproduction exists
+     │
+     ▼
+generate hypotheses
+     │
+     ▼
+prove the real root cause
+     │
+     ▼
+implement minimal fix
+     │
+     ▼
+run reproduction test
+     │
+still failing?
+     │
+ yes ─────────────► investigate again
+     │
+ no
+     ▼
+run full affected test suite
+     │
+     ▼
+done
 ```
 
 ---
@@ -175,5 +268,11 @@ Done
 
 The objective is **not** to make the bug appear fixed.
 
-The objective is to **prove**, through automated testing, that the root cause has been eliminated without introducing regressions.
+The objective is to **prove**, through deterministic reproduction and automated testing, that the verified root cause has been eliminated without introducing regressions.
+
+Every bug fix should move from:
+
+**Report → Reproduction → Evidence → Root Cause → Minimal Fix → Verification**
+
+Never skip a stage.
 
