@@ -216,6 +216,10 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     }
 
     for (const { result } of allResults) {
+      // Find the pane index for this result
+      const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
+      const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+      
       for (const s of (result.shapes || [])) {
         const candle = ohlcvMap.get(s.time);
         let barIdx = -1;
@@ -234,6 +238,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
           barIndex: barIdx >= 0 ? barIdx : undefined,
           price: s.price,
           overlay: s.overlay,
+          paneIndex,
         });
       }
       for (const b of (result.bgcolor || [])) {

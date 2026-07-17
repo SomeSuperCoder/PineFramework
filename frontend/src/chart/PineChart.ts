@@ -294,6 +294,12 @@ export class PineChart {
         }
       }
 
+      // Render shapes for this indicator pane
+      const paneShapes = this.shapeMarkers.filter((s) => s.paneIndex === paneIndex && s.overlay === false);
+      if (paneShapes.length > 0) {
+        this.markerRenderer.renderShapes(ctx, paneShapes, this.candles, this.viewport, this.layout, pane);
+      }
+
       ctx.restore();
 
       ctx.strokeStyle = this.options.borderColor;

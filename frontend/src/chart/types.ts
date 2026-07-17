@@ -23,6 +23,7 @@ export interface ShapeMarkerData {
   barIndex?: number;
   price?: number;
   overlay?: boolean;
+  paneIndex?: number;
 }
 
 export interface StrategyMarkerData {
