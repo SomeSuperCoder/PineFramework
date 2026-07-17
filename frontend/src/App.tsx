@@ -6,6 +6,7 @@ import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
+import { StrategyConflictDialog } from './components/StrategyConflictDialog';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
@@ -42,6 +43,12 @@ function App() {
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
+  const [strategyConflict, setStrategyConflict] = useState<{
+    existingName: string;
+    incomingName: string;
+    pendingScriptId: string;
+    pendingSource: string;
+  } | null>(null);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -130,15 +137,44 @@ function App() {
     }
   }, [scriptResult, indicatorResults]);
 
+  const extractScriptName = (src: string): string =>
+    src.match(/strategy\(\s*["'](.+?)["']/)?.[1]
+    || src.match(/indicator\(\s*["'](.+?)["']/)?.[1]
+    || src.match(/study\(\s*["'](.+?)["']/)?.[1]
+    || 'Indicator';
+
+  const isStrategySource = (src: string): boolean =>
+    /strategy\(\s*["']/.test(src);
+
+  const findExistingStrategy = (): { id: string; name: string } | null => {
+    for (const ind of indicatorManager.indicators) {
+      if (isStrategySource(ind.source)) {
+        return { id: ind.id, name: ind.name };
+      }
+    }
+    return null;
+  };
+
   const handleAddIndicator = async (scriptId: string, source: string) => {
     setEditorOpen(false);
+    setQuickAdderOpen(false);
+
+    if (isStrategySource(source)) {
+      const existing = findExistingStrategy();
+      if (existing) {
+        setStrategyConflict({
+          existingName: existing.name,
+          incomingName: extractScriptName(source),
+          pendingScriptId: scriptId,
+          pendingSource: source,
+        });
+        return;
+      }
+    }
 
     const indicator = await indicatorManager.addIndicator(
       scriptId,
-      source.match(/strategy\(\s*["'](.+?)["']/)?.[1]
-        || source.match(/indicator\(\s*["'](.+?)["']/)?.[1]
-        || source.match(/study\(\s*["'](.+?)["']/)?.[1]
-        || 'Indicator',
+      extractScriptName(source),
       true,
       source,
     );
@@ -147,6 +183,32 @@ function App() {
       await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
     }
   };
+
+  const handleStrategyReplace = useCallback(async () => {
+    if (!strategyConflict) return;
+    const { pendingScriptId, pendingSource, existingName } = strategyConflict;
+    setStrategyConflict(null);
+
+    const existing = findExistingStrategy();
+    if (existing) {
+      await handleRemoveIndicator(existing.id);
+    }
+
+    const indicator = await indicatorManager.addIndicator(
+      pendingScriptId,
+      extractScriptName(pendingSource),
+      true,
+      pendingSource,
+    );
+
+    if (indicator) {
+      await executeScript(pendingSource, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+    }
+  }, [strategyConflict, indicatorManager, executeScript, symbol, timeframe]);
+
+  const handleStrategyCancel = useCallback(() => {
+    setStrategyConflict(null);
+  }, []);
 
   const handleRemoveIndicator = async (indicatorId: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -347,6 +409,14 @@ function App() {
         phase={phase}
         result={result}
         error={error}
+      />
+
+      <StrategyConflictDialog
+        isOpen={strategyConflict !== null}
+        existingName={strategyConflict?.existingName ?? ''}
+        incomingName={strategyConflict?.incomingName ?? ''}
+        onReplace={handleStrategyReplace}
+        onCancel={handleStrategyCancel}
       />
     </div>
   );
