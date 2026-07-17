@@ -319,7 +319,7 @@ function App() {
       </main>
 
       <div className="footer-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 16px' }}>
-        <button className="editor-button" onClick={() => { setEditingScriptId(null); setEditorOpen(true); }} style={{
+        <button onClick={() => { setEditingScriptId(null); setEditorOpen(true); }} style={{
           padding: '6px 14px',
           background: '#111128',
           color: '#e0e0e0',
