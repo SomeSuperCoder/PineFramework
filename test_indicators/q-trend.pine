@@ -1,0 +1,44 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © tarasenko_
+
+//@version=5
+indicator("Q-Trend", overlay = 1) 
+
+
+// Inputs
+src = input(close, "Source", group = "Main settings")
+p = input.int(200, "Trend period", group = "Main settings", tooltip = "Changes STRONG signals' sensitivity.", minval = 1)
+atr_p = input.int(14, "ATR Period", group = "Main settings", minval = 1)
+mult = input.float(1.0, "ATR Multiplier", step = 0.1, group = "Main settings", tooltip = "Changes sensitivity: higher period = higher sensitivty.")
+mode = input.string("Type A", "Signal mode", options = ["Type A", "Type B"], group = "Mode")
+use_ema_smoother = input.string("No", "Smooth source with EMA?", options = ["Yes", "No"], group = "Source")
+src_ema_period = input(3, "EMA Smoother period", group = "Source")
+color_bars = input(true, "Color bars?", group = "Addons")
+show_tl = input(true, "Show trend line?", group = "Addons")
+signals_view = input.string("All", "Signals to show", options = ["All", "Buy/Sell", "Strong", "None"], group = "Signal's Addon")
+signals_shape = input.string("Labels", "Signal's shape", options = ["Labels", "Arrows"], group = "Signal's Addon")
+buy_col = input(color.green, "Buy colour", group = "Signal's Addon", inline = "BS")
+sell_col = input(color.red, "Sell colour", group = "Signal's Addon", inline = "BS")
+
+
+
+
+// Calculations
+src := use_ema_smoother == "Yes" ? ta.ema(src, src_ema_period) : src // Source;
+
+h = ta.highest(src, p) // Highest of src p-bars back;
+l = ta.lowest(src, p) // Lowest of src p-bars back.
+d = h - l
+
+ls = "" // Tracker of last signal
+
+m = (h + l) / 2 // Initial trend line;
+m := bar_index > p ? m[1] : m
+
+atr = ta.atr(atr_p)[1] // ATR;
+epsilon = mult * atr // Epsilon is a mathematical variable used in many different theorems in order to simplify work with mathematical object. Here it used as sensitivity measure.
+
+change_up = (mode == "Type B" ? ta.cross(src, m + epsilon) : ta.crossover(src, m + epsilon)) or src > m + epsilon // If price breaks trend line + epsilon (so called higher band), then it is time to update the value of a trend line;
+change_down = (mode == "Type B" ? ta.cross(src, m - epsilon) : ta.crossunder(src, m - epsilon)) or src < m - epsilon // If price breaks trend line - epsilon (so called higher band), then it is time to update the value of a trend line.
+sb = open < l + d / 8 and open >= l
+ss = open > h - d / 8 and open <= h

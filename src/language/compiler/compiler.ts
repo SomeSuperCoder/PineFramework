@@ -47,8 +47,12 @@ export class Compiler {
 
     let overlay = program.scriptKind === 'strategy';
     for (const arg of program.scriptArgs) {
-      if (arg.name === 'overlay' && arg.value.kind === 'BooleanLiteral') {
-        overlay = arg.value.value;
+      if (arg.name === 'overlay') {
+        if (arg.value.kind === 'BooleanLiteral') {
+          overlay = arg.value.value;
+        } else if (arg.value.kind === 'NumberLiteral') {
+          overlay = arg.value.value !== 0;
+        }
       }
     }
 

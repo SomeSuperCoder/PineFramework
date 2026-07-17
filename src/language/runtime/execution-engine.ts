@@ -305,6 +305,10 @@ export class ExecutionEngine {
   private changeCallIndex: number = 0;
   private changePrevValues: number[] = [];
   private atrState: Map<string, { prev: number; count: number }> = new Map();
+  private highestBuffers: Map<string, number[]> = new Map();
+  private highestCallIndex: number = 0;
+  private lowestBuffers: Map<string, number[]> = new Map();
+  private lowestCallIndex: number = 0;
   private rsiState: Map<
     string,
     { prevAvgGain: number; prevAvgLoss: number; count: number; prevSource: number }
@@ -589,6 +593,44 @@ export class ExecutionEngine {
       }
       state.prev = (state.prev * (len - 1) + tr) / len;
       return state.prev;
+    });
+
+    this.builtins.set('ta.highest', (source: PineValue, length: PineValue): PineValue => {
+      if (isNa(source) || isNa(length)) return NA;
+      const len = Math.trunc(length as number);
+      if (len <= 0) return NA;
+      const key = `highest_${len}_${this.highestCallIndex++}`;
+      if (!this.highestBuffers.has(key)) {
+        this.highestBuffers.set(key, []);
+      }
+      const buf = this.highestBuffers.get(key)!;
+      buf.push(source as number);
+      if (buf.length > len) buf.shift();
+      if (buf.length < len) return NA;
+      let max = buf[0];
+      for (let i = 1; i < buf.length; i++) {
+        if (buf[i] > max) max = buf[i];
+      }
+      return max;
+    });
+
+    this.builtins.set('ta.lowest', (source: PineValue, length: PineValue): PineValue => {
+      if (isNa(source) || isNa(length)) return NA;
+      const len = Math.trunc(length as number);
+      if (len <= 0) return NA;
+      const key = `lowest_${len}_${this.lowestCallIndex++}`;
+      if (!this.lowestBuffers.has(key)) {
+        this.lowestBuffers.set(key, []);
+      }
+      const buf = this.lowestBuffers.get(key)!;
+      buf.push(source as number);
+      if (buf.length > len) buf.shift();
+      if (buf.length < len) return NA;
+      let min = buf[0];
+      for (let i = 1; i < buf.length; i++) {
+        if (buf[i] < min) min = buf[i];
+      }
+      return min;
     });
 
     this.builtins.set('ta.hma', (source: PineValue, length: PineValue): PineValue => {
@@ -1233,6 +1275,16 @@ export class ExecutionEngine {
       },
     );
 
+    this.builtins.set('input', (...args: PineValue[]): PineValue => {
+      let defaultVal: PineValue = args[0] ?? 0;
+      if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0])) {
+        const na = args[0] as unknown as Record<string, PineValue>;
+        if (na.defval !== undefined) defaultVal = na.defval;
+        if (typeof na.title === 'string') this.inputs.set(na.title, { type: 'source', default: defaultVal });
+      }
+      return isNa(defaultVal) ? 0 : defaultVal;
+    });
+
     this.builtins.set('ta.pivothigh', (...args: PineValue[]): PineValue => {
       const ctx = this.currentContext;
       if (!ctx) return NA;
@@ -1456,6 +1508,22 @@ export class ExecutionEngine {
       prev.src = source as number;
       prev.cmp = compare as number;
       return result;
+    });
+
+    this.builtins.set('ta.cross', (source: PineValue, compare: PineValue): PineValue => {
+      if (isNa(source) || isNa(compare)) return false;
+      const idx = this.crossCallIndex++;
+      const prev = this.crossPrevValues[idx];
+      if (!prev) {
+        this.crossPrevValues[idx] = { src: source as number, cmp: compare as number };
+        return false;
+      }
+      const crossed =
+        (prev.src <= prev.cmp && (source as number) > (compare as number)) ||
+        (prev.src >= prev.cmp && (source as number) < (compare as number));
+      prev.src = source as number;
+      prev.cmp = compare as number;
+      return crossed;
     });
 
     this.builtins.set('ta.change', (source: PineValue): PineValue => {
@@ -2034,6 +2102,8 @@ export class ExecutionEngine {
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
     const preCrossPrevValues = [...this.crossPrevValues];
     const preChangePrevValues = [...this.changePrevValues];
+    const preHighestBuffers = new Map([...this.highestBuffers].map(([k, v]) => [k, [...v]]));
+    const preLowestBuffers = new Map([...this.lowestBuffers].map(([k, v]) => [k, [...v]]));
     const prePlotColors = new Map([...this.plotColors].map(([k, v]) => [k, [...v]]));
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
@@ -2072,6 +2142,8 @@ export class ExecutionEngine {
     this.emaState = preEmaState;
     this.crossPrevValues = preCrossPrevValues;
     this.changePrevValues = preChangePrevValues;
+    this.highestBuffers = preHighestBuffers;
+    this.lowestBuffers = preLowestBuffers;
     this.rsiState = preRsiState;
     this.atrState = preAtrState;
     this.hmaBuffers = preHmaBuffers;
