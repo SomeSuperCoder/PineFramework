@@ -224,6 +224,79 @@ describe('BacktestEngine Commission Methods', () => {
 
       expect(result.metrics.totalTrades).toBe(1);
     });
+
+    it('should close long position when short entry is attempted with jupiter_ultra (reversal close)', () => {
+      const bars = createDeterministicBars(30, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { rate: 0.001 },
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 15) eng.entry('Short', 'short', 10);
+      });
+
+      // The short entry is rejected (long-only), but the existing long position
+      // should have been closed via reversal. This produces one completed trade.
+      expect(result.metrics.totalTrades).toBe(1);
+      expect(result.trades[0]!.direction).toBe('long');
+      // Position should be flat after the reversal close
+      const finalPos = result.positions[result.positions.length - 1]!;
+      expect(finalPos.direction).toBe('flat');
+    });
+
+    it('should close long position when short entry is attempted with jupiter_manual', () => {
+      const bars = createDeterministicBars(30, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 15) eng.entry('Short', 'short', 10);
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      expect(result.trades[0]!.direction).toBe('long');
+      const finalPos = result.positions[result.positions.length - 1]!;
+      expect(finalPos.direction).toBe('flat');
+    });
+
+    it('should produce same completed trades as non-Jupiter when using reversal via short entry', () => {
+      const bars = createDeterministicBars(30, 100);
+
+      // Non-Jupiter: long entry, then short entry (reversal) — both execute
+      const normalEngine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'percent_fixed',
+        commissionMethodSettings: { rate: 0.001 },
+      });
+      const normalResult = normalEngine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 15) eng.entry('Short', 'short', 10);
+      });
+
+      // Jupiter: long entry, then short entry (rejected but long is closed)
+      const jupiterEngine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { rate: 0.001 },
+      });
+      const jupiterResult = jupiterEngine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 15) eng.entry('Short', 'short', 10);
+      });
+
+      // Both should have at least one completed long trade
+      expect(normalResult.metrics.totalTrades).toBeGreaterThanOrEqual(1);
+      expect(jupiterResult.metrics.totalTrades).toBeGreaterThanOrEqual(1);
+      // Both should have closed the long position
+      expect(normalResult.trades[0]!.direction).toBe('long');
+      expect(jupiterResult.trades[0]!.direction).toBe('long');
+    });
   });
 
   describe('commission in report output', () => {

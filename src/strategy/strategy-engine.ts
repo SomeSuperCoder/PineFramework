@@ -249,8 +249,16 @@ export class StrategyEngine {
       quantity = this.calculateQty(direction);
     }
 
-    // Long-only enforcement: reject short entries when commission method requires it
-    if (this.config.commissionMethod && isLongOnlyEnforced(this.config.commissionMethod) && direction === 'short') {
+    // Long-only enforcement: reject short entries when commission method requires it.
+    // Close any existing long position first (the strategy intended a reversal).
+    if (
+      this.config.commissionMethod &&
+      isLongOnlyEnforced(this.config.commissionMethod) &&
+      direction === 'short'
+    ) {
+      if (this.position.direction === 'long') {
+        this.close(this.position.entryName || name, 'reverse');
+      }
       return undefined;
     }
 
@@ -313,9 +321,16 @@ export class StrategyEngine {
       quantity = this.calculateQty(direction);
     }
 
-    // Long-only enforcement: reject short orders when commission method requires it
-    if (this.config.commissionMethod && isLongOnlyEnforced(this.config.commissionMethod) && direction === 'short') {
-      return undefined;
+    // Long-only enforcement: reject short orders when commission method requires it.
+    // Allow sell orders that close an existing long position.
+    if (
+      this.config.commissionMethod &&
+      isLongOnlyEnforced(this.config.commissionMethod) &&
+      direction === 'short'
+    ) {
+      if (this.position.direction !== 'long') {
+        return undefined;
+      }
     }
 
     const hasStop = stopPrice !== undefined && stopPrice > 0;
