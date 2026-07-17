@@ -50,6 +50,7 @@ function App() {
     pendingSource: string;
   } | null>(null);
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
+  const [errorConsoleOpen, setErrorConsoleOpen] = useState(false);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -380,9 +381,48 @@ function App() {
         >
           {autoScale ? 'Auto Scale' : 'Manual Scale'}
         </button>
+        <div style={{ position: 'relative', display: 'inline-flex' }}>
+          <button onClick={() => setErrorConsoleOpen(!errorConsoleOpen)} style={{
+            padding: '6px 14px',
+            background: errorConsoleOpen ? '#2a1520' : '#111128',
+            color: errors.length > 0 ? '#e94560' : '#e0e0e0',
+            border: `1px solid ${errors.length > 0 ? '#e94560' : '#111128'}`,
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '12px',
+          }}>
+            Errors
+          </button>
+          {errors.length > 0 && (
+            <span style={{
+              position: 'absolute',
+              top: '-6px',
+              right: '-6px',
+              backgroundColor: '#e94560',
+              color: '#fff',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              borderRadius: '50%',
+              minWidth: '16px',
+              height: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+              pointerEvents: 'none',
+            }}>
+              {errors.length}
+            </span>
+          )}
+        </div>
       </div>
 
-      <ErrorConsole errors={errors} onClear={() => setErrors([])} />
+      <ErrorConsole
+        errors={errors}
+        isOpen={errorConsoleOpen}
+        onClear={() => setErrors([])}
+        onClose={() => setErrorConsoleOpen(false)}
+      />
 
       <CodeEditor
         isOpen={editorOpen}
