@@ -19,10 +19,11 @@ interface ChartComponentProps {
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
   onRemoveIndicator?: (indicatorId: string) => void;
+  onEditIndicator?: (indicatorId: string) => void;
   forceAutoScale?: boolean;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, forceAutoScale = false }: ChartComponentProps) {
+export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }: ChartComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -269,6 +270,27 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     onRemoveIndicator?.(indicatorId);
   }, [onRemoveIndicator]);
 
+  const handleEditIndicator = useCallback((indicatorId: string) => {
+    onEditIndicator?.(indicatorId);
+  }, [onEditIndicator]);
+
+  const labelButtonStyle: React.CSSProperties = {
+    background: 'none',
+    border: 'none',
+    color: '#aaa',
+    cursor: 'pointer',
+    padding: '2px 4px',
+    fontSize: '13px',
+    lineHeight: 1,
+    borderRadius: '3px',
+    pointerEvents: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+  };
+
   return (
     <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
@@ -290,11 +312,12 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                padding: '2px 8px',
+                padding: '3px 8px',
                 background: 'rgba(12, 15, 30, 0.9)',
                 border: `1px solid ${label.overlay ? '#2196f3' : '#ff9800'}`,
-                borderRadius: '4px',
-                fontSize: '11px',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                 color: '#e0e0e0',
                 cursor: 'default',
                 whiteSpace: 'nowrap',
@@ -302,28 +325,30 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
               }}
             >
               <span style={{
-                width: '6px',
-                height: '6px',
+                width: '8px',
+                height: '8px',
                 borderRadius: '50%',
                 background: label.overlay ? '#2196f3' : '#ff9800',
                 flexShrink: 0,
               }} />
-              <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {label.name}
               </span>
               <button
+                onClick={() => handleEditIndicator(label.id)}
+                style={labelButtonStyle}
+                title="Edit script"
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
+              >
+                &#9998;
+              </button>
+              <button
                 onClick={() => handleRemoveIndicator(label.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#888',
-                  cursor: 'pointer',
-                  padding: '0 2px',
-                  fontSize: '12px',
-                  lineHeight: 1,
-                  pointerEvents: 'auto',
-                }}
+                style={labelButtonStyle}
                 title="Remove indicator"
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#e94560'; e.currentTarget.style.background = 'rgba(233,69,96,0.15)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
               >
                 ×
               </button>

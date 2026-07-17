@@ -20,6 +20,7 @@ interface CodeEditorProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd: (scriptId: string, source: string) => void;
+  initialScriptId?: string;
 }
 
 export const DEFAULT_CODE = `//@version=6
@@ -47,7 +48,7 @@ function extractVersion(source: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
-export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
+export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [scripts, setScripts] = useState<ScriptEntry[]>([]);
   const [builtInScripts, setBuiltInScripts] = useState<BuiltInScript[]>([]);
@@ -109,9 +110,30 @@ export function CodeEditor({ isOpen, onClose, onAdd }: CodeEditorProps) {
 
   useEffect(() => {
     if (isOpen) {
-      loadFirstScript();
+      if (initialScriptId) {
+        (async () => {
+          setLoading(true);
+          try {
+            const [listRes, builtInRes] = await Promise.all([
+              fetch('/api/scripts'),
+              fetch('/api/scripts/built-in'),
+            ]);
+            const listData = await listRes.json();
+            const builtInData = await builtInRes.json();
+            setScripts(listData.scripts || []);
+            setBuiltInScripts(builtInData.scripts || []);
+            await loadScript(initialScriptId);
+          } catch {
+            // ignore
+          } finally {
+            setLoading(false);
+          }
+        })();
+      } else {
+        loadFirstScript();
+      }
     }
-  }, [isOpen, loadFirstScript]);
+  }, [isOpen, loadFirstScript, loadScript, initialScriptId]);
 
   useEffect(() => {
     if (isOpen && textareaRef.current) {

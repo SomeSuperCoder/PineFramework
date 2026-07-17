@@ -49,6 +49,7 @@ function App() {
     pendingScriptId: string;
     pendingSource: string;
   } | null>(null);
+  const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -210,6 +211,14 @@ function App() {
     setStrategyConflict(null);
   }, []);
 
+  const handleEditIndicator = useCallback((indicatorId: string) => {
+    const ind = indicatorManager.indicators.find((i) => i.id === indicatorId);
+    if (ind) {
+      setEditingScriptId(ind.scriptId);
+      setEditorOpen(true);
+    }
+  }, [indicatorManager.indicators]);
+
   const handleRemoveIndicator = async (indicatorId: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
@@ -303,12 +312,13 @@ function App() {
           indicatorLabels={overlayIndicatorLabels}
           indicatorResults={indicatorResults}
           onRemoveIndicator={handleRemoveIndicator}
+          onEditIndicator={handleEditIndicator}
           forceAutoScale={autoScale}
         />
       </main>
 
       <div className="footer-bar" style={{ display: 'flex', gap: '10px', alignItems: 'center', padding: '8px 16px' }}>
-        <button className="editor-button" onClick={() => setEditorOpen(true)} style={{
+        <button className="editor-button" onClick={() => { setEditingScriptId(null); setEditorOpen(true); }} style={{
           padding: '6px 14px',
           background: '#111128',
           color: '#e0e0e0',
@@ -376,8 +386,9 @@ function App() {
 
       <CodeEditor
         isOpen={editorOpen}
-        onClose={() => setEditorOpen(false)}
+        onClose={() => { setEditorOpen(false); setEditingScriptId(null); }}
         onAdd={handleAddIndicator}
+        initialScriptId={editingScriptId ?? undefined}
       />
 
       <QuickAdderPopup
