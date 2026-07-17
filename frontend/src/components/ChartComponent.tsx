@@ -227,7 +227,7 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
         allShapeMarkers.push({
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
-          shape: s.type,
+          shape: s.style || s.type,
           color: s.color || '#2196f3',
           text: s.text || undefined,
           textcolor: s.textcolor,
