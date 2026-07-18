@@ -51,6 +51,7 @@ export class Parser {
   private tokens: Token[] = [];
   private current = 0;
   private callIdCounter = 0;
+  private userTypes: Set<string> = new Set();
 
   parse(source: string): ParseResult {
     const version = extractVersion(source);
@@ -279,6 +280,7 @@ export class Parser {
   private parseTypeDeclaration(): TypeDeclarationNode {
     const start = this.previous().span.start;
     const nameToken = this.consume(TokenType.Identifier, 'Expected type name');
+    this.userTypes.add(nameToken.lexeme);
     this.match(TokenType.Assign); // = is optional
 
     const fields: TypeFieldNode[] = [];
@@ -874,8 +876,16 @@ export class Parser {
           property,
         } as MemberExpressionNode;
 
-        // Handle type arguments after member expression (e.g., array.new<float>)
-        if (this.match(TokenType.Less)) {
+        // Handle type arguments after member expression ONLY for known type constructors
+        // (e.g., array.new<float>, matrix.new<float>, MyType.new<float>)
+        // NOT for property access like strategy.position_size < 100
+        const obj = expr.object;
+        const isTypeConstructor = obj.kind === 'Identifier' &&
+          (obj.name === 'array' || obj.name === 'matrix' || obj.name === 'map' ||
+           obj.name === 'Array' || obj.name === 'Matrix' || obj.name === 'Map' ||
+           this.userTypes.has(obj.name));
+
+        if (isTypeConstructor && this.match(TokenType.Less)) {
           const typeArgs: TypeAnnotationNode[] = [];
           while (!this.check(TokenType.Greater) && !this.isAtEnd()) {
             typeArgs.push(this.parseTypeAnnotation());
@@ -1032,7 +1042,12 @@ export class Parser {
       this.match(TokenType.Int) ||
       this.match(TokenType.Float) ||
       this.match(TokenType.Bool) ||
-      this.match(TokenType.StringType)
+      this.match(TokenType.StringType) ||
+      this.match(TokenType.Ta) ||
+      this.match(TokenType.Math) ||
+      this.match(TokenType.Str) ||
+      this.match(TokenType.Time) ||
+      this.match(TokenType.Input)
     ) {
       const token = this.previous();
 
@@ -1348,6 +1363,14 @@ export class Parser {
       TokenType.Array,
       TokenType.Map,
       TokenType.Matrix,
+      // Built-in namespaces
+      TokenType.Strategy,
+      TokenType.Ta,
+      TokenType.Math,
+      TokenType.Str,
+      TokenType.Time,
+      TokenType.Input,
+      TokenType.Color,
     ];
 
     for (const type of keywordTypes) {

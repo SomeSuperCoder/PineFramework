@@ -57,6 +57,11 @@ export enum TokenType {
   Matrix = 'Matrix',
   Series = 'Series',
   Simple = 'Simple',
+  Ta = 'Ta',
+  Math = 'Math',
+  Str = 'Str',
+  Time = 'Time',
+  Input = 'Input',
 
   // Operators
   Plus = 'Plus',
@@ -142,6 +147,11 @@ const KEYWORDS: Record<string, TokenType> = {
   matrix: TokenType.Matrix,
   series: TokenType.Series,
   simple: TokenType.Simple,
+  ta: TokenType.Ta,
+  math: TokenType.Math,
+  str: TokenType.Str,
+  time: TokenType.Time,
+  input: TokenType.Input,
 };
 
 export class Tokenizer {

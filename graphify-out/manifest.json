@@ -565,8 +565,8 @@
     "semantic_hash": ""
   },
   "src/language/runtime/execution-engine.ts": {
-    "mtime": 1784406852.2643259,
-    "ast_hash": "a7d70bf1bdf4dd39e723ec481c367151",
+    "mtime": 1784407355.9520226,
+    "ast_hash": "2e471ab2f885f97f56acae4d37117ac8",
     "semantic_hash": ""
   },
   "src/language/runtime/index.ts": {
