@@ -1154,14 +1154,16 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 20. THE delete button SHALL remove the indicator from the chart only — it SHALL NOT delete the script from the indicator bank
 21. THE overlay indicator list SHALL update dynamically when indicators are added or removed from the chart
 22. THE overlay indicator labels SHALL be rendered as non-intrusive overlays that do not obstruct candlestick or price action rendering
+23. WHEN the user hovers over an overlay indicator label, THE Frontend SHALL display a tooltip showing the full indicator name (useful when names are truncated due to space constraints)
 
 **Indicator Pane Labels (Per-Pane Top-Left Corner):**
 
-23. THE Frontend SHALL display a label with the indicator's name in the top-left corner of each indicator pane that creates a separate pane (overlay=false)
-24. Each indicator pane label SHALL include an option to unplot (remove) the indicator from the chart
-25. The unplot option SHALL remove the indicator's plots from the pane and, if the indicator is the only one in that pane, remove the pane entirely
-26. The unplot option SHALL NOT delete the script from the indicator bank
-27. THE indicator pane labels SHALL be rendered within the pane's clipped region, ensuring they do not bleed into adjacent panes
+24. THE Frontend SHALL display a label with the indicator's name in the top-left corner of each indicator pane that creates a separate pane (overlay=false)
+25. Each indicator pane label SHALL include an option to unplot (remove) the indicator from the chart
+26. The unplot option SHALL remove the indicator's plots from the pane and, if the indicator is the only one in that pane, remove the pane entirely
+27. The unplot option SHALL NOT delete the script from the indicator bank
+28. THE indicator pane labels SHALL be rendered within the pane's clipped region, ensuring they do not bleed into adjacent panes
+29. WHEN the user hovers over an indicator pane label, THE Frontend SHALL display a tooltip showing the full indicator name
 
 **Multi-Indicator Rendering:**
 
@@ -1357,6 +1359,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 10. THE quick adder popup SHALL display the script type (indicator or strategy) as a badge next to each option
 11. THE quick adder popup SHALL filter the list in real-time as the user types in the search bar
 12. THE quick adder popup SHALL show an empty state message when no scripts match the search query
+13. WHEN the user hovers over a script option in the quick adder popup, THE Frontend SHALL display a tooltip showing the full script name and its full source code path (useful when names are truncated or for identifying the script source)
 
 ### Requirement 43: CLI Backtest Tool for Multi-Symbol Strategy Validation
 

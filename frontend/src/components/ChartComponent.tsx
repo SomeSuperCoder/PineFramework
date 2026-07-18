@@ -346,6 +346,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           {indicatorLabels.map((label) => (
             <div
               key={label.id}
+              title={label.name}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

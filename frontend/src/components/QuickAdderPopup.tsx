@@ -152,6 +152,7 @@ export function QuickAdderPopup({ isOpen, onClose, onAdd }: QuickAdderPopupProps
                 className={`quick-adder-item ${i === highlightIndex ? 'highlighted' : ''}`}
                 onClick={() => handleAdd(s)}
                 onMouseEnter={() => setHighlightIndex(i)}
+                title={s.name}
               >
                 <span className="quick-adder-item-name">{s.name}</span>
                 <span className="quick-adder-item-badges">
