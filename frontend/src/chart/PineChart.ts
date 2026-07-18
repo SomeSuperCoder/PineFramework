@@ -554,7 +554,7 @@ export class PineChart {
 
   // Teleport line (vertical marker for "go to date")
   setTeleportLine(timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' }): void {
-    this.teleportLine = { time: timeSeconds, ...options };
+    this.teleportLine = { time: timeSeconds, visible: true, ...options };
     this.markDirty();
   }
 

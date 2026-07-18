@@ -321,6 +321,25 @@ Verify.
 
 ---
 
+# Committing Code
+
+Before committing any changes:
+
+1. **Run all tests** - Execute the full test suite to ensure no regressions
+2. **Run linters** - Check for code style, type errors, and potential issues
+3. **Verify build** - Ensure the project compiles/builds successfully
+4. **Check diff** - Review `git diff` to confirm only intended changes are included
+
+Only commit after all tests pass and linting is clean. Never commit broken code.
+
+Write clear, descriptive commit messages following the project's conventions.
+
+**Commit Frequency:** Commit often enough to capture meaningful progress (after each logical unit of work, test passing, or refactoring step), but not so often that history becomes noisy. Each commit should represent a coherent, testable change.
+
+**Before Breaking Changes:** Always commit current working state before making breaking changes or large refactors. This ensures a clean rollback point if the change introduces issues.
+
+---
+
 # Professional Standard
 
 Act as if every line of code will be reviewed by world-class engineers.
