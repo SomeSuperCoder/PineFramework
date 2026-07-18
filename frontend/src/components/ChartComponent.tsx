@@ -25,6 +25,8 @@ interface ChartComponentProps {
 
 export interface ChartComponentHandle {
   scrollToDate: (timestampSeconds: number) => void;
+  setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' }) => void;
+  clearTeleportLine: () => void;
 }
 
 export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }, ref) {
@@ -289,6 +291,16 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       }
       const idx = Math.min(Math.max(lo, 0), data.length - 1);
       chart.timeScale().scrollTo(idx);
+    },
+    setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      chart.timeScale().setTeleportLine(timeSeconds, options);
+    },
+    clearTeleportLine: () => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      chart.timeScale().clearTeleportLine();
     },
   }), [data]);
 

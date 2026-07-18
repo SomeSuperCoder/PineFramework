@@ -459,7 +459,10 @@ function App() {
       <GoToDatePopup
         isOpen={goToDateOpen}
         onClose={() => setGoToDateOpen(false)}
-        onGoToDate={(ts) => chartRef.current?.scrollToDate(ts)}
+        onGoToDate={(ts) => {
+          chartRef.current?.scrollToDate(ts);
+          chartRef.current?.setTeleportLine(ts, { color: '#2196f3', label: 'Teleport' });
+        }}
       />
 
       <StrategyConflictDialog

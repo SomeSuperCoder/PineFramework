@@ -74,11 +74,15 @@ export class PineChart {
   private barColors: Map<number, string> = new Map();
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
+  private teleportLine: { time: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' } | null = null;
   private chartLabels: LabelData[] = [];
   private boxes: BoxData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private lastIndicatorCount: number = 0;
   private container: HTMLElement;
+
+  // Teleport line (vertical marker for "go to date" teleportation)
+  private teleportLine: { barIndex: number; timestamp: number; color: string; label: string; visible: boolean } | null = null;
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -266,6 +270,8 @@ export class PineChart {
 
     this.renderDrawingLines(ctx);
 
+    this.renderTeleportLine(ctx);
+
     for (const [_key, handle] of this.plotSeries) {
       if (handle.overlay) {
         const nonNull = handle.data.filter(d => d.value !== null).length;
@@ -366,6 +372,42 @@ export class PineChart {
       ctx.stroke();
     }
     ctx.setLineDash([]);
+  }
+
+  private renderTeleportLine(ctx: CanvasRenderingContext2D): void {
+    if (!this.teleportLine || !this.teleportLine.visible) return;
+    const regions = this.layout.getRegions();
+    const { chartArea } = regions;
+    const bi = this.findBarIndex(this.teleportLine.timestamp);
+    const x = this.viewport.barIndexToPixel(bi);
+    ctx.save();
+    ctx.strokeStyle = this.cssColor(this.teleportLine.color || '#2196f3');
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, chartArea.y);
+    ctx.lineTo(x, chartArea.y + chartArea.height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (this.teleportLine.label) {
+      ctx.font = 'bold 11px Arial';
+      const text = this.teleportLine.label;
+      const metrics = ctx.measureText(text);
+      const padX = 6, padY = 2;
+      const bw = metrics.width + padX * 2;
+      const bh = 18;
+      const bx = x - bw / 2;
+      const by = chartArea.y + 4;
+      ctx.fillStyle = this.cssColor(this.teleportLine.color || '#2196f3');
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 4);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x, by + bh / 2);
+    }
+    ctx.restore();
   }
 
   private renderLabels(ctx: CanvasRenderingContext2D): void {
@@ -507,6 +549,17 @@ export class PineChart {
 
   setDrawingLines(lines: DrawingLineData[]): void {
     this.drawingLines = lines;
+    this.markDirty();
+  }
+
+  // Teleport line (vertical marker for "go to date")
+  setTeleportLine(timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' }): void {
+    this.teleportLine = { time: timeSeconds, ...options };
+    this.markDirty();
+  }
+
+  clearTeleportLine(): void {
+    this.teleportLine = null;
     this.markDirty();
   }
 
@@ -653,6 +706,14 @@ export class PineChart {
         return this.viewport.getVisibleRange();
       },
       scrollToDate: (_timestamp: number) => {
+        this.markDirty();
+      },
+      setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => {
+        this.teleportLine = { time: timeSeconds, ...options };
+        this.markDirty();
+      },
+      clearTeleportLine: () => {
+        this.teleportLine = null;
         this.markDirty();
       },
     };
