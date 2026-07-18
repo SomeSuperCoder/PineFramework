@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChartComponent } from './components/ChartComponent';
+import { ChartComponent, type ChartComponentHandle } from './components/ChartComponent';
 import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
+import { GoToDatePopup } from './components/GoToDatePopup';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
@@ -51,6 +52,8 @@ function App() {
   } | null>(null);
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
   const [errorConsoleOpen, setErrorConsoleOpen] = useState(false);
+  const [goToDateOpen, setGoToDateOpen] = useState(false);
+  const chartRef = useRef<ChartComponentHandle>(null);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -304,9 +307,10 @@ function App() {
 
       <main className="main-content">
         <ChartComponent
+          ref={chartRef}
           data={candles}
-          scriptResult={scriptResult}
           dataVersion={dataVersion}
+          scriptResult={scriptResult}
           symbol={symbol}
           interval={timeframe}
           fetchOlderOHLCV={fetchOlderOHLCV}
@@ -358,6 +362,15 @@ function App() {
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="1,4 1,1 4,1" /><polyline points="8,1 11,1 11,4" /><polyline points="11,8 11,11 8,11" /><polyline points="4,11 1,11 1,8" /></svg>
           {autoScale ? 'Auto Scale' : 'Manual'}
         </button>
+        <button onClick={() => setGoToDateOpen(true)} style={{
+          padding: '5px 10px', background: '#111128', color: '#e0e0e0',
+          border: '1px solid #111128', borderRadius: '4px', cursor: 'pointer',
+          fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '5px',
+        }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="6" cy="6" r="4.5" /><polyline points="6,3 6,6 8,7" /></svg>
+          Go to Date
+        </button>
+        <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
         <div style={{ flex: 1 }} />
         <button onClick={() => setTelegramOpen(!telegramOpen)} style={{
           padding: '5px 10px',
@@ -441,6 +454,12 @@ function App() {
         phase={phase}
         result={result}
         error={error}
+      />
+
+      <GoToDatePopup
+        isOpen={goToDateOpen}
+        onClose={() => setGoToDateOpen(false)}
+        onGoToDate={(ts) => chartRef.current?.scrollToDate(ts)}
       />
 
       <StrategyConflictDialog

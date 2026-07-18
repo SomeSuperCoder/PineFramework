@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { PineChart, createChart } from '../chart';
 import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData } from '../chart';
 import type { ScriptResult } from '../types';
@@ -23,7 +23,11 @@ interface ChartComponentProps {
   forceAutoScale?: boolean;
 }
 
-export function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }: ChartComponentProps) {
+export interface ChartComponentHandle {
+  scrollToDate: (timestampSeconds: number) => void;
+}
+
+export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -271,6 +275,23 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
     chart.endUpdate();
   }, [data, scriptResult, indicatorResults]);
 
+  useImperativeHandle(ref, () => ({
+    scrollToDate: (timestampSeconds: number) => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      let lo = 0;
+      let hi = data.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        if (data[mid].time < timestampSeconds) lo = mid + 1;
+        else if (data[mid].time > timestampSeconds) hi = mid - 1;
+        else { lo = mid; break; }
+      }
+      const idx = Math.min(Math.max(lo, 0), data.length - 1);
+      chart.timeScale().scrollTo(idx);
+    },
+  }), [data]);
+
   const handleRemoveIndicator = useCallback((indicatorId: string) => {
     onRemoveIndicator?.(indicatorId);
   }, [onRemoveIndicator]);
@@ -363,4 +384,4 @@ export function ChartComponent({ data, scriptResult, dataVersion, symbol, interv
       )}
     </div>
   );
-}
+});
