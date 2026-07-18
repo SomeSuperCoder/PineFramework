@@ -1,7 +1,7 @@
 import type { CandlestickData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
-import { formatAxisLabel } from '../../utils/time';
+import { formatAxisLabel } from 'pine-framework/utils/time';
 
 export class AxisRenderer {
   renderPriceScale(

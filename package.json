@@ -11,6 +11,11 @@
       "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./utils/time": {
+      "source": "./src/utils/time.ts",
+      "types": "./dist/utils/time.d.ts",
+      "import": "./dist/utils/time.js"
     }
   },
   "files": [
