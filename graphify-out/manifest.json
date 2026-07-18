@@ -545,8 +545,8 @@
     "semantic_hash": ""
   },
   "src/language/parser/ast/nodes.ts": {
-    "mtime": 1784396043.1772442,
-    "ast_hash": "f6d1fa55e128747ac22d685f1f2c1de1",
+    "mtime": 1784402495.1296244,
+    "ast_hash": "7e66ed32b1ff795cf22ba3a53a943dec",
     "semantic_hash": ""
   },
   "src/language/parser/index.ts": {
@@ -555,18 +555,18 @@
     "semantic_hash": ""
   },
   "src/language/parser/parser.ts": {
-    "mtime": 1784396043.1802442,
-    "ast_hash": "461d1f3201b558ec2bc9284f8d05ab99",
+    "mtime": 1784402691.0426645,
+    "ast_hash": "4068140a59f5a57d0a18a5f4771fba87",
     "semantic_hash": ""
   },
   "src/language/parser/tokenizer.ts": {
-    "mtime": 1784396043.1802442,
-    "ast_hash": "39bd297daf4a80d8d5a6f327629aff5c",
+    "mtime": 1784404741.3934896,
+    "ast_hash": "ecf9714f6d8148e7955e14c85f8cad96",
     "semantic_hash": ""
   },
   "src/language/runtime/execution-engine.ts": {
-    "mtime": 1784396043.184244,
-    "ast_hash": "92e187c8ebfc94757119b69f303a8eca",
+    "mtime": 1784405664.3378992,
+    "ast_hash": "fc28ed53fe2947caf7a2cb27d524e7bf",
     "semantic_hash": ""
   },
   "src/language/runtime/index.ts": {

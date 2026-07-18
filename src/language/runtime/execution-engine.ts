@@ -2754,11 +2754,43 @@ export class ExecutionEngine {
     if (expr.name === 'time') {
       return context.timestamp;
     }
+    if (expr.name === 'hl2') {
+      const high = context.high.getRelative(0);
+      const low = context.low.getRelative(0);
+      return (high + low) / 2;
+    }
+    if (expr.name === 'hlc3') {
+      const high = context.high.getRelative(0);
+      const low = context.low.getRelative(0);
+      const close = context.close.getRelative(0);
+      return (high + low + close) / 3;
+    }
+    if (expr.name === 'ohlc4') {
+      const open = context.open.getRelative(0);
+      const high = context.high.getRelative(0);
+      const low = context.low.getRelative(0);
+      const close = context.close.getRelative(0);
+      return (open + high + low + close) / 4;
+    }
     if (expr.name === 'na') {
       return NA;
     }
 
-    return getVariableValue(scope, expr.name, 0);
+    // Check if variable exists in scope first
+    const binding = resolveVariable(scope, expr.name);
+    if (binding) {
+      return getVariableValue(scope, expr.name, 0);
+    }
+
+    // Built-in position object (only available in strategies)
+    if (expr.name === 'position') {
+      return {
+        size: 0,
+        avg_price: 0,
+      };
+    }
+
+    throw new Error(`Variable '${expr.name}' is not defined`);
   }
 
   private executeBinaryExpression(
