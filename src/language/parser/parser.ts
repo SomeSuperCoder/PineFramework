@@ -288,11 +288,19 @@ export class Parser {
       if (!this.checkTypeKeyword() && !this.looksLikeUserType()) break;
       const typeAnnotation = this.parseTypeAnnotation();
       const fieldName = this.consume(TokenType.Identifier, 'Expected field name');
+
+      // Handle optional default value
+      let defaultValue: ExpressionNode | undefined;
+      if (this.match(TokenType.Assign)) {
+        defaultValue = this.parseExpression();
+      }
+
       fields.push({
         kind: 'TypeField',
         span: spanBetween(fieldStart, this.previous().span.end),
         name: fieldName.lexeme,
         typeAnnotation,
+        defaultValue,
       });
     }
 
@@ -370,6 +378,23 @@ export class Parser {
     }
 
     const variable = this.consume(TokenType.Identifier, 'Expected loop variable').lexeme;
+
+    // Check for "for ... in ..." syntax (array iteration)
+    if (this.match(TokenType.In)) {
+      const iterable = this.parseExpression();
+      const body = this.parseIndentedBlock();
+
+      return {
+        kind: 'ForStatement',
+        span: spanBetween(start, body[body.length - 1]?.span.end ?? iterable.span.end),
+        variable,
+        iterable,
+        body,
+        isForIn: true,
+      };
+    }
+
+    // Traditional "for ... = ... to ..." syntax
     this.consume(TokenType.Assign, 'Expected "=" after loop variable');
     const loopStart = this.parseExpression();
     this.consume(TokenType.To, 'Expected "to" in for loop');
@@ -390,6 +415,7 @@ export class Parser {
       end,
       step,
       body,
+      isForIn: false,
     };
   }
 
@@ -847,6 +873,17 @@ export class Parser {
           object: expr,
           property,
         } as MemberExpressionNode;
+
+        // Handle type arguments after member expression (e.g., array.new<float>)
+        if (this.match(TokenType.Less)) {
+          const typeArgs: TypeAnnotationNode[] = [];
+          while (!this.check(TokenType.Greater) && !this.isAtEnd()) {
+            typeArgs.push(this.parseTypeAnnotation());
+            if (!this.match(TokenType.Comma)) break;
+          }
+          this.consume(TokenType.Greater, 'Expected ">" after type arguments');
+          (expr as MemberExpressionNode).typeArguments = typeArgs;
+        }
       } else if (this.match(TokenType.LParen)) {
         expr = this.finishCall(expr);
       } else {
@@ -991,7 +1028,11 @@ export class Parser {
       this.match(TokenType.Library) ||
       this.match(TokenType.Array) ||
       this.match(TokenType.Map) ||
-      this.match(TokenType.Matrix)
+      this.match(TokenType.Matrix) ||
+      this.match(TokenType.Int) ||
+      this.match(TokenType.Float) ||
+      this.match(TokenType.Bool) ||
+      this.match(TokenType.StringType)
     ) {
       const token = this.previous();
 
@@ -1170,22 +1211,33 @@ export class Parser {
     let isMap = false;
     const typeArguments: TypeAnnotationNode[] = [];
 
-    if (this.match(TokenType.LBracket)) {
-      if (typeToken.type === TokenType.Array || typeToken.type === TokenType.Map) {
-        const arg = this.parseTypeAnnotation();
-        typeArguments.push(arg);
-        this.consume(TokenType.RBracket, 'Expected "]" after type argument');
-      } else {
-        isArray = true;
-        this.consume(TokenType.RBracket, 'Expected "]" after array type');
-      }
-    }
+    // Handle generic type arguments with either [] or <>
+    const isGenericStart =
+      this.check(TokenType.LBracket) || this.check(TokenType.Less);
+    if (isGenericStart) {
+      const isBracket = this.check(TokenType.LBracket);
+      if (isBracket) this.advance(); // consume [
+      else this.advance(); // consume <
 
-    if (typeToken.type === TokenType.Array) {
-      isArray = true;
-    }
-    if (typeToken.type === TokenType.Map) {
-      isMap = true;
+      if (typeToken.type === TokenType.Array || typeToken.type === TokenType.Map) {
+        // Parse comma-separated type arguments
+        while (!this.isAtEnd() && !this.check(isBracket ? TokenType.RBracket : TokenType.Greater)) {
+          const arg = this.parseTypeAnnotation();
+          typeArguments.push(arg);
+          if (!this.match(TokenType.Comma)) break;
+        }
+        this.consume(
+          isBracket ? TokenType.RBracket : TokenType.Greater,
+          `Expected "${isBracket ? ']' : '>'}" after type argument`,
+        );
+      } else {
+        // Simple array type like int[]
+        isArray = true;
+        this.consume(
+          isBracket ? TokenType.RBracket : TokenType.Greater,
+          `Expected "${isBracket ? ']' : '>'}" after array type`,
+        );
+      }
     }
 
     return {
@@ -1292,6 +1344,10 @@ export class Parser {
       TokenType.True,
       TokenType.False,
       TokenType.Na,
+      // Array methods and common properties
+      TokenType.Array,
+      TokenType.Map,
+      TokenType.Matrix,
     ];
 
     for (const type of keywordTypes) {

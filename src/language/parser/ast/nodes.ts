@@ -71,9 +71,11 @@ export interface ForStatementNode {
   kind: 'ForStatement';
   span: SourceSpan;
   variable: string;
-  start: ExpressionNode;
-  end: ExpressionNode;
+  start?: ExpressionNode;
+  end?: ExpressionNode;
   step?: ExpressionNode;
+  iterable?: ExpressionNode;
+  isForIn?: boolean;
   body: StatementNode[];
 }
 
@@ -125,6 +127,7 @@ export interface TypeFieldNode {
   span: SourceSpan;
   name: string;
   typeAnnotation: TypeAnnotationNode;
+  defaultValue?: ExpressionNode;
 }
 
 export interface ImportStatementNode {
@@ -252,6 +255,7 @@ export interface MemberExpressionNode {
   span: SourceSpan;
   object: ExpressionNode;
   property: string;
+  typeArguments?: TypeAnnotationNode[];
 }
 
 export interface IndexExpressionNode {

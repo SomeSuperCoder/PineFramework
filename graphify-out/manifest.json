@@ -709,46 +709,6 @@
     "ast_hash": "631f4948d27773538b04954747c20795",
     "semantic_hash": ""
   },
-  "prompts/dev/audit.md": {
-    "mtime": 1784398909.6023607,
-    "ast_hash": "b55e9fe5ff6359c08eb6c2868feefb63",
-    "semantic_hash": ""
-  },
-  "prompts/dev/bug-fixing.md": {
-    "mtime": 1784396043.102246,
-    "ast_hash": "a20dc32f72517fa75c08a8b6a166ed95",
-    "semantic_hash": ""
-  },
-  "prompts/dev/new-feature.md": {
-    "mtime": 1784396043.103246,
-    "ast_hash": "4b0b2f4446c9f67bda6f1df67609c003",
-    "semantic_hash": ""
-  },
-  "prompts/dev/super-programmer.md": {
-    "mtime": 1784396043.103246,
-    "ast_hash": "ded1ea054421f4ada643e09a29d3144d",
-    "semantic_hash": ""
-  },
-  "prompts/dev/sync.md": {
-    "mtime": 1784396043.104246,
-    "ast_hash": "80e4d2f01256c11651debb00168c664a",
-    "semantic_hash": ""
-  },
-  "prompts/dev/task-implementer.md": {
-    "mtime": 1784396043.105246,
-    "ast_hash": "6f910efe1d53553f0db8c23f686d9608",
-    "semantic_hash": ""
-  },
-  "prompts/live/compatibility-impl.md": {
-    "mtime": 1784396043.106246,
-    "ast_hash": "1e2df28b9b420634cf8eb03af396d81e",
-    "semantic_hash": ""
-  },
-  "prompts/live/merge-indicators-to-strategy.md": {
-    "mtime": 1784396043.106246,
-    "ast_hash": "f44568ebef4c9943480fa10d5cbb3ba3",
-    "semantic_hash": ""
-  },
   "requirements.md": {
     "mtime": 1784399631.0547795,
     "ast_hash": "4fcbd5902b28cb011ed66d8880696c31",

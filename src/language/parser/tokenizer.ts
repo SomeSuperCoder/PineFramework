@@ -44,6 +44,7 @@ export enum TokenType {
   Continue = 'Continue',
   To = 'To',
   By = 'By',
+  In = 'In',
 
   // Type keywords
   Int = 'Int',
@@ -130,6 +131,7 @@ const KEYWORDS: Record<string, TokenType> = {
   continue: TokenType.Continue,
   to: TokenType.To,
   by: TokenType.By,
+  in: TokenType.In,
   int: TokenType.Int,
   float: TokenType.Float,
   bool: TokenType.Bool,
@@ -198,6 +200,11 @@ export class Tokenizer {
       case ',':
         return this.makeToken(TokenType.Comma, ',', start);
       case '.':
+        // Handle numbers starting with a dot (e.g., .5)
+        // After advancing past '.', peek() gives us the next character
+        if (this.isDigit(this.peek())) {
+          return this.scanNumber(start);
+        }
         return this.makeToken(TokenType.Dot, '.', start);
       case ';':
         return this.makeToken(TokenType.Semicolon, ';', start);
@@ -290,16 +297,27 @@ export class Tokenizer {
   }
 
   private scanNumber(start: SourceLocation): Token {
-    while (this.isDigit(this.peek())) {
-      this.advance();
+    if (this.isDigit(this.peek())) {
+      while (this.isDigit(this.peek())) {
+        this.advance();
+      }
     }
 
     let isFloat = false;
-    if (this.peek() === '.' && this.isDigit(this.peekNext())) {
-      isFloat = true;
-      this.advance();
-      while (this.isDigit(this.peek())) {
-        this.advance();
+    if (this.peek() === '.') {
+      // Check if this is a float with digits after the dot (e.g., 0.5)
+      // or a float with no digits after the dot (e.g., 0.)
+      const nextChar = this.peekNext();
+      if (this.isDigit(nextChar)) {
+        isFloat = true;
+        this.advance(); // consume the dot
+        while (this.isDigit(this.peek())) {
+          this.advance();
+        }
+      } else if (nextChar === '\0' || /[\s\n()\[\]{},;+\-*/%<>=!&|]/.test(nextChar)) {
+        // Float with trailing dot (e.g., 0.) - consume the dot
+        isFloat = true;
+        this.advance(); // consume the dot
       }
     }
 

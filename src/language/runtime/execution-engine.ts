@@ -1338,19 +1338,29 @@ export class ExecutionEngine {
       return candidateValue;
     });
 
-    // @ts-ignore size parameter unused in stub implementation
-    this.builtins.set('array.new_line', (size: PineValue): PineValue => {
+    // @ts-expect-error size parameter unused in stub implementation
+    this.builtins.set('array.new_float', (_size: PineValue): PineValue => {
       return [];
     });
 
-    // @ts-ignore size parameter unused in stub implementation
-    this.builtins.set('array.new_float', (size: PineValue): PineValue => {
+    // @ts-expect-error size parameter unused in stub implementation
+    this.builtins.set('array.new_int', (_size: PineValue): PineValue => {
       return [];
     });
 
-    // @ts-ignore size parameter unused in stub implementation
-    this.builtins.set('array.new_int', (size: PineValue): PineValue => {
+    // @ts-expect-error size parameter unused in stub implementation
+    this.builtins.set('array.new_line', (_size: PineValue): PineValue => {
       return [];
+    });
+
+    // Generic array.new<T>(size) - used as array.new<T>(size)
+    this.builtins.set('array.new', (_size: PineValue): PineValue => {
+      return [];
+    });
+
+    // array.from(...values) - create array from values
+    this.builtins.set('array.from', (...values: PineValue[]): PineValue => {
+      return values;
     });
 
     this.builtins.set(
@@ -2512,8 +2522,26 @@ export class ExecutionEngine {
     scope: RuntimeScope,
     context: ExecutionContext,
   ): PineValue {
-    const start = this.executeExpression(stmt.start, scope, context) as number;
-    const end = this.executeExpression(stmt.end, scope, context) as number;
+    // Handle "for ... in ..." syntax (array iteration)
+    if (stmt.isForIn && stmt.iterable) {
+      const iterableValue = this.executeExpression(stmt.iterable, scope, context);
+      const loopScope = createRuntimeScope(scope);
+      declareVariable(loopScope, stmt.variable, FLOAT_TYPE); // element type
+
+      if (Array.isArray(iterableValue)) {
+        for (const element of iterableValue) {
+          setVariableValue(loopScope, stmt.variable, element);
+          for (const s of stmt.body) {
+            this.executeStatement(s, loopScope, context);
+          }
+        }
+      }
+      return NA;
+    }
+
+    // Traditional "for ... = ... to ..." syntax
+    const start = this.executeExpression(stmt.start!, scope, context) as number;
+    const end = this.executeExpression(stmt.end!, scope, context) as number;
     const step = stmt.step ? (this.executeExpression(stmt.step, scope, context) as number) : 1;
 
     const loopScope = createRuntimeScope(scope);
@@ -2716,6 +2744,9 @@ export class ExecutionEngine {
     }
     if (expr.name === 'bar_index') {
       return context.barIndex;
+    }
+    if (expr.name === 'last_bar_index') {
+      return context.barCount - 1;
     }
     if (expr.name === 'bar_count') {
       return context.barCount;
