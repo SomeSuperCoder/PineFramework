@@ -10,10 +10,6 @@ function toUtcDate(ts: number): Date {
   return new Date(ts * 1000);
 }
 
-function toUtcDateMs(ms: number): Date {
-  return new Date(ms);
-}
-
 /** Current time as Unix seconds (UTC). */
 export function now(): number {
   return Math.floor(Date.now() / 1000);
@@ -60,7 +56,14 @@ export function fromMskDate(d: Date): number {
 }
 
 /** Get MSK date components from Unix seconds (UTC). */
-export function getMskComponents(ts: number): { year: number; month: number; day: number; hours: number; minutes: number; seconds: number } {
+export function getMskComponents(ts: number): {
+  year: number;
+  month: number;
+  day: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+} {
   const d = toMskDate(ts);
   return {
     year: d.getUTCFullYear(),
@@ -95,7 +98,9 @@ export function parseMsk(dateStr: string, timeStr: string): number {
   if (!m) return NaN;
   const hh = Math.min(Math.max(parseInt(m[1], 10), 0), 23);
   const mm = Math.min(Math.max(parseInt(m[2], 10), 0), 59);
-  const ms = Date.parse(`${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+03:00`);
+  const ms = Date.parse(
+    `${dateStr}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+03:00`,
+  );
   return isNaN(ms) ? NaN : Math.floor(ms / 1000);
 }
 
@@ -152,13 +157,19 @@ export function toIsoMsk(ts: number): string {
 /** Format Unix seconds as MM/DD HH:MM (MSK) for axis labels. */
 export function formatAxisLabel(utcSeconds: number): string {
   const d = toMskDate(utcSeconds);
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(
+    d.getUTCMinutes(),
+  ).padStart(2, '0')}`;
 }
 
 /** Format Unix seconds as YYYY-MM-DD HH:MM (MSK) for tooltips. */
 export function formatTooltipDateTime(utcSeconds: number): string {
   const d = toMskDate(utcSeconds);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')} ${String(d.getUTCHours()).padStart(2, '0')}:${String(
+    d.getUTCMinutes(),
+  ).padStart(2, '0')}`;
 }
 
 export { MSK_OFFSET_SECONDS, MSK_OFFSET_MS };

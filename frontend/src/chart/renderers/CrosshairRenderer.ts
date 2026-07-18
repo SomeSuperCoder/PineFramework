@@ -1,7 +1,7 @@
 import type { CandlestickData, PlotSeriesData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
-import { formatAxisLabel, formatTooltipDateTime } from 'pine-framework/utils/time.js';
+import { formatAxisLabel, formatTooltipDateTime } from 'pine-framework/utils/time';
 
 export class CrosshairRenderer {
   private hoveredBarIndex: number = -1;

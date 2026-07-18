@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { formatMskDate, formatMskTime, parseMskDateTime, nowUtcSeconds } from 'pine-framework/utils/time';
+import { formatDate, formatTime, parseMsk, now } from 'pine-framework/utils/time';
 
 interface GoToDatePopupProps {
   isOpen: boolean;
@@ -14,9 +14,9 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
 
   useEffect(() => {
     if (isOpen) {
-      const now = nowUtcSeconds();
-      setDateStr(formatMskDate(now));
-      setTimeStr(formatMskTime(now));
+      const nowSec = now();
+      setDateStr(formatDate(nowSec));
+      setTimeStr(formatTime(nowSec));
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
@@ -25,7 +25,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const utc = parseMskDateTime(dateStr, timeStr);
+    const utc = parseMsk(dateStr, timeStr);
     if (isNaN(utc)) return;
     onGoToDate(utc);
     onClose();
