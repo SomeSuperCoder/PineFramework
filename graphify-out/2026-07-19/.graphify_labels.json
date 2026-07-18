@@ -11,5 +11,6 @@
   "9": ".parseExpression",
   "10": ".parseReturnStatement",
   "11": "MemberExpressionNode",
+  "12": "ParenthesizedExpressionNode",
   "13": ".parseProgram"
 }

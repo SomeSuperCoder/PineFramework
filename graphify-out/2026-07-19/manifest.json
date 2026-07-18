@@ -555,13 +555,13 @@
     "semantic_hash": ""
   },
   "src/language/parser/parser.ts": {
-    "mtime": 1784409473.7154083,
-    "ast_hash": "43942bbcfdcf177f4f775d08961d4950",
+    "mtime": 1784402691.0426645,
+    "ast_hash": "4068140a59f5a57d0a18a5f4771fba87",
     "semantic_hash": ""
   },
   "src/language/parser/tokenizer.ts": {
-    "mtime": 1784409473.7154083,
-    "ast_hash": "8e461fda1fe09c3d7556296daab32807",
+    "mtime": 1784404741.3934896,
+    "ast_hash": "ecf9714f6d8148e7955e14c85f8cad96",
     "semantic_hash": ""
   },
   "src/language/runtime/execution-engine.ts": {

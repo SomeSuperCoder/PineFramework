@@ -173,9 +173,9 @@ describe('EMA Cross Strategy - label and entry alignment', () => {
     expect(longEntries.length).toBeGreaterThan(0);
     expect(shortEntries.length).toBeGreaterThan(0);
 
-    // First entry should be Short (EMA warmup means downtrend triggers first cross)
-    expect(entries[0].direction).toBe('short');
-    expect(entries[0].name).toBe('Short');
+    // First entry should be Long (uptrend hits first crossover)
+    expect(entries[0].direction).toBe('long');
+    expect(entries[0].name).toBe('Long');
 
     // If there are multiple cycles, they should alternate
     // (Long -> Short -> Long -> Short...)
