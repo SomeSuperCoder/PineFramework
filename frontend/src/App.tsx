@@ -53,6 +53,10 @@ function App() {
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
   const [errorConsoleOpen, setErrorConsoleOpen] = useState(false);
   const [goToDateOpen, setGoToDateOpen] = useState(false);
+  const [lastTeleport, setLastTeleport] = useState(() => {
+    const saved = localStorage.getItem('pine-last-teleport');
+    return saved ? JSON.parse(saved) : { date: '', time: '' };
+  });
   const chartRef = useRef<ChartComponentHandle>(null);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -459,9 +463,12 @@ function App() {
       <GoToDatePopup
         isOpen={goToDateOpen}
         onClose={() => setGoToDateOpen(false)}
-        onGoToDate={(ts) => {
+        lastTeleport={lastTeleport}
+        onGoToDate={(ts, dateStr, timeStr) => {
           chartRef.current?.scrollToDate(ts);
           chartRef.current?.setTeleportLine(ts, { color: '#2196f3', label: 'Teleport' });
+          setLastTeleport({ date: dateStr, time: timeStr });
+          localStorage.setItem('pine-last-teleport', JSON.stringify({ date: dateStr, time: timeStr }));
         }}
       />
 

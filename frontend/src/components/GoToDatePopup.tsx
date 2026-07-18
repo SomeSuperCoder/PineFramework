@@ -4,10 +4,11 @@ import { formatDate, formatTime, parseMsk, now } from 'pine-framework/utils/time
 interface GoToDatePopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onGoToDate: (timestampSeconds: number) => void;
+  onGoToDate: (timestampSeconds: number, dateStr: string, timeStr: string) => void;
+  lastTeleport?: { date: string; time: string };
 }
 
-export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProps) {
+export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoToDatePopupProps) {
   const [dateStr, setDateStr] = useState('');
   const [timeStr, setTimeStr] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -15,11 +16,12 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
   useEffect(() => {
     if (isOpen) {
       const nowSec = now();
-      setDateStr(formatDate(nowSec));
-      setTimeStr(formatTime(nowSec));
+      // Use last teleport if available, otherwise current time
+      setDateStr(lastTeleport?.date || formatDate(nowSec));
+      setTimeStr(lastTeleport?.time || formatTime(nowSec));
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [isOpen]);
+  }, [isOpen, lastTeleport]);
 
   if (!isOpen) return null;
 
@@ -27,7 +29,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
     e.preventDefault();
     const utc = parseMsk(dateStr, timeStr);
     if (isNaN(utc)) return;
-    onGoToDate(utc);
+    onGoToDate(utc, dateStr, timeStr);
     onClose();
   };
 
