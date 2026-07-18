@@ -1,6 +1,7 @@
 import type { CandlestickData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
+import { formatAxisLabel } from '../../utils/time';
 
 export class AxisRenderer {
   renderPriceScale(
@@ -104,8 +105,7 @@ export class AxisRenderer {
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       if (x >= chartArea.x && x <= chartArea.x + chartArea.width) {
         const time = candles[i].time;
-        const date = new Date(time * 1000);
-        const label = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        const label = formatAxisLabel(time);
         ctx.fillText(label, x, timeScale.y + 6);
       }
     }

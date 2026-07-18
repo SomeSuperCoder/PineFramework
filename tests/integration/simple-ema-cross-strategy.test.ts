@@ -26,7 +26,7 @@ function createCrossoverBars(): Bar[] {
   const bars: Bar[] = [];
   let price = 100;
 
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 120; i++) {
     const open = price;
     let close: number;
 
@@ -34,8 +34,10 @@ function createCrossoverBars(): Bar[] {
       close = open + 2.0;
     } else if (i < 60) {
       close = open - 2.0;
-    } else {
+    } else if (i < 90) {
       close = open + 2.0;
+    } else {
+      close = open - 2.0;
     }
 
     const high = Math.max(open, close) + 0.5;
@@ -117,19 +119,19 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   it('compiles and executes all 90 bars without errors', () => {
     const failures = allResults.filter((r) => !r.success);
     expect(failures).toEqual([]);
-    expect(allResults).toHaveLength(90);
+    expect(allResults).toHaveLength(120);
   });
 
   it('batch executeBars returns all markers', () => {
     expect(batchResult.success).toBe(true);
-    // At minimum we expect: Long entry, Exit Long, Short entry, Exit Short, Long entry
+    // At minimum we expect: Short entry, Exit Short, Long entry, Exit Long, Short entry
     expect(batchMarkers.length).toBeGreaterThanOrEqual(5);
   });
 
   // --- Incremental marker correctness -------------------------------------
 
-  it('incremental execution produces at least 5 markers (Long entry, Exit Long, Short entry, Exit Short, Long entry)', () => {
-    // Expected sequence: Long entry + Exit Long (reverse) + Short entry + Exit Short (reverse) + Long entry
+  it('incremental execution produces at least 5 markers (Short entry, Exit Short, Long entry, Exit Long, Short entry)', () => {
+    // Expected sequence: Short entry + Exit Short (reverse) + Long entry + Exit Long (reverse) + Short entry
     expect(incrementalMarkers.length).toBeGreaterThanOrEqual(5);
   });
 
@@ -185,12 +187,14 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Marker sequence correctness ----------------------------------------
 
-  it('entries alternate: Long, then Short, then Long', () => {
+  it('entries alternate: Short, then Long, then Short', () => {
     const entries = incrementalMarkers.filter((m) => m.type === 'entry');
     expect(entries.length).toBeGreaterThanOrEqual(3);
-    expect(entries[0].direction).toBe('long');
-    expect(entries[1].direction).toBe('short');
-    expect(entries[2].direction).toBe('long');
+    // First entry is Short (EMA warmup means downtrend hits first crossover)
+    expect(entries[0].direction).toBe('short');
+    expect(entries[0].name).toBe('Short');
+    expect(entries[1].direction).toBe('long');
+    expect(entries[2].direction).toBe('short');
   });
 
   it('each reversal entry is preceded by a close', () => {

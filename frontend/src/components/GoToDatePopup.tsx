@@ -1,13 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { formatMskDate, formatMskTime, parseMskDateTime, nowUtcSeconds } from 'pine-framework/utils/time';
 
 interface GoToDatePopupProps {
   isOpen: boolean;
   onClose: () => void;
   onGoToDate: (timestampSeconds: number) => void;
-}
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max);
 }
 
 export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProps) {
@@ -17,14 +14,9 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
 
   useEffect(() => {
     if (isOpen) {
-      const now = new Date();
-      const mskOffset = 3 * 60 * 60 * 1000;
-      const msk = new Date(now.getTime() + mskOffset);
-      setDateStr(msk.toISOString().slice(0, 10));
-      setTimeStr(
-        String(msk.getUTCHours()).padStart(2, '0') + ':' +
-        String(msk.getUTCMinutes()).padStart(2, '0')
-      );
+      const now = nowUtcSeconds();
+      setDateStr(formatMskDate(now));
+      setTimeStr(formatMskTime(now));
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
@@ -33,13 +25,9 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return;
-    const hh = String(clamp(parseInt(m[1], 10), 0, 23)).padStart(2, '0');
-    const mm = String(clamp(parseInt(m[2], 10), 0, 59)).padStart(2, '0');
-    const ms = Date.parse(`${dateStr}T${hh}:${mm}:00+03:00`);
-    if (isNaN(ms)) return;
-    onGoToDate(Math.floor(ms / 1000));
+    const utc = parseMskDateTime(dateStr, timeStr);
+    if (isNaN(utc)) return;
+    onGoToDate(utc);
     onClose();
   };
 
@@ -71,7 +59,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate }: GoToDatePopupProp
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 10 }}>
             <label style={{ display: 'block', marginBottom: 4, color: '#888' }}>Date</label>
-<input
+            <input
               type="date"
               value={dateStr}
               onChange={(e) => setDateStr(e.target.value)}

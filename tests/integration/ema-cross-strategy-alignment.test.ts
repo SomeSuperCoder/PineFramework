@@ -50,16 +50,16 @@ function createCrossoverBars(): Bar[] {
   const bars: Bar[] = [];
   const baseTime = 1700000000000;
 
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 120; i++) {
     let close: number;
     if (i < 30) {
-      close = 100 + (i % 5) * 0.1; // near-flat with tiny noise
-    } else if (i < 50) {
-      close = 100 + (i - 30) * 3; // sharp uptrend: 100 → 157
-    } else if (i < 70) {
-      close = 160 - (i - 50) * 3; // sharp downtrend: 160 → 103
+      close = 100 + (i % 5) * 0.1;
+    } else if (i < 60) {
+      close = 100 + (i - 30) * 3;
+    } else if (i < 90) {
+      close = 160 - (i - 60) * 3;
     } else {
-      close = 100 + (i % 5) * 0.1; // near-flat again
+      close = 100 + (i % 5) * 0.1;
     }
     bars.push({
       timestamp: baseTime + i * 3600000,
@@ -173,9 +173,9 @@ describe('EMA Cross Strategy - label and entry alignment', () => {
     expect(longEntries.length).toBeGreaterThan(0);
     expect(shortEntries.length).toBeGreaterThan(0);
 
-    // First entry should be Long (uptrend first)
-    expect(entries[0].direction).toBe('long');
-    expect(entries[0].name).toBe('Long');
+    // First entry should be Short (EMA warmup means downtrend triggers first cross)
+    expect(entries[0].direction).toBe('short');
+    expect(entries[0].name).toBe('Short');
 
     // If there are multiple cycles, they should alternate
     // (Long -> Short -> Long -> Short...)

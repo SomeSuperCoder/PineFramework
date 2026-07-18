@@ -1,6 +1,7 @@
 import type { CandlestickData, PlotSeriesData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
+import { formatAxisLabel, formatTooltipDateTime } from 'pine-framework/utils/time.js';
 
 export class CrosshairRenderer {
   private hoveredBarIndex: number = -1;
@@ -74,7 +75,7 @@ export class CrosshairRenderer {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const date = new Date(candle.time * 1000);
-      const timeLabel = `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      const timeLabel = formatAxisLabel(candle.time);
       ctx.fillText(timeLabel, snappedX, timeScale.y + timeScale.height / 2);
 
       this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor);
@@ -89,7 +90,9 @@ export class CrosshairRenderer {
     chartArea: { x: number; y: number; width: number; height: number },
     textColor: string,
   ): void {
+    const dtLine = formatTooltipDateTime(candle.time);
     const lines = [
+      dtLine,
       `O: ${candle.open.toFixed(2)}`,
       `H: ${candle.high.toFixed(2)}`,
       `L: ${candle.low.toFixed(2)}`,
@@ -117,7 +120,7 @@ export class CrosshairRenderer {
 
     const lineHeight = 16;
     const padding = 6;
-    const tooltipWidth = 130;
+    const tooltipWidth = 155;
     const tooltipHeight = lines.length * lineHeight + padding * 2;
     let tooltipX = x + 12;
     let tooltipY = chartArea.y + 10;
@@ -138,8 +141,9 @@ export class CrosshairRenderer {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     for (let i = 0; i < lines.length; i++) {
-      const isOHLC = i < 4;
-      ctx.fillStyle = isOHLC ? (candle.close >= candle.open ? '#4caf50' : '#e94560') : textColor;
+      const isDate = i === 0;
+      const isOHLC = i >= 1 && i <= 4;
+      ctx.fillStyle = isDate ? '#8888aa' : isOHLC ? (candle.close >= candle.open ? '#4caf50' : '#e94560') : textColor;
       ctx.fillText(lines[i], tooltipX + padding, tooltipY + padding + i * lineHeight);
     }
   }

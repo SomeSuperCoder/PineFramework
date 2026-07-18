@@ -8,6 +8,7 @@ export * from './rendering/index.js';
 export * from './strategy/index.js';
 export * from './extensibility/index.js';
 export * from './performance/index.js';
+export * from './utils/time.js';
 export * from './api.js';
 
 export { parse } from './language/parser/index.js';
