@@ -74,15 +74,12 @@ export class PineChart {
   private barColors: Map<number, string> = new Map();
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
-  private teleportLine: { time: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' } | null = null;
+  private teleportLine: { time: number; timestamp: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string; visible: boolean } | null = null;
   private chartLabels: LabelData[] = [];
   private boxes: BoxData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private lastIndicatorCount: number = 0;
   private container: HTMLElement;
-
-  // Teleport line (vertical marker for "go to date" teleportation)
-  private teleportLine: { barIndex: number; timestamp: number; color: string; label: string; visible: boolean } | null = null;
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -554,7 +551,7 @@ export class PineChart {
 
   // Teleport line (vertical marker for "go to date")
   setTeleportLine(timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }): void {
-    this.teleportLine = { time: timeSeconds, visible: true, ...options };
+    this.teleportLine = { timestamp: timeSeconds, visible: true, ...options };
     this.markDirty();
   }
 
@@ -709,7 +706,7 @@ export class PineChart {
         this.markDirty();
       },
       setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => {
-        this.teleportLine = { time: timeSeconds, ...options };
+        this.teleportLine = { timestamp: timeSeconds, visible: true, ...options };
         this.markDirty();
       },
       clearTeleportLine: () => {
