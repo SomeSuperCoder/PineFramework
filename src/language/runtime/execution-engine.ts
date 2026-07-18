@@ -1454,6 +1454,67 @@ export class ExecutionEngine {
       return isNa(value);
     });
 
+    // Table builtins (stubs for indicators that use tables for dashboards)
+    this.builtins.set('table.new', (): PineValue => {
+      return 0; // table ID
+    });
+
+    this.builtins.set('table.cell', (): PineValue => {
+      return NA;
+    });
+
+    this.builtins.set('table.get_cell_text', (): PineValue => {
+      return '';
+    });
+
+    this.builtins.set('table.get_cell_text_color', (): PineValue => {
+      return '';
+    });
+
+    this.builtins.set('table.get_cell_bgcolor', (): PineValue => {
+      return '';
+    });
+
+    this.builtins.set('table.set_cell_text', (): PineValue => {
+      return NA;
+    });
+
+    this.builtins.set('table.set_cell_text_color', (): PineValue => {
+      return NA;
+    });
+
+    this.builtins.set('table.set_cell_bgcolor', (): PineValue => {
+      return NA;
+    });
+
+    this.builtins.set('table.set_cell_width', (): PineValue => {
+      return NA;
+    });
+
+    // Position namespace builtins (for table position)
+    this.builtins.set('position.top_left', 0);
+    this.builtins.set('position.top_center', 1);
+    this.builtins.set('position.top_right', 2);
+    this.builtins.set('position.middle_left', 3);
+    this.builtins.set('position.middle_center', 4);
+    this.builtins.set('position.middle_right', 5);
+    this.builtins.set('position.bottom_left', 6);
+    this.builtins.set('position.bottom_center', 7);
+    this.builtins.set('position.bottom_right', 8);
+
+    // Size namespace builtins (for table/text size)
+    this.builtins.set('size.auto', 'auto');
+    this.builtins.set('size.tiny', 'tiny');
+    this.builtins.set('size.small', 'small');
+    this.builtins.set('size.normal', 'normal');
+    this.builtins.set('size.large', 'large');
+    this.builtins.set('size.huge', 'huge');
+
+    // Text alignment builtins
+    this.builtins.set('text.align_left', 'left');
+    this.builtins.set('text.align_center', 'center');
+    this.builtins.set('text.align_right', 'right');
+
     this.builtins.set('box', (_arg?: PineValue): PineValue => {
       return NA;
     });
