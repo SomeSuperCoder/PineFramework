@@ -1396,3 +1396,71 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 3. THE Chart_Library SHALL suppress WebSocket candle updates until the initial historical REST data has loaded, preventing a brief flash of a single candle before the full dataset appears
 4. THE Chart_Library SHALL track a `historicalDataLoadedRef` flag that is set to `false` when a new data fetch begins and `true` when the REST response is received
 5. WHEN `historicalDataLoadedRef` is `false`, THE Chart_Library SHALL ignore incoming WebSocket kline data for candle updates
+
+### Requirement 45: Centralized Time Module
+
+**User Story:** As a developer, I want a shared time utility module that provides consistent time handling across frontend and backend, so that time parsing, formatting, and alignment logic is centralized and consistent.
+
+#### Acceptance Criteria
+
+1. THE System SHALL provide a `src/utils/time.ts` module accessible to both frontend and backend via the `pine-framework` package exports
+2. THE Time Module SHALL provide timezone-aware timestamp parsing accepting ISO strings, epoch milliseconds, and date components
+3. THE Time Module SHALL provide `formatTime(timestamp, timeframe)` for adaptive axis label formatting based on timeframe
+4. THE Time Module SHALL provide `intervalToMs(interval)` converting timeframe strings (1m, 1h, 1D) to milliseconds
+5. THE Time Module SHALL provide `alignToInterval(timestamp, interval)` snapping timestamps to interval boundaries
+6. THE Time Module SHALL provide `timeAgo(timestamp)` for human-readable relative time display
+7. THE Frontend SHALL use the time module for CrosshairRenderer, AxisRenderer, GoToDatePopup, and ChartComponent
+8. THE Backend SHALL use the time module for Bybit adapter, ScriptSession, and kline processing
+
+### Requirement 46: Go to Date with Teleport Line
+
+**User Story:** As a chart analyst, I want to jump to a specific date and time on the chart, so that I can quickly navigate to historical events or specific time periods for analysis.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL display a "Go to Date" button on the footer bar
+2. WHEN clicked, THE Frontend SHALL open a popup with date/time input fields and a calendar picker
+3. ON submit, THE Frontend SHALL call `chart.timeScale().scrollToDate(timestamp)` to navigate the viewport
+4. THE Frontend SHALL render a "teleport line" on the chart at the target timestamp — a vertical dashed line with a date/time label
+5. THE Teleport Line SHALL use `findBarIndex(candles, time)` for accurate time-based positioning
+6. THE Teleport Line SHALL persist until the next navigation action or manual clear
+7. THE Teleport Line SHALL be rendered on the topmost canvas layer for visibility
+
+### Requirement 47: Error Console as Toggleable Popup
+
+**User Story:** As a chart analyst, I want the error console to be a collapsible popup with an error count badge, so that it doesn't consume vertical space when there are no errors but remains accessible when needed.
+
+#### Acceptance Criteria
+
+1. THE ErrorConsole SHALL render as a popup overlay when expanded, and collapse to a badge in the footer bar when closed
+2. THE Error Count Badge SHALL display the number of active errors in red
+3. CLICKING the badge SHALL toggle the popup open/closed
+4. THE Popup SHALL include a close (X) button to collapse it
+5. THE Popup SHALL list compilation and runtime errors with line numbers, descriptions, and source mapping
+6. ERROR STATE SHALL persist across chart re-executions and script changes
+
+### Requirement 48: Single Strategy Enforcement
+
+**User Story:** As a chart analyst, I want the system to enforce at most one strategy on the chart at a time, so that strategy markers don't overlap and cause confusion.
+
+#### Acceptance Criteria
+
+1. WHEN a user adds a strategy script via Quick Adder or CodeEditor "Add" button, THE Frontend SHALL check for existing strategy indicators
+2. IF a strategy already exists, THE Frontend SHALL display a StrategyConflictDialog with options: Replace (remove existing, add new) or Cancel
+3. THE Backend SHALL also validate on `POST /api/indicators` and reject if a strategy is already running for the session
+4. STRATEGY INDICATORS are identified by `overlay: true` in execution result + presence of `strategyMarkers`
+5. THE Conflict Dialog SHALL be a centered modal with clear Replace/Cancel buttons
+
+### Requirement 49: Footer Bar with Multi-Control Layout
+
+**User Story:** As a chart analyst, I want a persistent footer bar containing frequently used chart controls, so I can access them without opening menus or the code editor.
+
+#### Acceptance Criteria
+
+1. THE Frontend SHALL render a footer bar between the chart and error console
+2. THE Footer Bar SHALL contain (left to right): Auto-Scale toggle, Quick Indicator/Strategy Adder button, Go to Date button
+3. THE Auto-Scale Toggle SHALL show "Auto Scale" with green background when active, dim when inactive
+4. THE Quick Adder Button SHALL open the quick adder popup (Requirement 42)
+5. THE Go to Date Button SHALL open the date/time picker popup (Requirement 46)
+6. THE Footer Bar SHALL use dark theme styling consistent with the rest of the UI
+7. THE Footer Bar SHALL be responsive and accessible on mobile and desktop
