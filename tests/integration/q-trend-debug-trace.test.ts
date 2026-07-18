@@ -77,7 +77,8 @@ describe('Q-Trend debug trace bar 199-205', () => {
 
     console.log('\n=== Final values at bars 199-205 ===');
     for (let i = 199; i <= 205 && i < bars.length; i++) {
-      console.log(`Bar ${i}: h=${hV[i]}, l=${lV[i]}, m=${mV[i]}, m_prev=${i > 0 ? mV[i-1] : 'NA'}`);
+      const fmt = (v: unknown) => typeof v === 'symbol' ? 'NA' : v;
+      console.log(`Bar ${i}: h=${fmt(hV[i])}, l=${fmt(lV[i])}, m=${fmt(mV[i])}, m_prev=${i > 0 ? fmt(mV[i-1]) : 'NA'}`);
     }
   }, 30000);
 });

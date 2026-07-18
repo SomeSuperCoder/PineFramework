@@ -20,17 +20,27 @@ function loadBars(): { timestamp: number; open: number; high: number; low: numbe
   }));
 }
 
-// Reference values for SOLUSDT 5m, July 17 2026 (Moscow time).
-// m, upper, lower calibrated from engine output (rounded to 2 decimals).
-// src, h, l, d, atr, epsilon match TradingView.
-const REFERENCE = [
+// Reference values for SOLUSDT 5m, July 17-18 2026 (Moscow time).
+// Bars chosen at shape-producing bars (where plotshape() fires).
+// Shapes require additional conditions (change_down or change_up must
+// be true simultaneously with strong_buy/strong_sell and ls[1] guard).
+interface ShapeSpec { text: string; style: string; location: string }
+const REFERENCE: Array<{
+  label: string; time: number;
+  candle: { open: number; high: number; low: number; close: number };
+  src: number; h: number; l: number; d: number;
+  m: number; atr: number; epsilon: number; upper: number; lower: number;
+  change_up: boolean; change_down: boolean; strong_buy: boolean; strong_sell: boolean;
+  shape: ShapeSpec | null;
+}> = [
   {
-    label: '21:20 MSK',
-    time: Date.UTC(2026, 6, 17, 18, 20, 0),
-    candle: { open: 75.09, high: 75.10, low: 75.01, close: 75.06 },
-    src: 75.06, h: 75.50, l: 73.47, d: 2.03,
-    m: 75.13, atr: 0.17, epsilon: 0.17, upper: 75.30, lower: 74.97,
-    change_up: false, change_down: false, strong_buy: false, strong_sell: true,
+    label: '21:15 MSK',
+    time: Date.UTC(2026, 6, 17, 18, 15, 0),
+    candle: { open: 75.26, high: 75.26, low: 75.05, close: 75.09 },
+    src: 75.09, h: 75.50, l: 73.47, d: 2.03,
+    m: 75.13, atr: 0.16, epsilon: 0.16, upper: 75.29, lower: 74.97,
+    change_up: false, change_down: true, strong_buy: false, strong_sell: true,
+    shape: { text: 'STRONG', style: 'labeldown', location: 'abovebar' },
   },
   {
     label: '21:45 MSK',
@@ -39,14 +49,16 @@ const REFERENCE = [
     src: 75.29, h: 75.50, l: 73.47, d: 2.03,
     m: 75.28, atr: 0.15, epsilon: 0.15, upper: 75.43, lower: 75.13,
     change_up: true, change_down: false, strong_buy: false, strong_sell: false,
+    shape: { text: 'BUY', style: 'labelup', location: 'belowbar' },
   },
   {
-    label: '22:05 MSK',
-    time: Date.UTC(2026, 6, 17, 19, 5, 0),
-    candle: { open: 75.31, high: 75.31, low: 75.15, close: 75.16 },
-    src: 75.16, h: 75.50, l: 73.47, d: 2.03,
-    m: 75.28, atr: 0.15, epsilon: 0.15, upper: 75.43, lower: 75.13,
-    change_up: false, change_down: false, strong_buy: false, strong_sell: true,
+    label: '22:10 MSK',
+    time: Date.UTC(2026, 6, 17, 19, 10, 0),
+    candle: { open: 75.16, high: 75.16, low: 75.02, close: 75.05 },
+    src: 75.05, h: 75.50, l: 73.47, d: 2.03,
+    m: 75.13, atr: 0.15, epsilon: 0.15, upper: 75.28, lower: 74.97,
+    change_up: false, change_down: true, strong_buy: false, strong_sell: true,
+    shape: { text: 'STRONG', style: 'labeldown', location: 'abovebar' },
   },
 ];
 
@@ -54,6 +66,7 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
   let result: ReturnType<ExecutionEngine['executeBars']>;
   let bars: ReturnType<typeof loadBars>;
   let getVar: (name: string) => any[] | null;
+  let getShape: (idx: number) => Array<{ text: string; style: string; location: string; }>;
   let barIndexByTime: Map<number, number>;
 
   beforeAll(() => {
@@ -82,11 +95,18 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
       return b ? b.series.values : null;
     };
 
+    getShape = (idx: number) => {
+      const bar = bars[idx];
+      return (result.shapes || [])
+        .filter((s: any) => s.time === bar.timestamp)
+        .map((s: any) => ({ text: s.text, style: s.style, location: s.location }));
+    };
+
     barIndexByTime = new Map(bars.map((b, i) => [b.timestamp, i]));
   });
 
   for (const ref of REFERENCE) {
-    it(`${ref.label} – candle + indicator values match TradingView`, () => {
+    it(`${ref.label} – signal shape, variables, and candles match`, () => {
       const idx = barIndexByTime.get(ref.time);
       expect(idx).toBeDefined();
 
@@ -96,15 +116,17 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
 
       const checkNum = (name: string, engineVal: number, refVal: number) => {
         if (r(engineVal) !== refVal) {
-          diffs.push(`${name}: engine=${engineVal} (rounded=${r(engineVal)}) tv=${refVal}`);
+          diffs.push(`${name}: engine=${engineVal} (rounded=${r(engineVal)}) expected=${refVal}`);
         }
       };
 
+      // Candle
       checkNum('open', bar.open, ref.candle.open);
       checkNum('high', bar.high, ref.candle.high);
       checkNum('low', bar.low, ref.candle.low);
       checkNum('close', bar.close, ref.candle.close);
 
+      // Indicator variables
       const src = getVar('src')?.[idx!] as number;
       const h = getVar('h')?.[idx!] as number;
       const l = getVar('l')?.[idx!] as number;
@@ -125,12 +147,33 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
         checkNum('lower', m - epsilon, ref.lower);
       }
 
+      // Boolean signal variables
       for (const name of ['change_up', 'change_down', 'strong_buy', 'strong_sell'] as const) {
         const engineVal = getVar(name)?.[idx!];
         const refVal = ref[name];
         if (engineVal !== refVal) {
-          diffs.push(`${name}: engine=${engineVal} tv=${refVal}`);
+          diffs.push(`${name}: engine=${engineVal} expected=${refVal}`);
         }
+      }
+
+      // Shape check
+      const shapes = getShape(idx!);
+      if (ref.shape) {
+        const matching = shapes.filter(s => s.text === ref.shape!.text);
+        if (matching.length === 0) {
+          diffs.push(`shape: expected text="${ref.shape.text}" but found no matching shape at this bar`);
+          diffs.push(`  (all shapes at this bar: ${JSON.stringify(shapes)})`);
+        } else {
+          const match = matching[0];
+          if (match.style !== ref.shape.style) {
+            diffs.push(`shape.style: engine=${match.style} expected=${ref.shape.style}`);
+          }
+          if (match.location !== ref.shape.location) {
+            diffs.push(`shape.location: engine=${match.location} expected=${ref.shape.location}`);
+          }
+        }
+      } else if (shapes.length > 0) {
+        diffs.push(`shape: expected no shape but found ${JSON.stringify(shapes)}`);
       }
 
       if (diffs.length > 0) {
