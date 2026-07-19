@@ -50,6 +50,53 @@ import {
 } from './scope.js';
 import { type Series, createSeries } from './series.js';
 
+// RingBuffer for O(1) push/pop operations (replaces Array.push/shift)
+class RingBuffer {
+  private buffer: number[];
+  private capacity: number;
+  private head: number = 0;
+  private size: number = 0;
+  private sum: number = 0;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.buffer = new Array(capacity);
+  }
+
+  push(value: number): void {
+    if (this.size === this.capacity) {
+      // Overwrite oldest value
+      this.sum -= this.buffer[this.head];
+      this.buffer[this.head] = value;
+      this.sum += value;
+      this.head = (this.head + 1) % this.capacity;
+    } else {
+      this.buffer[this.head] = value;
+      this.sum += value;
+      this.head = (this.head + 1) % this.capacity;
+      this.size++;
+    }
+  }
+
+  getSize(): number {
+    return this.size;
+  }
+
+  getSum(): number {
+    return this.sum;
+  }
+
+  getCapacity(): number {
+    return this.capacity;
+  }
+
+  clear(): void {
+    this.head = 0;
+    this.size = 0;
+    this.sum = 0;
+  }
+}
+
 export interface ExecutionContext {
   barIndex: number;
   barCount: number;
@@ -363,21 +410,14 @@ export class ExecutionEngine {
 
       const key = `sma_${len}_${this.currentCallSiteId}`;
       if (!this.smaBuffers.has(key)) {
-        this.smaBuffers.set(key, []);
+        this.smaBuffers.set(key, new RingBuffer(len));
       }
       const buf = this.smaBuffers.get(key)!;
       buf.push(source as number);
-      if (buf.length > len) {
-        buf.shift();
-      }
-      if (buf.length < len) {
+      if (buf.getSize() < len) {
         return NA;
       }
-      let sum = 0;
-      for (let i = 0; i < buf.length; i++) {
-        sum += buf[i];
-      }
-      return sum / buf.length;
+      return buf.getSum() / len;
     });
 
     this.builtins.set('ta.ema', (source: PineValue, length: PineValue): PineValue => {
