@@ -55,11 +55,12 @@ describe('Commission Calculator', () => {
   });
 
   describe('getAllCommissionMethodDescriptors', () => {
-    it('should return 5 built-in methods', () => {
+    it('should return 6 built-in methods', () => {
       const descriptors = getAllCommissionMethodDescriptors();
-      expect(descriptors).toHaveLength(5);
+      expect(descriptors).toHaveLength(6);
       expect(descriptors.map((d) => d.id)).toEqual([
         'percent_fixed',
+        'percent_commission',
         'per_order_fixed',
         'jupiter_ultra',
         'jupiter_manual',

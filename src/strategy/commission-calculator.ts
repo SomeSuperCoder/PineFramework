@@ -26,6 +26,7 @@ export interface TradeContext {
 /** Identifies a built-in commission calculation method. */
 export type CommissionMethodId =
   | 'percent_fixed'
+  | 'percent_commission'
   | 'per_order_fixed'
   | 'jupiter_ultra'
   | 'jupiter_manual'
@@ -53,9 +54,16 @@ export interface JupiterUltraSettings {
   rate: number;
 }
 
+/** Settings for the percent_commission method (legacy-compatible). */
+export interface PercentCommissionSettings {
+  /** Commission as a percentage (e.g., 0.1 = 0.1%), matching legacy commissionType: 'percent'. */
+  rate: number;
+}
+
 /** Union of all method-specific settings. */
 export type CommissionMethodSettings =
   | PercentFixedSettings
+  | PercentCommissionSettings
   | PerOrderFixedSettings
   | JupiterUltraSettings
   | Record<string, never>
@@ -116,6 +124,18 @@ class PercentFixedCalculator implements CommissionCalculator {
   }
 }
 
+class PercentCommissionCalculator implements CommissionCalculator {
+  /**
+   * Legacy-compatible commission calculator.
+   * Takes `commission` as a percentage (e.g., 0.1 = 0.1%), matching the legacy `commission` + `commissionType: 'percent'` behavior.
+   * This provides a drop-in replacement for legacy commission configuration.
+   */
+  calculate(context: TradeContext, config: CommissionConfig): number {
+    const percent = (config.settings as PercentCommissionSettings)?.commission ?? 0;
+    return context.tradeValue * (percent / 100);
+  }
+}
+
 class PerOrderFixedCalculator implements CommissionCalculator {
   calculate(_context: TradeContext, config: CommissionConfig): number {
     return (config.settings as PerOrderFixedSettings)?.amount ?? 0;
@@ -155,6 +175,7 @@ class NoneCalculator implements CommissionCalculator {
 
 const CALCULATORS: Record<CommissionMethodId, CommissionCalculator> = {
   percent_fixed: new PercentFixedCalculator(),
+  percent_commission: new PercentCommissionCalculator(),
   per_order_fixed: new PerOrderFixedCalculator(),
   jupiter_ultra: new JupiterUltraCalculator(),
   jupiter_manual: new JupiterManualCalculator(),
@@ -169,7 +190,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   {
     id: 'percent_fixed',
     name: 'Percent (Fixed)',
-    description: 'Fixed percentage of trade value',
+    description: 'Fixed percentage of trade value (fraction)',
     enforceLongOnly: false,
     defaultSettings: { rate: 0.001 } as PercentFixedSettings,
     settingsFields: [
@@ -182,6 +203,25 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         max: 1,
         step: 0.0001,
         tooltip: 'Commission rate as a fraction (e.g. 0.001 = 0.1%)',
+      },
+    ],
+  },
+  {
+    id: 'percent_commission',
+    name: 'Percent Commission (Legacy)',
+    description: 'Percentage commission matching legacy commissionType: percent (e.g. 0.1 = 0.1%)',
+    enforceLongOnly: false,
+    defaultSettings: { rate: 0.1 } as PercentCommissionSettings,
+    settingsFields: [
+      {
+        key: 'rate',
+        label: 'Rate (%)',
+        type: 'number',
+        defaultValue: 0.1,
+        min: 0,
+        max: 100,
+        step: 0.01,
+        tooltip: 'Commission as a percentage (e.g. 0.1 = 0.1%)',
       },
     ],
   },
