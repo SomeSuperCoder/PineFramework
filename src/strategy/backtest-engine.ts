@@ -190,14 +190,34 @@ export class BacktestEngine {
     const startEquity = points[0]!.equity;
     let prevMonthEquity = startEquity;
 
+    // Track all months in the range
+    const firstDate = new Date(points[0]!.time);
+    const lastDate = new Date(points[points.length - 1]!.time);
+    const startYear = firstDate.getFullYear();
+    const startMonth = firstDate.getMonth();
+    const endYear = lastDate.getFullYear();
+    const endMonth = lastDate.getMonth();
+
+    // Fill all months in range with 0% return initially
+    for (let year = startYear; year <= endYear; year++) {
+      const startM = year === startYear ? startMonth : 0;
+      const endM = year === endYear ? endMonth : 11;
+      for (let month = startM; month <= endM; month++) {
+        const key = `${year}-${String(month + 1).padStart(2, '0')}`;
+        monthly[key] = 0;
+      }
+    }
+
+    // Now compute actual returns for months that have data
+    let lastRecordedEquity = startEquity;
     for (const point of points) {
       const date = new Date(point.time);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
-      if (!monthly[key]) {
-        monthly[key] =
-          prevMonthEquity > 0 ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100 : 0;
-        prevMonthEquity = point.equity;
+      // Only update if this is the first data point for this month
+      if (monthly[key] === 0 && point.equity !== lastRecordedEquity) {
+        monthly[key] = lastRecordedEquity > 0 ? ((point.equity - lastRecordedEquity) / lastRecordedEquity) * 100 : 0;
+        lastRecordedEquity = point.equity;
       }
     }
 
