@@ -1,4 +1,4 @@
-import { type Bar, type ExecutionContext, ExecutionEngine, barsToContext, type FormingCandleResult, type ExecutionResult } from 'pine-framework';
+import { type Bar, type ExecutionContext, ExecutionEngine, barsToContext, createSeries, type FormingCandleResult, type ExecutionResult } from 'pine-framework';
 import type { ScriptOutputs } from './ScriptSession.js';
 
 function pineValueToJSON(v: unknown): number | string | boolean | null {
@@ -32,8 +32,14 @@ export class FormingCandleManager {
     const lastBar = this.bars[this.bars.length - 1];
     if (lastBar && lastBar.timestamp === bar.timestamp) {
       this.bars[this.bars.length - 1] = bar;
-      const fullContexts = barsToContext(this.bars);
-      this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+      // Update only the last context in-place (O(1)) instead of rebuilding all (O(n))
+      const lastContext = this.contexts[this.contexts.length - 1];
+      lastContext.timestamp = bar.timestamp;
+      lastContext.open = createSeries('open', [bar.open]);
+      lastContext.high = createSeries('high', [bar.high]);
+      lastContext.low = createSeries('low', [bar.low]);
+      lastContext.close = createSeries('close', [bar.close]);
+      lastContext.volume = createSeries('volume', [bar.volume]);
     } else {
       this.bars.push(bar);
       const fullContexts = barsToContext(this.bars);
@@ -53,8 +59,14 @@ export class FormingCandleManager {
   confirm(bar: Bar): ScriptOutputs {
     if (bar.timestamp <= this.lastConfirmedTimestamp) {
       this.bars[this.bars.length - 1] = bar;
-      const fullContexts = barsToContext(this.bars);
-      this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+      // Update only the last context in-place
+      const lastContext = this.contexts[this.contexts.length - 1];
+      lastContext.timestamp = bar.timestamp;
+      lastContext.open = createSeries('open', [bar.open]);
+      lastContext.high = createSeries('high', [bar.high]);
+      lastContext.low = createSeries('low', [bar.low]);
+      lastContext.close = createSeries('close', [bar.close]);
+      lastContext.volume = createSeries('volume', [bar.volume]);
       const context = this.contexts[this.contexts.length - 1]!;
       this.engine.setFormingCandle(true);
       const result = this.engine.computeFormingCandle(context);
@@ -62,8 +74,14 @@ export class FormingCandleManager {
     }
     this.lastConfirmedTimestamp = bar.timestamp;
     this.bars[this.bars.length - 1] = bar;
-    const fullContexts = barsToContext(this.bars);
-    this.contexts[this.contexts.length - 1] = fullContexts[fullContexts.length - 1]!;
+    // Update only the last context in-place
+    const lastContext = this.contexts[this.contexts.length - 1];
+    lastContext.timestamp = bar.timestamp;
+    lastContext.open = createSeries('open', [bar.open]);
+    lastContext.high = createSeries('high', [bar.high]);
+    lastContext.low = createSeries('low', [bar.low]);
+    lastContext.close = createSeries('close', [bar.close]);
+    lastContext.volume = createSeries('volume', [bar.volume]);
     const context = this.contexts[this.contexts.length - 1]!;
     this.engine.setFormingCandle(false);
     const execResult = this.engine.executeBar(context);
