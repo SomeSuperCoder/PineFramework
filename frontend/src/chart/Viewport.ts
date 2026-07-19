@@ -42,7 +42,8 @@ export class Viewport {
 
   scrollTo(barIndex: number, chartWidth: number): void {
     this.state.barCount = Math.ceil(chartWidth / this.state.barSpacing) + 2;
-    this.state.firstBarIndex = Math.max(0, Math.floor(barIndex - this.state.barCount / 2));
+    const maxFirstBarIndex = Math.max(0, this.totalBars - this.state.barCount);
+    this.state.firstBarIndex = Math.round(Math.max(0, Math.min(maxFirstBarIndex, barIndex - this.state.barCount / 2)));
   }
 
   scrollToDate(_timestamp: number, _chartWidth: number): void {
@@ -53,12 +54,14 @@ export class Viewport {
     const centerBar = this.pixelToBarIndex(centerPixelX);
     this.state.barSpacing = Math.max(this.minBarSpacing, Math.min(this.maxBarSpacing, this.state.barSpacing * factor));
     this.state.barCount = Math.ceil(chartWidth / this.state.barSpacing) + 2;
-    this.state.firstBarIndex = Math.max(0, Math.floor(centerBar - (centerPixelX / this.state.barSpacing)));
+    const maxFirstBarIndex = Math.max(0, this.totalBars - this.state.barCount);
+    this.state.firstBarIndex = Math.round(Math.max(0, Math.min(maxFirstBarIndex, centerBar - (centerPixelX / this.state.barSpacing))));
   }
 
   pan(deltaPixels: number): void {
     const deltaBars = deltaPixels / this.state.barSpacing;
-    this.state.firstBarIndex = Math.max(0, this.state.firstBarIndex - deltaBars);
+    const maxFirstBarIndex = Math.max(0, this.totalBars - this.state.barCount);
+    this.state.firstBarIndex = Math.round(Math.max(0, Math.min(maxFirstBarIndex, this.state.firstBarIndex - deltaBars)));
   }
 
   barIndexToPixel(barIndex: number): number {
