@@ -95,6 +95,27 @@ class RingBuffer {
     this.size = 0;
     this.sum = 0;
   }
+
+  toArray(): number[] {
+    if (this.size === 0) return [];
+    if (this.size < this.capacity) {
+      return this.buffer.slice(0, this.size);
+    }
+    // Buffer is full, need to reconstruct in order
+    const result = new Array(this.capacity);
+    for (let i = 0; i < this.capacity; i++) {
+      result[i] = this.buffer[(this.head + i) % this.capacity];
+    }
+    return result;
+  }
+
+  static fromArray(arr: number[], capacity: number): RingBuffer {
+    const rb = new RingBuffer(capacity);
+    for (const v of arr) {
+      rb.push(v);
+    }
+    return rb;
+  }
 }
 
 export interface ExecutionContext {
@@ -2246,7 +2267,7 @@ export class ExecutionEngine {
     const preTimestampsLen = this.barTimestamps.length;
     const preTotalBars = this.metrics.totalBars;
     const preAlertTriggersLen = this.alertTriggers.length;
-    const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, [...v]]));
+    const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]));
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
     const preCrossPrevValues = new Map(this.crossPrevValues);
     const preChangePrevValues = new Map(this.changePrevValues);
@@ -2289,7 +2310,13 @@ export class ExecutionEngine {
       : this.metrics.failedBars - 1;
 
     this.globalScope = cloneRuntimeScope(this.globalScope);
-    this.smaBuffers = preSmaBuffers;
+    // Restore smaBuffers: convert arrays back to RingBuffers
+    this.smaBuffers = new Map();
+    for (const [key, arr] of preSmaBuffers) {
+      const parts = key.split('_');
+      const capacity = parseInt(parts[1], 10);
+      this.smaBuffers.set(key, RingBuffer.fromArray(arr, capacity));
+    }
     this.emaState = preEmaState;
     this.crossPrevValues = preCrossPrevValues;
     this.changePrevValues = preChangePrevValues;
