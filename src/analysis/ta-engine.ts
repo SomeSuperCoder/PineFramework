@@ -2,10 +2,10 @@ import { TARegistry } from './ta-registry.js';
 import * as movingAverages from './moving-averages.js';
 import * as oscillators from './oscillators.js';
 import * as mathFunctions from './math-functions.js';
-import { NA, isNa } from '../language/types/na.js';
+import { NA, type PineValue } from '../language/types/na.js';
 
 // Helper to convert analysis layer NaN to PineScript NA
-function toPineValue(value: number): number | typeof NA {
+function toPineValue(value: number): PineValue {
   return Number.isNaN(value) ? NA : value;
 }
 
@@ -157,7 +157,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (source: number, fast: number, slow: number) => {
         const result = oscillators.macd([source], fast, slow, 9);
-        return result.macd[result.macd.length - 1] ?? NaN;
+        return toPineValue(result.macd[result.macd.length - 1] ?? NaN);
       },
       description: 'MACD Line',
     });
@@ -169,7 +169,7 @@ export class TAEngine {
       maxArgs: 4,
       implementation: (high: number, low: number, close: number, length: number) => {
         const result = oscillators.stoch([high], [low], [close], length, 3);
-        return result.k[result.k.length - 1] ?? NaN;
+        return toPineValue(result.k[result.k.length - 1] ?? NaN);
       },
       description: 'Stochastic Oscillator',
     });
@@ -181,7 +181,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (source: number, rsiLength: number, stochLength: number) => {
         const result = oscillators.stochRsi([source], rsiLength, stochLength, 3, 3);
-        return result.k[result.k.length - 1] ?? NaN;
+        return toPineValue(result.k[result.k.length - 1] ?? NaN);
       },
       description: 'Stochastic RSI',
     });
@@ -205,7 +205,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (high: number, low: number, close: number) => {
         const result = oscillators.adx([high], [low], [close], 14);
-        return result.adx[result.adx.length - 1] ?? NaN;
+        return toPineValue(result.adx[result.adx.length - 1] ?? NaN);
       },
       description: 'Average Directional Index',
     });
@@ -439,7 +439,7 @@ export class TAEngine {
     });
   }
 
-  call(namespace: string, name: string, args: number[]): number {
+  call(namespace: string, name: string, args: number[]): PineValue {
     return this.registry.call(namespace, name, args);
   }
 

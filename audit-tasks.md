@@ -202,63 +202,63 @@
 
 ### Low
 
-- [ ] **L-001** | [Alert Conditions Are Accumulated Without Cleanup] | `src/language/runtime/execution-engine.ts:224` | `alertConditionEntries` and `alertTriggers` grow unbounded
+- [x] **L-001** | [Alert Conditions Are Accumulated Without Cleanup] | `src/language/runtime/execution-engine.ts:224` | `alertConditionEntries` and `alertTriggers` grow unbounded
   - **Issue:** `alertConditionEntries` and `alertTriggers` arrays are never cleared or bounded. Every bar that triggers an alert condition adds an entry. Over a long backtest or continuous real-time session, these arrays grow without bound, leaking memory.
   - **Impact:** Memory leak in long-running sessions. Backtests with many alerts consume increasing memory.
   - **Fix:** Add a maximum size (e.g., 1000 entries) and trim oldest when exceeded. Or, for `alertTriggers`, only keep the last N entries and return the full set in the execution result (which the FormingCandleManager consumes). The backend should not accumulate triggers indefinitely.
   - **Test:** Run a strategy that triggers alerts on every bar for 5000 bars, verify memory doesn't grow beyond the cap.
 - **Confidence:** High
 
-- [ ] **L-002** | [Backtest Date Filtering `undefined` Non-null Assertions] | `src/strategy/backtest-engine.ts:86,89` | Uses `this.config.startDate!` with non-null assertion after undefined check
+- [x] **L-002** | [Backtest Date Filtering `undefined` Non-null Assertions] | `src/strategy/backtest-engine.ts:86,89` | Uses `this.config.startDate!` with non-null assertion after undefined check
   - **Issue:** Lines 85-90: `if (this.config.startDate !== undefined) { filteredBars = filteredBars.filter((b) => b.timestamp >= this.config.startDate!) }`. The `!` is a lie — TypeScript knows `startDate` could be `undefined` from the `BacktestConfig` type (line 37: `startDate?: number`). While the check ensures it's defined, it's a code smell. The same for `endDate`.
   - **Impact:** No runtime issue, but hides potential type errors. If someone changes the `BacktestConfig` type, the non-null assertion could mask the undefined case.
   - **Fix:** Use a local const: `const startDate = this.config.startDate; if (startDate !== undefined) { ... b.timestamp >= startDate ... }`.
   - **Test:** All existing backtest tests pass.
 - **Confidence:** Medium
 
-- [ ] **L-003** | [FormingCandleManager.confirm() Skips Last Bar When Timestamp Already Confirmed] | `backend/src/session/FormingCandleManager.ts:53-62` | Edge case: confirm called for already-confirmed bar doesn't update lastConfirmedTimestamp
+- [x] **L-003** | [FormingCandleManager.confirm() Skips Last Bar When Timestamp Already Confirmed] | `backend/src/session/FormingCandleManager.ts:53-62` | Edge case: confirm called for already-confirmed bar doesn't update lastConfirmedTimestamp
   - **Issue:** On line 54: `if (bar.timestamp <= this.lastConfirmedTimestamp)` — if a bar with the same timestamp as the last confirmed bar arrives again, the method replaces the bar data and runs `computeFormingCandle` but does NOT update `lastConfirmedTimestamp`. This seems fine for a re-confirm. But what if the bar's timestamp is LESS than `lastConfirmedTimestamp` (older bar)? It still runs the forming candle path, but the bar data has already been replaced with the closing price of that old bar. The `lastConfirmedTimestamp` isn't updated, so future confirmations with a timestamp between the old bar and the new bar could be missed. This is a very edge case and unlikely in normal operation, but shows the logic is fragile.
   - **Impact:** Under unusual data arrival order (e.g., delayed data), the confirmation logic could miss bars or process them incorrectly.
   - **Fix:** Add a guard for the `bar.timestamp < this.lastConfirmedTimestamp` case: emit a warning and skip. Only allow re-confirm of the most recent bar (timestamp === lastConfirmedTimestamp).
   - **Test:** Send a stale bar (older timestamp), verify it's rejected.
 - **Confidence:** Low
 
-- [ ] **L-004** | [`plot` Builtin Uses Title Heuristic That May Conflict] | `src/language/runtime/execution-engine.ts:3025-3033` | heuristically assigns default title from first argument identifier name
+- [x] **L-004** | [`plot` Builtin Uses Title Heuristic That May Conflict] | `src/language/runtime/execution-engine.ts:3025-3033` | heuristically assigns default title from first argument identifier name
   - **Issue:** Lines 3025-3033: if a `plot()` call has no named `title` and the first argument is an `Identifier` node, the code assigns `namedArgs.title = firstArg.name`. This means `plot(close)` becomes equivalent to `plot(close, title='close')`. But what about `plot(close + high)`? The first argument is a `BinaryExpression`, not an `Identifier`, so no title is set (line 3026: `if (funcName === 'plot' && !namedArgs.title) { const hasPositionalTitle = expr.arguments.length > 1 && expr.arguments[1]!.kind === 'StringLiteral'; if (!hasPositionalTitle && expr.arguments.length > 0) { const firstArg = expr.arguments[0]; if (firstArg.kind === 'Identifier') { namedArgs.title = firstArg.name; } } }`). This means the auto-title only works for simple `plot(close)` but not `plot(close + high)`. Users get inconsistent plot titles.
   - **Impact:** Some plots get auto-titles, others get generic "plot" title. UI shows confusing labels.
   - **Fix:** Use a more descriptive auto-title based on the expression text, or always require explicit titles. At minimum, document the behavior.
   - **Test:** `plot(close + high)` should not silently use a bad title.
 - **Confidence:** Medium
 
-- [ ] **L-005** | [`str.plot()` Not a Real Function] | `src/language/runtime/execution-engine.ts:3464-3467` | `plot` as member of `str` namespace incorrectly handled
+- [x] **L-005** | [`str.plot()` Not a Real Function] | `src/language/runtime/execution-engine.ts:3464-3467` | `plot` as member of `str` namespace incorrectly handled
   - **Issue:** Lines 3464-3467: `if (objName === 'plot') { return expr.property; }` — This handles `plot.xxx` member expressions by returning `expr.property` as a string. This is wrong — there is no `plot` namespace object in PineScript. This is likely dead code or a misinterpretation. If a user writes `plot.something`, it would return the property name string instead of throwing an error.
   - **Impact:** Silent wrong behavior for invalid `plot.xxx` syntax. The user gets a string instead of a compile error.
   - **Fix:** Remove this code path or handle it only if `plot` is a known builtin namespace. Let the undefined variable error occur naturally.
   - **Test:** `plot.nonexistent` should throw a compile or runtime error, not return a string.
 - **Confidence:** High
 
-- [ ] **L-006** | [`ema` Initialization Uses `source.Value` Not SMA] | `src/language/runtime/execution-engine.ts:388-396` | EMA first value is raw source, not SMA as in standard PineScript
+- [x] **L-006** | [`ema` Initialization Uses `source.Value` Not SMA] | `src/language/runtime/execution-engine.ts:388-396` | EMA first value is raw source, not SMA as in standard PineScript
   - **Issue:** Line 391: `this.emaState.set(key, { prev: source as number, initialized: false }); return source as number;` — The first EMA value is initialized with the raw source value, not with an SMA of the first `length` values. In TradingView's PineScript, EMA seeds with SMA(source, length) for the first `length-1` bars. This implementation uses the first source value directly, which gives different EMA values for the early bars.
   - **Impact:** EMA values differ from TradingView's output for the first `length` bars. Cross-verification with PineScript fails. Users comparing strategies across platforms see discrepancies.
   - **Fix:** Accumulate the first `length` values and compute their average as the EMA seed. Return `NA` for the first `length-1` bars, matching PineScript behavior.
   - **Test:** EMA(close, 5) on first 6 bars should match TradingView's output within 0.01%.
 - **Confidence:** High
 
-- [ ] **L-007** | [Plot Colors Array Length Grows Unbounded] | `src/language/runtime/execution-engine.ts:997-1000` | `plotColors` arrays grow with every bar call including forming candle re-execution
+- [x] **L-007** | [Plot Colors Array Length Grows Unbounded] | `src/language/runtime/execution-engine.ts:997-1000` | `plotColors` arrays grow with every bar call including forming candle re-execution
   - **Issue:** Each call to `plot()` pushes a color value to `plotColors[key]`. In `computeFormingCandle`, the pre-state saves `plotColors` and restores it after execution, but the output snapshot (`diffPlotColors`) directly references the slice. The state restoration (line 2343) sets `this.plotColors = prePlotColors` which replaces the map. However, the colors that were pushed during the forming candle execution are discarded via the map reassignment. But for `executeBar` (full execution), every push is permanent.
   - **Impact:** No actual bug, but the pattern is fragile. If any code path fails to restore `plotColors`, the arrays grow without bound.
   - **Fix:** No immediate fix needed, but add comments documenting the lifetimes and state management contract for all mutable arrays.
   - **Test:** Existing tests pass.
 - **Confidence:** Low
 
-- [ ] **L-008** | [Frontend `ChartComponent` Ignores `fetchError` Return Value] | `frontend/src/components/ChartComponent.tsx:86` | The `fetchOlderOHLCV` promise result is ignored
+- [x] **L-008** | [Frontend `ChartComponent` Ignores `fetchError` Return Value] | `frontend/src/components/ChartComponent.tsx:86` | The `fetchOlderOHLCV` promise result is ignored
   - **Issue:** Line 86: `await fetchRef.current(sy, iv);` — the function `fetchOlderOHLCV` returns `Promise<number>` (the number of bars fetched) but the return value is ignored. The `isLoadingHistoryRef` flag is set false in `finally`, but if the fetch was triggered by one `onRangeChange` call and another fires before the first completes, the `finally` block on line 87-89 will set `isLoadingHistoryRef = false` for the first call, then the second call's `finally` also sets it false. The guard on line 88 `if (!isLoadingHistoryRef.current) return;` is a no-op since it always returns after setting to false.
   - **Impact:** The loading guard is ineffective. If `onVisibleRangeChange` fires rapidly, multiple concurrent fetches can occur, causing data races.
   - **Fix:** Use an AbortController or a sequential queue. Or use a counter-based guard (`loadingCounter++ / loadingCounter--`) instead of a boolean.
   - **Test:** Simulate rapid scrolling past the load boundary, verify only one fetch is in flight at a time.
 - **Confidence:** Medium
 
-- [ ] **L-009** | [Backtest Route's `buildEquityCurve` Uses Only Trade PnL] | `backend/src/routes/backtest.ts:322-330` | Doesn't account for open position unrealized PnL
+- [x] **L-009** | [Backtest Route's `buildEquityCurve` Uses Only Trade PnL] | `backend/src/routes/backtest.ts:322-330` | Doesn't account for open position unrealized PnL
   - **Issue:** `buildEquityCurve` starts at `initialCapital` and adds realized PnL from closed trades. It doesn't include unrealized PnL from open positions. The resulting equity curve jumps only when trades close, rather than showing continuous equity changes as the market moves. The `BacktestEngine`'s own `equityCurve` also doesn't include unrealized PnL (just `engine.getEquity()`, which is cash balance). So both curves have the same limitation.
   - **Impact:** Equity curves look like stair-steps (flat during open positions, jump on close). Users can't see drawdowns during open positions. Max drawdown may be understated.
   - **Fix:** Include unrealized PnL in equity curve values. Use `account.equity` (which includes unrealized PnL) instead of `engine.getEquity()`.

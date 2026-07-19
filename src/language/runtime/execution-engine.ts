@@ -335,7 +335,7 @@ export class ExecutionEngine {
   }
 
   private smaBuffers: Map<string, RingBuffer> = new Map();
-  private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
+  private emaState: Map<string, { prev: number; count: number; sum: number; initialized: boolean }> = new Map();
   private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
   private sarState: Map<
     string,
@@ -363,7 +363,7 @@ export class ExecutionEngine {
   private labels: LabelEntry[] = [];
   private boxes: Map<number, BoxEntry> = new Map();
   private boxIdCounter: number = 0;
-  private userTypeFields: Map<string, { name: string; defaultExpr: import('../../parser/ast/nodes.js').ExpressionNode | null }[]> = new Map();
+  private userTypeFields: Map<string, { name: string; defaultExpr: import('../parser/ast/nodes.js').ExpressionNode | null }[]> = new Map();
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();

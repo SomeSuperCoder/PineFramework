@@ -1,4 +1,4 @@
-import { NA, type PineValue } from '../language/types/na.js';
+import { type PineValue } from '../language/types/na.js';
 
 export type TAFunction = (...args: number[]) => PineValue;
 
@@ -31,7 +31,7 @@ export class TARegistry {
     return this.functions.has(`${namespace}.${name}`);
   }
 
-  call(namespace: string, name: string, args: number[]): number {
+  call(namespace: string, name: string, args: number[]): PineValue {
     const info = this.get(namespace, name);
     if (!info) {
       throw new Error(`TA function not found: ${namespace}.${name}`);

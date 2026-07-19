@@ -45,6 +45,7 @@ export class FormingCandleManager {
       const fullContexts = barsToContext(this.bars);
       this.contexts.push(fullContexts[fullContexts.length - 1]!);
     }
+      this.cachedAlertConditions = [];
 
     const context = this.contexts[this.contexts.length - 1]!;
     this.engine.setFormingCandle(true);
