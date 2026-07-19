@@ -2665,10 +2665,21 @@ export class ExecutionEngine {
     const end = this.executeExpression(stmt.end!, scope, context) as number;
     const step = stmt.step ? (this.executeExpression(stmt.step, scope, context) as number) : 1;
 
+    // Guard against infinite loops: step <= 0 or floating-point accumulation issues
+    const safeStep = step <= 0 ? 1 : step;
+    const maxIterations = 1000000;
+
     const loopScope = createRuntimeScope(scope);
     declareVariable(loopScope, stmt.variable, INT_TYPE);
 
-    for (let i = start; i <= end; i += step) {
+    // Use integer counter to avoid floating-point accumulation errors
+    const startInt = Math.floor(start);
+    const endInt = Math.floor(end);
+    const stepInt = Math.max(1, Math.floor(safeStep));
+    const expectedIterations = Math.max(0, Math.floor((endInt - startInt) / stepInt) + 1);
+    const iterations = Math.min(expectedIterations, maxIterations);
+
+    for (let iter = 0, i = startInt; iter < iterations; iter++, i += stepInt) {
       setVariableValue(loopScope, stmt.variable, i);
       for (const s of stmt.body) {
         this.executeStatement(s, loopScope, context);
