@@ -760,9 +760,15 @@ export class StrategyEngine {
       pnl: pnl - commission,
       pnlPercent:
         this.position.avgPrice > 0
-          ? ((price - this.position.avgPrice) / this.position.avgPrice) *
-            100 *
-            (this.position.direction === 'long' ? 1 : -1)
+          ? (() => {
+              const positionValue = this.position.avgPrice * this.position.quantity;
+              const marginRate =
+                this.position.direction === 'long'
+                  ? this.config.marginLong
+                  : this.config.marginShort;
+              const capitalAtRisk = marginRate > 0 ? positionValue * marginRate : positionValue;
+              return capitalAtRisk > 0 ? (pnl / capitalAtRisk) * 100 : 0;
+            })()
           : 0,
       commission,
       entryName: '',
