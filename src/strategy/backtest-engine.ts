@@ -188,7 +188,6 @@ export class BacktestEngine {
     if (points.length < 2) return monthly;
 
     const startEquity = points[0]!.equity;
-    let prevMonthEquity = startEquity;
 
     // Track all months in the range
     const firstDate = new Date(points[0]!.time);

@@ -332,7 +332,7 @@ export class ExecutionEngine {
     }
   }
 
-  private smaBuffers: Map<string, number[]> = new Map();
+  private smaBuffers: Map<string, RingBuffer> = new Map();
   private emaState: Map<string, { prev: number; initialized: boolean }> = new Map();
   private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
   private sarState: Map<

@@ -1,4 +1,6 @@
-export type TAFunction = (...args: number[]) => number;
+import { NA, type PineValue } from '../language/types/na.js';
+
+export type TAFunction = (...args: number[]) => PineValue;
 
 export interface TAFunctionInfo {
   name: string;

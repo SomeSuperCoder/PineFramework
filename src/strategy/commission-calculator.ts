@@ -131,8 +131,9 @@ class PercentCommissionCalculator implements CommissionCalculator {
    * This provides a drop-in replacement for legacy commission configuration.
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
-    const percent = (config.settings as PercentCommissionSettings)?.commission ?? 0;
-    return context.tradeValue * (percent / 100);
+    const settings = config.settings as PercentCommissionSettings | undefined;
+    const rate = settings?.rate ?? 0;
+    return context.tradeValue * (rate / 100);
   }
 }
 
