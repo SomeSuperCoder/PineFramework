@@ -44,6 +44,9 @@ function App() {
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
+  const [computingIndicators, setComputingIndicators] = useState<Set<string>>(new Set());
+  const computingRef = useRef<Set<string>>(new Set());
+  computingRef.current = computingIndicators;
   const [strategyConflict, setStrategyConflict] = useState<{
     existingName: string;
     incomingName: string;
@@ -66,6 +69,11 @@ function App() {
     setIndicatorResults((prev) => {
       const next = new Map(prev);
       next.set(indicatorId, result);
+      return next;
+    });
+    setComputingIndicators((prev) => {
+      const next = new Set(prev);
+      next.delete(indicatorId);
       return next;
     });
   }, []);
@@ -108,8 +116,11 @@ function App() {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
     setIndicatorResults(new Map());
+    setComputingIndicators(new Set());
     fetchOHLCV(symbol, timeframe).then(() => {
       indicatorManagerRef.current.fetchIndicators().then((list) => {
+        const ids = new Set(list.map((ind) => ind.id));
+        setComputingIndicators(ids);
         for (const ind of list) {
           executeScriptRef.current(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
         }
@@ -189,7 +200,16 @@ function App() {
     );
 
     if (indicator) {
-      await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+      setComputingIndicators((prev) => new Set(prev).add(indicator.id));
+      try {
+        await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+      } catch {
+        setComputingIndicators((prev) => {
+          const next = new Set(prev);
+          next.delete(indicator.id);
+          return next;
+        });
+      }
     }
   };
 
@@ -211,7 +231,16 @@ function App() {
     );
 
     if (indicator) {
-      await executeScript(pendingSource, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+      setComputingIndicators((prev) => new Set(prev).add(indicator.id));
+      try {
+        await executeScript(pendingSource, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+      } catch {
+        setComputingIndicators((prev) => {
+          const next = new Set(prev);
+          next.delete(indicator.id);
+          return next;
+        });
+      }
     }
   }, [strategyConflict, indicatorManager, executeScript, symbol, timeframe]);
 
@@ -235,6 +264,11 @@ function App() {
     removeIndicatorData(indicatorId);
     setIndicatorResults((prev) => {
       const next = new Map(prev);
+      next.delete(indicatorId);
+      return next;
+    });
+    setComputingIndicators((prev) => {
+      const next = new Set(prev);
       next.delete(indicatorId);
       return next;
     });
@@ -320,6 +354,7 @@ function App() {
           fetchOlderOHLCV={fetchOlderOHLCV}
           indicatorLabels={overlayIndicatorLabels}
           indicatorResults={indicatorResults}
+          computingIndicators={computingIndicators}
           onRemoveIndicator={handleRemoveIndicator}
           onEditIndicator={handleEditIndicator}
           forceAutoScale={autoScale}

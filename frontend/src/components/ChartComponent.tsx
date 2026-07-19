@@ -18,6 +18,7 @@ interface ChartComponentProps {
   fetchOlderOHLCV: (symbol: string, interval: string) => Promise<number>;
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
+  computingIndicators?: Set<string>;
   onRemoveIndicator?: (indicatorId: string) => void;
   onEditIndicator?: (indicatorId: string) => void;
   forceAutoScale?: boolean;
@@ -29,7 +30,7 @@ export interface ChartComponentHandle {
   clearTeleportLine: () => void;
 }
 
-export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }, ref) {
+export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -373,6 +374,23 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
               <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {label.name}
               </span>
+              {computingIndicators.has(label.id) ? (
+                <span title="Computing..." style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '14px', height: '14px', fontSize: '10px', flexShrink: 0,
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" style={{ animation: 'spin 1s linear infinite' }}>
+                    <circle cx="6" cy="6" r="4" fill="none" stroke="#ffa726" strokeWidth="1.5"
+                      strokeDasharray="18.85 6.28" strokeLinecap="round" />
+                  </svg>
+                </span>
+              ) : (
+                <span title="Ready" style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: '14px', height: '14px', fontSize: '8px', flexShrink: 0,
+                  color: '#4caf50',
+                }}>✓</span>
+              )}
               <button
                 onClick={() => handleEditIndicator(label.id)}
                 style={labelButtonStyle}
