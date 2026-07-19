@@ -3141,12 +3141,12 @@ export class ExecutionEngine {
         namedArgs[na.name] = this.executeExpression(na.value, scope, context);
       }
       const builtin = this.builtins.get('na');
-      if (builtin) {
-        this.currentCallSiteId = expr.callId;
-        const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
-        return builtin(...builtinArgs);
+      if (!builtin) {
+        throw new Error('Builtin function "na" not registered');
       }
-      return isNa(args[0] ?? NA);
+      this.currentCallSiteId = expr.callId;
+      const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
+      return builtin(...builtinArgs);
     }
 
     if (expr.callee.kind === 'MemberExpression') {
