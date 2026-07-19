@@ -1,8 +1,8 @@
-import { StrategyEngine, resetOrderIdCounter } from '../../src/strategy/strategy-engine.js';
+import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 
 describe('StrategyEngine', () => {
   beforeEach(() => {
-    resetOrderIdCounter();
+    // no-op: each new instance has its own counter
   });
 
   describe('constructor', () => {

@@ -14,7 +14,7 @@ import type {
   PerOrderFixedSettings,
   JupiterUltraSettings,
 } from '../../src/strategy/commission-calculator.js';
-import { StrategyEngine, resetOrderIdCounter } from '../../src/strategy/strategy-engine.js';
+import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 
 describe('Commission Calculator', () => {
   const makeContext = (overrides: Partial<TradeContext> = {}): TradeContext => ({
@@ -274,7 +274,7 @@ describe('Commission Calculator', () => {
 
   describe('StrategyEngine integration', () => {
     beforeEach(() => {
-      resetOrderIdCounter();
+      // Each new StrategyEngine instance starts with its own order ID counter
     });
 
     it('should use percent_fixed commission method', () => {

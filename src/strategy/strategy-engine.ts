@@ -158,16 +158,6 @@ export interface StrategyMarker {
   comment?: string;
 }
 
-let orderIdCounter = 0;
-
-function generateOrderId(): string {
-  return `order_${++orderIdCounter}`;
-}
-
-export function resetOrderIdCounter(): void {
-  orderIdCounter = 0;
-}
-
 export class StrategyEngine {
   private config: StrategyConfig;
   private position: Position;
@@ -187,6 +177,7 @@ export class StrategyEngine {
   private commissionCalculator: CommissionCalculator | undefined;
   private commissionConfig: CommissionConfig | undefined;
   private _lastMarkerCount: number = 0;
+  private _nextOrderId: number = 0;
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -274,7 +265,7 @@ export class StrategyEngine {
     }
 
     const order: Order = {
-      id: generateOrderId(),
+      id: this.generateOrderId(),
       symbol: '',
       direction,
       action: direction === 'long' ? 'buy' : 'sell',
@@ -347,7 +338,7 @@ export class StrategyEngine {
     }
 
     const order: Order = {
-      id: generateOrderId(),
+      id: this.generateOrderId(),
       symbol: '',
       direction,
       action: direction === 'long' ? 'buy' : 'sell',
@@ -415,7 +406,7 @@ export class StrategyEngine {
     }
 
     const order: Order = {
-      id: generateOrderId(),
+      id: this.generateOrderId(),
       symbol: this.position.symbol,
       direction: exitDirection,
       action: exitAction,
@@ -461,7 +452,7 @@ export class StrategyEngine {
 
     const price = this.currentPrice;
     const order: Order = {
-      id: generateOrderId(),
+      id: this.generateOrderId(),
       symbol: this.position.symbol,
       direction: this.position.direction === 'long' ? 'long' : 'short',
       action: this.position.direction === 'long' ? 'sell' : 'buy',
@@ -910,7 +901,7 @@ export class StrategyEngine {
       } else {
         const limitOrder: Order = {
           ...order,
-          id: generateOrderId(),
+          id: this.generateOrderId(),
           type: 'limit',
           price: limitPrice,
           stopPrice: undefined,
@@ -962,6 +953,10 @@ export class StrategyEngine {
 
   getPeakEquity(): number {
     return this.peakEquity;
+  }
+
+  private generateOrderId(): string {
+    return `order_${++this._nextOrderId}`;
   }
 
   getMaxDrawdown(): number {
@@ -1068,7 +1063,7 @@ export class StrategyEngine {
   }
 
   reset(): void {
-    resetOrderIdCounter();
+    this._nextOrderId = 0;
     this.position = {
       symbol: '',
       direction: 'flat',

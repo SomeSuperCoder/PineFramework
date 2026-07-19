@@ -1,4 +1,4 @@
-export { StrategyEngine, resetOrderIdCounter, DEFAULT_STRATEGY_CONFIG } from './strategy-engine.js';
+export { StrategyEngine, DEFAULT_STRATEGY_CONFIG } from './strategy-engine.js';
 export type {
   Order,
   FilledOrder,

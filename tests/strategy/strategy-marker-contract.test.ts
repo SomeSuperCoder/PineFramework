@@ -1,4 +1,4 @@
-import { StrategyEngine, resetOrderIdCounter } from '../../src/strategy/strategy-engine.js';
+import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import {
@@ -52,7 +52,7 @@ function runPineScript(source: string, bars: Bar[]): StrategyMarkerEntry[] {
 
 describe('Strategy Marker Contract', () => {
   beforeEach(() => {
-    resetOrderIdCounter();
+    // Each new StrategyEngine instance starts with its own order ID counter
   });
 
   // =========================================================================
