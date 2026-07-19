@@ -110,23 +110,9 @@ export function createBacktestRouter() {
       console.log('[backtest] First bar: open=%d, high=%d, low=%d, close=%d', contexts[0]?.open.get(0), contexts[0]?.high.get(0), contexts[0]?.low.get(0), contexts[0]?.close.get(0));
       console.log('[backtest] Last bar: open=%d, high=%d, low=%d, close=%d', contexts[contexts.length-1]?.open.get(contexts.length-1), contexts[contexts.length-1]?.high.get(contexts.length-1), contexts[contexts.length-1]?.low.get(contexts.length-1), contexts[contexts.length-1]?.close.get(contexts.length-1));
 
-      const batchSize = 100;
-      let execResult;
-      for (let i = 0; i < contexts.length; i += batchSize) {
-        const batch = contexts.slice(i, i + batchSize);
-        execResult = execEngine.executeBars(batch);
-        if (!execResult.success) {
-          throw new Error(execResult.error || 'Execution failed');
-        }
-        const batchProgress = 20 + Math.round(((i + batch.length) / contexts.length) * 60);
-        updateProgress(job.jobId, batchProgress);
-        if (i + batchSize < contexts.length) {
-          await new Promise(r => setTimeout(r, 50));
-        }
-      }
-
-      if (!execResult || !execResult.success) {
-        throw new Error(execResult?.error || 'Execution failed');
+      const execResult = execEngine.executeBars(contexts);
+      if (!execResult.success) {
+        throw new Error(execResult.error || 'Execution failed');
       }
       console.log('[backtest] Execution complete. success=%o, markers=%d', execResult.success, execResult.strategyMarkers?.length || 0);
 
