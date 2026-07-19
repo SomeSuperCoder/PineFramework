@@ -2,6 +2,12 @@ import { TARegistry } from './ta-registry.js';
 import * as movingAverages from './moving-averages.js';
 import * as oscillators from './oscillators.js';
 import * as mathFunctions from './math-functions.js';
+import { NA, isNa } from '../language/types/na.js';
+
+// Helper to convert analysis layer NaN to PineScript NA
+function toPineValue(value: number): number | typeof NA {
+  return Number.isNaN(value) ? NA : value;
+}
 
 export class TAEngine {
   private registry: TARegistry;
@@ -19,7 +25,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.sma([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Simple Moving Average',
     });
@@ -31,7 +37,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.ema([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Exponential Moving Average',
     });
@@ -43,7 +49,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.wma([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Weighted Moving Average',
     });
@@ -55,7 +61,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.vwma([source], [source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Volume Weighted Moving Average',
     });
@@ -67,7 +73,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.rma([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: "RMA (Wilder's Smoothing)",
     });
@@ -79,7 +85,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.hma([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Hull Moving Average',
     });
@@ -91,7 +97,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.dema([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Double Exponential Moving Average',
     });
@@ -103,7 +109,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.tema([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Triple Exponential Moving Average',
     });
@@ -115,7 +121,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = movingAverages.linreg([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Linear Regression',
     });
@@ -127,7 +133,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (source1: number, source2: number, length: number) => {
         const result = movingAverages.correlation([source1], [source2], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Pearson Correlation Coefficient',
     });
@@ -139,7 +145,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = oscillators.rsi([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Relative Strength Index',
     });
@@ -187,7 +193,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (high: number, low: number, close: number) => {
         const result = oscillators.atr([high], [low], [close], 14);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Average True Range',
     });
@@ -211,7 +217,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (high: number, low: number, close: number) => {
         const result = oscillators.cci([high], [low], [close], 20);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Commodity Channel Index',
     });
@@ -223,7 +229,7 @@ export class TAEngine {
       maxArgs: 4,
       implementation: (high: number, low: number, close: number, volume: number) => {
         const result = oscillators.mfi([high], [low], [close], [volume], 14);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Money Flow Index',
     });
@@ -235,7 +241,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (close: number, volume: number) => {
         const result = oscillators.obv([close], [volume]);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'On Balance Volume',
     });
@@ -247,7 +253,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (high: number, low: number, close: number) => {
         const result = oscillators.vwap([high], [low], [close], [1]);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Volume Weighted Average Price',
     });
@@ -259,7 +265,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = oscillators.roc([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Rate of Change',
     });
@@ -271,7 +277,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = oscillators.momentum([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Momentum',
     });
@@ -283,7 +289,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.highest([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Highest value over length bars',
     });
@@ -295,7 +301,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.lowest([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Lowest value over length bars',
     });
@@ -307,7 +313,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.highestBars([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Bar offset of highest value',
     });
@@ -319,7 +325,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.lowestBars([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Bar offset of lowest value',
     });
@@ -331,7 +337,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.sum([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Sum over length bars',
     });
@@ -343,7 +349,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.dev([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Standard deviation',
     });
@@ -355,7 +361,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.stdev([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Standard deviation',
     });
@@ -367,7 +373,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.variance([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Variance',
     });
@@ -379,7 +385,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.rank([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Rank',
     });
@@ -391,7 +397,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.median([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Median',
     });
@@ -403,7 +409,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (source: number, length: number, percentage: number) => {
         const result = mathFunctions.percentile([source], length, percentage);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Percentile',
     });
@@ -415,7 +421,7 @@ export class TAEngine {
       maxArgs: 3,
       implementation: (source: number, length: number, q: number) => {
         const result = mathFunctions.quantile([source], length, q);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Quantile',
     });
@@ -427,7 +433,7 @@ export class TAEngine {
       maxArgs: 2,
       implementation: (source: number, length: number) => {
         const result = mathFunctions.zscore([source], length);
-        return result[result.length - 1] ?? NaN;
+        return toPineValue(result[result.length - 1] ?? NaN);
       },
       description: 'Z-Score',
     });
