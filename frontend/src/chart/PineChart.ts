@@ -410,23 +410,73 @@ export class PineChart {
   private renderLabels(ctx: CanvasRenderingContext2D): void {
     const regions = this.layout.getRegions();
     const { chartArea } = regions;
+
+    // Map Pine Script size strings to font sizes
+    const sizeMap: Record<string, number> = {
+      'size.tiny': 9,
+      'size.small': 10,
+      'size.normal': 12,
+      'size.large': 14,
+      'size.huge': 16,
+    };
+
     for (const label of this.chartLabels) {
       const bi = this.findBarIndex(label.time);
       const x = this.viewport.barIndexToPixel(bi) + this.viewport.getBarSpacing() / 2;
       const y = this.layout.priceToPixel(label.price, chartArea.y, chartArea.height);
       const text = label.text || '';
+      const style = label.style || 'label.style_label_down';
+      const fontSize = sizeMap[label.size || 'size.normal'] || 12;
+
       ctx.save();
-      ctx.font = 'bold 12px Arial';
+      ctx.font = `bold ${fontSize}px Arial`;
       const metrics = ctx.measureText(text);
       const pad = 4;
       const bw = metrics.width + pad * 2;
-      const bh = 20;
-      const bx = x - bw / 2;
-      const by = y - bh - 4;
+      const bh = fontSize + 8;
+
+      const isUp = style === 'label.style_label_up';
+      const isDown = style === 'label.style_label_down';
+
+      // Position: label_up → below bar (arrow points up), label_down → above bar (arrow points down)
+      let bx: number, by: number;
+      if (isUp) {
+        bx = x - bw / 2;
+        by = y + 4; // below the price
+      } else {
+        bx = x - bw / 2;
+        by = y - bh - 4; // above the price (default)
+      }
+
+      // Draw arrow triangle + rounded rect background
       ctx.fillStyle = this.cssColor(label.color || '#2196f3');
+
+      if (isUp || isDown) {
+        // Draw arrow triangle
+        ctx.beginPath();
+        if (isUp) {
+          // Arrow pointing up: triangle at top center
+          const triH = 6;
+          ctx.moveTo(x, by - triH);
+          ctx.lineTo(x - 5, by);
+          ctx.lineTo(x + 5, by);
+        } else {
+          // Arrow pointing down: triangle at bottom center
+          const triH = 6;
+          const triY = by + bh;
+          ctx.moveTo(x, triY + triH);
+          ctx.lineTo(x - 5, triY);
+          ctx.lineTo(x + 5, triY);
+        }
+        ctx.fill();
+      }
+
+      // Draw background rect
       ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 4);
+      ctx.roundRect(bx, by, bw, bh, 3);
       ctx.fill();
+
+      // Draw text
       ctx.fillStyle = label.textColor || '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

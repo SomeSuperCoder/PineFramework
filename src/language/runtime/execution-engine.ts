@@ -1454,6 +1454,36 @@ export class ExecutionEngine {
       return isNa(value);
     });
 
+    // Type cast builtins
+    this.builtins.set('int', (value: PineValue): PineValue => {
+      if (isNa(value)) return NA;
+      if (typeof value === 'number') return Math.trunc(value);
+      if (typeof value === 'string') { const n = Number(value); return isNaN(n) ? NA : Math.trunc(n); }
+      if (typeof value === 'boolean') return value ? 1 : 0;
+      return NA;
+    });
+
+    this.builtins.set('float', (value: PineValue): PineValue => {
+      if (isNa(value)) return NA;
+      if (typeof value === 'number') return value;
+      if (typeof value === 'string') { const n = Number(value); return isNaN(n) ? NA : n; }
+      if (typeof value === 'boolean') return value ? 1.0 : 0.0;
+      return NA;
+    });
+
+    this.builtins.set('bool', (value: PineValue): PineValue => {
+      if (isNa(value)) return NA;
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'number') return value !== 0;
+      if (typeof value === 'string') return value.length > 0;
+      return NA;
+    });
+
+    this.builtins.set('string', (value: PineValue): PineValue => {
+      if (isNa(value)) return NA;
+      return String(value);
+    });
+
     // Table builtins (stubs for indicators that use tables for dashboards)
     this.builtins.set('table.new', (): PineValue => {
       return 0; // table ID
