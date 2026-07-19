@@ -141,12 +141,13 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         }
 
         if (data.length > seriesData.length && seriesData.length > 0) {
-          const lastPoint = seriesData[seriesData.length - 1];
+          // Pad with null instead of repeating last value to avoid showing
+          // incorrect data for bars before the indicator started computing
           for (let j = seriesData.length; j < data.length; j++) {
             seriesData.push({
               time: data[j].time,
-              value: lastPoint.value,
-              color: lastPoint.color,
+              value: null,
+              color: undefined,
             });
           }
         }
