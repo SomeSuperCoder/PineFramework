@@ -112,7 +112,7 @@ export class BacktestEngine {
         pnl: position.pnl,
       });
 
-      equityCurve.push(engine.getEquity());
+      equityCurve.push(account.equity);
       drawdownCurve.push(engine.getMaxDrawdown());
       equityPoints.push({
         time: bar.timestamp,
