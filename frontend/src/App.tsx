@@ -47,6 +47,7 @@ function App() {
   const [computingIndicators, setComputingIndicators] = useState<Set<string>>(new Set());
   const computingRef = useRef<Set<string>>(new Set());
   computingRef.current = computingIndicators;
+  const lastIndicatorsRef = useRef<Set<string>>(new Set());
   const [strategyConflict, setStrategyConflict] = useState<{
     existingName: string;
     incomingName: string;
@@ -115,11 +116,14 @@ function App() {
   useEffect(() => {
     setDataVersion((v) => v + 1);
     subscribe(symbol, timeframe);
+    // Show loading spinners IMMEDIATELY on all known indicators
+    setComputingIndicators(new Set(lastIndicatorsRef.current));
+    // Clear all plot data (unplot) — spinners show in same render
     setIndicatorResults(new Map());
-    setComputingIndicators(new Set());
     fetchOHLCV(symbol, timeframe).then(() => {
       indicatorManagerRef.current.fetchIndicators().then((list) => {
         const ids = new Set(list.map((ind) => ind.id));
+        lastIndicatorsRef.current = ids;
         setComputingIndicators(ids);
         for (const ind of list) {
           executeScriptRef.current(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
@@ -200,6 +204,7 @@ function App() {
     );
 
     if (indicator) {
+      lastIndicatorsRef.current = new Set(lastIndicatorsRef.current).add(indicator.id);
       setComputingIndicators((prev) => new Set(prev).add(indicator.id));
       try {
         await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
@@ -207,6 +212,7 @@ function App() {
         setComputingIndicators((prev) => {
           const next = new Set(prev);
           next.delete(indicator.id);
+          lastIndicatorsRef.current = next;
           return next;
         });
       }
@@ -238,6 +244,7 @@ function App() {
         setComputingIndicators((prev) => {
           const next = new Set(prev);
           next.delete(indicator.id);
+          lastIndicatorsRef.current = next;
           return next;
         });
       }
@@ -270,6 +277,7 @@ function App() {
     setComputingIndicators((prev) => {
       const next = new Set(prev);
       next.delete(indicatorId);
+      lastIndicatorsRef.current = next;
       return next;
     });
   };
