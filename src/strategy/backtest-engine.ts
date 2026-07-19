@@ -5,6 +5,7 @@ import {
   type StrategyMetrics,
   type Trade,
   type FilledOrder,
+  DEFAULT_STRATEGY_CONFIG,
 } from './strategy-engine.js';
 
 export interface EquityPoint {
@@ -45,21 +46,9 @@ export class BacktestEngine {
 
   constructor(config: Partial<BacktestConfig> = {}) {
     this.config = {
-      initialCapital: 10000,
-      commission: 0,
-      slippage: 0,
-      commissionType: 'percent',
-      slippageType: 'ticks',
+      ...DEFAULT_STRATEGY_CONFIG,
       defaultQty: 1,
       defaultQtyType: 'contracts',
-      pyramiding: 0,
-      calcOnOrderFills: true,
-      calcOnEveryTick: false,
-      processOrdersOnClose: false,
-      maxBarsBack: 0,
-      marginLong: 0,
-      marginShort: 0,
-      currency: 'USD',
       ...config,
     };
   }
