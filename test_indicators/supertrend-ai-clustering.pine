@@ -19,8 +19,8 @@ if minMult > maxMult
 perfAlpha = input.float(10, 'Performance Memory', minval = 2)
 fromCluster = input.string('Best', 'From Cluster', options = ['Best', 'Average', 'Worst'])
 
-//Optimization
-maxIter = input.int(1000, 'Maximum Iteration Steps', minval = 0, group = 'Optimization')
+//Optimization (reduced defaults for performance - K-means converges in <20 iterations with 9 points)
+maxIter = input.int(50, 'Maximum Iteration Steps', minval = 0, group = 'Optimization')
 maxData = input.int(10000, 'Historical Bars Calculation', minval = 0, group = 'Optimization')
 
 //Style
@@ -85,7 +85,7 @@ for factor in factors
     k += 1
 
 //-----------------------------------------------------------------------------}
-//K-means clustering
+//K-means clustering (optimized: reduced iterations, epsilon convergence)
 //-----------------------------------------------------------------------------{
 factor_array = array.new<float>(0)
 data = array.new<float>(0)
@@ -107,10 +107,11 @@ var array<vector> factors_clusters = na
 var array<vector> perfclusters = na
 
 if last_bar_index - bar_index <= maxData
+    factors_clusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
+    perfclusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
+    
+    //K-means with epsilon convergence (avoids infinite float oscillation)
     for _ = 0 to maxIter
-        factors_clusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
-        perfclusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
-        
         //Assign value to cluster
         i = 0
         for value in data
@@ -128,8 +129,9 @@ if last_bar_index - bar_index <= maxData
         for cluster_ in perfclusters
             new_centroids.push(cluster_.out.avg())
 
-        //Test if centroid changed
-        if new_centroids.get(0) == centroids.get(0) and new_centroids.get(1) == centroids.get(1) and new_centroids.get(2) == centroids.get(2)
+        //Test if centroid changed (with epsilon for float stability)
+        eps = 0.0000000001
+        if math.abs(new_centroids.get(0) - centroids.get(0)) < eps and math.abs(new_centroids.get(1) - centroids.get(1)) < eps and math.abs(new_centroids.get(2) - centroids.get(2)) < eps
             break
 
         centroids := new_centroids
