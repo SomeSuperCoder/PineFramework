@@ -4,6 +4,8 @@ export type CliCommissionMethod = 'percent_fixed' | 'per_order_fixed' | 'jupiter
 export interface CliOptions {
   scriptPath: string;
   timeframe: string;
+  /** Multi-timeframe support: comma-separated list of timeframes to backtest on. */
+  timeframes?: string[];
   symbols: string[];
   daysBack: number;
   startDate?: string;
@@ -49,12 +51,20 @@ export interface CrossPairSummary {
   failedSymbols: number;
 }
 
-export interface BacktestOutput {
-  script: string;
+/** Results for a single timeframe within a multi-timeframe backtest run. */
+export interface TimeframeResult {
   timeframe: string;
   dateRange: { start: string; end: string };
   symbols: SymbolResult[];
   crossPairSummary: CrossPairSummary;
+}
+
+export interface BacktestOutput {
+  script: string;
+  /** Overall date range across all timeframes. */
+  dateRange: { start: string; end: string };
+  /** Per-timeframe results. Always an array (one entry per timeframe tested). */
+  timeframes: TimeframeResult[];
 }
 
 export const VALID_TIMEFRAMES = ['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M'];

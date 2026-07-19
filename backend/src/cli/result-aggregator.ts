@@ -1,4 +1,4 @@
-import type { SymbolResult, BacktestOutput } from './types.js';
+import type { SymbolResult, BacktestOutput, TimeframeResult } from './types.js';
 
 export function aggregateResults(
   scriptPath: string,
@@ -6,12 +6,38 @@ export function aggregateResults(
   symbols: SymbolResult[],
   dateRange: { start: string; end: string },
 ): BacktestOutput {
+  const tfResult = buildTimeframeResult(timeframe, symbols, dateRange);
+
+  return {
+    script: scriptPath,
+    dateRange,
+    timeframes: [tfResult],
+  };
+}
+
+/** Convenience: build a multi-timeframe BacktestOutput from several timeframe results. */
+export function buildMultiTimeframeOutput(
+  scriptPath: string,
+  dateRange: { start: string; end: string },
+  timeframeResults: TimeframeResult[],
+): BacktestOutput {
+  return {
+    script: scriptPath,
+    dateRange,
+    timeframes: timeframeResults,
+  };
+}
+
+export function buildTimeframeResult(
+  timeframe: string,
+  symbols: SymbolResult[],
+  dateRange: { start: string; end: string },
+): TimeframeResult {
   const successful = symbols.filter((s) => s.status === 'completed' && s.metrics);
   const failed = symbols.filter((s) => s.status === 'failed');
 
   if (successful.length === 0) {
     return {
-      script: scriptPath,
       timeframe,
       dateRange,
       symbols,
@@ -39,7 +65,6 @@ export function aggregateResults(
   const worstIdx = argMin(profits);
 
   return {
-    script: scriptPath,
     timeframe,
     dateRange,
     symbols,

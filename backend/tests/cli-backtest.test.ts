@@ -1,5 +1,5 @@
 import { aggregateResults } from '../src/cli/result-aggregator.js';
-import type { SymbolResult, BacktestOutput } from '../src/cli/types.js';
+import type { SymbolResult } from '../src/cli/types.js';
 
 function makeCompletedResult(symbol: string, overrides: Partial<{ netProfitPercent: number; profitFactor: number; maxDrawdownPercent: number; winRate: number; sharpeRatio: number; totalTrades: number; buyHoldReturn: number }> = {}): SymbolResult {
   return {
@@ -24,22 +24,29 @@ function makeFailedResult(symbol: string, error: string): SymbolResult {
 
 const DATE_RANGE = { start: '2026-04-14', end: '2026-07-13' };
 
+/** Shorthand to get the first timeframe result from aggregateResults. */
+function firstTf(output: ReturnType<typeof aggregateResults>) {
+  return output.timeframes[0]!;
+}
+
 describe('result-aggregator', () => {
   describe('aggregateResults', () => {
     it('returns empty summary when all symbols fail', () => {
       const results = [makeFailedResult('BTCUSDT', 'compile error')];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.successfulSymbols).toBe(0);
-      expect(output.crossPairSummary.failedSymbols).toBe(1);
-      expect(output.crossPairSummary.overfittingRisk).toBe('HIGH');
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.successfulSymbols).toBe(0);
+      expect(tf.crossPairSummary.failedSymbols).toBe(1);
+      expect(tf.crossPairSummary.overfittingRisk).toBe('HIGH');
     });
 
     it('computes correct averages for single symbol', () => {
       const results = [makeCompletedResult('BTCUSDT', { netProfitPercent: 10 })];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.avgNetProfitPercent).toBe(10);
-      expect(output.crossPairSummary.successfulSymbols).toBe(1);
-      expect(output.crossPairSummary.failedSymbols).toBe(0);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.avgNetProfitPercent).toBe(10);
+      expect(tf.crossPairSummary.successfulSymbols).toBe(1);
+      expect(tf.crossPairSummary.failedSymbols).toBe(0);
     });
 
     it('computes correct averages for multiple symbols', () => {
@@ -49,7 +56,8 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { netProfitPercent: 30 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.avgNetProfitPercent).toBe(20);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.avgNetProfitPercent).toBe(20);
     });
 
     it('computes LOW overfitting risk when returns are consistent', () => {
@@ -59,8 +67,9 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { netProfitPercent: 11 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.overfittingRisk).toBe('LOW');
-      expect(output.crossPairSummary.coefficientOfVariation).toBeLessThan(0.5);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.overfittingRisk).toBe('LOW');
+      expect(tf.crossPairSummary.coefficientOfVariation).toBeLessThan(0.5);
     });
 
     it('computes HIGH overfitting risk when returns vary wildly', () => {
@@ -70,8 +79,9 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { netProfitPercent: 10 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.overfittingRisk).toBe('HIGH');
-      expect(output.crossPairSummary.coefficientOfVariation).toBeGreaterThan(1.5);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.overfittingRisk).toBe('HIGH');
+      expect(tf.crossPairSummary.coefficientOfVariation).toBeGreaterThan(1.5);
     });
 
     it('identifies best and worst pairs correctly', () => {
@@ -81,8 +91,9 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { netProfitPercent: 5 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.bestPair).toBe('ETHUSDT');
-      expect(output.crossPairSummary.worstPair).toBe('SOLUSDT');
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.bestPair).toBe('ETHUSDT');
+      expect(tf.crossPairSummary.worstPair).toBe('SOLUSDT');
     });
 
     it('skips failed symbols in aggregation', () => {
@@ -92,9 +103,10 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { netProfitPercent: 20 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.successfulSymbols).toBe(2);
-      expect(output.crossPairSummary.failedSymbols).toBe(1);
-      expect(output.crossPairSummary.avgNetProfitPercent).toBe(15);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.successfulSymbols).toBe(2);
+      expect(tf.crossPairSummary.failedSymbols).toBe(1);
+      expect(tf.crossPairSummary.avgNetProfitPercent).toBe(15);
     });
 
     it('includes all symbol results in output', () => {
@@ -103,20 +115,22 @@ describe('result-aggregator', () => {
         makeFailedResult('ETHUSDT', 'error'),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.symbols).toHaveLength(2);
-      expect(output.symbols[0]!.symbol).toBe('BTCUSDT');
-      expect(output.symbols[1]!.symbol).toBe('ETHUSDT');
+      const tf = firstTf(output);
+      expect(tf.symbols).toHaveLength(2);
+      expect(tf.symbols[0]!.symbol).toBe('BTCUSDT');
+      expect(tf.symbols[1]!.symbol).toBe('ETHUSDT');
     });
 
     it('sets script and timeframe in output', () => {
       const output = aggregateResults('my_strategy.pine', '240', [], DATE_RANGE);
       expect(output.script).toBe('my_strategy.pine');
-      expect(output.timeframe).toBe('240');
+      expect(firstTf(output).timeframe).toBe('240');
     });
 
     it('sets date range in output', () => {
       const output = aggregateResults('test.pine', '60', [], DATE_RANGE);
       expect(output.dateRange).toEqual(DATE_RANGE);
+      expect(firstTf(output).dateRange).toEqual(DATE_RANGE);
     });
 
     it('computes median profit factor correctly', () => {
@@ -126,7 +140,13 @@ describe('result-aggregator', () => {
         makeCompletedResult('SOLUSDT', { profitFactor: 2.0 }),
       ];
       const output = aggregateResults('test.pine', '60', results, DATE_RANGE);
-      expect(output.crossPairSummary.medianProfitFactor).toBe(2.0);
+      const tf = firstTf(output);
+      expect(tf.crossPairSummary.medianProfitFactor).toBe(2.0);
+    });
+
+    it('produces exactly one timeframe entry for single-timeframe call', () => {
+      const output = aggregateResults('test.pine', '60', [], DATE_RANGE);
+      expect(output.timeframes).toHaveLength(1);
     });
   });
 });
