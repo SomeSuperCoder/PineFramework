@@ -2211,7 +2211,7 @@ export class ExecutionEngine {
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
     const preRsiState = new Map([...this.rsiState].map(([k, v]) => [k, { ...v }]));
-    const preAtrState = new Map([...this.atrState].map(([k, v]) => [k, { ...v }]));
+    const preAtrState = new Map([...this.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]));
     const preHmaBuffers = new Map(
       [...this.hmaBuffers].map(([k, v]) => [
         k,
