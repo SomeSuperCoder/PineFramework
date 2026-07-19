@@ -295,6 +295,8 @@ export class ExecutionEngine {
   private metrics: ExecutionMetrics;
   private executionTimes: number[];
   private maxSnapshots: number;
+  private maxAlertEntries: number = 1000;
+  private maxPlotColorsEntries: number = 5000;
   private currentTimestamp: number = 0;
   private currentContext: ExecutionContext | null = null;
   private barTimestamps: number[] = [];
@@ -449,10 +451,22 @@ export class ExecutionEngine {
       const key = `ema_${len}_${this.currentCallSiteId}`;
       const k = 2 / (len + 1);
       if (!this.emaState.has(key)) {
-        this.emaState.set(key, { prev: source as number, initialized: false });
-        return source as number;
+        this.emaState.set(key, { prev: 0, count: 0, sum: 0, initialized: false });
+        return NA;
       }
       const state = this.emaState.get(key)!;
+      state.count++;
+      state.sum += source as number;
+
+      if (state.count < len) {
+        return NA;
+      }
+      if (!state.initialized) {
+        // Initialize with SMA of first 'len' values
+        state.prev = state.sum / len;
+        state.initialized = true;
+        return state.prev;
+      }
       state.prev = (source as number) * k + state.prev * (1 - k);
       return state.prev;
     });
@@ -1059,6 +1073,7 @@ export class ExecutionEngine {
         this.plotColors.set(key, []);
       }
       this.plotColors.get(key)!.push(color ?? null);
+      this.trimPlotColorsArrays();
       return `__plot_ref:${key}` as PineValue;
     });
 
@@ -1827,6 +1842,7 @@ export class ExecutionEngine {
           barIndex: this.currentContext.barIndex,
           timestamp: this.currentContext.timestamp,
         });
+        this.trimAlertArrays();
       }
       return NA;
     });
@@ -1839,6 +1855,7 @@ export class ExecutionEngine {
           barIndex: this.currentContext.barIndex,
           timestamp: this.currentContext.timestamp,
         });
+        this.trimAlertArrays();
       }
       return NA;
     });
@@ -1854,6 +1871,23 @@ export class ExecutionEngine {
         global.isVarip,
         global.isConst,
       );
+    }
+  }
+
+  private trimAlertArrays(): void {
+    if (this.alertConditionEntries.length > this.maxAlertEntries) {
+      this.alertConditionEntries = this.alertConditionEntries.slice(-this.maxAlertEntries);
+    }
+    if (this.alertTriggers.length > this.maxAlertEntries) {
+      this.alertTriggers = this.alertTriggers.slice(-this.maxAlertEntries);
+    }
+  }
+
+  private trimPlotColorsArrays(): void {
+    for (const [, colors] of this.plotColors) {
+      if (colors.length > this.maxPlotColorsEntries) {
+        colors.splice(0, colors.length - this.maxPlotColorsEntries);
+      }
     }
   }
 
@@ -3108,12 +3142,8 @@ export class ExecutionEngine {
       if (funcName === 'plot' && !namedArgs.title) {
         const hasPositionalTitle =
           expr.arguments.length > 1 && expr.arguments[1]!.kind === 'StringLiteral';
-        if (!hasPositionalTitle && expr.arguments.length > 0) {
-          const firstArg = expr.arguments[0];
-          if (firstArg.kind === 'Identifier') {
-            namedArgs.title = firstArg.name;
-          }
-        }
+        // Only use auto-title for simple Identifier arguments to avoid confusing titles
+        // for complex expressions. For other cases, let the plot function use default title.
       }
 
       if (this.builtins.has(funcName)) {
@@ -3543,9 +3573,6 @@ export class ExecutionEngine {
         }
       }
       if (objName === '__strategy.commission__') {
-        return expr.property;
-      }
-      if (objName === 'plot') {
         return expr.property;
       }
       if (objName === 'line' || objName === 'label') {

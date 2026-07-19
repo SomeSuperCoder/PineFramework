@@ -130,7 +130,7 @@ export function createBacktestRouter() {
       const filledOrders = strategyEngine.getFilledOrders();
 
       const initialCapital = strategyEngine.getConfig().initialCapital;
-      const equityCurve = buildEquityCurve(initialCapital, trades);
+      const equityCurve = buildEquityCurve(equityPoints);
       const drawdownCurve = buildDrawdownCurve(equityCurve);
       const equityPoints = buildEquityPoints(bars, equityCurve, drawdownCurve);
       const monthlyReturns = computeMonthlyReturns(equityPoints);
@@ -305,14 +305,8 @@ export function createBacktestRouter() {
   return router;
 }
 
-function buildEquityCurve(initialCapital: number, trades: Array<{ pnl: number }>): number[] {
-  const curve: number[] = [initialCapital];
-  let equity = initialCapital;
-  for (const trade of trades) {
-    equity += trade.pnl;
-    curve.push(equity);
-  }
-  return curve;
+function buildEquityCurve(equityPoints: Array<{ equity: number }>): number[] {
+  return equityPoints.map((p) => p.equity);
 }
 
 function buildDrawdownCurve(equityCurve: number[]): number[] {

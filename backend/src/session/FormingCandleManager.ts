@@ -58,6 +58,26 @@ export class FormingCandleManager {
    */
   confirm(bar: Bar): ScriptOutputs {
     if (bar.timestamp <= this.lastConfirmedTimestamp) {
+      if (bar.timestamp < this.lastConfirmedTimestamp) {
+        // Stale bar (older than last confirmed): reject with warning
+        console.warn(
+          `[FormingCandleManager] Received stale bar with timestamp ${bar.timestamp}, last confirmed was ${this.lastConfirmedTimestamp}. Ignoring.`,
+        );
+        return this.toFormingCandleOutputs({
+          success: false,
+          error: 'Stale bar ignored',
+          overlay: false,
+          diffOutputs: {},
+          diffShapes: [],
+          diffFills: [],
+          diffLines: [],
+          diffLabels: [],
+          barTimestamps: [],
+          barIndex: this.bars.length - 1,
+          isDiff: false,
+        });
+      }
+      // Re-confirm of the most recent bar (timestamp === lastConfirmedTimestamp)
       this.bars[this.bars.length - 1] = bar;
       // Update only the last context in-place
       const lastContext = this.contexts[this.contexts.length - 1];

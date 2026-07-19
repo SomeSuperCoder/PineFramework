@@ -83,7 +83,11 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       const sy = symbolRef.current;
       const iv = intervalRef.current;
       try {
-        await fetchRef.current(sy, iv);
+        const barsFetched = await fetchRef.current(sy, iv);
+        if (barsFetched === 0) {
+          // No more historical data available
+          shouldFitRef.current = true;
+        }
       } finally {
         if (!isLoadingHistoryRef.current) return;
         isLoadingHistoryRef.current = false;

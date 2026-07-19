@@ -72,10 +72,12 @@ export class BacktestEngine {
     let filteredBars = bars;
 
     if (this.config.startDate !== undefined) {
-      filteredBars = filteredBars.filter((b) => b.timestamp >= this.config.startDate!);
+      const startDate = this.config.startDate;
+      filteredBars = filteredBars.filter((b) => b.timestamp >= startDate);
     }
     if (this.config.endDate !== undefined) {
-      filteredBars = filteredBars.filter((b) => b.timestamp <= this.config.endDate!);
+      const endDate = this.config.endDate;
+      filteredBars = filteredBars.filter((b) => b.timestamp <= endDate);
     }
 
     const subBarMap = this.buildSubBarMap(filteredBars);
