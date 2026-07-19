@@ -503,7 +503,7 @@ export class ExecutionEngine {
       const afStart = typeof start === 'number' ? start : 0.02;
       const afInc = typeof inc === 'number' ? inc : 0.02;
       const afMax = typeof max === 'number' ? max : 0.2;
-      const key = 'sar';
+      const key = `sar_${this.currentCallSiteId}`;
 
       if (!this.sarState.has(key)) {
         this.sarState.set(key, {
