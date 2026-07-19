@@ -293,7 +293,7 @@ export class ExecutionEngine {
   private labels: LabelEntry[] = [];
   private boxes: Map<number, BoxEntry> = new Map();
   private boxIdCounter: number = 0;
-  private userTypeFields: Map<string, string[]> = new Map();
+  private userTypeFields: Map<string, { name: string; defaultExpr: import('../../parser/ast/nodes.js').ExpressionNode | null }[]> = new Map();
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
@@ -2521,6 +2521,36 @@ export class ExecutionEngine {
     }
 
     if (stmt.target.kind === 'MemberExpression') {
+      // Evaluate the object to get the UDT instance
+      const obj = this.executeExpression(stmt.target.object, scope, context);
+      if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
+        const fieldName = stmt.target.property;
+        const record = obj as unknown as Record<string, PineValue>;
+
+        let result: PineValue = value;
+        if (stmt.operator !== '=') {
+          const current = record[fieldName] !== undefined ? record[fieldName] : NA;
+          switch (stmt.operator) {
+            case '+=':
+              result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0);
+              break;
+            case '-=':
+              result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0);
+              break;
+            case '*=':
+              result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0);
+              break;
+            case '/=':
+              result = typeof current === 'number' && typeof value === 'number' && value !== 0 ? current / value : 0;
+              break;
+            case ':=':
+              result = value;
+              break;
+          }
+        }
+        // Store result back into the UDT instance field
+        record[fieldName] = result;
+      }
       return value;
     }
 
@@ -2681,7 +2711,10 @@ export class ExecutionEngine {
   ): PineValue {
     this.userTypeFields.set(
       stmt.name,
-      stmt.fields.map((f) => f.name),
+      stmt.fields.map((f) => ({
+        name: f.name,
+        defaultExpr: f.defaultValue ?? null,
+      })),
     );
     return NA;
   }
@@ -3020,12 +3053,18 @@ export class ExecutionEngine {
         return builtin(...builtinArgs);
       }
 
-      // Type constructor: TypeName.new(...)
+      // Type constructor: TypeName.new(...) — applies field defaults from type declaration
       if (methodName === 'new' && this.userTypeFields.has(objName)) {
         const fields = this.userTypeFields.get(objName)!;
         const obj: Record<string, PineValue> = {};
-        for (let i = 0; i < fields.length && i < args.length; i++) {
-          obj[fields[i]!] = args[i]!;
+        for (let i = 0; i < fields.length; i++) {
+          if (i < args.length) {
+            obj[fields[i]!.name] = args[i]!;
+          } else if (fields[i]!.defaultExpr) {
+            const defaultVal = this.executeExpression(fields[i]!.defaultExpr, scope, context);
+            obj[fields[i]!.name] = defaultVal;
+          }
+          // If no default and no arg, field is left undefined → will return NA on access
         }
         return obj as unknown as PineValue;
       }
@@ -3074,6 +3113,64 @@ export class ExecutionEngine {
           case 'get': {
             const gi = (args[0] as number) ?? 0;
             return obj[gi] ?? NA;
+          }
+          case 'min': {
+            let minVal: number | null = null;
+            for (const item of obj) {
+              if (typeof item === 'number' && !isNaN(item)) {
+                if (minVal === null || item < minVal) minVal = item;
+              }
+            }
+            return minVal !== null ? minVal : NA;
+          }
+          case 'max': {
+            let maxVal: number | null = null;
+            for (const item of obj) {
+              if (typeof item === 'number' && !isNaN(item)) {
+                if (maxVal === null || item > maxVal) maxVal = item;
+              }
+            }
+            return maxVal !== null ? maxVal : NA;
+          }
+          case 'avg': {
+            let sum = 0;
+            let count = 0;
+            for (const item of obj) {
+              if (typeof item === 'number' && !isNaN(item)) {
+                sum += item;
+                count++;
+              }
+            }
+            return count > 0 ? sum / count : NA;
+          }
+          case 'stdev': {
+            const nums = obj.filter((v): v is number => typeof v === 'number' && !isNaN(v));
+            if (nums.length < 2) return NA;
+            const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+            const variance = nums.reduce((sum, v) => sum + (v - mean) ** 2, 0) / (nums.length - 1);
+            return Math.sqrt(variance);
+          }
+          case 'indexof':
+            for (let idx = 0; idx < obj.length; idx++) {
+              if (obj[idx] === args[0]) return idx;
+            }
+            return -1;
+          case 'clear':
+            obj.length = 0;
+            return NA;
+          case 'percentile_linear_interpolation': {
+            const pct = (args[0] as number) ?? 50;
+            const nums = obj
+              .filter((v): v is number => typeof v === 'number' && !isNaN(v))
+              .sort((a, b) => a - b);
+            if (nums.length === 0) return NA;
+            if (nums.length === 1) return nums[0];
+            const rank = (pct / 100) * (nums.length - 1);
+            const lower = Math.floor(rank);
+            const upper = Math.ceil(rank);
+            if (lower === upper) return nums[lower];
+            const frac = rank - lower;
+            return nums[lower] + frac * (nums[upper] - nums[lower]);
           }
           case 'sort':
             return obj.sort((a: PineValue, b: PineValue) => (a as number) - (b as number));

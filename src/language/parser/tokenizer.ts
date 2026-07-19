@@ -332,11 +332,14 @@ export class Tokenizer {
     }
 
     const lexeme = this.source.slice(start.offset, this.pos);
+    // Detect floats like `.5` (leading dot) where isFloat was already set,
+    // OR that contain a dot (standard or trailing-dot floats)
+    const isActuallyFloat = isFloat || lexeme.includes('.');
     return {
       type: TokenType.Number,
       lexeme,
       span: spanBetween(start, this.currentLocation()),
-      value: isFloat ? parseFloat(lexeme) : parseInt(lexeme, 10),
+      value: isActuallyFloat ? parseFloat(lexeme) : parseInt(lexeme, 10),
     };
   }
 

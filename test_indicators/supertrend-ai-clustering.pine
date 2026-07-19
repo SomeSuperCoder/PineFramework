@@ -107,11 +107,11 @@ var array<vector> factors_clusters = na
 var array<vector> perfclusters = na
 
 if last_bar_index - bar_index <= maxData
-    factors_clusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
-    perfclusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
-    
-    //K-means with epsilon convergence (avoids infinite float oscillation)
+    //K-means with epsilon convergence (avoids infinite float oscillation from empty clusters)
     for _ = 0 to maxIter
+        factors_clusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
+        perfclusters := array.from(vector.new(array.new<float>(0)), vector.new(array.new<float>(0)), vector.new(array.new<float>(0)))
+        
         //Assign value to cluster
         i = 0
         for value in data
@@ -124,10 +124,13 @@ if last_bar_index - bar_index <= maxData
             factors_clusters.get(idx).out.push(factor_array.get(i))
             i += 1
 
-        //Update centroids
+        //Update centroids (if a cluster is empty, keep its previous centroid)
         new_centroids = array.new<float>(0)
+        c = 0
         for cluster_ in perfclusters
-            new_centroids.push(cluster_.out.avg())
+            avg_val = cluster_.out.avg()
+            new_centroids.push(na(avg_val) ? centroids.get(c) : avg_val)
+            c += 1
 
         //Test if centroid changed (with epsilon for float stability)
         eps = 0.0000000001
