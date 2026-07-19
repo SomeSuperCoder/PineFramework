@@ -449,8 +449,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
         const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
         if (isNewBar) {
-          const rawTime = msg.barTimestamps?.[msg.barIndex] ?? (plot.data[plot.data.length - 1]?.time ?? 0);
-          const newTime = Math.floor(rawTime / 1000);
+          const rawTime = msg.barTimestamps?.[msg.barIndex];
+          const newTime = rawTime !== undefined ? Math.floor(rawTime / 1000) : (plot.data[plot.data.length - 1]?.time ?? 0);
           return {
             ...plot,
             data: [...plot.data, { time: newTime, value: numValue, color }],

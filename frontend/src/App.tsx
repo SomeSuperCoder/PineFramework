@@ -296,9 +296,6 @@ function App() {
         return '';
       }
     }
-    if (indicatorResults.size > 0) {
-      console.log('[strategySource] No strategyMarkers in any of %d indicatorResults', indicatorResults.size);
-    }
     return '';
   })();
 
