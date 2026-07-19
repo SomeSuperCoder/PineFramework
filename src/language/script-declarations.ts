@@ -6,7 +6,7 @@ export type PineScale = 'inherit' | 'linear' | 'logarithmic';
 
 export type DefaultQtyType = 'fixed' | 'percent_of_equity' | 'currency';
 
-export type CommissionType = 'percent' | 'per_order' | 'per_contract';
+import type { CommissionType } from '../strategy/strategy-engine.js';
 
 export type CloseEntriesRule = 'FIFO' | 'LIFO';
 
