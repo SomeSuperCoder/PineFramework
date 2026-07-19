@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1871 nodes · 4210 edges · 100 communities (72 shown, 28 thin omitted)
-- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 16 edges (avg confidence: 0.69)
+- 1871 nodes · 4439 edges · 92 communities (71 shown, 21 thin omitted)
+- Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 19 edges (avg confidence: 0.71)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `72385e82`
+- Built from commit: `d9585770`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -102,25 +102,17 @@
 - eslint-plugin-prettier
 - AGENTS.md - Graphify Instructions
 - Plugin Architecture
-- isNa
-- DataEngine
-- compiler.ts
-- .run
-- .inferExpressionType
-- primitiveType
-- MapType
-- buildTradeContextFromFill
 
 ## God Nodes (most connected - your core abstractions)
-1. `DrawingEngine` - 76 edges
-2. `PineChart` - 67 edges
-3. `Parser` - 63 edges
-4. `ExecutionEngine` - 56 edges
-5. `LayoutManager` - 55 edges
-6. `SourceSpan` - 55 edges
-7. `Viewport` - 48 edges
-8. `PineValue` - 48 edges
-9. `StrategyEngine` - 48 edges
+1. `PineValue` - 81 edges
+2. `DrawingEngine` - 76 edges
+3. `PineChart` - 67 edges
+4. `Parser` - 63 edges
+5. `ExecutionEngine` - 63 edges
+6. `SourceSpan` - 57 edges
+7. `LayoutManager` - 55 edges
+8. `StrategyEngine` - 51 edges
+9. `Viewport` - 48 edges
 10. `parseColor()` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -151,27 +143,27 @@
 - **Core Engine Components** — parser_component, compiler_component, type_system, execution_engine, data_engine, ta_engine, request_system, plot_engine, drawing_engine, canvas_charting_library, strategy_engine, plugin_registry, alert_system, input_system, color_system, script_declaration_system [INFERRED 0.85]
 - **Real-Time Execution Pipeline** — execution_engine, backend_api_server, websocket_streaming, frontend_web_app, canvas_charting_library, bybit_adapter [INFERRED 0.95]
 
-## Communities (100 total, 28 thin omitted)
+## Communities (92 total, 21 thin omitted)
 
 ### Community 0 - "PineValue"
 Cohesion: 0.06
-Nodes (7): FormingCandleManager, pineValueToJSON(), ScriptOutputs, ScriptSession, ClientSubscription, createWSGateway(), ExecutionEngine
+Nodes (29): ExecutionContext, ExecutionEngine, ExecutionSnapshot, FormingCandleResult, cloneRuntimeScope(), createRuntimeScope(), declareVariable(), getVariableValue() (+21 more)
 
 ### Community 1 - "Parser"
-Cohesion: 0.08
-Nodes (50): CompileError, ParseError, PineError, TypeError, SourceLocation, SourceSpan, spanBetween(), ArgumentNode (+42 more)
+Cohesion: 0.17
+Nodes (6): spanBetween(), ArgumentNode, ExpressionNode, Parser, Token, TokenType
 
 ### Community 2 - "index.ts"
 Cohesion: 0.07
 Nodes (28): createDataSourcePlugin(), createFunctionPlugin(), createRendererPlugin(), createTypePlugin(), PluginManager, DEFAULT_REGISTRY_CONFIG, PluginDependency, PluginEntry (+20 more)
 
 ### Community 3 - "DrawingEngine"
-Cohesion: 0.07
-Nodes (6): PineValue, DrawingEngine, generateDrawingId(), isNaOrNull(), toNumber(), toString()
+Cohesion: 0.05
+Nodes (3): DrawingEngine, generateDrawingId(), isNaOrNull()
 
 ### Community 4 - "index.ts"
-Cohesion: 0.12
-Nodes (29): AlertBarData, AlertCondition, AlertConfig, AlertDestination, AlertEvent, AlertFrequency, DEFAULT_ALERT_CONFIG, resetAlertIdCounter() (+21 more)
+Cohesion: 0.09
+Nodes (46): AlertBarData, AlertCondition, AlertConfig, AlertDestination, AlertEvent, AlertFrequency, DEFAULT_ALERT_CONFIG, resetAlertIdCounter() (+38 more)
 
 ### Community 5 - "Requirements Document"
 Cohesion: 0.09
@@ -179,11 +171,15 @@ Nodes (50): Alert System, Backend API Server, Strategy Backtest Engine, Bar-by-B
 
 ### Community 6 - "execution-engine.ts"
 Cohesion: 0.12
-Nodes (13): barsToContexts(), AlertConditionEntry, AlertTriggerEntry, BoxEntry, ExecutionContext, ExecutionMetrics, ExecutionResult, ExecutionSnapshot (+5 more)
+Nodes (45): SourceSpan, ArrayExpressionNode, AssignmentNode, BinaryExpressionNode, BooleanLiteralNode, BreakStatementNode, CallExpressionNode, ColorLiteralNode (+37 more)
+
+### Community 7 - "StrategyEngine"
+Cohesion: 0.08
+Nodes (3): BacktestEngine, generateOrderId(), StrategyEngine
 
 ### Community 9 - "index.ts"
-Cohesion: 0.15
-Nodes (26): PineColor, TableObject, PlotEngine, PlotOutput, resetPlotIdCounter(), ArrowDescriptor, ArrowStyle, BarcolorDescriptor (+18 more)
+Cohesion: 0.13
+Nodes (27): PineColor, LinefillObject, PlotEngine, PlotOutput, resetPlotIdCounter(), ArrowDescriptor, ArrowStyle, BarcolorDescriptor (+19 more)
 
 ### Community 10 - "backtest-cli.ts"
 Cohesion: 0.12
@@ -194,8 +190,8 @@ Cohesion: 0.11
 Nodes (3): LayoutManager, AxisRenderer, MarkerRenderer
 
 ### Community 12 - "Bar"
-Cohesion: 0.19
-Nodes (3): Bar, CacheEntry, RequestSystem
+Cohesion: 0.10
+Nodes (4): Bar, CacheEntry, DataEngine, RequestSystem
 
 ### Community 13 - "PineChart.ts"
 Cohesion: 0.15
@@ -206,16 +202,16 @@ Cohesion: 0.07
 Nodes (26): app, cache, DATA_DIR, __dirname, INDICATORS_JSON_PATH, indicatorsStore, manifestStore, PORT (+18 more)
 
 ### Community 15 - "compiler.ts"
-Cohesion: 0.17
-Nodes (11): Compiler, CompiledScript, CompileResult, createIRBuilder(), createScope(), IRBuilder, IRInstruction, IROpCode (+3 more)
+Cohesion: 0.14
+Nodes (20): compile(), Compiler, CompiledScript, CompileResult, createIRBuilder(), createScope(), declareVariable(), IRBuilder (+12 more)
 
 ### Community 16 - "PineType"
-Cohesion: 0.10
-Nodes (9): IRFunction, IRGlobal, CoercionResult, AnyType, ArrayType, NaType, PineType, SeriesType (+1 more)
+Cohesion: 0.06
+Nodes (13): IRFunction, IRGlobal, CoercionResult, withSeries(), AnyType, ArrayType, MapType, NaType (+5 more)
 
 ### Community 17 - "ScriptsManifestStore"
-Cohesion: 0.11
-Nodes (12): migrateLegacyScripts(), detectScriptType(), ScriptEntry, ScriptFileManager, computeChecksum(), DEFAULT_MANIFEST, FileScriptEntry, ScriptsManifest (+4 more)
+Cohesion: 0.13
+Nodes (8): migrateLegacyScripts(), detectScriptType(), ScriptEntry, ScriptFileManager, computeChecksum(), ScriptsManifestStore, sanitizeFilename(), uniqueFilename()
 
 ### Community 18 - "TelegramConfigStore"
 Cohesion: 0.08
@@ -226,24 +222,24 @@ Cohesion: 0.09
 Nodes (25): ErrorConsole(), ErrorConsoleProps, buildScriptResult(), COLORS, ExecuteResponse, ExecutionResultMessage, NOTE: ohlcvDataRef.current is NOT updated here., useChartData() (+17 more)
 
 ### Community 20 - "drawing-engine.ts"
-Cohesion: 0.10
-Nodes (19): BoxObject, DEFAULT_LIMITS, DrawingLimits, DrawingOutput, LabelObject, LinefillObject, LineObject, LinePoint (+11 more)
+Cohesion: 0.14
+Nodes (22): BoxObject, DEFAULT_LIMITS, DrawingLimits, DrawingOutput, LabelObject, LineObject, LinePoint, PolylineObject (+14 more)
 
 ### Community 21 - "compilerOptions"
 Cohesion: 0.07
 Nodes (27): ES2022, tests/**/*, compilerOptions, declaration, declarationMap, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules (+19 more)
 
 ### Community 22 - "parseColor"
-Cohesion: 0.14
-Nodes (20): addColors(), blendColors(), clamp(), colorEquals(), ColorInput, colorToGrayscale(), colorToHex(), invertColor() (+12 more)
+Cohesion: 0.15
+Nodes (21): addColors(), blendColors(), clamp(), colorEquals(), ColorInput, colorToGrayscale(), colorToHex(), colorToNumber() (+13 more)
 
 ### Community 23 - "Viewport"
 Cohesion: 0.22
 Nodes (6): PaneRegion, LineRenderer, CandlestickData, PlotSeriesData, Viewport, ChartComponentProps
 
 ### Community 24 - "coercion.ts"
-Cohesion: 0.24
-Nodes (12): coerce(), coerceBinaryOperands(), coerceToBool(), coerceToColor(), coerceToFloat(), coerceToInt(), coerceToString(), getCommonType() (+4 more)
+Cohesion: 0.13
+Nodes (23): coerce(), coerceBinaryOperands(), coerceToBool(), coerceToColor(), coerceToFloat(), coerceToInt(), coerceToString(), getCommonType() (+15 more)
 
 ### Community 25 - "time.ts"
 Cohesion: 0.12
@@ -254,11 +250,11 @@ Cohesion: 0.12
 Nodes (17): highest(), lowest(), median(), percentile(), quantile(), stdev(), taAverage(), taMax() (+9 more)
 
 ### Community 28 - "index.ts"
-Cohesion: 0.34
-Nodes (10): areTimeframesCompatible(), BarData, createBar(), parseTimeframe(), Timeframe, timeframeToMinutes(), validateBar(), DataEngineOptions (+2 more)
+Cohesion: 0.17
+Nodes (15): backtestStrategy(), barsToContexts(), areTimeframesCompatible(), BarData, createBar(), parseTimeframe(), Timeframe, timeframeToMinutes() (+7 more)
 
 ### Community 30 - "script-declarations.ts"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (19): CloseEntriesRule, CommissionType, DefaultQtyType, IndicatorConfig, LibraryConfig, parseIndicatorDeclaration(), parseLibraryDeclaration(), parseStrategyDeclaration() (+11 more)
 
 ### Community 31 - "compilerOptions"
@@ -282,16 +278,16 @@ Cohesion: 0.15
 Nodes (17): BacktestSettingsPopup(), BARS_PER_DAY, buildConfig(), COMMISSION_METHODS, DateRangeMode, defaultConfig, estimateBars(), getDefaultMethodSettings() (+9 more)
 
 ### Community 37 - "index.ts"
-Cohesion: 0.20
-Nodes (19): colorToNumber(), colorToRgb(), colorToRgba(), ConfigChangeListener, ConfigSection, AnyInputDefinition, BoolInputDefinition, ColorInputDefinition (+11 more)
+Cohesion: 0.25
+Nodes (16): ConfigChangeListener, ConfigSection, AnyInputDefinition, BoolInputDefinition, ColorInputDefinition, FloatInputDefinition, InputDefinition, InputState (+8 more)
 
 ### Community 39 - "RunningIndicatorsStore"
 Cohesion: 0.16
 Nodes (7): createIndicatorsRouter(), createScriptsRouter(), DEFAULT_DATA, RunningIndicator, RunningIndicatorsData, RunningIndicatorsStore, validate()
 
 ### Community 40 - "gateway.ts"
-Cohesion: 0.18
-Nodes (13): cloneRuntimeScope(), createRuntimeScope(), declareVariable(), getVariableValue(), pushBarValues(), resolveVariable(), RuntimeScope, setVariableValue() (+5 more)
+Cohesion: 0.22
+Nodes (6): FormingCandleManager, pineValueToJSON(), ScriptOutputs, ScriptSession, ClientSubscription, createWSGateway()
 
 ### Community 41 - "compilerOptions"
 Cohesion: 0.11
@@ -306,8 +302,12 @@ Cohesion: 0.17
 Nodes (6): CacheEntry, OHLCVCache, createBarsRouter(), VALID_INTERVALS, createOHLCVRouter(), VALID_INTERVALS
 
 ### Community 45 - "tokenizer.ts"
-Cohesion: 0.24
-Nodes (6): barsToContext(), executeScript(), parseAndCompile(), parse(), extractVersion(), KEYWORDS
+Cohesion: 0.17
+Nodes (9): CompileError, ParseError, PineError, TypeError, createLocation(), parse(), ParseResult, extractVersion() (+1 more)
+
+### Community 46 - "JsonStore"
+Cohesion: 0.19
+Nodes (6): JsonStore, JsonStoreOptions, DEFAULT_MANIFEST, FileScriptEntry, ScriptsManifest, validateManifest()
 
 ### Community 47 - "App.tsx"
 Cohesion: 0.17
@@ -342,8 +342,8 @@ Cohesion: 0.30
 Nodes (9): BacktestResults(), BacktestResultsProps, StrategyResultsPopup(), StrategyResultsPopupProps, MOCK_METRICS, MOCK_RESULT, MOCK_TRADES, BacktestResultResponse (+1 more)
 
 ### Community 57 - "CommissionCalculator"
-Cohesion: 0.09
-Nodes (22): buildTradeContextFromTrade(), CALCULATORS, CommissionCalculator, CommissionConfig, CommissionMethodDescriptor, computeCommission(), DESCRIPTOR_MAP, getAllCommissionMethodDescriptors() (+14 more)
+Cohesion: 0.17
+Nodes (6): CommissionCalculator, JupiterManualCalculator, JupiterUltraCalculator, NoneCalculator, PercentFixedCalculator, PerOrderFixedCalculator
 
 ### Community 58 - "tsconfig.build.json"
 Cohesion: 0.18
@@ -409,37 +409,25 @@ Nodes (5): keywords, backtesting, pine-script, technical-analysis, tradingview
 Cohesion: 0.50
 Nodes (3): plugin, $schema, .opencode/plugins/graphify.js
 
-### Community 92 - "isNa"
-Cohesion: 0.17
-Nodes (9): isNa(), isValidNumber(), na, naOr(), pineTruthy(), propagateNa(), ChartPointFactory, pineTruthy() (+1 more)
-
-### Community 94 - "compiler.ts"
-Cohesion: 0.18
-Nodes (12): compile(), inferLiteralType(), ANY_TYPE, BOOL_TYPE, COLOR_TYPE, FLOAT_TYPE, INT_TYPE, NA_TYPE (+4 more)
-
-### Community 96 - ".inferExpressionType"
-Cohesion: 0.27
-Nodes (8): declareVariable(), resolveVariable(), StatementNode, isAssignable(), arrayOf(), mapOf(), seriesOf(), typeFromAnnotation()
-
 ## Knowledge Gaps
-- **299 isolated node(s):** `KEYWORDS`, `ShapeEntry`, `LineEntry`, `LabelEntry`, `BoxEntry` (+294 more)
+- **297 isolated node(s):** `$schema`, `.opencode/plugins/graphify.js`, `name`, `version`, `type` (+292 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **28 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Profiler` connect `Profiler` to `index.ts`?**
-  _High betweenness centrality (0.234) - this node is a cross-community bridge._
 - **Why does `CodeEditor()` connect `CodeEditor.tsx` to `Profiler`, `App.tsx`?**
-  _High betweenness centrality (0.230) - this node is a cross-community bridge._
-- **Why does `PluginRegistry` connect `index.ts` to `tokenizer.ts`, `OHLCVCache`, `PineScriptEngine`, `execution-engine.ts`?**
-  _High betweenness centrality (0.133) - this node is a cross-community bridge._
-- **What connects `KEYWORDS`, `ShapeEntry`, `LineEntry` to the rest of the system?**
-  _299 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.217) - this node is a cross-community bridge._
+- **Why does `Profiler` connect `Profiler` to `index.ts`?**
+  _High betweenness centrality (0.200) - this node is a cross-community bridge._
+- **Why does `PluginRegistry` connect `index.ts` to `index.ts`, `PineScriptEngine`, `OHLCVCache`?**
+  _High betweenness centrality (0.158) - this node is a cross-community bridge._
+- **What connects `$schema`, `.opencode/plugins/graphify.js`, `name` to the rest of the system?**
+  _297 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `PineValue` be split into smaller, more focused modules?**
-  _Cohesion score 0.06180733162830349 - nodes in this community are weakly interconnected._
-- **Should `Parser` be split into smaller, more focused modules?**
-  _Cohesion score 0.07619997151402934 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06262626262626263 - nodes in this community are weakly interconnected._
 - **Should `index.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.06586538461538462 - nodes in this community are weakly interconnected._
+- **Should `DrawingEngine` be split into smaller, more focused modules?**
+  _Cohesion score 0.04949874686716792 - nodes in this community are weakly interconnected._
