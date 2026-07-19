@@ -711,17 +711,6 @@ export class StrategyEngine {
     }
   }
 
-  private getExtremePrice(
-    direction: OrderDirection,
-    high: number,
-    low: number,
-  ): { maxPrice: number; minPrice: number } {
-    if (direction === 'long') {
-      return { maxPrice: high, minPrice: low };
-    }
-    return { maxPrice: low, minPrice: high };
-  }
-
   private closeOrReducePosition(
     quantity: number,
     price: number,
@@ -734,21 +723,18 @@ export class StrategyEngine {
         ? (price - this.position.avgPrice) * closeQuantity
         : (this.position.avgPrice - price) * closeQuantity;
 
-    const { maxPrice, minPrice } = this.getExtremePrice(
-      this.position.direction as OrderDirection,
-      this.high,
-      this.low,
-    );
-
+    // MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion)
+    // For long: adverse = price drops (low), favorable = price rises (high)
+    // For short: adverse = price rises (high), favorable = price drops (low)
     const mae =
       this.position.direction === 'long'
-        ? ((this.position.avgPrice - minPrice) / this.position.avgPrice) * 100
-        : ((maxPrice - this.position.avgPrice) / this.position.avgPrice) * 100;
+        ? ((this.position.avgPrice - this.low) / this.position.avgPrice) * 100
+        : ((this.high - this.position.avgPrice) / this.position.avgPrice) * 100;
 
     const mfe =
       this.position.direction === 'long'
-        ? ((maxPrice - this.position.avgPrice) / this.position.avgPrice) * 100
-        : ((this.position.avgPrice - minPrice) / this.position.avgPrice) * 100;
+        ? ((this.high - this.position.avgPrice) / this.position.avgPrice) * 100
+        : ((this.position.avgPrice - this.low) / this.position.avgPrice) * 100;
 
     const trade: Trade = {
       id: `trade_${this.trades.length + 1}`,
