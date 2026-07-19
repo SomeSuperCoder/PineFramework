@@ -141,7 +141,7 @@ export function createBacktestRouter() {
       updateProgress(job.jobId, 90);
       setPhase(job.jobId, 'Building results');
 
-      const sanitize = (v: number) => Number.isFinite(v) ? v : 0;
+      const sanitize = (v: number) => Number.isFinite(v) ? v : (v === Infinity ? null : 0);
 
       console.log('[backtest] Metrics: totalTrades=%d, totalPnl=%d, winRate=%d, profitFactor=%d', metrics.totalTrades, metrics.totalPnl, metrics.winRate, metrics.profitFactor);
       console.log('[backtest] Equity curve length=%d, trades=%d', equityCurve.length, trades.length);
