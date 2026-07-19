@@ -206,9 +206,10 @@ export class BacktestEngine {
 
   private computeBuyHoldReturn(bars: Bar[]): number {
     if (bars.length < 2) return 0;
-    const firstClose = bars[0]!.close;
+    // Buy at first bar open, sell at last bar close (matching market order buy-and-hold)
+    const firstOpen = bars[0]!.open;
     const lastClose = bars[bars.length - 1]!.close;
-    return firstClose > 0 ? ((lastClose - firstClose) / firstClose) * 100 : 0;
+    return firstOpen > 0 ? ((lastClose - firstOpen) / firstOpen) * 100 : 0;
   }
 
   runWithOHLCV(
