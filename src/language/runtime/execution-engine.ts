@@ -2196,7 +2196,12 @@ export class ExecutionEngine {
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
       if (!lastResult.success) {
-        break;
+        // Return accumulated markers from all successfully executed bars, not just the failed bar's markers
+        return {
+          ...lastResult,
+          strategyMarkers: allMarkers,
+          maxLookback: this.getMaxLookback(),
+        };
       }
       allMarkers.push(...lastResult.strategyMarkers);
     }
