@@ -189,6 +189,13 @@ export class StrategyEngine {
         method: this.config.commissionMethod,
         settings: this.config.commissionMethodSettings ?? null,
       };
+
+      // Warn if both pluggable and legacy commission are configured
+      if (this.config.commission !== 0) {
+        console.warn(
+          `[StrategyEngine] Both commissionMethod ('${this.config.commissionMethod}') and legacy commission (${this.config.commission}) are configured. The pluggable commissionMethod takes precedence and legacy commission will be ignored.`,
+        );
+      }
     }
     this.position = {
       symbol: '',
@@ -657,7 +664,7 @@ export class StrategyEngine {
   }
 
   private calculateCommission(order: Order, price: number): number {
-    // Use pluggable commission calculator if configured
+    // Use pluggable commission calculator if configured (takes precedence over legacy)
     if (this.commissionCalculator && this.commissionConfig) {
       const context = buildTradeContextFromFill({
         direction: order.direction,
@@ -668,6 +675,8 @@ export class StrategyEngine {
     }
 
     // Legacy commission calculation
+    // Note: order.commission field is set at order creation but is NOT used for charging.
+    // Commission is calculated fresh at fill time based on current config.
     if (this.config.commission === 0) return 0;
 
     if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
@@ -678,6 +687,7 @@ export class StrategyEngine {
       return this.config.commission * order.quantity;
     }
 
+    // 'percent' type: commission as percentage of trade value
     return price * order.quantity * (this.config.commission / 100);
   }
 
