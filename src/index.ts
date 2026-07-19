@@ -65,29 +65,17 @@ export function createRequestSystem(
 export function barsToContext(
   bars: Bar[],
 ): import('./language/runtime/execution-engine.js').ExecutionContext[] {
+  // Each context only needs the current bar's values — executeBar uses getRelative(0)
+  // which reads the last element. Historical values are maintained by the engine's
+  // pushBarValues mechanism, not by the context series. This is O(n) memory, not O(n²).
   return bars.map((bar, index) => ({
     barIndex: index,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries(
-      'open',
-      bars.slice(0, index + 1).map((b) => b.open),
-    ),
-    high: createSeries(
-      'high',
-      bars.slice(0, index + 1).map((b) => b.high),
-    ),
-    low: createSeries(
-      'low',
-      bars.slice(0, index + 1).map((b) => b.low),
-    ),
-    close: createSeries(
-      'close',
-      bars.slice(0, index + 1).map((b) => b.close),
-    ),
-    volume: createSeries(
-      'volume',
-      bars.slice(0, index + 1).map((b) => b.volume),
-    ),
+    open: createSeries('open', [bar.open]),
+    high: createSeries('high', [bar.high]),
+    low: createSeries('low', [bar.low]),
+    close: createSeries('close', [bar.close]),
+    volume: createSeries('volume', [bar.volume]),
   }));
 }
