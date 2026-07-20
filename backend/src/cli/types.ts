@@ -20,6 +20,9 @@ export interface CliOptions {
   defaultQty?: number;
   pyramiding?: number;
   help: boolean;
+  /** When true, allows using a non-Jupiter commission method. Without this flag,
+   *  the CLI will refuse to run with fee models that don't match the live bot. */
+  allowUnrealisticResults?: boolean;
 }
 
 export interface SymbolResult {

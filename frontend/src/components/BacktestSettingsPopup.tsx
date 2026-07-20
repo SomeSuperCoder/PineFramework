@@ -126,6 +126,9 @@ const JUPITER_TIER_LABELS: Record<string, { label: string; bps: number }> = {
   new_token: { label: 'New Token (<24h)', bps: 50 },
 };
 
+/** Methods that match the real Jupiter trading bot's fee structure. */
+const JUPITER_METHODS = new Set<CommissionMethodId>(['jupiter_manual', 'jupiter_ultra']);
+
 /** Known stablecoin symbols for tier detection. */
 const STABLECOINS = new Set(['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USD', 'USDE', 'FDUSD']);
 const KNOWN_QUOTES = ['USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'FRAX', 'USD', 'DAI', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP'];
@@ -474,7 +477,54 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                   {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
                 </div>
               )}
-            </div>
+
+              {commissionMethod === undefined ? (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '10px 12px',
+                  background: '#3a1a00',
+                  border: '1px solid #ff6b00',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#ff8c00',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>⚠️ UNREALISTIC RESULTS</strong><br />
+                  No commission method selected — using legacy strategy parameters. The live trading bot executes
+                  swaps via <strong>Jupiter</strong> (Router path — 0% Jupiter commission). Select{' '}
+                  <strong>Jupiter (Basic Swap)</strong> to match real trading conditions.
+                </div>
+              ) : !JUPITER_METHODS.has(commissionMethod) ? (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '10px 12px',
+                  background: '#3a1a00',
+                  border: '1px solid #ff6b00',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#ff8c00',
+                  lineHeight: 1.5,
+                }}>
+                  <strong>⚠️ UNREALISTIC RESULTS</strong><br />
+                  The live trading bot executes swaps via <strong>Jupiter</strong> (Router path — 0% Jupiter commission).
+                  Using <strong>{COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.label ?? commissionMethod}</strong>{' '}
+                  will produce backtest results that do not reflect real trading conditions.
+                  Select <strong>Jupiter (Basic Swap)</strong> or <strong>Jupiter Ultra</strong> instead.
+                </div>
+              ) : (
+                <div style={{
+                  marginTop: '8px',
+                  padding: '8px 12px',
+                  background: '#0a2e1a',
+                  border: '1px solid #4caf50',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  color: '#4caf50',
+                  lineHeight: 1.5,
+                }}>
+                  ✓ Commission method matches the Jupiter fee structure used by the live trading bot.
+                </div>
+              )}
             {commissionMethod === 'percent_fixed' && (
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>

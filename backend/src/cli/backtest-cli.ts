@@ -29,6 +29,9 @@ Options:
   --slippage <n>          Slippage value (default: 0)
   --default-qty <n>       Default order quantity (default: 1)
   --pyramiding <n>        Max pyramiding entries (default: 0)
+  --allow-unrealistic-results  Allow non-Jupiter commission methods. Use this only if you
+                          understand that the backtest fee model does not match the live
+                          Jupiter bot's fee structure, producing unrealistic results.
   --help                  Show this help message
 `);
 }
@@ -109,6 +112,8 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--pyramiding') {
       i++;
       options.pyramiding = parseInt(args[i] ?? '', 10);
+    } else if (arg === '--allow-unrealistic-results') {
+      options.allowUnrealisticResults = true;
     } else if (!arg.startsWith('-')) {
       if (positionalCount === 0) {
         options.scriptPath = arg;
@@ -157,6 +162,21 @@ function validateOptions(options: CliOptions): string | null {
 
   if (options.symbols.length === 0) {
     return 'At least one symbol is required';
+  }
+
+  // Enforce Jupiter commission method for realistic results
+  const REALISTIC_METHODS: CliCommissionMethod[] = ['jupiter_manual', 'jupiter_ultra'];
+  if (
+    options.commissionMethod &&
+    !REALISTIC_METHODS.includes(options.commissionMethod) &&
+    !options.allowUnrealisticResults
+  ) {
+    return (
+      `Unrealistic commission method: '${options.commissionMethod}'. ` +
+      `The live trading bot executes swaps via Jupiter (Router path — 0% Jupiter commission). ` +
+      `Only 'jupiter_manual' or 'jupiter_ultra' match the bot's actual fee structure. ` +
+      `Pass --allow-unrealistic-results to override this check.`
+    );
   }
 
   // daysBack is checked per-timeframe in main(), not here
