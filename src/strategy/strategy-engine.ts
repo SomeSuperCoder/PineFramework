@@ -1,3 +1,6 @@
+/** Typical number of trading days per year used for Sharpe/Sortino annualization. */
+const TRADING_DAYS_PER_YEAR = 252;
+
 export type OrderDirection = 'long' | 'short';
 export type OrderAction = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
@@ -1089,8 +1092,8 @@ export class StrategyEngine {
         this.config.initialCapital > 0 ? (totalPnl / this.config.initialCapital) * 100 : 0,
       maxDrawdown: this.maxDrawdown,
       maxDrawdownPercent: this.peakEquity > 0 ? (this.maxDrawdown / this.peakEquity) * 100 : 0,
-      sharpeRatio: stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(252) : 0,
-      sortinoRatio: downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(252) : 0,
+      sharpeRatio: stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
+      sortinoRatio: downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
       averageWin: avgWin,
       averageLoss: avgLoss,
       largestWin: winningTrades.length > 0 ? Math.max(...winningTrades.map((t) => t.pnl)) : 0,

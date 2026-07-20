@@ -216,13 +216,13 @@
   - **Fix:** Add an option to fill market orders at a randomized or average price within the bar (e.g., `(open + high + low + close) / 4`) instead of always using `open`. At minimum, document this limitation.
   - **Test:** Create a strategy that enters at market on every bar and compare results with different fill price models.
 
-- [ ] **L-005** | [Bug-Logic] | `src/strategy/strategy-engine.ts:1032-1038` | Sharpe ratio hardcoded to annualize with sqrt(252)
+- [x] **L-005** | [Bug-Logic] | `src/strategy/strategy-engine.ts:1032-1038` | Sharpe ratio hardcoded to annualize with sqrt(252)
   - **Issue:** The Sharpe and Sortino ratios multiply by `Math.sqrt(252)` regardless of the actual bar timeframe. For daily data, 252 is correct. For hourly data, it should be `sqrt(252*6.5)` or `sqrt(252*24)`. For minute data, the scaling is orders of magnitude off.
   - **Impact:** Sharpe and Sortino ratios are only correct for daily timeframe backtests. All other timeframes produce incorrect (overly large or small) risk-adjusted return metrics.
   - **Fix:** Make the annualization factor configurable or derive it from the bar timeframe. At minimum, add a `timeframe` parameter to the engine and compute the correct factor (e.g., `sqrt(252 * barsPerDay)`). For CLI backtests, pass the timeframe automatically.
   - **Test:** Run the same strategy on 1h and 1D data and verify Sharpe ratio values are comparable (annualized to the same period).
 
-- [ ] **L-006** | [CodeQuality-MagicNumbers] | `src/strategy/strategy-engine.ts:1032-1038` | Hardcoded `252` for annualization
+- [x] **L-006** | [CodeQuality-MagicNumbers] | `src/strategy/strategy-engine.ts:1032-1038` | Hardcoded `252` for annualization
   - **Issue:** `Math.sqrt(252)` appears twice (Sharpe and Sortino) with no named constant explaining what 252 represents.
   - **Impact:** Without documentation, a reader might not understand that 252 = typical trading days per year. If the data uses different conventions (e.g., crypto 365-day markets), the value is wrong.
   - **Fix:** Define `const TRADING_DAYS_PER_YEAR = 252;` at the module level and use it in both places.
