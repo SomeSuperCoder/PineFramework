@@ -108,22 +108,150 @@ function getDefaultMethodSettings(method: CommissionMethodId): Record<string, un
   switch (method) {
     case 'percent_fixed': return { rate: 0.001 };
     case 'per_order_fixed': return { amount: 1 };
-    case 'jupiter_ultra': return { pairCategory: 'default' };
+    case 'jupiter_ultra': return {}; // Auto-detect from symbol — no explicit settings needed
     case 'jupiter_manual': return null;
     case 'none': return null;
     default: return null;
   }
 }
 
-const JUPITER_PAIR_OPTIONS: Array<{ value: string; label: string; bps: number }> = [
-  { value: 'jupiter_ecosystem', label: 'Jupiter Ecosystem (0 bps)', bps: 0 },
-  { value: 'pegged_asset', label: 'Pegged Assets (0 bps)', bps: 0 },
-  { value: 'sol_stable', label: 'SOL ↔ Stable (2 bps)', bps: 2 },
-  { value: 'lst_stable', label: 'LST ↔ Stable (5 bps)', bps: 5 },
-  { value: 'default', label: 'Default (10 bps)', bps: 10 },
-  { value: 'new_token', label: 'New Token (50 bps)', bps: 50 },
-  { value: 'custom', label: 'Custom Rate', bps: 0 },
-];
+// ── Jupiter Ultra tier auto-detection (simplified, for display only) ──
+
+const JUPITER_TIER_LABELS: Record<string, { label: string; bps: number }> = {
+  jupiter_ecosystem: { label: 'Jupiter Ecosystem', bps: 0 },
+  pegged_asset: { label: 'Pegged Assets', bps: 0 },
+  sol_stable: { label: 'SOL ↔ Stable', bps: 2 },
+  lst_stable: { label: 'LST ↔ Stable', bps: 5 },
+  default: { label: 'Default', bps: 10 },
+  new_token: { label: 'New Token (<24h)', bps: 50 },
+};
+
+/** Known stablecoin symbols for tier detection. */
+const STABLECOINS = new Set(['USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USD', 'USDE', 'FDUSD']);
+const KNOWN_QUOTES = ['USDT', 'USDC', 'BUSD', 'FDUSD', 'TUSD', 'FRAX', 'USD', 'DAI', 'BTC', 'ETH', 'SOL', 'BNB', 'XRP'];
+
+/** Detect Jupiter fee tier from a trading pair symbol. Returns tier key + label. */
+function detectJupiterTier(symbol: string): { tier: string; label: string; bps: number } {
+  // Simple pair parsing: strip separators, match longest known quote suffix
+  const clean = symbol.toUpperCase().replace(/[/_\-.]/g, '');
+  let base = '', quote = '';
+  for (const q of KNOWN_QUOTES) {
+    if (clean.endsWith(q) && clean.length > q.length) {
+      base = clean.slice(0, clean.length - q.length);
+      quote = q;
+      break;
+    }
+  }
+  if (!base) return { tier: 'default', label: 'Default', bps: 10 };
+
+  const isStable = (t: string) => STABLECOINS.has(t);
+  const isSol = (t: string) => t === 'SOL';
+  const isJupEcosystem = (t: string) => t === 'JUP' || t === 'JLP' || t === 'JUPSOL';
+  const isLst = (t: string) => t === 'MSOL' || t === 'STSOL' || t === 'BSOL' || t === 'JUPSOL';
+
+  if (isJupEcosystem(base) || isJupEcosystem(quote)) return { tier: 'jupiter_ecosystem', label: 'Jupiter Ecosystem', bps: 0 };
+  if ((isStable(base) && isStable(quote)) || (isLst(base) && isLst(quote))) return { tier: 'pegged_asset', label: 'Pegged Assets', bps: 0 };
+  if ((isSol(base) && isStable(quote)) || (isStable(base) && isSol(quote))) return { tier: 'sol_stable', label: 'SOL ↔ Stable', bps: 2 };
+  if ((isLst(base) && isStable(quote)) || (isStable(base) && isLst(quote))) return { tier: 'lst_stable', label: 'LST ↔ Stable', bps: 5 };
+
+  return { tier: 'default', label: 'Default', bps: 10 };
+}
+
+/** Sub-component for Jupiter Ultra commission settings with auto-detection. */
+function JupiterUltraConfig({
+  symbol,
+  settings,
+  onSettingsChange,
+}: {
+  symbol?: string;
+  settings: Record<string, unknown>;
+  onSettingsChange: (s: Record<string, unknown>) => void;
+}) {
+  const useCustom = !!(settings as Record<string, unknown>)?.useCustomRate;
+  const tierInfo = symbol ? detectJupiterTier(symbol) : null;
+
+  const handleToggleCustom = (checked: boolean) => {
+    const updated = { ...settings };
+    if (checked) {
+      updated.useCustomRate = true;
+      // Keep existing rate or use default
+      if (typeof updated.rate !== 'number') updated.rate = 0.001;
+    } else {
+      delete updated.useCustomRate;
+      delete updated.rate;
+    }
+    onSettingsChange(updated);
+  };
+
+  const handleRateChange = (rate: number) => {
+    onSettingsChange({ ...settings, useCustom: true, rate });
+  };
+
+  return (
+    <>
+      {tierInfo && !useCustom && (
+        <div style={{
+          padding: '8px 10px',
+          background: '#0a2e1a',
+          border: '1px solid #4caf50',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#4caf50',
+          marginBottom: '8px',
+        }}>
+          Auto-detected: <strong>{tierInfo.label} ({tierInfo.bps} bps)</strong> from symbol {symbol}
+        </div>
+      )}
+
+      {!tierInfo && !useCustom && (
+        <div style={{
+          padding: '8px 10px',
+          background: '#1a1a2e',
+          border: '1px solid #333',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#aaa',
+          marginBottom: '8px',
+        }}>
+          Default fee tier: 10 bps. Set a symbol to enable auto-detection.
+        </div>
+      )}
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', marginBottom: useCustom ? '8px' : 0 }}>
+        <input
+          type="checkbox"
+          checked={useCustom}
+          onChange={(e) => handleToggleCustom(e.target.checked)}
+          style={{ cursor: 'pointer' }}
+        />
+        <span style={{ color: '#aaa', fontSize: '12px' }}>Override with custom rate</span>
+      </label>
+
+      {useCustom && (
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Custom Rate</label>
+          <input
+            type="number"
+            step="0.0001"
+            min="0"
+            max="1"
+            value={(settings as Record<string, unknown>)?.rate as number ?? 0.001}
+            onChange={(e) => handleRateChange(Number(e.target.value))}
+            style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+          />
+          <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+            Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+        Fee tier matching Jupiter Ultra's actual per-pair fee schedule.
+        See <a href="https://developers.jup.ag/docs/ultra/fees" target="_blank" rel="noopener noreferrer" style={{ color: '#2196f3' }}>Jupiter docs</a>.
+      </div>
+    </>
+  );
+}
 
 export interface BacktestSettingsPopupProps {
   isOpen: boolean;
@@ -131,9 +259,11 @@ export interface BacktestSettingsPopupProps {
   onRun: (config: BacktestConfig, startDate?: string, endDate?: string) => void;
   scriptSource: string;
   timeframe: string;
+  /** Current trading pair symbol (e.g. "SOLUSDT"). Used for Jupiter fee tier auto-detection. */
+  symbol?: string;
 }
 
-export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, timeframe }: BacktestSettingsPopupProps) {
+export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, timeframe, symbol }: BacktestSettingsPopupProps) {
   const saved = loadUserSettings();
   const scriptParams = extractStrategyParams(scriptSource);
 
@@ -318,50 +448,14 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             )}
 
             {commissionMethod === 'jupiter_ultra' && (
-              <>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Pair Category</label>
-                  <select
-                    value={(commissionMethodSettings as Record<string, unknown>)?.pairCategory as string ?? 'default'}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const newSettings = { ...(commissionMethodSettings as Record<string, unknown> ?? {}), pairCategory: val };
-                      if (val !== 'custom') {
-                        // Remove rate when using a preset tier
-                        delete newSettings.rate;
-                      }
-                      setCommissionMethodSettings(newSettings);
-                      persist({ commissionMethodSettings: newSettings });
-                    }}
-                    style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                  >
-                    {JUPITER_PAIR_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-                    Fee tier matching Jupiter Ultra's actual per-pair fee schedule.
-                    See <a href="https://developers.jup.ag/docs/ultra/fees" target="_blank" rel="noopener noreferrer" style={{ color: '#2196f3' }}>Jupiter docs</a>.
-                  </div>
-                </div>
-                {(commissionMethodSettings as Record<string, unknown>)?.pairCategory === 'custom' && (
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Custom Rate</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      min="0"
-                      max="1"
-                      value={(commissionMethodSettings as Record<string, unknown>)?.rate as number ?? 0.001}
-                      onChange={(e) => handleSettingChange('rate', Number(e.target.value))}
-                      style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                    />
-                    <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-                      Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
-                    </div>
-                  </div>
-                )}
-              </>
+              <JupiterUltraConfig
+                symbol={symbol}
+                settings={commissionMethodSettings as Record<string, unknown> ?? {}}
+                onSettingsChange={(newSettings) => {
+                  setCommissionMethodSettings(newSettings);
+                  persist({ commissionMethodSettings: newSettings });
+                }}
+              />
             )}
             {commissionMethod === 'per_order_fixed' && (
               <div>

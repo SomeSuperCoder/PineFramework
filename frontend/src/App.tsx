@@ -487,6 +487,7 @@ function App() {
         onRun={handleRunBacktest}
         scriptSource={strategySource}
         timeframe={timeframe}
+        symbol={symbol}
       />
 
       <StrategyResultsPopup

@@ -59,7 +59,7 @@ describe('BacktestSettingsPopup', () => {
       expect(select.value).toBe('');
     });
 
-    it('should restore saved method from localStorage', () => {
+    it('should restore saved method from localStorage (backward compat with rate)', () => {
       localStorage.setItem('pine-backtest-settings', JSON.stringify({
         initialCapital: 10000,
         commission: 0,
@@ -69,6 +69,23 @@ describe('BacktestSettingsPopup', () => {
         endDate: '',
         commissionMethod: 'jupiter_ultra',
         commissionMethodSettings: { rate: 0.001 },
+      }));
+
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      expect(select.value).toBe('jupiter_ultra');
+    });
+
+    it('should restore saved method with pairCategory from localStorage', () => {
+      localStorage.setItem('pine-backtest-settings', JSON.stringify({
+        initialCapital: 10000,
+        commission: 0,
+        daysBack: 30,
+        dateRangeMode: 'days_back',
+        startDate: '',
+        endDate: '',
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { pairCategory: 'sol_stable' },
       }));
 
       const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
@@ -94,12 +111,31 @@ describe('BacktestSettingsPopup', () => {
       expect(screen.getByText('Flat commission amount per order fill')).toBeDefined();
     });
 
-    it('should show rate input for jupiter_ultra method', () => {
+    it('should show auto-detect info for jupiter_ultra method', () => {
       const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
       selectMethod(container, 'jupiter_ultra');
 
-      expect(screen.getByText('Rate (Jupiter Ultra)')).toBeDefined();
-      expect(screen.getByText('Representative rate for Jupiter DEX Ultra Mode (e.g. 0.001 = 10 bps)')).toBeDefined();
+      expect(screen.getByText('Default fee tier: 10 bps. Set a symbol to enable auto-detection.')).toBeDefined();
+    });
+
+    it('should show auto-detected tier when symbol is provided', () => {
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} symbol="SOLUSDT" />);
+      selectMethod(container, 'jupiter_ultra');
+
+      expect(screen.getByText(/Auto-detected:/)).toBeDefined();
+      expect(screen.getByText(/SOL ↔ Stable/)).toBeDefined();
+      expect(screen.getByText(/SOLUSDT/)).toBeDefined();
+    });
+
+    it('should show custom rate input when override checkbox is checked', async () => {
+      const user = userEvent.setup();
+      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
+      selectMethod(container, 'jupiter_ultra');
+
+      const checkbox = screen.getByText('Override with custom rate').previousElementSibling as HTMLInputElement;
+      await user.click(checkbox);
+
+      expect(screen.getByText('Custom Rate')).toBeDefined();
     });
 
     it('should show no settings for jupiter_manual method', () => {
@@ -138,7 +174,8 @@ describe('BacktestSettingsPopup', () => {
 
       const saved = JSON.parse(localStorage.getItem('pine-backtest-settings') ?? '{}');
       expect(saved.commissionMethod).toBe('jupiter_ultra');
-      expect(saved.commissionMethodSettings).toEqual({ rate: 0.001 });
+      // Default jupiter_ultra uses auto-detect (no rate, no pairCategory)
+      expect(saved.commissionMethodSettings).toEqual({});
     });
 
     it('should persist method settings changes to localStorage', () => {
@@ -166,7 +203,8 @@ describe('BacktestSettingsPopup', () => {
       expect(onRun).toHaveBeenCalledTimes(1);
       const config = onRun.mock.calls[0][0];
       expect(config.commissionMethod).toBe('jupiter_ultra');
-      expect(config.commissionMethodSettings).toEqual({ rate: 0.001 });
+      // Default jupiter_ultra has no rate — uses auto-detect from symbol
+      expect(config.commissionMethodSettings).toEqual({});
     });
 
     it('should not include commissionMethod when legacy is selected', async () => {

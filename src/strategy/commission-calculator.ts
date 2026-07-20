@@ -31,6 +31,12 @@ export interface TradeContext {
   exitPrice: number;
   quantity: number;
   tradeValue: number; // abs(entryPrice * quantity) or abs(exitPrice * quantity)
+  /**
+   * Trading pair symbol (e.g. "SOLUSDT", "BTCUSDT").
+   * Used by JupiterUltraCalculator to auto-detect the fee tier from the token pair.
+   * Optional — when omitted, falls back to explicit rate or pairCategory setting.
+   */
+  symbol?: string;
 }
 
 /** Identifies a built-in commission calculation method. */
@@ -103,6 +109,116 @@ export const JUPITER_FEE_BPS: Record<Exclude<JupiterPairCategory, 'custom'>, num
   default: 10,             // 0.1%
   new_token: 50,           // 0.5%
 };
+
+// ---------------------------------------------------------------------------
+// Token classification for Jupiter auto-tier-detection
+// ---------------------------------------------------------------------------
+
+/** Recognised stablecoin symbols (uppercase). */
+const STABLECOINS = new Set([
+  'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USD', 'USDE', 'FDUSD', 'USDD',
+]);
+
+/** Recognised liquid-staking-token symbols (uppercase). */
+const LST_TOKENS = new Set([
+  'MSOL', 'STSOL', 'BSOL', 'JUPSOL',
+]);
+
+/** Jupiter ecosystem tokens (uppercase). */
+const JUPITER_ECOSYSTEM_TOKENS = new Set([
+  'JUP', 'JLP', 'JUPSOL',
+]);
+
+/**
+ * Known quote-currency suffixes used to decompose exchange pair symbols.
+ * Ordered longest-first to match greedily (e.g. "USDT" before "USD").
+ */
+const KNOWN_QUOTE_CURRENCIES = [
+  'USDT', 'USDC', 'BUSD', 'FDUSD', 'USDD', 'TUSD', 'FRAX',
+  'USD', 'DAI',
+  'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'DOT',
+];
+
+type TokenType = 'jupiter_ecosystem' | 'sol' | 'lst' | 'stablecoin' | 'other';
+
+/** Classify a single token symbol into its Jupiter fee tier category. */
+function classifyToken(token: string): TokenType {
+  const upper = token.toUpperCase();
+  if (JUPITER_ECOSYSTEM_TOKENS.has(upper)) return 'jupiter_ecosystem';
+  if (upper === 'SOL') return 'sol';
+  if (LST_TOKENS.has(upper)) return 'lst';
+  if (STABLECOINS.has(upper)) return 'stablecoin';
+  return 'other';
+}
+
+/**
+ * Parse a trading pair symbol into its base and quote tokens.
+ * Handles both concatenated (e.g. "SOLUSDT") and separator-delimited
+ * (e.g. "SOL/USDT", "SOL-USDT") formats.
+ */
+export function parsePairSymbol(symbol: string): { base: string; quote: string } | undefined {
+  // Try separator-based first
+  const sepMatch = symbol.match(/^([A-Za-z0-9]+)[/_-]([A-Za-z0-9]+)$/);
+  if (sepMatch) {
+    return { base: sepMatch[1]!.toUpperCase(), quote: sepMatch[2]!.toUpperCase() };
+  }
+
+  // Try suffix matching against known quote currencies (longest first)
+  const upper = symbol.toUpperCase();
+  for (const quote of KNOWN_QUOTE_CURRENCIES) {
+    if (upper.endsWith(quote) && upper.length > quote.length) {
+      const base = upper.slice(0, upper.length - quote.length);
+      return { base, quote };
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Auto-detect the Jupiter Ultra fee tier for a given trading pair symbol.
+ * Uses token classification against known Jupiter fee schedule categories.
+ * Returns 'default' (10 bps) when the pair cannot be determined.
+ */
+export function detectJupiterPairCategory(symbol: string): JupiterPairCategory {
+  const pair = parsePairSymbol(symbol);
+  if (!pair) return 'default';
+
+  const baseType = classifyToken(pair.base);
+  const quoteType = classifyToken(pair.quote);
+
+  // Jupiter ecosystem tokens (0 bps): if either side is Jupiter ecosystem
+  if (baseType === 'jupiter_ecosystem' || quoteType === 'jupiter_ecosystem') {
+    return 'jupiter_ecosystem';
+  }
+
+  // Pegged assets (0 bps): stable↔stable or LST↔LST
+  if (
+    (baseType === 'stablecoin' && quoteType === 'stablecoin') ||
+    (baseType === 'lst' && quoteType === 'lst')
+  ) {
+    return 'pegged_asset';
+  }
+
+  // SOL ↔ Stable (2 bps)
+  if (
+    (baseType === 'sol' && quoteType === 'stablecoin') ||
+    (baseType === 'stablecoin' && quoteType === 'sol')
+  ) {
+    return 'sol_stable';
+  }
+
+  // LST ↔ Stable (5 bps)
+  if (
+    (baseType === 'lst' && quoteType === 'stablecoin') ||
+    (baseType === 'stablecoin' && quoteType === 'lst')
+  ) {
+    return 'lst_stable';
+  }
+
+  // Everything else (10 bps)
+  return 'default';
+}
 
 /** Settings for the percent_commission method (legacy-compatible). */
 export interface PercentCommissionSettings {
@@ -208,19 +324,31 @@ class JupiterUltraCalculator implements CommissionCalculator {
    *   - Everything else (default):         10 bps
    *   - New tokens (<24h):                 50 bps
    *
-   * Backward compatible: if pairCategory is unset, falls back to `rate`.
+   * Fee tier resolution order:
+   *   1. Explicit `pairCategory` in settings (manual override)
+   *   2. Auto-detected from `context.symbol` (if provided)
+   *   3. Explicit `rate` in settings (backward compatible fallback)
+   *   4. Default rate of 0.001 (10 bps)
+   *
    * See https://developers.jup.ag/docs/ultra/fees
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
     const settings = config.settings as JupiterUltraSettings | undefined;
 
-    // If a named tier is explicitly set (and it's not 'custom'), use its bps.
+    // 1. If pairCategory is explicitly set (and not 'custom'), use its bps.
     if (settings?.pairCategory && settings.pairCategory !== 'custom') {
-      const bps = JUPITER_FEE_BPS[settings.pairCategory] ?? 10; // default fallback
+      const bps = JUPITER_FEE_BPS[settings.pairCategory] ?? 10;
       return context.tradeValue * (bps / 10000);
     }
 
-    // Fallback: use explicit rate (backward compatible with old configs).
+    // 2. Auto-detect from symbol if available.
+    if (context.symbol) {
+      const category = detectJupiterPairCategory(context.symbol);
+      const bps = JUPITER_FEE_BPS[category];
+      return context.tradeValue * (bps / 10000);
+    }
+
+    // 3 & 4. Fallback: use explicit rate (backward compatible with old configs).
     const rate = settings?.rate ?? 0.001;
     return context.tradeValue * rate;
   }
@@ -428,6 +556,8 @@ export function buildTradeContextFromFill(params: {
   direction: 'long' | 'short';
   fillPrice: number;
   quantity: number;
+  /** Trading pair symbol for Jupiter tier auto-detection. */
+  symbol?: string;
 }): TradeContext {
   const tradeValue = Math.abs(params.fillPrice * params.quantity);
   return {
@@ -436,6 +566,7 @@ export function buildTradeContextFromFill(params: {
     exitPrice: params.fillPrice,
     quantity: params.quantity,
     tradeValue,
+    symbol: params.symbol,
   };
 }
 
@@ -448,6 +579,8 @@ export function buildTradeContextFromTrade(params: {
   entryPrice: number;
   exitPrice: number;
   quantity: number;
+  /** Trading pair symbol for Jupiter tier auto-detection. */
+  symbol?: string;
 }): TradeContext {
   const tradeValue = Math.abs(params.entryPrice * params.quantity);
   return {
@@ -456,5 +589,6 @@ export function buildTradeContextFromTrade(params: {
     exitPrice: params.exitPrice,
     quantity: params.quantity,
     tradeValue,
+    symbol: params.symbol,
   };
 }

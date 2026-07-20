@@ -124,6 +124,12 @@ export interface StrategyConfig {
   commissionMethod?: CommissionMethodId;
   /** Settings for the pluggable commission method. */
   commissionMethodSettings?: CommissionMethodSettings;
+  /**
+   * Trading pair symbol (e.g. "SOLUSDT", "BTCUSDT").
+   * Used for auto-detecting Jupiter fee tiers from the token pair.
+   * Optional — only relevant when using Jupiter Ultra commission method.
+   */
+  symbol?: string;
 }
 
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
@@ -670,6 +676,7 @@ export class StrategyEngine {
         direction: order.direction,
         fillPrice: price,
         quantity: order.quantity,
+        symbol: this.config.symbol,
       });
       return this.commissionCalculator.calculate(context, this.commissionConfig);
     }

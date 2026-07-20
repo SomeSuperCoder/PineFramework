@@ -6,6 +6,8 @@ import {
   computeCommission,
   buildTradeContextFromFill,
   buildTradeContextFromTrade,
+  detectJupiterPairCategory,
+  parsePairSymbol,
 } from '../../src/strategy/commission-calculator.js';
 import type {
   TradeContext,
@@ -261,6 +263,137 @@ describe('Commission Calculator', () => {
       };
       const context = makeContext({ tradeValue: 0 });
       expect(computeCommission(context, config)).toBe(0);
+    });
+  });
+
+  describe('jupiter_ultra auto-detection from symbol', () => {
+    it('should detect jupiter_ecosystem tier for JUPUSDT', () => {
+      expect(detectJupiterPairCategory('JUPUSDT')).toBe('jupiter_ecosystem');
+    });
+
+    it('should detect jupiter_ecosystem tier for JLPUSDT', () => {
+      expect(detectJupiterPairCategory('JLPUSDT')).toBe('jupiter_ecosystem');
+    });
+
+    it('should detect pegged_asset tier for USDCUSDT (stable-stable)', () => {
+      expect(detectJupiterPairCategory('USDCUSDT')).toBe('pegged_asset');
+    });
+
+    it('should detect sol_stable tier for SOLUSDT', () => {
+      expect(detectJupiterPairCategory('SOLUSDT')).toBe('sol_stable');
+    });
+
+    it('should detect sol_stable tier for USDSOL', () => {
+      expect(detectJupiterPairCategory('USDSOL')).toBe('sol_stable');
+    });
+
+    it('should detect lst_stable tier for MSOLUSDT', () => {
+      expect(detectJupiterPairCategory('MSOLUSDT')).toBe('lst_stable');
+    });
+
+    it('should detect default tier for BTCUSDT', () => {
+      expect(detectJupiterPairCategory('BTCUSDT')).toBe('default');
+    });
+
+    it('should detect default tier for ETHUSDT', () => {
+      expect(detectJupiterPairCategory('ETHUSDT')).toBe('default');
+    });
+
+    it('should detect default tier for unknown symbols', () => {
+      expect(detectJupiterPairCategory('')).toBe('default');
+      expect(detectJupiterPairCategory('XYZ')).toBe('default');
+    });
+
+    it('should handle separator-delimited symbols', () => {
+      expect(detectJupiterPairCategory('SOL/USDT')).toBe('sol_stable');
+      expect(detectJupiterPairCategory('BTC-USDT')).toBe('default');
+      expect(detectJupiterPairCategory('JUP_USDT')).toBe('jupiter_ecosystem');
+    });
+
+    it('should compute fee from auto-detected symbol tier via TradeContext', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: null,
+      };
+      // SOLUSDT → sol_stable → 2 bps → 10000 * 0.0002 = 2
+      const context: TradeContext = {
+        direction: 'long',
+        entryPrice: 100,
+        exitPrice: 110,
+        quantity: 100,
+        tradeValue: 10000,
+        symbol: 'SOLUSDT',
+      };
+      expect(computeCommission(context, config)).toBeCloseTo(2);
+    });
+
+    it('should compute default 10 bps for non-SOL symbol', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: null,
+      };
+      // BTCUSDT → default → 10 bps → 10000 * 0.001 = 10
+      const context: TradeContext = {
+        direction: 'long',
+        entryPrice: 100,
+        exitPrice: 110,
+        quantity: 100,
+        tradeValue: 10000,
+        symbol: 'BTCUSDT',
+      };
+      expect(computeCommission(context, config)).toBeCloseTo(10);
+    });
+
+    it('should prefer explicit pairCategory over symbol auto-detection', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'pegged_asset' } as JupiterUltraSettings,
+      };
+      // Even though the symbol is SOLUSDT (sol_stable), explicit pairCategory wins
+      const context: TradeContext = {
+        direction: 'long',
+        entryPrice: 100,
+        exitPrice: 110,
+        quantity: 100,
+        tradeValue: 10000,
+        symbol: 'SOLUSDT',
+      };
+      expect(computeCommission(context, config)).toBeCloseTo(0); // pegged_asset = 0 bps
+    });
+
+    it('should fall back to rate when no symbol and no pairCategory', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { rate: 0.005 } as JupiterUltraSettings,
+      };
+      const context: TradeContext = {
+        direction: 'long',
+        entryPrice: 100,
+        exitPrice: 110,
+        quantity: 100,
+        tradeValue: 10000,
+        // no symbol
+      };
+      expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005
+    });
+  });
+
+  describe('parsePairSymbol', () => {
+    it('should parse SOLUSDT', () => {
+      expect(parsePairSymbol('SOLUSDT')).toEqual({ base: 'SOL', quote: 'USDT' });
+    });
+
+    it('should parse BTCUSDT', () => {
+      expect(parsePairSymbol('BTCUSDT')).toEqual({ base: 'BTC', quote: 'USDT' });
+    });
+
+    it('should parse SOL/USDT with separator', () => {
+      expect(parsePairSymbol('SOL/USDT')).toEqual({ base: 'SOL', quote: 'USDT' });
+    });
+
+    it('should return undefined for unrecognised format', () => {
+      expect(parsePairSymbol('')).toBeUndefined();
+      expect(parsePairSymbol('X')).toBeUndefined();
     });
   });
 
