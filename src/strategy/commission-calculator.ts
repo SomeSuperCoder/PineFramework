@@ -14,12 +14,13 @@
  * Jupiter has TWO swap paths:
  *
  * 1. Router path (basic swap) — `/build` + `/submit`
- *    - 0% Jupiter commission. You only pay Solana network fees.
- *    - This is what a trading bot should use. Zero commission.
+ *    - 0% Jupiter commission.
+ *    - This is what a trading bot should use. Zero Jupiter commission.
+ *    - Only Solana network fees apply (~$0.0015/trade at $150/SOL).
  *    - See https://developers.jup.ag/docs/swap
  *
  * 2. Meta-Aggregator path (Ultra) — `/order` + `/execute`
- *    - Tiered 0–50 bps fee depending on the token pair:
+ *    - Tiered 0–50 bps Jupiter commission (depends on token pair):
  *    | Category                  | Fee (bps) | Fee (%) |
  *    |---------------------------|-----------|---------|
  *    | Jupiter ecosystem tokens  |     0     |   0%    |
@@ -28,14 +29,71 @@
  *    | LST ↔ Stable              |     5     |  0.05%  |
  *    | Everything else           |    10     |  0.1%   |
  *    | New tokens (<24h old)     |    50     |  0.5%   |
+ *    - Plus Solana network fees on top (~$0.0015/trade at $150/SOL).
  *    - See https://developers.jup.ag/docs/ultra/fees
  *
  * Integrator/platform fees are OPTIONAL (0% by default) and only apply
  * if the integrator explicitly adds them via `platformFeeBps`.
  *
- * Solana network fee: 5,000 lamports (~0.000005 SOL ≈ $0.001) per signature.
- * This is negligible for backtesting purposes.
+ * Solana network fee: 5,000 lamports per signature × ~2 sigs/swap =
+ * 0.00001 SOL ≈ $0.0015 at $150/SOL. This is always added on top of
+ * the Jupiter commission (if any) when a SOL price is configured.
  */
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * Solana base fee per signature in lamports.
+ * See https://solana.com/docs/core/fees
+ */
+const SOLANA_LAMPORTS_PER_SIG = 5_000;
+
+/**
+ * Lamports per SOL (1 SOL = 10⁹ lamports).
+ */
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
+/**
+ * Typical number of signatures in a Jupiter swap transaction.
+ * A basic swap (Router path) uses ~2 signatures.
+ */
+const DEFAULT_SIGS_PER_SWAP = 2;
+
+/**
+ * Default SOL/USD price used when `solPriceUsd` is not configured in settings.
+ * ~$150 is a reasonable long-term estimate for SOL in 2024–2025.
+ * Set to 0 to disable network fee calculation.
+ */
+const DEFAULT_SOL_PRICE_USD = 150;
+
+/**
+ * Extract the SOL/USD price from commission settings, falling back to the
+ * default when not set. Returns 0 when settings explicitly disable it.
+ */
+function getSolPriceUsd(settings: CommissionMethodSettings | null | undefined): number {
+  if (!settings) return DEFAULT_SOL_PRICE_USD;
+  const s = settings as Record<string, unknown>;
+  if (typeof s.solPriceUsd === 'number') return s.solPriceUsd;
+  return DEFAULT_SOL_PRICE_USD;
+}
+
+/**
+ * Calculate the Solana network fee in USD for a single swap transaction.
+ *
+ * The base Solana fee is 5,000 lamports per signature. A typical Jupiter swap
+ * uses ~2 signatures, totaling 0.00001 SOL. This is converted to USD using
+ * the provided SOL price.
+ *
+ * @returns USD amount of the network fee, or 0 if solPriceUsd is ≤ 0.
+ */
+function calculateSolanaNetworkFee(settings: CommissionMethodSettings | null | undefined): number {
+  const solPriceUsd = getSolPriceUsd(settings);
+  if (solPriceUsd <= 0) return 0;
+  const solFee = (DEFAULT_SIGS_PER_SWAP * SOLANA_LAMPORTS_PER_SIG) / LAMPORTS_PER_SOL;
+  return solFee * solPriceUsd;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,6 +173,22 @@ export interface JupiterUltraSettings {
    * (backward compatibility with existing configs).
    */
   rate?: number;
+  /**
+   * SOL/USD price used to convert the Solana network fee (in lamports)
+   * to a USD commission amount. At ~$150/SOL and ~2 sigs/swap, this is
+   * roughly $0.0015 per trade. Set to 0 or omit to skip network fees.
+   */
+  solPriceUsd?: number;
+}
+
+/** Settings for the jupiter_manual (basic swap) method. */
+export interface JupiterManualSettings {
+  /**
+   * SOL/USD price used to convert the Solana network fee (in lamports)
+   * to a USD commission amount. Defaults to $150 when unset.
+   * Set to 0 to skip network fee calculation entirely.
+   */
+  solPriceUsd?: number;
 }
 
 /** Maps each Jupiter pair category to its fee in basis points (1 bps = 0.01%). */
@@ -249,6 +323,7 @@ export type CommissionMethodSettings =
   | PercentCommissionSettings
   | PerOrderFixedSettings
   | JupiterUltraSettings
+  | JupiterManualSettings
   | Record<string, never>
   | null;
 
@@ -348,38 +423,48 @@ class JupiterUltraCalculator implements CommissionCalculator {
    *   3. Explicit `rate` in settings (backward compatible fallback)
    *   4. Default rate of 0.001 (10 bps)
    *
+   * On top of the Jupiter Ultra commission, the Solana network fee
+   * (~$0.0015/trade at $150/SOL) is added.
+   *
    * See https://developers.jup.ag/docs/swap and https://developers.jup.ag/docs/ultra/fees
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
     const settings = config.settings as JupiterUltraSettings | undefined;
 
+    // Calculate Jupiter Ultra tiered fee
+    let jupiterFee: number;
+
     // 1. If pairCategory is explicitly set (and not 'custom'), use its bps.
     if (settings?.pairCategory && settings.pairCategory !== 'custom') {
       const bps = JUPITER_FEE_BPS[settings.pairCategory] ?? 10;
-      return context.tradeValue * (bps / 10000);
+      jupiterFee = context.tradeValue * (bps / 10000);
     }
-
     // 2. Auto-detect from symbol if available.
-    if (context.symbol) {
+    else if (context.symbol) {
       const category = detectJupiterPairCategory(context.symbol);
       const bps = JUPITER_FEE_BPS[category];
-      return context.tradeValue * (bps / 10000);
+      jupiterFee = context.tradeValue * (bps / 10000);
+    }
+    // 3 & 4. Fallback: use explicit rate (backward compatible with old configs).
+    else {
+      const rate = settings?.rate ?? 0.001;
+      jupiterFee = context.tradeValue * rate;
     }
 
-    // 3 & 4. Fallback: use explicit rate (backward compatible with old configs).
-    const rate = settings?.rate ?? 0.001;
-    return context.tradeValue * rate;
+    // Add Solana network fee on top
+    return jupiterFee + calculateSolanaNetworkFee(config.settings);
   }
 }
 
 class JupiterManualCalculator implements CommissionCalculator {
   /**
    * Standard Jupiter Swap (Router path) — 0% Jupiter commission.
-   * Users only pay Solana network fees (~5,000 lamports/sig = ~$0.001).
-   * This is the correct model for a trading bot using the basic swap API.
+   * Users only pay Solana network fees (~5,000 lamports/sig, ~$0.0015/trade
+   * at $150/SOL). This is the correct model for a trading bot using the
+   * basic swap API.
    */
-  calculate(_context: TradeContext, _config: CommissionConfig): number {
-    return 0;
+  calculate(_context: TradeContext, config: CommissionConfig): number {
+    return calculateSolanaNetworkFee(config.settings);
   }
 }
 
@@ -496,6 +581,15 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         step: 0.0001,
         tooltip: 'Custom fee rate (used when Pair Category is "Custom Rate").',
       },
+      {
+        key: 'solPriceUsd',
+        label: 'SOL Price (USD)',
+        type: 'number',
+        defaultValue: 150,
+        min: 0,
+        step: 0.01,
+        tooltip: 'SOL/USD price for converting Solana network fees (lamports → USD). 0 disables network fee.',
+      },
     ],
   },
   {
@@ -503,8 +597,18 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
     name: 'Jupiter (Basic Swap)',
     description: 'Standard Jupiter swap API (Router path) — 0% Jupiter commission. Only Solana network fees.',
     enforceLongOnly: true,
-    defaultSettings: null,
-    settingsFields: [],
+    defaultSettings: { solPriceUsd: 150 } as JupiterManualSettings,
+    settingsFields: [
+      {
+        key: 'solPriceUsd',
+        label: 'SOL Price (USD)',
+        type: 'number',
+        defaultValue: 150,
+        min: 0,
+        step: 0.01,
+        tooltip: 'SOL/USD price for converting Solana network fees (lamports → USD). 0 disables network fee.',
+      },
+    ],
   },
   {
     id: 'none',

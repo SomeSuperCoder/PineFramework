@@ -15,6 +15,7 @@ import type {
   PercentFixedSettings,
   PerOrderFixedSettings,
   JupiterUltraSettings,
+  JupiterManualSettings,
   JupiterPairCategory,
 } from '../../src/strategy/commission-calculator.js';
 import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
@@ -166,12 +167,16 @@ describe('Commission Calculator', () => {
   });
 
   describe('jupiter_ultra method', () => {
+    // All tiered-fee unit tests use solPriceUsd: 0 to isolate the Jupiter
+    // commission calculation from the Solana network fee. The network fee
+    // is tested separately.
+
     // ── Backward compatible: rate-based (no pairCategory) ──
 
     it('should calculate commission as tradeValue * rate (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { rate: 0.001 } as JupiterUltraSettings,
+        settings: { rate: 0.001, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(10);
@@ -180,7 +185,7 @@ describe('Commission Calculator', () => {
     it('should use default rate of 0.001 when settings are null (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: null,
+        settings: { solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(10);
@@ -189,7 +194,7 @@ describe('Commission Calculator', () => {
     it('should use default rate when pairCategory is unset (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { rate: 0.005 } as JupiterUltraSettings,
+        settings: { rate: 0.005, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005
@@ -207,7 +212,7 @@ describe('Commission Calculator', () => {
     ])('should charge %s tier: %d bps', (category, bps, tradeValue, expectedCommission) => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: category as JupiterPairCategory } as JupiterUltraSettings,
+        settings: { pairCategory: category as JupiterPairCategory, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue });
       // bps / 10000 = decimal fraction
@@ -217,17 +222,16 @@ describe('Commission Calculator', () => {
     it('should use custom rate when pairCategory is "custom"', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'custom', rate: 0.002 } as JupiterUltraSettings,
+        settings: { pairCategory: 'custom', rate: 0.002, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(20); // 10000 * 0.002
     });
 
     it('should ignore rate field when a named tier is set', () => {
-      // Even if rate is set alongside a tier, the tier should win
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'sol_stable', rate: 0.1 } as JupiterUltraSettings,
+        settings: { pairCategory: 'sol_stable', rate: 0.1, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       // 2 bps = 0.02% = tradeValue * 0.0002
@@ -239,7 +243,7 @@ describe('Commission Calculator', () => {
     it('should handle large trade values with default tier', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'default' } as JupiterUltraSettings,
+        settings: { pairCategory: 'default', solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 1_000_000 });
       // 10 bps = 0.001 = 1_000_000 * 0.001 = 1000
@@ -249,7 +253,7 @@ describe('Commission Calculator', () => {
     it('should handle small trade values with sol_stable tier', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'sol_stable' } as JupiterUltraSettings,
+        settings: { pairCategory: 'sol_stable', solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 50 });
       // 2 bps = 0.0002 = 50 * 0.0002 = 0.01
@@ -259,10 +263,30 @@ describe('Commission Calculator', () => {
     it('should handle zero trade value', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'new_token' } as JupiterUltraSettings,
+        settings: { pairCategory: 'new_token', solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 0 });
       expect(computeCommission(context, config)).toBe(0);
+    });
+
+    // ── Network fee on top ──
+
+    it('should add Solana network fee on top of tiered fee', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'default', solPriceUsd: 150 } as JupiterUltraSettings,
+      };
+      // 10 bps = 10000 * 0.001 = 10, plus network fee 0.0015 = 10.0015
+      expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(10.0015, 4);
+    });
+
+    it('should add only network fee when tier is 0 bps', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'jupiter_ecosystem', solPriceUsd: 150 } as JupiterUltraSettings,
+      };
+      // Jupiter fee = 0, network fee = 0.0015
+      expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(0.0015, 4);
     });
   });
 
@@ -313,7 +337,7 @@ describe('Commission Calculator', () => {
     it('should compute fee from auto-detected symbol tier via TradeContext', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: null,
+        settings: { solPriceUsd: 0 } as JupiterUltraSettings,
       };
       // SOLUSDT → sol_stable → 2 bps → 10000 * 0.0002 = 2
       const context: TradeContext = {
@@ -330,7 +354,7 @@ describe('Commission Calculator', () => {
     it('should compute default 10 bps for non-SOL symbol', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: null,
+        settings: { solPriceUsd: 0 } as JupiterUltraSettings,
       };
       // BTCUSDT → default → 10 bps → 10000 * 0.001 = 10
       const context: TradeContext = {
@@ -347,7 +371,7 @@ describe('Commission Calculator', () => {
     it('should prefer explicit pairCategory over symbol auto-detection', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'pegged_asset' } as JupiterUltraSettings,
+        settings: { pairCategory: 'pegged_asset', solPriceUsd: 0 } as JupiterUltraSettings,
       };
       // Even though the symbol is SOLUSDT (sol_stable), explicit pairCategory wins
       const context: TradeContext = {
@@ -364,7 +388,7 @@ describe('Commission Calculator', () => {
     it('should fall back to rate when no symbol and no pairCategory', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { rate: 0.005 } as JupiterUltraSettings,
+        settings: { rate: 0.005, solPriceUsd: 0 } as JupiterUltraSettings,
       };
       const context: TradeContext = {
         direction: 'long',
@@ -398,13 +422,31 @@ describe('Commission Calculator', () => {
   });
 
   describe('jupiter_manual method', () => {
-    it('should always return zero commission', () => {
+    it('should return only Solana network fee (default SOL price)', () => {
+      // Default solPriceUsd = 150 → fee = 0.00001 SOL * $150 = $0.0015
       const config: CommissionConfig = {
         method: 'jupiter_manual',
         settings: null,
       };
+      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBeCloseTo(0.0015, 6);
+      expect(computeCommission(makeContext({ tradeValue: 0 }), config)).toBeCloseTo(0.0015, 6);
+    });
+
+    it('should return zero commission when SOL price is 0', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_manual',
+        settings: { solPriceUsd: 0 } as JupiterManualSettings,
+      };
       expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBe(0);
-      expect(computeCommission(makeContext({ tradeValue: 0 }), config)).toBe(0);
+    });
+
+    it('should scale network fee with SOL price', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_manual',
+        settings: { solPriceUsd: 300 } as JupiterManualSettings,
+      };
+      // 0.00001 SOL * $300 = $0.0030
+      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBeCloseTo(0.003, 6);
     });
   });
 
@@ -507,7 +549,7 @@ describe('Commission Calculator', () => {
     it('should use jupiter_ultra commission method', () => {
       const engine = new StrategyEngine({
         commissionMethod: 'jupiter_ultra',
-        commissionMethodSettings: { rate: 0.001 },
+        commissionMethodSettings: { rate: 0.001, solPriceUsd: 0 },
       });
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -519,7 +561,7 @@ describe('Commission Calculator', () => {
       expect(engine.getEquity()).toBeCloseTo(10000 - 1);
     });
 
-    it('should use jupiter_manual commission method (zero commission)', () => {
+    it('should use jupiter_manual commission method (0% Jupiter fee + Solana network fee)', () => {
       const engine = new StrategyEngine({
         commissionMethod: 'jupiter_manual',
       });
@@ -529,7 +571,8 @@ describe('Commission Calculator', () => {
 
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
-      expect(engine.getEquity()).toBeCloseTo(10000);
+      // Network fee at default $150/SOL: 0.00001 * 150 = $0.0015 per fill
+      expect(engine.getEquity()).toBeCloseTo(10000 - 0.0015, 4);
     });
 
     it('should use none commission method (zero commission)', () => {

@@ -108,8 +108,8 @@ function getDefaultMethodSettings(method: CommissionMethodId): Record<string, un
   switch (method) {
     case 'percent_fixed': return { rate: 0.001 };
     case 'per_order_fixed': return { amount: 1 };
-    case 'jupiter_ultra': return {}; // Auto-detect from symbol — no explicit settings needed
-    case 'jupiter_manual': return null;
+    case 'jupiter_ultra': return { solPriceUsd: 150 }; // Auto-detect pair tier from symbol
+    case 'jupiter_manual': return { solPriceUsd: 150 };
     case 'none': return null;
     default: return null;
   }
@@ -155,6 +155,39 @@ function detectJupiterTier(symbol: string): { tier: string; label: string; bps: 
   if ((isLst(base) && isStable(quote)) || (isStable(base) && isLst(quote))) return { tier: 'lst_stable', label: 'LST ↔ Stable', bps: 5 };
 
   return { tier: 'default', label: 'Default', bps: 10 };
+}
+
+/** Sub-component for Jupiter Basic Swap commission settings (SOL price for network fee). */
+function JupiterBasicConfig({
+  settings,
+  onSettingsChange,
+}: {
+  settings: Record<string, unknown>;
+  onSettingsChange: (s: Record<string, unknown>) => void;
+}) {
+  const solPrice = (settings as Record<string, unknown>)?.solPriceUsd as number ?? 150;
+  return (
+    <>
+      <div>
+        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>SOL Price (USD)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={solPrice}
+          onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
+          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+        />
+        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+          SOL/USD price used to convert Solana network fees from lamports to USD.
+          At ~$150/SOL, each swap costs ~$0.0015. Set to 0 to disable network fee.
+        </div>
+      </div>
+      <div style={{ marginTop: '8px', fontSize: '11px', color: '#555' }}>
+        Jupiter commission: <strong>0%</strong> (Jupiter charges no fee for basic swaps)
+      </div>
+    </>
+  );
 }
 
 /** Sub-component for Jupiter Ultra commission settings with auto-detection. */
@@ -244,6 +277,21 @@ function JupiterUltraConfig({
           </div>
         </div>
       )}
+
+      <div style={{ marginTop: '12px' }}>
+        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>SOL Price (USD)</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={(settings as Record<string, unknown>)?.solPriceUsd as number ?? 150}
+          onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
+          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+        />
+        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+          SOL/USD price for Solana network fees (~$0.0015/trade at $150/SOL). 0 disables network fee.
+        </div>
+      </div>
 
       <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
         Fee tier matching Jupiter Ultra's actual per-pair fee schedule.
@@ -450,6 +498,15 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             {commissionMethod === 'jupiter_ultra' && (
               <JupiterUltraConfig
                 symbol={symbol}
+                settings={commissionMethodSettings as Record<string, unknown> ?? {}}
+                onSettingsChange={(newSettings) => {
+                  setCommissionMethodSettings(newSettings);
+                  persist({ commissionMethodSettings: newSettings });
+                }}
+              />
+            )}
+            {commissionMethod === 'jupiter_manual' && (
+              <JupiterBasicConfig
                 settings={commissionMethodSettings as Record<string, unknown> ?? {}}
                 onSettingsChange={(newSettings) => {
                   setCommissionMethodSettings(newSettings);

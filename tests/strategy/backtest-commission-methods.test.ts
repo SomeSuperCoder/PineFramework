@@ -134,12 +134,30 @@ describe('BacktestEngine Commission Methods', () => {
       expect(result.metrics.commission).toBeGreaterThan(0);
     });
 
-    it('should charge 0 commission for jupiter_ecosystem tier', () => {
+    it('should charge 0 Jupiter commission for jupiter_ecosystem tier (plus network fee)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
         commissionMethod: 'jupiter_ultra',
         commissionMethodSettings: { pairCategory: 'jupiter_ecosystem' },
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      // Jupiter fee = 0 bps, but Solana network fee still applies on exit fill
+      expect(result.metrics.commission).toBeCloseTo(0.0015, 6);
+    });
+
+    it('should charge 0 total when network fee is disabled (solPriceUsd=0)', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { pairCategory: 'jupiter_ecosystem', solPriceUsd: 0 },
       });
 
       const result = engine.run(bars, (eng, _bar, index) => {
@@ -173,11 +191,29 @@ describe('BacktestEngine Commission Methods', () => {
   });
 
   describe('jupiter_manual method', () => {
-    it('should apply zero commission', () => {
+    it('should apply Solana network fee (0% Jupiter + ~$0.0015/trade network fee)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
         commissionMethod: 'jupiter_manual',
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      // Only exit fill commission is recorded in trade (entry fill subtracted from equity directly)
+      expect(result.metrics.commission).toBeCloseTo(0.0015, 6);
+    });
+
+    it('should apply zero commission when solPriceUsd is 0', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+        commissionMethodSettings: { solPriceUsd: 0 },
       });
 
       const result = engine.run(bars, (eng, _bar, index) => {

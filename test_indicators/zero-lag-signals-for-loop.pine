@@ -1,0 +1,181 @@
+// This script is licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
+// https://creativecommons.org/licenses/by-nc-sa/4.0/
+// © QuantAlgo
+
+//@version=6
+indicator(title="Zero Lag Signals For Loop [QuantAlgo]", overlay=true)
+
+//              ╔════════════════════════════════╗              //
+//              ║      USER-DEFINED SETTINGS     ║              //
+//              ╚════════════════════════════════╝              //
+
+var string preset_settings  = "════════ Preset Configuration ════════"
+var string zlag_settings    = "════════ Zero Lag Settings ════════"
+var string loop_settings    = "════════ For Loop Settings ════════"
+var string thresh_settings  = "════════ Threshold Settings ════════"
+var string visual_settings  = "════════ Visualization Settings ════════"
+
+tooltip_preset        = "Select a predefined configuration optimized for different trading styles and timeframes."
+tooltip_preset_details = "Default (50, 1.5, 1-70, 5/-5): Standard configuration for swing trading on 4H and daily charts. Balanced zero lag period with moderate volatility filtering and loop range. Generates reliable trend signals suitable for most traders and market conditions.\n\nFast Response (30, 1.2, 1-45, 3/-3): Responsive configuration for intraday trading on 5min-1H charts. Shorter zero lag period adapts quickly to price shifts, tighter volatility buffer allows earlier signal triggers. Moderate loop range with relaxed thresholds captures short-term momentum. Best for active traders who want quicker entries without excessive noise.\n\nSmooth Trend (70, 2.0, 1-100, 8/-8): Conservative configuration for position trading on daily and weekly charts. Extended zero lag period provides a stable trend baseline, wider volatility buffer filters out whipsaws. Broader loop range with strict thresholds ensures only meaningful trend changes generate signals. Best for patient traders seeking high-conviction setups."
+tooltip_zl_length     = "Length of the Zero Lag calculation period. Higher values create smoother signals."
+tooltip_vol_mult      = "Multiplier for volatility in signal generation. Higher values make signals more conservative by requiring larger price movements."
+tooltip_loop_start    = "Starting point for the loop analysis. Lower values analyze more recent price action."
+tooltip_loop_end      = "Ending point for the loop analysis. Higher values analyze longer historical periods."
+tooltip_thresh_up     = "Minimum score required to generate uptrend signals. Higher values create stricter conditions."
+tooltip_thresh_down   = "Maximum score required to generate downtrend signals. Lower values create stricter conditions."
+tooltip_color_preset  = "Pre-configured color schemes optimized for different chart themes. Classic uses traditional green/red. Aqua provides ocean-inspired blues and oranges. Cosmic offers futuristic cyan and purple. Cyber features warm orange and cool cyan contrast. Neon delivers high-contrast yellow and magenta. Custom allows full color customization."
+tooltip_signals       = "Enable/disable signal markers on the chart"
+tooltip_candles       = "Enable/disable candle coloring based on trend direction"
+tooltip_bg_lines      = "Enable/disable vertical lines on signal changes"
+
+preset_config = input.string("Default", "Preset Configuration", 
+     options=["Default", "Fast Response", "Smooth Trend"], 
+     group=preset_settings, 
+     tooltip=tooltip_preset + "\n\n" + tooltip_preset_details)
+
+length = input.int(50, "Zero Lag Length", 
+     minval=1, 
+     group=zlag_settings, 
+     tooltip=tooltip_zl_length)
+volatility_mult = input.float(1.5, "Volatility Multiplier", 
+     minval=0.1, 
+     group=zlag_settings, 
+     tooltip=tooltip_vol_mult)
+
+loop_start = input.int(1, "Loop Start", 
+     minval=1, 
+     group=loop_settings, 
+     tooltip=tooltip_loop_start)
+loop_end = input.int(70, "Loop End", 
+     minval=1, 
+     group=loop_settings, 
+     tooltip=tooltip_loop_end)
+
+threshold_up = input.int(5, "Threshold Uptrend", 
+     group=thresh_settings, 
+     tooltip=tooltip_thresh_up)
+threshold_down = input.int(-5, "Threshold Downtrend", 
+     group=thresh_settings, 
+     tooltip=tooltip_thresh_down)
+
+if preset_config == "Fast Response"
+    length := 30
+    volatility_mult := 1.2
+    loop_end := 45
+    threshold_up := 3
+    threshold_down := -3
+else if preset_config == "Smooth Trend"
+    length := 70
+    volatility_mult := 2.0
+    loop_end := 100
+    threshold_up := 8
+    threshold_down := -8
+
+color_preset = input.string("Custom", "Color Preset", 
+     options=["Classic", "Aqua", "Cosmic", "Cyber", "Neon", "Custom"], 
+     group=visual_settings, 
+     tooltip=tooltip_color_preset)
+bullcolor = input.color(#00ffaa, "Bullish Color", group=visual_settings)
+bearcolor = input.color(#ff0000, "Bearish Color", group=visual_settings)
+
+[bull_color, bear_color] = switch color_preset
+    "Classic" => [#00ff00, #ff0000]
+    "Aqua"    => [#00d4ff, #ff8c00]
+    "Cosmic"  => [#49ffce, #9932cc]
+    "Cyber"   => [#00cccc, #ff6600]
+    "Neon"    => [#ffff00, #ff00ff]
+    "Custom"  => [bullcolor, bearcolor]
+
+show_signals = input.bool(true, "Show Signal Markers", 
+     group=visual_settings, tooltip=tooltip_signals)
+paint_candles = input.bool(true, "Color Candles", 
+     group=visual_settings, tooltip=tooltip_candles)
+show_bg_lines = input.bool(false, "Signal Change Lines", 
+     group=visual_settings, tooltip=tooltip_bg_lines)
+
+//              ╔════════════════════════════════╗              //
+//              ║      ZERO LAG CALCULATIONS     ║              //
+//              ╚════════════════════════════════╝              //
+
+lag = math.floor((length - 1) / 2)
+zl_basis = ta.ema(close + (close - close[lag]), length)
+volatility = ta.highest(ta.atr(length), length*3) * volatility_mult
+
+//              ╔════════════════════════════════╗              //
+//              ║        FOR LOOP ANALYSIS       ║              //
+//              ╚════════════════════════════════╝              //
+
+forloop_analysis(basis_price) =>
+    sum = 0.0
+    for i = loop_start to loop_end by 1
+        sum += (basis_price > basis_price[i] ? 1 : -1)
+    sum
+
+score = forloop_analysis(zl_basis)
+
+//              ╔════════════════════════════════╗              //
+//              ║        SIGNAL GENERATION       ║              //
+//              ╚════════════════════════════════╝              //
+
+long_signal = score > threshold_up and close > zl_basis + volatility
+short_signal = score < threshold_down and close < zl_basis - volatility
+
+var trend = 0
+if long_signal
+    trend := 1
+else if short_signal
+    trend := -1
+
+var prev_trend = 0
+trend_changed = trend != prev_trend
+prev_trend := trend
+
+//              ╔════════════════════════════════╗              //
+//              ║         VISUALIZATION          ║              //
+//              ╚════════════════════════════════╝              //
+
+trend_col = trend == 1 ? bull_color : trend == -1 ? bear_color : na
+
+p_basis = plot(zl_basis, "Zero Lag Basis", color=trend_col, linewidth=3)
+p_price = plot(hl2, "Price", display=display.none, editable=false)
+
+fill(p_basis, p_price, hl2, zl_basis, na, color.new(trend_col, 20))
+
+plotshape(trend_changed and trend == 1 ? zl_basis : na, "Bullish Trend", 
+     shape.labelup, location.absolute, bull_color, 
+     text="𝑳", textcolor=#000000, size=size.small, force_overlay=true)
+
+plotshape(trend_changed and trend == -1 ? zl_basis : na, "Bearish Trend", 
+     shape.labeldown, location.absolute, bear_color, 
+     text="𝑺", textcolor=#ffffff, size=size.small, force_overlay=true)
+
+bgcolor(show_bg_lines ? 
+     (ta.crossover(trend, 0) ? bull_color : 
+      ta.crossunder(trend, 0) ? bear_color : na) : na)
+
+barcolor(paint_candles ? 
+     (trend == 1 ? bull_color : 
+      trend == -1 ? bear_color : na) : na)
+
+//              ╔════════════════════════════════╗              //
+//              ║             ALERTS             ║              //
+//              ╚════════════════════════════════╝              //
+
+alertcondition(ta.crossover(trend, 0),
+     title="Zero Lag Signals Long",
+     message="Zero Lag Signals Long {{exchange}}:{{ticker}}")
+
+alertcondition(ta.crossunder(trend, 0),
+     title="Zero Lag Signals Short",
+     message="Zero Lag Signals Short {{exchange}}:{{ticker}}")
+
+//              ╔════════════════════════════════╗              //
+//              ║           CREATED BY           ║              //
+//              ╚════════════════════════════════╝              //
+
+// ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗     █████╗ ██╗      ██████╗  ██████╗ 
+//██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝    ██╔══██╗██║     ██╔════╝ ██╔═══██╗
+//██║   ██║██║   ██║███████║██╔██╗ ██║   ██║       ███████║██║     ██║  ███╗██║   ██║
+//██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║       ██╔══██║██║     ██║   ██║██║   ██║
+//╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║       ██║  ██║███████╗╚██████╔╝╚██████╔╝
+// ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝       ╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝
