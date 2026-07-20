@@ -1092,6 +1092,9 @@ export class Parser {
       } as IdentifierNode;
     }
     if (this.match(TokenType.LParen)) {
+      if (this.check(TokenType.RParen)) {
+        throw this.error('Empty parentheses expression is not allowed');
+      }
       const expr = this.parseExpression();
       this.consume(TokenType.RParen, 'Expected ")" after expression');
       return {

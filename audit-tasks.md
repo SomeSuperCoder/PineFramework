@@ -240,7 +240,7 @@
   - **Fix:** Sort both `bars` and `subBars` by timestamp before processing. Validate that timestamps overlap. Add a warning when subBars match zero bars.
   - **Test:** Create a test with unsorted bars and verify the engine handles them correctly or throws a meaningful error.
 
-- [ ] **L-009** | [Bug-Parser] | `src/language/parser/parser.ts:1089-1095` | Parenthesized expression consumes `(` and `)` but doesn't handle empty parentheses
+- [x] **L-009** | [Bug-Parser] | `src/language/parser/parser.ts:1089-1095` | Parenthesized expression now produces clear error for empty `()`
   - **Issue:** If a user writes an empty parenthesized expression `()`, the parser will call `parseExpression()` inside the parentheses. If the next token is `)`, `parseExpression()` will fail because there's no expression to parse. However, empty parentheses could also be a function call with no arguments (already handled by `finishCall` which checks for `)`). This edge case isn't gracefully handled.
   - **Impact:** `()` in Pine Script produces a confusing parse error instead of a clear message like "empty expression".
   - **Fix:** Check for `)` before calling `parseExpression()` inside parentheses and produce a clear error message.
