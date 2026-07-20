@@ -4,10 +4,10 @@ import { cloneRuntimeScope } from './scope.js';
 import type { ExecutionSnapshot } from './execution-types.js';
 
 export class StateManager {
-  private eng: any;
+  private eng: ExecutionEngine;
 
   constructor(engine: ExecutionEngine) {
-    this.eng = engine as any;
+    this.eng = engine;
   }
 
   createSnapshot(): void {

@@ -48,10 +48,10 @@ import type {
 import type { ExecutionEngine } from './execution-engine.js';
 
 export class Interpreter {
-  private eng: any;
+  private eng: ExecutionEngine;
 
   constructor(engine: ExecutionEngine) {
-    this.eng = engine as any;
+    this.eng = engine;
   }
 
   executeBar(context: ExecutionContext): ExecutionResult {

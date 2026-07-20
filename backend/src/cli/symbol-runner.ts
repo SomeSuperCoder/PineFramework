@@ -1,12 +1,6 @@
 import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
 import type { SymbolResult, SymbolMetrics } from './types.js';
-import { validateBybitUrl, validateSymbol } from '../utils/security.js';
-
-const BYBIT_REST_BASE = (() => {
-  const url = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
-  validateBybitUrl(url, 'BYBIT_REST_URL');
-  return url;
-})();
+import { fetchBars } from '../bybit/fetch-bars.js';
 
 function isJupiterMethod(method: unknown): method is 'jupiter_manual' | 'jupiter_ultra' {
   return method === 'jupiter_manual' || method === 'jupiter_ultra';
@@ -126,60 +120,4 @@ export async function runSymbolBacktest(
   }
 }
 
-async function fetchBars(
-  symbol: string,
-  timeframe: string,
-  startDate?: number,
-  endDate?: number,
-): Promise<Bar[]> {
-  if (!validateSymbol(symbol)) {
-    throw new Error(`Invalid symbol "${symbol}". Only alphanumeric characters are allowed.`);
-  }
-  const bybitSymbol = encodeURIComponent(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
-  const limit = 1000;
-  let allBars: Bar[] = [];
-  let cursor: number | undefined;
 
-  for (let attempt = 0; attempt < 200; attempt++) {
-    let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
-    if (cursor) url += `&end=${cursor}`;
-
-    const response = await fetch(url);
-    if (!response.ok) break;
-
-    const json = (await response.json()) as {
-      retCode: number;
-      result: { list: string[][] };
-    };
-
-    if (json.retCode !== 0) break;
-
-    const raw = json.result.list;
-    if (!raw || raw.length === 0) break;
-
-    const bars: Bar[] = raw
-      .map((row: string[]) => ({
-        timestamp: parseInt(row[0], 10),
-        open: parseFloat(row[1]),
-        high: parseFloat(row[2]),
-        low: parseFloat(row[3]),
-        close: parseFloat(row[4]),
-        volume: parseFloat(row[5]),
-      }))
-      .reverse();
-
-    const filtered = bars.filter((b: Bar) => {
-      if (startDate && b.timestamp < startDate) return false;
-      if (endDate && b.timestamp > endDate) return false;
-      return true;
-    });
-
-    allBars = allBars.concat(filtered);
-    cursor = bars[0]!.timestamp;
-
-    if (bars.length < limit) break;
-    if (startDate && cursor <= startDate) break;
-  }
-
-  return allBars;
-}

@@ -13,10 +13,10 @@ import { createSeries, type Series } from './series.js';
 import { cloneRuntimeScope } from './scope.js';
 
 export class FormingCandleProcessor {
-  private eng: any;
+  private eng: ExecutionEngine;
 
   constructor(engine: ExecutionEngine) {
-    this.eng = engine as any;
+    this.eng = engine;
   }
 
   computeFormingCandle(context: ExecutionContext): FormingCandleResult {

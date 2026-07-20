@@ -1052,7 +1052,6 @@ export class Parser {
       this.match(TokenType.Int) ||
       this.match(TokenType.Float) ||
       this.match(TokenType.Bool) ||
-      this.match(TokenType.StringType) ||
       this.match(TokenType.Ta) ||
       this.match(TokenType.Math) ||
       this.match(TokenType.Str) ||

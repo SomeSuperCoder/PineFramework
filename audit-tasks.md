@@ -128,13 +128,13 @@
 
 ### Medium
 
-- [ ] **M-001** | [CodeQuality-TypeSafety] | `src/language/runtime/execution-engine.ts:63,66` | Public fields marked `@internal` used by reference across module boundary
+- [x] **M-001** | [CodeQuality-TypeSafety] | `src/language/runtime/execution-engine.ts:63,66` | Public fields marked `@internal` used by reference across module boundary
   - **Issue:** The `ExecutionEngine` has 30+ public fields annotated with `/** @internal */` JSDoc comments. These fields (like `compiledScript`, `sourceProgram`, `globalScope`, etc.) are accessed directly by `Interpreter`, `StateManager`, and `FormingCandleProcessor` via `this.eng = engine as any` in those classes. This completely bypasses TypeScript's type system. If a field name changes, there's no compilation error — it fails at runtime.
   - **Impact:** Refactoring the engine is extremely fragile. Any rename of an internal field requires manually finding all `any`-typed usages across 4+ files. This has likely already caused or will cause runtime errors.
   - **Fix:** Define an `EngineInternals` interface (or `InternalEngine`) that exposes the cross-module surface, and have the `Interpreter`/`StateManager`/`FormingCandleProcessor` accept it as a typed parameter instead of `any`. Alternatively, move cross-cutting state into a shared state object.
   - **Test:** Rename one field (e.g., `smaBuffers` to `smaBufferMap`) and verify the TypeScript compiler catches all usages.
 
-- [ ] **M-002** | [CodeQuality-Duplication] | `backend/src/routes/backtest.ts:379-441` and `backend/src/cli/symbol-runner.ts:121-174` | Duplicated fetchBars function with identical logic
+- [x] **M-002** | [CodeQuality-Duplication] | `backend/src/routes/backtest.ts:379-441` and `backend/src/cli/symbol-runner.ts:121-174` | Duplicated fetchBars function with identical logic
   - **Issue:** `backtest.ts` and `symbol-runner.ts` both define their own `fetchBars()` function with virtually identical implementation (pagination loop, Bybit API calls, bar parsing, filtering). This violates DRY. Any bug fix or improvement must be applied to both copies.
   - **Impact:** Maintenance burden doubles. The `backtest.ts` version has progress reporting not present in `symbol-runner.ts`. The rate limiter is bypassed in both since they use raw `fetch()` instead of going through `BybitDataSource`.
   - **Fix:** Extract a shared `fetchBars()` function in the Bybit data source module and have both callers use it. Add progress callback support for the backtest route.
@@ -158,7 +158,7 @@
   - **Fix:** Log a warning when a short entry is suppressed due to long-only enforcement. Consider adding a strategy config validation step that warns at initialization time if the strategy uses short entries with a long-only method.
   - **Test:** Create a strategy with both long and short entries using a long-only commission method, and verify that the output clearly indicates which trades were suppressed.
 
-- [ ] **M-006** | [Bug-Parser] | `src/language/parser/parser.ts:1081-1088` | Identifier node created from non-identifier tokens (keywords) may have unexpected `name`
+- [x] **M-006** | [Bug-Parser] | `src/language/parser/parser.ts:1081-1088` | Identifier node created from non-identifier tokens (keywords) may have unexpected `name`
   - **Issue:** The `parsePrimary()` method matches many keyword tokens (ColorType, StringType, Strategy, Indicator, Library, Array, Map, Matrix, Int, Float, Bool, Ta, Math, Str, Time, Input) and creates an `IdentifierNode` with `name: token.lexeme`. However, `token.lexeme` for these tokens contains the actual source text, which may be a keyword like "strategy" or "int". When this identifier is later evaluated, the interpreter may try to resolve it as a variable, and if it doesn't exist, it throws "Variable 'strategy' is not defined". Some keywords should not be treated as identifiers.
   - **Impact:** Certain valid Pine Script expressions may fail to parse or execute if a keyword is used in an unsupported context.
   - **Fix:** In contexts where an identifier is expected (not a keyword), only match `TokenType.Identifier`. For built-in namespace references (ta, math, str, time, input, color), route them to the correct evaluation logic instead of treating them as variable lookups.

@@ -1,13 +1,7 @@
 import { Router } from 'express';
 import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
-import { validateBybitUrl, validateSymbol } from '../utils/security.js';
-
-const BYBIT_REST_BASE = (() => {
-  const url = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
-  validateBybitUrl(url, 'BYBIT_REST_URL');
-  return url;
-})();
+import { fetchBars } from '../bybit/fetch-bars.js';
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
@@ -390,70 +384,4 @@ function computeMonthlyReturns(
   return monthly;
 }
 
-async function fetchBars(
-  symbol: string,
-  timeframe: string,
-  startDate?: number,
-  endDate?: number,
-  onProgress?: (progress: number) => void,
-): Promise<Bar[]> {
-  if (!validateSymbol(symbol)) {
-    throw new Error(`Invalid symbol "${symbol}". Only alphanumeric characters are allowed.`);
-  }
-  const bybitSymbol = encodeURIComponent(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
-  const limit = 1000;
-  let allBars: Bar[] = [];
-  let cursor: number | undefined;
-  const totalSpan = startDate && endDate ? endDate - startDate : undefined;
 
-  for (let attempt = 0; attempt < 200; attempt++) {
-    let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
-    if (cursor) url += `&end=${cursor}`;
-
-    const response = await fetch(url);
-    if (!response.ok) break;
-
-    const json = await response.json() as {
-      retCode: number;
-      result: { list: string[][] };
-    };
-
-    if (json.retCode !== 0) break;
-
-    const raw = json.result.list;
-    if (!raw || raw.length === 0) break;
-
-    const bars: Bar[] = raw.map((row: string[]) => ({
-      timestamp: parseInt(row[0], 10),
-      open: parseFloat(row[1]),
-      high: parseFloat(row[2]),
-      low: parseFloat(row[3]),
-      close: parseFloat(row[4]),
-      volume: parseFloat(row[5]),
-    })).reverse();
-
-    const filtered = bars.filter((b: Bar) => {
-      if (startDate && b.timestamp < startDate) return false;
-      if (endDate && b.timestamp > endDate) return false;
-      return true;
-    });
-
-    allBars = allBars.concat(filtered);
-    cursor = bars[0]!.timestamp;
-
-    if (onProgress) {
-      if (totalSpan && totalSpan > 0) {
-        const fetched = endDate && cursor ? endDate - cursor : 0;
-        onProgress(Math.min(19, Math.round((fetched / totalSpan) * 19)));
-      } else {
-        onProgress(Math.min(19, attempt + 1));
-      }
-    }
-
-    console.log('[backtest] fetchBars attempt=%d got=%d filtered=%d total=%d cursor=%d', attempt, raw.length, filtered.length, allBars.length, cursor);
-    if (bars.length < limit) break;
-    if (startDate && cursor <= startDate) break;
-  }
-
-  return allBars;
-}
