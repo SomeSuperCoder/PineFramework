@@ -134,7 +134,7 @@ describe('BacktestEngine Commission Methods', () => {
       expect(result.metrics.commission).toBeGreaterThan(0);
     });
 
-    it('should charge 0 Jupiter commission for jupiter_ecosystem tier (plus network fee)', () => {
+    it('should charge 0 Jupiter commission for jupiter_ecosystem tier (plus DEX + network fee)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
@@ -148,11 +148,14 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // Jupiter fee = 0 bps, but Solana network fee still applies on exit fill
-      expect(result.metrics.commission).toBeCloseTo(0.0015, 6);
+      // Entry at bar 0 → fills at bar 1 open=102
+      // Exit at bar 10 → fills at bar 11 open=104
+      // Exit fill tradeValue = 104 * 10 = 1040
+      // DEX (25 bps): 1040 * 0.0025 = 2.60, network: 0.0015 → total = 2.6015
+      expect(result.metrics.commission).toBeCloseTo(2.6015, 4);
     });
 
-    it('should charge 0 total when network fee is disabled (solPriceUsd=0)', () => {
+    it('should charge only DEX fee when solPriceUsd=0 (no network fee on Jupiter 0-tier)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
@@ -166,15 +169,17 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      expect(result.metrics.commission).toBe(0);
+      // Exit fill tradeValue = 104 * 10 = 1040
+      // DEX fee (25 bps): 1040 * 0.0025 = 2.60
+      expect(result.metrics.commission).toBeCloseTo(2.60, 4);
     });
 
-    it('should charge 2 bps for sol_stable tier', () => {
+    it('should charge 2 bps for sol_stable tier (no DEX fee)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
         commissionMethod: 'jupiter_ultra',
-        commissionMethodSettings: { pairCategory: 'sol_stable' },
+        commissionMethodSettings: { pairCategory: 'sol_stable', dexFeeBps: 0 },
       });
 
       const result = engine.run(bars, (eng, _bar, index) => {
@@ -184,14 +189,15 @@ describe('BacktestEngine Commission Methods', () => {
 
       expect(result.metrics.totalTrades).toBe(1);
       expect(result.metrics.commission).toBeGreaterThan(0);
-      // At 100 entry, 10 shares: fee = 100 * 10 * 0.0002 = $0.20 entry + $0.22 exit
-      // ~$0.42 total
+      // At 100 entry, 10 shares: Jupiter fee = 100 * 10 * 0.0002 = $0.20
+      // Exit at 101: Jupiter fee = 101 * 10 * 0.0002 = $0.202
+      // trade.commission (exit only) = $0.202 (DEX fee disabled)
       expect(result.metrics.commission).toBeLessThan(1);
     });
   });
 
   describe('jupiter_manual method', () => {
-    it('should apply Solana network fee (0% Jupiter + ~$0.0015/trade network fee)', () => {
+    it('should apply DEX fee + network fee with default settings', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
@@ -204,16 +210,39 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // Only exit fill commission is recorded in trade (entry fill subtracted from equity directly)
-      expect(result.metrics.commission).toBeCloseTo(0.0015, 6);
+      // Entry at bar 0 → fills at bar 1 open=102
+      // Exit at bar 10 → fills at bar 11 open=104
+      // Exit fill tradeValue = 104 * 10 = 1040
+      // DEX fee (25 bps) = 1040 * 0.0025 = 2.60
+      // Network fee = 0.0015
+      // trade.commission (exit only) = 2.6015
+      expect(result.metrics.commission).toBeCloseTo(2.6015, 4);
     });
 
-    it('should apply zero commission when solPriceUsd is 0', () => {
+    it('should apply only network fee when DEX fee is disabled', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
         commissionMethod: 'jupiter_manual',
-        commissionMethodSettings: { solPriceUsd: 0 },
+        commissionMethodSettings: { dexFeeBps: 0, solPriceUsd: 150 },
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      // Only network fee on exit fill: 0.0015
+      expect(result.metrics.commission).toBeCloseTo(0.0015, 6);
+    });
+
+    it('should apply zero commission when both fees are disabled', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+        commissionMethodSettings: { dexFeeBps: 0, solPriceUsd: 0 },
       });
 
       const result = engine.run(bars, (eng, _bar, index) => {

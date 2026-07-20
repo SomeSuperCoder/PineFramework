@@ -11,33 +11,42 @@
  *
  * ── Jupiter Fee Reality (from official Jupiter docs) ──
  *
- * Jupiter has TWO swap paths:
+ * Jupiter is a **liquidity aggregator** — it routes swaps through DEXs
+ * (Raydium, Orca, Meteora, etc.) that charge their own pool fees. The
+ * total cost of a Jupiter swap consists of:
+ *
+ *   a) **DEX swap fee** — paid to the liquidity pool (always applies).
+ *      Raydium: 25 bps, Orca: 1–30 bps, Meteora: dynamic.
+ *      Configurable via `dexFeeBps` (default: 25 bps / 0.25%).
+ *
+ *   b) **Jupiter commission** — Jupiter's own markup.
+ *      Router path (basic swap): 0% (Jupiter charges nothing).
+ *      Ultra path (Meta-Aggregator): tiered 0–50 bps.
+ *
+ *   c) **Solana network fee** — paid to validators.
+ *      ~5,000 lamports/sig × ~2 sigs = 0.00001 SOL ≈ $0.0015 at $150/SOL.
+ *
+ *   d) **Integrator fees** — OPTIONAL (0% by default), only if the
+ *      integrator explicitly adds via `platformFeeBps`.
+ *
+ * ── Fee breakdown by swap path ──
  *
  * 1. Router path (basic swap) — `/build` + `/submit`
- *    - 0% Jupiter commission.
- *    - This is what a trading bot should use. Zero Jupiter commission.
- *    - Only Solana network fees apply (~$0.0015/trade at $150/SOL).
+ *    - DEX swap fee  +  0% Jupiter commission  +  network fee
+ *    - This is what a trading bot should use.
  *    - See https://developers.jup.ag/docs/swap
  *
  * 2. Meta-Aggregator path (Ultra) — `/order` + `/execute`
- *    - Tiered 0–50 bps Jupiter commission (depends on token pair):
- *    | Category                  | Fee (bps) | Fee (%) |
- *    |---------------------------|-----------|---------|
- *    | Jupiter ecosystem tokens  |     0     |   0%    |
- *    | Pegged assets (Stable/LST)|     0     |   0%    |
- *    | SOL ↔ Stable              |     2     |  0.02%  |
- *    | LST ↔ Stable              |     5     |  0.05%  |
- *    | Everything else           |    10     |  0.1%   |
- *    | New tokens (<24h old)     |    50     |  0.5%   |
- *    - Plus Solana network fees on top (~$0.0015/trade at $150/SOL).
+ *    - DEX swap fee  +  tiered Jupiter commission  +  network fee
+ *    | Category                  | Jupiter bps | Total (DEX 25 + Jupiter) |
+ *    |---------------------------|-------------|--------------------------|
+ *    | Jupiter ecosystem tokens  |     0       |  25 bps (0.25%)         |
+ *    | Pegged assets (Stable/LST)|     0       |  25 bps (0.25%)         |
+ *    | SOL ↔ Stable              |     2       |  27 bps (0.27%)         |
+ *    | LST ↔ Stable              |     5       |  30 bps (0.30%)         |
+ *    | Everything else           |    10       |  35 bps (0.35%)         |
+ *    | New tokens (<24h old)     |    50       |  75 bps (0.75%)         |
  *    - See https://developers.jup.ag/docs/ultra/fees
- *
- * Integrator/platform fees are OPTIONAL (0% by default) and only apply
- * if the integrator explicitly adds them via `platformFeeBps`.
- *
- * Solana network fee: 5,000 lamports per signature × ~2 sigs/swap =
- * 0.00001 SOL ≈ $0.0015 at $150/SOL. This is always added on top of
- * the Jupiter commission (if any) when a SOL price is configured.
  */
 
 // ---------------------------------------------------------------------------
@@ -67,6 +76,25 @@ const DEFAULT_SIGS_PER_SWAP = 2;
  * Set to 0 to disable network fee calculation.
  */
 const DEFAULT_SOL_PRICE_USD = 150;
+
+/**
+ * Default DEX swap fee in basis points (1 bps = 0.01%).
+ * Jupiter is a liquidity aggregator — it routes swaps through DEXs like
+ * Raydium (0.25%), Orca (0.01–0.30%), and Meteora. The DEX fee is paid
+ * to the liquidity pool, not to Jupiter. 25 bps is the Raydium standard
+ * and a reasonable average for typical token pairs.
+ */
+const DEFAULT_DEX_FEE_BPS = 25;
+
+/**
+ * Extract the dexFeeBps from settings, falling back to the default.
+ */
+function getDexFeeBps(settings: CommissionMethodSettings | null | undefined): number {
+  if (!settings) return DEFAULT_DEX_FEE_BPS;
+  const s = settings as Record<string, unknown>;
+  if (typeof s.dexFeeBps === 'number') return s.dexFeeBps;
+  return DEFAULT_DEX_FEE_BPS;
+}
 
 /**
  * Extract the SOL/USD price from commission settings, falling back to the
@@ -179,6 +207,13 @@ export interface JupiterUltraSettings {
    * roughly $0.0015 per trade. Set to 0 or omit to skip network fees.
    */
   solPriceUsd?: number;
+  /**
+   * DEX liquidity pool swap fee in basis points (1 bps = 0.01%).
+   * Jupiter routes through DEXs like Raydium (25 bps), Orca (1-30 bps),
+   * and Meteora. This fee is ALWAYS paid on every swap regardless of
+   * Jupiter's commission. Default: 25 bps (Raydium standard).
+   */
+  dexFeeBps?: number;
 }
 
 /** Settings for the jupiter_manual (basic swap) method. */
@@ -189,6 +224,13 @@ export interface JupiterManualSettings {
    * Set to 0 to skip network fee calculation entirely.
    */
   solPriceUsd?: number;
+  /**
+   * DEX liquidity pool swap fee in basis points (1 bps = 0.01%).
+   * Jupiter routes through DEXs like Raydium (25 bps), Orca (1-30 bps),
+   * and Meteora. This fee is ALWAYS paid on every swap.
+   * Default: 25 bps (Raydium standard). Set to 0 to simulate a zero-fee DEX.
+   */
+  dexFeeBps?: number;
 }
 
 /** Maps each Jupiter pair category to its fee in basis points (1 bps = 0.01%). */
@@ -410,61 +452,67 @@ class JupiterUltraCalculator implements CommissionCalculator {
   /**
    * Models Jupiter Ultra (Meta-Aggregator path) swap fees.
    *
-   * Uses the actual tiered fee schedule published by Jupiter:
+   * Total cost = DEX swap fee + Jupiter Ultra tiered fee + network fee.
+   *
+   * Jupiter Ultra charges its own tiered fee (0–50 bps, see schedule below)
+   * ON TOP of the underlying DEX liquidity pool fee.
+   *
+   * Jupiter fee tier resolution order:
+   *   1. Explicit `pairCategory` in settings (manual override)
+   *   2. Auto-detected from `context.symbol` (if provided)
+   *   3. Explicit `rate` in settings (backward compatible fallback)
+   *   4. Default rate of 0.001 (10 bps)
+   *
+   * Jupiter Ultra tiered schedule:
    *   - Jupiter ecosystem / pegged assets: 0 bps
    *   - SOL ↔ Stable:                      2 bps
    *   - LST ↔ Stable:                      5 bps
    *   - Everything else (default):         10 bps
    *   - New tokens (<24h):                 50 bps
    *
-   * Fee tier resolution order:
-   *   1. Explicit `pairCategory` in settings (manual override)
-   *   2. Auto-detected from `context.symbol` (if provided)
-   *   3. Explicit `rate` in settings (backward compatible fallback)
-   *   4. Default rate of 0.001 (10 bps)
-   *
-   * On top of the Jupiter Ultra commission, the Solana network fee
-   * (~$0.0015/trade at $150/SOL) is added.
-   *
    * See https://developers.jup.ag/docs/swap and https://developers.jup.ag/docs/ultra/fees
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
     const settings = config.settings as JupiterUltraSettings | undefined;
 
-    // Calculate Jupiter Ultra tiered fee
+    // 1. Compute DEX swap fee (always applies — Jupiter routes through DEXs)
+    const dexFeeBps = getDexFeeBps(config.settings);
+    const dexFee = context.tradeValue * (dexFeeBps / 10000);
+
+    // 2. Compute Jupiter Ultra tiered fee
     let jupiterFee: number;
 
-    // 1. If pairCategory is explicitly set (and not 'custom'), use its bps.
     if (settings?.pairCategory && settings.pairCategory !== 'custom') {
       const bps = JUPITER_FEE_BPS[settings.pairCategory] ?? 10;
       jupiterFee = context.tradeValue * (bps / 10000);
-    }
-    // 2. Auto-detect from symbol if available.
-    else if (context.symbol) {
+    } else if (context.symbol) {
       const category = detectJupiterPairCategory(context.symbol);
       const bps = JUPITER_FEE_BPS[category];
       jupiterFee = context.tradeValue * (bps / 10000);
-    }
-    // 3 & 4. Fallback: use explicit rate (backward compatible with old configs).
-    else {
+    } else {
       const rate = settings?.rate ?? 0.001;
       jupiterFee = context.tradeValue * rate;
     }
 
-    // Add Solana network fee on top
-    return jupiterFee + calculateSolanaNetworkFee(config.settings);
+    // 3. Add Solana network fee
+    return dexFee + jupiterFee + calculateSolanaNetworkFee(config.settings);
   }
 }
 
 class JupiterManualCalculator implements CommissionCalculator {
   /**
-   * Standard Jupiter Swap (Router path) — 0% Jupiter commission.
-   * Users only pay Solana network fees (~5,000 lamports/sig, ~$0.0015/trade
-   * at $150/SOL). This is the correct model for a trading bot using the
-   * basic swap API.
+   * Standard Jupiter Swap (Router path).
+   *
+   * Jupiter charges 0% commission, but the swap still routes through a DEX
+   * (Raydium, Orca, etc.) that charges a liquidity pool fee. So total cost:
+   *   DEX swap fee  +  Solana network fee
+   *
+   * This is the correct model for a trading bot using the basic swap API.
    */
-  calculate(_context: TradeContext, config: CommissionConfig): number {
-    return calculateSolanaNetworkFee(config.settings);
+  calculate(context: TradeContext, config: CommissionConfig): number {
+    const dexFeeBps = getDexFeeBps(config.settings);
+    const dexFee = context.tradeValue * (dexFeeBps / 10000);
+    return dexFee + calculateSolanaNetworkFee(config.settings);
   }
 }
 
@@ -551,9 +599,9 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   {
     id: 'jupiter_ultra',
     name: 'Jupiter Ultra',
-    description: 'Jupiter Ultra (Meta-Aggregator path) — tiered 0–50 bps fees by token pair type',
+    description: 'Jupiter Ultra (Meta-Aggregator) — tiered 0–50 bps Jupiter fee + DEX swap fee + network fee',
     enforceLongOnly: true,
-    defaultSettings: { pairCategory: 'default' } as JupiterUltraSettings,
+    defaultSettings: { pairCategory: 'default', dexFeeBps: 25, solPriceUsd: 150 } as JupiterUltraSettings,
     settingsFields: [
       {
         key: 'pairCategory',
@@ -582,6 +630,16 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         tooltip: 'Custom fee rate (used when Pair Category is "Custom Rate").',
       },
       {
+        key: 'dexFeeBps',
+        label: 'DEX Swap Fee (bps)',
+        type: 'number',
+        defaultValue: 25,
+        min: 0,
+        max: 100,
+        step: 1,
+        tooltip: 'Underlying DEX liquidity pool fee in bps. Raydium=25, Orca=1-30, Meteora=dynamic. This is paid on every swap regardless of Jupiter.',
+      },
+      {
         key: 'solPriceUsd',
         label: 'SOL Price (USD)',
         type: 'number',
@@ -595,10 +653,20 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   {
     id: 'jupiter_manual',
     name: 'Jupiter (Basic Swap)',
-    description: 'Standard Jupiter swap API (Router path) — 0% Jupiter commission. Only Solana network fees.',
+    description: 'Jupiter Router path — 0% Jupiter fee + DEX swap fee (default 25 bps) + network fee',
     enforceLongOnly: true,
-    defaultSettings: { solPriceUsd: 150 } as JupiterManualSettings,
+    defaultSettings: { dexFeeBps: 25, solPriceUsd: 150 } as JupiterManualSettings,
     settingsFields: [
+      {
+        key: 'dexFeeBps',
+        label: 'DEX Swap Fee (bps)',
+        type: 'number',
+        defaultValue: 25,
+        min: 0,
+        max: 100,
+        step: 1,
+        tooltip: 'Underlying DEX liquidity pool fee in bps. Jupiter routes through Raydium (25 bps), Orca (1-30 bps), Meteora. This is paid on every swap.',
+      },
       {
         key: 'solPriceUsd',
         label: 'SOL Price (USD)',
