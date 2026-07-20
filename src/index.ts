@@ -65,9 +65,9 @@ export function createRequestSystem(
 export function barsToContext(
   bars: Bar[],
 ): import('./language/runtime/execution-engine.js').ExecutionContext[] {
-  // Each context only needs the current bar's values — executeBar uses getRelative(0)
-  // which reads the last element. Historical values are maintained by the engine's
-  // pushBarValues mechanism, not by the context series. This is O(n) memory, not O(n²).
+  // Each context only needs the current bar's values. The engine accumulates an OHLC
+  // history across bars (see executeBar), so series indexing like close[1] resolves
+  // via the engine's ohlcHistory — not from the context series. O(n) memory.
   return bars.map((bar, index) => ({
     barIndex: index,
     barCount: bars.length,

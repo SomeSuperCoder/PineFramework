@@ -29,6 +29,13 @@ export class StateManager {
       alertTriggers: [...this.eng.alertTriggers],
       boxes: new Map(this.eng.boxes),
       barTimestamps: [...this.eng.barTimestamps],
+      ohlcHistory: {
+        open: [...this.eng.ohlcHistory.open],
+        high: [...this.eng.ohlcHistory.high],
+        low: [...this.eng.ohlcHistory.low],
+        close: [...this.eng.ohlcHistory.close],
+        volume: [...this.eng.ohlcHistory.volume],
+      },
     };
     this.eng.snapshots.push(snapshot);
     if (this.eng.snapshots.length > this.eng.maxSnapshots) {
@@ -61,6 +68,15 @@ export class StateManager {
     if (snapshot.alertTriggers) this.eng.alertTriggers = [...snapshot.alertTriggers];
     if (snapshot.boxes) this.eng.boxes = new Map(snapshot.boxes);
     if (snapshot.barTimestamps) this.eng.barTimestamps = [...snapshot.barTimestamps];
+    if (snapshot.ohlcHistory) {
+      this.eng.ohlcHistory = {
+        open: [...snapshot.ohlcHistory.open],
+        high: [...snapshot.ohlcHistory.high],
+        low: [...snapshot.ohlcHistory.low],
+        close: [...snapshot.ohlcHistory.close],
+        volume: [...snapshot.ohlcHistory.volume],
+      };
+    }
     this.eng.snapshots = this.eng.snapshots.slice(0, snapshotIndex);
     return true;
   }

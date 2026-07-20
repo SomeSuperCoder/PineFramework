@@ -99,6 +99,22 @@ export class Interpreter {
       this.eng.barTimestamps.push(context.timestamp);
       pushBarValues(this.eng.globalScope);
 
+      // Accumulate OHLC history so series indexing (close[1], open[2], etc.) works.
+      // Each bar context provides only the current bar's values; the engine's ohlcHistory
+      // grows one entry per bar, giving executeIndexExpression the full history it needs.
+      {
+        const o = context.open.getRelative(0);
+        const h = context.high.getRelative(0);
+        const l = context.low.getRelative(0);
+        const c = context.close.getRelative(0);
+        const v = context.volume.getRelative(0);
+        this.eng.ohlcHistory.open.push(typeof o === 'number' ? o : 0);
+        this.eng.ohlcHistory.high.push(typeof h === 'number' ? h : 0);
+        this.eng.ohlcHistory.low.push(typeof l === 'number' ? l : 0);
+        this.eng.ohlcHistory.close.push(typeof c === 'number' ? c : 0);
+        this.eng.ohlcHistory.volume.push(typeof v === 'number' ? v : 0);
+      }
+
       if (this.eng.strategyEngine) {
         const openVal = context.open.getRelative(0);
         const highVal = context.high.getRelative(0);

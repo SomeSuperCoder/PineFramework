@@ -173,4 +173,11 @@ export interface ExecutionSnapshot {
   alertTriggers?: AlertTriggerEntry[];
   boxes?: Map<number, BoxEntry>;
   barTimestamps?: number[];
+  ohlcHistory?: {
+    open: number[];
+    high: number[];
+    low: number[];
+    close: number[];
+    volume: number[];
+  };
 }

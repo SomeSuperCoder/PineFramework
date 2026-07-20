@@ -24,7 +24,6 @@ import {
   getVariableValue,
   pushBarValues,
 } from './scope.js';
-import { type Series } from './series.js';
 import type { ExecutionContext } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
 
@@ -532,8 +531,13 @@ export function executeIndexExpression(
   if (expr.object.kind === 'Identifier') {
     const objName = expr.object.name;
     if (objName === 'close' || objName === 'open' || objName === 'high' || objName === 'low' || objName === 'volume') {
-      const series = getOHLCSeries(objName, context);
-      return series.getRelative(index as number);
+      // Use the engine's accumulated OHLC history so close[1], open[2], etc. resolve
+      // correctly even when bar contexts only carry a single value (O(n) memory).
+      const history = getOHLCHistory(objName, eng);
+      const idx = index as number;
+      const target = history.length - 1 - idx;
+      if (target >= 0 && target < history.length) return history[target] as PineValue;
+      return NA;
     }
     if (objName === 'time') {
       const idx = eng.barTimestamps.length - 1 - (index as number);
@@ -573,13 +577,13 @@ export function executeIndexExpression(
   return NA;
 }
 
-function getOHLCSeries(name: string, context: ExecutionContext): Series {
+function getOHLCHistory(name: string, eng: ExecutionEngine): number[] {
   switch (name) {
-    case 'close': return context.close;
-    case 'open': return context.open;
-    case 'high': return context.high;
-    case 'low': return context.low;
-    case 'volume': return context.volume;
+    case 'close': return eng.ohlcHistory.close;
+    case 'open': return eng.ohlcHistory.open;
+    case 'high': return eng.ohlcHistory.high;
+    case 'low': return eng.ohlcHistory.low;
+    case 'volume': return eng.ohlcHistory.volume;
     default: throw new Error(`Unknown OHLCSeries: ${name}`);
   }
 }

@@ -82,6 +82,13 @@ export class ExecutionEngine {
   /** @internal */ currentTimestamp: number = 0;
   /** @internal */ currentContext: ExecutionContext | null = null;
   /** @internal */ barTimestamps: number[] = [];
+  /** @internal */ ohlcHistory: {
+    open: number[];
+    high: number[];
+    low: number[];
+    close: number[];
+    volume: number[];
+  } = { open: [], high: [], low: [], close: [], volume: [] };
   /** @internal */ isFormingCandle: boolean = false;
 
   // Delegated components
