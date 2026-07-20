@@ -28,8 +28,9 @@ describe('Q-Trend debug trace bar 199-205', () => {
     const engine = new ExecutionEngine(compiled);
 
     // Monkey-patch executeTernaryExpression to trace m's ternary
-    const origExecuteTernary = (engine as any).executeTernaryExpression.bind(engine);
-    (engine as any).executeTernaryExpression = (expr: any, scope: any, context: any) => {
+    const interpreter = (engine as any).interpreter;
+    const origExecuteTernary = interpreter.executeTernaryExpression.bind(interpreter);
+    interpreter.executeTernaryExpression = (expr: any, scope: any, context: any) => {
       // Find if this ternary involves m by checking the parent assignment
       const result = origExecuteTernary(expr, scope, context);
 
