@@ -217,7 +217,10 @@ export class BacktestEngine {
 
       // Only update if this is the first data point for this month
       if (monthly[key] === 0 && point.equity !== lastRecordedEquity) {
-        monthly[key] = lastRecordedEquity > 0 ? ((point.equity - lastRecordedEquity) / lastRecordedEquity) * 100 : 0;
+        monthly[key] =
+          lastRecordedEquity > 0
+            ? ((point.equity - lastRecordedEquity) / lastRecordedEquity) * 100
+            : 0;
         lastRecordedEquity = point.equity;
       }
     }

@@ -175,18 +175,19 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const smaKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('sma'));
-      expect(smaKey).toBeDefined();
-      const smaSeries = fullResult.outputs.get(smaKey!)!;
-      const prevSmaValue = smaSeries.last();
+      // plot() without title defaults to key 'plot'
+      const plotKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('plot'));
+      expect(plotKey).toBeDefined();
+      const plotSeries = fullResult.outputs.get(plotKey!)!;
+      const prevPlotValue = plotSeries.last();
 
       const lastBar = bars[bars.length - 1]!;
-      const formingCtx = makeFormingContext(bars, (prevSmaValue as number) + 10);
+      const formingCtx = makeFormingContext(bars, (prevPlotValue as number) + 10);
 
       const formingResult = engine.computeFormingCandle(formingCtx);
-      if (formingResult.diffOutputs[smaKey!] !== undefined) {
-        const newSmaValue = formingResult.diffOutputs[smaKey!];
-        expect(newSmaValue).not.toBe(prevSmaValue);
+      if (formingResult.diffOutputs[plotKey!] !== undefined) {
+        const newPlotValue = formingResult.diffOutputs[plotKey!];
+        expect(newPlotValue).not.toBe(prevPlotValue);
       }
     });
 
@@ -268,7 +269,9 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       engine.executeBars(contexts);
 
-      const counterOutput = engine.getOutput('counter');
+      // plot(counter) without title creates output key 'plot'
+      const counterOutput = engine.getOutput('plot');
+      expect(counterOutput).toBeDefined();
       expect(counterOutput!.last()).toBe(5);
 
       const lastBar = bars[bars.length - 1]!;
@@ -276,7 +279,8 @@ describe('Forming Candle Computation', () => {
       const result = engine.computeFormingCandle(formingCtx);
       expect(result.success).toBe(true);
 
-      const counterAfter = engine.getOutput('counter');
+      const counterAfter = engine.getOutput('plot');
+      expect(counterAfter).toBeDefined();
       expect(counterAfter!.last()).toBe(5);
     });
 
@@ -330,8 +334,9 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       const fullResult = engine.executeBars(contexts);
 
-      const emaKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('ema'));
-      expect(emaKey).toBeDefined();
+      // plot() without title defaults to key 'plot'
+      const plotKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('plot'));
+      expect(plotKey).toBeDefined();
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 10);

@@ -1,14 +1,27 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
-  const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
   let price = startPrice;
   let s = seed;
-  const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  const rand = () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
   for (let i = 0; i < count; i++) {
     const open = price;
     let drift: number;
@@ -38,32 +51,49 @@ describe('SuperTrend AI Diagnostic', () => {
         barIndex: i,
         barCount: bars.length,
         timestamp: bar.timestamp,
-        open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-        high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-        low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-        close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-        volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+        open: createSeries(
+          'open',
+          bars.slice(0, i + 1).map((b) => b.open),
+        ),
+        high: createSeries(
+          'high',
+          bars.slice(0, i + 1).map((b) => b.high),
+        ),
+        low: createSeries(
+          'low',
+          bars.slice(0, i + 1).map((b) => b.low),
+        ),
+        close: createSeries(
+          'close',
+          bars.slice(0, i + 1).map((b) => b.close),
+        ),
+        volume: createSeries(
+          'volume',
+          bars.slice(0, i + 1).map((b) => b.volume),
+        ),
       }));
-      
+
       const start = Date.now();
       const result = engine.executeBars(contexts);
       const elapsed = Date.now() - start;
-      
+
       expect(result.success).toBe(true);
       const keys = Array.from(result.outputs.keys());
       console.log(`\nBars: ${barCount} (${elapsed}ms)`);
       for (const [key, series] of result.outputs) {
         const values = series.values;
-        const nonNull = values.filter(v => v !== null).length;
-        const firstNonNull = values.findIndex(v => v !== null);
-        console.log(`  ${key}: ${nonNull}/${values.length} non-null, first at index ${firstNonNull}`);
+        const nonNull = values.filter((v) => v !== null).length;
+        const firstNonNull = values.findIndex((v) => v !== null);
+        console.log(
+          `  ${key}: ${nonNull}/${values.length} non-null, first at index ${firstNonNull}`,
+        );
       }
-      
+
       // With enough bars, trailing stop should have some non-null values
-      const trailingStopKey = keys.find(k => k.includes('Trailing Stop'));
+      const trailingStopKey = keys.find((k) => k.includes('Trailing Stop'));
       if (trailingStopKey && barCount >= 500) {
         const series = result.outputs.get(trailingStopKey)!;
-        const nonNull = series.values.filter(v => v !== null).length;
+        const nonNull = series.values.filter((v) => v !== null).length;
         // Should have at least some non-null values with enough data
         expect(nonNull).toBeGreaterThan(0);
       }

@@ -40,14 +40,20 @@ describe('Q-Trend debug trace bar 199-205', () => {
           const mVal = (engine as any).globalScope.variables.get('m')?.series.getRelative(0);
           const m1Val = (engine as any).globalScope.variables.get('m')?.series.getRelative(1);
           const cu = (engine as any).globalScope.variables.get('change_up')?.series.getRelative(0);
-          const cd = (engine as any).globalScope.variables.get('change_down')?.series.getRelative(0);
+          const cd = (engine as any).globalScope.variables
+            .get('change_down')
+            ?.series.getRelative(0);
           const hVal = (engine as any).globalScope.variables.get('h')?.series.getRelative(0);
           const lVal = (engine as any).globalScope.variables.get('l')?.series.getRelative(0);
           const srcVal = (engine as any).globalScope.variables.get('src')?.series.getRelative(0);
-          const epsVal = (engine as any).globalScope.variables.get('epsilon')?.series.getRelative(0);
+          const epsVal = (engine as any).globalScope.variables
+            .get('epsilon')
+            ?.series.getRelative(0);
 
-          console.log(`Bar ${context.barIndex}: m=${mVal}, m[1]=${m1Val}, h=${hVal}, l=${lVal}, src=${srcVal}, eps=${epsVal}, cu=${cu}, cd=${cd}, result=${result}`);
-        } catch(e) {}
+          console.log(
+            `Bar ${context.barIndex}: m=${mVal}, m[1]=${m1Val}, h=${hVal}, l=${lVal}, src=${srcVal}, eps=${epsVal}, cu=${cu}, cd=${cd}, result=${result}`,
+          );
+        } catch (e) {}
       }
       return result;
     };
@@ -56,11 +62,26 @@ describe('Q-Trend debug trace bar 199-205', () => {
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     engine.executeBars(contexts);
@@ -77,8 +98,10 @@ describe('Q-Trend debug trace bar 199-205', () => {
 
     console.log('\n=== Final values at bars 199-205 ===');
     for (let i = 199; i <= 205 && i < bars.length; i++) {
-      const fmt = (v: unknown) => typeof v === 'symbol' ? 'NA' : v;
-      console.log(`Bar ${i}: h=${fmt(hV[i])}, l=${fmt(lV[i])}, m=${fmt(mV[i])}, m_prev=${i > 0 ? fmt(mV[i-1]) : 'NA'}`);
+      const fmt = (v: unknown) => (typeof v === 'symbol' ? 'NA' : v);
+      console.log(
+        `Bar ${i}: h=${fmt(hV[i])}, l=${fmt(lV[i])}, m=${fmt(mV[i])}, m_prev=${i > 0 ? fmt(mV[i - 1]) : 'NA'}`,
+      );
     }
   }, 30000);
 });

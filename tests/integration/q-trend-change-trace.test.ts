@@ -31,11 +31,26 @@ describe('Q-Trend change event trace', () => {
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     engine.executeBars(contexts);
@@ -67,13 +82,21 @@ describe('Q-Trend change event trace', () => {
       const m = typeof mV[i] === 'number' ? mV[i].toFixed(4) : 'NA';
       const hV2 = typeof hV[i] === 'number' ? hV[i].toFixed(4) : 'NA';
 
-      let oldMStr = typeof oldM === 'number' ? oldM.toFixed(4) : 'NA';
+      const oldMStr = typeof oldM === 'number' ? oldM.toFixed(4) : 'NA';
       const mPrev = i > 0 ? mV[i - 1] : null;
       const newMStr = typeof newM === 'number' ? newM.toFixed(4) : 'NA';
-      const mPlusEps = typeof mV[i] === 'number' && typeof epsV[i] === 'number' ? (mV[i] + epsV[i]).toFixed(4) : 'NA';
-      const mMinusEps = typeof mV[i] === 'number' && typeof epsV[i] === 'number' ? (mV[i] - epsV[i]).toFixed(4) : 'NA';
+      const mPlusEps =
+        typeof mV[i] === 'number' && typeof epsV[i] === 'number'
+          ? (mV[i] + epsV[i]).toFixed(4)
+          : 'NA';
+      const mMinusEps =
+        typeof mV[i] === 'number' && typeof epsV[i] === 'number'
+          ? (mV[i] - epsV[i]).toFixed(4)
+          : 'NA';
 
-      console.log(`${i},${ts},${oldMStr},${newMStr},${eps},${type},${src},${mPlusEps},${mMinusEps},${hV2}`);
+      console.log(
+        `${i},${ts},${oldMStr},${newMStr},${eps},${type},${src},${mPlusEps},${mMinusEps},${hV2}`,
+      );
     }
   }, 30000);
 });

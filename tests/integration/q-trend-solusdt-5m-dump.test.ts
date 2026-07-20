@@ -7,7 +7,14 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
-function loadBars(): { timestamp: number; open: number; high: number; low: number; close: number; volume: number }[] {
+function loadBars(): {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}[] {
   const raw = JSON.parse(fs.readFileSync('./tests/fixtures/solusdt-5m-jul17.json', 'utf-8'));
   return raw.result.list.reverse().map((k: any[]) => ({
     timestamp: Number(k[0]),
@@ -31,11 +38,26 @@ describe('Q-Trend SOLUSDT 5m – debug dump', () => {
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     engine.executeBars(contexts);
@@ -47,11 +69,11 @@ describe('Q-Trend SOLUSDT 5m – debug dump', () => {
 
     // Reference times (UTC)
     const refTimes = [
-      Date.UTC(2026, 6, 17, 18, 20, 0),  // 21:20 MSK
-      Date.UTC(2026, 6, 17, 18, 45, 0),  // 21:45 MSK
-      Date.UTC(2026, 6, 17, 19, 5, 0),   // 22:05 MSK
+      Date.UTC(2026, 6, 17, 18, 20, 0), // 21:20 MSK
+      Date.UTC(2026, 6, 17, 18, 45, 0), // 21:45 MSK
+      Date.UTC(2026, 6, 17, 19, 5, 0), // 22:05 MSK
     ];
-    const refBarIndices = refTimes.map(t => bars.findIndex(b => b.timestamp === t));
+    const refBarIndices = refTimes.map((t) => bars.findIndex((b) => b.timestamp === t));
 
     const srcV = getVar('src')!;
     const hV = getVar('h')!;

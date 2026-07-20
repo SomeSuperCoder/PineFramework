@@ -1,14 +1,27 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
-  const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
   let price = startPrice;
   let s = seed;
-  const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  const rand = () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
   for (let i = 0; i < count; i++) {
     const open = price;
     let drift: number;
@@ -53,9 +66,13 @@ plot(r6, "size")
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
     const ctx: ExecutionContext = {
-      barIndex: 0, barCount: 1, timestamp: Date.now(),
-      open: createSeries('open', [100]), high: createSeries('high', [101]),
-      low: createSeries('low', [99]), close: createSeries('close', [100]),
+      barIndex: 0,
+      barCount: 1,
+      timestamp: Date.now(),
+      open: createSeries('open', [100]),
+      high: createSeries('high', [101]),
+      low: createSeries('low', [99]),
+      close: createSeries('close', [100]),
       volume: createSeries('volume', [1000]),
     };
     const result = engine.executeBar(ctx);
@@ -76,24 +93,49 @@ plot(r6, "size")
     const bars = createTrendingBars(20, 80);
     const engine = new ExecutionEngine(compiled);
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
     const result = engine.executeBars(contexts);
     expect(result.success).toBe(true);
     console.log('\n=== Trailing Stop Values ===');
     for (const [key, series] of result.outputs) {
       // Show first 5 and last 5 non-null
-      const nonNullIndices = series.values.map((v, i) => v !== null ? i : -1).filter(i => i >= 0);
+      const nonNullIndices = series.values
+        .map((v, i) => (v !== null ? i : -1))
+        .filter((i) => i >= 0);
       console.log(`\n${key}:`);
       console.log(`  Non-null: ${nonNullIndices.length}/${series.values.length}`);
       if (nonNullIndices.length > 0) {
-        console.log(`  First 5 values:`, nonNullIndices.slice(0, 5).map(i => `[${i}]${series.values[i]}`));
-        console.log(`  Last 5 values:`, nonNullIndices.slice(-5).map(i => `[${i}]${series.values[i]}`));
+        console.log(
+          `  First 5 values:`,
+          nonNullIndices.slice(0, 5).map((i) => `[${i}]${series.values[i]}`),
+        );
+        console.log(
+          `  Last 5 values:`,
+          nonNullIndices.slice(-5).map((i) => `[${i}]${series.values[i]}`),
+        );
       }
       // Show first 10 values regardless
       console.log(`  First 10 raw:`, series.values.slice(0, 10));

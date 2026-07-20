@@ -335,7 +335,10 @@ export class ExecutionEngine {
   }
 
   private smaBuffers: Map<string, RingBuffer> = new Map();
-  private emaState: Map<string, { prev: number; count: number; sum: number; initialized: boolean }> = new Map();
+  private emaState: Map<
+    string,
+    { prev: number; count: number; sum: number; initialized: boolean }
+  > = new Map();
   private hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
   private sarState: Map<
     string,
@@ -363,7 +366,10 @@ export class ExecutionEngine {
   private labels: LabelEntry[] = [];
   private boxes: Map<number, BoxEntry> = new Map();
   private boxIdCounter: number = 0;
-  private userTypeFields: Map<string, { name: string; defaultExpr: import('../parser/ast/nodes.js').ExpressionNode | null }[]> = new Map();
+  private userTypeFields: Map<
+    string,
+    { name: string; defaultExpr: import('../parser/ast/nodes.js').ExpressionNode | null }[]
+  > = new Map();
   private plotColors: Map<string, (string | null)[]> = new Map();
   private fillColorData: Map<string, (string | null)[]> = new Map();
   private inputs: Map<string, { type: string; default: PineValue }> = new Map();
@@ -1534,7 +1540,10 @@ export class ExecutionEngine {
     this.builtins.set('int', (value: PineValue): PineValue => {
       if (isNa(value)) return NA;
       if (typeof value === 'number') return Math.trunc(value);
-      if (typeof value === 'string') { const n = Number(value); return isNaN(n) ? NA : Math.trunc(n); }
+      if (typeof value === 'string') {
+        const n = Number(value);
+        return isNaN(n) ? NA : Math.trunc(n);
+      }
       if (typeof value === 'boolean') return value ? 1 : 0;
       return NA;
     });
@@ -1542,7 +1551,10 @@ export class ExecutionEngine {
     this.builtins.set('float', (value: PineValue): PineValue => {
       if (isNa(value)) return NA;
       if (typeof value === 'number') return value;
-      if (typeof value === 'string') { const n = Number(value); return isNaN(n) ? NA : n; }
+      if (typeof value === 'string') {
+        const n = Number(value);
+        return isNaN(n) ? NA : n;
+      }
       if (typeof value === 'boolean') return value ? 1.0 : 0.0;
       return NA;
     });
@@ -2301,7 +2313,9 @@ export class ExecutionEngine {
     const preTimestampsLen = this.barTimestamps.length;
     const preTotalBars = this.metrics.totalBars;
     const preAlertTriggersLen = this.alertTriggers.length;
-    const preSmaBuffers = new Map([...this.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]));
+    const preSmaBuffers = new Map(
+      [...this.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]),
+    );
     const preEmaState = new Map([...this.emaState].map(([k, v]) => [k, { ...v }]));
     const preCrossPrevValues = new Map(this.crossPrevValues);
     const preChangePrevValues = new Map(this.changePrevValues);
@@ -2311,7 +2325,9 @@ export class ExecutionEngine {
     const preFillColorData = new Map([...this.fillColorData].map(([k, v]) => [k, [...v]]));
     const preBgcolorDataLen = this.bgcolorData.length;
     const preRsiState = new Map([...this.rsiState].map(([k, v]) => [k, { ...v }]));
-    const preAtrState = new Map([...this.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]));
+    const preAtrState = new Map(
+      [...this.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]),
+    );
     const preHmaBuffers = new Map(
       [...this.hmaBuffers].map(([k, v]) => [
         k,
@@ -2668,16 +2684,25 @@ export class ExecutionEngine {
           const current = record[fieldName] !== undefined ? record[fieldName] : NA;
           switch (stmt.operator) {
             case '+=':
-              result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0);
+              result =
+                (typeof current === 'number' ? current : 0) +
+                (typeof value === 'number' ? value : 0);
               break;
             case '-=':
-              result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0);
+              result =
+                (typeof current === 'number' ? current : 0) -
+                (typeof value === 'number' ? value : 0);
               break;
             case '*=':
-              result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0);
+              result =
+                (typeof current === 'number' ? current : 0) *
+                (typeof value === 'number' ? value : 0);
               break;
             case '/=':
-              result = typeof current === 'number' && typeof value === 'number' && value !== 0 ? current / value : 0;
+              result =
+                typeof current === 'number' && typeof value === 'number' && value !== 0
+                  ? current / value
+                  : 0;
               break;
             case ':=':
               result = value;
@@ -3576,6 +3601,9 @@ export class ExecutionEngine {
         return expr.property;
       }
       if (objName === 'line' || objName === 'label') {
+        return expr.property;
+      }
+      if (objName === 'plot') {
         return expr.property;
       }
       if (objName === 'barstate') {

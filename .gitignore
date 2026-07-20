@@ -9,3 +9,5 @@ coverage/
 frontend/dist/
 backend/dist/
 backend/data/
+test-*.mjs
+user_profile.json

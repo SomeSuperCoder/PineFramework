@@ -175,14 +175,17 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Marker sequence correctness ----------------------------------------
 
-  it('entries alternate: Long, then Short, then Long', () => {
+  it('entries alternate: Short, then Long, then Short', () => {
     const entries = incrementalMarkers.filter((m) => m.type === 'entry');
     expect(entries.length).toBeGreaterThanOrEqual(3);
-    // First entry is Long (uptrend hits first crossover)
-    expect(entries[0].direction).toBe('long');
-    expect(entries[0].name).toBe('Long');
-    expect(entries[1].direction).toBe('short');
-    expect(entries[2].direction).toBe('long');
+    // Both EMAs start equal at bar 0, so during the uptrend (phase 1)
+    // fastEMA is already above slowEMA — no crossover occurs.
+    // The first cross event is the crossunder as the downtrend (phase 2)
+    // pulls fastEMA below slowEMA.
+    expect(entries[0].direction).toBe('short');
+    expect(entries[0].name).toBe('Short');
+    expect(entries[1].direction).toBe('long');
+    expect(entries[2].direction).toBe('short');
   });
 
   it('each reversal entry is preceded by a close', () => {

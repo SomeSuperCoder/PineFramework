@@ -18,11 +18,22 @@ function findMStatements(node: any, depth = 0): void {
       function findRefs(expr: any, label: string): void {
         if (!expr || typeof expr !== 'object') return;
         if (expr.kind === 'IndexExpression' && (expr.object as any)?.name === 'm') {
-          const index = (expr.index as any)?.kind === 'NumberLiteral' ? (expr.index as any).value : '?';
-          console.log(indent + '    [' + label + '] m[' + index + '] at line ' + (expr.span?.startLine || '?'));
+          const index =
+            (expr.index as any)?.kind === 'NumberLiteral' ? (expr.index as any).value : '?';
+          console.log(
+            indent +
+              '    [' +
+              label +
+              '] m[' +
+              index +
+              '] at line ' +
+              (expr.span?.startLine || '?'),
+          );
         }
         if (expr.kind === 'Identifier' && expr.name === 'm') {
-          console.log(indent + '    [' + label + '] m (bare) at line ' + (expr.span?.startLine || '?'));
+          console.log(
+            indent + '    [' + label + '] m (bare) at line ' + (expr.span?.startLine || '?'),
+          );
         }
         for (const k of Object.keys(expr)) {
           if (k === 'parent') continue;

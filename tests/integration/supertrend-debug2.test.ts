@@ -1,11 +1,13 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('SuperTrend AI K-means Debug', () => {
-
   it('tests k-means clustering in isolation', () => {
     const source = `
 //@version=5
@@ -68,17 +70,19 @@ plot(factors_clusters.get(0).out.size(), "f0_size")
 plot(factors_clusters.get(1).out.size(), "f1_size")
 plot(factors_clusters.get(2).out.size(), "f2_size")
     `;
-    
+
     const { ast } = parse(source);
     expect(ast).toBeDefined();
-    
+
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
-    
+
     const engine = new ExecutionEngine(compiled);
     const bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
     const ctx: ExecutionContext = {
-      barIndex: 0, barCount: 1, timestamp: bar.timestamp,
+      barIndex: 0,
+      barCount: 1,
+      timestamp: bar.timestamp,
       open: createSeries('open', [bar.open]),
       high: createSeries('high', [bar.high]),
       low: createSeries('low', [bar.low]),
@@ -86,30 +90,30 @@ plot(factors_clusters.get(2).out.size(), "f2_size")
       volume: createSeries('volume', [bar.volume]),
     };
     const result = engine.executeBar(ctx);
-    
+
     if (!result.success) {
       console.log('Error:', result.error);
     }
     expect(result.success).toBe(true);
-    
+
     if (result.success) {
       console.log('Output keys:', Array.from(result.outputs.keys()));
       for (const [key, series] of result.outputs) {
         console.log(`  ${key}:`, series.values);
       }
-      
+
       // Centroids should be non-null
       const c0 = result.outputs.get('c0')?.values[0];
       const c1 = result.outputs.get('c1')?.values[0];
       const c2 = result.outputs.get('c2')?.values[0];
       console.log(`\nCentroids: c0=${c0} c1=${c1} c2=${c2}`);
-      
+
       // Cluster sizes should be > 0
       const f0s = result.outputs.get('f0_size')?.values[0];
       const f1s = result.outputs.get('f1_size')?.values[0];
       const f2s = result.outputs.get('f2_size')?.values[0];
       console.log(`Cluster sizes: c0=${f0s} c1=${f1s} c2=${f2s}`);
-      
+
       expect(c0).not.toBeNull();
       expect(c1).not.toBeNull();
       expect(c2).not.toBeNull();

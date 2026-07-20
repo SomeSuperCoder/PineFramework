@@ -7,7 +7,14 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
-function loadBars(): { timestamp: number; open: number; high: number; low: number; close: number; volume: number }[] {
+function loadBars(): {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}[] {
   const raw = JSON.parse(fs.readFileSync('./tests/fixtures/solusdt-5m-jul17.json', 'utf-8'));
   if (raw.retCode !== 0) throw new Error(`Bybit API error: ${raw.retMsg}`);
   return raw.result.list.reverse().map((k: any[]) => ({
@@ -24,40 +31,85 @@ function loadBars(): { timestamp: number; open: number; high: number; low: numbe
 // Bars chosen at shape-producing bars (where plotshape() fires).
 // Shapes require additional conditions (change_down or change_up must
 // be true simultaneously with strong_buy/strong_sell and ls[1] guard).
-interface ShapeSpec { text: string; style: string; location: string }
+interface ShapeSpec {
+  text: string;
+  style: string;
+  location: string;
+}
 const REFERENCE: Array<{
-  label: string; time: number;
+  label: string;
+  time: number;
   candle: { open: number; high: number; low: number; close: number };
-  src: number; h: number; l: number; d: number;
-  m: number; atr: number; epsilon: number; upper: number; lower: number;
-  change_up: boolean; change_down: boolean; strong_buy: boolean; strong_sell: boolean;
+  src: number;
+  h: number;
+  l: number;
+  d: number;
+  m: number;
+  atr: number;
+  epsilon: number;
+  upper: number;
+  lower: number;
+  change_up: boolean;
+  change_down: boolean;
+  strong_buy: boolean;
+  strong_sell: boolean;
   shape: ShapeSpec | null;
 }> = [
   {
     label: '21:15 MSK',
     time: Date.UTC(2026, 6, 17, 18, 15, 0),
     candle: { open: 75.26, high: 75.26, low: 75.05, close: 75.09 },
-    src: 75.09, h: 75.50, l: 73.47, d: 2.03,
-    m: 75.13, atr: 0.16, epsilon: 0.16, upper: 75.29, lower: 74.97,
-    change_up: false, change_down: true, strong_buy: false, strong_sell: true,
+    src: 75.09,
+    h: 75.5,
+    l: 73.47,
+    d: 2.03,
+    m: 75.13,
+    atr: 0.16,
+    epsilon: 0.16,
+    upper: 75.29,
+    lower: 74.97,
+    change_up: false,
+    change_down: true,
+    strong_buy: false,
+    strong_sell: true,
     shape: { text: 'STRONG', style: 'labeldown', location: 'abovebar' },
   },
   {
     label: '21:45 MSK',
     time: Date.UTC(2026, 6, 17, 18, 45, 0),
     candle: { open: 75.09, high: 75.36, low: 75.08, close: 75.29 },
-    src: 75.29, h: 75.50, l: 73.47, d: 2.03,
-    m: 75.28, atr: 0.15, epsilon: 0.15, upper: 75.43, lower: 75.13,
-    change_up: true, change_down: false, strong_buy: false, strong_sell: false,
+    src: 75.29,
+    h: 75.5,
+    l: 73.47,
+    d: 2.03,
+    m: 75.28,
+    atr: 0.15,
+    epsilon: 0.15,
+    upper: 75.43,
+    lower: 75.13,
+    change_up: true,
+    change_down: false,
+    strong_buy: false,
+    strong_sell: false,
     shape: { text: 'BUY', style: 'labelup', location: 'belowbar' },
   },
   {
     label: '22:10 MSK',
     time: Date.UTC(2026, 6, 17, 19, 10, 0),
     candle: { open: 75.16, high: 75.16, low: 75.02, close: 75.05 },
-    src: 75.05, h: 75.50, l: 73.47, d: 2.03,
-    m: 75.13, atr: 0.15, epsilon: 0.15, upper: 75.28, lower: 74.97,
-    change_up: false, change_down: true, strong_buy: false, strong_sell: true,
+    src: 75.05,
+    h: 75.5,
+    l: 73.47,
+    d: 2.03,
+    m: 75.13,
+    atr: 0.15,
+    epsilon: 0.15,
+    upper: 75.28,
+    lower: 74.97,
+    change_up: false,
+    change_down: true,
+    strong_buy: false,
+    strong_sell: true,
     shape: { text: 'STRONG', style: 'labeldown', location: 'abovebar' },
   },
 ];
@@ -66,7 +118,7 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
   let result: ReturnType<ExecutionEngine['executeBars']>;
   let bars: ReturnType<typeof loadBars>;
   let getVar: (name: string) => any[] | null;
-  let getShape: (idx: number) => Array<{ text: string; style: string; location: string; }>;
+  let getShape: (idx: number) => Array<{ text: string; style: string; location: string }>;
   let barIndexByTime: Map<number, number>;
 
   beforeAll(() => {
@@ -81,11 +133,26 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     result = engine.executeBars(contexts);
@@ -159,9 +226,11 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
       // Shape check
       const shapes = getShape(idx!);
       if (ref.shape) {
-        const matching = shapes.filter(s => s.text === ref.shape!.text);
+        const matching = shapes.filter((s) => s.text === ref.shape!.text);
         if (matching.length === 0) {
-          diffs.push(`shape: expected text="${ref.shape.text}" but found no matching shape at this bar`);
+          diffs.push(
+            `shape: expected text="${ref.shape.text}" but found no matching shape at this bar`,
+          );
           diffs.push(`  (all shapes at this bar: ${JSON.stringify(shapes)})`);
         } else {
           const match = matching[0];

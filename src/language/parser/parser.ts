@@ -880,10 +880,15 @@ export class Parser {
         // (e.g., array.new<float>, matrix.new<float>, MyType.new<float>)
         // NOT for property access like strategy.position_size < 100
         const obj = expr.object;
-        const isTypeConstructor = obj.kind === 'Identifier' &&
-          (obj.name === 'array' || obj.name === 'matrix' || obj.name === 'map' ||
-           obj.name === 'Array' || obj.name === 'Matrix' || obj.name === 'Map' ||
-           this.userTypes.has(obj.name));
+        const isTypeConstructor =
+          obj.kind === 'Identifier' &&
+          (obj.name === 'array' ||
+            obj.name === 'matrix' ||
+            obj.name === 'map' ||
+            obj.name === 'Array' ||
+            obj.name === 'Matrix' ||
+            obj.name === 'Map' ||
+            this.userTypes.has(obj.name));
 
         if (isTypeConstructor && this.match(TokenType.Less)) {
           const typeArgs: TypeAnnotationNode[] = [];
@@ -1223,15 +1228,15 @@ export class Parser {
 
     const typeToken = this.consumeTypeKeyword();
     let isArray = false;
-    let isMap = false;
+    const isMap = false;
     const typeArguments: TypeAnnotationNode[] = [];
 
     // Handle generic type arguments with either [] or <>
-    const isGenericStart =
-      this.check(TokenType.LBracket) || this.check(TokenType.Less);
+    const isGenericStart = this.check(TokenType.LBracket) || this.check(TokenType.Less);
     if (isGenericStart) {
       const isBracket = this.check(TokenType.LBracket);
-      if (isBracket) this.advance(); // consume [
+      if (isBracket)
+        this.advance(); // consume [
       else this.advance(); // consume <
 
       if (typeToken.type === TokenType.Array || typeToken.type === TokenType.Map) {

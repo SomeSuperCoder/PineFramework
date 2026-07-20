@@ -7,11 +7,7 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
-function createTrendingBars(
-  count: number,
-  startPrice: number,
-  seed: number = 42,
-) {
+function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
   const bars: Array<{
     timestamp: number;
     open: number;
@@ -49,10 +45,7 @@ function createTrendingBars(
   return bars;
 }
 
-function runEngine(
-  source: string,
-  bars: ReturnType<typeof createTrendingBars>,
-) {
+function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -87,10 +80,7 @@ function runEngine(
 }
 
 describe('SuperTrend AI (Clustering) [LuxAlgo]', () => {
-  const source = fs.readFileSync(
-    './test_indicators/supertrend-ai-clustering.pine',
-    'utf-8',
-  );
+  const source = fs.readFileSync('./test_indicators/supertrend-ai-clustering.pine', 'utf-8');
 
   it('parses successfully', () => {
     const result = parse(source);
