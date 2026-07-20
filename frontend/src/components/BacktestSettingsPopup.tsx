@@ -184,7 +184,7 @@ function JupiterBasicConfig({
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic.">ⓘ</span>
             </label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               step="1"
               min="0"
               max="100"
@@ -202,7 +202,7 @@ function JupiterBasicConfig({
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
             </label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               step="0.01"
               min="0"
               value={solPrice}
@@ -295,7 +295,7 @@ function JupiterUltraConfig({
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Custom Rate</label>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.0001"
             min="0"
             max="1"
@@ -325,7 +325,7 @@ function JupiterUltraConfig({
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX.">ⓘ</span>
             </label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               step="1"
               min="0"
               max="100"
@@ -343,7 +343,7 @@ function JupiterUltraConfig({
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
             </label>
             <input
-              type="number"
+              type="text" inputMode="decimal"
               step="0.01"
               min="0"
               value={solPrice}
@@ -506,7 +506,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             <div>
               <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Initial Capital</label>
               <input
-                type="number"
+                type="text" inputMode="decimal"
                 value={initialCapital}
                 onChange={(e) => { const v = Number(e.target.value); setInitialCapital(v); persist({ initialCapital: v }); }}
                 style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
@@ -579,7 +579,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                   Rate (Percent Fixed)
                 </label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="0.0001"
                   min="0"
                   max="1"
@@ -616,7 +616,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Fixed Amount per Order</label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   step="0.01"
                   min="0"
                   value={(commissionMethodSettings as Record<string, unknown>)?.amount as number ?? 1}
@@ -632,7 +632,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Legacy Commission Value</label>
                 <input
-                  type="number"
+                  type="text" inputMode="decimal"
                   value={commission}
                   onChange={(e) => { const v = Number(e.target.value); setCommission(v); persist({ commission: v }); }}
                   style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
@@ -678,7 +678,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               {dateRangeMode === 'days_back' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <input
-                    type="number"
+                    type="text" inputMode="decimal"
                     min={1}
                     value={daysBack}
                     onChange={(e) => { const v = Number(e.target.value) || 1; setDaysBack(v); persist({ daysBack: v }); }}
