@@ -1,5 +1,5 @@
 import type { ExecutionEngine } from '../execution-engine.js';
-import { isNa, type PineValue } from '../../types/na.js';
+import { NA, isNa, type PineValue } from '../../types/na.js';
 
 export function registerColorBuiltins(engine: ExecutionEngine): void {
   const eng = engine as any;
@@ -7,6 +7,7 @@ export function registerColorBuiltins(engine: ExecutionEngine): void {
   eng.builtins.set(
     'color.new',
     (color: PineValue, transp: PineValue, _namedOrNamed?: PineValue): PineValue => {
+      if (isNa(color)) return NA;  // color.new(na, ...) should return na
       const c = typeof color === 'string' ? color : '#2196f3';
       const t = isNa(transp) ? 0 : (transp as number);
       const alpha = Math.round(Math.max(0, Math.min(100, 100 - t)) * 2.55);

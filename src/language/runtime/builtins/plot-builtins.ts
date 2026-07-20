@@ -259,7 +259,10 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
         : undefined;
     const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
 
-    // Pine Script fill(plot1, plot2, top_value, bottom_value, top_color, bottom_color, editable, fillgaps, title)
+    // Pine Script fill() forms:
+    // 1. fill(plot1, plot2, color=...) - simple fill between two plots
+    // 2. fill(hline1, hline2, color=...) - fill between two hlines
+    // 3. fill(plot1, plot2, top_value, bottom_value, text, color, ...) - band fill
     const from =
       typeof positionalArgs[0] === 'string' &&
       (positionalArgs[0] as string).startsWith('__plot_ref:')
@@ -271,26 +274,34 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
         ? (positionalArgs[1] as string).slice(11)
         : String(positionalArgs[1] ?? '');
 
-    let topColor: string | null = null;
-    let bottomColor: string | null = null;
-    if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'string')
-      topColor = positionalArgs[4] as string;
-    if (positionalArgs.length >= 6 && typeof positionalArgs[5] === 'string')
-      bottomColor = positionalArgs[5] as string;
+    let color: string | null = null;
+
+    // Form 3: band fill - color is at position 5 (after plot1, plot2, top_val, bottom_val, text)
+    // Form 1/2: simple fill - color is at position 2 or in named args
+    if (positionalArgs.length >= 6) {
+      // Band fill form: fill(plot1, plot2, top_value, bottom_value, text, color, ...)
+      const rawColor = positionalArgs[5];
+      if (typeof rawColor === 'string' && rawColor !== 'na') {
+        color = rawColor;
+      }
+    } else if (positionalArgs.length >= 3 && typeof positionalArgs[2] === 'string') {
+      // Simple fill form: fill(plot1, plot2, color)
+      color = positionalArgs[2] as string;
+    }
 
     if (namedArgs) {
-      if (typeof namedArgs.color === 'string') topColor = namedArgs.color;
+      if (typeof namedArgs.color === 'string') color = namedArgs.color;
     }
 
     const fillKey = `${from}::${to}`;
     if (!eng.fills.some((f: { from: string; to: string }) => f.from === from && f.to === to)) {
-      eng.fills.push({ from, to, color: topColor ?? bottomColor ?? 'rgba(33,150,243,0.2)' });
+      eng.fills.push({ from, to, color: color ?? 'rgba(33,150,243,0.2)' });
     }
     if (!eng.fillColorData.has(fillKey)) {
       eng.fillColorData.set(fillKey, []);
     }
-    // Push the top color for this bar — the renderer uses one color per bar segment
-    eng.fillColorData.get(fillKey)!.push(topColor);
+    // Push the color for this bar — the renderer uses one color per bar segment
+    eng.fillColorData.get(fillKey)!.push(color);
     return NA;
   });
 }
