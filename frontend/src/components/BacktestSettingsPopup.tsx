@@ -1,8 +1,55 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, type InputHTMLAttributes } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig, CommissionMethodId } from '../types';
 
 const MAX_BARS = 1500;
+
+/** Text input that accepts numeric keystrokes but shows empty while editing.
+ *
+ *  Unlike `type="number"`, the browser never locks the field — you can delete
+ *  the last digit freely. The numeric value is only committed on blur, so the
+ *  field stays empty while you're typing.
+ */
+function NumberInput({ value, onChange, style, ...rest }: {
+  value: number;
+  onChange: (v: number) => void;
+  style?: React.CSSProperties;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  const [display, setDisplay] = useState(() => value === 0 ? '' : String(value));
+
+  useEffect(() => {
+    setDisplay(value === 0 ? '' : String(value));
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={display}
+      onChange={(e) => setDisplay(e.target.value)}
+      onBlur={() => {
+        const trimmed = display.trim();
+        if (trimmed === '') {
+          onChange(0);
+          return;
+        }
+        const parsed = Number(trimmed);
+        if (!isNaN(parsed)) {
+          onChange(parsed);
+        } else {
+          setDisplay(value === 0 ? '' : String(value));
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', ...style }}
+      {...rest}
+    />
+  );
+}
 
 const BARS_PER_DAY: Record<string, number> = {
   '1': 1440,
@@ -183,14 +230,12 @@ function JupiterBasicConfig({
               DEX Swap Fee (bps)
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic.">ⓘ</span>
             </label>
-            <input
-              type="text" inputMode="decimal"
-              step="1"
-              min="0"
-              max="100"
+            <NumberInput
               value={dexFee}
-              onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
-              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+              onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
+              step="1"
+              min={0}
+              max={100}
             />
             <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
               Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched from Jupiter API before each backtest.
@@ -201,13 +246,11 @@ function JupiterBasicConfig({
               SOL Price (USD)
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
             </label>
-            <input
-              type="text" inputMode="decimal"
-              step="0.01"
-              min="0"
+            <NumberInput
               value={solPrice}
-              onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
-              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+              onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
+              step="0.01"
+              min={0}
             />
             <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
               SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
@@ -294,14 +337,12 @@ function JupiterUltraConfig({
       {useCustom && (
         <div>
           <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Custom Rate</label>
-          <input
-            type="text" inputMode="decimal"
-            step="0.0001"
-            min="0"
-            max="1"
+          <NumberInput
             value={(settings as Record<string, unknown>)?.rate as number ?? 0.001}
-            onChange={(e) => handleRateChange(Number(e.target.value))}
-            style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+            onChange={(v) => handleRateChange(v)}
+            step="0.0001"
+            min={0}
+            max={1}
           />
           <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
             Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
@@ -324,14 +365,12 @@ function JupiterUltraConfig({
               DEX Swap Fee (bps)
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX.">ⓘ</span>
             </label>
-            <input
-              type="text" inputMode="decimal"
-              step="1"
-              min="0"
-              max="100"
+            <NumberInput
               value={dexFee}
-              onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
-              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+              onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
+              step="1"
+              min={0}
+              max={100}
             />
             <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
               Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap.
@@ -342,13 +381,11 @@ function JupiterUltraConfig({
               SOL Price (USD)
               <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
             </label>
-            <input
-              type="text" inputMode="decimal"
-              step="0.01"
-              min="0"
+            <NumberInput
               value={solPrice}
-              onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
-              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+              onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
+              step="0.01"
+              min={0}
             />
             <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
               SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
@@ -505,11 +542,9 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Initial Capital</label>
-              <input
-                type="text" inputMode="decimal"
+              <NumberInput
                 value={initialCapital}
-                onChange={(e) => { const v = Number(e.target.value); setInitialCapital(v); persist({ initialCapital: v }); }}
-                style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                onChange={(v) => { setInitialCapital(v); persist({ initialCapital: v }); }}
               />
             </div>
             <div>
@@ -578,14 +613,12 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
                   Rate (Percent Fixed)
                 </label>
-                <input
-                  type="text" inputMode="decimal"
-                  step="0.0001"
-                  min="0"
-                  max="1"
+                <NumberInput
                   value={(commissionMethodSettings as Record<string, unknown>)?.rate as number ?? 0.001}
-                  onChange={(e) => handleSettingChange('rate', Number(e.target.value))}
-                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                  onChange={(v) => handleSettingChange('rate', v)}
+                  step="0.0001"
+                  min={0}
+                  max={1}
                 />
                 <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
                   Percentage of trade value (e.g. 0.001 = 0.1%)
@@ -615,13 +648,11 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             {commissionMethod === 'per_order_fixed' && (
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Fixed Amount per Order</label>
-                <input
-                  type="text" inputMode="decimal"
-                  step="0.01"
-                  min="0"
+                <NumberInput
                   value={(commissionMethodSettings as Record<string, unknown>)?.amount as number ?? 1}
-                  onChange={(e) => handleSettingChange('amount', Number(e.target.value))}
-                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                  onChange={(v) => handleSettingChange('amount', v)}
+                  step="0.01"
+                  min={0}
                 />
                 <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
                   Flat commission amount per order fill
@@ -631,11 +662,9 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             {!commissionMethod && (
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Legacy Commission Value</label>
-                <input
-                  type="text" inputMode="decimal"
+                <NumberInput
                   value={commission}
-                  onChange={(e) => { const v = Number(e.target.value); setCommission(v); persist({ commission: v }); }}
-                  style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                  onChange={(v) => { setCommission(v); persist({ commission: v }); }}
                 />
                 <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
                   Used with commission_type from strategy() declaration
@@ -677,12 +706,11 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
               </div>
               {dateRangeMode === 'days_back' ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input
-                    type="text" inputMode="decimal"
-                    min={1}
+                  <NumberInput
                     value={daysBack}
-                    onChange={(e) => { const v = Number(e.target.value) || 1; setDaysBack(v); persist({ daysBack: v }); }}
-                    style={{ width: '80px', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                    onChange={(v) => { setDaysBack(v); persist({ daysBack: v }); }}
+                    min={1}
+                    style={{ width: '80px' }}
                   />
                   <span style={{ color: '#aaa', fontSize: '12px' }}>days back from today</span>
                 </div>
