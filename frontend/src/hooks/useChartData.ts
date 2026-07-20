@@ -31,6 +31,7 @@ interface ExecuteResponse {
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
   tables?: import('../types').TableData[];
+  hiddenPlotKeys?: string[];
 }
 
 interface ExecutionResultMessage {
@@ -65,6 +66,7 @@ interface ExecutionResultMessage {
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
   barIndex: number;
   tables?: import('../types').TableData[];
+  hiddenPlotKeys?: string[];
 }
 
 const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
@@ -86,6 +88,7 @@ function buildScriptResult(
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>,
   boxes?: ExecutionResultMessage['boxes'],
   tables?: import('../types').TableData[],
+  hiddenPlotKeys?: string[],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -132,6 +135,9 @@ function buildScriptResult(
   }
 
   const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+  // Hidden plot titles — plots with display=display.none (fill-only references
+  // that must not render as visible lines). Strip metadata from raw keys.
+  const hiddenPlotTitles: string[] = (hiddenPlotKeys || []).map((key) => stripMeta(key));
   const transformFillKey = (rawKey: string) => {
     const parts = rawKey.split('::');
     return parts.map(stripMeta).join('::');
@@ -201,6 +207,7 @@ function buildScriptResult(
     alertConditions: (alertConditions || []).map((a) => ({ id: a.id, title: a.title, message: a.message })),
     alertTriggers: (alertTriggers || []).map((t) => ({ alertId: t.alertId, barIndex: t.barIndex, timestamp: t.timestamp })),
     tables: tables || [],
+    hiddenPlotTitles: hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
   };
 }
 
@@ -333,6 +340,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.alertTriggers,
             execResult.boxes,
             execResult.tables,
+            execResult.hiddenPlotKeys,
           );
 
           const prev = indicatorResultsRef.current.get(indId);
@@ -639,6 +647,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           msg.alertTriggers,
           msg.boxes,
           msg.tables,
+          msg.hiddenPlotKeys,
         );
         indicatorResultsRef.current.set(msg.indicatorId, result);
         onIndicatorResult(msg.indicatorId, result);
@@ -691,6 +700,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         msg.alertTriggers,
         msg.boxes,
         msg.tables,
+        msg.hiddenPlotKeys,
       );
       setScriptResult(result);
     }
@@ -929,6 +939,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.alertTriggers,
                 seedResult.boxes,
                 seedResult.tables,
+                seedResult.hiddenPlotKeys,
               );
 
               // Trim seed bar data from plot results — seed bars are not in
@@ -995,6 +1006,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         result.alertTriggers,
         result.boxes,
         result.tables,
+        result.hiddenPlotKeys,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;

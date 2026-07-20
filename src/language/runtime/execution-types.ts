@@ -120,6 +120,7 @@ export interface ExecutionResult {
   bgcolor: Array<{ time: number; color: string }>;
   plotColors?: Map<string, (string | null)[]>;
   fillColorData?: Map<string, (string | null)[]>;
+  hiddenPlotKeys?: string[];
   lines?: LineEntry[];
   labels?: LabelEntry[];
   boxes?: BoxEntry[];
@@ -194,6 +195,7 @@ export interface ExecutionSnapshot {
   barIndex: number;
   plotColors?: Map<string, (string | null)[]>;
   fillColorData?: Map<string, (string | null)[]>;
+  hiddenPlotKeys?: string[];
   alertConditionEntries?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
   boxes?: Map<number, BoxEntry>;

@@ -86,14 +86,16 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       if (namedArgs.display !== undefined) display = namedArgs.display;
     }
 
-    if (display === 'none' || display === 0) {
-      return NA;
-    }
-
     const metaParts = [seriesName];
     if (linewidth) metaParts.push(`__lw:${linewidth}`);
     if (style) metaParts.push(`__style:${style}`);
     const key = metaParts.join('');
+
+    // Always register the output and return the plot ref (needed for fill()).
+    // display=display.none only prevents frontend rendering, not data collection.
+    if (display === 'none' || display === 0) {
+      eng.hiddenPlotKeys.add(key);
+    }
     if (!eng.outputs.has(key)) {
       eng.outputs.set(key, createSeries(key));
     }

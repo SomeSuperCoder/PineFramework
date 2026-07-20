@@ -182,6 +182,7 @@ executeRouter.post('/execute', async (req, res) => {
       maxLookback: result.maxLookback ?? 0,
       alertConditions,
       alertTriggers,
+      hiddenPlotKeys: result.hiddenPlotKeys ?? [],
     });
   } catch (err) {
     console.error('[Execute] Error:', err);

@@ -109,6 +109,7 @@ export interface ScriptResult {
   strategyMarkers?: StrategyMarkerData[];
   alertConditions?: AlertConditionData[];
   alertTriggers?: AlertTriggerData[];
+  hiddenPlotTitles?: string[];
 }
 
 export interface TelegramSubscriber {

@@ -205,6 +205,7 @@ export class Interpreter {
       bgcolor: this.eng.bgcolorData,
       plotColors: this.eng.plotColors,
       fillColorData: this.eng.fillColorData,
+      hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
       lines: [...this.eng.lines.values()].map((l: any) => ({ ...l })),
       labels: [...this.eng.labels],
       boxes: [...this.eng.boxes.values()],

@@ -212,6 +212,7 @@ export class ExecutionEngine {
   > = new Map();
   /** @internal */ plotColors: Map<string, (string | null)[]> = new Map();
   /** @internal */ fillColorData: Map<string, (string | null)[]> = new Map();
+  /** @internal */ hiddenPlotKeys: Set<string> = new Set();
   /** @internal */ inputs: Map<string, { type: string; default: PineValue }> = new Map();
   /** @internal */ crossPrevValues: Map<string, { src: number; cmp: number }> = new Map();
   /** @internal */ changePrevValues: Map<string, number> = new Map();

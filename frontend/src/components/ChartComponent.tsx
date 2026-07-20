@@ -178,6 +178,18 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       seriesNamesRef.current.add(title);
     }
 
+    // Collect hidden plot titles from all results and mark them in PineChart
+    // so they don't render as visible lines (display=display.none fill references).
+    const allHiddenTitles: string[] = [];
+    for (const { result } of allResults) {
+      if (result.hiddenPlotTitles) {
+        for (const t of result.hiddenPlotTitles) {
+          allHiddenTitles.push(t);
+        }
+      }
+    }
+    chart.setHiddenPlots(allHiddenTitles);
+
     const allStrategyMarkers: StrategyMarkerData[] = [];
     const allFills: FillData[] = [];
     let allFillColorData: Record<string, (string | null)[]> = {};

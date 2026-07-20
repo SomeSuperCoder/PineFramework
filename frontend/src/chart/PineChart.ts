@@ -66,6 +66,7 @@ export class PineChart {
 
   private candles: CandlestickData[] = [];
   private plotSeries: Map<string, PlotSeriesHandle> = new Map();
+  private hiddenPlots: Set<string> = new Set();
   private shapeMarkers: ShapeMarkerData[] = [];
   private strategyMarkers: StrategyMarkerData[] = [];
   private fills: FillData[] = [];
@@ -273,7 +274,7 @@ export class PineChart {
     this.renderTeleportLine(ctx);
 
     for (const [_key, handle] of this.plotSeries) {
-      if (handle.overlay) {
+      if (handle.overlay && !this.hiddenPlots.has(handle.name)) {
         const nonNull = handle.data.filter(d => d.value !== null).length;
         if (nonNull === 0) console.log('[PC] draw overlay plot ALL NULLS', { name: handle.name, dataLen: handle.data.length });
         this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options);
@@ -295,7 +296,7 @@ export class PineChart {
 
       const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
       for (const [_key, handle] of this.plotSeries) {
-        if (!handle.overlay && handle.paneIndex === paneIndex) {
+        if (!handle.overlay && handle.paneIndex === paneIndex && !this.hiddenPlots.has(handle.name)) {
           this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options, pane);
         }
       }
@@ -624,7 +625,7 @@ export class PineChart {
     const candleRange = max - min || 1;
 
     for (const [_key, handle] of this.plotSeries) {
-      if (!handle.overlay) continue;
+      if (!handle.overlay || this.hiddenPlots.has(handle.name)) continue;
       for (let i = range.start; i < range.end && i < handle.data.length; i++) {
         const v = handle.data[i]?.value;
         if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
@@ -650,7 +651,7 @@ export class PineChart {
       let indMax = -Infinity;
       const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
       for (const [_key, handle] of this.plotSeries) {
-        if (handle.overlay || handle.paneIndex !== paneIndex) continue;
+        if (handle.overlay || handle.paneIndex !== paneIndex || this.hiddenPlots.has(handle.name)) continue;
         for (let i = range.start; i < range.end && i < handle.data.length; i++) {
           const v = handle.data[i]?.value;
           if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
@@ -761,6 +762,11 @@ export class PineChart {
       handle.data = data;
       this.markDirty();
     }
+  }
+
+  setHiddenPlots(names: string[]): void {
+    this.hiddenPlots = new Set(names);
+    this.markDirty();
   }
 
   removeSeries(name: string): void {
