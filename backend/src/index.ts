@@ -32,7 +32,9 @@ const TEST_INDICATORS_DIR = path.resolve(__dirname, '..', '..', 'test_indicators
 
 const app = express();
 const server = createServer(app);
-const PORT = parseInt(process.env.PORT || '8080', 10);
+const PORT = parseInt(process.env.PORT || '8081', 10);
+
+console.log(`Backend server running on port ${PORT}`);
 
 const cache = new OHLCVCache(100, 60_000);
 

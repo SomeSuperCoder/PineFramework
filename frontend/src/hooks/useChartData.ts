@@ -692,7 +692,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const connectWebSocket = useCallback(() => {
     try {
-      const ws = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
+      const ws = new WebSocket(`ws://${window.location.hostname}:8081/ws`);
 
       ws.onopen = () => {
         setIsConnected(true);
