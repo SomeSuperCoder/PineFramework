@@ -164,7 +164,7 @@
   - **Fix:** In contexts where an identifier is expected (not a keyword), only match `TokenType.Identifier`. For built-in namespace references (ta, math, str, time, input, color), route them to the correct evaluation logic instead of treating them as variable lookups.
   - **Test:** Parse and execute a script using `ta.sma(close, 14)` and verify it works without errors about undefined variables.
 
-- [ ] **M-007** | [Bug-Logic] | `src/language/runtime/interpreter.ts:607` | FunctionExpression evaluation returns NA, discarding function registration in some contexts
+- [x] **M-007** | [Bug-Logic] | `src/language/runtime/execution-engine.ts` | Functions are now hoisted (pre-registered from AST during init) so they're available regardless of conditional-branch execution
   - **Issue:** `executeFunctionExpression()` registers the function in `this.eng.functions.set(expr.name, expr)` and returns NA. However, in the `executeCallExpression()` method (line 825), the code checks `this.eng.functions.get(funcName)` to call user-defined functions. If a function is defined within a conditional branch that doesn't execute on the first bar, it won't be registered when called on a later bar.
   - **Impact:** User-defined functions inside conditional blocks (if statements) may not be accessible on all bars, causing "function not found" errors.
   - **Fix:** Ensure function definitions are hoisted or evaluated unconditionally. The simplest approach is to register all top-level function definitions during initialization rather than during bar execution.

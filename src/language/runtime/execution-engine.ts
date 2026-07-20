@@ -2,6 +2,7 @@ import type {
   ProgramNode,
   ExpressionNode,
   FunctionExpressionNode,
+  StatementNode,
 } from '../parser/ast/nodes.js';
 import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { type PineValue } from '../types/na.js';
@@ -118,11 +119,49 @@ export class ExecutionEngine {
     this.formingCandleProcessor = new FormingCandleProcessor(this);
 
     this.registerBuiltins();
+    this.hoistFunctions();
     this.initializeGlobals();
 
     if (this.sourceProgram.scriptKind === 'strategy') {
       this.initializeStrategy(strategyConfigOverride);
     }
+  }
+
+  /**
+   * Walk the AST and pre-register all named function expressions so they
+   * are available regardless of conditional-branch execution order.
+   * Pine Script hoists all function definitions to the top of the script.
+   */
+  private hoistFunctions(): void {
+    const walk = (stmts: StatementNode[]): void => {
+      for (const stmt of stmts) {
+        switch (stmt.kind) {
+          case 'ExpressionStatement':
+            if (stmt.expression.kind === 'FunctionExpression' && stmt.expression.name) {
+              this.functions.set(stmt.expression.name, stmt.expression);
+            }
+            break;
+          case 'IfStatement':
+            walk(stmt.thenBranch);
+            if (stmt.elseBranch) walk(stmt.elseBranch);
+            break;
+          case 'ForStatement':
+            walk(stmt.body);
+            break;
+          case 'WhileStatement':
+            walk(stmt.body);
+            break;
+          case 'SwitchStatement':
+            for (const c of stmt.cases) walk(c.body);
+            if (stmt.defaultCase) walk(stmt.defaultCase);
+            break;
+          case 'TypeDeclaration':
+            // Methods inside type declarations may reference functions
+            break;
+        }
+      }
+    };
+    walk(this.sourceProgram.body);
   }
 
   /** @internal */ smaBuffers: Map<string, RingBuffer> = new Map();
