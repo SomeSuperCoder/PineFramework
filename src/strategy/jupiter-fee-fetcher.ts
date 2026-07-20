@@ -1,53 +1,43 @@
 /**
  * Jupiter Fee Fetcher
  *
- * Fetches real-time DEX swap fees from the Jupiter Quote API for a given
- * trading pair. Used to calibrate backtest commission estimates with
- * current on-chain fee conditions rather than hardcoding a default.
+ * Uses the official @jup-ag/api SDK to fetch real-time DEX swap fees from the
+ * Jupiter Quote API for a given trading pair. Calibrates backtest commission
+ * estimates with current on-chain fee conditions.
  *
  * ── Cache strategy ──
  *
  *   Two-tier: in-memory (session) → persistent (disk).
  *
- *   A persistent JSON file at ~/.pine/jupiter-fees.json stores the
- *   last-known fee per symbol. On startup, if the API is unreachable,
- *   the fetcher falls back to this cache. If neither API nor cache is
- *   available, the call throws.
+ *   A persistent JSON file at ~/.pine/jupiter-fees.json stores the last-known
+ *   fee per symbol. On startup, if the API is unreachable, the fetcher falls
+ *   back to this cache. If neither API nor cache is available, the call throws.
  *
- * ── API ──
+ * ── Fee extraction ──
  *
- *   GET https://quote-api.jup.ag/v6/quote?inputMint=...&outputMint=...&amount=...
+ *   The SDK's SwapInfo includes feeAmount and feeMint (present after Jupiter's
+ *   May 2025 API update). The fee in bps is computed as:
  *
- *   Response includes routePlan[].swapInfo with:
- *     - outAmount:  output token amount (atomic units, after fee)
- *     - feeAmount:  optional — fee deducted, in feeMint token (atomic units)
- *     - label:      DEX name (e.g. "Raydium", "Orca V2", "Meteora DLMM")
- *     - feeMint:    mint address of the token the fee is paid in
+ *     feeBps = (feeAmount / (outAmount + feeAmount)) * 10000
  *
- *   Fee extraction strategy (per route step):
- *     1. If feeAmount + feeMint are present → compute from ratio
- *     2. Else → look up known fee for the DEX label
- *     3. Else → use conservative default (25 bps)
- *
- *   Then weighted-average across steps by percent.
+ *   If feeAmount is missing from a route step, a known-fee table keyed by DEX
+ *   label is used as fallback. A weighted average is taken across route steps.
  */
 
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
+import { createJupiterApiClient, QuoteGetRequest } from '@jup-ag/api';
 import { parsePairSymbol } from './commission-calculator.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const JUPITER_QUOTE_API = 'https://quote-api.jup.ag/v6/quote';
-
 /**
- * Default sample amount in atomic units (~0.01 SOL worth for 9-decimal
- * tokens, ~10 USDC for 6-decimal tokens). The fee structure is percentage-
- * based, so the exact amount only needs to be above the minimum swap
- * threshold for the pair.
+ * Default sample amount in atomic units (~0.01 SOL worth for 9-decimal tokens,
+ * ~10 USDC for 6-decimal tokens). The fee is percentage-based, so any amount
+ * above the minimum swap threshold works.
  */
 const DEFAULT_SAMPLE_AMOUNT = 10_000_000;
 
@@ -56,6 +46,19 @@ const CACHE_PATH = path.join(os.homedir(), '.pine', 'jupiter-fees.json');
 
 /** Stale threshold for cache entries (30 days). */
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// SDK client (lazy-initialised)
+// ---------------------------------------------------------------------------
+
+let _client: ReturnType<typeof createJupiterApiClient> | null = null;
+
+function getClient() {
+  if (!_client) {
+    _client = createJupiterApiClient();
+  }
+  return _client;
+}
 
 // ---------------------------------------------------------------------------
 // Token mint addresses on Solana
@@ -92,52 +95,38 @@ const BRIDGED_MINTS: Record<string, string> = {
 // Known DEX fees on Solana (fallback when feeAmount is not in the response)
 // ---------------------------------------------------------------------------
 
-/**
- * Known DEX swap fees in bps, keyed by the label returned by Jupiter's
- * routePlan. These are used as fallback when the API response doesn't
- * include feeAmount/feeMint for a route step.
- *
- * Sources: official DEX docs, Jupiter route labels.
- */
 const KNOWN_DEX_FEES: Record<string, number> = {
-  // Major CPMMs
   Raydium: 25,
   'Raydium CPMM': 25,
-  'Raydium CLMM': 20, // Concentrated liquidity — varies, 20 is a rough average
-  'Orca': 20, // varies 1-30, 20 is rough average for volatile pairs
+  'Raydium CLMM': 20,
+  Orca: 20,
   'Orca V2': 20,
   'Orca Whirlpool': 20,
-  'Meteora DLMM': 10, // Dynamic — varies widely, 10 is a conservative average
+  'Meteora DLMM': 10,
   'Meteora Pools': 10,
-  'DexLab': 25,
-
-  // Smaller / niche DEXes
+  DexLab: 25,
   'Lifinity V2': 10,
-  'Lifinity': 10,
-  'Crema': 25,
-  'Aldrin': 25,
-  'Cropper': 25,
-  'Saber': 1,
+  Lifinity: 10,
+  Crema: 25,
+  Aldrin: 25,
+  Cropper: 25,
+  Saber: 1,
   'Saber (Decimals)': 1,
-  'Mercurial': 1,
-  'GooseFX': 25,
-  'Saros': 25,
-  'Stepn': 25,
+  Mercurial: 1,
+  GooseFX: 25,
+  Saros: 25,
+  Stepn: 25,
   'Step Finance': 25,
-  'Invariant': 10,
-  'OpenBook': 0, // Order-book — no swap fee (taker fees separate)
-  'Phantom': 25,
-  'Whirlpool': 20,
-  'Guacswap': 25,
-  'Penguin': 25,
-  'Sanctum': 10,
-
-  // Stable swap AMMs (typically very low fees)
+  Invariant: 10,
+  OpenBook: 0,
+  Phantom: 25,
+  Whirlpool: 20,
+  Guacswap: 25,
+  Penguin: 25,
+  Sanctum: 10,
   'Saber (Stable)': 1,
   'Mercurial (Stable)': 1,
-  'BonkSwap': 25,
-
-  // Labels that signal a direct route with no intermediary
+  BonkSwap: 25,
   DEFAULT: 25,
 };
 
@@ -243,11 +232,9 @@ function symbolToMints(symbol: string): { inputMint: string; outputMint: string 
  * Get the known DEX fee for a given DEX label, falling back to default.
  */
 function getKnownFeeBps(label: string): number {
-  // Try exact match first
   const exact = KNOWN_DEX_FEES[label];
   if (exact !== undefined) return exact;
 
-  // Try partial match (e.g. "Orca V2" contains "Orca")
   for (const [key, fee] of Object.entries(KNOWN_DEX_FEES)) {
     if (label.toLowerCase().includes(key.toLowerCase())) {
       return fee;
@@ -258,22 +245,26 @@ function getKnownFeeBps(label: string): number {
 }
 
 /**
+ * The SDK's QuoteResponse uses RoutePlanStep with SwapInfo that contains
+ * feeAmount/feeMint in the actual API response, but the bundled .d.ts
+ * omits them. This interface extends SwapInfo to access the fields.
+ */
+interface SwapInfoWithFee {
+  ammKey: string;
+  label?: string;
+  inputMint: string;
+  outputMint: string;
+  inAmount: string;
+  outAmount: string;
+  feeAmount?: string;
+  feeMint?: string;
+}
+
+/**
  * Compute the DEX fee in bps from a single route step.
- *
- * Strategy (in order of preference):
- *   1. If feeAmount is present → compute from fee / output ratio
- *   2. Else → look up known fee for the DEX label
- *   3. Else → return 0 (caller handles the fallback)
  */
 function computeStepBps(step: {
-  swapInfo: {
-    label?: string;
-    inAmount: string;
-    outAmount: string;
-    feeAmount?: string;
-    feeMint?: string;
-    outputMint: string;
-  };
+  swapInfo: SwapInfoWithFee;
 }): number {
   const inAmount = Number.parseInt(step.swapInfo.inAmount, 10);
   const outAmount = Number.parseInt(step.swapInfo.outAmount, 10);
@@ -300,62 +291,33 @@ function computeStepBps(step: {
     return getKnownFeeBps(step.swapInfo.label);
   }
 
-  return 0; // caller averages and falls back to default
+  return 0;
 }
 
 // ---------------------------------------------------------------------------
-// API call
+// API call via SDK
 // ---------------------------------------------------------------------------
-
-interface JupiterSwapInfo {
-  label?: string;
-  inputMint: string;
-  outputMint: string;
-  inAmount: string;
-  outAmount: string;
-  feeAmount?: string;
-  feeMint?: string;
-  [key: string]: unknown;
-}
-
-interface JupiterRouteStep {
-  swapInfo: JupiterSwapInfo;
-  percent: number;
-}
-
-interface JupiterQuoteResponse {
-  inputMint: string;
-  inAmount: string;
-  outputMint: string;
-  outAmount: string;
-  routePlan: JupiterRouteStep[];
-  [key: string]: unknown;
-}
 
 /**
- * Call the Jupiter Quote API to get a sample quote and extract the DEX fee.
+ * Call the Jupiter Quote API via the official SDK to get a sample quote
+ * and extract the DEX fee.
  */
 async function callJupiterApi(
   inputMint: string,
   outputMint: string,
   amount: number = DEFAULT_SAMPLE_AMOUNT,
 ): Promise<FeeFetchResult> {
-  const url = `${JUPITER_QUOTE_API}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100`;
+  const params: QuoteGetRequest = {
+    inputMint,
+    outputMint,
+    amount,
+    slippageBps: 100,
+  };
 
-  const response = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const client = getClient();
+  const quote = await client.quoteGet(params);
 
-  if (!response.ok) {
-    throw new Error(
-      `Jupiter API returned ${response.status}${response.statusText ? ': ' + response.statusText : ''}`,
-    );
-  }
-
-  const data = (await response.json()) as JupiterQuoteResponse;
-
-  if (!data.routePlan || data.routePlan.length === 0) {
+  if (!quote.routePlan || quote.routePlan.length === 0) {
     throw new Error('Jupiter API returned no routes for this pair');
   }
 
@@ -364,8 +326,9 @@ async function callJupiterApi(
   let totalBps = 0;
   let totalWeight = 0;
 
-  for (const step of data.routePlan) {
-    const stepBps = computeStepBps(step);
+  for (const step of quote.routePlan) {
+    const stepWithFee = step as { swapInfo: SwapInfoWithFee };
+    const stepBps = computeStepBps(stepWithFee);
     const weight = step.percent ?? 100;
     totalBps += stepBps * (weight / 100);
     totalWeight += weight;
@@ -384,7 +347,7 @@ async function callJupiterApi(
 
   return {
     dexFeeBps,
-    source: 'api',
+    source: 'api' as const,
     dexLabel: labelArr.join(' + ') || 'unknown',
   };
 }
@@ -398,9 +361,8 @@ async function callJupiterApi(
  *
  * Cache strategy:
  *   1. In-memory cache (session) — instant, no I/O
- *   2. Persistent cache (~/.pine/jupiter-fees.json) — survives restarts,
- *      provides fallback when API is unreachable
- *   3. API call — live data, source of truth
+ *   2. Persistent cache (~/.pine/jupiter-fees.json) — survives restarts
+ *   3. API call via @jup-ag/api SDK — live data, source of truth
  *
  * Throws if ALL sources are unavailable (no API, no cache).
  *
@@ -496,7 +458,6 @@ export function getCachedDexFeeBps(symbol: string): FeeFetchResult | undefined {
 
 /**
  * Clear both in-memory and persistent fee caches.
- * Useful for testing or forcing a fresh API fetch on the next call.
  */
 export function clearFeeCache(): void {
   memCache.clear();

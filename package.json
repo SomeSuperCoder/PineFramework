@@ -60,5 +60,8 @@
     "prettier": "^3.5.3",
     "ts-jest": "^29.2.6",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@jup-ag/api": "^6.0.48"
   }
 }
