@@ -130,10 +130,19 @@ function calculateSolanaNetworkFee(settings: CommissionMethodSettings | null | u
 /** Minimal trade data needed for commission calculation. */
 export interface TradeContext {
   direction: 'long' | 'short';
+  /**
+   * Price at which the position was entered (0 for exit-only fills).
+   */
   entryPrice: number;
+  /**
+   * Price at which the position was exited (0 for entry-only fills).
+   */
   exitPrice: number;
   quantity: number;
-  tradeValue: number; // abs(entryPrice * quantity) or abs(exitPrice * quantity)
+  /** Absolute value of (current fillPrice * quantity) for this fill. */
+  tradeValue: number;
+  /** True if this fill is opening (entry), false if closing (exit). */
+  isEntry: boolean;
   /**
    * Trading pair symbol (e.g. "SOLUSDT", "BTCUSDT").
    * Used by JupiterUltraCalculator to auto-detect the fee tier from the token pair.
@@ -751,16 +760,19 @@ export function buildTradeContextFromFill(params: {
   direction: 'long' | 'short';
   fillPrice: number;
   quantity: number;
+  /** True for an entry fill (opening a position), false for exit. */
+  isEntry: boolean;
   /** Trading pair symbol for Jupiter tier auto-detection. */
   symbol?: string;
 }): TradeContext {
   const tradeValue = Math.abs(params.fillPrice * params.quantity);
   return {
     direction: params.direction,
-    entryPrice: params.fillPrice,
-    exitPrice: params.fillPrice,
+    entryPrice: params.isEntry ? params.fillPrice : 0,
+    exitPrice: params.isEntry ? 0 : params.fillPrice,
     quantity: params.quantity,
     tradeValue,
+    isEntry: params.isEntry,
     symbol: params.symbol,
   };
 }

@@ -140,7 +140,7 @@
   - **Fix:** Extract a shared `fetchBars()` function in the Bybit data source module and have both callers use it. Add progress callback support for the backtest route.
   - **Test:** Verify both CLI backtest and HTTP backtest produce identical results for the same symbol/timeframe.
 
-- [ ] **M-003** | [Bug-Logic] | `src/strategy/commission-calculator.ts:756-764` | buildTradeContextFromFill sets both entryPrice and exitPrice to fillPrice
+- [x] **M-003** | [Bug-Logic] | `src/strategy/commission-calculator.ts:756-764` | buildTradeContextFromFill sets both entryPrice and exitPrice to fillPrice
   - **Issue:** `buildTradeContextFromFill()` sets both `entryPrice` and `exitPrice` to `params.fillPrice`. This means the `TradeContext` doesn't distinguish between entry and exit fills. The `JupiterUltraCalculator.calculate()` method uses `context.tradeValue` (which is `|fillPrice * quantity|`) for both entry and exit, potentially double-charging DEX fees on a single round-trip trade.
   - **Impact:** Jupiter commission methods charge DEX swap fee (25 bps) on both entry and exit, when in reality the DEX fee is paid per swap. For a backtest, each order fill triggers commission, so a market buy + market sell would charge 50 bps total instead of 25 bps per swap direction. While this may be intentional for some models, the lack of exit/entry context means custom calculators can't differentiate.
   - **Fix:** Add an `isEntry` boolean to `TradeContext` or split into `entryFill`/`exitFill` contexts. For legacy behavior, preserve the current behavior but document it clearly.

@@ -505,17 +505,34 @@ describe('Commission Calculator', () => {
   });
 
   describe('buildTradeContextFromFill', () => {
-    it('should build context from fill data', () => {
+    it('should build context from entry fill data', () => {
       const ctx = buildTradeContextFromFill({
         direction: 'long',
         fillPrice: 100,
         quantity: 5,
+        isEntry: true,
       });
       expect(ctx.direction).toBe('long');
       expect(ctx.entryPrice).toBe(100);
-      expect(ctx.exitPrice).toBe(100);
+      expect(ctx.exitPrice).toBe(0);
       expect(ctx.quantity).toBe(5);
       expect(ctx.tradeValue).toBe(500); // abs(100 * 5)
+      expect(ctx.isEntry).toBe(true);
+    });
+
+    it('should build context from exit fill data', () => {
+      const ctx = buildTradeContextFromFill({
+        direction: 'long',
+        fillPrice: 150,
+        quantity: 5,
+        isEntry: false,
+      });
+      expect(ctx.direction).toBe('long');
+      expect(ctx.entryPrice).toBe(0);
+      expect(ctx.exitPrice).toBe(150);
+      expect(ctx.quantity).toBe(5);
+      expect(ctx.tradeValue).toBe(750);
+      expect(ctx.isEntry).toBe(false);
     });
 
     it('should handle short direction', () => {
@@ -523,6 +540,7 @@ describe('Commission Calculator', () => {
         direction: 'short',
         fillPrice: 200,
         quantity: 10,
+        isEntry: true,
       });
       expect(ctx.direction).toBe('short');
       expect(ctx.tradeValue).toBe(2000);

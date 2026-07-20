@@ -619,7 +619,8 @@ export class StrategyEngine {
 
   private fillOrder(order: Order, fillPrice: number): void {
     const slippage = this.calculateSlippage(order, fillPrice);
-    let commission = this.calculateCommission(order, fillPrice);
+    const isFlat = this.position.direction === 'flat';
+    let commission = this.calculateCommission(order, fillPrice, isFlat);
     const adjustedPrice = order.action === 'buy' ? fillPrice + slippage : fillPrice - slippage;
 
     const filledOrder: FilledOrder = {
@@ -631,7 +632,6 @@ export class StrategyEngine {
 
     this.filledOrders.push(filledOrder);
 
-    const isFlat = this.position.direction === 'flat';
     const isExit = !isFlat;
 
     // For fixed/per_order commission types, charge commission only on entry
@@ -688,13 +688,14 @@ export class StrategyEngine {
     return price * (this.config.slippage / 100);
   }
 
-  private calculateCommission(order: Order, price: number): number {
+  private calculateCommission(order: Order, price: number, isEntry: boolean): number {
     // Use pluggable commission calculator if configured (takes precedence over legacy)
     if (this.commissionCalculator && this.commissionConfig) {
       const context = buildTradeContextFromFill({
         direction: order.direction,
         fillPrice: price,
         quantity: order.quantity,
+        isEntry,
         symbol: this.config.symbol,
       });
       return this.commissionCalculator.calculate(context, this.commissionConfig);
