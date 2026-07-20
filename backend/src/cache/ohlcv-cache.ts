@@ -2,7 +2,8 @@ import type { Bar } from 'pine-framework';
 
 interface CacheEntry {
   data: Bar[];
-  lastAccessed: number;
+  createdAt: number;   // insertion time — used for TTL expiry
+  lastAccessed: number; // last read time — used for LRU eviction
 }
 
 export class OHLCVCache {
@@ -23,7 +24,8 @@ export class OHLCVCache {
     const key = this.makeKey(symbol, interval);
     const entry = this.cache.get(key);
     if (!entry) return null;
-    if (Date.now() - entry.lastAccessed > this.ttlMs) {
+    // Use createdAt for TTL so frequently-accessed entries still expire
+    if (Date.now() - entry.createdAt > this.ttlMs) {
       this.cache.delete(key);
       return null;
     }
@@ -34,6 +36,7 @@ export class OHLCVCache {
   set(symbol: string, interval: string, data: Bar[]): void {
     const key = this.makeKey(symbol, interval);
     if (this.cache.size >= this.maxSize) {
+      // Evict by lastAccessed (LRU) to keep frequently-used entries
       let oldestKey: string | null = null;
       let oldestTime = Infinity;
       for (const [k, v] of this.cache) {
@@ -44,7 +47,8 @@ export class OHLCVCache {
       }
       if (oldestKey) this.cache.delete(oldestKey);
     }
-    this.cache.set(key, { data, lastAccessed: Date.now() });
+    const now = Date.now();
+    this.cache.set(key, { data, createdAt: now, lastAccessed: now });
   }
 
   invalidate(symbol: string, interval: string): void {

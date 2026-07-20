@@ -187,6 +187,7 @@ export class BacktestEngine {
 
   private computeMonthlyReturns(points: EquityPoint[]): Record<string, number> {
     const monthly: Record<string, number> = {};
+    const computed = new Set<string>();
     if (points.length < 2) return monthly;
 
     const startEquity = points[0]!.equity;
@@ -209,14 +210,17 @@ export class BacktestEngine {
       }
     }
 
-    // Now compute actual returns for months that have data
+    // Now compute actual returns for months that have data.
+    // Use a separate Set to track which months have been computed,
+    // since 0% is a valid monthly return and should not be a sentinel.
     let lastRecordedEquity = startEquity;
     for (const point of points) {
       const date = new Date(point.time);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
       // Only update if this is the first data point for this month
-      if (monthly[key] === 0 && point.equity !== lastRecordedEquity) {
+      if (!computed.has(key)) {
+        computed.add(key);
         monthly[key] =
           lastRecordedEquity > 0
             ? ((point.equity - lastRecordedEquity) / lastRecordedEquity) * 100

@@ -229,7 +229,13 @@ export function createBacktestRouter() {
       job.completedAt = Date.now();
     } catch (err) {
       job.status = 'failed';
-      job.error = err instanceof Error ? err.message : String(err);
+      // Sanitize error messages to prevent leaking internal URLs, hostnames,
+      // or environment configuration in API responses.
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      console.error('[backtest] Backtest failed: %s', rawMessage);
+      // Strip anything that looks like a URL or hostname from the user-facing error
+      job.error = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
+        .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
       job.completedAt = Date.now();
     }
   }

@@ -54,6 +54,11 @@ export class Parser {
   private userTypes: Set<string> = new Set();
 
   parse(source: string): ParseResult {
+    // Reject overly large scripts (DoS prevention for tokenizer/parser)
+    if (source.length > 1024 * 1024) {
+      throw new ParseError('Script exceeds maximum size of 1MB');
+    }
+
     const version = extractVersion(source);
     if (version === null) {
       throw new ParseError('Missing //@version=N declaration');

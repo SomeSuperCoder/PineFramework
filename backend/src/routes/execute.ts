@@ -3,6 +3,16 @@ import { createPineScriptEngine, type Bar } from 'pine-framework';
 
 const engine = createPineScriptEngine();
 
+/** Escape HTML entities to prevent XSS in rendered label/shape text. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function pineValueToJSON(v: unknown): number | string | boolean | null {
   if (v === null || v === undefined) return null;
   if (typeof v === 'symbol') return null;
@@ -59,7 +69,7 @@ executeRouter.post('/execute', async (req, res) => {
       location: s.location,
       color: s.color,
       time: s.time,
-      text: s.text,
+      text: s.text ? escapeHtml(String(s.text)) : s.text,
       price: s.price,
       overlay: s.overlay,
     }));
@@ -102,7 +112,7 @@ executeRouter.post('/execute', async (req, res) => {
     const labels = (result.labels || []).map((l) => ({
       time: l.time,
       price: l.price,
-      text: l.text,
+      text: l.text ? escapeHtml(String(l.text)) : l.text,
       color: l.color,
       textColor: l.textcolor,
       style: l.style,
@@ -124,7 +134,11 @@ executeRouter.post('/execute', async (req, res) => {
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
     if (rawConditions) {
       for (const ac of rawConditions) {
-        alertConditions.push({ id: ac.id, title: ac.title, message: ac.message });
+        alertConditions.push({
+          id: ac.id,
+          title: ac.title ? escapeHtml(String(ac.title)) : ac.title,
+          message: ac.message ? escapeHtml(String(ac.message)) : ac.message,
+        });
       }
     }
 

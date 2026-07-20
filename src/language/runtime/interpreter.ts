@@ -815,8 +815,9 @@ export class Interpreter {
         if (builtin) {
           // Set call site ID for TA functions that need stable keys across bars
           this.eng.currentCallSiteId = expr.callId;
-          // Only pass namedArgs when there are actual named arguments,
-          // otherwise an empty {} object gets passed as a positional arg to builtins like nz()
+          // Pass namedArgs as the last positional argument for builtins that
+          // support named parameters (e.g., plot, plotshape). Calculation-only
+          // builtins ignore the extra argument naturally.
           const builtinArgs = Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;
           return builtin(...builtinArgs);
         }

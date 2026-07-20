@@ -64,7 +64,7 @@
 
 ### High
 
-- [ ] **H-001** | [Security-XSS] | `backend/src/routes/execute.ts:92-100` | Line/box coordinates used to construct response without sanitization
+- [x] **H-001** | [Security-XSS] | `backend/src/routes/execute.ts:92-100` | Line/box coordinates used to construct response without sanitization
   - **Issue:** Line coordinates (`l.x1`, `l.x2`, `l.y1`, `l.y2`) and box coordinates are passed through as-is in the response. While these are numbers, the label `text` fields (line 108) and shape `text` fields (line 64) are returned unescaped. The frontend may render these as HTML or in canvas without sanitization.
   - **Impact:** If a malicious Pine script produces text with HTML/script content, it could lead to XSS in the frontend when rendered.
   - **Fix:** Sanitize text fields using DOMPurify on the frontend or strip HTML from text fields in the API response. At minimum, escape HTML entities in text content.
@@ -76,7 +76,7 @@
   - **Fix:** Track `mfe` and `mae` incrementally during `updatePositionPnL()` by comparing against all bar high/low values while the position is open. Store the worst excursion in the Trade object at close time.
   - **Test:** Create a trade where price moves against the position mid-trade but recovers at exit. Verify MAE captures the adverse move, not just the exit bar.
 
-- [ ] **H-003** | [Bug-Logic] | `src/strategy/backtest-engine.ts:188-228` | Monthly returns calculation incorrectly reports 0% for first month of data
+- [x] **H-003** | [Bug-Logic] | `src/strategy/backtest-engine.ts:188-228` | Monthly returns calculation incorrectly reports 0% for first month of data
   - **Issue:** `computeMonthlyReturns()` initializes all months in range to 0, then only updates a month when `monthly[key] === 0 && point.equity !== lastRecordedEquity`. The first month's return is always 0 because it's initialized to 0 and `point.equity !== lastRecordedEquity` is checked against the start equity — but the equity might legitimately not change in the first month, resulting in a correct 0. The bigger issue: if the first bar has the same equity as `lastRecordedEquity` (which is set to `points[0].equity`), the condition `point.equity !== lastRecordedEquity` fails for the first data point, always making the first month 0 regardless of actual returns.
   - **Impact:** First month of backtest results always shows 0% return, hiding any gains or losses that occur in that month.
   - **Fix:** Use a different sentinel value (e.g., `null` or `undefined`) instead of 0 to indicate "not yet computed," since 0 is a valid monthly return. Alternatively, skip the first month entirely or compute it differently.
@@ -94,13 +94,13 @@
   - **Fix:** Ensure that when a stop-limit order converts to a limit order, the `limitPrice` is preserved on the new limit order and `price` is set to the same value. Add comprehensive tests for stop-limit fill scenarios.
   - **Test:** Create a stop-limit buy order where stop=105, limit=106, and the bar has high=107 but only reaches 105.5 (triggered but limit not hit on same bar). Verify the limit order persists and fills on a subsequent bar.
 
-- [ ] **H-006** | [Security-EnvLeak] | `backend/src/routes/backtest.ts:5` | BYBIT_REST_URL env var could be exposed via error messages
+- [x] **H-006** | [Security-EnvLeak] | `backend/src/routes/backtest.ts:5` | BYBIT_REST_URL env var could be exposed via error messages
   - **Issue:** Error messages from failed API calls are surfaced to users in the API response (e.g., `job.error = err instanceof Error ? err.message : String(err)`). If the URL or its components appear in error messages (e.g., connection refused to a custom BYBIT_REST_URL), the environment configuration is leaked.
   - **Impact:** Information disclosure of internal network topology or custom API endpoints.
   - **Fix:** Sanitize error messages in API responses. Never surface raw error messages from external API calls. Log the full error server-side and return a generic error to the client.
   - **Test:** Verify that API error responses never contain URLs, hostnames, or IP addresses.
 
-- [ ] **H-007** | [Performance-ReDoS] | `src/language/parser/tokenizer.ts` | Regex-based tokenizer could be vulnerable to ReDoS
+- [x] **H-007** | [Performance-ReDoS] | `src/language/parser/tokenizer.ts` | Regex-based tokenizer could be vulnerable to ReDoS
   - **Issue:** The tokenizer uses regex patterns for token matching. If complex regex patterns are used for string literals or numbers with exponential backtracking potential, an attacker could craft a Pine script that takes exponential time to tokenize. Long string literals with escape sequences are particularly risky.
   - **Impact:** A malicious Pine script could cause the tokenizer to hang for seconds or minutes, blocking the Node.js event loop (since tokenization is synchronous). This is a DoS vector.
   - **Fix:** Audit all regex patterns in the tokenizer for ReDoS vulnerability. Use atomic groups or possessive quantifiers where possible. Implement a maximum input length for the parser (e.g., reject scripts > 1MB).
@@ -118,7 +118,7 @@
   - **Fix:** Make the lock failure throw an error instead of silently continuing. Use a mutex or write queue for each store. Add retry logic with exponential backoff. Consider switching to a proper database (SQLite) for configuration storage instead of JSON files.
   - **Test:** Send 10 concurrent PUT requests to `/api/settings/telegram` and verify data integrity.
 
-- [ ] **H-010** | [Performance-CacheIneffective] | `backend/src/cache/ohlcv-cache.ts:22-31` | Cache uses lastAccessed for TTL check, not insertion time
+- [x] **H-010** | [Performance-CacheIneffective] | `backend/src/cache/ohlcv-cache.ts:22-31` | Cache uses lastAccessed for TTL check, not insertion time
   - **Issue:** The TTL check uses `lastAccessed` (updated on every `get()`) rather than the original insertion/fetch time. This means frequently accessed cache entries never expire, even if the underlying data (OHLCV) has changed. For a 60-second TTL with a popular symbol being polled every second, the cache effectively never expires.
   - **Impact:** Real-time or intraday backtests could use stale OHLCV data indefinitely if the symbol is polled frequently. The cache never refreshes for actively queried symbols.
   - **Fix:** Store `createdAt` (insertion timestamp) alongside `lastAccessed`. Use `createdAt` for TTL expiration. Or use a hybrid: expire based on `createdAt` but evict based on `lastAccessed` (LRU).
