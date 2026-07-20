@@ -948,6 +948,7 @@ export class StrategyEngine {
           id: this.generateOrderId(),
           type: 'limit',
           price: limitPrice,
+          limitPrice,
           stopPrice: undefined,
         };
         this.pendingOrders.push(limitOrder);

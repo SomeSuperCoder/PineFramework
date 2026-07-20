@@ -44,8 +44,16 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
       }
 
       const entryName = typeof name === 'string' ? name : 'entry';
-      const sp = typeof restArgs[2] === 'number' ? restArgs[2] : undefined;
-      const lp = typeof restArgs[3] === 'number' ? restArgs[3] : undefined;
+      const sp = typeof restArgs[2] === 'number'
+        ? restArgs[2]
+        : typeof namedArgs?.stop === 'number'
+          ? namedArgs.stop
+          : undefined;
+      const lp = typeof restArgs[3] === 'number'
+        ? restArgs[3]
+        : typeof namedArgs?.limit === 'number'
+          ? namedArgs.limit
+          : undefined;
       const cm =
         (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ??
         (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);

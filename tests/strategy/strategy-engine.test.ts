@@ -242,6 +242,84 @@ describe('StrategyEngine', () => {
       expect(engine.getPosition().direction).toBe('long');
       expect(engine.getPosition().avgPrice).toBe(106);
     });
+
+    it('should create stop-limit order when both stop and limit provided', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      const order = engine.entry('Long', 'long', 1, 0, 106, 104);
+
+      expect(order).toBeDefined();
+      expect(order!.type).toBe('stop-limit');
+      expect(order!.stopPrice).toBe(106);
+      expect(order!.limitPrice).toBe(104);
+      expect(engine.getPendingOrders().length).toBe(1);
+      expect(engine.getPosition().direction).toBe('flat');
+    });
+
+    it('should fill stop-limit order when both stop and limit are hit on same bar', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1, 0, 106, 104);
+
+      expect(engine.getPendingOrders().length).toBe(1);
+
+      // Bar 1: high=108 hits stop (106), low=103 hits limit (104) — fills on same bar
+      engine.updateBar(1, 1001, 100, 108, 103, 105, 1000);
+
+      expect(engine.getPendingOrders().length).toBe(0);
+      expect(engine.getPosition().direction).toBe('long');
+      expect(engine.getPosition().avgPrice).toBe(104);
+    });
+
+    it('should convert stop-limit to limit order when stop hit but limit not hit on same bar', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1, 0, 106, 104);
+
+      expect(engine.getPendingOrders().length).toBe(1);
+
+      // Bar 1: high=107 hits stop (106), but low=105 never reaches limit (104)
+      // The stop-limit should convert to a limit order at 104
+      engine.updateBar(1, 1001, 100, 107, 105, 106, 1000);
+
+      // Still flat — limit not hit yet
+      expect(engine.getPosition().direction).toBe('flat');
+      // One pending order remains (the converted limit order)
+      expect(engine.getPendingOrders().length).toBe(1);
+      // Verify it's a limit order with correct price
+      const pending = engine.getPendingOrders();
+      expect(pending[0]!.type).toBe('limit');
+      expect(pending[0]!.price).toBe(104);
+      expect(pending[0]!.limitPrice).toBe(104);
+      expect(pending[0]!.stopPrice).toBeUndefined();
+
+      // Bar 2: low=103 hits the limit price (104) — fills now
+      engine.updateBar(2, 1002, 106, 108, 103, 107, 1000);
+
+      expect(engine.getPendingOrders().length).toBe(0);
+      expect(engine.getPosition().direction).toBe('long');
+      expect(engine.getPosition().avgPrice).toBe(104);
+    });
+
+    it('should fill sell stop-limit order on a short entry', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Short', 'short', 1, 0, 98, 100);
+
+      expect(engine.getPendingOrders().length).toBe(1);
+      expect(engine.getPendingOrders()[0]!.type).toBe('stop-limit');
+
+      // Bar 1: low=97 hits stop (98), high=101 hits the limit (100) — fills on same bar
+      engine.updateBar(1, 1001, 100, 101, 97, 100, 1000);
+
+      expect(engine.getPendingOrders().length).toBe(0);
+      expect(engine.getPosition().direction).toBe('short');
+      expect(engine.getPosition().avgPrice).toBe(100);
+    });
   });
 
   describe('trades', () => {
