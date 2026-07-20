@@ -7,6 +7,7 @@ export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
 export type PositionDirection = 'long' | 'short' | 'flat';
 export type QtyType = 'contracts' | 'percent_of_equity' | 'cash';
 export type CommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
+export type MarketFillPrice = 'open' | 'ohlc4' | 'close' | 'high' | 'low';
 
 import type {
   CommissionCalculator,
@@ -123,6 +124,8 @@ export interface StrategyConfig {
   marginLong: number;
   marginShort: number;
   currency: string;
+  /** How to price market order fills: 'open' (default), 'ohlc4' (OHLC/4 average), 'close', 'high', or 'low'. */
+  marketFillPrice: MarketFillPrice;
   /** Pluggable commission method ID. When set, overrides legacy commissionType/commission. */
   commissionMethod?: CommissionMethodId;
   /** Settings for the pluggable commission method. */
@@ -151,6 +154,7 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   marginLong: 0,
   marginShort: 0,
   currency: 'USD',
+  marketFillPrice: 'open',
 };
 
 export interface StrategyMarker {
@@ -863,7 +867,7 @@ export class StrategyEngine {
     this.high = high;
     this.low = low;
 
-    this.fillPendingMarketOrders(open);
+    this.fillPendingMarketOrders(open, high, low, close);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
 
@@ -876,15 +880,33 @@ export class StrategyEngine {
     this.checkLiquidation();
   }
 
-  private fillPendingMarketOrders(open: number): void {
+  private computeMarketFillPrice(open: number, high: number, low: number, close: number): number {
+    switch (this.config.marketFillPrice) {
+      case 'ohlc4':
+        return (open + high + low + close) / 4;
+      case 'close':
+        return close;
+      case 'high':
+        return high;
+      case 'low':
+        return low;
+      case 'open':
+      default:
+        return open;
+    }
+  }
+
+  private fillPendingMarketOrders(open: number, high: number, low: number, close: number): void {
     const marketOrders = this.pendingOrders.filter((o) => o.type === 'market');
     this.pendingOrders = this.pendingOrders.filter((o) => o.type !== 'market');
 
+    const fillPrice = this.computeMarketFillPrice(open, high, low, close);
+
     for (const order of marketOrders) {
       console.log(
-        `[StrategyEngine] fillMarketOrder: orderId=${order.id} action=${order.action} qty=${order.quantity} open=${open}`,
+        `[StrategyEngine] fillMarketOrder: orderId=${order.id} action=${order.action} qty=${order.quantity} fillPrice=${fillPrice} (mode=${this.config.marketFillPrice})`,
       );
-      this.fillOrder(order, open);
+      this.fillOrder(order, fillPrice);
     }
     if (marketOrders.length > 0) {
       console.log(

@@ -47,31 +47,49 @@ export class FormingCandleProcessor {
     const preTimestampsLen = this.eng.barTimestamps.length;
     const preTotalBars = this.eng.metrics.totalBars;
     const preAlertTriggersLen = this.eng.alertTriggers.length;
-    const preSmaBuffers = new Map(
-      [...this.eng.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]),
-    );
-    const preEmaState = new Map([...this.eng.emaState].map(([k, v]) => [k, { ...v }]));
-    const preCrossPrevValues = new Map(this.eng.crossPrevValues);
-    const preChangePrevValues = new Map(this.eng.changePrevValues);
-    const preHighestBuffers = new Map([...this.eng.highestBuffers].map(([k, v]) => [k, [...v]]));
-    const preLowestBuffers = new Map([...this.eng.lowestBuffers].map(([k, v]) => [k, [...v]]));
-    const prePlotColors = new Map([...this.eng.plotColors].map(([k, v]) => [k, [...v]]));
-    const preFillColorData = new Map([...this.eng.fillColorData].map(([k, v]) => [k, [...v]]));
+    const preSmaBuffers = this.eng.smaBuffers.size > 0
+      ? new Map([...this.eng.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]))
+      : undefined;
+    const preEmaState = this.eng.emaState.size > 0
+      ? new Map([...this.eng.emaState].map(([k, v]) => [k, { ...v }]))
+      : undefined;
+    const preCrossPrevValues = this.eng.crossPrevValues.size > 0
+      ? new Map(this.eng.crossPrevValues)
+      : undefined;
+    const preChangePrevValues = this.eng.changePrevValues.size > 0
+      ? new Map(this.eng.changePrevValues)
+      : undefined;
+    const preHighestBuffers = this.eng.highestBuffers.size > 0
+      ? new Map([...this.eng.highestBuffers].map(([k, v]) => [k, [...v]]))
+      : undefined;
+    const preLowestBuffers = this.eng.lowestBuffers.size > 0
+      ? new Map([...this.eng.lowestBuffers].map(([k, v]) => [k, [...v]]))
+      : undefined;
+    const prePlotColors = this.eng.plotColors.size > 0
+      ? new Map([...this.eng.plotColors].map(([k, v]) => [k, [...v]]))
+      : undefined;
+    const preFillColorData = this.eng.fillColorData.size > 0
+      ? new Map([...this.eng.fillColorData].map(([k, v]) => [k, [...v]]))
+      : undefined;
     const preBgcolorDataLen = this.eng.bgcolorData.length;
-    const preRsiState = new Map([...this.eng.rsiState].map(([k, v]) => [k, { ...v }]));
-    const preAtrState = new Map(
-      [...this.eng.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]),
-    );
-    const preHmaBuffers = new Map(
-      [...this.eng.hmaBuffers].map(([k, v]) => [
-        k,
-        { half: [...v.half], full: [...v.full], diff: [...v.diff] },
-      ]),
-    );
-    const preSarState = new Map([...this.eng.sarState].map(([k, v]) => [k, { ...v }]));
-    const preFunctionPersistentScopes = new Map(
-      [...this.eng.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]),
-    );
+    const preRsiState = this.eng.rsiState.size > 0
+      ? new Map([...this.eng.rsiState].map(([k, v]) => [k, { ...v }]))
+      : undefined;
+    const preAtrState = this.eng.atrState.size > 0
+      ? new Map([...this.eng.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]))
+      : undefined;
+    const preHmaBuffers = this.eng.hmaBuffers.size > 0
+      ? new Map([...this.eng.hmaBuffers].map(([k, v]) => [
+          k,
+          { half: [...v.half], full: [...v.full], diff: [...v.diff] },
+        ]))
+      : undefined;
+    const preSarState = this.eng.sarState.size > 0
+      ? new Map([...this.eng.sarState].map(([k, v]) => [k, { ...v }]))
+      : undefined;
+    const preFunctionPersistentScopes = this.eng.functionPersistentScopes.size > 0
+      ? new Map([...this.eng.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]))
+      : undefined;
     const preBarColorDataLen = this.eng.barColorData.length;
     const preBoxesSize = this.eng.boxes.size;
     const preBoxIdCounter = this.eng.boxIdCounter;
@@ -94,22 +112,26 @@ export class FormingCandleProcessor {
       : this.eng.metrics.failedBars - 1;
 
     this.eng.globalScope = cloneRuntimeScope(this.eng.globalScope);
-    this.eng.smaBuffers = new Map();
-    for (const [key, arr] of preSmaBuffers) {
-      const parts = key.split('_');
-      const capacity = parseInt(parts[1], 10);
-      this.eng.smaBuffers.set(key, RingBuffer.fromArray(arr, capacity));
+    if (preSmaBuffers) {
+      this.eng.smaBuffers = new Map();
+      for (const [key, arr] of preSmaBuffers) {
+        const parts = key.split('_');
+        const capacity = parseInt(parts[1], 10);
+        this.eng.smaBuffers.set(key, RingBuffer.fromArray(arr, capacity));
+      }
+    } else {
+      this.eng.smaBuffers.clear();
     }
-    this.eng.emaState = preEmaState;
-    this.eng.crossPrevValues = preCrossPrevValues;
-    this.eng.changePrevValues = preChangePrevValues;
-    this.eng.highestBuffers = preHighestBuffers;
-    this.eng.lowestBuffers = preLowestBuffers;
-    this.eng.rsiState = preRsiState;
-    this.eng.atrState = preAtrState;
-    this.eng.hmaBuffers = preHmaBuffers;
-    this.eng.sarState = preSarState;
-    this.eng.functionPersistentScopes = preFunctionPersistentScopes;
+    restoreMap(this.eng.emaState, preEmaState);
+    restoreMap(this.eng.crossPrevValues, preCrossPrevValues);
+    restoreMap(this.eng.changePrevValues, preChangePrevValues);
+    restoreMap(this.eng.highestBuffers, preHighestBuffers);
+    restoreMap(this.eng.lowestBuffers, preLowestBuffers);
+    restoreMap(this.eng.rsiState, preRsiState);
+    restoreMap(this.eng.atrState, preAtrState);
+    restoreMap(this.eng.hmaBuffers, preHmaBuffers);
+    restoreMap(this.eng.sarState, preSarState);
+    restoreMap(this.eng.functionPersistentScopes, preFunctionPersistentScopes);
     this.eng.barColorData.length = preBarColorDataLen;
     if (this.eng.boxes.size > preBoxesSize) {
       for (const [id] of this.eng.boxes) {
@@ -195,8 +217,16 @@ export class FormingCandleProcessor {
       diffBgcolor = this.eng.bgcolorData.slice(preBgcolorDataLen);
     }
 
-    this.eng.plotColors = prePlotColors;
-    this.eng.fillColorData = preFillColorData;
+    if (prePlotColors) {
+      this.eng.plotColors = prePlotColors;
+    } else {
+      this.eng.plotColors.clear();
+    }
+    if (preFillColorData) {
+      this.eng.fillColorData = preFillColorData;
+    } else {
+      this.eng.fillColorData.clear();
+    }
     this.eng.bgcolorData.length = preBgcolorDataLen;
 
     const isDiff =
@@ -233,5 +263,21 @@ export class FormingCandleProcessor {
       cloned.set(name, createSeries(name, series.values.slice()));
     }
     return cloned;
+  }
+}
+
+/**
+ * Restore a Map-typed buffer from a pre-execution snapshot.
+ * If snapshot is undefined, clear the buffer (it was empty before execution,
+ * so any entries added speculatively must be removed).
+ */
+function restoreMap<T>(target: Map<string, T>, snapshot: Map<string, T> | undefined): void {
+  if (snapshot) {
+    target.clear();
+    for (const [k, v] of snapshot) {
+      target.set(k, v);
+    }
+  } else {
+    target.clear();
   }
 }

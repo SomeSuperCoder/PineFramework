@@ -3,6 +3,10 @@ import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
 
+/** Completed/failed backtest jobs older than this (ms) are eligible for garbage collection. */
+const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // sweep every 5 minutes
+
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
 export interface BacktestJob {
@@ -38,6 +42,34 @@ export function createBacktestRouter() {
       job.phase = phase;
     }
   }
+
+  /**
+   * Remove completed/failed jobs that are older than JOB_TTL_MS.
+   * Returns the number of removed jobs.
+   */
+  function sweepOldJobs(): number {
+    const cutoff = Date.now() - JOB_TTL_MS;
+    let removed = 0;
+    for (const [id, job] of jobs) {
+      if (
+        (job.status === 'completed' || job.status === 'failed') &&
+        job.completedAt != null &&
+        job.completedAt < cutoff
+      ) {
+        jobs.delete(id);
+        removed++;
+      }
+    }
+    if (removed > 0) {
+      console.log(`[backtest] Swept ${removed} old jobs, remaining: ${jobs.size}`);
+    }
+    return removed;
+  }
+
+  // Periodic sweep to prevent unbounded memory growth
+  const sweepTimer = setInterval(sweepOldJobs, SWEEP_INTERVAL_MS);
+  // Don't prevent process exit
+  if (sweepTimer.unref) sweepTimer.unref();
 
   async function runBacktest(job: BacktestJob): Promise<void> {
     try {

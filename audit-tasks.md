@@ -192,25 +192,25 @@
 
 ### Low
 
-- [ ] **L-001** | [ErrorHandling] | `backend/src/routes/backtest.ts:102` | DEX fee fetch failure throws, aborting the entire backtest
+- [~] **L-001** | [ErrorHandling] | `backend/src/routes/backtest.ts:102` | DEX fee fetch failure throws, aborting the entire backtest *(invalidated by user)*
   - **Issue:** When Jupiter commission is configured and `fetchDexFeeBps()` fails (e.g., Jupiter API is down), the error is thrown (`throw err`), aborting the entire backtest. This means a backtest cannot complete if the Jupiter API is unreachable, even though cached fees might be available.
   - **Impact:** Backtests fail unnecessarily when Jupiter API is temporarily unavailable, even for strategies that would be fine with cached or default fees.
   - **Fix:** Fall back to the persistent cache or default DEX fee (25 bps) instead of throwing. Log a warning. The `fetchDexFeeBps()` function already has cache fallback — use it. Add a `--allow-cached-fees` option.
   - **Test:** Simulate Jupiter API failure and verify the backtest completes using cached or default fees.
 
-- [ ] **L-002** | [ErrorHandling] | `backend/src/routes/scripts.ts:47` | No rate limiting on script CRUD operations
+- [~] **L-002** | [ErrorHandling] | `backend/src/routes/scripts.ts:47` | No rate limiting on script CRUD operations *(invalidated by user)*
   - **Issue:** Script creation, update, and deletion routes have no rate limiting. A user could create thousands of scripts, filling disk space with .pine files. The `uniqueFilename` function uses up to 1000 attempts, but there's no cap on total scripts.
   - **Impact:** Disk space exhaustion through script creation DoS.
   - **Fix:** Add rate limiting middleware. Limit the total number of scripts per instance (e.g., max 1000). Add a TTL or cleanup mechanism for unused scripts.
   - **Test:** Attempt to create 2000 scripts and verify the API rejects or limits the creation.
 
-- [ ] **L-003** | [Performance] | `src/language/runtime/forming-candle.ts:42-78` | Full state clone on every forming candle tick is extremely expensive
+- [x] **L-003** | [Performance] | `src/language/runtime/forming-candle.ts:42-78` | Full state clone on every forming candle tick is extremely expensive
   - **Issue:** On every forming candle tick (potentially multiple per second), `computeFormingCandle()` deep-clones ALL internal engine state: `smaBuffers`, `emaState`, `crossPrevValues`, `changePrevValues`, `highestBuffers`, `lowestBuffers`, `plotColors`, `fillColorData`, `rsiState`, `atrState`, `hmaBuffers`, `sarState`, `functionPersistentScopes`, and more. Each clone allocates new arrays/objects. For a real-time system with 20+ indicators and multiple ticks per second, this creates massive GC pressure.
   - **Impact:** High latency and memory churn in real-time mode. On slower hardware or with many indicators, this can cause the event loop to block, leading to missed ticks or WebSocket disconnections.
   - **Fix:** Use a copy-on-write strategy or an immutable state tree that shares unchanged data. At minimum, make the deep clone lazy (only clone state that actually changes). Consider using Immer or a similar library.
   - **Test:** Profile the forming candle processor with 50+ bars/sec and measure GC pause times.
 
-- [ ] **L-004** | [Bug-OrderFill] | `src/strategy/strategy-engine.ts:844-858` | Market orders fill at open price even when entered mid-bar
+- [x] **L-004** | [Bug-OrderFill] | `src/strategy/strategy-engine.ts:844-858` | Market orders fill at open price even when entered mid-bar
   - **Issue:** `fillPendingMarketOrders()` fills all pending market orders at the current bar's `open` price. However, in real trading, market orders entered during a bar would fill at some price within the bar's range, not necessarily at the open. This is particularly problematic for `calcOnEveryTick: true` strategies.
   - **Impact:** Market order fills are systematically inaccurate, assuming all orders execute at the open. This can significantly affect backtest results for fast-moving markets or during high volatility.
   - **Fix:** Add an option to fill market orders at a randomized or average price within the bar (e.g., `(open + high + low + close) / 4`) instead of always using `open`. At minimum, document this limitation.
@@ -228,7 +228,7 @@
   - **Fix:** Define `const TRADING_DAYS_PER_YEAR = 252;` at the module level and use it in both places.
   - **Test:** Pure refactoring — no behavior change expected.
 
-- [ ] **L-007** | [ErrorHandling] | `backend/src/routes/backtest.ts:229-281` | Backtest job queue is unbounded, no cleanup for failed/completed jobs
+- [x] **L-007** | [ErrorHandling] | `backend/src/routes/backtest.ts:229-281` | Backtest job queue is unbounded, no cleanup for failed/completed jobs
   - **Issue:** Completed and failed jobs remain in the `jobs` Map indefinitely. There's no TTL or cleanup mechanism. Over time, this will exhaust memory if users submit many backtests.
   - **Impact:** Memory leak in production. Each backtest result can be hundreds of KB (equity curves, trade lists, etc.). After thousands of backtests, the server will OOM.
   - **Fix:** Add a TTL for completed/failed jobs (e.g., 30 minutes). Periodically sweep old jobs. Or store results on disk and only keep metadata in memory.
@@ -246,7 +246,7 @@
   - **Fix:** Check for `)` before calling `parseExpression()` inside parentheses and produce a clear error message.
   - **Test:** Attempt to parse `()` and verify the error message is clear.
 
-- [ ] **L-010** | [CodeQuality] | `src/language/runtime/interpreter.ts:50-54` | Interpreter stores engine as `any` type
+- [x] **L-010** | [CodeQuality] | `src/language/runtime/interpreter.ts:50-54` | Interpreter stores engine as `any` type *(fixed in M-001)*
   - **Issue:** `private eng: any; constructor(engine: ExecutionEngine) { this.eng = engine as any; }` — the interpreter references ALL engine properties directly via `this.eng.*`, bypassing type checking entirely. Same pattern in `FormingCandleProcessor` and `StateManager`.
   - **Impact:** Complete loss of TypeScript type safety for the most critical component of the system. Refactoring any field on the engine requires manually verifying all `any`-typed accesses across 3+ files.
   - **Fix:** Define a typed interface (e.g., `EngineCore`) that exposes all properties accessed by delegation components. Have the constructor accept `EngineCore` instead of `any`.

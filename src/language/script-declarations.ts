@@ -56,6 +56,8 @@ export interface StrategyConfig {
   max_labels_count?: number;
   max_polylines_count?: number;
   risk_free_rate?: number;
+  /** How to price market order fills: 'open' (default), 'ohlc4', 'close', 'high', 'low'. */
+  market_fill_price?: 'open' | 'ohlc4' | 'close' | 'high' | 'low';
 }
 
 export interface LibraryConfig {
@@ -321,6 +323,8 @@ export function getStrategyConfig(config: ScriptConfig): {
   maxBarsBack: number;
   marginLong: number;
   marginShort: number;
+  /** Market order fill price model */
+  marketFillPrice?: 'open' | 'ohlc4' | 'close' | 'high' | 'low';
 } | null {
   if (config.type !== 'strategy') return null;
 
@@ -357,6 +361,7 @@ export function getStrategyConfig(config: ScriptConfig): {
     maxBarsBack: 0,
     marginLong: (strat.margin_long ?? 0) / 100,
     marginShort: (strat.margin_short ?? 0) / 100,
+    ...(strat.market_fill_price ? { marketFillPrice: strat.market_fill_price } : {}),
   };
 }
 
