@@ -31,10 +31,10 @@ const TIMEFRAME_LABELS: Record<string, string> = {
 };
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
-  { id: 'jupiter_ultra', label: 'Jupiter Ultra (DEX)', description: 'Jupiter DEX Ultra Mode fees with per-pair tiered fee schedule' },
+  { id: 'jupiter_ultra', label: 'Jupiter Ultra', description: 'Tiered fees by pair (0–50 bps) — uses Meta-Aggregator path' },
+  { id: 'jupiter_manual', label: 'Jupiter (Basic Swap)', description: '0% Jupiter commission — only Solana network fees (~$0.001/trade)' },
   { id: 'percent_fixed', label: 'Percent (Fixed)', description: 'Percentage of trade value' },
   { id: 'per_order_fixed', label: 'Per Order (Fixed)', description: 'Fixed amount per order' },
-  { id: 'jupiter_manual', label: 'Jupiter Manual (Swap)', description: 'Zero-commission Jupiter Market Swap' },
   { id: 'none', label: 'None', description: 'No commission' },
 ];
 

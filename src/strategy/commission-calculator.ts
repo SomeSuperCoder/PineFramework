@@ -9,15 +9,32 @@
  * when one is configured via commissionMethod. Legacy commission_type /
  * commission_value from strategy() declarations remain supported as fallback.
  *
- * ── Jupiter Ultra Fee Tiers (from official Jupiter docs) ──
- * | Category                  | Fee (bps) | Fee (%) |
- * |---------------------------|-----------|---------|
- * | Jupiter ecosystem tokens  |     0     |   0%    |
- * | Pegged assets (Stable/LST)|     0     |   0%    |
- * | SOL ↔ Stable              |     2     |  0.02%  |
- * | LST ↔ Stable              |     5     |  0.05%  |
- * | Everything else           |    10     |  0.1%   |
- * | New tokens (<24h old)     |    50     |  0.5%   |
+ * ── Jupiter Fee Reality (from official Jupiter docs) ──
+ *
+ * Jupiter has TWO swap paths:
+ *
+ * 1. Router path (basic swap) — `/build` + `/submit`
+ *    - 0% Jupiter commission. You only pay Solana network fees.
+ *    - This is what a trading bot should use. Zero commission.
+ *    - See https://developers.jup.ag/docs/swap
+ *
+ * 2. Meta-Aggregator path (Ultra) — `/order` + `/execute`
+ *    - Tiered 0–50 bps fee depending on the token pair:
+ *    | Category                  | Fee (bps) | Fee (%) |
+ *    |---------------------------|-----------|---------|
+ *    | Jupiter ecosystem tokens  |     0     |   0%    |
+ *    | Pegged assets (Stable/LST)|     0     |   0%    |
+ *    | SOL ↔ Stable              |     2     |  0.02%  |
+ *    | LST ↔ Stable              |     5     |  0.05%  |
+ *    | Everything else           |    10     |  0.1%   |
+ *    | New tokens (<24h old)     |    50     |  0.5%   |
+ *    - See https://developers.jup.ag/docs/ultra/fees
+ *
+ * Integrator/platform fees are OPTIONAL (0% by default) and only apply
+ * if the integrator explicitly adds them via `platformFeeBps`.
+ *
+ * Solana network fee: 5,000 lamports (~0.000005 SOL ≈ $0.001) per signature.
+ * This is negligible for backtesting purposes.
  */
 
 // ---------------------------------------------------------------------------
@@ -316,8 +333,9 @@ class PerOrderFixedCalculator implements CommissionCalculator {
 
 class JupiterUltraCalculator implements CommissionCalculator {
   /**
-   * Models Jupiter DEX Ultra Mode swap fees using the actual tiered fee
-   * schedule published by Jupiter:
+   * Models Jupiter Ultra (Meta-Aggregator path) swap fees.
+   *
+   * Uses the actual tiered fee schedule published by Jupiter:
    *   - Jupiter ecosystem / pegged assets: 0 bps
    *   - SOL ↔ Stable:                      2 bps
    *   - LST ↔ Stable:                      5 bps
@@ -330,7 +348,7 @@ class JupiterUltraCalculator implements CommissionCalculator {
    *   3. Explicit `rate` in settings (backward compatible fallback)
    *   4. Default rate of 0.001 (10 bps)
    *
-   * See https://developers.jup.ag/docs/ultra/fees
+   * See https://developers.jup.ag/docs/swap and https://developers.jup.ag/docs/ultra/fees
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
     const settings = config.settings as JupiterUltraSettings | undefined;
@@ -355,7 +373,11 @@ class JupiterUltraCalculator implements CommissionCalculator {
 }
 
 class JupiterManualCalculator implements CommissionCalculator {
-  /** Jupiter Market Swap (manual routing) charges zero commission. */
+  /**
+   * Standard Jupiter Swap (Router path) — 0% Jupiter commission.
+   * Users only pay Solana network fees (~5,000 lamports/sig = ~$0.001).
+   * This is the correct model for a trading bot using the basic swap API.
+   */
   calculate(_context: TradeContext, _config: CommissionConfig): number {
     return 0;
   }
@@ -444,7 +466,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   {
     id: 'jupiter_ultra',
     name: 'Jupiter Ultra',
-    description: 'Jupiter DEX Ultra Mode swap fees with actual per-pair tiered fee schedule',
+    description: 'Jupiter Ultra (Meta-Aggregator path) — tiered 0–50 bps fees by token pair type',
     enforceLongOnly: true,
     defaultSettings: { pairCategory: 'default' } as JupiterUltraSettings,
     settingsFields: [
@@ -478,8 +500,8 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   },
   {
     id: 'jupiter_manual',
-    name: 'Jupiter Manual',
-    description: 'Jupiter DEX Market Swap (manual routing) — zero commission',
+    name: 'Jupiter (Basic Swap)',
+    description: 'Standard Jupiter swap API (Router path) — 0% Jupiter commission. Only Solana network fees.',
     enforceLongOnly: true,
     defaultSettings: null,
     settingsFields: [],
