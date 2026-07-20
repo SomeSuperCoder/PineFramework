@@ -60,8 +60,8 @@ export class Interpreter {
     this.eng.currentContext = context;
 
     try {
-      this.eng.barTimestamps.push(context.timestamp);
       this.eng.createSnapshot();
+      this.eng.barTimestamps.push(context.timestamp);
       pushBarValues(this.eng.globalScope);
 
       if (this.eng.strategyEngine) {

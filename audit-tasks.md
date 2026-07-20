@@ -176,7 +176,7 @@
   - **Fix:** In the error handler, restore outputs, shapes, lines, labels, and other visual elements to their pre-bar state. The `FormingCandleProcessor` already has the infrastructure for this (snapshot/restore pattern). Apply the same pattern to `executeBar()`.
   - **Test:** Create a script that produces valid output for 10 bars then throws on bar 11. Verify the outputs after the failure don't contain partial bar 11 data.
 
-- [ ] **M-009** | [Bug-Logic] | `src/language/runtime/forming-candle.ts:22-40` | First execution uses executeRealtimeBar but doesn't add to barTimestamps consistently
+- [x] **M-009** | [Bug-Logic] | `src/language/runtime/interpreter.ts:executeBar` | barTimestamps.push moved after createSnapshot so rollback properly removes orphan timestamps on failure
   - **Issue:** When `computeFormingCandle()` is called with `metrics.totalBars === 0` (first bar), it calls `executeRealtimeBar()` which internally calls `executeBar()`. After execution, it returns `diffOutputs` from the result. However, it doesn't add the bar to `barTimestamps` — the result's `barTimestamps` may be empty if `executeBar` fails to add it. Meanwhile, on subsequent calls, `barTimestamps` is expected to have entries.
   - **Impact:** The first forming candle computation may produce inconsistent timestamps, causing the frontend to display incorrect time labels.
   - **Fix:** Ensure `executeRealtimeBar()` always records timestamps. Add the timestamp to `barTimestamps` after `executeBar()` regardless of success/failure.
