@@ -639,6 +639,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                 </div>
               </div>
             )}
+            </div>
             <div>
               <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Date Range</label>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
