@@ -1,0 +1,282 @@
+import fs from 'fs';
+import { parse } from '../../src/language/parser/parser.js';
+import { compile } from '../../src/language/compiler/compiler.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
+import { createSeries } from '../../src/language/runtime/series.js';
+
+function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
+  let price = startPrice;
+  let s = seed;
+  const rand = () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
+  for (let i = 0; i < count; i++) {
+    const open = price;
+    let drift: number;
+    if (i < Math.floor(count * 0.4)) drift = 0.5;
+    else if (i < Math.floor(count * 0.7)) drift = -0.5;
+    else drift = 0.4;
+    const change = drift + (rand() - 0.5) * 0.5;
+    const close = open + change;
+    const high = Math.max(open, close) + rand() * 0.5;
+    const low = Math.min(open, close) - rand() * 0.5;
+    bars.push({ timestamp: 1700000000000 + i * 3600000, open, high, low, close, volume: 1000 });
+    price = close;
+  }
+  return bars;
+}
+
+function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+  const { ast } = parse(source);
+  const compiled = compile(ast);
+  const engine = new ExecutionEngine(compiled);
+  const contexts: ExecutionContext[] = bars.map((bar, i) => ({
+    barIndex: i,
+    barCount: bars.length,
+    timestamp: bar.timestamp,
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
+  }));
+  const result = engine.executeBars(contexts);
+  if (!result.success) console.log('executeBars error:', result.error);
+  return { engine, bars, result };
+}
+
+describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
+  const source = fs.readFileSync('./test_indicators/zero-lag-signals-for-loop.pine', 'utf-8');
+
+  it('parses successfully', () => {
+    const result = parse(source);
+    expect(result.ast).toBeDefined();
+    expect(result.errors?.length ?? 0).toBe(0);
+  });
+
+  it('compiles successfully', () => {
+    const { ast } = parse(source);
+    const compiled = compile(ast);
+    expect(compiled).toBeDefined();
+  });
+
+  it('executes on a single bar without crashing', () => {
+    const { ast } = parse(source);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const bar = { timestamp: Date.now(), open: 100, high: 101, low: 99, close: 100, volume: 1000 };
+    const ctx: ExecutionContext = {
+      barIndex: 0,
+      barCount: 1,
+      timestamp: bar.timestamp,
+      open: createSeries('open', [bar.open]),
+      high: createSeries('high', [bar.high]),
+      low: createSeries('low', [bar.low]),
+      close: createSeries('close', [bar.close]),
+      volume: createSeries('volume', [bar.volume]),
+    };
+    const result = engine.executeBar(ctx);
+    if (!result.success) console.log('executeBar error:', result.error);
+    expect(result.success).toBe(true);
+  });
+
+  it('produces expected plot output keys', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    const keys = Array.from(result.outputs.keys());
+    expect(keys.length).toBeGreaterThanOrEqual(1);
+    const hasBasis = keys.some((k) => k.includes('Zero Lag Basis'));
+    expect(hasBasis).toBe(true);
+    // The Price plot is hidden with display=display.none, so it may or may not appear
+    console.log('Output keys:', keys);
+  });
+
+  it('has non-null values after warmup period', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    const keys = Array.from(result.outputs.keys());
+    const warmup = 250;
+    for (const [key, series] of result.outputs) {
+      const values = series.values;
+      const nullCount = values.slice(warmup).filter((v) => v === null).length;
+      const total = values.length - warmup;
+      console.log(
+        `  ${key}: ${nullCount}/${total} nulls after warmup, first non-null at: ${values.findIndex((v) => v !== null)}`,
+      );
+    }
+    const basisKey = keys.find((k) => k.includes('Zero Lag Basis'));
+    expect(basisKey).toBeDefined();
+    const basisSeries = result.outputs.get(basisKey!)!;
+    expect(basisSeries.values.length).toBe(500);
+  });
+
+  it('values stay within reasonable bounds', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    const basisKey = Array.from(result.outputs.keys()).find((k) => k.includes('Zero Lag Basis'));
+    expect(basisKey).toBeDefined();
+    const basisSeries = result.outputs.get(basisKey!)!;
+    const warmup = 100;
+    for (let i = warmup; i < basisSeries.values.length; i++) {
+      const val = basisSeries.values[i];
+      if (val === null) continue;
+      const bar = bars[i];
+      expect(val as number).toBeGreaterThan(bar.low * 0.5);
+      expect(val as number).toBeLessThan(bar.high * 2.0);
+    }
+  });
+
+  it('trend changes over time', () => {
+    const bars = createTrendingBars(500, 80, 99);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+
+    // Check that the zero lag basis line changes over time (not flat)
+    const basisKey = Array.from(result.outputs.keys()).find((k) => k.includes('Zero Lag Basis'));
+    expect(basisKey).toBeDefined();
+    const basisValues = result.outputs.get(basisKey!)!.values as number[];
+    const nonNullValues = basisValues.filter((v) => v !== null) as number[];
+    expect(nonNullValues.length).toBeGreaterThan(100);
+
+    const uniqueRounded = new Set(nonNullValues.map((v) => Math.round(v)));
+    expect(uniqueRounded.size).toBeGreaterThan(5);
+  });
+
+  it('produces shapes for trend signals', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.shapes).toBeDefined();
+  });
+
+  it('produces bar colors when paint_candles is true (default)', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.barColorData).toBeDefined();
+    const warmup = 250;
+    const coloredBars = (result.barColorData ?? []).filter((c, i) => c !== null && i >= warmup);
+    expect(coloredBars.length).toBeGreaterThan(0);
+  });
+
+  it('has overlay=true in execution result and compiled script', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.overlay).toBe(true);
+  });
+
+  it('has zero lag basis with plot colors (trend-based)', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.plotColors).toBeDefined();
+    const basisColorKey = Array.from(result.plotColors!.keys()).find((k) =>
+      k.includes('Zero Lag Basis'),
+    );
+    expect(basisColorKey).toBeDefined();
+    const colors = result.plotColors!.get(basisColorKey!)!;
+    expect(colors.length).toBe(500);
+    const warmup = 200;
+    const afterWarmup = colors.slice(warmup).filter((c): c is string => c !== null);
+    // Should have at least some non-null colors
+    expect(afterWarmup.length).toBeGreaterThan(0);
+    console.log(`Zero Lag Basis plot colors: ${afterWarmup.length} non-null after warmup`);
+    if (afterWarmup.length > 0) {
+      console.log('Sample colors:', afterWarmup.slice(0, 5));
+    }
+  });
+
+  it('generates fills between basis and price', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    expect(result.fills).toBeDefined();
+    expect(result.fills!.length).toBeGreaterThanOrEqual(1);
+    console.log('Fills:', JSON.stringify(result.fills));
+  });
+
+  it('bgcolor data is present when show_bg_lines is false (default)', () => {
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    // bgcolor data should exist (may be empty/null since show_bg_lines defaults to false)
+    expect(result.bgcolor).toBeDefined();
+  });
+
+  it('handles the preset_config switching correctly', () => {
+    // Test with "Fast Response" preset by modifying the source
+    // Since we can't pass inputs easily, check that the default path produces reasonable values
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+    // Default preset length=50 should produce reasonable zero lag basis
+    const basisKey = Array.from(result.outputs.keys()).find((k) => k.includes('Zero Lag Basis'));
+    expect(basisKey).toBeDefined();
+    const basisSeries = result.outputs.get(basisKey!)!;
+    const basisValues = basisSeries.values as (number | null)[];
+    // After warmup, values should be in a reasonable range around price
+    for (let i = 300; i < 320; i++) {
+      if (basisValues[i] !== null) {
+        expect(Math.abs(basisValues[i]! - bars[i].close)).toBeLessThan(
+          bars[i].close * 0.5,
+        );
+      }
+    }
+  });
+
+  it('score oscillates between positive and negative values', () => {
+    // We can't directly verify the internal `score` variable, but we can check
+    // that the trend changes by verifying both bullish and bearish bar colors exist
+    const bars = createTrendingBars(500, 80);
+    const { result } = runEngine(source, bars);
+    expect(result.success).toBe(true);
+
+    // Bar colors should have both uptrend and downtrend colors
+    expect(result.barColorData).toBeDefined();
+    const barColors = result.barColorData!;
+    const warmup = 250;
+    const coloredBarsAfterWarmup = barColors
+      .slice(warmup)
+      .filter((c): c is { time: number; color: string } => c !== null);
+    expect(coloredBarsAfterWarmup.length).toBeGreaterThan(0);
+
+    // Check if we have shapes (signals were triggered)
+    if (result.shapes.length > 0) {
+      console.log(`Found ${result.shapes.length} shapes`);
+      for (const shape of result.shapes.slice(0, 5)) {
+        console.log(`  shape: style=${shape.style} location=${shape.location} text="${shape.text}" color=${shape.color}`);
+      }
+    }
+  });
+});

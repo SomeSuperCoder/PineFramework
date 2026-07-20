@@ -3,8 +3,17 @@ import { readdirSync, readFileSync } from 'fs';
 import { join, basename } from 'path';
 
 function extractNameFromContent(source: string): string | null {
-  const match = source.match(/\b(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/);
-  return match ? match[1] : null;
+  // Match positional string: indicator("Name")
+  const positionalMatch = source.match(
+    /\b(?:indicator|strategy|library)\s*\(\s*["']([^"']+)["']/,
+  );
+  if (positionalMatch) return positionalMatch[1];
+
+  // Match named title argument: indicator(title="Name")
+  const namedMatch = source.match(
+    /\b(?:indicator|strategy|library)\s*\(\s*title\s*=\s*["']([^"']+)["']/,
+  );
+  return namedMatch ? namedMatch[1] : null;
 }
 
 export function createBuiltInScriptsRouter(testIndicatorsDir: string): Router {

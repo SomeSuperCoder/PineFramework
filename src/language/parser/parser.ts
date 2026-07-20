@@ -112,13 +112,35 @@ export class Parser {
 
     this.consume(TokenType.LParen, 'Expected "(" after script declaration');
 
-    const titleToken = this.consume(TokenType.String, 'Expected script title string');
-    const scriptName = titleToken.value as string;
-
     const scriptArgs: ArgumentNode[] = [];
+    let scriptName = '';
+
+    // First argument can be a plain string title or a named argument (title="...")
+    if (this.check(TokenType.String)) {
+      const titleToken = this.advance();
+      scriptName = titleToken.value as string;
+    } else if (this.check(TokenType.Identifier) && this.checkNext(TokenType.Assign)) {
+      // Named argument like title="My Script" — parse it normally
+      scriptArgs.push(this.parseScriptArgument());
+      // Look for the title argument
+      const titleArg = scriptArgs.find((a) => a.name === 'title');
+      if (titleArg && titleArg.value.kind === 'StringLiteral') {
+        scriptName = (titleArg.value as any).value;
+      }
+    }
+
     while (!this.check(TokenType.RParen) && !this.isAtEnd()) {
       this.consume(TokenType.Comma, 'Expected "," before script argument');
       scriptArgs.push(this.parseScriptArgument());
+    }
+
+    // If we got a title from a named arg, don't double-add it
+    // Also check remaining args for a "title" named arg
+    if (!scriptName) {
+      const titleArg = scriptArgs.find((a) => a.name === 'title');
+      if (titleArg && titleArg.value.kind === 'StringLiteral') {
+        scriptName = (titleArg.value as any).value;
+      }
     }
 
     this.consume(TokenType.RParen, 'Expected ")" after script declaration');
