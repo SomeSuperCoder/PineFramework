@@ -1,7 +1,12 @@
 import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
 import type { SymbolResult, SymbolMetrics } from './types.js';
+import { validateBybitUrl, validateSymbol } from '../utils/security.js';
 
-const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
+const BYBIT_REST_BASE = (() => {
+  const url = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
+  validateBybitUrl(url, 'BYBIT_REST_URL');
+  return url;
+})();
 
 function isJupiterMethod(method: unknown): method is 'jupiter_manual' | 'jupiter_ultra' {
   return method === 'jupiter_manual' || method === 'jupiter_ultra';
@@ -56,15 +61,18 @@ export async function runSymbolBacktest(
       Object.keys(effectiveConfig).length > 0 ? effectiveConfig : undefined,
     );
 
+    // Each context only needs the current bar's values — executeBar uses getRelative(0)
+    // which reads the last element. Historical values are maintained by the engine's
+    // pushBarValues mechanism, not by the context series. This is O(n) memory, not O(n²).
     const contexts = bars.map((bar, i) => ({
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries('open', [bar.open]),
+      high: createSeries('high', [bar.high]),
+      low: createSeries('low', [bar.low]),
+      close: createSeries('close', [bar.close]),
+      volume: createSeries('volume', [bar.volume]),
     }));
 
     const batchSize = 100;
@@ -124,7 +132,10 @@ async function fetchBars(
   startDate?: number,
   endDate?: number,
 ): Promise<Bar[]> {
-  const bybitSymbol = symbol.endsWith('USDT') ? symbol : `${symbol}USDT`;
+  if (!validateSymbol(symbol)) {
+    throw new Error(`Invalid symbol "${symbol}". Only alphanumeric characters are allowed.`);
+  }
+  const bybitSymbol = encodeURIComponent(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
   const limit = 1000;
   let allBars: Bar[] = [];
   let cursor: number | undefined;

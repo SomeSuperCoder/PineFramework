@@ -4,6 +4,7 @@ import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
+import { validateBybitUrl } from '../utils/security.js';
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -11,7 +12,11 @@ interface ClientSubscription {
   sessions: Map<string, ScriptSession>;
 }
 
-const BYBIT_WS_URL = process.env.BYBIT_WS_URL || 'wss://stream.bybit.com/v5/public/linear';
+const BYBIT_WS_URL = (() => {
+  const url = process.env.BYBIT_WS_URL || 'wss://stream.bybit.com/v5/public/linear';
+  validateBybitUrl(url, 'BYBIT_WS_URL');
+  return url;
+})();
 
 export function createWSGateway(
   server: Server,
@@ -88,7 +93,39 @@ export function createWSGateway(
     });
   }
 
-  const recentAlertKeys = new Set<string>();
+  // Per-topic alert dedup with TTL: Map<topic, Map<dedupKey, timestamp>>
+  // Automatically evicts entries older than 5 minutes and caps at 100 per topic.
+  const DEDUP_TTL_MS = 5 * 60 * 1000;
+  const MAX_DEDUP_KEYS_PER_TOPIC = 100;
+  const alertDedupByTopic = new Map<string, Map<string, number>>();
+
+  function pruneDedupKeys(topic: string): Map<string, number> {
+    let keys = alertDedupByTopic.get(topic);
+    if (!keys) {
+      keys = new Map();
+      alertDedupByTopic.set(topic, keys);
+    }
+    const now = Date.now();
+    // Prune expired entries
+    for (const [key, ts] of keys) {
+      if (now - ts > DEDUP_TTL_MS) {
+        keys.delete(key);
+      }
+    }
+    return keys;
+  }
+
+  function isDuplicateAlert(topic: string, dedupKey: string): boolean {
+    const keys = pruneDedupKeys(topic);
+    if (keys.has(dedupKey)) return true;
+    // Evict oldest if over capacity
+    if (keys.size >= MAX_DEDUP_KEYS_PER_TOPIC) {
+      const oldest = keys.entries().next().value;
+      if (oldest) keys.delete(oldest[0]);
+    }
+    keys.set(dedupKey, Date.now());
+    return false;
+  }
 
   function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
     const subscribers = topicCallbacks.get(topic);
@@ -140,14 +177,9 @@ export function createWSGateway(
               const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
               const title = condition?.title || trigger.alertId;
               const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
-              if (recentAlertKeys.has(dedupKey)) {
+              if (isDuplicateAlert(topic, dedupKey)) {
                 console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
                 continue;
-              }
-              recentAlertKeys.add(dedupKey);
-              if (recentAlertKeys.size > 100) {
-                const first = recentAlertKeys.values().next().value;
-                if (first) recentAlertKeys.delete(first);
               }
               console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
               telegramService.sendAlertToSubscribers(

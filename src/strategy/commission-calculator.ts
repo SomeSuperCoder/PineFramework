@@ -487,7 +487,8 @@ class JupiterUltraCalculator implements CommissionCalculator {
       jupiterFee = context.tradeValue * (bps / 10000);
     } else if (context.symbol) {
       const category = detectJupiterPairCategory(context.symbol);
-      const bps = JUPITER_FEE_BPS[category];
+      // category is never 'custom' here because we're in the else branch
+      const bps = JUPITER_FEE_BPS[category as Exclude<JupiterPairCategory, 'custom'>];
       jupiterFee = context.tradeValue * (bps / 10000);
     } else {
       const rate = settings?.rate ?? 0.001;

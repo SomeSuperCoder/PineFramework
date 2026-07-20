@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { lockSync, unlockSync } from 'proper-lockfile';
+import { sanitizeJson } from '../utils/security.js';
 
 export interface JsonStoreOptions {
   defaultData: Record<string, unknown>;
@@ -34,15 +35,21 @@ export class JsonStore<T extends Record<string, unknown>> {
     }
   }
 
+  getDefaults(): T {
+    return { ...this.defaults };
+  }
+
   read(): T {
     this.initIfMissing();
     try {
       const raw = fs.readFileSync(this.filePath, 'utf-8');
-      const parsed = JSON.parse(raw) as T;
-      if (this.validateFn && !this.validateFn(parsed)) {
+      const parsed = JSON.parse(raw);
+      // Strip __proto__ and constructor.prototype keys to prevent prototype pollution
+      const sanitized = sanitizeJson(parsed) as T;
+      if (this.validateFn && !this.validateFn(sanitized)) {
         return { ...this.defaults };
       }
-      return parsed;
+      return sanitized;
     } catch {
       return { ...this.defaults };
     }
@@ -64,21 +71,21 @@ export class JsonStore<T extends Record<string, unknown>> {
 
   private writeRaw(data: T): void {
     this.ensureDir();
-    let release: (() => void) | null = null;
     try {
-      release = lockSync(this.filePath, { retries: { retries: 5, minTimeout: 20 } });
-    } catch {
-      // proceed without lock if locking fails
+      lockSync(this.filePath);
+    } catch (err) {
+      // Lock failure is a critical data integrity risk — throw to prevent corruption
+      throw new Error(
+        `Failed to acquire file lock for ${path.basename(this.filePath)}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
     try {
       fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
     } finally {
-      if (release) {
-        try {
-          unlockSync(this.filePath);
-        } catch {
-          // ignore unlock errors
-        }
+      try {
+        unlockSync(this.filePath);
+      } catch {
+        // ignore unlock errors — write already succeeded
       }
     }
   }

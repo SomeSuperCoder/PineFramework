@@ -40,6 +40,12 @@ export function createSeries<T extends SeriesValue = SeriesValue>(
     },
 
     getRelative(offset: number): T {
+      if (values.length === 0) {
+        // Empty series have no data — return NA for any offset.
+        // Callers should ensure series are never empty (e.g., barsToContext
+        // creates each series with [bar.open] so getRelative(0) always works).
+        return NA as T;
+      }
       const currentIndex = values.length - 1;
       const targetIndex = currentIndex - offset;
 

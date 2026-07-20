@@ -1,7 +1,12 @@
 import type { Bar } from 'pine-framework';
 import { RateLimiter } from './rate-limiter.js';
+import { validateBybitUrl } from '../utils/security.js';
 
-const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
+const BYBIT_REST_BASE = (() => {
+  const url = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
+  validateBybitUrl(url, 'BYBIT_REST_URL');
+  return url;
+})();
 
 export class BybitDataSource {
   private rateLimiter: RateLimiter;
