@@ -42,11 +42,13 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const logFn = res.statusCode >= 400 ? logger.warn : logger.info;
-    logFn(
-      { method: req.method, url: req.originalUrl || req.url, status: res.statusCode, duration },
-      `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`,
-    );
+    const attrs = { method: req.method, url: req.originalUrl || req.url, status: res.statusCode, duration };
+    const msg = `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`;
+    if (res.statusCode >= 400) {
+      logger.warn(attrs, msg);
+    } else {
+      logger.info(attrs, msg);
+    }
   });
   next();
 });
