@@ -36,6 +36,29 @@ export interface LabelEntry {
   size: string;
 }
 
+export interface TableCellEntry {
+  text: string;
+  text_color: string;
+  text_halign: string;
+  text_valign: string;
+  bgcolor: string;
+  width: number;
+  text_size: string;
+  tooltip: string;
+}
+
+export interface TableEntry {
+  position: number;
+  columns: number;
+  rows: number;
+  bgcolor: string;
+  border_color: string;
+  border_width: number;
+  frame_color: string;
+  frame_width: number;
+  cells: Record<string, TableCellEntry>;  // key: "row,col"
+}
+
 export interface BoxEntry {
   left: number;
   top: number;
@@ -100,6 +123,7 @@ export interface ExecutionResult {
   lines?: LineEntry[];
   labels?: LabelEntry[];
   boxes?: BoxEntry[];
+  tables?: TableEntry[];
   barTimestamps?: number[];
   alertConditions?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
@@ -120,6 +144,7 @@ export interface FormingCandleResult {
   diffFillColorData?: Record<string, (string | null)[]>;
   diffBgcolor?: Array<{ time: number; color: string }>;
   diffAlertTriggers?: AlertTriggerEntry[];
+  tables?: TableEntry[];
   barTimestamps: number[];
   barIndex: number;
   isDiff: boolean;
@@ -172,6 +197,8 @@ export interface ExecutionSnapshot {
   alertConditionEntries?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
   boxes?: Map<number, BoxEntry>;
+  tables?: Array<[number, TableEntry]>;
+  tableIdCounter?: number;
   barTimestamps?: number[];
   ohlcHistory?: {
     open: number[];

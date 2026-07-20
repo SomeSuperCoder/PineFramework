@@ -111,3 +111,26 @@ export const DEFAULT_OPTIONS: Required<ChartOptions> = {
   priceScaleWidth: 70,
   timeScaleHeight: 30,
 };
+
+export interface TableCellData {
+  text: string;
+  text_color: string;
+  text_halign: string;
+  text_valign: string;
+  bgcolor: string;
+  width: number;
+  text_size: string;
+  tooltip: string;
+}
+
+export interface TableData {
+  position: number;
+  columns: number;
+  rows: number;
+  bgcolor: string;
+  border_color: string;
+  border_width: number;
+  frame_color: string;
+  frame_width: number;
+  cells: Record<string, TableCellData>;
+}

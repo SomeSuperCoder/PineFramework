@@ -27,6 +27,26 @@ export interface ScriptOutputs {
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
+  tables?: Array<{
+    position: number;
+    columns: number;
+    rows: number;
+    bgcolor: string;
+    border_color: string;
+    border_width: number;
+    frame_color: string;
+    frame_width: number;
+    cells: Record<string, {
+      text: string;
+      text_color: string;
+      text_halign: string;
+      text_valign: string;
+      bgcolor: string;
+      width: number;
+      text_size: string;
+      tooltip: string;
+    }>;
+  }>;
   barTimestamps?: number[];
   barIndex: number;
   formingCandle?: boolean;

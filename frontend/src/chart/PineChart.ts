@@ -8,6 +8,7 @@ import type {
   DrawingLineData,
   LabelData,
   BoxData,
+  TableData,
   ChartOptions,
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
@@ -77,9 +78,11 @@ export class PineChart {
   private teleportLine: { time: number; timestamp: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string; visible: boolean } | null = null;
   private chartLabels: LabelData[] = [];
   private boxes: BoxData[] = [];
+  private tables: TableData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private lastIndicatorCount: number = 0;
   private container: HTMLElement;
+  private tableContainer: HTMLElement | null = null;
 
   constructor(container: HTMLElement, options: ChartOptions = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -327,6 +330,83 @@ export class PineChart {
 
     this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(this.offscreen, 0, 0);
+
+    this.renderTables();
+  }
+
+  private renderTables(): void {
+    if (this.tables.length === 0) {
+      if (this.tableContainer) {
+        this.tableContainer.style.display = 'none';
+      }
+      return;
+    }
+
+    if (!this.tableContainer) {
+      this.tableContainer = document.createElement('div');
+      this.tableContainer.style.position = 'absolute';
+      this.tableContainer.style.pointerEvents = 'auto';
+      this.tableContainer.style.overflow = 'auto';
+      this.tableContainer.style.maxHeight = '60%';
+      this.tableContainer.style.maxWidth = '60%';
+      this.container.appendChild(this.tableContainer);
+    }
+
+    this.tableContainer.style.display = 'block';
+
+    // Pine Script table position constants
+    const POSITIONS = ['top_right', 'top_left', 'bottom_right', 'bottom_left'] as const;
+    const positionName = POSITIONS[this.tables[0]?.position] || 'top_right';
+    const table = this.tables[0];
+
+    // Position the container
+    this.tableContainer.style.position = 'absolute';
+    this.tableContainer.style.margin = '8px';
+    if (positionName === 'top_left') {
+      this.tableContainer.style.top = '0';
+      this.tableContainer.style.left = '0';
+    } else if (positionName === 'top_right') {
+      this.tableContainer.style.top = '0';
+      this.tableContainer.style.right = '0';
+    } else if (positionName === 'bottom_left') {
+      this.tableContainer.style.bottom = '0';
+      this.tableContainer.style.left = '0';
+    } else if (positionName === 'bottom_right') {
+      this.tableContainer.style.bottom = '0';
+      this.tableContainer.style.right = '0';
+    }
+
+    // Build HTML table
+    const frameColor = table.frame_color || '#373a46';
+    const borderColor = table.border_color || '#373a46';
+    const borderWidth = table.border_width || 1;
+    const frameWidth = table.frame_width || 1;
+    const bgcolor = table.bgcolor || 'transparent';
+
+    let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: Arial, sans-serif;">`;
+
+    for (let row = 0; row < table.rows; row++) {
+      html += '<tr>';
+      for (let col = 0; col < table.columns; col++) {
+        const cell = table.cells[`${col},${row}`];
+        if (cell) {
+          const textColor = cell.text_color || '#FFFFFF';
+          const cellBg = cell.bgcolor || 'transparent';
+          const halign = cell.text_halign || 'center';
+          const valign = cell.text_valign || 'center';
+          const fontSize = cell.text_size === 'size.large' ? '14px'
+            : cell.text_size === 'size.small' ? '9px'
+            : '11px';
+          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${cell.text}</td>`;
+        } else {
+          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
+        }
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+
+    this.tableContainer.innerHTML = html;
   }
 
   private findBarIndex(time: number): number {
@@ -617,6 +697,11 @@ export class PineChart {
 
   setBoxes(boxes: BoxData[]): void {
     this.boxes = boxes;
+    this.markDirty();
+  }
+
+  setTables(tables: TableData[]): void {
+    this.tables = tables;
     this.markDirty();
   }
 

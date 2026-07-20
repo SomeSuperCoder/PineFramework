@@ -192,6 +192,22 @@ export class FormingCandleManager {
     }));
 
     const resultAny = result as unknown as Record<string, unknown>;
+    const rawTables = resultAny.tables as Array<{
+      position: number; columns: number; rows: number; bgcolor: string;
+      border_color: string; border_width: number; frame_color: string; frame_width: number;
+      cells: Record<string, { text: string; text_color: string; text_halign: string; text_valign: string; bgcolor: string; width: number; text_size: string; tooltip: string }>;
+    }> | undefined;
+    const tables = (rawTables || []).map((t) => ({
+      position: t.position,
+      columns: t.columns,
+      rows: t.rows,
+      bgcolor: t.bgcolor,
+      border_color: t.border_color,
+      border_width: t.border_width,
+      frame_color: t.frame_color,
+      frame_width: t.frame_width,
+      cells: t.cells,
+    }));
     const alertConditions: Array<{ id: string; title: string; message: string }> = [];
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
     if (rawConditions) {
@@ -227,6 +243,7 @@ export class FormingCandleManager {
       lines,
       labels,
       boxes,
+      tables,
       barTimestamps: result.barTimestamps ?? [],
       barIndex: this.contexts.length > 0 ? this.contexts.length - 1 : 0,
       formingCandle: false,

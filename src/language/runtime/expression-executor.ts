@@ -277,8 +277,20 @@ export function executeCallExpression(
       return obj as unknown as PineValue;
     }
 
-    // Generic array methods
+    // Evaluate the object — used for both table and array method dispatch
     const obj = dispatch(expr.callee.object, scope, context);
+
+    // Table method dispatch: tb.cell(...) → table.cell(tb_id, ...)
+    if (typeof obj === 'number' && eng.tables && eng.tables.has(obj)) {
+      const tableMethod = eng.builtins.get(`table.${methodName}`);
+      if (tableMethod) {
+        eng.currentCallSiteId = expr.callId;
+        const builtinArgs = Object.keys(namedArgs).length > 0 ? [obj, ...args, namedArgs] : [obj, ...args];
+        return tableMethod(...builtinArgs);
+      }
+    }
+
+    // Generic array methods
     if (Array.isArray(obj)) {
       switch (methodName) {
         case 'size': return obj.length;

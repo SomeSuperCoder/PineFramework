@@ -31,6 +31,7 @@ const EMPTY_RESULT: ScriptResult = {
   lines: [],
   boxes: [],
   labels: [],
+  tables: [],
   fills: [],
   fillColorData: {},
   plotColors: {},

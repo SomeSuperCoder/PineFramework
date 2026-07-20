@@ -42,6 +42,7 @@ import type {
   LineEntry,
   LabelEntry,
   BoxEntry,
+  TableEntry,
   AlertConditionEntry,
   AlertTriggerEntry,
 } from './execution-types.js';
@@ -203,6 +204,8 @@ export class ExecutionEngine {
   /** @internal */ labels: LabelEntry[] = [];
   /** @internal */ boxes: Map<number, BoxEntry> = new Map();
   /** @internal */ boxIdCounter: number = 0;
+  /** @internal */ tables: Map<number, TableEntry> = new Map();
+  /** @internal */ tableIdCounter: number = 0;
   /** @internal */ userTypeFields: Map<
     string,
     { name: string; defaultExpr: import('../parser/ast/nodes.js').ExpressionNode | null }[]

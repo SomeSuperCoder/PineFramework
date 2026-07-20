@@ -129,6 +129,18 @@ executeRouter.post('/execute', async (req, res) => {
       backgroundColor: b.bgcolor,
     }));
 
+    const tables = (result.tables || []).map((t) => ({
+      position: t.position,
+      columns: t.columns,
+      rows: t.rows,
+      bgcolor: t.bgcolor,
+      border_color: t.border_color,
+      border_width: t.border_width,
+      frame_color: t.frame_color,
+      frame_width: t.frame_width,
+      cells: t.cells,
+    }));
+
     const resultAny = result as unknown as Record<string, unknown>;
     const alertConditions: Array<{ id: string; title: string; message: string }> = [];
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
@@ -165,6 +177,7 @@ executeRouter.post('/execute', async (req, res) => {
       lines,
       labels,
       boxes,
+      tables,
       barTimestamps: result.barTimestamps ?? [],
       maxLookback: result.maxLookback ?? 0,
       alertConditions,

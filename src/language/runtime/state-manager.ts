@@ -28,6 +28,10 @@ export class StateManager {
       alertConditionEntries: [...this.eng.alertConditionEntries],
       alertTriggers: [...this.eng.alertTriggers],
       boxes: new Map(this.eng.boxes),
+      tables: this.eng.tables.size > 0
+        ? [...this.eng.tables.entries()].map(([id, t]) => [id, { ...t, cells: { ...t.cells } }] as [number, typeof t])
+        : [],
+      tableIdCounter: this.eng.tableIdCounter,
       barTimestamps: [...this.eng.barTimestamps],
       ohlcHistory: {
         open: [...this.eng.ohlcHistory.open],
@@ -67,6 +71,10 @@ export class StateManager {
     if (snapshot.alertConditionEntries) this.eng.alertConditionEntries = [...snapshot.alertConditionEntries];
     if (snapshot.alertTriggers) this.eng.alertTriggers = [...snapshot.alertTriggers];
     if (snapshot.boxes) this.eng.boxes = new Map(snapshot.boxes);
+    if (snapshot.tables) {
+      this.eng.tables = new Map(snapshot.tables.map(([id, t]) => [id, { ...t, cells: { ...t.cells } }]));
+    }
+    if (snapshot.tableIdCounter !== undefined) this.eng.tableIdCounter = snapshot.tableIdCounter;
     if (snapshot.barTimestamps) this.eng.barTimestamps = [...snapshot.barTimestamps];
     if (snapshot.ohlcHistory) {
       this.eng.ohlcHistory = {

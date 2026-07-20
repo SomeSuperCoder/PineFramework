@@ -30,6 +30,7 @@ interface ExecuteResponse {
   maxLookback?: number;
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
+  tables?: import('../types').TableData[];
 }
 
 interface ExecutionResultMessage {
@@ -63,6 +64,7 @@ interface ExecutionResultMessage {
   alertConditions?: Array<{ id: string; title: string; message: string }>;
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
   barIndex: number;
+  tables?: import('../types').TableData[];
 }
 
 const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
@@ -83,6 +85,7 @@ function buildScriptResult(
   alertConditions?: Array<{ id: string; title: string; message: string }>,
   alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>,
   boxes?: ExecutionResultMessage['boxes'],
+  tables?: import('../types').TableData[],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -197,6 +200,7 @@ function buildScriptResult(
     bgcolor: (bgcolor || []).map((b) => ({ time: Math.floor(b.time / 1000), color: b.color })),
     alertConditions: (alertConditions || []).map((a) => ({ id: a.id, title: a.title, message: a.message })),
     alertTriggers: (alertTriggers || []).map((t) => ({ alertId: t.alertId, barIndex: t.barIndex, timestamp: t.timestamp })),
+    tables: tables || [],
   };
 }
 
@@ -328,6 +332,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.alertConditions,
             execResult.alertTriggers,
             execResult.boxes,
+            execResult.tables,
           );
 
           const prev = indicatorResultsRef.current.get(indId);
@@ -418,6 +423,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
     const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];
     const mergedBoxes = [...(newResult.boxes || []), ...(prev.boxes || [])];
+    // Tables are static dashboard state — use the latest
+    const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
 
     return {
       ...prev,
@@ -431,6 +438,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       plotColors: mergedPlotColors,
       bgcolor: mergedBgcolor,
       boxes: mergedBoxes,
+      tables: mergedTables,
     };
   }, []);
 
@@ -586,6 +594,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       fillColorData: mergedFillColorData,
       bgcolor: mergedBgcolor,
       boxes: mergedBoxes,
+      // Tables are static dashboard state — replace on any update
+      tables: msg.tables || prev.tables,
     };
   }, []);
 
@@ -628,6 +638,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           msg.alertConditions,
           msg.alertTriggers,
           msg.boxes,
+          msg.tables,
         );
         indicatorResultsRef.current.set(msg.indicatorId, result);
         onIndicatorResult(msg.indicatorId, result);
@@ -679,6 +690,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         msg.alertConditions,
         msg.alertTriggers,
         msg.boxes,
+        msg.tables,
       );
       setScriptResult(result);
     }
@@ -916,6 +928,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.alertConditions,
                 seedResult.alertTriggers,
                 seedResult.boxes,
+                seedResult.tables,
               );
 
               // Trim seed bar data from plot results — seed bars are not in
@@ -981,6 +994,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         result.alertConditions,
         result.alertTriggers,
         result.boxes,
+        result.tables,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;

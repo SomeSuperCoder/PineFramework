@@ -185,6 +185,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     const allChartLabels: LabelData[] = [];
     const allAlertTriggers: import('../types').AlertTriggerData[] = [];
     const allBoxes: import('../types').BoxData[] = [];
+    const allTables: import('../types').TableData[] = [];
 
     for (const { result } of allResults) {
       for (const m of (result.strategyMarkers || [])) {
@@ -217,6 +218,9 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       }
       for (const b of (result.boxes || [])) {
         allBoxes.push(b);
+      }
+      for (const t of (result.tables || [])) {
+        allTables.push(t);
       }
     }
 
@@ -275,6 +279,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     chart.setDrawingLines(allDrawingLines);
     chart.setLabels(allChartLabels);
     chart.setBoxes(allBoxes);
+    chart.setTables(allTables);
     chart.setMarkers(allShapeMarkers);
     chart.setBgColors(allBgColorsMap);
     chart.setHLines([]);
