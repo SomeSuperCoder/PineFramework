@@ -31,7 +31,7 @@ const TIMEFRAME_LABELS: Record<string, string> = {
 };
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
-  { id: 'jupiter_ultra', label: 'Jupiter Ultra (DEX)', description: 'Model Jupiter DEX Ultra Mode fees' },
+  { id: 'jupiter_ultra', label: 'Jupiter Ultra (DEX)', description: 'Jupiter DEX Ultra Mode fees with per-pair tiered fee schedule' },
   { id: 'percent_fixed', label: 'Percent (Fixed)', description: 'Percentage of trade value' },
   { id: 'per_order_fixed', label: 'Per Order (Fixed)', description: 'Fixed amount per order' },
   { id: 'jupiter_manual', label: 'Jupiter Manual (Swap)', description: 'Zero-commission Jupiter Market Swap' },
@@ -108,12 +108,22 @@ function getDefaultMethodSettings(method: CommissionMethodId): Record<string, un
   switch (method) {
     case 'percent_fixed': return { rate: 0.001 };
     case 'per_order_fixed': return { amount: 1 };
-    case 'jupiter_ultra': return { rate: 0.001 };
+    case 'jupiter_ultra': return { pairCategory: 'default' };
     case 'jupiter_manual': return null;
     case 'none': return null;
     default: return null;
   }
 }
+
+const JUPITER_PAIR_OPTIONS: Array<{ value: string; label: string; bps: number }> = [
+  { value: 'jupiter_ecosystem', label: 'Jupiter Ecosystem (0 bps)', bps: 0 },
+  { value: 'pegged_asset', label: 'Pegged Assets (0 bps)', bps: 0 },
+  { value: 'sol_stable', label: 'SOL ↔ Stable (2 bps)', bps: 2 },
+  { value: 'lst_stable', label: 'LST ↔ Stable (5 bps)', bps: 5 },
+  { value: 'default', label: 'Default (10 bps)', bps: 10 },
+  { value: 'new_token', label: 'New Token (50 bps)', bps: 50 },
+  { value: 'custom', label: 'Custom Rate', bps: 0 },
+];
 
 export interface BacktestSettingsPopupProps {
   isOpen: boolean;
@@ -287,10 +297,10 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                 </div>
               )}
             </div>
-            {commissionMethod && (commissionMethod === 'percent_fixed' || commissionMethod === 'jupiter_ultra') && (
+            {commissionMethod === 'percent_fixed' && (
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-                  Rate ({commissionMethod === 'jupiter_ultra' ? 'Jupiter Ultra' : 'Percent Fixed'})
+                  Rate (Percent Fixed)
                 </label>
                 <input
                   type="number"
@@ -302,11 +312,56 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                   style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
                 />
                 <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-                  {commissionMethod === 'jupiter_ultra'
-                    ? 'Representative rate for Jupiter DEX Ultra Mode (e.g. 0.001 = 10 bps)'
-                    : 'Percentage of trade value (e.g. 0.001 = 0.1%)'}
+                  Percentage of trade value (e.g. 0.001 = 0.1%)
                 </div>
               </div>
+            )}
+
+            {commissionMethod === 'jupiter_ultra' && (
+              <>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Pair Category</label>
+                  <select
+                    value={(commissionMethodSettings as Record<string, unknown>)?.pairCategory as string ?? 'default'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const newSettings = { ...(commissionMethodSettings as Record<string, unknown> ?? {}), pairCategory: val };
+                      if (val !== 'custom') {
+                        // Remove rate when using a preset tier
+                        delete newSettings.rate;
+                      }
+                      setCommissionMethodSettings(newSettings);
+                      persist({ commissionMethodSettings: newSettings });
+                    }}
+                    style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                  >
+                    {JUPITER_PAIR_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                    Fee tier matching Jupiter Ultra's actual per-pair fee schedule.
+                    See <a href="https://developers.jup.ag/docs/ultra/fees" target="_blank" rel="noopener noreferrer" style={{ color: '#2196f3' }}>Jupiter docs</a>.
+                  </div>
+                </div>
+                {(commissionMethodSettings as Record<string, unknown>)?.pairCategory === 'custom' && (
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Custom Rate</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      max="1"
+                      value={(commissionMethodSettings as Record<string, unknown>)?.rate as number ?? 0.001}
+                      onChange={(e) => handleSettingChange('rate', Number(e.target.value))}
+                      style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+                    />
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+                      Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             {commissionMethod === 'per_order_fixed' && (
               <div>

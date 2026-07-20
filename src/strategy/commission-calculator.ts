@@ -8,6 +8,16 @@
  * The StrategyEngine delegates commission calculation to the active calculator
  * when one is configured via commissionMethod. Legacy commission_type /
  * commission_value from strategy() declarations remain supported as fallback.
+ *
+ * ── Jupiter Ultra Fee Tiers (from official Jupiter docs) ──
+ * | Category                  | Fee (bps) | Fee (%) |
+ * |---------------------------|-----------|---------|
+ * | Jupiter ecosystem tokens  |     0     |   0%    |
+ * | Pegged assets (Stable/LST)|     0     |   0%    |
+ * | SOL ↔ Stable              |     2     |  0.02%  |
+ * | LST ↔ Stable              |     5     |  0.05%  |
+ * | Everything else           |    10     |  0.1%   |
+ * | New tokens (<24h old)     |    50     |  0.5%   |
  */
 
 // ---------------------------------------------------------------------------
@@ -44,15 +54,55 @@ export interface PerOrderFixedSettings {
   amount: number;
 }
 
+/**
+ * Jupiter Ultra fee tier, matched to the actual Jupiter DEX fee schedule.
+ *
+ * See https://docs.jup.ag/user-docs/trade/swap/fees and
+ * https://developers.jup.ag/docs/ultra/fees for up-to-date fee details.
+ */
+export type JupiterPairCategory =
+  /** Buying Jupiter ecosystem tokens: SOL/Stable → JUP/JLP/jupSOL (0 bps). */
+  | 'jupiter_ecosystem'
+  /** Pegged asset pairs: LST↔LST, Stable↔Stable (0 bps). */
+  | 'pegged_asset'
+  /** SOL ↔ Stablecoin (2 bps). */
+  | 'sol_stable'
+  /** Liquid Staking Token ↔ Stablecoin (5 bps). */
+  | 'lst_stable'
+  /** Default: all other token pairs not in a special tier (10 bps). */
+  | 'default'
+  /** Tokens less than 24 hours old on Solana (50 bps). */
+  | 'new_token'
+  /** Use a custom rate via the `rate` field instead of a preset tier. */
+  | 'custom';
+
 /** Settings for the jupiter_ultra method. */
 export interface JupiterUltraSettings {
   /**
-   * Representative commission rate for backtesting.
-   * Real Jupiter Ultra fees vary by pair volatility and token type (0–0.5%).
-   * Default: 0.001 (~10 bps).
+   * Fee tier based on the traded token pair.
+   * Maps to Jupiter Ultra's actual per-pair fee schedule.
+   * When set to a named tier, `rate` is ignored and the tier's bps is used.
+   * When set to 'custom' or omitted, `rate` is used (backward compatible).
+   * Default: 'default' (10 bps).
    */
-  rate: number;
+  pairCategory?: JupiterPairCategory;
+  /**
+   * Custom rate override as a decimal fraction (e.g. 0.001 = 0.1%).
+   * Only used when pairCategory is 'custom' or when pairCategory is unset
+   * (backward compatibility with existing configs).
+   */
+  rate?: number;
 }
+
+/** Maps each Jupiter pair category to its fee in basis points (1 bps = 0.01%). */
+export const JUPITER_FEE_BPS: Record<Exclude<JupiterPairCategory, 'custom'>, number> = {
+  jupiter_ecosystem: 0,    // 0%
+  pegged_asset: 0,         // 0%
+  sol_stable: 2,           // 0.02%
+  lst_stable: 5,           // 0.05%
+  default: 10,             // 0.1%
+  new_token: 50,           // 0.5%
+};
 
 /** Settings for the percent_commission method (legacy-compatible). */
 export interface PercentCommissionSettings {
@@ -86,16 +136,21 @@ export interface CommissionMethodDescriptor {
   settingsFields: SettingsFieldDescriptor[];
 }
 
+/** Supported UI field types for method-specific settings. */
+export type SettingsFieldType = 'number' | 'select';
+
 /** Describes a single settings field for the UI. */
 export interface SettingsFieldDescriptor {
   key: string;
   label: string;
-  type: 'number';
-  defaultValue: number;
+  type: SettingsFieldType;
+  defaultValue: number | string;
   min?: number;
   max?: number;
   step?: number;
   tooltip?: string;
+  /** Options for 'select' type fields. */
+  options?: Array<{ value: string; label: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,14 +200,28 @@ class PerOrderFixedCalculator implements CommissionCalculator {
 
 class JupiterUltraCalculator implements CommissionCalculator {
   /**
-   * Models Jupiter DEX Ultra Mode swap fees.
+   * Models Jupiter DEX Ultra Mode swap fees using the actual tiered fee
+   * schedule published by Jupiter:
+   *   - Jupiter ecosystem / pegged assets: 0 bps
+   *   - SOL ↔ Stable:                      2 bps
+   *   - LST ↔ Stable:                      5 bps
+   *   - Everything else (default):         10 bps
+   *   - New tokens (<24h):                 50 bps
    *
-   * Real fees vary by pair volatility and token type (typically 0–0.5%,
-   * ~5–10 bps typical). For backtesting, a representative fixed rate is used.
-   * The fee amount is determined at quote time by the Jupiter backend.
+   * Backward compatible: if pairCategory is unset, falls back to `rate`.
+   * See https://developers.jup.ag/docs/ultra/fees
    */
   calculate(context: TradeContext, config: CommissionConfig): number {
-    const rate = (config.settings as JupiterUltraSettings)?.rate ?? 0.001;
+    const settings = config.settings as JupiterUltraSettings | undefined;
+
+    // If a named tier is explicitly set (and it's not 'custom'), use its bps.
+    if (settings?.pairCategory && settings.pairCategory !== 'custom') {
+      const bps = JUPITER_FEE_BPS[settings.pairCategory] ?? 10; // default fallback
+      return context.tradeValue * (bps / 10000);
+    }
+
+    // Fallback: use explicit rate (backward compatible with old configs).
+    const rate = settings?.rate ?? 0.001;
     return context.tradeValue * rate;
   }
 }
@@ -247,20 +316,35 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
   {
     id: 'jupiter_ultra',
     name: 'Jupiter Ultra',
-    description: 'Jupiter DEX Ultra Mode swap fees (~0–0.5%, ~10 bps typical)',
+    description: 'Jupiter DEX Ultra Mode swap fees with actual per-pair tiered fee schedule',
     enforceLongOnly: true,
-    defaultSettings: { rate: 0.001 } as JupiterUltraSettings,
+    defaultSettings: { pairCategory: 'default' } as JupiterUltraSettings,
     settingsFields: [
       {
+        key: 'pairCategory',
+        label: 'Pair Category',
+        type: 'select',
+        defaultValue: 'default',
+        options: [
+          { value: 'jupiter_ecosystem', label: 'Jupiter Ecosystem (0 bps) — SOL/Stable → JUP/JLP/jupSOL' },
+          { value: 'pegged_asset', label: 'Pegged Assets (0 bps) — LST↔LST, Stable↔Stable' },
+          { value: 'sol_stable', label: 'SOL↔Stable (2 bps)' },
+          { value: 'lst_stable', label: 'LST↔Stable (5 bps)' },
+          { value: 'default', label: 'Default (10 bps) — everything else' },
+          { value: 'new_token', label: 'New Token (50 bps) — <24 hours old' },
+          { value: 'custom', label: 'Custom Rate' },
+        ],
+        tooltip: 'Fee tier based on the traded token pair, matching Jupiter Ultra\'s actual fee schedule.',
+      },
+      {
         key: 'rate',
-        label: 'Rate',
+        label: 'Custom Rate',
         type: 'number',
         defaultValue: 0.001,
         min: 0,
         max: 0.01,
         step: 0.0001,
-        tooltip:
-          'Representative fee rate for backtesting. Real Jupiter Ultra fees vary by pair (0–0.5%).',
+        tooltip: 'Custom fee rate (used when Pair Category is "Custom Rate").',
       },
     ],
   },

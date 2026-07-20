@@ -13,6 +13,7 @@ import type {
   PercentFixedSettings,
   PerOrderFixedSettings,
   JupiterUltraSettings,
+  JupiterPairCategory,
 } from '../../src/strategy/commission-calculator.js';
 import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 
@@ -163,7 +164,9 @@ describe('Commission Calculator', () => {
   });
 
   describe('jupiter_ultra method', () => {
-    it('should calculate commission as tradeValue * rate', () => {
+    // ── Backward compatible: rate-based (no pairCategory) ──
+
+    it('should calculate commission as tradeValue * rate (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
         settings: { rate: 0.001 } as JupiterUltraSettings,
@@ -172,7 +175,7 @@ describe('Commission Calculator', () => {
       expect(computeCommission(context, config)).toBeCloseTo(10);
     });
 
-    it('should use default rate of 0.001 when settings are null', () => {
+    it('should use default rate of 0.001 when settings are null (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
         settings: null,
@@ -181,22 +184,83 @@ describe('Commission Calculator', () => {
       expect(computeCommission(context, config)).toBeCloseTo(10);
     });
 
-    it('should handle typical 10 bps rate', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { rate: 0.001 } as JupiterUltraSettings, // 10 bps
-      };
-      const context = makeContext({ tradeValue: 50000 });
-      expect(computeCommission(context, config)).toBeCloseTo(50); // 50000 * 0.001
-    });
-
-    it('should handle higher rate (50 bps)', () => {
+    it('should use default rate when pairCategory is unset (backward compat)', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
         settings: { rate: 0.005 } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005
+    });
+
+    // ── Tiered fee schedule (pairCategory-based) ──
+
+    it.each([
+      ['jupiter_ecosystem', 0, 10000, 0],
+      ['pegged_asset', 0, 10000, 0],
+      ['sol_stable', 2, 10000, 2],
+      ['lst_stable', 5, 10000, 5],
+      ['default', 10, 10000, 10],
+      ['new_token', 50, 10000, 50],
+    ])('should charge %s tier: %d bps', (category, bps, tradeValue, expectedCommission) => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: category as JupiterPairCategory } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue });
+      // bps / 10000 = decimal fraction
+      expect(computeCommission(context, config)).toBeCloseTo(expectedCommission);
+    });
+
+    it('should use custom rate when pairCategory is "custom"', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'custom', rate: 0.002 } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue: 10000 });
+      expect(computeCommission(context, config)).toBeCloseTo(20); // 10000 * 0.002
+    });
+
+    it('should ignore rate field when a named tier is set', () => {
+      // Even if rate is set alongside a tier, the tier should win
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'sol_stable', rate: 0.1 } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue: 10000 });
+      // 2 bps = 0.02% = tradeValue * 0.0002
+      expect(computeCommission(context, config)).toBeCloseTo(2);
+    });
+
+    // ── Large values ──
+
+    it('should handle large trade values with default tier', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'default' } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue: 1_000_000 });
+      // 10 bps = 0.001 = 1_000_000 * 0.001 = 1000
+      expect(computeCommission(context, config)).toBeCloseTo(1000);
+    });
+
+    it('should handle small trade values with sol_stable tier', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'sol_stable' } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue: 50 });
+      // 2 bps = 0.0002 = 50 * 0.0002 = 0.01
+      expect(computeCommission(context, config)).toBeCloseTo(0.01);
+    });
+
+    it('should handle zero trade value', () => {
+      const config: CommissionConfig = {
+        method: 'jupiter_ultra',
+        settings: { pairCategory: 'new_token' } as JupiterUltraSettings,
+      };
+      const context = makeContext({ tradeValue: 0 });
+      expect(computeCommission(context, config)).toBe(0);
     });
   });
 

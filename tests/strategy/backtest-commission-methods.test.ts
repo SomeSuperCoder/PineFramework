@@ -100,7 +100,7 @@ describe('BacktestEngine Commission Methods', () => {
   });
 
   describe('jupiter_ultra method', () => {
-    it('should apply jupiter_ultra commission', () => {
+    it('should apply jupiter_ultra commission (backward compat rate)', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
@@ -115,6 +115,60 @@ describe('BacktestEngine Commission Methods', () => {
 
       expect(result.metrics.totalTrades).toBe(1);
       expect(result.metrics.commission).toBeGreaterThan(0);
+    });
+
+    it('should apply jupiter_ultra tiered fee via pairCategory', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { pairCategory: 'default' }, // 10 bps
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      expect(result.metrics.commission).toBeGreaterThan(0);
+    });
+
+    it('should charge 0 commission for jupiter_ecosystem tier', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { pairCategory: 'jupiter_ecosystem' },
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      expect(result.metrics.commission).toBe(0);
+    });
+
+    it('should charge 2 bps for sol_stable tier', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { pairCategory: 'sol_stable' },
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      expect(result.metrics.totalTrades).toBe(1);
+      expect(result.metrics.commission).toBeGreaterThan(0);
+      // At 100 entry, 10 shares: fee = 100 * 10 * 0.0002 = $0.20 entry + $0.22 exit
+      // ~$0.42 total
+      expect(result.metrics.commission).toBeLessThan(1);
     });
   });
 
