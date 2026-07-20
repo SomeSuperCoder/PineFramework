@@ -146,13 +146,13 @@
   - **Fix:** Add an `isEntry` boolean to `TradeContext` or split into `entryFill`/`exitFill` contexts. For legacy behavior, preserve the current behavior but document it clearly.
   - **Test:** Write a test that verifies commission for a round-trip Jupiter swap matches expected documentation values.
 
-- [ ] **M-004** | [ErrorHandling] | `backend/src/routes/scripts.ts:47-57` | getById reads full file source but setActive returns empty source string
+- [x] **M-004** | [ErrorHandling] | `backend/src/store/ScriptFileManager.ts:setActive()` | setActive now reads source from file and is async; caller in scripts.ts updated to await
   - **Issue:** `setActive()` returns a `ScriptEntry` with `source: ''` (empty string) because it only reads from the manifest, not the file. This is inconsistent with `getById()` and `getActive()` which return the actual source. Any caller using `setActive()` result to display the script source will show an empty editor.
   - **Impact:** The "Set Active Script" API response doesn't include script source, forcing the frontend to make an additional `getById()` call to get the source.
   - **Fix:** Have `setActive()` read the file and return the full source, or document that the source field is intentionally empty.
   - **Test:** Call PUT /api/scripts/active with a valid ID and verify the response includes the script source.
 
-- [ ] **M-005** | [Bug-Logic] | `src/strategy/strategy-engine.ts:258-267` | Long-only enforcement silently drops short entries without notifying the user
+- [x] **M-005** | [Bug-Logic] | `src/strategy/strategy-engine.ts:258-267` | Long-only enforcement silently drops short entries without notifying the user
   - **Issue:** When a commission method enforces long-only (`isLongOnlyEnforced` returns true), `entry()` returns `undefined` for short entries. The calling Pine script has no way to know the order was rejected. The strategy continues execution as if nothing happened, potentially causing significant discrepancies between expected and actual behavior.
   - **Impact:** Backtest results silently omit short trades when long-only is enforced. This can make a strategy that relies on short trades appear as if it never trades at all, without any error or warning.
   - **Fix:** Log a warning when a short entry is suppressed due to long-only enforcement. Consider adding a strategy config validation step that warns at initialization time if the strategy uses short entries with a long-only method.
@@ -182,7 +182,7 @@
   - **Fix:** Ensure `executeRealtimeBar()` always records timestamps. Add the timestamp to `barTimestamps` after `executeBar()` regardless of success/failure.
   - **Test:** Create a forming candle computation and verify `barTimestamps` is consistently set.
 
-- [ ] **M-010** | [CodeQuality-Coupling] | `backend/src/ws/gateway.ts:293` | GlobalThis pollution for cross-module communication
+- [x] **M-010** | [CodeQuality-Coupling] | `backend/src/ws/gateway.ts:293` | GlobalThis pollution for cross-module communication
   - **Issue:** `(globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved = ...` pollutes the global scope. The scripts router (`scripts.ts:119`) accesses it via `(globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved`. This is a fragile, untestable pattern for cross-module communication.
   - **Impact:** Testing any route handler that calls this function requires setting up global state. Refactoring the broadcast logic requires finding all usages of `__wsBroadcastIndicatorRemoved`. TypeScript provides no type checking for this.
   - **Fix:** Use dependency injection: pass the broadcast function to `createScriptsRouter()` as a parameter (similar to how `indicatorsStore` is passed). Or use an EventEmitter-based pattern.

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { ScriptFileManager } from '../store/ScriptFileManager.js';
 import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
+import { broadcastIndicatorRemoved } from '../ws/broadcast.js';
 
 export function createScriptsRouter(fileManager: ScriptFileManager, indicatorsStore?: RunningIndicatorsStore): Router {
   const router = Router();
@@ -25,14 +26,14 @@ export function createScriptsRouter(fileManager: ScriptFileManager, indicatorsSt
     }
   });
 
-  router.put('/scripts/active', (req, res) => {
+  router.put('/scripts/active', async (req, res) => {
     try {
       const { scriptId } = req.body as { scriptId?: string };
       if (typeof scriptId !== 'string' || scriptId.trim() === '') {
         res.status(400).json({ error: 'scriptId must be a non-empty string' });
         return;
       }
-      const script = fileManager.setActive(scriptId);
+      const script = await fileManager.setActive(scriptId);
       if (!script) {
         res.status(404).json({ error: 'Script not found' });
         return;
@@ -116,8 +117,7 @@ export function createScriptsRouter(fileManager: ScriptFileManager, indicatorsSt
         removedIndicatorIds = removed.map((i) => i.id);
       }
       if (removedIndicatorIds.length > 0) {
-        const broadcast = (globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved as ((ids: string[]) => void) | undefined;
-        if (broadcast) broadcast(removedIndicatorIds);
+        broadcastIndicatorRemoved(removedIndicatorIds);
       }
       res.json({ success: true, removedIndicatorIds });
     } catch (err) {

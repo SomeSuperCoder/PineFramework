@@ -5,6 +5,7 @@ import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
 import { validateBybitUrl } from '../utils/security.js';
+import { setBroadcastIndicatorRemoved } from './broadcast.js';
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -321,10 +322,10 @@ export function createWSGateway(
     });
   });
 
-  // Expose broadcastToAll for cascade removals
-  (globalThis as Record<string, unknown>).__wsBroadcastIndicatorRemoved = (indicatorIds: string[]) => {
+  // Expose broadcastToAll for cascade removals via shared module
+  setBroadcastIndicatorRemoved((indicatorIds: string[]) => {
     broadcastToAll({ type: 'indicator_removed', data: { indicatorIds } });
-  };
+  });
 
   connectToBybit();
 }

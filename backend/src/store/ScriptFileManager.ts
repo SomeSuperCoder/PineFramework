@@ -79,18 +79,23 @@ export class ScriptFileManager {
     return this.getById(id);
   }
 
-  setActive(id: string): ScriptEntry | null {
+  async setActive(id: string): Promise<ScriptEntry | null> {
     const entry = this.manifest.getById(id);
     if (!entry) return null;
     this.manifest.setActive(id);
-    return {
-      id: entry.id,
-      name: entry.name,
-      source: '',
-      scriptType: entry.scriptType as 'strategy' | 'indicator',
-      createdAt: entry.createdAt,
-      updatedAt: entry.updatedAt,
-    };
+    try {
+      const source = await readFile(this.resolveFilePath(entry.filePath), 'utf-8');
+      return {
+        id: entry.id,
+        name: entry.name,
+        source,
+        scriptType: entry.scriptType as 'strategy' | 'indicator',
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async create(name: string, source: string): Promise<ScriptEntry> {

@@ -265,6 +265,9 @@ export class StrategyEngine {
       isLongOnlyEnforced(this.config.commissionMethod) &&
       direction === 'short'
     ) {
+      console.warn(
+        `[StrategyEngine] Short entry suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading.`,
+      );
       if (this.position.direction === 'long') {
         this.close(this.position.entryName || name, 'reverse');
       }
