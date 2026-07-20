@@ -117,15 +117,6 @@ function getDefaultMethodSettings(method: CommissionMethodId): Record<string, un
 
 // ── Jupiter Ultra tier auto-detection (simplified, for display only) ──
 
-const JUPITER_TIER_LABELS: Record<string, { label: string; bps: number }> = {
-  jupiter_ecosystem: { label: 'Jupiter Ecosystem', bps: 0 },
-  pegged_asset: { label: 'Pegged Assets', bps: 0 },
-  sol_stable: { label: 'SOL ↔ Stable', bps: 2 },
-  lst_stable: { label: 'LST ↔ Stable', bps: 5 },
-  default: { label: 'Default', bps: 10 },
-  new_token: { label: 'New Token (<24h)', bps: 50 },
-};
-
 /** Methods that match the real Jupiter trading bot's fee structure. */
 const JUPITER_METHODS = new Set<CommissionMethodId>(['jupiter_manual', 'jupiter_ultra']);
 
@@ -168,50 +159,62 @@ function JupiterBasicConfig({
   settings: Record<string, unknown>;
   onSettingsChange: (s: Record<string, unknown>) => void;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const dexFee = (settings as Record<string, unknown>)?.dexFeeBps as number ?? 25;
   const solPrice = (settings as Record<string, unknown>)?.solPriceUsd as number ?? 150;
   return (
     <>
-      <div style={{ marginBottom: '8px', padding: '8px 10px', background: '#0a2e1a', border: '1px solid #4caf50', borderRadius: '4px', fontSize: '12px', color: '#4caf50' }}>
-        <strong>✓ Realistic fee model</strong><br />
-        Jupiter is a liquidity aggregator — it routes through DEXs like Raydium (25 bps) and Orca.<br />
-        <strong>Total cost:</strong> DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
+      <div style={{ padding: '8px 10px', background: '#0a2e1a', border: '1px solid #4caf50', borderRadius: '4px', fontSize: '12px', color: '#4caf50' }}>
+        ✓ Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
       </div>
-      <div>
-        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-          DEX Swap Fee (bps)
-          <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic.">ⓘ</span>
-        </label>
-        <input
-          type="number"
-          step="1"
-          min="0"
-          max="100"
-          value={dexFee}
-          onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
-          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-        />
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-          Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). This is <strong>always</strong> paid on every swap through Jupiter.
-        </div>
+
+      <div
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        style={{ cursor: 'pointer', color: '#888', fontSize: '12px', marginTop: '8px', userSelect: 'none' }}
+      >
+        {showAdvanced ? '▼' : '▶'} Advanced settings
+        {!showAdvanced && <span style={{ marginLeft: '8px', color: '#666' }}>(DEX fee: {dexFee} bps · SOL: ${solPrice})</span>}
       </div>
-      <div style={{ marginTop: '8px' }}>
-        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-          SOL Price (USD)
-          <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={solPrice}
-          onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
-          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-        />
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-          SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
-        </div>
-      </div>
+
+      {showAdvanced && (
+        <>
+          <div style={{ marginTop: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+              DEX Swap Fee (bps)
+              <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic.">ⓘ</span>
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              max="100"
+              value={dexFee}
+              onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
+              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+            />
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+              Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched from Jupiter API before each backtest.
+            </div>
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+              SOL Price (USD)
+              <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={solPrice}
+              onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
+              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+            />
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+              SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
@@ -226,14 +229,16 @@ function JupiterUltraConfig({
   settings: Record<string, unknown>;
   onSettingsChange: (s: Record<string, unknown>) => void;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const useCustom = !!(settings as Record<string, unknown>)?.useCustomRate;
   const tierInfo = symbol ? detectJupiterTier(symbol) : null;
+  const dexFee = (settings as Record<string, unknown>)?.dexFeeBps as number ?? 25;
+  const solPrice = (settings as Record<string, unknown>)?.solPriceUsd as number ?? 150;
 
   const handleToggleCustom = (checked: boolean) => {
     const updated = { ...settings };
     if (checked) {
       updated.useCustomRate = true;
-      // Keep existing rate or use default
       if (typeof updated.rate !== 'number') updated.rate = 0.001;
     } else {
       delete updated.useCustomRate;
@@ -304,42 +309,53 @@ function JupiterUltraConfig({
         </div>
       )}
 
-      <div style={{ marginTop: '8px' }}>
-        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-          DEX Swap Fee (bps)
-          <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX.">ⓘ</span>
-        </label>
-        <input
-          type="number"
-          step="1"
-          min="0"
-          max="100"
-          value={(settings as Record<string, unknown>)?.dexFeeBps as number ?? 25}
-          onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
-          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-        />
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-          Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap.
-        </div>
+      <div
+        onClick={() => setShowAdvanced(!showAdvanced)}
+        style={{ cursor: 'pointer', color: '#888', fontSize: '12px', marginTop: '8px', userSelect: 'none' }}
+      >
+        {showAdvanced ? '▼' : '▶'} Advanced settings
+        {!showAdvanced && <span style={{ marginLeft: '8px', color: '#666' }}>(DEX fee: {dexFee} bps · SOL: ${solPrice})</span>}
       </div>
 
-      <div style={{ marginTop: '8px' }}>
-        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-          SOL Price (USD)
-          <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={(settings as Record<string, unknown>)?.solPriceUsd as number ?? 150}
-          onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
-          style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-        />
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-          SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
-        </div>
-      </div>
+      {showAdvanced && (
+        <>
+          <div style={{ marginTop: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+              DEX Swap Fee (bps)
+              <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX.">ⓘ</span>
+            </label>
+            <input
+              type="number"
+              step="1"
+              min="0"
+              max="100"
+              value={dexFee}
+              onChange={(e) => onSettingsChange({ ...settings, dexFeeBps: Number(e.target.value) })}
+              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+            />
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+              Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap.
+            </div>
+          </div>
+          <div style={{ marginTop: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+              SOL Price (USD)
+              <span style={{ marginLeft: '4px', color: '#666', cursor: 'help' }} title="SOL/USD price for converting Solana network fees from lamports to USD.">ⓘ</span>
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={solPrice}
+              onChange={(e) => onSettingsChange({ ...settings, solPriceUsd: Number(e.target.value) })}
+              style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
+            />
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+              SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
+            </div>
+          </div>
+        </>
+      )}
 
       <div style={{ marginTop: '8px', fontSize: '11px', color: '#888' }}>
         <strong>Total = DEX fee + Jupiter Ultra fee + network fee.</strong>{' '}
@@ -556,20 +572,7 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
                   will produce backtest results that do not reflect real trading conditions.
                   Select <strong>Jupiter (Basic Swap)</strong> or <strong>Jupiter Ultra</strong> instead.
                 </div>
-              ) : (
-                <div style={{
-                  marginTop: '8px',
-                  padding: '8px 12px',
-                  background: '#0a2e1a',
-                  border: '1px solid #4caf50',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  color: '#4caf50',
-                  lineHeight: 1.5,
-                }}>
-                  ✓ Commission method matches the Jupiter fee structure used by the live trading bot.
-                </div>
-              )}
+              ) : null}
             {commissionMethod === 'percent_fixed' && (
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
