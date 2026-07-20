@@ -146,7 +146,7 @@
   - **Fix:** Add an `isEntry` boolean to `TradeContext` or split into `entryFill`/`exitFill` contexts. For legacy behavior, preserve the current behavior but document it clearly.
   - **Test:** Write a test that verifies commission for a round-trip Jupiter swap matches expected documentation values.
 
-- [x] **M-004** | [ErrorHandling] | `backend/src/store/ScriptFileManager.ts:setActive()` | setActive now reads source from file and is async; caller in scripts.ts updated to await
+- [x] **M-004** | [ErrorHandling] | `backend/src/store/ScriptFileManager.ts:setActive()` | setActive now reads source from file and is async; updated caller in scripts.ts and tests
   - **Issue:** `setActive()` returns a `ScriptEntry` with `source: ''` (empty string) because it only reads from the manifest, not the file. This is inconsistent with `getById()` and `getActive()` which return the actual source. Any caller using `setActive()` result to display the script source will show an empty editor.
   - **Impact:** The "Set Active Script" API response doesn't include script source, forcing the frontend to make an additional `getById()` call to get the source.
   - **Fix:** Have `setActive()` read the file and return the full source, or document that the source field is intentionally empty.

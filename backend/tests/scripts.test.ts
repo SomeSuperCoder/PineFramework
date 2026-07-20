@@ -146,7 +146,7 @@ describe('ScriptFileManager', () => {
 
     it('clears activeScriptId when deleting active script', async () => {
       const created = await fm.create('Active', 'indicator("A")\nplot(close)');
-      fm.setActive(created.id);
+      await fm.setActive(created.id);
       expect(fm.getActiveId()).toBe(created.id);
       await fm.delete(created.id);
       expect(fm.getActiveId()).toBeNull();
@@ -163,20 +163,20 @@ describe('ScriptFileManager', () => {
   });
 
   describe('active script', () => {
-    it('setActive returns null for missing id', () => {
-      expect(fm.setActive('nonexistent')).toBeNull();
+    it('setActive returns null for missing id', async () => {
+      await expect(fm.setActive('nonexistent')).resolves.toBeNull();
     });
 
     it('setActive persists and getActive retrieves', async () => {
       const s1 = await fm.create('A', 'indicator("A")\nplot(close)');
       const s2 = await fm.create('B', 'indicator("B")\nplot(close)');
 
-      fm.setActive(s1.id);
+      await fm.setActive(s1.id);
       const active1 = await fm.getActive();
       expect(active1!.id).toBe(s1.id);
       expect(fm.getActiveId()).toBe(s1.id);
 
-      fm.setActive(s2.id);
+      await fm.setActive(s2.id);
       const active2 = await fm.getActive();
       expect(active2!.id).toBe(s2.id);
       expect(fm.getActiveId()).toBe(s2.id);
@@ -227,7 +227,7 @@ describe('ScriptFileManager', () => {
   describe('persistence', () => {
     it('preserves data across manager instances', async () => {
       const created = await fm.create('Persist', 'indicator("P")\nplot(close)');
-      fm.setActive(created.id);
+      await fm.setActive(created.id);
 
       const result2 = createFileManager(dir);
       expect(await result2.fileManager.getAll()).toHaveLength(1);
