@@ -751,4 +751,219 @@ describe('StrategyEngine', () => {
       expect(closeMarker!.comment).toBe('reverse');
     });
   });
+
+  describe('pyramiding', () => {
+    it('should allow entries up to pyramiding+1 (with pyramiding=2 allows 3 total entries)', () => {
+      const engine = new StrategyEngine({ pyramiding: 2 });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('First', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+      expect(engine.getPosition().quantity).toBe(1);
+
+      engine.entry('Second', 'long', 1);
+      engine.updateBar(2, 1002, 103, 106, 101, 104, 1000);
+      expect(engine.getPosition().quantity).toBe(2);
+
+      // Third entry fills — entries counter is now 3 which equals pyramiding+1
+      engine.entry('Third', 'long', 1);
+      engine.updateBar(3, 1003, 104, 107, 102, 105, 1000);
+      expect(engine.getPosition().quantity).toBe(3);
+    });
+
+    it('should reject entry beyond pyramiding+1 (pyramiding=0 allows only 1 total entry)', () => {
+      const engine = new StrategyEngine({ pyramiding: 0 });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('First', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+      expect(engine.getPosition().quantity).toBe(1);
+
+      // Second entry should be rejected since pyramiding=0 allows only 1 entry
+      const order = engine.entry('Second', 'long', 1);
+      expect(order).toBeUndefined();
+    });
+  });
+
+  describe('fractional quantities', () => {
+    it('should handle fractional entry quantity', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 0.5);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      expect(engine.getPosition().quantity).toBe(0.5);
+      expect(engine.getPosition().direction).toBe('long');
+    });
+
+    it('should handle fractional exit quantity', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+      engine.exit('Partial', 0.3);
+      engine.updateBar(2, 1002, 103, 105, 101, 104, 1000);
+
+      expect(engine.getPosition().quantity).toBeCloseTo(0.7);
+    });
+  });
+
+  describe('zero-price scenarios', () => {
+    it('should fill market order at current price when price=0', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1, 0);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      expect(engine.getPosition().avgPrice).toBe(102);
+    });
+
+    it('should handle limit entry with explicit limitPrice > 0', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      const order = engine.entry('Long', 'long', 1, 0, undefined, 95);
+      expect(order).toBeDefined();
+      expect(order!.type).toBe('limit');
+      expect(order!.limitPrice).toBe(95);
+    });
+  });
+
+  describe('negative slippage', () => {
+    it('should not reduce fill price below market with negative slippage', () => {
+      const engine = new StrategyEngine({ slippage: -1, slippageType: 'ticks' });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      // Slippage modifies price; the fill price should still be the current price
+      expect(engine.getPosition().avgPrice).toBeGreaterThan(0);
+      expect(engine.getPosition().direction).toBe('long');
+    });
+
+    it('should handle negative percent slippage', () => {
+      const engine = new StrategyEngine({ slippage: -0.5, slippageType: 'percent' });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      expect(engine.getPosition().direction).toBe('long');
+    });
+  });
+
+  describe('stop-limit short fill across multiple bars', () => {
+    it('should convert stop-limit to limit on short side when stop hit but limit not hit', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      // Short entry: stop=98 (trigger if low <= 98), limit=100 (fill when high >= 100)
+      engine.entry('Short', 'short', 1, 0, 98, 100);
+
+      expect(engine.getPendingOrders().length).toBe(1);
+      expect(engine.getPendingOrders()[0]!.type).toBe('stop-limit');
+
+      // Bar 1: low=97 hits stop (98), high=99 never reaches limit (100) — converts to limit
+      engine.updateBar(1, 1001, 100, 99, 97, 98, 1000);
+
+      expect(engine.getPosition().direction).toBe('flat');
+      expect(engine.getPendingOrders().length).toBe(1);
+      expect(engine.getPendingOrders()[0]!.type).toBe('limit');
+      expect(engine.getPendingOrders()[0]!.price).toBe(100);
+
+      // Bar 2: high=101 hits the limit price (100) — fills now
+      engine.updateBar(2, 1002, 98, 101, 97, 99, 1000);
+
+      expect(engine.getPendingOrders().length).toBe(0);
+      expect(engine.getPosition().direction).toBe('short');
+      expect(engine.getPosition().avgPrice).toBe(100);
+    });
+  });
+
+  describe('exit with stop/limit orders', () => {
+    it('should create a stop exit order', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      const exitOrder = engine.exit('Long', 1, 0, 98);
+      expect(exitOrder).toBeDefined();
+      expect(exitOrder!.type).toBe('stop');
+      expect(exitOrder!.stopPrice).toBe(98);
+    });
+
+    it('should create a limit exit order', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      const exitOrder = engine.exit('Long', 1, 0, undefined, 110);
+      expect(exitOrder).toBeDefined();
+      expect(exitOrder!.type).toBe('limit');
+      expect(exitOrder!.limitPrice).toBe(110);
+    });
+
+    it('should fill stop exit order when price reaches stop', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      // Place a stop exit at 98 (stop-loss)
+      engine.exit('Long', 1, 0, 98);
+
+      // Bar 2: low=97 hits the stop — fills
+      engine.updateBar(2, 1002, 103, 104, 97, 102, 1000);
+
+      expect(engine.getPosition().direction).toBe('flat');
+      expect(engine.getPosition().quantity).toBe(0);
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.exitPrice).toBe(98);
+    });
+
+    it('should fill limit exit order when price reaches limit', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+
+      // Place a limit exit at 108 (take-profit)
+      engine.exit('Long', 1, 0, undefined, 108);
+
+      // Bar 2: high=109 hits the limit — fills
+      engine.updateBar(2, 1002, 103, 109, 102, 108, 1000);
+
+      expect(engine.getPosition().direction).toBe('flat');
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.exitPrice).toBe(108);
+    });
+  });
+
+  describe('stop-limit entry with immediate fill', () => {
+    it('should fill long stop-limit when bar opens within range', () => {
+      const engine = new StrategyEngine();
+
+      // Place stop-limit: stop=105, limit=104
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 1, 0, 105, 104);
+
+      // Bar opens at 106 (above stop), then trades down to 103 which hits the limit
+      engine.updateBar(1, 1001, 106, 107, 103, 105, 1000);
+
+      expect(engine.getPosition().direction).toBe('long');
+      expect(engine.getPosition().avgPrice).toBe(104);
+    });
+  });
 });

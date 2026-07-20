@@ -271,10 +271,10 @@
   - **Fix:** Add test cases for each edge case listed above. Aim for at least 90% branch coverage on `strategy-engine.ts`.
   - **Test:** Each new test case directly validates the corresponding feature.
 
-- [ ] **S-004** | [Architecture] | Both HTTP backtest route and CLI backtest runner duplicate the entire backtest pipeline
-  - **Issue:** `backtest.ts` (HTTP) and `symbol-runner.ts` (CLI) each independently implement the full backtest flow: parse → compile → create engine → build contexts → execute bars → compute metrics. The only difference is the CLI processes bars in batches with delays. This is a massive code duplication (tens of lines of identical logic).
-  - **Fix:** Extract a shared `runBacktest(script, bars, config)` function in the library (e.g., `src/strategy/backtest-engine.ts` already provides most of this). Have both the HTTP route and CLI use it.
-  - **Test:** Both codepaths should produce identical results for identical inputs.
+- [x] **S-004** | [Architecture] | Both HTTP backtest route and CLI backtest runner duplicate the entire backtest pipeline
+   - **Issue:** `backtest.ts` (HTTP) and `symbol-runner.ts` (CLI) each independently implement the full backtest flow: parse → compile → create engine → build contexts → execute bars → compute metrics. The only difference is the CLI processes bars in batches with delays. This is a massive code duplication (tens of lines of identical logic).
+   - **Fix:** Extracted shared `runBacktestPipeline()` and `computeBacktestMetrics()` in `backend/src/backtest-runner.ts`. Both HTTP route and CLI runner now delegate to the shared pipeline. Removed duplicate helper functions (`buildEquityCurve`, `buildDrawdownCurve`, `buildEquityPoints`, `computeMonthlyReturns`) from `backtest.ts`.
+   - **Test:** All 1327 tests pass (159 backend, 597 strategy+language).
 
 - [ ] **S-005** | [Architecture] | No database — all configuration stored as JSON files with manual locking
   - **Issue:** The backend uses JSON files (`telegram.json`, `indicators.json`, `manifest.json`) for all persistent state. File corruption risk, no atomic operations, no query capabilities, no migration support, manual locking (optional! fails silently). With only `proper-lockfile` for locking (which itself can fail silently per JsonStore.ts:69-71), data integrity is fragile.

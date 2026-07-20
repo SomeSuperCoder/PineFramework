@@ -652,15 +652,19 @@ export class StrategyEngine {
     }
 
     if (order.action === 'buy') {
-      if (isFlat) {
+      if (isFlat || this.position.direction === 'long') {
+        // Adding to a long position or opening fresh
         this.openOrAddPosition('long', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
+        // Closing/reducing a short position
         this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
       }
     } else {
-      if (isFlat) {
+      if (isFlat || this.position.direction === 'short') {
+        // Adding to a short position or opening fresh
         this.openOrAddPosition('short', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
+        // Closing/reducing a long position
         this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
       }
     }

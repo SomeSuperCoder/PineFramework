@@ -1,9 +1,12 @@
 /**
  * RingBuffer — O(1) push-and-evict sliding window.
  * Replaces Array.push() / shift() patterns that are O(n).
+ *
+ * The underlying array is lazily allocated on the first push() call,
+ * avoiding wasted memory for buffers that are created but never used.
  */
 export class RingBuffer {
-  private buffer: number[];
+  private buffer: number[] | null = null;
   private capacity: number;
   private head: number = 0;
   private size: number = 0;
@@ -11,10 +14,13 @@ export class RingBuffer {
 
   constructor(capacity: number) {
     this.capacity = capacity;
-    this.buffer = new Array(capacity);
+    // Buffer is lazily allocated in push()
   }
 
   push(value: number): void {
+    if (this.buffer === null) {
+      this.buffer = new Array(this.capacity);
+    }
     if (this.size === this.capacity) {
       // Overwrite oldest value
       this.sum -= this.buffer[this.head];
@@ -45,17 +51,20 @@ export class RingBuffer {
     this.head = 0;
     this.size = 0;
     this.sum = 0;
+    this.buffer = null;
   }
 
   toArray(): number[] {
     if (this.size === 0) return [];
+    // buffer is guaranteed to be non-null when size > 0
+    const buf = this.buffer!;
     if (this.size < this.capacity) {
-      return this.buffer.slice(0, this.size);
+      return buf.slice(0, this.size);
     }
     // Buffer is full, need to reconstruct in order
     const result = new Array(this.capacity);
     for (let i = 0; i < this.capacity; i++) {
-      result[i] = this.buffer[(this.head + i) % this.capacity];
+      result[i] = buf[(this.head + i) % this.capacity];
     }
     return result;
   }

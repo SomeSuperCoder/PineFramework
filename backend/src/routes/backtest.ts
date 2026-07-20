@@ -1,7 +1,9 @@
 import { Router } from 'express';
-import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
+import { fetchDexFeeBps, type StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
+import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
+import { logger } from '../utils/logger.js';
 
 /** Completed/failed backtest jobs older than this (ms) are eligible for garbage collection. */
 const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -61,7 +63,7 @@ export function createBacktestRouter() {
       }
     }
     if (removed > 0) {
-      console.log(`[backtest] Swept ${removed} old jobs, remaining: ${jobs.size}`);
+      logger.info({ removed, remaining: jobs.size }, 'Swept old backtest jobs');
     }
     return removed;
   }
@@ -75,7 +77,7 @@ export function createBacktestRouter() {
     try {
       job.status = 'running';
       setPhase(job.jobId, 'Fetching market data');
-      console.log('[backtest] runBacktest starting: jobId=%s, symbol=%s, script length=%d', job.jobId, job.symbol, (job.config.script as string)?.length || 0);
+      logger.info({ jobId: job.jobId, symbol: job.symbol, scriptLen: (job.config.script as string)?.length || 0 }, 'Starting backtest');
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
         job.endDate ? new Date(job.endDate).getTime() : undefined,
@@ -87,24 +89,14 @@ export function createBacktestRouter() {
         throw new Error('No bar data available for the specified symbol and timeframe');
       }
 
-      if (bars.length > 1500) {
-        throw new Error(`Too many bars (${bars.length}). Maximum is 1500. Use a shorter date range or larger timeframe.`);
-      }
-
       const script = job.config.script as string | undefined;
-
       if (!script) {
         throw new Error('No Pine Script source provided. Set "script" in the request body.');
       }
 
       setPhase(job.jobId, 'Compiling script');
-      const parseResult = parse(script);
-      const compileResult = compile(parseResult.ast);
 
-      if (compileResult.ir.scriptKind !== 'strategy') {
-        throw new Error('Script must be a strategy (use strategy() instead of indicator() or library())');
-      }
-
+      // Build config override from job config
       const configOverride: Partial<StrategyConfig> = {};
       const configFields: Array<keyof StrategyConfig> = [
         'initialCapital', 'commission', 'slippage',
@@ -124,75 +116,46 @@ export function createBacktestRouter() {
       const cm = configOverride.commissionMethod;
       if (job.symbol && (cm === 'jupiter_manual' || cm === 'jupiter_ultra')) {
         try {
-          const { dexFeeBps, source, dexLabel } = await fetchDexFeeBps(job.symbol);
+          const { dexFeeBps } = await fetchDexFeeBps(job.symbol);
           const existingSettings = (configOverride.commissionMethodSettings as Record<string, unknown>) ?? {};
           configOverride.commissionMethodSettings = { ...existingSettings, dexFeeBps };
-          console.log('[backtest] DEX fee: %d bps (source: %s, label: %s) for %s', dexFeeBps, source, dexLabel || '?', job.symbol);
+          logger.info({ jobId: job.jobId, symbol: job.symbol, dexFeeBps }, 'DEX fee fetched');
         } catch (err) {
-          console.error('[backtest] Failed to fetch DEX fee for %s: %s', job.symbol, err instanceof Error ? err.message : String(err));
+          logger.error({ jobId: job.jobId, symbol: job.symbol, err }, 'Failed to fetch DEX fee');
           throw err;
         }
       }
 
-      const execEngine = new ExecutionEngine(compileResult, Object.keys(configOverride).length > 0 ? configOverride : undefined);
-
-      setPhase(job.jobId, 'Preparing bars');
-      // Each context only needs the current bar's values — executeBar uses getRelative(0)
-      // which reads the last element. Historical values are maintained by the engine's
-      // pushBarValues mechanism, not by the context series. This is O(n) memory, not O(n²).
-      const contexts = bars.map((bar, i) => ({
-        barIndex: i,
-        barCount: bars.length,
-        timestamp: bar.timestamp,
-        open: createSeries('open', [bar.open]),
-        high: createSeries('high', [bar.high]),
-        low: createSeries('low', [bar.low]),
-        close: createSeries('close', [bar.close]),
-        volume: createSeries('volume', [bar.volume]),
-      }));
-
-      updateProgress(job.jobId, 20);
       setPhase(job.jobId, 'Executing bars');
+      const pipelineResult = runBacktestPipeline({
+        script,
+        bars,
+        configOverride: Object.keys(configOverride).length > 0 ? configOverride : undefined,
+      });
 
-      console.log('[backtest] Executing %d bars', contexts.length);
-      console.log('[backtest] First bar: open=%d, high=%d, low=%d, close=%d', contexts[0]?.open.get(0), contexts[0]?.high.get(0), contexts[0]?.low.get(0), contexts[0]?.close.get(0));
-      console.log('[backtest] Last bar: open=%d, high=%d, low=%d, close=%d', contexts[contexts.length-1]?.open.get(contexts.length-1), contexts[contexts.length-1]?.high.get(contexts.length-1), contexts[contexts.length-1]?.low.get(contexts.length-1), contexts[contexts.length-1]?.close.get(contexts.length-1));
-
-      const execResult = execEngine.executeBars(contexts);
-      if (!execResult.success) {
-        throw new Error(execResult.error || 'Execution failed');
+      if (!pipelineResult.success) {
+        throw new Error(pipelineResult.error || 'Execution failed');
       }
-      console.log('[backtest] Execution complete. success=%o, markers=%d', execResult.success, execResult.strategyMarkers?.length || 0);
+
+      const execEngine = pipelineResult.engine!;
+      logger.info({ jobId: job.jobId, success: true, markers: pipelineResult.execResult?.strategyMarkers?.length || 0 }, 'Backtest execution complete');
 
       updateProgress(job.jobId, 80);
       setPhase(job.jobId, 'Computing metrics');
 
-      const strategyEngine = execEngine.getStrategyEngine();
-
-      if (!strategyEngine) {
+      const metricsResult = computeBacktestMetrics(bars, execEngine);
+      if (!metricsResult) {
         throw new Error('Script is not a strategy (missing strategy() declaration)');
       }
 
-      const trades = strategyEngine.getTrades();
-      const metrics = strategyEngine.getMetrics();
-      const filledOrders = strategyEngine.getFilledOrders();
-
-      const initialCapital = strategyEngine.getConfig().initialCapital;
-      const equityCurve = buildEquityCurve(initialCapital, trades);
-      const drawdownCurve = buildDrawdownCurve(equityCurve);
-      const equityPoints = buildEquityPoints(bars, equityCurve, drawdownCurve);
-      const monthlyReturns = computeMonthlyReturns(equityPoints);
-      const buyHoldReturn = bars.length >= 2
-        ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100
-        : 0;
+      const { trades, metrics, filledOrders, equityCurve, drawdownCurve, equityPoints, monthlyReturns, buyHoldReturn } = metricsResult;
 
       updateProgress(job.jobId, 90);
       setPhase(job.jobId, 'Building results');
 
       const sanitize = (v: number) => Number.isFinite(v) ? v : (v === Infinity ? null : 0);
 
-      console.log('[backtest] Metrics: totalTrades=%d, totalPnl=%d, winRate=%d, profitFactor=%d', metrics.totalTrades, metrics.totalPnl, metrics.winRate, metrics.profitFactor);
-      console.log('[backtest] Equity curve length=%d, trades=%d', equityCurve.length, trades.length);
+      logger.info({ jobId: job.jobId, totalTrades: metrics.totalTrades, totalPnl: metrics.totalPnl, winRate: metrics.winRate, profitFactor: metrics.profitFactor }, 'Backtest metrics computed');
 
       job.result = {
         metrics: {
@@ -258,7 +221,7 @@ export function createBacktestRouter() {
       // Sanitize error messages to prevent leaking internal URLs, hostnames,
       // or environment configuration in API responses.
       const rawMessage = err instanceof Error ? err.message : String(err);
-      console.error('[backtest] Backtest failed: %s', rawMessage);
+      logger.error({ jobId: job.jobId, error: rawMessage }, 'Backtest failed');
       // Strip anything that looks like a URL or hostname from the user-facing error
       job.error = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
         .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
@@ -359,61 +322,5 @@ export function createBacktestRouter() {
   return router;
 }
 
-function buildEquityCurve(initialCapital: number, trades: Array<{ pnl: number }>): number[] {
-  const curve: number[] = [initialCapital];
-  let equity = initialCapital;
-  for (const trade of trades) {
-    equity += trade.pnl;
-    curve.push(equity);
-  }
-  return curve;
-}
-
-function buildDrawdownCurve(equityCurve: number[]): number[] {
-  const curve: number[] = [];
-  let peak = -Infinity;
-  for (const eq of equityCurve) {
-    if (eq > peak) peak = eq;
-    curve.push(peak - eq);
-  }
-  return curve;
-}
-
-function buildEquityPoints(
-  bars: Array<{ timestamp: number }>,
-  equityCurve: number[],
-  drawdownCurve: number[],
-): Array<{ time: number; equity: number; drawdown: number; balance: number }> {
-  const points: Array<{ time: number; equity: number; drawdown: number; balance: number }> = [];
-  const len = Math.min(bars.length, equityCurve.length);
-  for (let i = 0; i < len; i++) {
-    points.push({
-      time: bars[i]!.timestamp,
-      equity: equityCurve[i] ?? 0,
-      drawdown: drawdownCurve[i] ?? 0,
-      balance: equityCurve[i] ?? 0,
-    });
-  }
-  return points;
-}
-
-function computeMonthlyReturns(
-  points: Array<{ time: number; equity: number }>,
-): Record<string, number> {
-  const monthly: Record<string, number> = {};
-  if (points.length < 2) return monthly;
-  let prevMonthEquity = points[0]!.equity;
-  for (const point of points) {
-    const date = new Date(point.time);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthly[key]) {
-      monthly[key] = prevMonthEquity > 0
-        ? Math.round(((point.equity - prevMonthEquity) / prevMonthEquity) * 10000) / 100
-        : 0;
-      prevMonthEquity = point.equity;
-    }
-  }
-  return monthly;
-}
 
 

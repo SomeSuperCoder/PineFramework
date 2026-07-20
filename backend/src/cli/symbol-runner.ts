@@ -1,6 +1,7 @@
-import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
+import { fetchDexFeeBps, type StrategyConfig } from 'pine-framework';
 import type { SymbolResult, SymbolMetrics } from './types.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
+import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
 
 function isJupiterMethod(method: unknown): method is 'jupiter_manual' | 'jupiter_ultra' {
   return method === 'jupiter_manual' || method === 'jupiter_ultra';
@@ -21,18 +22,12 @@ export async function runSymbolBacktest(
     }
 
     // ── Live DEX fee fetch (Jupiter methods only) ──
-    let effectiveConfig = configOverride ? { ...configOverride } : {};
+    const effectiveConfig = configOverride ? { ...configOverride } : {};
     if (symbol && isJupiterMethod(effectiveConfig.commissionMethod)) {
       try {
         const { dexFeeBps, source, dexLabel } = await fetchDexFeeBps(symbol);
         const existingSettings = (effectiveConfig.commissionMethodSettings as Record<string, unknown>) ?? {};
-        effectiveConfig = {
-          ...effectiveConfig,
-          commissionMethodSettings: {
-            ...existingSettings,
-            dexFeeBps,
-          },
-        };
+        effectiveConfig.commissionMethodSettings = { ...existingSettings, dexFeeBps };
         process.stderr.write(
           `  ℹ ${symbol}: using DEX fee ${dexFeeBps} bps (source: ${source})${dexLabel ? ' via ' + dexLabel : ''}\n`,
         );
@@ -44,70 +39,32 @@ export async function runSymbolBacktest(
       }
     }
 
-    const parseResult = parse(script);
-    const compileResult = compile(parseResult.ast);
-    if (compileResult.ir.scriptKind !== 'strategy') {
-      return { symbol, status: 'failed', error: 'Script is not a strategy' };
+    const pipelineResult = runBacktestPipeline({
+      script,
+      bars,
+      configOverride: Object.keys(effectiveConfig).length > 0 ? effectiveConfig : undefined,
+    });
+
+    if (!pipelineResult.success) {
+      return { symbol, status: 'failed', error: pipelineResult.error || 'Execution failed' };
     }
 
-    const execEngine = new ExecutionEngine(
-      compileResult,
-      Object.keys(effectiveConfig).length > 0 ? effectiveConfig : undefined,
-    );
-
-    // Each context only needs the current bar's values — executeBar uses getRelative(0)
-    // which reads the last element. Historical values are maintained by the engine's
-    // pushBarValues mechanism, not by the context series. This is O(n) memory, not O(n²).
-    const contexts = bars.map((bar, i) => ({
-      barIndex: i,
-      barCount: bars.length,
-      timestamp: bar.timestamp,
-      open: createSeries('open', [bar.open]),
-      high: createSeries('high', [bar.high]),
-      low: createSeries('low', [bar.low]),
-      close: createSeries('close', [bar.close]),
-      volume: createSeries('volume', [bar.volume]),
-    }));
-
-    const batchSize = 100;
-    let execResult;
-    for (let i = 0; i < contexts.length; i += batchSize) {
-      const batch = contexts.slice(i, i + batchSize);
-      execResult = execEngine.executeBars(batch);
-      if (!execResult.success) {
-        return { symbol, status: 'failed', error: execResult.error || 'Execution failed' };
-      }
-      if (i + batchSize < contexts.length) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-    }
-
-    if (!execResult || !execResult.success) {
-      return { symbol, status: 'failed', error: execResult?.error || 'Execution failed' };
-    }
-
-    const strategyEngine = execEngine.getStrategyEngine();
-    if (!strategyEngine) {
+    const metricsResult = computeBacktestMetrics(bars, pipelineResult.engine!);
+    if (!metricsResult) {
       return { symbol, status: 'failed', error: 'Missing strategy engine' };
     }
-
-    const metrics = strategyEngine.getMetrics();
-
-    const buyHoldReturn = bars.length >= 2
-      ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100
-      : 0;
 
     const sanitize = (v: number) => (Number.isFinite(v) ? v : 0);
 
     const resultMetrics: SymbolMetrics = {
-      netProfit: sanitize(metrics.totalPnl),
-      netProfitPercent: sanitize(metrics.totalPnlPercent),
-      profitFactor: sanitize(metrics.profitFactor),
-      maxDrawdownPercent: sanitize(metrics.maxDrawdownPercent),
-      winRate: sanitize(metrics.winRate),
-      sharpeRatio: sanitize(metrics.sharpeRatio),
-      totalTrades: metrics.totalTrades,
-      buyHoldReturn: Math.round(buyHoldReturn * 100) / 100,
+      netProfit: sanitize(metricsResult.metrics.totalPnl),
+      netProfitPercent: sanitize(metricsResult.metrics.totalPnlPercent),
+      profitFactor: sanitize(metricsResult.metrics.profitFactor),
+      maxDrawdownPercent: sanitize(metricsResult.metrics.maxDrawdownPercent),
+      winRate: sanitize(metricsResult.metrics.winRate),
+      sharpeRatio: sanitize(metricsResult.metrics.sharpeRatio),
+      totalTrades: metricsResult.metrics.totalTrades,
+      buyHoldReturn: Math.round(metricsResult.buyHoldReturn * 100) / 100,
     };
 
     return { symbol, status: 'completed', metrics: resultMetrics };

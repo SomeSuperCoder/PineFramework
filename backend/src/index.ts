@@ -21,6 +21,7 @@ import { RunningIndicatorsStore } from './store/RunningIndicatorsStore.js';
 import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
 import { TelegramService } from './telegram/TelegramService.js';
 import { migrateLegacyScripts } from './migration.js';
+import { logger } from './utils/logger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
@@ -34,7 +35,21 @@ const app = express();
 const server = createServer(app);
 const PORT = parseInt(process.env.PORT || '8081', 10);
 
-console.log(`Backend server running on port ${PORT}`);
+logger.info({ port: PORT }, 'Backend server starting');
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const logFn = res.statusCode >= 400 ? logger.warn : logger.info;
+    logFn(
+      { method: req.method, url: req.originalUrl || req.url, status: res.statusCode, duration },
+      `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`,
+    );
+  });
+  next();
+});
 
 const cache = new OHLCVCache(100, 60_000);
 
