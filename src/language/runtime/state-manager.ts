@@ -23,6 +23,12 @@ export class StateManager {
       barColorData: [...this.eng.barColorData],
       sarState: new Map([...this.eng.sarState].map(([k, v]) => [k, { ...v }])),
       barIndex: this.eng.metrics.totalBars,
+      plotColors: new Map(this.eng.plotColors),
+      fillColorData: new Map(this.eng.fillColorData),
+      alertConditionEntries: [...this.eng.alertConditionEntries],
+      alertTriggers: [...this.eng.alertTriggers],
+      boxes: new Map(this.eng.boxes),
+      barTimestamps: [...this.eng.barTimestamps],
     };
     this.eng.snapshots.push(snapshot);
     if (this.eng.snapshots.length > this.eng.maxSnapshots) {
@@ -49,6 +55,12 @@ export class StateManager {
     this.eng.bgcolorData = snapshot.bgcolorData;
     this.eng.barColorData = snapshot.barColorData;
     this.eng.sarState = new Map([...snapshot.sarState].map(([k, v]) => [k, { ...v }]));
+    if (snapshot.plotColors) this.eng.plotColors = new Map(snapshot.plotColors);
+    if (snapshot.fillColorData) this.eng.fillColorData = new Map(snapshot.fillColorData);
+    if (snapshot.alertConditionEntries) this.eng.alertConditionEntries = [...snapshot.alertConditionEntries];
+    if (snapshot.alertTriggers) this.eng.alertTriggers = [...snapshot.alertTriggers];
+    if (snapshot.boxes) this.eng.boxes = new Map(snapshot.boxes);
+    if (snapshot.barTimestamps) this.eng.barTimestamps = [...snapshot.barTimestamps];
     this.eng.snapshots = this.eng.snapshots.slice(0, snapshotIndex);
     return true;
   }

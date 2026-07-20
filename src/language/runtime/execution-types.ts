@@ -167,4 +167,10 @@ export interface ExecutionSnapshot {
   barColorData: Array<{ time: number; color: string }>;
   sarState: Map<string, SarStateValue>;
   barIndex: number;
+  plotColors?: Map<string, (string | null)[]>;
+  fillColorData?: Map<string, (string | null)[]>;
+  alertConditionEntries?: AlertConditionEntry[];
+  alertTriggers?: AlertTriggerEntry[];
+  boxes?: Map<number, BoxEntry>;
+  barTimestamps?: number[];
 }

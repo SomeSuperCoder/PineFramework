@@ -58,9 +58,9 @@ export class Interpreter {
     const startTime = performance.now();
     this.eng.currentTimestamp = context.timestamp;
     this.eng.currentContext = context;
-    this.eng.barTimestamps.push(context.timestamp);
 
     try {
+      this.eng.barTimestamps.push(context.timestamp);
       this.eng.createSnapshot();
       pushBarValues(this.eng.globalScope);
 

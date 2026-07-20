@@ -170,7 +170,7 @@
   - **Fix:** Ensure function definitions are hoisted or evaluated unconditionally. The simplest approach is to register all top-level function definitions during initialization rather than during bar execution.
   - **Test:** Create a script with a function defined inside an if statement and verify it's callable from outside the if block.
 
-- [ ] **M-008** | [ErrorHandling] | `src/language/runtime/interpreter.ts:114-139` | Error in executeBar returns a partial success result with empty outputs but success=false
+- [x] **M-008** | [ErrorHandling] | `src/language/runtime/interpreter.ts` | Error in executeBar properly restores barTimestamps, plotColors, fillColorData, alerts, boxes on rollback
   - **Issue:** When an error occurs during bar execution, the catch block returns `{ success: false, error: ... }` but also returns all current `this.eng.outputs`, `this.eng.shapes`, etc. These outputs may contain partial results from the failed bar execution that were not rolled back properly (since `rollbackToPreviousBar()` only rolls back snapshot state, not outputs/shapes/lines). This can lead to the frontend displaying partial/dirty state from a failed bar.
   - **Impact:** Failed bar executions can leave the engine in an inconsistent state, with partial UI updates displayed to the user.
   - **Fix:** In the error handler, restore outputs, shapes, lines, labels, and other visual elements to their pre-bar state. The `FormingCandleProcessor` already has the infrastructure for this (snapshot/restore pattern). Apply the same pattern to `executeBar()`.
