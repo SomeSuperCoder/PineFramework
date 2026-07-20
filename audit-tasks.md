@@ -70,7 +70,7 @@
   - **Fix:** Sanitize text fields using DOMPurify on the frontend or strip HTML from text fields in the API response. At minimum, escape HTML entities in text content.
   - **Test:** Create a Pine script that generates a shape with `text='<script>alert(1)</script>'` and verify it's not rendered as HTML.
 
-- [ ] **H-002** | [Bug-Logic] | `src/strategy/strategy-engine.ts:745-755` | MAE/MFE calculation uses bar-level high/low, not trade-level excursion
+- [x] **H-002** | [Bug-Logic] | `src/strategy/strategy-engine.ts:745-755` | MAE/MFE calculation uses bar-level high/low, not trade-level excursion
   - **Issue:** MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion) are calculated using the entire bar's `high` and `low` values at the time of position close, not the excursion during the entire trade lifetime. The correct calculation should track the best/worst price reached during the entire holding period, not just on the exit bar.
   - **Impact:** MAE and MFE values in trades are incorrect — they only reflect the exit bar's range, not the full trade range. This makes them useless for position sizing or stop-loss analysis.
   - **Fix:** Track `mfe` and `mae` incrementally during `updatePositionPnL()` by comparing against all bar high/low values while the position is open. Store the worst excursion in the Trade object at close time.
@@ -82,7 +82,7 @@
   - **Fix:** Use a different sentinel value (e.g., `null` or `undefined`) instead of 0 to indicate "not yet computed," since 0 is a valid monthly return. Alternatively, skip the first month entirely or compute it differently.
   - **Test:** Run a backtest where the first month has a profitable trade and verify the monthly return is non-zero.
 
-- [ ] **H-004** | [Bug-Logic] | `src/strategy/strategy-engine.ts:672-698` | Commission calculated per fill, but legacy commission config applies to both entry AND exit fills when it should only apply once per trade
+- [x] **H-004** | [Bug-Logic] | `src/strategy/strategy-engine.ts:672-698` | Commission calculated per fill, but legacy commission config applies to both entry AND exit fills when it should only apply once per trade
   - **Issue:** In the legacy commission system, `calculateCommission()` is called in `fillOrder()` for every fill. A market order entry calls `fillOrder()` once. But a limit order entry followed by a market exit calls `fillOrder()` twice — once for entry and once for exit. The per-order/per-contract/fixed commission types charge independently on each fill, which means commission is charged twice per round-trip trade. Most real brokerages charge once per trade (entry + exit combined), not per fill.
   - **Impact:** Backtest commissions may be double-counted, making strategies appear less profitable than they would be in reality. For `fixed` and `per_order` commission types, the error is especially large.
   - **Fix:** Change legacy commission to charge only on entry (not exit) by default, or make it configurable. Add a `commissionOnExit` config option. The pluggable commission system (`CommissionCalculator`) has the same issue since `calculate()` is called every fill.
@@ -106,7 +106,7 @@
   - **Fix:** Audit all regex patterns in the tokenizer for ReDoS vulnerability. Use atomic groups or possessive quantifiers where possible. Implement a maximum input length for the parser (e.g., reject scripts > 1MB).
   - **Test:** Craft a Pine script with a long string containing many escape sequences and measure tokenization time.
 
-- [ ] **H-008** | [Bug-Interpreter] | `src/language/runtime/interpreter.ts:813-821` | Named arguments passed to builtins may overwrite positional arguments
+- [ ] **H-008** | [Bug-Interpreter] | `src/language/runtime/interpreter.ts:813-821` | Named arguments passed to builtins may overwrite positional arguments (deferred — current behavior preserves named args needed by plot builtins; calculation builtins naturally ignore extra args)
   - **Issue:** The code constructs `builtinArgs` as `Object.keys(namedArgs).length > 0 ? [...args, namedArgs] : args;`. This appends the namedArgs object as an EXTRA argument at the end. If a builtin expects a specific number of positional arguments, adding an extra `namedArgs` object at the end can cause the builtin to receive incorrect argument positions. For example, `math.sum(a, b)` called as `math.sum(a, b, title="test")` would get `[a, b, {title: "test"}]` as 3 positional args.
   - **Impact:** Built-in function calls with named arguments (e.g., for display titles) may silently produce wrong results or throw confusing errors.
   - **Fix:** Named arguments should be extracted and passed separately to builtins, or builtins should be aware of named args and skip the last argument if it's a plain object. Alternatively, strip named args before calling builtins that don't support them.

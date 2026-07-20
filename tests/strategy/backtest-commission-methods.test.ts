@@ -288,8 +288,8 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // trade.commission = exit commission only = $2.5
-      expect(result.trades[0]!.commission).toBe(2.5);
+      // trade.commission = exit commission only = $0 (fixed commission charged on entry only)
+      expect(result.trades[0]!.commission).toBe(0);
     });
 
     it('should prefer commissionMethod over legacy when both set', () => {

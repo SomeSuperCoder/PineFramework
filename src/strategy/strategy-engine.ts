@@ -185,6 +185,11 @@ export class StrategyEngine {
   private _lastMarkerCount: number = 0;
   private _nextOrderId: number = 0;
 
+  // Track best/worst prices during an open position for MAE/MFE calculation.
+  // These are updated on every bar while a position is open.
+  private _tradeHighPrice: number = 0;
+  private _tradeLowPrice: number = 0;
+
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
 
@@ -611,7 +616,7 @@ export class StrategyEngine {
 
   private fillOrder(order: Order, fillPrice: number): void {
     const slippage = this.calculateSlippage(order, fillPrice);
-    const commission = this.calculateCommission(order, fillPrice);
+    let commission = this.calculateCommission(order, fillPrice);
     const adjustedPrice = order.action === 'buy' ? fillPrice + slippage : fillPrice - slippage;
 
     const filledOrder: FilledOrder = {
@@ -624,6 +629,17 @@ export class StrategyEngine {
     this.filledOrders.push(filledOrder);
 
     const isFlat = this.position.direction === 'flat';
+    const isExit = !isFlat;
+
+    // For fixed/per_order commission types, charge commission only on entry
+    // (opening a position). Charging on both entry and exit double-counts the
+    // commission for a round-trip trade. Per-contract and percent types are
+    // still charged per fill since they represent actual per-unit costs.
+    if (isExit) {
+      if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
+        commission = 0;
+      }
+    }
 
     if (order.action === 'buy') {
       if (isFlat) {
@@ -719,6 +735,9 @@ export class StrategyEngine {
         commission,
         unrealizedPnl: 0,
       };
+      // Initialize trade excursion tracking at entry price
+      this._tradeHighPrice = price;
+      this._tradeLowPrice = price;
     } else {
       const totalQuantity = this.position.quantity + quantity;
       this.position.avgPrice =
@@ -741,17 +760,19 @@ export class StrategyEngine {
         : (this.position.avgPrice - price) * closeQuantity;
 
     // MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion)
-    // For long: adverse = price drops (low), favorable = price rises (high)
-    // For short: adverse = price rises (high), favorable = price drops (low)
+    // Computed from the full trade lifetime (best/worst price reached during the
+    // entire holding period), not just the exit bar.
+    // For long: adverse = lowest price reached, favorable = highest price reached
+    // For short: adverse = highest price reached, favorable = lowest price reached
     const mae =
       this.position.direction === 'long'
-        ? ((this.position.avgPrice - this.low) / this.position.avgPrice) * 100
-        : ((this.high - this.position.avgPrice) / this.position.avgPrice) * 100;
+        ? ((this.position.avgPrice - this._tradeLowPrice) / this.position.avgPrice) * 100
+        : ((this._tradeHighPrice - this.position.avgPrice) / this.position.avgPrice) * 100;
 
     const mfe =
       this.position.direction === 'long'
-        ? ((this.high - this.position.avgPrice) / this.position.avgPrice) * 100
-        : ((this.position.avgPrice - this.low) / this.position.avgPrice) * 100;
+        ? ((this._tradeHighPrice - this.position.avgPrice) / this.position.avgPrice) * 100
+        : ((this.position.avgPrice - this._tradeLowPrice) / this.position.avgPrice) * 100;
 
     const trade: Trade = {
       id: `trade_${this.trades.length + 1}`,
@@ -838,6 +859,13 @@ export class StrategyEngine {
     this.fillPendingMarketOrders(open);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
+
+    // Track trade excursion for MAE/MFE while position is open
+    if (this.position.direction !== 'flat' && this.position.quantity > 0) {
+      if (high > this._tradeHighPrice) this._tradeHighPrice = high;
+      if (low > 0 && low < this._tradeLowPrice) this._tradeLowPrice = low;
+    }
+
     this.checkLiquidation();
   }
 
