@@ -234,7 +234,7 @@
   - **Fix:** Add a TTL for completed/failed jobs (e.g., 30 minutes). Periodically sweep old jobs. Or store results on disk and only keep metadata in memory.
   - **Test:** Submit 100 backtests, wait, then verify the jobs Map size doesn't keep growing indefinitely.
 
-- [ ] **L-008** | [Bug-Logic] | `src/strategy/backtest-engine.ts:133-149` | Intrabar magnification (barMagnifier) builds subBarMap but subBars param ordering assumption is fragile
+- [x] **L-008** | [Bug-Logic] | `src/strategy/backtest-engine.ts:133-149` | Intrabar magnification (barMagnifier) now sorts subBars and warns on non-overlapping timestamps
   - **Issue:** `buildSubBarMap()` assumes `subBars` are sorted by timestamp and that no two main bars overlap. It uses `bars[i+1]?.timestamp` as the upper bound, but if `bars` are not sorted (which is not guaranteed), the matching logic fails. There's also no validation that the timestamp ranges of subBars and bars overlap at all.
   - **Impact:** Bar magnification silently produces incorrect results or empty sub-bar lists if the input ordering assumptions are violated.
   - **Fix:** Sort both `bars` and `subBars` by timestamp before processing. Validate that timestamps overlap. Add a warning when subBars match zero bars.

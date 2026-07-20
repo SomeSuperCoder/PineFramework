@@ -134,9 +134,22 @@ export class BacktestEngine {
     const map = new Map<number, Bar[]>();
     if (!this.config.barMagnifier || !this.config.subBars) return map;
 
+    const subBars = [...this.config.subBars].sort((a, b) => a.timestamp - b.timestamp);
+
+    // Warn if no subBars fall within any main bar's time range
+    const mainStart = bars[0]?.timestamp ?? 0;
+    const mainEnd = bars[bars.length - 1]?.timestamp ?? 0;
+    const subStart = subBars[0]?.timestamp ?? 0;
+    const subEnd = subBars[subBars.length - 1]?.timestamp ?? 0;
+    if (subEnd < mainStart || subStart > mainEnd) {
+      console.warn(
+        '[BacktestEngine] Intrabar magnification: subBars timestamps do not overlap with main bar range',
+      );
+    }
+
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i]!;
-      const matching = this.config.subBars.filter(
+      const matching = subBars.filter(
         (sb) =>
           sb.timestamp >= bar.timestamp &&
           (i === bars.length - 1 || sb.timestamp < bars[i + 1]!.timestamp),
