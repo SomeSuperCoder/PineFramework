@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { parse, compile, ExecutionEngine, createSeries, type Bar, type StrategyConfig } from 'pine-framework';
+import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
@@ -86,6 +86,20 @@ export function createBacktestRouter() {
         const val = job.config[field];
         if (val !== undefined) {
           (configOverride as Record<string, unknown>)[field] = val;
+        }
+      }
+
+      // ── Live DEX fee fetch (Jupiter methods only) ──
+      const cm = configOverride.commissionMethod;
+      if (job.symbol && (cm === 'jupiter_manual' || cm === 'jupiter_ultra')) {
+        try {
+          const { dexFeeBps, source, dexLabel } = await fetchDexFeeBps(job.symbol);
+          const existingSettings = (configOverride.commissionMethodSettings as Record<string, unknown>) ?? {};
+          configOverride.commissionMethodSettings = { ...existingSettings, dexFeeBps };
+          console.log('[backtest] DEX fee: %d bps (source: %s, label: %s) for %s', dexFeeBps, source, dexLabel || '?', job.symbol);
+        } catch (err) {
+          console.error('[backtest] Failed to fetch DEX fee for %s: %s', job.symbol, err instanceof Error ? err.message : String(err));
+          throw err;
         }
       }
 

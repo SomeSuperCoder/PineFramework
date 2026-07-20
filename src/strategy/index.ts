@@ -49,4 +49,13 @@ export type {
   PercentFixedSettings,
   PerOrderFixedSettings,
   JupiterUltraSettings,
+  JupiterManualSettings,
 } from './commission-calculator.js';
+
+export {
+  fetchDexFeeBps,
+  getCachedDexFeeBps,
+  clearFeeCache,
+  getCacheFilePath,
+} from './jupiter-fee-fetcher.js';
+export type { FeeFetchResult } from './jupiter-fee-fetcher.js';

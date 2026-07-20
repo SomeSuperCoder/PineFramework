@@ -1,7 +1,11 @@
-import { parse, compile, ExecutionEngine, createSeries, type Bar, type StrategyConfig } from 'pine-framework';
+import { parse, compile, ExecutionEngine, createSeries, fetchDexFeeBps, type Bar, type StrategyConfig } from 'pine-framework';
 import type { SymbolResult, SymbolMetrics } from './types.js';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
+
+function isJupiterMethod(method: unknown): method is 'jupiter_manual' | 'jupiter_ultra' {
+  return method === 'jupiter_manual' || method === 'jupiter_ultra';
+}
 
 export async function runSymbolBacktest(
   script: string,
@@ -17,6 +21,30 @@ export async function runSymbolBacktest(
       return { symbol, status: 'failed', error: 'No bar data available' };
     }
 
+    // ── Live DEX fee fetch (Jupiter methods only) ──
+    let effectiveConfig = configOverride ? { ...configOverride } : {};
+    if (symbol && isJupiterMethod(effectiveConfig.commissionMethod)) {
+      try {
+        const { dexFeeBps, source, dexLabel } = await fetchDexFeeBps(symbol);
+        const existingSettings = (effectiveConfig.commissionMethodSettings as Record<string, unknown>) ?? {};
+        effectiveConfig = {
+          ...effectiveConfig,
+          commissionMethodSettings: {
+            ...existingSettings,
+            dexFeeBps,
+          },
+        };
+        process.stderr.write(
+          `  ℹ ${symbol}: using DEX fee ${dexFeeBps} bps (source: ${source})${dexLabel ? ' via ' + dexLabel : ''}\n`,
+        );
+      } catch (err) {
+        process.stderr.write(
+          `  ⚠ ${symbol}: failed to fetch live DEX fee — ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+        throw err;
+      }
+    }
+
     const parseResult = parse(script);
     const compileResult = compile(parseResult.ast);
     if (compileResult.ir.scriptKind !== 'strategy') {
@@ -25,7 +53,7 @@ export async function runSymbolBacktest(
 
     const execEngine = new ExecutionEngine(
       compileResult,
-      configOverride && Object.keys(configOverride).length > 0 ? configOverride : undefined,
+      Object.keys(effectiveConfig).length > 0 ? effectiveConfig : undefined,
     );
 
     const contexts = bars.map((bar, i) => ({
