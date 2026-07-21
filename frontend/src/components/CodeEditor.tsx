@@ -34,13 +34,12 @@ plot(sma20, color=color.blue, linewidth=2)
 `;
 
 function extractName(source: string): string | null {
-  const strategyMatch = source.match(/strategy\(\s*["'](.+?)["']/);
-  if (strategyMatch) return strategyMatch[1];
-  const indicatorMatch = source.match(/indicator\(\s*["'](.+?)["']/);
-  if (indicatorMatch) return indicatorMatch[1];
-  const studyMatch = source.match(/study\(\s*["'](.+?)["']/);
-  if (studyMatch) return studyMatch[1];
-  return null;
+  // Match positional string: indicator("Name")
+  const posMatch = source.match(/\b(?:strategy|indicator|study)\s*\(\s*["']([^"']+)["']/);
+  if (posMatch) return posMatch[1];
+  // Match named title argument: indicator(title="Name")
+  const namedMatch = source.match(/\b(?:strategy|indicator|study)\s*\(\s*title\s*=\s*["']([^"']+)["']/);
+  return namedMatch?.[1] ?? null;
 }
 
 function extractVersion(source: string): number | null {

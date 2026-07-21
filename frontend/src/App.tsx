@@ -161,11 +161,13 @@ function App() {
     }
   }, [scriptResult, indicatorResults]);
 
-  const extractScriptName = (src: string): string =>
-    src.match(/strategy\(\s*["'](.+?)["']/)?.[1]
-    || src.match(/indicator\(\s*["'](.+?)["']/)?.[1]
-    || src.match(/study\(\s*["'](.+?)["']/)?.[1]
-    || 'Indicator';
+  const extractScriptName = (src: string): string => {
+    // Prefer positional "Name", then named title="Name"
+    const pos = src.match(/\b(?:strategy|indicator|study)\s*\(\s*["']([^"']+)["']/);
+    if (pos) return pos[1];
+    const named = src.match(/\b(?:strategy|indicator|study)\s*\(\s*title\s*=\s*["']([^"']+)["']/);
+    return named?.[1] || 'Indicator';
+  };
 
   const isStrategySource = (src: string): boolean =>
     /strategy\(\s*["']/.test(src);
