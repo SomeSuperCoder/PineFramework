@@ -92,3 +92,42 @@ export function isNearZero(val: number, epsilon: number = 1e-10): boolean {
 export function isNearlyEqual(a: number, b: number, epsilon: number = 1e-10): boolean {
   return Math.abs(a - b) < epsilon;
 }
+
+// ---- Compensated summation ----
+
+/**
+ * Kahan summation accumulator — reduces floating-point error from O(N) to O(1).
+ *
+ * Usage:
+ *   let acc = { sum: 0, comp: 0 };
+ *   kahanAdd(acc, 1.005);
+ *   kahanAdd(acc, 2.01);
+ */
+export interface KahanAccumulator {
+  sum: number;
+  comp: number;
+}
+
+/**
+ * Add a value to a Kahan summation accumulator.
+ */
+export function kahanAdd(acc: KahanAccumulator, value: number): void {
+  const y = value - acc.comp;
+  const t = acc.sum + y;
+  acc.comp = (t - acc.sum) - y;
+  acc.sum = t;
+}
+
+/**
+ * Create a fresh Kahan accumulator initialised to zero.
+ */
+export function kahanZero(): KahanAccumulator {
+  return { sum: 0, comp: 0 };
+}
+
+/**
+ * Convenience: finalise a Kahan accumulator into a single number.
+ */
+export function kahanValue(acc: KahanAccumulator): number {
+  return acc.sum;
+}

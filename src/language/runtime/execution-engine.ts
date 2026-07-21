@@ -230,50 +230,21 @@ export class ExecutionEngine {
   // PUBLIC API
   // ========================================================================
 
+  /** Extract an integer length from a state-map key segment (e.g. "sma_14" -> 14). */
+  private parseMapLength(parts: string[]): number {
+    if (parts.length < 2) return 0;
+    const len = parseInt(parts[1], 10);
+    return Number.isFinite(len) && len > 0 ? len : 0;
+  }
+
   getMaxLookback(): number {
     let max = 0;
-    for (const key of this.smaBuffers.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
-    for (const key of this.emaState.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
-    for (const key of this.rsiState.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
-    for (const key of this.atrState.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
-    for (const key of this.hmaBuffers.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
-    for (const key of this.sarState.keys()) {
-      const parts = key.split('_');
-      if (parts.length >= 2) {
-        const len = parseInt(parts[1], 10);
-        if (len > max) max = len;
-      }
-    }
+    for (const key of this.smaBuffers.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.emaState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.rsiState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.atrState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.hmaBuffers.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.sarState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
     return max;
   }
 
@@ -341,13 +312,21 @@ export class ExecutionEngine {
     } else {
       this.metrics.failedBars++;
     }
+    this.metrics.lastExecutionTimeMs = executionTimeMs;
+
+    // Running average — O(1) instead of O(N) reduce.
+    const windowSize = Math.min(this.executionTimes.length, 1000);
+    if (windowSize === 0) {
+      this.metrics.averageExecutionTimeMs = executionTimeMs;
+    } else {
+      this.metrics.averageExecutionTimeMs +=
+        (executionTimeMs - this.metrics.averageExecutionTimeMs) / (windowSize + 1);
+    }
+
     this.executionTimes.push(executionTimeMs);
     if (this.executionTimes.length > 1000) {
       this.executionTimes.shift();
     }
-    this.metrics.lastExecutionTimeMs = executionTimeMs;
-    this.metrics.averageExecutionTimeMs =
-      this.executionTimes.reduce((a, b) => a + b, 0) / this.executionTimes.length;
   }
 
   /** @internal */

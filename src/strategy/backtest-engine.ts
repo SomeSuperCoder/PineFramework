@@ -269,10 +269,15 @@ export class BacktestEngine {
     pnlDifference: number;
     maxDrawdownDifference: number;
   } {
+    // Per-field thresholds: PnL in dollars, drawdown in dollars, win rate in percent
+    const PNL_EPSILON = 0.01;
+    const DRAWDOWN_EPSILON = 0.01;
+    const WINRATE_EPSILON = 0.001;
+
     const metricsMatch =
-      Math.abs(result1.metrics.totalPnl - result2.metrics.totalPnl) < 0.01 &&
-      Math.abs(result1.metrics.maxDrawdown - result2.metrics.maxDrawdown) < 0.01 &&
-      Math.abs(result1.metrics.winRate - result2.metrics.winRate) < 0.01;
+      Math.abs(result1.metrics.totalPnl - result2.metrics.totalPnl) < PNL_EPSILON &&
+      Math.abs(result1.metrics.maxDrawdown - result2.metrics.maxDrawdown) < DRAWDOWN_EPSILON &&
+      Math.abs(result1.metrics.winRate - result2.metrics.winRate) < WINRATE_EPSILON;
 
     return {
       metricsMatch,

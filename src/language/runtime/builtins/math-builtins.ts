@@ -9,9 +9,13 @@ import { guardFinite, isFiniteNumber } from '../float-guards.js';
  */
 function stableRound(value: number, precision: number): number {
   const factor = Math.pow(10, precision);
-  // Shift values that are just_under 0.5 ULPs due to binary representation
+  // Compensate for IEEE 754 binary artifacts: values like 1.005 * 100
+  // produce 100.49999999999999 instead of 100.5.
+  // Using a fixed 1e-12 epsilon (≈ 10^-12 in the shifted domain) reliably
+  // pushes borderline cases past the halfway point without affecting
+  // genuine values — the binary representation error is ~10^-15 to 10^-14.
   const shifted = value * factor;
-  const eps = Number.EPSILON * 0.5 * Math.sign(value) || Number.EPSILON * 0.5;
+  const eps = shifted >= 0 ? 1e-12 : -1e-12;
   const result = Math.round(shifted + eps) / factor;
   return result;
 }

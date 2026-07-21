@@ -33,6 +33,7 @@ import {
 import type { ExecutionEngine } from './execution-engine.js';
 import type { RuntimeScope } from './scope.js';
 import type { PineValue } from '../types/na.js';
+import { NA, isNa } from '../types/na.js';
 import { pushBarValues } from './scope.js';
 
 // ── Module implementation imports ─────────────────────────────────────────────
@@ -220,10 +221,14 @@ export class Interpreter {
     for (const bar of bars) {
       lastResult = this.executeBar(bar);
       if (!lastResult.success) {
+        this.sanitizeOutputs();
         return { ...lastResult, strategyMarkers: allMarkers, maxLookback: this.eng.getMaxLookback() };
       }
       allMarkers.push(...lastResult.strategyMarkers);
     }
+
+    // Final pass: convert any remaining NaN/Infinity across all outputs to NA
+    this.sanitizeOutputs();
 
     return { ...lastResult, strategyMarkers: allMarkers, maxLookback: this.eng.getMaxLookback() };
   }
@@ -231,6 +236,36 @@ export class Interpreter {
   executeRealtimeBar(context: ExecutionContext): ExecutionResult {
     if (this.eng.snapshots.length === 0) this.eng.createSnapshot();
     return this.executeBar(context);
+  }
+
+  /**
+   * Sanitize output values: convert any remaining NaN/Infinity to NA.
+   * This is called once after all bars have been executed (in executeBars),
+   * NOT per-bar, so intermediate NaN during warmup isn't prematurely overwritten.
+   */
+  private sanitizeOutputs(): void {
+    function walk(v: any): any {
+      if (v === null || v === undefined) return v;
+      if (typeof v === 'number') {
+        if (Number.isNaN(v) || !Number.isFinite(v)) return NA;
+        return v;
+      }
+      if (Array.isArray(v)) {
+        for (let i = 0; i < v.length; i++) {
+          const w = walk(v[i]);
+          if (w !== v[i]) v[i] = w;
+        }
+        return v;
+      }
+      return v;
+    }
+    const outputs = this.eng.outputs;
+    for (const key of Object.keys(outputs)) {
+      const val = outputs[key];
+      if (val !== null && val !== undefined) {
+        outputs[key] = walk(val);
+      }
+    }
   }
 
   // ==========================================================================
