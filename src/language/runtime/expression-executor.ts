@@ -16,6 +16,18 @@ import type {
 import { NA, isNa, pineTruthy, type PineValue } from '../types/na.js';
 import { FLOAT_TYPE } from '../types/pine-types.js';
 import {
+  guardFinite,
+  safeAdd,
+  safeSub,
+  safeMul,
+  safeDiv,
+  safeMod,
+  safePow,
+  safeUnaryMinus,
+  safeUnaryPlus,
+  isFiniteNumber,
+} from './float-guards.js';
+import {
   type RuntimeScope,
   createRuntimeScope,
   declareVariable,
@@ -87,22 +99,25 @@ export function executeIdentifier(
   if (expr.name === 'bar_count') return context.barCount;
   if (expr.name === 'time') return context.timestamp;
   if (expr.name === 'hl2') {
-    const high = context.high.getRelative(0) as number;
-    const low = context.low.getRelative(0) as number;
-    return (high + low) / 2;
+    const high = context.high.getRelative(0);
+    const low = context.low.getRelative(0);
+    if (isNa(high) || isNa(low)) return NA;
+    return safeAdd(high as number, low as number) as number / 2;
   }
   if (expr.name === 'hlc3') {
-    const high = context.high.getRelative(0) as number;
-    const low = context.low.getRelative(0) as number;
-    const close = context.close.getRelative(0) as number;
-    return (high + low + close) / 3;
+    const high = context.high.getRelative(0);
+    const low = context.low.getRelative(0);
+    const close = context.close.getRelative(0);
+    if (isNa(high) || isNa(low) || isNa(close)) return NA;
+    return ((high as number) + (low as number) + (close as number)) / 3;
   }
   if (expr.name === 'ohlc4') {
-    const open = context.open.getRelative(0) as number;
-    const high = context.high.getRelative(0) as number;
-    const low = context.low.getRelative(0) as number;
-    const close = context.close.getRelative(0) as number;
-    return (open + high + low + close) / 4;
+    const open = context.open.getRelative(0);
+    const high = context.high.getRelative(0);
+    const low = context.low.getRelative(0);
+    const close = context.close.getRelative(0);
+    if (isNa(open) || isNa(high) || isNa(low) || isNa(close)) return NA;
+    return ((open as number) + (high as number) + (low as number) + (close as number)) / 4;
   }
   if (expr.name === 'na') return NA;
 
@@ -134,12 +149,12 @@ export function executeBinaryExpression(
   switch (expr.operator) {
     case '+':
       if (typeof left === 'string' || typeof right === 'string') return String(left) + String(right);
-      return (left as number) + (right as number);
-    case '-': return (left as number) - (right as number);
-    case '*': return (left as number) * (right as number);
-    case '/': return (right as number) === 0 ? NA : (left as number) / (right as number);
-    case '%': return (right as number) === 0 ? NA : (left as number) % (right as number);
-    case '**': return Math.pow(left as number, right as number);
+      return safeAdd(left as number, right as number);
+    case '-': return safeSub(left as number, right as number);
+    case '*': return safeMul(left as number, right as number);
+    case '/': return safeDiv(left as number, right as number);
+    case '%': return safeMod(left as number, right as number);
+    case '**': return safePow(left as number, right as number);
     case '==': return left === right;
     case '!=': return left !== right;
     case '<': return (left as number) < (right as number);
@@ -160,8 +175,8 @@ export function executeUnaryExpression(
   const operand = dispatch(expr.operand, scope, context);
   if (isNa(operand)) return NA;
   switch (expr.operator) {
-    case '-': return -(operand as number);
-    case '+': return +(operand as number);
+    case '-': return safeUnaryMinus(operand as number);
+    case '+': return safeUnaryPlus(operand as number);
     case 'not': return !pineTruthy(operand);
     default: throw new Error(`Unsupported unary operator: ${expr.operator}`);
   }
@@ -332,7 +347,8 @@ export function executeCallExpression(
         case 'clear': obj.length = 0; return NA;
         case 'percentile_linear_interpolation': {
           const pct = (args[0] as number) ?? 50;
-          const nums = obj.filter((v: any): v is number => typeof v === 'number' && !isNaN(v)).sort((a: number, b: number) => a - b);
+          if (typeof pct !== 'number' || isNaN(pct)) return NA;
+          const nums = obj.filter((v: any): v is number => typeof v === 'number' && !isNaN(v) && Number.isFinite(v)).sort((a: number, b: number) => a - b);
           if (nums.length === 0) return NA;
           if (nums.length === 1) return nums[0];
           const rank = (pct / 100) * (nums.length - 1);

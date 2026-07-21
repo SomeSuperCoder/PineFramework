@@ -1,6 +1,7 @@
 import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
 import { RingBuffer } from '../ring-buffer.js';
+import { guardFinite, isFiniteNumber, isNearZero } from '../float-guards.js';
 
 export function registerTaBuiltins(engine: ExecutionEngine): void {
   const eng = engine as any;
@@ -26,6 +27,8 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     if (isNa(source) || isNa(length)) return NA;
     const len = Math.trunc(length as number);
     if (len <= 0) return NA;
+    const val = source as number;
+    if (!isFiniteNumber(val)) return NA;
 
     const key = `ema_${len}_${eng.currentCallSiteId}`;
     const k = 2 / (len + 1);
@@ -35,7 +38,7 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     }
     const state = eng.emaState.get(key)!;
     state.count++;
-    state.sum += source as number;
+    state.sum += val;
 
     if (state.count < len) {
       return NA;
@@ -46,8 +49,10 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
       state.initialized = true;
       return state.prev;
     }
-    state.prev = (source as number) * k + state.prev * (1 - k);
-    return state.prev;
+    // Numerically stable form: prev += k * (val - prev)
+    // Avoids the less-stable: prev = val * k + prev * (1 - k)
+    state.prev += k * (val - state.prev);
+    return guardFinite(state.prev);
   });
 
   eng.builtins.set('ta.rsi', (source: PineValue, length: PineValue): PineValue => {
@@ -79,9 +84,10 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
       state.prevAvgLoss = (state.prevAvgLoss * (len - 1) + loss) / len;
     }
 
-    if (state.prevAvgLoss === 0) return state.prevAvgGain === 0 ? 50 : 100;
+    // Use epsilon comparison to handle IEEE 754 near-zero values
+    if (isNearZero(state.prevAvgLoss)) return isNearZero(state.prevAvgGain) ? 50 : 100;
     const rs = state.prevAvgGain / state.prevAvgLoss;
-    return 100 - 100 / (1 + rs);
+    return guardFinite(100 - 100 / (1 + rs));
   });
 
   eng.builtins.set('ta.sar', (start: PineValue, inc: PineValue, max: PineValue): PineValue => {
@@ -169,7 +175,12 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     const prevHigh2 = state.prevHigh2;
     const prevEp = state.prevEp;
 
-    let sar = state.prevSar + state.af * (state.ep - state.prevSar);
+    // Guard all inputs to prevent NaN cascade
+    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) {
+      return NA;
+    }
+    let sar = guardFinite(state.prevSar + state.af * (state.ep - state.prevSar));
+    if (isNa(sar)) return NA;
 
     if (state.trend === 'up') {
       sar = Math.min(sar, prevLow1, prevLow2);
@@ -208,7 +219,7 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     state.prevHigh1 = high;
     state.prevHigh2 = prevHigh1;
 
-    return sar;
+    return guardFinite(sar);
   });
 
   eng.builtins.set('ta.atr', (length: PineValue): PineValue => {
@@ -350,6 +361,11 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     return dSum / dWeight;
   });
 
+  // Small epsilon for cross detection — values within this band are
+  // considered equal, preventing false positives from IEEE 754 noise
+  // while still detecting clear cross signals.
+  const CROSS_EPSILON = 1e-10;
+
   eng.builtins.set('ta.crossover', (source: PineValue, compare: PineValue): PineValue => {
     if (isNa(source) || isNa(compare)) return false;
     const key = `cross_${eng.currentCallSiteId}`;
@@ -358,7 +374,10 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
       eng.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
       return false;
     }
-    const result = prev.src <= prev.cmp && (source as number) > (compare as number);
+    const prevDiff = prev.src - prev.cmp;
+    const currDiff = (source as number) - (compare as number);
+    // Was not clearly above, now clearly above (must clear epsilon band)
+    const result = prevDiff < CROSS_EPSILON && currDiff > CROSS_EPSILON;
     prev.src = source as number;
     prev.cmp = compare as number;
     return result;
@@ -372,7 +391,10 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
       eng.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
       return false;
     }
-    const result = prev.src >= prev.cmp && (source as number) < (compare as number);
+    const prevDiff = prev.src - prev.cmp;
+    const currDiff = (source as number) - (compare as number);
+    // Was not clearly below, now clearly below
+    const result = prevDiff > -CROSS_EPSILON && currDiff < -CROSS_EPSILON;
     prev.src = source as number;
     prev.cmp = compare as number;
     return result;
@@ -386,9 +408,11 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
       eng.crossPrevValues.set(key, { src: source as number, cmp: compare as number });
       return false;
     }
+    const prevDiff = prev.src - prev.cmp;
+    const currDiff = (source as number) - (compare as number);
     const crossed =
-      (prev.src <= prev.cmp && (source as number) > (compare as number)) ||
-      (prev.src >= prev.cmp && (source as number) < (compare as number));
+      (prevDiff < CROSS_EPSILON && currDiff > CROSS_EPSILON) ||
+      (prevDiff > -CROSS_EPSILON && currDiff < -CROSS_EPSILON);
     prev.src = source as number;
     prev.cmp = compare as number;
     return crossed;

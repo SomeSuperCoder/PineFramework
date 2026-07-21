@@ -22,7 +22,7 @@ export function naOr<T extends PineValue>(value: T | typeof NA, fallback: T): T 
 }
 
 export function isValidNumber(value: PineValue): value is number {
-  return typeof value === 'number' && !isNa(value);
+  return typeof value === 'number' && !isNa(value) && Number.isFinite(value);
 }
 
 export function propagateNa(...values: PineValue[]): boolean {

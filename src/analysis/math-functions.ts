@@ -211,6 +211,11 @@ export function rank(source: number[], length: number): number[] {
 export function quantile(source: number[], length: number, q: number): number[] {
   const result: number[] = [];
 
+  // Guard against NaN quantile parameter
+  if (isNaN(q) || !isFinite(q)) {
+    return source.map(() => NaN);
+  }
+
   for (let i = 0; i < source.length; i++) {
     if (i < length - 1) {
       result.push(NaN);

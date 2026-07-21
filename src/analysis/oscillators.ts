@@ -1,4 +1,5 @@
 import { rma, ema as emaFunc, sma as smaFunc } from './moving-averages.js';
+import { isNearZero, guardFinite } from '../language/runtime/float-guards.js';
 
 export function rsi(source: number[], length: number): number[] {
   if (length <= 0 || source.length === 0) {
@@ -95,7 +96,7 @@ export function stoch(
     }
 
     const range = highest - lowest;
-    rawK.push(range === 0 ? 50 : ((close[i]! - lowest) / range) * 100);
+    rawK.push(isNearZero(range) ? 50 : ((close[i]! - lowest) / range) * 100);
   }
 
   const smoothedK = rma(rawK, dSmooth);
@@ -227,7 +228,7 @@ export function adx(
     minusDi.push(mdi);
 
     const sum = pdi + mdi;
-    dx.push(sum === 0 ? 0 : (Math.abs(pdi - mdi) / sum) * 100);
+    dx.push(isNearZero(sum) ? 0 : (Math.abs(pdi - mdi) / sum) * 100);
   }
 
   const adxValues = rma(dx, length);
@@ -291,7 +292,7 @@ export function cci(high: number[], low: number[], close: number[], length: numb
     }
     const meanAbsDev = sumAbsDev / length;
 
-    result.push(meanAbsDev === 0 ? 0 : (tp[i]! - mean) / (0.015 * meanAbsDev));
+    result.push(isNearZero(meanAbsDev) ? 0 : (tp[i]! - mean) / (0.015 * meanAbsDev));
   }
 
   return result;
@@ -332,7 +333,7 @@ export function mfi(
       }
     }
 
-    const mfRatio = negativeMF === 0 ? 100 : positiveMF / negativeMF;
+    const mfRatio = isNearZero(negativeMF) ? 100 : positiveMF / negativeMF;
     result.push(100 - 100 / (1 + mfRatio));
   }
 
@@ -380,7 +381,7 @@ export function roc(source: number[], length: number): number[] {
   const result: number[] = [];
 
   for (let i = 0; i < source.length; i++) {
-    if (i < length || source[i - length] === 0) {
+    if (i < length || isNearZero(source[i - length]!)) {
       result.push(NaN);
     } else {
       result.push(((source[i]! - source[i - length]!) / source[i - length]!) * 100);

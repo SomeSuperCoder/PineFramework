@@ -1,6 +1,9 @@
 /** Typical number of trading days per year used for Sharpe/Sortino annualization. */
 const TRADING_DAYS_PER_YEAR = 252;
 
+/** Small epsilon to guard against division by subnormal values in Sharpe/Sortino. */
+const STD_EPSILON = 1e-15;
+
 export type OrderDirection = 'long' | 'short';
 export type OrderAction = 'buy' | 'sell';
 export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
@@ -755,8 +758,10 @@ export class StrategyEngine {
       this._tradeLowPrice = price;
     } else {
       const totalQuantity = this.position.quantity + quantity;
-      this.position.avgPrice =
-        (this.position.avgPrice * this.position.quantity + price * quantity) / totalQuantity;
+      // Two-product weighted average: compute in two passes to reduce floating-point drift
+      const oldContribution = this.position.avgPrice * this.position.quantity;
+      const newContribution = price * quantity;
+      this.position.avgPrice = (oldContribution + newContribution) / totalQuantity;
       this.position.quantity = totalQuantity;
       this.position.commission += commission;
     }
@@ -1119,8 +1124,8 @@ export class StrategyEngine {
         this.config.initialCapital > 0 ? (totalPnl / this.config.initialCapital) * 100 : 0,
       maxDrawdown: this.maxDrawdown,
       maxDrawdownPercent: this.peakEquity > 0 ? (this.maxDrawdown / this.peakEquity) * 100 : 0,
-      sharpeRatio: stdReturn > 0 ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
-      sortinoRatio: downsideDev > 0 ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
+      sharpeRatio: stdReturn > STD_EPSILON ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
+      sortinoRatio: downsideDev > STD_EPSILON ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
       averageWin: avgWin,
       averageLoss: avgLoss,
       largestWin: winningTrades.length > 0 ? Math.max(...winningTrades.map((t) => t.pnl)) : 0,

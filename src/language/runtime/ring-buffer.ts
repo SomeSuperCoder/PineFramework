@@ -11,6 +11,7 @@ export class RingBuffer {
   private head: number = 0;
   private size: number = 0;
   private sum: number = 0;
+  private pushCount: number = 0;
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -33,6 +34,32 @@ export class RingBuffer {
       this.head = (this.head + 1) % this.capacity;
       this.size++;
     }
+    // Periodically recompute sum from scratch to correct IEEE 754 drift
+    this.pushCount++;
+    if (this.pushCount >= this.capacity * 10) {
+      this.pushCount = 0;
+      this.recalcSum();
+    }
+  }
+
+  /** Recompute running sum from buffer contents to correct floating-point drift. */
+  private recalcSum(): void {
+    if (this.size === 0) {
+      this.sum = 0;
+      return;
+    }
+    const buf = this.buffer!;
+    let s = 0;
+    if (this.size < this.capacity) {
+      for (let i = 0; i < this.size; i++) {
+        s += buf[i];
+      }
+    } else {
+      for (let i = 0; i < this.capacity; i++) {
+        s += buf[(this.head + i) % this.capacity];
+      }
+    }
+    this.sum = s;
   }
 
   getSize(): number {

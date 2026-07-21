@@ -201,6 +201,10 @@ export function linreg(source: number[], length: number): number[] {
   }
 
   const result: number[] = [];
+  // Precompute sumX, sumX2, meanX — these are constant for a given length
+  const sumX = (length * (length - 1)) / 2;
+  const sumX2 = ((length - 1) * length * (2 * length - 1)) / 6;
+  const meanX = sumX / length;
 
   for (let i = 0; i < source.length; i++) {
     if (i < length - 1) {
@@ -208,22 +212,31 @@ export function linreg(source: number[], length: number): number[] {
       continue;
     }
 
-    let sumX = 0;
     let sumY = 0;
     let sumXY = 0;
-    let sumX2 = 0;
 
     for (let j = 0; j < length; j++) {
       const x = j;
       const y = source[i - j]!;
-      sumX += x;
       sumY += y;
       sumXY += x * y;
-      sumX2 += x * x;
     }
 
-    const slope = (length * sumXY - sumX * sumY) / (length * sumX2 - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / length;
+    const meanY = sumY / length;
+
+    // Use centered (two-pass) formula to avoid catastrophic cancellation:
+    //   slope = Σ(x - meanX)(y - meanY) / Σ(x - meanX)²
+    let centeredNum = 0;
+    let centeredDen = 0;
+    for (let j = 0; j < length; j++) {
+      const dx = j - meanX;
+      const dy = source[i - j]! - meanY;
+      centeredNum += dx * dy;
+      centeredDen += dx * dx;
+    }
+
+    const slope = centeredDen === 0 ? 0 : centeredNum / centeredDen;
+    const intercept = meanY - slope * meanX;
 
     result.push(intercept + slope * (length - 1));
   }
@@ -244,26 +257,32 @@ export function correlation(source1: number[], source2: number[], length: number
       continue;
     }
 
+    // Two-pass algorithm for numerical stability:
+    // First pass: compute means to center the data
     let sumX = 0;
     let sumY = 0;
-    let sumXY = 0;
-    let sumX2 = 0;
-    let sumY2 = 0;
+    for (let j = 0; j < length; j++) {
+      sumX += source1[i - j]!;
+      sumY += source2[i - j]!;
+    }
+    const meanX = sumX / length;
+    const meanY = sumY / length;
+
+    // Second pass: centered sums (avoids catastrophic cancellation)
+    let centeredXY = 0;
+    let centeredX2 = 0;
+    let centeredY2 = 0;
 
     for (let j = 0; j < length; j++) {
-      const x = source1[i - j]!;
-      const y = source2[i - j]!;
-      sumX += x;
-      sumY += y;
-      sumXY += x * y;
-      sumX2 += x * x;
-      sumY2 += y * y;
+      const dx = source1[i - j]! - meanX;
+      const dy = source2[i - j]! - meanY;
+      centeredXY += dx * dy;
+      centeredX2 += dx * dx;
+      centeredY2 += dy * dy;
     }
 
-    const numerator = length * sumXY - sumX * sumY;
-    const denominator = Math.sqrt((length * sumX2 - sumX * sumX) * (length * sumY2 - sumY * sumY));
-
-    result.push(denominator === 0 ? NaN : numerator / denominator);
+    const denominator = Math.sqrt(Math.max(0, centeredX2) * Math.max(0, centeredY2));
+    result.push(denominator === 0 ? NaN : centeredXY / denominator);
   }
 
   return result;

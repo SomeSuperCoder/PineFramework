@@ -20,6 +20,7 @@ import type {
 } from '../parser/ast/nodes.js';
 import { NA, pineTruthy, type PineValue } from '../types/na.js';
 import { FLOAT_TYPE, INT_TYPE } from '../types/pine-types.js';
+import { safeAdd, safeSub, safeMul, safeDiv } from './float-guards.js';
 import {
   type RuntimeScope,
   createRuntimeScope,
@@ -88,10 +89,10 @@ export function executeAssignment(
     if (stmt.operator !== '=') {
       const current = binding.series.getRelative(0);
       switch (stmt.operator) {
-        case '+=': result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0); break;
-        case '-=': result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0); break;
-        case '*=': result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0); break;
-        case '/=': result = typeof current === 'number' && typeof value === 'number' && value !== 0 ? current / value : 0; break;
+        case '+=': result = safeAdd(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+        case '-=': result = safeSub(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+        case '*=': result = safeMul(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+        case '/=': result = safeDiv(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
         case ':=': result = value; break;
       }
     }
@@ -112,10 +113,10 @@ export function executeAssignment(
       if (stmt.operator !== '=') {
         const current = record[fieldName] !== undefined ? record[fieldName] : NA;
         switch (stmt.operator) {
-          case '+=': result = (typeof current === 'number' ? current : 0) + (typeof value === 'number' ? value : 0); break;
-          case '-=': result = (typeof current === 'number' ? current : 0) - (typeof value === 'number' ? value : 0); break;
-          case '*=': result = (typeof current === 'number' ? current : 0) * (typeof value === 'number' ? value : 0); break;
-          case '/=': result = typeof current === 'number' && typeof value === 'number' && value !== 0 ? current / value : 0; break;
+          case '+=': result = safeAdd(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+          case '-=': result = safeSub(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+          case '*=': result = safeMul(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
+          case '/=': result = safeDiv(typeof current === 'number' ? current : 0, typeof value === 'number' ? value : 0); break;
           case ':=': result = value; break;
         }
       }
