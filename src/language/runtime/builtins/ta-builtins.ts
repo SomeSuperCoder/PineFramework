@@ -431,6 +431,16 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     return result;
   });
 
+  /**
+   * ta.pivothigh(leftBars, rightBars) → series float
+   *
+   * Detects a pivot high bar whose high is strictly greater than the high
+   * of all bars in the window [barIndex - leftBars - rightBars, barIndex - rightBars + rightBars],
+   * excluding the candidate bar itself.
+   *
+   * The result appears `rightBars` bars after the pivot (when confirmed).
+   * Left-side bars that go beyond the available series length are skipped (NA-tolerant).
+   */
   eng.builtins.set('ta.pivothigh', (...args: PineValue[]): PineValue => {
     const ctx = eng.currentContext;
     if (!ctx) return NA;
@@ -443,7 +453,9 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     if (leftBars < 1 || rightBars < 1) return NA;
     const series = ctx.high;
     const len = series.length;
-    if (len < leftBars + rightBars + 1) return NA;
+    // Need at least rightBars + 1 bars so the candidate at offset rightBars exists.
+    // Left-side bars beyond available history are handled by NA skipping in the loop.
+    if (len < rightBars + 1) return NA;
     const candidateOffset = rightBars;
     const candidateValue = series.getRelative(candidateOffset);
     if (isNa(candidateValue)) return NA;
@@ -455,6 +467,13 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     return candidateValue;
   });
 
+  /**
+   * ta.pivotlow(leftBars, rightBars) → series float
+   *
+   * Detects a pivot low bar whose low is strictly less than the low
+   * of all bars in the window [barIndex - leftBars - rightBars, barIndex - rightBars + rightBars],
+   * excluding the candidate bar itself.
+   */
   eng.builtins.set('ta.pivotlow', (...args: PineValue[]): PineValue => {
     const ctx = eng.currentContext;
     if (!ctx) return NA;
@@ -467,7 +486,8 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     if (leftBars < 1 || rightBars < 1) return NA;
     const series = ctx.low;
     const len = series.length;
-    if (len < leftBars + rightBars + 1) return NA;
+    // Need at least rightBars + 1 bars so the candidate at offset rightBars exists.
+    if (len < rightBars + 1) return NA;
     const candidateOffset = rightBars;
     const candidateValue = series.getRelative(candidateOffset);
     if (isNa(candidateValue)) return NA;
