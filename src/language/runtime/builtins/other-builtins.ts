@@ -508,19 +508,36 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
       let textcolorStr = '#ffffff';
       let styleStr = 'label.style_label_down';
       let sizeStr = 'size.normal';
+      let xlocStr = 'bar_index';
       if (typeof actualNamedArgs === 'object' && actualNamedArgs !== null) {
         if (typeof actualNamedArgs.color === 'string') colorStr = actualNamedArgs.color;
         if (typeof actualNamedArgs.textcolor === 'string') textcolorStr = actualNamedArgs.textcolor;
         if (typeof actualNamedArgs.style === 'string') styleStr = actualNamedArgs.style;
         if (typeof actualNamedArgs.size === 'string') sizeStr = actualNamedArgs.size;
+        if (typeof actualNamedArgs.xloc === 'string') xlocStr = actualNamedArgs.xloc;
         // text might also be in tooltip named arg
         if (typeof actualNamedArgs.text === 'string') actualText = actualNamedArgs.text;
       }
       // Member expression resolution strips prefixes: label.style_label_down → style_label_down
       if (!styleStr.startsWith('label.')) styleStr = 'label.' + styleStr;
       if (!sizeStr.startsWith('size.')) sizeStr = 'size.' + sizeStr;
+      // Compute the label time from x depending on xloc mode.
+      // In TradingView, xloc.bar_index (default) means x is a bar index;
+      // xloc.bar_time means x is a UNIX timestamp in milliseconds.
+      let time: number;
+      if (xlocStr === 'bar_time') {
+        time = x as number;
+      } else {
+        // bar_index mode — convert bar index to timestamp via barTimestamps array
+        const barIdx = Math.trunc(x as number);
+        if (barIdx >= 0 && barIdx < eng.barTimestamps.length) {
+          time = eng.barTimestamps[barIdx];
+        } else {
+          time = eng.currentTimestamp; // fallback for out-of-range indices
+        }
+      }
       eng.labels.push({
-        time: eng.currentTimestamp,
+        time,
         price: y as number,
         text: String(actualText),
         color: colorStr,

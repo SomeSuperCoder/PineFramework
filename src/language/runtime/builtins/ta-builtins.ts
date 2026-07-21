@@ -442,8 +442,7 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
    * Left-side bars that go beyond the available series length are skipped (NA-tolerant).
    */
   eng.builtins.set('ta.pivothigh', (...args: PineValue[]): PineValue => {
-    const ctx = eng.currentContext;
-    if (!ctx) return NA;
+    if (!eng.currentContext) return NA;
     const last = args[args.length - 1];
     const hasNamed = typeof last === 'object' && last !== null && !Array.isArray(last);
     const positionalCount = hasNamed ? args.length - 1 : args.length;
@@ -451,18 +450,21 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     const leftBars = args[0] as number;
     const rightBars = args[1] as number;
     if (leftBars < 1 || rightBars < 1) return NA;
-    const series = ctx.high;
-    const len = series.length;
-    // Need at least rightBars + 1 bars so the candidate at offset rightBars exists.
-    // Left-side bars beyond available history are handled by NA skipping in the loop.
+    // Read from the engine's accumulated OHLC history, not from the context series.
+    // Each context's series only has the current bar's value, but ohlcHistory has
+    // all historical bars pushed by the interpreter before statements execute.
+    const highArr = eng.ohlcHistory.high;
+    const len = highArr.length;
     if (len < rightBars + 1) return NA;
-    const candidateOffset = rightBars;
-    const candidateValue = series.getRelative(candidateOffset);
-    if (isNa(candidateValue)) return NA;
+    const candidateIdx = len - 1 - rightBars;
+    const candidateValue = highArr[candidateIdx];
+    if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
     for (let d = -leftBars; d <= rightBars; d++) {
       if (d === 0) continue;
-      const v = series.getRelative(rightBars - d);
-      if (!isNa(v) && (v as number) > (candidateValue as number)) return NA;
+      const idx = candidateIdx + d;
+      if (idx < 0 || idx >= len) continue;
+      const v = highArr[idx];
+      if (typeof v === 'number' && !isNaN(v) && v > candidateValue) return NA;
     }
     return candidateValue;
   });
@@ -475,8 +477,7 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
    * excluding the candidate bar itself.
    */
   eng.builtins.set('ta.pivotlow', (...args: PineValue[]): PineValue => {
-    const ctx = eng.currentContext;
-    if (!ctx) return NA;
+    if (!eng.currentContext) return NA;
     const last = args[args.length - 1];
     const hasNamed = typeof last === 'object' && last !== null && !Array.isArray(last);
     const positionalCount = hasNamed ? args.length - 1 : args.length;
@@ -484,17 +485,19 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     const leftBars = args[0] as number;
     const rightBars = args[1] as number;
     if (leftBars < 1 || rightBars < 1) return NA;
-    const series = ctx.low;
-    const len = series.length;
-    // Need at least rightBars + 1 bars so the candidate at offset rightBars exists.
+    // Read from the engine's accumulated OHLC history, not from the context series.
+    const lowArr = eng.ohlcHistory.low;
+    const len = lowArr.length;
     if (len < rightBars + 1) return NA;
-    const candidateOffset = rightBars;
-    const candidateValue = series.getRelative(candidateOffset);
-    if (isNa(candidateValue)) return NA;
+    const candidateIdx = len - 1 - rightBars;
+    const candidateValue = lowArr[candidateIdx];
+    if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
     for (let d = -leftBars; d <= rightBars; d++) {
       if (d === 0) continue;
-      const v = series.getRelative(rightBars - d);
-      if (!isNa(v) && (v as number) < (candidateValue as number)) return NA;
+      const idx = candidateIdx + d;
+      if (idx < 0 || idx >= len) continue;
+      const v = lowArr[idx];
+      if (typeof v === 'number' && !isNaN(v) && v < candidateValue) return NA;
     }
     return candidateValue;
   });
