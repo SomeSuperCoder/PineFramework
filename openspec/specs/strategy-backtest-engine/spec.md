@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Strategy Backtest Engine functionality for the strategy-backtest-engine module.
+
+## Requirements
 
 ### Requirement: Strategy Backtest Engine
 The system SHALL provide a backtest engine within the backend that processes historical data, executes strategy scripts, and computes performance metrics.

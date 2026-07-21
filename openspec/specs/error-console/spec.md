@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Error Console functionality for the error-console module.
+
+## Requirements
 
 ### Requirement: Error Console
 The frontend SHALL provide a dedicated error console panel displaying compilation errors, runtime errors, and script output.

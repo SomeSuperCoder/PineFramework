@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Execution Performance functionality for the performance-scalability module.
+
+## Requirements
 
 ### Requirement: Execution Performance
 The engine SHALL achieve specific performance benchmarks for parsing, compilation, and execution.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Bar-by-Bar Execution functionality for the execution-engine module.
+
+## Requirements
 
 ### Requirement: Bar-by-Bar Execution
 The execution engine SHALL execute Pine Script programs bar-by-bar, maintaining series state across historical bars and updating calculations on realtime bars.

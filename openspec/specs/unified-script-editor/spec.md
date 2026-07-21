@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Unified Script Editor functionality for the unified-script-editor module.
+
+## Requirements
 
 ### Requirement: Unified Script Editor
 The frontend SHALL provide a unified code editor for Pine Script with syntax highlighting, autocomplete, error highlighting, and multi-tab support.

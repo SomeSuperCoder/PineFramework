@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Dark Theme UI functionality for the dark-theme module.
+
+## Requirements
 
 ### Requirement: Dark Theme UI
 The application SHALL provide a dark theme for all UI components including chart, editor, and settings panels.

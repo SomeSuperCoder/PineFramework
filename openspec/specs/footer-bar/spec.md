@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Footer Bar functionality for the footer-bar module.
+
+## Requirements
 
 ### Requirement: Footer Bar
 The chart SHALL display a footer bar showing current symbol name, timeframe, bar index, and cursor OHLC values.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Library Indicator Import functionality for the extensibility module.
+
+## Requirements
 
 ### Requirement: Library Indicator Import
 The engine SHALL support import statements for reusable library scripts via `import` keyword.

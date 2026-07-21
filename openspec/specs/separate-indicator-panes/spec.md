@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Separate Indicator Panes functionality for the separate-indicator-panes module.
+
+## Requirements
 
 ### Requirement: Separate Indicator Panes
 The chart SHALL render each non-overlay indicator in a separate pane below the main price chart, with synchronized crosshair and X-axis.

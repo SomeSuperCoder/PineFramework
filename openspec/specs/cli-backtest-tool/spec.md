@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify CLI Backtest Tool functionality for the cli-backtest-tool module.
+
+## Requirements
 
 ### Requirement: CLI Backtest Tool
 The system SHALL provide a CLI backtest tool for running strategies from the command line.

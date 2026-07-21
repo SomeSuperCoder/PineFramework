@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Regression Test Suite functionality for the testing-compatibility module.
+
+## Requirements
 
 ### Requirement: Regression Test Suite
 The engine SHALL have a comprehensive regression test suite covering parser, compiler, runtime, and built-in functions.

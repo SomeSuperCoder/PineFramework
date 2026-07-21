@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Index-Based Bar Rendering functionality for the index-based-rendering module.
+
+## Requirements
 
 ### Requirement: Index-Based Bar Rendering
 The chart SHALL render bars using index-based positioning rather than time-based, with access to bar_index.

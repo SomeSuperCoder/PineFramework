@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Color System functionality for the color-system module.
+
+## Requirements
 
 ### Requirement: Color System
 The engine SHALL implement Pine Script's color system with predefined constants, color arithmetic, and CSS-style hex representation.

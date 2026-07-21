@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Time Module functionality for the time-module module.
+
+## Requirements
 
 ### Requirement: Time Module
 The system SHALL provide a time module with configurable time display modes, session-specific visibility, and custom time ranges.

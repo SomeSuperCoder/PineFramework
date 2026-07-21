@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Go To Date functionality for the go-to-date module.
+
+## Requirements
 
 ### Requirement: Go To Date
 The chart SHALL provide a "Go to Date" feature allowing users to jump to a specific date/time in the data.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Chart Viewport Autofit functionality for the chart-viewport-autofit module.
+
+## Requirements
 
 ### Requirement: Chart Viewport Autofit
 The chart SHALL provide an autofit button that resets zoom and pan to fit all available data.

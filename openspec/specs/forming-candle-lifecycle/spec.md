@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Forming Candle Lifecycle functionality for the forming-candle-lifecycle module.
+
+## Requirements
 
 ### Requirement: Forming Candle Lifecycle
 The engine SHALL support a forming (live) candle lifecycle where the bar is re-evaluated as new ticks arrive within the same bar period.

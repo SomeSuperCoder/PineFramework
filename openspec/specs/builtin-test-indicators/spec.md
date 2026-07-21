@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Built-in Test Indicators functionality for the builtin-test-indicators module.
+
+## Requirements
 
 ### Requirement: Built-in Test Indicators
 The system SHALL ship a set of built-in test indicators that demonstrate Pine Script features and serve as reference for compatibility testing.

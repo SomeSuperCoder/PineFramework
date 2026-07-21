@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Quick Indicator Adder functionality for the quick-indicator-adder module.
+
+## Requirements
 
 ### Requirement: Quick Indicator Adder
 The frontend SHALL provide a keyboard shortcut (Ctrl+K / Cmd+K) to open a fuzzy-search dialog for quickly adding indicators.

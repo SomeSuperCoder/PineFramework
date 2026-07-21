@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Technical Indicator Functions functionality for the ta-functions module.
+
+## Requirements
 
 ### Requirement: Technical Indicator Functions
 The engine SHALL implement a comprehensive set of Pine-compatible TA functions covering trend, momentum, volume, volatility, and statistical indicators.

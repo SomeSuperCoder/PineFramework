@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Bybit Data Integration functionality for the bybit-integration module.
+
+## Requirements
 
 ### Requirement: Bybit Data Integration
 The backend SHALL integrate with Bybit APIs for market data (WebSocket stream and REST history) and account operations.

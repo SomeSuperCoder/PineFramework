@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Multi-Symbol Data Access functionality for the multi-symbol-data module.
+
+## Requirements
 
 ### Requirement: Multi-Symbol Data Access
 The engine SHALL support cross-symbol data access via request.security and request.security_lower_tf, including data transformation functions.

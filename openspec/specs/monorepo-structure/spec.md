@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Monorepo Package Structure functionality for the monorepo-structure module.
+
+## Requirements
 
 ### Requirement: Monorepo Package Structure
 The repository SHALL be organized as a pnpm monorepo with at least three packages: core engine, backend server, and frontend application.

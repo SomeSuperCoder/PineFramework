@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Auto-Scale Toggle functionality for the auto-scale-toggle module.
+
+## Requirements
 
 ### Requirement: Auto-Scale Toggle
 Each chart pane SHALL have an auto-scale toggle that automatically adjusts the price/indicator range to fit the visible data.

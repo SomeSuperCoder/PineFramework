@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Progressive Indicator Computation functionality for the progressive-computation module.
+
+## Requirements
 
 ### Requirement: Progressive Indicator Computation
 The system SHALL compute indicators progressively — compute for visible range first, then background-compute remaining bars.

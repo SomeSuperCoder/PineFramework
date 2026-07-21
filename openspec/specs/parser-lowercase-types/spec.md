@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Lowercase Type Keywords functionality for the parser-lowercase-types module.
+
+## Requirements
 
 ### Requirement: Lowercase Type Keywords
 The parser SHALL accept lowercase type keywords (`int`, `float`, `bool`, `string`, `color`, `line`, `label`, `box`, `table`, `polyline`, `array`, `matrix`, `map`) as valid type declarations.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Dynamic Indicator Management UI functionality for the dynamic-indicator-management-ui module.
+
+## Requirements
 
 ### Requirement: Dynamic Indicator Management UI
 The frontend SHALL provide UI for adding, removing, reordering, and configuring indicators without page reload.

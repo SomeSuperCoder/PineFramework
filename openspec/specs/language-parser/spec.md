@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Parse Pine Script v5 and v6 source code into an executable AST, with dynamic version detection, compiler validation, and descriptive error reporting.
+
+## Requirements
 
 ### Requirement: Dynamic Version Detection
 The parser SHALL dynamically detect the declared Pine Script version from the `//@version=N` directive (supporting N=5 and N=6), automatically select the corresponding grammar, and apply version-appropriate syntax rules without manual configuration.

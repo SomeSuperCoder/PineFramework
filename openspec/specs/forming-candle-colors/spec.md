@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Forming Candle Colors functionality for the forming-candle-colors module.
+
+## Requirements
 
 ### Requirement: Forming Candle Colors
 The forming (live) candle SHALL be rendered with a distinct color from confirmed candles.

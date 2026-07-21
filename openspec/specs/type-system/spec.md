@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Primitive Type Support functionality for the type-system module.
+
+## Requirements
 
 ### Requirement: Primitive Type Support
 The type system SHALL support all Pine primitive types (int, float, bool, string, color) with automatic type coercion following Pine Script rules.

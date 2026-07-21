@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify String Manipulation functionality for the string-time-functions module.
+
+## Requirements
 
 ### Requirement: String Manipulation
 The engine SHALL implement Pine-compatible string functions: str.contains, str.replace, str.substring, str.length, str.lower, str.upper, str.pos, str.split, str.tonumber, str.format, str.endswith, str.startswith, str.match, str.tostring, char.code_at, char.new, char.compare_strings, and char.eq_strings.

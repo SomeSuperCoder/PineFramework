@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Alert Function Support functionality for the alert-system module.
+
+## Requirements
 
 ### Requirement: Alert Function Support
 The engine SHALL support alert() and alertcondition() functions.

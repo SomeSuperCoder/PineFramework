@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Script Bank Management functionality for the script-bank-management module.
+
+## Requirements
 
 ### Requirement: Script Bank Management
 The system SHALL maintain a script bank for storing, organizing, and retrieving user-defined Pine Script code.

@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Input Parameters functionality for the input-configuration module.
+
+## Requirements
 
 ### Requirement: Input Parameters
 The engine SHALL support input() with full parameter set: type, title, default value, min/max, step, options, group, inline, tooltip, confirm, and display.

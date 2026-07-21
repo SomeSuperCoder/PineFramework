@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify AI Agent Integration functionality for the ai-agent-integration module.
+
+## Requirements
 
 ### Requirement: AI Agent Integration
 The system SHALL support AI agent integration for generating and modifying Pine Script code via natural language, storing conversation history, and tracking versioned script modifications.

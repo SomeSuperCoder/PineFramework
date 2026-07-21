@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify indicator() Declaration functionality for the script-declaration module.
+
+## Requirements
 
 ### Requirement: indicator() Declaration
 The engine SHALL support indicator() declaration with all Pine-compatible parameters.

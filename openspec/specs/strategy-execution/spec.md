@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Strategy Mode Functions functionality for the strategy-execution module.
+
+## Requirements
 
 ### Requirement: Strategy Mode Functions
 The engine SHALL implement strategy mode with strategy.entry(), strategy.exit(), strategy.close(), strategy.cancel(), strategy.risk.*, strategy.position_size, strategy.openprofit, strategies for pyramiding, and brokerage emulation.

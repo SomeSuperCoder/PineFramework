@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Backend API Server functionality for the backend-api-server module.
+
+## Requirements
 
 ### Requirement: Backend API Server
 The backend SHALL provide an Express-based API server with WebSocket support for real-time chart data, script execution, and management.

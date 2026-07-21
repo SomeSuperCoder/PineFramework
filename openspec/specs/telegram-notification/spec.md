@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Telegram Notification Integration functionality for the telegram-notification module.
+
+## Requirements
 
 ### Requirement: Telegram Notification Integration
 The system SHALL integrate with Telegram Bot API to send trading notifications (signals, alerts, errors) to configured recipients.

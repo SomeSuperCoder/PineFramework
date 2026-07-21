@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify HTML5 Canvas Charting functionality for the canvas-charting-library module.
+
+## Requirements
 
 ### Requirement: HTML5 Canvas Charting
 The frontend SHALL implement a custom charting library using HTML5 Canvas for rendering OHLC, candle, bar, line, area, and custom chart types.

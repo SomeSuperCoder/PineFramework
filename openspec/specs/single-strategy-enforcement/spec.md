@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Single Strategy Enforcement functionality for the single-strategy-enforcement module.
+
+## Requirements
 
 ### Requirement: Single Strategy Enforcement
 The engine SHALL enforce that only one strategy() declaration can exist per script.

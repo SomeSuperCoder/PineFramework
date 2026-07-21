@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Line Object Management functionality for the drawing-objects module.
+
+## Requirements
 
 ### Requirement: Line Object Management
 The engine SHALL support line.new(), line.set_*(), and line.delete() with dynamic modification capabilities.

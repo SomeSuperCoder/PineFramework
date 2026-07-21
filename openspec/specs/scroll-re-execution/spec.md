@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Scroll Re-Execution functionality for the scroll-re-execution module.
+
+## Requirements
 
 ### Requirement: Scroll Re-Execution
 When scrolling the chart to a new visible range, the engine SHALL re-execute indicators for the visible bars.

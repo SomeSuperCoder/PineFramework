@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify Multi-Version Script Support functionality for the multi-version-support module.
+
+## Requirements
 
 ### Requirement: Multi-Version Script Support
 The engine SHALL support running scripts of different Pine Script versions (v5 and v6) simultaneously.

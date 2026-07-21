@@ -1,4 +1,7 @@
-## ADDED Requirements
+## Purpose
+Implement and verify File-Based Storage functionality for the file-based-storage module.
+
+## Requirements
 
 ### Requirement: File-Based Storage
 The system SHALL use file-based storage for scripts, settings, and chart layouts, organized in a readable directory structure.
