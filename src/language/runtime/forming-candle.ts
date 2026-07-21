@@ -90,6 +90,9 @@ export class FormingCandleProcessor {
     const preFunctionPersistentScopes = this.eng.functionPersistentScopes.size > 0
       ? new Map([...this.eng.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]))
       : undefined;
+    const preValuewhenHistory = this.eng.valuewhenHistory && this.eng.valuewhenHistory.size > 0
+      ? new Map([...this.eng.valuewhenHistory].map(([k, v]) => [k, [...v]]))
+      : undefined;
     const preBarColorDataLen = this.eng.barColorData.length;
     const preBoxesSize = this.eng.boxes.size;
     const preBoxIdCounter = this.eng.boxIdCounter;
@@ -178,6 +181,24 @@ export class FormingCandleProcessor {
     restoreMap(this.eng.hmaBuffers, preHmaBuffers);
     restoreMap(this.eng.sarState, preSarState);
     restoreMap(this.eng.functionPersistentScopes, preFunctionPersistentScopes);
+    // Restore valuewhen history to pre-tick state.  Each forming-candle tick calls
+    // ta.valuewhen() from the indicator script (e.g. prevPl/prevPh — lines 44-45,
+    // and backbone cleanup — lines 83-85 of the HHLL script).  Without restoration,
+    // valuewhenHistory accumulates across ticks, shifting the occurrence offset:
+    //   tick 1:  valuewhen(cond, src, 1) returns history[length-1-1] = history[N-2]
+    //   tick 2:  returns history[N+1-1-1] = history[N-1]  ← different entry!
+    // This corrupts prevPl/prevPh (label classification) and the backbone cleanup
+    // conditions, potentially making them evaluate differently on each tick.
+    if (preValuewhenHistory) {
+      if (!this.eng.valuewhenHistory) this.eng.valuewhenHistory = new Map();
+      this.eng.valuewhenHistory.clear();
+      for (const [k, v] of preValuewhenHistory) {
+        this.eng.valuewhenHistory.set(k, [...v]);
+      }
+    } else if (this.eng.valuewhenHistory && this.eng.valuewhenHistory.size > 0) {
+      this.eng.valuewhenHistory.clear();
+    }
+
     // Relink function persistent scopes' parent chains so they resolve variables
     // against the engine's live global scope, not a detached deep-clone.
     //
