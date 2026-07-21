@@ -144,6 +144,8 @@ export function executePineScript(
   strategyMarkers: import('./language/runtime/execution-engine.js').StrategyMarkerEntry[];
   metrics: import('./language/runtime/execution-engine.js').ExecutionMetrics;
   plotColors?: Map<string, (string | null)[]>;
+  fillColorData?: Map<string, (string | null)[]>;
+  maxLookback?: number;
 } {
   const result = parse(source);
   const compileResult = compile(result.ast);
@@ -160,6 +162,8 @@ export function executePineScript(
     strategyMarkers: execResult.strategyMarkers,
     metrics: engine.getMetrics(),
     plotColors: execResult.plotColors,
+    fillColorData: execResult.fillColorData,
+    maxLookback: execResult.maxLookback,
   };
 }
 

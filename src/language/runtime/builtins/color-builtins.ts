@@ -13,7 +13,10 @@ export function registerColorBuiltins(engine: ExecutionEngine): void {
       const alpha = Math.round(Math.max(0, Math.min(100, 100 - t)) * 2.55);
       const hex = alpha.toString(16).padStart(2, '0');
       if (c.startsWith('#')) {
-        return c + hex;
+        // Extract the base RGB (first 6 hex digits after #) — discard any existing alpha.
+        // color.new(color, transp) replaces alpha, does NOT append.
+        const base = c.slice(1, 7);
+        return '#' + base + hex;
       }
       return c;
     },
