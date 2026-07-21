@@ -154,7 +154,7 @@ describe('Forming Candle Computation', () => {
       expect(totalBarsAfter).toBe(totalBarsBefore);
     });
 
-    it('should not add a new bar to barTimestamps', () => {
+    it('should send post-tick barTimestamps reflecting the tick', () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
@@ -166,7 +166,13 @@ describe('Forming Candle Computation', () => {
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
 
       const formingResult = engine.computeFormingCandle(formingCtx);
-      expect(formingResult.barTimestamps.length).toBe(timestampsBefore);
+      // The diff result now includes the tick's bar in barTimestamps
+      // (the engine's internal state IS still restored; only the diff message
+      // tells the frontend about the tick). Same-bar ticks get a duplicate
+      // timestamp; new-bar ticks get a genuinely new one.
+      expect(formingResult.barTimestamps.length).toBe(timestampsBefore + 1);
+      // Verify the engine itself was restored (last timestamp unchanged)
+      expect(result.barTimestamps).toEqual(engine['barTimestamps']);
     });
 
     it('should return updated output value when OHLCV changes', () => {
@@ -202,7 +208,9 @@ describe('Forming Candle Computation', () => {
 
       const result = engine.computeFormingCandle(sameCtx);
       expect(result.success).toBe(true);
-      expect(result.barTimestamps.length).toBe(bars.length);
+      // Diff includes the tick's bar (len = bars.length + 1), engine restored
+      expect(result.barTimestamps.length).toBe(bars.length + 1);
+      expect(engine.barTimestamps.length).toBe(bars.length);
     });
 
     it('should handle forming candle before any historical bars', () => {
@@ -234,7 +242,8 @@ describe('Forming Candle Computation', () => {
         const formingCtx = makeFormingContext(bars, lastBar.close + tick);
         const result = engine.computeFormingCandle(formingCtx);
         expect(result.success).toBe(true);
-        expect(result.barTimestamps.length).toBe(bars.length);
+        // Each tick adds one entry to the diff's barTimestamps
+        expect(result.barTimestamps.length).toBe(bars.length + 1);
       }
     });
 
