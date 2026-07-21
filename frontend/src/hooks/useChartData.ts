@@ -344,7 +344,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           );
 
           const prev = indicatorResultsRef.current.get(indId);
-          const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize) : newResult;
+          // Build set of overlap bar timestamps (in seconds) so prepend can
+          // purge stale labels/lines/shapes from the recomputed region.
+          const overlapTimestamps = new Set<number>();
+          for (const bar of contextBars) {
+            overlapTimestamps.add(Math.floor(bar.timestamp / 1000));
+          }
+          const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize, overlapTimestamps) : newResult;
           indicatorUpdates.push({ id: indId, result: merged });
 
           // Create WS session with full bar set for real-time updates
@@ -375,7 +381,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
 
-  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, contextSize: number): ScriptResult => {
+  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, contextSize: number, overlapTimestamps?: Set<number>): ScriptResult => {
     // The execution result contains entries for BOTH newBars and contextBars.
     // - First addedCount entries: newBars (some may have null warmup)
     // - Last contextSize entries: contextBars recomputed with newBars as history
@@ -403,12 +409,41 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }
     }
 
-    // Deduplicate by identity key — newResult covers all bars including the
-    // overlap with prev, so filter out prev entries whose key matches a new entry.
-    const mergedShapes = [...newResult.shapes, ...prev.shapes.filter((s) => !newResult.shapes.some((n) => n.time === s.time))];
-    const mergedFills = [...(newResult.fills || []), ...(prev.fills || []).filter((f) => !(newResult.fills || []).some((n) => n.from === f.from && n.to === f.to))];
-    const mergedLines = [...newResult.lines, ...prev.lines.filter((l) => !newResult.lines.some((n) => n.points[0]?.time === l.points[0]?.time))];
-    const mergedLabels = [...newResult.labels, ...prev.labels.filter((l) => !newResult.labels.some((n) => n.time === l.time))];
+    // The overlap region (first contextSize bars of prev) was RE-EXECUTED with
+    // more lookback history. Pivot-like indicators can change which bars have
+    // labels/lines or what value they carry, so we MUST purge any prev entry
+    // whose timestamp falls in the overlap region — the new execution is
+    // authoritative for those bars. Without this, stale labels persist (e.g. an
+    // old HH label at bar T survives even though the re-execution moved the
+    // pivot to T' or dropped it entirely), causing drift and double labels.
+    const inOverlap = overlapTimestamps
+      ? (t: number) => overlapTimestamps.has(t)
+      : (_t: number) => false;
+
+    const mergedShapes = [
+      ...newResult.shapes,
+      ...prev.shapes.filter((s) => !newResult.shapes.some((n) => n.time === s.time) && !inOverlap(s.time)),
+    ];
+    const mergedFills = [
+      ...(newResult.fills || []),
+      ...(prev.fills || []).filter(
+        (f) => !(newResult.fills || []).some((n) => n.from === f.from && n.to === f.to),
+      ),
+    ];
+    const mergedLines = [
+      ...newResult.lines,
+      ...prev.lines.filter(
+        (l) =>
+          !newResult.lines.some((n) => n.points[0]?.time === l.points[0]?.time) &&
+          (l.points[0]?.time === undefined || !inOverlap(l.points[0].time)),
+      ),
+    ];
+    const mergedLabels = [
+      ...newResult.labels,
+      ...prev.labels.filter(
+        (l) => !newResult.labels.some((n) => n.time === l.time) && !inOverlap(l.time),
+      ),
+    ];
     const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
 
     // Prepend fillColorData entries and recompute boundary
@@ -431,8 +466,15 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
     }
 
-    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || []).filter((b) => !(newResult.bgcolor || []).some((n) => n.time === b.time))];
-    const mergedBoxes = [...(newResult.boxes || []), ...(prev.boxes || []).filter((b) => !(newResult.boxes || []).some((n) => n.startTime === b.startTime))];
+    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || []).filter((b) => !(newResult.bgcolor || []).some((n) => n.time === b.time) && !inOverlap(b.time))];
+    const mergedBoxes = [
+      ...(newResult.boxes || []),
+      ...(prev.boxes || []).filter(
+        (b) =>
+          !(newResult.boxes || []).some((n) => n.startTime === b.startTime) &&
+          !inOverlap(b.startTime),
+      ),
+    ];
     // Tables are static dashboard state — use the latest
     const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
 
