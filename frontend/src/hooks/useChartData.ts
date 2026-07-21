@@ -492,6 +492,10 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     });
 
     const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+    const transformFillKey = (rawKey: string) => {
+      const parts = rawKey.split('::');
+      return parts.map(stripMeta).join('::');
+    };
     const diffShapes = (msg.shapes || []).map((s) => ({
       type: s.style as import('../types').ShapeData['type'],
       time: Math.floor(s.time / 1000),
@@ -564,11 +568,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
     const mergedFillColorData = msg.fillColorData
       ? Object.entries(msg.fillColorData).reduce((acc, [key, colors]) => {
-          const prevColors = prev.fillColorData?.[key];
+          const transformedKey = transformFillKey(key);
+          const prevColors = prev.fillColorData?.[transformedKey];
           if (prevColors) {
-            acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
+            acc[transformedKey] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
           } else {
-            acc[key] = colors;
+            acc[transformedKey] = colors;
           }
           return acc;
         }, {} as Record<string, (string | null)[]>)
