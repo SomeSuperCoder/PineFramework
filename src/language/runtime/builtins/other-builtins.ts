@@ -493,16 +493,28 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
       text: PineValue,
       namedArgs?: Record<string, PineValue>,
     ): PineValue => {
-      if (isNa(x) || isNa(y) || isNa(text)) return 0;
+      // When text is passed as named arg (not positional), the signature shifts:
+      // args = [x, y, namedArgs] so text param receives the namedArgs object.
+      let actualNamedArgs: Record<string, PineValue> | undefined;
+      let actualText: PineValue = text;
+      if (typeof text === 'object' && text !== null && !Array.isArray(text)) {
+        actualNamedArgs = text as unknown as Record<string, PineValue>;
+        actualText = actualNamedArgs['text'] ?? '';
+      } else {
+        actualNamedArgs = namedArgs;
+      }
+      if (isNa(x) || isNa(y)) return 0;
       let colorStr = '#2196f3';
       let textcolorStr = '#ffffff';
       let styleStr = 'label.style_label_down';
       let sizeStr = 'size.normal';
-      if (typeof namedArgs === 'object' && namedArgs !== null) {
-        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
-        if (typeof namedArgs.textcolor === 'string') textcolorStr = namedArgs.textcolor;
-        if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
-        if (typeof namedArgs.size === 'string') sizeStr = namedArgs.size;
+      if (typeof actualNamedArgs === 'object' && actualNamedArgs !== null) {
+        if (typeof actualNamedArgs.color === 'string') colorStr = actualNamedArgs.color;
+        if (typeof actualNamedArgs.textcolor === 'string') textcolorStr = actualNamedArgs.textcolor;
+        if (typeof actualNamedArgs.style === 'string') styleStr = actualNamedArgs.style;
+        if (typeof actualNamedArgs.size === 'string') sizeStr = actualNamedArgs.size;
+        // text might also be in tooltip named arg
+        if (typeof actualNamedArgs.text === 'string') actualText = actualNamedArgs.text;
       }
       // Member expression resolution strips prefixes: label.style_label_down → style_label_down
       if (!styleStr.startsWith('label.')) styleStr = 'label.' + styleStr;
@@ -510,7 +522,7 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
       eng.labels.push({
         time: eng.currentTimestamp,
         price: y as number,
-        text: String(text),
+        text: String(actualText),
         color: colorStr,
         textcolor: textcolorStr,
         style: styleStr,

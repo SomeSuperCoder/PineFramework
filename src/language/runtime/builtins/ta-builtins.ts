@@ -478,4 +478,31 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     }
     return candidateValue;
   });
+
+  eng.builtins.set('ta.valuewhen', (condition: PineValue, source: PineValue, occurrence: PineValue): PineValue => {
+    const occ = typeof occurrence === 'number' ? Math.trunc(occurrence) : 0;
+    if (occ < 0) return NA;
+    const key = `valuewhen_${eng.currentCallSiteId}`;
+    if (!eng.valuewhenHistory) {
+      eng.valuewhenHistory = new Map();
+    }
+    if (!eng.valuewhenHistory.has(key)) {
+      eng.valuewhenHistory.set(key, []);
+    }
+    const history: number[] = eng.valuewhenHistory.get(key)!;
+    // When condition is truthy, record the source value
+    if (condition && condition !== 0 && condition !== false) {
+      if (typeof source === 'number') {
+        history.push(source);
+      } else {
+        history.push(NA as any);
+      }
+    }
+    // Return the value at the requested occurrence (occ=0 is most recent, occ=1 is previous, etc.)
+    const idx = history.length - 1 - occ;
+    if (idx >= 0 && idx < history.length) {
+      return history[idx]!;
+    }
+    return NA;
+  });
 }

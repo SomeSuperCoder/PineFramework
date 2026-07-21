@@ -727,6 +727,12 @@ export class Parser {
         break;
       }
       statements.push(this.parseStatement());
+      // Pine Script allows comma-separated statements on the same line
+      // e.g., "loc1=0.0, loc2=0.0, loc3=0.0, loc4=0.0, xx=0"
+      // Consume the comma and continue parsing the next statement
+      if (this.check(TokenType.Comma)) {
+        this.advance();
+      }
     }
 
     return statements;

@@ -530,7 +530,8 @@ export function executeMemberExpression(
         objName === 'text' || objName === 'linewidth' || objName === 'linecap' ||
         objName === 'linejoin' || objName === 'textalign' ||
         objName === 'line' || objName === 'label' || objName === 'plot' ||
-        objName === 'barmerge' || objName === 'xloc' || objName === 'display' ||
+        objName === 'barmerge' || objName === 'xloc' || objName === 'yloc' ||
+        objName === 'format' || objName === 'display' ||
         objName === 'alert' || objName === '__strategy.commission__') {
       return expr.property;
     }
