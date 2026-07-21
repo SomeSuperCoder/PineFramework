@@ -449,11 +449,13 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
       let styleStr = 'solid';
       let widthNum = 1;
       let xlocStr = 'bar_index';
+      let extendStr = 'none';
       if (typeof namedArgs === 'object' && namedArgs !== null) {
         if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
         if (typeof namedArgs.style === 'string') styleStr = namedArgs.style;
         if (typeof namedArgs.width === 'number') widthNum = namedArgs.width;
         if (typeof namedArgs.xloc === 'string') xlocStr = namedArgs.xloc;
+        if (typeof namedArgs.extend === 'string') extendStr = namedArgs.extend;
       }
       const id = eng.lineIdCounter++;
       eng.lines.set(id, {
@@ -465,6 +467,7 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
         style: styleStr,
         width: widthNum,
         xloc: xlocStr,
+        extend: extendStr,
       });
       return id;
     },
@@ -481,6 +484,118 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
     if (typeof lineId === 'number') {
       const line = eng.lines.get(lineId);
       if (line) return line.x2;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.get_x1', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.x1;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.get_y1', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.y1;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.get_y2', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.y2;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.get_color', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.color;
+    }
+    return '';
+  });
+
+  eng.builtins.set('line.get_style', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.style;
+    }
+    return '';
+  });
+
+  eng.builtins.set('line.get_width', (lineId: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) return line.width;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_x1', (lineId: PineValue, x: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.x1 = x as number;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_y1', (lineId: PineValue, y: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.y1 = y as number;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_x2', (lineId: PineValue, x: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.x2 = x as number;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_y2', (lineId: PineValue, y: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.y2 = y as number;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_color', (lineId: PineValue, color: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.color = String(color ?? '#2196f3');
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_style', (lineId: PineValue, style: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.style = String(style ?? 'solid');
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_width', (lineId: PineValue, width: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.width = (width as number) ?? 1;
+    }
+    return 0;
+  });
+
+  eng.builtins.set('line.set_extend', (lineId: PineValue, extend: PineValue): PineValue => {
+    if (typeof lineId === 'number') {
+      const line = eng.lines.get(lineId);
+      if (line) line.extend = String(extend ?? 'none');
     }
     return 0;
   });

@@ -24,6 +24,7 @@ export interface LineEntry {
   style: string;
   width: number;
   xloc: string;
+  extend?: string;
 }
 
 export interface LabelEntry {
