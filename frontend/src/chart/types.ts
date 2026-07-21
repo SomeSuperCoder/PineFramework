@@ -54,6 +54,7 @@ export interface DrawingLineData {
   color: string;
   width?: number;
   style?: 'solid' | 'dotted' | 'dashed';
+  extend?: 'none' | 'left' | 'right' | 'both';
 }
 
 export interface LabelData {

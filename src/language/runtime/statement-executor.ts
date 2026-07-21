@@ -31,6 +31,19 @@ import {
 import type { ExecutionContext } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
 
+// ── Flow-control signals ──────────────────────────────────────────────────────
+// break/continue propagate via exceptions because if-statements (etc.) don't
+// forward the return value of executeStmt — only a thrown signal can traverse
+// nested statement execution without manual plumbing at every level.
+
+export class BreakSignal extends Error {
+  constructor() { super('break'); this.name = 'BreakSignal'; }
+}
+
+export class ContinueSignal extends Error {
+  constructor() { super('continue'); this.name = 'ContinueSignal'; }
+}
+
 export type ExecuteExpressionFn = (
   expr: ExpressionNode,
   scope: RuntimeScope,
@@ -204,7 +217,13 @@ export function executeForStatement(
     if (Array.isArray(iterableValue)) {
       for (const element of iterableValue) {
         setVariableValue(loopScope, stmt.variable, element);
-        for (const s of stmt.body) executeStmt(s, loopScope, context);
+        try {
+          for (const s of stmt.body) executeStmt(s, loopScope, context);
+        } catch (e) {
+          if (e instanceof BreakSignal) break;
+          if (e instanceof ContinueSignal) continue;
+          throw e;
+        }
       }
     }
     return NA;
@@ -225,7 +244,13 @@ export function executeForStatement(
 
   for (let iter = 0, i = startInt; iter < iterations; iter++, i += stepInt) {
     setVariableValue(loopScope, stmt.variable, i);
-    for (const s of stmt.body) executeStmt(s, loopScope, context);
+    try {
+      for (const s of stmt.body) executeStmt(s, loopScope, context);
+    } catch (e) {
+      if (e instanceof BreakSignal) break;
+      if (e instanceof ContinueSignal) continue;
+      throw e;
+    }
   }
   return NA;
 }
@@ -244,7 +269,13 @@ export function executeWhileStatement(
   while (pineTruthy(executeExpr(stmt.condition, loopScope, context))) {
     iterations++;
     if (iterations > maxIterations) throw new Error('While loop exceeded maximum iterations');
-    for (const s of stmt.body) executeStmt(s, loopScope, context);
+    try {
+      for (const s of stmt.body) executeStmt(s, loopScope, context);
+    } catch (e) {
+      if (e instanceof BreakSignal) break;
+      if (e instanceof ContinueSignal) continue;
+      throw e;
+    }
   }
   return NA;
 }

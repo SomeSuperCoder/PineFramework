@@ -216,6 +216,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         allDrawingLines.push({
           points: l.points, color: l.color || '#2196f3',
           width: l.width || 1, style: l.style || 'dotted',
+          extend: l.extend || 'none',
         });
       }
       for (const l of (result.labels || [])) {

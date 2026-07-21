@@ -112,6 +112,7 @@ executeRouter.post('/execute', async (req, res) => {
       color: l.color,
       width: l.width,
       style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
+      extend: l.extend || 'none',
     }));
 
     const labels = (result.labels || []).map((l) => ({

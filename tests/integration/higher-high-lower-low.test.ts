@@ -7,39 +7,31 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
-function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
-  const bars: Array<{
-    timestamp: number;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-  }> = [];
-  let price = startPrice;
-  let s = seed;
-  const rand = () => {
-    s = (s * 16807 + 0) % 2147483647;
-    return s / 2147483647;
-  };
+function createZigzagBars(count: number): Array<{
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}> {
+  const bars: Array<any> = [];
+  let s = 42;
+  const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  // Sine-wave pattern with noise to create reliable pivot points
   for (let i = 0; i < count; i++) {
-    const open = price;
-    let drift: number;
-    if (i < Math.floor(count * 0.4)) drift = 0.5;
-    else if (i < Math.floor(count * 0.7)) drift = -0.5;
-    else drift = 0.4;
-    const change = drift + (rand() - 0.5) * 0.5;
-    const close = open + change;
-    // Create more pronounced highs and lows to trigger pivots
-    const high = Math.max(open, close) + rand() * 1.5 + 0.5;
-    const low = Math.min(open, close) - rand() * 1.5 - 0.5;
+    const phase = (i % 30) / 30;
+    const base = 100 + 10 * Math.sin(phase * Math.PI * 2) + (i / count) * 5;
+    const open = base + (rand() - 0.5) * 2;
+    const close = base + (rand() - 0.5) * 2;
+    const high = Math.max(open, close) + 1 + rand() * 3;
+    const low = Math.min(open, close) - 1 - rand() * 3;
     bars.push({ timestamp: 1700000000000 + i * 3600000, open, high, low, close, volume: 1000 });
-    price = close;
   }
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+function runEngine(source: string, bars: ReturnType<typeof createZigzagBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -89,13 +81,13 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
   });
 
   it('executes without crashing', () => {
-    const bars = createTrendingBars(200, 100);
+    const bars = createZigzagBars(200);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
   });
 
   it('produces label output (HH/HL/LH/LL)', () => {
-    const bars = createTrendingBars(500, 100);
+    const bars = createZigzagBars(500);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
 
@@ -120,24 +112,25 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
   });
 
   it('produces lines for support/resistance', () => {
-    const bars = createTrendingBars(500, 100);
+    const bars = createZigzagBars(500);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
 
     console.log(`Lines produced: ${result.lines?.length ?? 0}`);
 
-    // Lines are produced when showSR is true (default) and pivots are found
-    if (result.lines && result.lines.length > 0) {
-      for (const line of result.lines) {
-        console.log(`  Line: x1=${line.x1}, y1=${line.y1.toFixed(2)}, x2=${line.x2}, y2=${line.y2.toFixed(2)}, color=${line.color}, style=${line.style}, width=${line.width}`);
-        expect(typeof line.x1).toBe('number');
-        expect(typeof line.y1).toBe('number');
-        expect(typeof line.x2).toBe('number');
-        expect(typeof line.y2).toBe('number');
-        expect(line.color).toMatch(/^#[0-9a-fA-F]{6,8}$/);
-        expect(['line.style_solid', 'line.style_dashed', 'line.style_dotted']).toContain(line.style);
-        expect(line.width).toBe(3);
-      }
+    // With zigzag data that produces many pivots, S/R lines should be drawn
+    expect(result.lines?.length ?? 0).toBeGreaterThan(0);
+
+    for (const line of result.lines!) {
+      console.log(`  Line: x1=${line.x1}, y1=${line.y1.toFixed(2)}, x2=${line.x2}, y2=${line.y2.toFixed(2)}, color=${line.color}, style=${line.style}, width=${line.width}`);
+      expect(typeof line.x1).toBe('number');
+      expect(typeof line.y1).toBe('number');
+      expect(typeof line.x2).toBe('number');
+      expect(typeof line.y2).toBe('number');
+      expect(line.color).toMatch(/^#[0-9a-fA-F]{6,8}$/);
+      // Style is returned as 'style_dotted' (from namespace resolution) not 'line.style_dotted'
+      expect(['style_solid', 'style_dashed', 'style_dotted', 'solid', 'dashed', 'dotted']).toContain(line.style);
+      expect(line.width).toBe(3);
     }
   });
 
@@ -148,7 +141,7 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
   });
 
   it('produces alert conditions', () => {
-    const bars = createTrendingBars(500, 100);
+    const bars = createZigzagBars(500);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
 
@@ -164,7 +157,7 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
   });
 
   it('handles large bar count without issues', () => {
-    const bars = createTrendingBars(1000, 100);
+    const bars = createZigzagBars(1000);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     console.log(`1000 bars: ${result.labels?.length ?? 0} labels, ${result.lines?.length ?? 0} lines`);

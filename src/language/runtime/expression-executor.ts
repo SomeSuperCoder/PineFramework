@@ -144,7 +144,26 @@ export function executeBinaryExpression(
   if (expr.operator === 'and') return pineTruthy(left) && pineTruthy(right);
   if (expr.operator === 'or') return pineTruthy(left) || pineTruthy(right);
 
-  if (isNa(left) || isNa(right)) return NA;
+  // PineScript NA semantics for comparisons:
+  // - == with na on either side → na (unknown), unless BOTH are na → na too (indeterminate)
+  // - != with na on exactly ONE side → true (one is known, the other is na → definitely not equal)
+  // - != with na on BOTH sides → na (indeterminate)
+  // - <, >, <=, >= with na on either side → na
+  // - +, -, *, /, %, ** with na on either side → na
+  if (isNa(left) || isNa(right)) {
+    switch (expr.operator) {
+      case '==':
+        // na == value → na, na == na → na
+        return NA;
+      case '!=':
+        // na != na → na (indeterminate)
+        if (isNa(left) && isNa(right)) return NA;
+        // na != 5 → true (known different from unknown)
+        return true;
+      default:
+        return NA;
+    }
+  }
 
   switch (expr.operator) {
     case '+':
@@ -532,6 +551,7 @@ export function executeMemberExpression(
         objName === 'line' || objName === 'label' || objName === 'plot' ||
         objName === 'barmerge' || objName === 'xloc' || objName === 'yloc' ||
         objName === 'format' || objName === 'display' ||
+        objName === 'extend' ||
         objName === 'alert' || objName === '__strategy.commission__') {
       return expr.property;
     }

@@ -436,8 +436,24 @@ export class PineChart {
       const x2 = this.viewport.barIndexToPixel(bi2);
       const y2 = this.layout.priceToPixel(line.points[1].price, chartArea.y, chartArea.height);
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      const extend = line.extend || 'none';
+      if (extend === 'right') {
+        // Line extends from x1 to the right edge of the chart
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(chartArea.x + chartArea.width, y1);
+      } else if (extend === 'left') {
+        // Line extends from x2 to the left edge
+        ctx.moveTo(chartArea.x, y2);
+        ctx.lineTo(x2, y2);
+      } else if (extend === 'both') {
+        // Line extends across the full chart width
+        ctx.moveTo(chartArea.x, y1);
+        ctx.lineTo(chartArea.x + chartArea.width, y1);
+      } else {
+        // Normal line between the two points
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+      }
       ctx.strokeStyle = this.cssColor(line.color || '#2196f3');
       ctx.lineWidth = line.width || 1;
       if (line.style === 'dotted') {

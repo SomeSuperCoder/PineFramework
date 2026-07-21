@@ -70,6 +70,8 @@ import {
   executeSwitchStatement,
   executeTypeDeclaration,
   executeReturnStatement,
+  BreakSignal,
+  ContinueSignal,
 } from './statement-executor.js';
 
 export class Interpreter {
@@ -293,8 +295,9 @@ export class Interpreter {
       case 'ReturnStatement':
         return this.executeReturnStatement(stmt as ReturnStatementNode, scope, context);
       case 'BreakStatement':
+        throw new BreakSignal();
       case 'ContinueStatement':
-        return undefined as unknown as PineValue;
+        throw new ContinueSignal();
       default:
         throw new Error(`Unsupported statement kind: ${(stmt as StatementNode).kind}`);
     }
