@@ -95,6 +95,13 @@ export class FormingCandleProcessor {
     const preBoxIdCounter = this.eng.boxIdCounter;
     const preStrategyState = this.eng.strategyEngine ? this.eng.strategyEngine.saveState() : null;
 
+    // Save pre-tick OHLC history lengths so we can restore them after the tick.
+    // executeBar pushes one bar to ohlcHistory (open, high, low, close, volume).
+    // Without restoration, the arrays grow by one entry per tick, shifting the
+    // candidate index used by ta.pivotlow/pivothigh (which uses ohlcHistory as
+    // its data source) by one bar on every subsequent tick.
+    const preOhlcLen = this.eng.ohlcHistory.high.length;
+
     // Save pre-tick global scope variable series lengths so we can restore them
     // after cloneRuntimeScope. Each forming-candle tick adds entries to every
     // variable's series (via = assignment in executeBar → setVariableValue).
@@ -107,6 +114,8 @@ export class FormingCandleProcessor {
     }
 
     const result = this.eng.executeBar(context);
+
+
 
     // Capture the actual bar state BEFORE restoration — the frontend needs
     // the real barIndex and barTimestamps so it can correctly append a new
@@ -123,6 +132,15 @@ export class FormingCandleProcessor {
     }
 
     this.eng.barTimestamps.length = preTimestampsLen;
+    // Restore OHLC history to pre-tick length, undoing the push from executeBar.
+    // Without this, each tick adds a duplicate entry, shifting pivot detection.
+    if (this.eng.ohlcHistory.open.length > preOhlcLen) {
+      this.eng.ohlcHistory.open.length = preOhlcLen;
+      this.eng.ohlcHistory.high.length = preOhlcLen;
+      this.eng.ohlcHistory.low.length = preOhlcLen;
+      this.eng.ohlcHistory.close.length = preOhlcLen;
+      this.eng.ohlcHistory.volume.length = preOhlcLen;
+    }
     this.eng.metrics.totalBars = preTotalBars;
     this.eng.metrics.successfulBars = result.success
       ? this.eng.metrics.successfulBars - 1
@@ -160,6 +178,34 @@ export class FormingCandleProcessor {
     restoreMap(this.eng.hmaBuffers, preHmaBuffers);
     restoreMap(this.eng.sarState, preSarState);
     restoreMap(this.eng.functionPersistentScopes, preFunctionPersistentScopes);
+    // Relink function persistent scopes' parent chains so they resolve variables
+    // against the engine's live global scope, not a detached deep-clone.
+    //
+    // restoreMap deep-clones each funcScope, including its entire parent chain
+    // (e.g. funcScope → blockScope → oldGlobalScope).  The terminal scope
+    // (oldGlobalScope clone) has all the global variables (zz, hlFlag, etc.), but
+    // its series have PRE-tick lengths (80 entries).  On the NEXT forming-candle
+    // tick, executeBar pushes bar data to this.eng.globalScope (81 entries), but
+    // findprevious reads from the terminal (80 entries) → every getRelative(offset)
+    // is off by one → the search loop `hlFlag[x]==ehl` misses every pivot.
+    //
+    // Fix: change the reference that POINTS to the terminal scope so it points
+    // to this.eng.globalScope instead.  We walk each funcScope's parent chain and
+    // identify the scope whose parent is the terminal (a scope with no parent of
+    // its own).  That scope's `parent` is redirected to this.eng.globalScope.
+    // The terminal (oldGlobalScope clone) is then unreferenced and GC'd.
+    for (const [, fnScope] of this.eng.functionPersistentScopes) {
+      let current: RuntimeScope | undefined = fnScope;
+      // Walk to find the scope whose parent is the terminal (no parent of its own).
+      while (current && current.parent && current.parent.parent) {
+        current = current.parent;
+      }
+      // current.parent is the terminal (it has .parent === undefined).
+      // Replace it with the engine's live global scope.
+      if (current && current.parent && !current.parent.parent) {
+        current.parent = this.eng.globalScope;
+      }
+    }
     this.eng.barColorData.length = preBarColorDataLen;
     if (this.eng.boxes.size > preBoxesSize) {
       for (const [id] of this.eng.boxes) {

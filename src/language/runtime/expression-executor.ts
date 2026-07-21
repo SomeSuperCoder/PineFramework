@@ -442,6 +442,7 @@ function executeFunctionCall(
   scopeKey?: string,
 ): PineValue {
   const key = scopeKey ?? func.name ?? `anon_${func.span.start.offset}`;
+
   let funcScope: RuntimeScope;
   if (eng.functionPersistentScopes.has(key)) {
     funcScope = eng.functionPersistentScopes.get(key)!;
