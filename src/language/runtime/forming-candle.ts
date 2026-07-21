@@ -108,6 +108,15 @@ export class FormingCandleProcessor {
 
     const result = this.eng.executeBar(context);
 
+    // Capture the actual bar state BEFORE restoration — the frontend needs
+    // the real barIndex and barTimestamps so it can correctly append a new
+    // plot data point for forming-candle bars (isNewBar = true). Without this,
+    // shapes created during the tick have the new bar's timestamp, but the
+    // plot update says "bar N-1" → isNewBar = false → plot timestamp doesn't
+    // advance → shapes appear ahead of the trend line (= "labels without lines").
+    const actualBarTimestamps = [...this.eng.barTimestamps];
+    const actualBarIndex = context.barIndex;
+
     const snapshotsAdded = this.eng.snapshots.length > 0 ? 1 : 0;
     for (let i = 0; i < snapshotsAdded; i++) {
       this.eng.snapshots.pop();
@@ -269,8 +278,8 @@ export class FormingCandleProcessor {
       diffFillColorData: Object.keys(diffFillColorData).length > 0 ? diffFillColorData : undefined,
       diffBgcolor: diffBgcolor.length > 0 ? diffBgcolor : undefined,
       diffAlertTriggers: diffAlertTriggers.length > 0 ? diffAlertTriggers : undefined,
-      barTimestamps: [...this.eng.barTimestamps],
-      barIndex: this.eng.barTimestamps.length - 1,
+      barTimestamps: actualBarTimestamps,
+      barIndex: actualBarIndex,
       isDiff,
       isConfirmed: !this.eng.isFormingCandle,
     };
