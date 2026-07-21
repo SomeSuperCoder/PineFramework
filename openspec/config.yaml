@@ -10,3 +10,21 @@ context: |
   Testing: Jest with ts-jest, integration tests in tests/
   Conventions: Conventional commits, ESLint + Prettier
   Project is a fully implemented Pine Script v5/v6 engine with canvas charting, Bybit integration, Telegram alerts, backtesting, progressive indicator computation, and dynamic indicator management
+
+rules:
+  proposal:
+    - Keep proposals under 500 words
+    - Always include a "Non-goals" section when scope is bounded
+    - Reference spec IDs for affected capabilities
+  spec:
+    - Every Requirement must have at least one Scenario
+    - Scenarios must follow the WHEN/THEN format
+    - Use Pine Script terminology (series, bar, indicator, plot)
+  design:
+    - Document decisions with rationale, not just outcomes
+    - Include a "Risks / Trade-offs" section
+    - Reference spec IDs when describing how requirements are met
+  tasks:
+    - Break tasks into chunks of max 4 hours
+    - Use hierarchical numbering (1.1, 1.2, etc.)
+    - Reference spec IDs and design sections
