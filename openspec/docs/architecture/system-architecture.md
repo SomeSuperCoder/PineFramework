@@ -4,6 +4,25 @@
 
 A Pine Script v5/v6 compatible alternative runtime that dynamically detects the declared version (`//@version=5` or `//@version=6`), parses, executes, and renders programs with TradingView-like semantics. Organized as a pnpm monorepo with three packages: engine, backend, frontend.
 
+### Research Findings
+
+Key insights from Pine Script v6 and TradingView architecture research:
+1. **Pine Script v5 Language Features**: Mature version with well-established syntax, type system, and built-in functions; widely used by existing TradingView scripts
+2. **Pine Script v6 Language Features**: Latest version includes enums, dynamic data requests, runtime logging, tighter type system, and syntax refinements over v5
+3. **Version Detection**: The `//@version=N` directive at the top of a script declares the version; the engine must parse this before selecting grammar rules
+4. **Execution Model**: Bar-by-bar execution with rollback capability for realtime bars
+5. **Series Data Type**: Core Pine concept where each element corresponds to a historical bar
+6. **Script Structure**: `//@version=6` declaration, script type (indicator/strategy/library), main code body
+7. **TradingView Architecture**: Event-driven, plugin-based extensibility, realtime updates with rollback
+
+### Design Principles
+
+1. **SOLID Principles**: Single responsibility, open/closed, Liskov substitution, interface segregation, dependency inversion
+2. **Plugin Architecture**: Extensible via plugin registry without core modifications
+3. **Separation of Concerns**: Clear boundaries between parser, compiler, runtime, data engine, indicator engine, renderer, UI layer
+4. **Performance Optimization**: Efficient handling of millions of candles and hundreds of concurrent indicators
+5. **Modularity**: Independent development of components with well-defined interfaces
+
 ## Layer Architecture
 
 ```
@@ -115,3 +134,48 @@ pine-framework/          ← Root (engine)
 - Progressive computation (visible range first, then background)
 - Circular buffers for TA calculations
 - Cache-invalidation strategy for data requests
+
+## Detailed Design Documents
+
+The following design documents in `openspec/docs/design/` contain the full architectural specifications:
+
+| Document | Content |
+|----------|---------|
+| `component-specifications.md` | All 20 component specs (Parser, Compiler, Type System, Engine, Plot Engine, etc.) |
+| `data-flow.md` | 6 data flow diagrams with alert dedup pipeline |
+| `module-boundaries.md` | 7-layer module boundary definitions |
+| `execution-lifecycle.md` | 4-phase execution lifecycle |
+| `rendering-architecture.md` | Visual element hierarchy, rendering pipeline, index-based positioning |
+| `plugin-system.md` | Plugin interfaces, lifecycle, registry features |
+| `data-storage-caching.md` | 4-layer storage architecture, caching strategies |
+| `error-handling.md` | Error classification, handling strategies, recovery mechanisms |
+| `testing-architecture.md` | Test strategy (unit/integration/compatibility/property-based) |
+| `performance-optimization.md` | Optimization strategies, scalability design, monitoring |
+| `security.md` | Plugin, data, and execution security |
+| `frontend-architecture.md` | Frontend components, data flow, features |
+| `monorepo-deployment.md` | Package structure, deployment, configuration, monitoring |
+| `indicator-panes.md` | Non-overlay indicator pane architecture |
+| `dynamic-indicators.md` | Dynamic indicator management UI, data model, rendering pipeline |
+| `progressive-computation.md` | Progressive indicator computation, lookback seed mgmt, batch queue |
+| `forming-candle-lifecycle.md` | FormingCandleManager module, tick/confirm lifecycle |
+| `chart-interactions.md` | Viewport auto-fit, auto-scale toggle, scroll re-execution, go-to-date |
+| `backtest-engine.md` | Broker simulator, orchestrator, metrics, commission methods |
+| `script-bank-ai-editor.md` | Script bank, AI agent integration, file-based storage, built-in tests |
+| `telegram-alerts.md` | Alert system, Telegram bot, SOCKS5 proxy, database layer |
+| `cli-backtest-tool.md` | CLI backtest tool for multi-symbol strategy validation |
+| `single-strategy-enforcement.md` | Single strategy per script enforcement |
+
+## Completed Implementation Tasks
+
+See `openspec/docs/tasks/completed-implementation.md` for the full preservation of all 144 implementation tasks, including sub-tasks, notes, and the task dependency graph.
+
+## Conclusion
+
+This architecture provides a comprehensive foundation for a production-grade Pine Script v5/v6 Engine that maintains compatibility with TradingView while offering extensibility, performance, and scalability. The modular design allows for independent development of components, and the plugin architecture ensures the system can evolve with new features without modifying core code.
+
+The system prioritizes:
+1. **Correctness**: TradingView-compatible semantics and numerical precision
+2. **Performance**: Efficient handling of large datasets and concurrent indicators
+3. **Extensibility**: Plugin-based architecture for future growth
+4. **Reliability**: Robust error handling and recovery mechanisms
+5. **Usability**: Clear interfaces and comprehensive testing
