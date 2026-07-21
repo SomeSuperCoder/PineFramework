@@ -95,6 +95,17 @@ export class FormingCandleProcessor {
     const preBoxIdCounter = this.eng.boxIdCounter;
     const preStrategyState = this.eng.strategyEngine ? this.eng.strategyEngine.saveState() : null;
 
+    // Save pre-tick global scope variable series lengths so we can restore them
+    // after cloneRuntimeScope. Each forming-candle tick adds entries to every
+    // variable's series (via = assignment in executeBar → setVariableValue).
+    // Without restoration, these phantom entries accumulate across N ticks,
+    // causing historical references like trend[1] to read from the wrong offset
+    // when the next confirmed bar is executed.
+    const preVarLengths = new Map<string, number>();
+    for (const [name, binding] of this.eng.globalScope.variables) {
+      preVarLengths.set(name, binding.series.length);
+    }
+
     const result = this.eng.executeBar(context);
 
     const snapshotsAdded = this.eng.snapshots.length > 0 ? 1 : 0;
@@ -112,6 +123,14 @@ export class FormingCandleProcessor {
       : this.eng.metrics.failedBars - 1;
 
     this.eng.globalScope = cloneRuntimeScope(this.eng.globalScope);
+    // Restore global scope variable series lengths to pre-tick state,
+    // removing the phantom entries added during the tick.
+    for (const [name, binding] of this.eng.globalScope.variables) {
+      const preLen = preVarLengths.get(name);
+      if (preLen !== undefined && binding.series.length > preLen) {
+        binding.series.values.length = preLen;
+      }
+    }
     if (preSmaBuffers) {
       this.eng.smaBuffers = new Map();
       for (const [key, arr] of preSmaBuffers) {

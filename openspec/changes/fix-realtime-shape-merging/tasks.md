@@ -16,12 +16,12 @@
 
 ## 3. Verify and test
 
-- [ ] 3.1 **Run full test suite** — `npm test` — verify no regressions.
-- [ ] 3.2 **Manual verification** — Deploy frontend, load an indicator with `plotshape()`, observe real-time kline updates on trailing candles. Confirm labels stay correct across 20+ bar updates.
+- [x] 3.1 **Run full test suite** — 1423 tests, 75 suites, all pass.
+- [ ] 3.2 **Manual verification** — Deploy frontend, load an indicator with `plotshape()`, observe real-time kline updates on trailing candles. Confirm labels stay correct across 20+ bar updates. *(Manual — requires browser)*
 
 ## 4. Cleanup
 
-- [ ] 4.1 **Commit** with message: `fix: merge shapes/labels/lines/fills/boxes by timestamp instead of array position in real-time WS diffs`
+- [x] 4.1 **Commit** — `69c34a2` — `fix: merge shapes/labels/lines/fills/boxes by timestamp instead of array position in real-time WS diffs`
 
 ## Design References
 
