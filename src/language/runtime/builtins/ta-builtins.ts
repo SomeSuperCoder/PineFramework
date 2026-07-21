@@ -455,16 +455,22 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     // all historical bars pushed by the interpreter before statements execute.
     const highArr = eng.ohlcHistory.high;
     const len = highArr.length;
-    if (len < rightBars + 1) return NA;
+    // Must have ALL left + right + candidate bars in the window
+    if (len < leftBars + rightBars + 1) return NA;
     const candidateIdx = len - 1 - rightBars;
     const candidateValue = highArr[candidateIdx];
     if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
-    for (let d = -leftBars; d <= rightBars; d++) {
-      if (d === 0) continue;
+    // Left neighbors: equal values are OK (candidate is the LAST max in the window)
+    for (let d = -leftBars; d < 0; d++) {
       const idx = candidateIdx + d;
-      if (idx < 0 || idx >= len) continue;
       const v = highArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v > candidateValue) return NA;
+    }
+    // Right neighbors: must be STRICTLY less — equal means pivot not confirmed
+    for (let d = 1; d <= rightBars; d++) {
+      const idx = candidateIdx + d;
+      const v = highArr[idx];
+      if (typeof v === 'number' && !isNaN(v) && v >= candidateValue) return NA;
     }
     return candidateValue;
   });
@@ -488,16 +494,22 @@ export function registerTaBuiltins(engine: ExecutionEngine): void {
     // Read from the engine's accumulated OHLC history, not from the context series.
     const lowArr = eng.ohlcHistory.low;
     const len = lowArr.length;
-    if (len < rightBars + 1) return NA;
+    // Must have ALL left + right + candidate bars in the window
+    if (len < leftBars + rightBars + 1) return NA;
     const candidateIdx = len - 1 - rightBars;
     const candidateValue = lowArr[candidateIdx];
     if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
-    for (let d = -leftBars; d <= rightBars; d++) {
-      if (d === 0) continue;
+    // Left neighbors: equal values are OK (candidate is the LAST min in the window)
+    for (let d = -leftBars; d < 0; d++) {
       const idx = candidateIdx + d;
-      if (idx < 0 || idx >= len) continue;
       const v = lowArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v < candidateValue) return NA;
+    }
+    // Right neighbors: must be STRICTLY greater — equal means pivot not confirmed
+    for (let d = 1; d <= rightBars; d++) {
+      const idx = candidateIdx + d;
+      const v = lowArr[idx];
+      if (typeof v === 'number' && !isNaN(v) && v <= candidateValue) return NA;
     }
     return candidateValue;
   });
