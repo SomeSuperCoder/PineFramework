@@ -6,7 +6,7 @@
 
 ## Summary
 
-- **48** capability specs created from **49** legacy requirements
+- **48** capability specs created from **48** legacy requirements
 - **1** architecture document created
 - **1** migration change proposal created
 - **0** requirements lost
@@ -176,7 +176,7 @@ openspec/
 
 ## Verification
 
-- [x] All 49 requirements mapped to specs
+- [x] All 48 requirements mapped to specs
 - [x] No data loss in migration
 - [x] Legacy files preserved
 - [x] Migration change documented
