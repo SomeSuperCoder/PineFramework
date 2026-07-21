@@ -206,7 +206,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 
 **display namespace:**
 43. THE Plot_Engine SHALL support the `display` namespace (display.data_window, display.pane, display.none) as a builtin returning display mode constants
-44. WHEN `display` is set to `display.none` or `0`, THE Plot_Engine SHALL suppress the plot from rendering
+44. WHEN `display` is set to `display.none` or `0`, THE Plot_Engine SHALL suppress the plot from line rendering (no visible line on chart) while still computing and storing the plot's data so that fill() lookups and other data-dependent operations continue to work; the hidden plot's values remain available in `allPlots` for AreaRenderer fill polygon construction and price range calculation SHALL exclude hidden plot values
 
 **Variadic argument handling:**
 45. THE Plot_Engine SHALL accept plot() arguments as variadic positional args with a trailing optional namedArgs object, reading color from positionalArgs[2], linewidth from [3], style from [4], and display from [11]
@@ -482,7 +482,9 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 6. THE System SHALL support Pine's gradient and palette functions
 7. THE System SHALL render colors consistently across different display systems
 8. THE Color_System SHALL support color.new(color, transp) builtin for creating colors with specified transparency
-9. THE Color_System SHALL support color namespace syntax (color.blue, color.red, color.green, etc.) resolving to hex color values
+9. THE Color_System SHALL propagate transparency through color strings correctly — `color.new()` SHALL extract only the RGB base (first 6 hex digits) from the input color and replace alpha entirely, preventing alpha accumulation when color.new() is called on an already-transparent color
+10. WHEN `color.new(na, transp)` is called (input color is na), THE Color_System SHALL return na instead of defaulting to a solid color — this allows conditional fill/plot colors to properly represent a neutral/no-color state
+11. THE Color_System SHALL support color namespace syntax (color.blue, color.red, color.green, etc.) resolving to hex color values
 
 ### Requirement 16: Script Declaration and Configuration
 
@@ -498,6 +500,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
   - THE System SHALL accept `commission_type` and `commission_value` from strategy() declarations for backward compatibility, but the backtest runtime commission calculation SHALL be overridden by the selected Commission Calculation Method when a method is chosen in the backtest settings
 6. THE System SHALL validate script type compatibility with available functions
 7. WHEN strategy() is called without an explicit overlay parameter, THE System SHALL default overlay to `true` (strategies render on the main chart pane by default)
+8. THE System SHALL accept the script name from BOTH positional string argument (e.g., `indicator("My Name")`) AND named `title=` argument (e.g., `indicator(title="My Name", overlay=true)`) in indicator() and strategy() declarations — the name extraction logic SHALL first attempt positional match, then fall back to named `title=` attribute match, ensuring compatibility with scripts that use either syntax
 
 ### Requirement 17: Frontend Web Application with Canvas Charting
 
@@ -601,7 +604,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 5. THE Backend SHALL handle multiple concurrent WebSocket clients
 6. THE Backend SHALL support symbol and interval subscription/unsubscription via WebSocket messages
 7. THE Backend SHALL cache recent OHLCV data to reduce Bybit API calls
-8. THE Backend SHALL run on port 8080 by default (configurable via environment variable)
+8. THE Backend SHALL run on port 8081 by default (configurable via environment variable; the Vite dev server proxy forwards `/api` and `/ws` requests to this port)
 9. THE Backend SHALL be a workspace package within the monorepo
 10. THE Backend SHALL gracefully handle Bybit API rate limits and connection failures
 11. THE Backend SHALL log connection status and error events
@@ -619,6 +622,7 @@ This specification defines requirements for building a Pine Script v5 and v6 com
 23. THE Backend SHALL include bgcolor data in POST /api/execute and WebSocket execution_result responses
 24. THE Backend SHALL include per-bar plot color data and per-bar fill color data in execution responses for fine-grained canvas rendering
 25. THE Backend SHALL include barColorData in POST /api/execute and WebSocket execution_result responses for bar coloring overrides
+26. THE Backend SHALL include hiddenPlotKeys (an array of plot key strings whose display is `display.none`) in POST /api/execute and WebSocket execution_result responses, so the frontend can skip rendering those plots as visible lines while keeping their data available for fill lookups
 26. THE Backend SHALL include line objects (LineEntry mapped to DrawingLineData) and label objects (LabelData) in execution responses for canvas rendering
 27. THE Backend SHALL extend GET /api/ohlcv to accept an `end` timestamp parameter for fetching bars older than a given time point (lazy loading)
 28. THE Backend WebSocket gateway SHALL prune stale (closed) WebSocket connections from topic subscriber sets before each re-execution iteration to prevent connection-set drift

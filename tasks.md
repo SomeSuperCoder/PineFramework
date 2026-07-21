@@ -3647,6 +3647,14 @@ This implementation plan outlines the step-by-step development of a production-g
 - Task 131 is the checkpoint validating the CLI tool and merge prompt tutorial work end-to-end.
 - Tasks 132-133 implement chart viewport auto-fit on initial load (suppress WS updates until REST loads, auto-fit when data arrives) and fix node16 module resolution (add .js extensions to relative imports).
 - Tasks 134-136 implement Pluggable Commission Calculation Methods: defines CommissionCalculator interface and CommissionConfig types (134.1), implements five built-in methods — percent_fixed (134.2), per_order_fixed (134.3), jupiter_ultra modeling Jupiter DEX Ultra Mode fees (134.4), jupiter_manual modeling zero-commission Jupiter Market Swap (134.5), none (134.6), long-only enforcement (134.7), wires methods into Broker Simulator and REST API (135.1-135.3), and adds commission method dropdown + method-specific settings to the backtest settings UI (136.1-136.3). Legacy commission_type/commission_value from strategy() serves as fallback when no method is selected.
+- Task 137 implements Engine-Level OHLC History Accumulation: the ExecutionEngine now accumulates an `ohlcHistory` object with open/high/low/close/volume arrays across bar execution, enabling series indexing (close[1], etc.) without O(n²) memory overhead from cumulative context series. StateManager snapshots save/restore ohlcHistory for rollback. Fixes history access broken by C-003 single-value series optimization.
+- Task 138 splits the monolithic interpreter.ts into expression-executor.ts and statement-executor.ts for maintainability (S-007). Expression evaluation (binary ops, member access, index expressions, function calls) is extracted to expression-executor.ts; statement-level execution (variable declarations, if/else, for loops, switch, return) remains in statement-executor.ts.
+- Task 139 implements hidden plot support (display=display.none): plots with display.none do not render as visible lines on the chart, but their data remains available in the allPlots map for fill() polygon lookups and AreaRenderer reference. The engine tracks hiddenPlotKeys and passes them in the execution result; the frontend skips hidden plots during line rendering and price range calculation.
+- Task 140 adds named title= argument support for indicator/strategy declarations: the parser now accepts `indicator(title="Name", overlay=true)` in addition to positional `indicator("Name")`. Name extraction at all call sites (parser, backend, frontend) uses a two-pass approach — positional first, then named title= attribute match — ensuring scripts using named argument syntax display correct names in the editor, indicator labels, and strategy conflict dialogs.
+- Task 141 fixes color.new() alpha accumulation: when color.new() is called on an already-transparent color, it now replaces the alpha byte entirely instead of appending, preventing invalid 10-hex-char color strings. Also fixes color.new(na, transp) to return na instead of defaulting to #2196f3, enabling neutral-trend fill states.
+- Task 142 adds per-bar fill color support for 6-argument band fill form: fill() builtin detects the 6+ argument band fill form (p_basis, p_price, hl2, zl_basis, na, color.new(...)) and reads the color from positionalArgs[5] instead of positionalArgs[4], correctly handling scripts like Zero Lag Signals For Loop that use this form.
+- Task 143 adds barColors API to backend /api/execute response: the barcolor() builtin data (stored in engine.barColorData) is now serialized in execution responses, enabling candle body/wick color overrides visible to the frontend.
+- Task 144 switches default backend port from 8080 to 8081: updates backend server default port, Vite proxy targets, and WebSocket connection URL to use 8081, avoiding conflicts with common services that use 8080.
 
 ## Task Dependency Graph
 
@@ -3825,7 +3833,15 @@ This implementation plan outlines the step-by-step development of a production-g
     { "id": 169, "tasks": ["135.1", "135.2", "135.3"] },
     { "id": 170, "tasks": ["135.4"] },
     { "id": 171, "tasks": ["136.1", "136.2", "136.3"] },
-    { "id": 172, "tasks": ["136.4"] }
+    { "id": 172, "tasks": ["136.4"] },
+    { "id": 173, "tasks": ["137"] },
+    { "id": 174, "tasks": ["138"] },
+    { "id": 175, "tasks": ["139"] },
+    { "id": 176, "tasks": ["140"] },
+    { "id": 177, "tasks": ["141"] },
+    { "id": 178, "tasks": ["142"] },
+    { "id": 179, "tasks": ["143"] },
+    { "id": 180, "tasks": ["144"] }
   ]
 }
 ```

@@ -140,7 +140,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
 - **Key Features**:
   - Version-aware execution: dispatches built-in functions to v5 or v6 implementations based on detected version
   - Maintains series state across executions
-  - Implements Pine's series indexing (`close[1]`, etc.)
+  - Implements Pine's series indexing (`close[1]`, etc.) — the engine accumulates an `ohlcHistory` object across bar execution with `open/high/low/close/volume` arrays, so `executeIndexExpression()` reads from the engine's accumulated history rather than from the context series (which only holds the current bar's value). This avoids O(n²) memory from cumulative series while preserving full history access. `StateManager` snapshots save/restore `ohlcHistory` for rollback.
   - Variable scope management
   - Error recovery with rollback
   - Returns shapes (plotshape markers), fills (area between plots), strategyMarkers, lines (LineEntry), and labels (LabelEntry) as part of execution result
@@ -176,7 +176,7 @@ Key insights from Pine Script v6 and TradingView architecture research:
   - `ta.hma(source, length)`: Hull Moving Average implemented via WMA-based algorithm with per-call-site buffer isolation (`hmaBuffers` map keyed by `hma_${len}_${hmaCallIndex}`). Maintains `half` (half-length WMA), `full` (full-length WMA), and `diff` (sqrt-length WMA of 2*half - full) buffers. Returns NA until sufficient data is accumulated. `hmaCallIndex` reset each bar.
   - `plotchar(series, title, char, location, color, ...)`: Character marker builtin that produces `ShapeEntry` objects with unicode char, location handling (abovebar/belowbar/absolute), and color. Supports unicode characters (▲, ▼, ◆, etc.).
   - `plotcandle(open, high, low, close, color, ...)`: Candle color override builtin that stores body color into `barColorData` array for candle body rendering.
-  - `display` namespace: `display.data_window`, `display.pane`, `display.none` resolved as builtin constants via `executeMemberExpression()`. When `display` is `none` or `0`, the plot is suppressed.
+  - `display` namespace: `display.data_window`, `display.pane`, `display.none` resolved as builtin constants via `executeMemberExpression()`. When `display` is `none` or `0`, the plot is suppressed from visible line rendering but its data remains available for fill() lookups (the engine tracks `hiddenPlotKeys` to tell the frontend which plots to skip during line rendering while keeping data in `allPlots` for AreaRenderer fill polygon construction). Price range calculation also excludes hidden plot values.
   - `plot()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs object. Reads color from `positionalArgs[2]`, linewidth from `[3]`, style from `[4]`, display from `[11]`. Named args override positional when both present. Pushes `positionalArgs[0]` (the series) to output, not the `value` parameter.
   - `fill()` variadic arguments: accepts `(...allArgs)` with positional args separated from trailing namedArgs. Reads `top_color` from `positionalArgs[4]` and `bottom_color` from `positionalArgs[5]`. Stores one color per bar in `fillColorData` for per-bar segment rendering.
   - `ta.change(source)`: Returns the difference between current and previous source values (source - source[1]). Per-call-site state tracking via `changeCallIndex` and `changePrevValues` arrays. Returns NA on first call. State reset each bar.
@@ -790,7 +790,7 @@ pine-framework (engine library)
 - **AST Walker**: Tree traversal and transformation
 
 #### Execution Layer
-- **Runtime**: Script execution environment
+- **Interpreter** (split into `statement-executor.ts` and `expression-executor.ts` for maintainability): Pine script execution environment; `expression-executor.ts` handles expression evaluation (binary ops, member access, index expressions, function calls), `statement-executor.ts` handles statement-level execution (variable declarations, if/else, for loops, switch, return)
 - **State Management**: Series and variable state
 - **Scope Manager**: Variable scope handling
 - **Error Handler**: Exception and rollback management
