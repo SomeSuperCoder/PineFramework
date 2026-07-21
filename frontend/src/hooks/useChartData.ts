@@ -403,10 +403,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       }
     }
 
-    const mergedShapes = [...newResult.shapes, ...prev.shapes];
-    const mergedFills = [...(newResult.fills || []), ...(prev.fills || [])];
-    const mergedLines = [...newResult.lines, ...prev.lines];
-    const mergedLabels = [...newResult.labels, ...prev.labels];
+    // Deduplicate by identity key — newResult covers all bars including the
+    // overlap with prev, so filter out prev entries whose key matches a new entry.
+    const mergedShapes = [...newResult.shapes, ...prev.shapes.filter((s) => !newResult.shapes.some((n) => n.time === s.time))];
+    const mergedFills = [...(newResult.fills || []), ...(prev.fills || []).filter((f) => !(newResult.fills || []).some((n) => n.from === f.from && n.to === f.to))];
+    const mergedLines = [...newResult.lines, ...prev.lines.filter((l) => !newResult.lines.some((n) => n.points[0]?.time === l.points[0]?.time))];
+    const mergedLabels = [...newResult.labels, ...prev.labels.filter((l) => !newResult.labels.some((n) => n.time === l.time))];
     const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
 
     // Prepend fillColorData entries and recompute boundary
@@ -429,8 +431,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
     }
 
-    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || [])];
-    const mergedBoxes = [...(newResult.boxes || []), ...(prev.boxes || [])];
+    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || []).filter((b) => !(newResult.bgcolor || []).some((n) => n.time === b.time))];
+    const mergedBoxes = [...(newResult.boxes || []), ...(prev.boxes || []).filter((b) => !(newResult.boxes || []).some((n) => n.startTime === b.startTime))];
     // Tables are static dashboard state — use the latest
     const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
 
@@ -505,7 +507,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       location: s.location as import('../types').ShapeData['location'],
     }));
     const mergedShapes = diffShapes.length > 0
-      ? [...prev.shapes.slice(0, -diffShapes.length || undefined), ...diffShapes]
+      ? [...prev.shapes.filter((s) => !diffShapes.some((d) => d.time === s.time)), ...diffShapes]
       : prev.shapes;
 
     const diffFills = (msg.fills || []).map((f) => ({
@@ -514,7 +516,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       color: f.color,
     }));
     const mergedFills = diffFills.length > 0
-      ? [...(prev.fills || []).slice(0, -diffFills.length || undefined), ...diffFills]
+      ? [...(prev.fills || []).filter((f) => !diffFills.some((d) => d.from === f.from && d.to === f.to)), ...diffFills]
       : (prev.fills || []);
 
     const diffLines = (msg.lines || []).map((l) => ({
@@ -524,7 +526,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
     }));
     const mergedLines = diffLines.length > 0
-      ? [...prev.lines.slice(0, -diffLines.length || undefined), ...diffLines]
+      ? [...prev.lines.filter((l) => !diffLines.some((d) => d.points[0]?.time === l.points[0]?.time)), ...diffLines]
       : prev.lines;
 
     const diffLabels = (msg.labels || []).map((l) => ({
@@ -537,7 +539,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       size: l.size,
     }));
     const mergedLabels = diffLabels.length > 0
-      ? [...prev.labels.slice(0, -diffLabels.length || undefined), ...diffLabels]
+      ? [...prev.labels.filter((l) => !diffLabels.some((d) => d.time === l.time)), ...diffLabels]
       : prev.labels;
 
     const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
@@ -592,7 +594,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       backgroundColor: b.backgroundColor,
     }));
     const mergedBoxes = diffBoxes.length > 0
-      ? [...(prev.boxes || []).slice(0, -diffBoxes.length || undefined), ...diffBoxes]
+      ? [...(prev.boxes || []).filter((b) => !diffBoxes.some((d) => d.startTime === b.startTime)), ...diffBoxes]
       : (prev.boxes || []);
 
     return {
