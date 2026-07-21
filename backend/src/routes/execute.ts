@@ -85,6 +85,11 @@ executeRouter.post('/execute', async (req, res) => {
       color: b.color,
     }));
 
+    const barColors = (result.barColorData || []).map((b) => ({
+      time: b.time,
+      color: b.color,
+    }));
+
     const strategyMarkers = (result.strategyMarkers || []).map((m) => ({
       type: m.type,
       name: m.name,
@@ -173,6 +178,7 @@ executeRouter.post('/execute', async (req, res) => {
       shapes,
       fills,
       bgcolor,
+      barColors,
       strategyMarkers,
       lines,
       labels,

@@ -228,7 +228,7 @@ export function executeCallExpression(
 
     const func = eng.functions.get(funcName);
     if (func) {
-      return executeFunctionCall(eng, func, args, scope, context, `${funcName}@${expr.callId}`);
+      return executeFunctionCall(eng, func, args, expr.arguments, scope, context, `${funcName}@${expr.callId}`);
     }
   }
 
@@ -349,7 +349,8 @@ export function executeCallExpression(
     // User-defined method call
     const methodFunc = eng.functions.get(methodName);
     if (methodFunc) {
-      return executeFunctionCall(eng, methodFunc, [obj, ...args], scope, context, `${methodName}@${expr.callId}`);
+      const methodArgExprs = [expr.callee.object, ...expr.arguments];
+      return executeFunctionCall(eng, methodFunc, [obj, ...args], methodArgExprs, scope, context, `${methodName}@${expr.callId}`);
     }
 
     // Line methods on returned IDs
@@ -400,6 +401,7 @@ function executeFunctionCall(
   eng: ExecutionEngine,
   func: any,
   args: PineValue[],
+  argExprs: any[],
   scope: RuntimeScope,
   context: ExecutionContext,
   scopeKey?: string,
@@ -419,6 +421,34 @@ function executeFunctionCall(
     let value: PineValue;
     if (i < args.length) {
       value = args[i]!;
+
+      // Pine Script function parameters preserve series history when a series
+      // variable is passed as an argument.  e.g.:
+      //   myFunc(price) => price > price[1]
+      //   myFunc(close)    →  inside myFunc, price[i] accesses close[i]
+      //
+      // When the argument is a plain Identifier, alias the parameter's series
+      // to the original variable's series so history-referencing ([i]) works.
+      if (argExprs[i]?.kind === 'Identifier') {
+        const argName = argExprs[i].name;
+        const argBinding = resolveVariable(scope, argName);
+        if (argBinding) {
+          // Built-in series (close, high, etc.) use a different history lookup
+          // path in executeIndexExpression — skip aliasing for those.
+          const builtInNames = new Set(['close', 'open', 'high', 'low', 'volume', 'time', 'hl2', 'hlc3', 'ohlc4', 'bar_index']);
+          if (!builtInNames.has(argName)) {
+            const paramBinding = resolveVariable(funcScope, param.name);
+            if (paramBinding) {
+              // Replace the parameter's series with the original variable's
+              // series.  Both now share the same backing array, so any
+              // history-reference resolves against the original variable's
+              // full timeseries.
+              paramBinding.series = argBinding.series;
+              continue;  // skip the normal declare+setVariableValue path
+            }
+          }
+        }
+      }
     } else if (param.defaultValue) {
       value = _defaultDispatch(param.defaultValue, scope, context);
     } else {
