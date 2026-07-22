@@ -1,11 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
-import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import { createTrendBars, prependBars } from '../helpers/deterministicBars.js';
 import { EVERY_BAR_ALERT_SOURCE, thresholdAlertSource } from '../fixtures/every-bar-alert.js';
+import { HHLL_SOURCE } from '../fixtures/higher-high-lower-low.js';
 import { Viewport } from '../../frontend/src/chart/Viewport.js';
 import type { CandlestickData, AlertTriggerData } from '../../frontend/src/chart/types.js';
 
@@ -169,7 +169,7 @@ describe('Alert trigger end-to-end pipeline', () => {
   // 5.3 — real higher-high-lower-low.pine script on 1000 bars
   // -----------------------------------------------------------------------
   it('higher-high-lower-low.pine produces valid triggers on 1000 bars', () => {
-    const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
+    const source = HHLL_SOURCE;
     const bars = createTrendBars({ count: 1000, seed: 42, trend: 'sine-wave' });
     const { result } = runEngine(source, bars);
 

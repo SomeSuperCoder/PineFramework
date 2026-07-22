@@ -672,8 +672,15 @@ export function registerOtherBuiltins(engine: ExecutionEngine): void {
         ? (args[args.length - 1] as unknown as Record<string, PineValue>)
         : {};
     const condition = args[0] ?? NA;
-    const titleVal = namedArgs['title'];
-    const msgVal = namedArgs['message'];
+    // Support both named (title="...", message="...") and positional
+    // (alertcondition(condition, title, message)) argument styles.
+    // Positional: args[1] = title, args[2] = message (when those are strings).
+    const titleVal =
+      namedArgs['title'] ??
+      (args.length > 1 && typeof args[1] === 'string' ? args[1] : undefined);
+    const msgVal =
+      namedArgs['message'] ??
+      (args.length > 2 && typeof args[2] === 'string' ? args[2] : undefined);
     const title =
       typeof titleVal === 'string' ? titleVal : `Alert ${eng.alertConditionEntries.length + 1}`;
     const message = typeof msgVal === 'string' ? msgVal : title;
