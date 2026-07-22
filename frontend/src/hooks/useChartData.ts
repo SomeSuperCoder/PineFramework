@@ -23,7 +23,7 @@ interface ExecuteResponse {
     comment?: string;
   }>;
   bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
+  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string; extend?: string }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
   barTimestamps?: number[];
@@ -170,6 +170,7 @@ function buildScriptResult(
       color: l.color,
       width: l.width,
       style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
+      extend: l.extend,
     })),
     boxes: (boxes || []).map((b) => ({
       startTime: Math.floor(b.startTime / 1000),
@@ -596,6 +597,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       color: l.color,
       width: l.width,
       style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
+      extend: l.extend,
     }));
     const mergedLines = diffLines.length > 0
       ? [...prev.lines.filter((l) => !diffLines.some((d) => d.points[0]?.time === l.points[0]?.time)), ...diffLines]
