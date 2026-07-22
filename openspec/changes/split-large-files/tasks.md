@@ -5,10 +5,10 @@
 
 ## 2. Core Engine: Expression Executor & Execution Engine
 
-- [ ] 2.1 Extract `src/language/runtime/expression-executor.ts` (~724 lines) array-method dispatch into `src/language/runtime/array-methods.ts`
-- [ ] 2.2 Extract line/box/label/table method dispatch from `expression-executor.ts` into `src/language/runtime/drawing-methods.ts`
-- [ ] 2.3 Extract type-constructor logic from `expression-executor.ts` into `src/language/runtime/type-constructors.ts`
-- [ ] 2.4 Update `index.ts` barrel in `src/language/runtime/` with new exports; verify all tests pass
+- [x] 2.1 Extract `src/language/runtime/expression-executor.ts` (~724 lines) array-method dispatch into `src/language/runtime/array-methods.ts`
+- [x] 2.2 Extract line/box/label/table method dispatch from `expression-executor.ts` into `src/language/runtime/drawing-methods.ts`
+- [x] 2.3 Extract type-constructor logic from `expression-executor.ts` into `src/language/runtime/type-constructors.ts`
+- [x] 2.4 Update `index.ts` barrel in `src/language/runtime/` with new exports; verify all language tests pass
 - [ ] 2.5 Clean up `src/language/runtime/execution-engine.ts` (~441 lines): extract helper functions (`parseMapLength`, `evaluateArgValue`, strategy initialization) into separate utility files; simplify the delegation layer
 
 ## 3. Core Engine: Parser

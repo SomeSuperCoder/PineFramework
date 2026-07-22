@@ -38,6 +38,9 @@ import {
 } from './scope.js';
 import type { ExecutionContext } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
+import { executeArrayMethod } from './array-methods.js';
+import { executeLineMethod, executeBoxMethod } from './drawing-methods.js';
+import { executeTypeConstructor } from './type-constructors.js';
 
 // ── Circular-dependency bridge ────────────────────────────────────────────────
 // expression-executor needs executeStatement (for function bodies).
@@ -299,16 +302,7 @@ export function executeCallExpression(
     // Type constructor: TypeName.new(...)
     if (methodName === 'new' && eng.userTypeFields.has(objName)) {
       const fields = eng.userTypeFields.get(objName)!;
-      const obj: Record<string, PineValue> = {};
-      for (let i = 0; i < fields.length; i++) {
-        if (i < args.length) {
-          obj[fields[i]!.name] = args[i]!;
-        } else if (fields[i]!.defaultExpr) {
-          const defaultVal = dispatch(fields[i]!.defaultExpr!, scope, context);
-          obj[fields[i]!.name] = defaultVal;
-        }
-      }
-      return obj as unknown as PineValue;
+      return executeTypeConstructor(fields, args, dispatch, scope, context);
     }
 
     // Evaluate the object — used for both table and array method dispatch
@@ -326,59 +320,8 @@ export function executeCallExpression(
 
     // Generic array methods
     if (Array.isArray(obj)) {
-      switch (methodName) {
-        case 'size': return obj.length;
-        case 'first': return obj.length > 0 ? obj[0] : NA;
-        case 'last': return obj.length > 0 ? obj[obj.length - 1] : NA;
-        case 'shift': return obj.shift() ?? NA;
-        case 'pop': return obj.pop() ?? NA;
-        case 'push': obj.push(args[0] ?? NA); return obj.length;
-        case 'unshift': obj.unshift(args[0] ?? NA); return obj.length;
-        case 'insert': { const idx = (args[0] as number) ?? 0; obj.splice(idx, 0, args[1] ?? NA); return obj.length; }
-        case 'remove': { const ri = (args[0] as number) ?? 0; return obj.splice(ri, 1)[0] ?? NA; }
-        case 'contains': return obj.includes(args[0] ?? NA);
-        case 'fill': { const fv = args[0] ?? NA; for (let fi = 0; fi < obj.length; fi++) obj[fi] = fv; return obj; }
-        case 'set': { const si = (args[0] as number) ?? 0; obj[si] = args[1] ?? NA; return obj; }
-        case 'get': { const gi = (args[0] as number) ?? 0; return obj[gi] ?? NA; }
-        case 'min': {
-          let minVal: number | null = null;
-          for (const item of obj) if (typeof item === 'number' && !isNaN(item)) { if (minVal === null || item < minVal) minVal = item; }
-          return minVal !== null ? minVal : NA;
-        }
-        case 'max': {
-          let maxVal: number | null = null;
-          for (const item of obj) if (typeof item === 'number' && !isNaN(item)) { if (maxVal === null || item > maxVal) maxVal = item; }
-          return maxVal !== null ? maxVal : NA;
-        }
-        case 'avg': {
-          let sum = 0; let count = 0;
-          for (const item of obj) if (typeof item === 'number' && !isNaN(item)) { sum += item; count++; }
-          return count > 0 ? sum / count : NA;
-        }
-        case 'stdev': {
-          const nums = obj.filter((v: any): v is number => typeof v === 'number' && !isNaN(v));
-          if (nums.length < 2) return NA;
-          const mean = nums.reduce((a: number, b: number) => a + b, 0) / nums.length;
-          const variance = nums.reduce((sum: number, v: number) => sum + (v - mean) ** 2, 0) / (nums.length - 1);
-          return Math.sqrt(variance);
-        }
-        case 'indexof': for (let idx = 0; idx < obj.length; idx++) if (obj[idx] === args[0]) return idx; return -1;
-        case 'clear': obj.length = 0; return NA;
-        case 'percentile_linear_interpolation': {
-          const pct = (args[0] as number) ?? 50;
-          if (typeof pct !== 'number' || isNaN(pct)) return NA;
-          const nums = obj.filter((v: any): v is number => typeof v === 'number' && !isNaN(v) && Number.isFinite(v)).sort((a: number, b: number) => a - b);
-          if (nums.length === 0) return NA;
-          if (nums.length === 1) return nums[0];
-          const rank = (pct / 100) * (nums.length - 1);
-          const lower = Math.floor(rank); const upper = Math.ceil(rank);
-          if (lower === upper) return nums[lower];
-          return nums[lower] + (rank - lower) * (nums[upper] - nums[lower]);
-        }
-        case 'sort': return obj.sort((a: PineValue, b: PineValue) => (a as number) - (b as number));
-        case 'copy': return [...obj];
-        default: return NA;
-      }
+      const result = executeArrayMethod(obj, methodName, args);
+      if (result !== undefined) return result;
     }
 
     // User-defined method call
@@ -388,42 +331,23 @@ export function executeCallExpression(
       return executeFunctionCall(eng, methodFunc, [obj, ...args], methodArgExprs, scope, context, `${methodName}@${expr.callId}`);
     }
 
-    // Line methods on returned IDs
+    // Drawing object methods on returned IDs
     if (typeof obj === 'number') {
-      switch (methodName) {
-        case 'delete': eng.lines.delete(obj); return true;
-        case 'get_x1': { const ln = eng.lines.get(obj); return ln ? ln.x1 : NA; }
-        case 'get_y1': { const ln = eng.lines.get(obj); return ln ? ln.y1 : NA; }
-        case 'get_x2': { const ln = eng.lines.get(obj); return ln ? ln.x2 : NA; }
-        case 'get_y2': { const ln = eng.lines.get(obj); return ln ? ln.y2 : NA; }
-        case 'get_color': { const ln = eng.lines.get(obj); return ln ? ln.color : NA; }
-        case 'get_style': { const ln = eng.lines.get(obj); return ln ? ln.style : NA; }
-        case 'get_width': { const ln = eng.lines.get(obj); return ln ? ln.width : NA; }
-        case 'set_color': { const ln = eng.lines.get(obj); if (ln) ln.color = String(args[0] ?? '#2196f3'); return true; }
-        case 'set_style': { const ln = eng.lines.get(obj); if (ln) ln.style = String(args[0] ?? 'solid'); return true; }
-        case 'set_width': { const ln = eng.lines.get(obj); if (ln) ln.width = (args[0] as number) ?? 1; return true; }
-        default: break;
+      if (methodName === 'delete') {
+        // Generic delete — works on both lines and boxes
+        if (eng.lines.has(obj)) { eng.lines.delete(obj); return true; }
+        if (eng.boxes.has(obj)) { eng.boxes.delete(obj); return true; }
+        return true;
       }
-    }
-
-    // Box methods on returned IDs
-    if (typeof obj === 'number') {
+      const line = eng.lines.get(obj);
+      if (line) {
+        const result = executeLineMethod(line, methodName, args);
+        if (result !== undefined) return result;
+      }
       const bx = eng.boxes.get(obj);
       if (bx) {
-        switch (methodName) {
-          case 'set_left': bx.left = (args[0] as number) ?? bx.left; return true;
-          case 'set_top': bx.top = (args[0] as number) ?? bx.top; return true;
-          case 'set_right': bx.right = (args[0] as number) ?? bx.right; return true;
-          case 'set_bottom': bx.bottom = (args[0] as number) ?? bx.bottom; return true;
-          case 'set_border_color': bx.border_color = String(args[0] ?? '#00000000'); return true;
-          case 'set_bgcolor': bx.bgcolor = String(args[0] ?? '#2196f380'); return true;
-          case 'get_left': return bx.left;
-          case 'get_top': return bx.top;
-          case 'get_right': return bx.right;
-          case 'get_bottom': return bx.bottom;
-          case 'delete': eng.boxes.delete(obj); return true;
-          default: return NA;
-        }
+        const result = executeBoxMethod(bx, methodName, args);
+        if (result !== undefined) return result;
       }
     }
   }
