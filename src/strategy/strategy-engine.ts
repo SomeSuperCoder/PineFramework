@@ -50,6 +50,7 @@ export interface Order {
   ocaGroup?: string;
   trailPrice?: number;
   trailOffset?: number;
+  fromEntry?: string;
 }
 
 export interface FilledOrder extends Order {
@@ -497,6 +498,7 @@ export class StrategyEngine {
         : undefined,
       trailPrice,
       trailOffset,
+      fromEntry,
     };
 
     if (orderType === 'market') {
@@ -715,7 +717,7 @@ export class StrategyEngine {
         this.openOrAddPosition('long', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         // Closing/reducing a short position
-        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
+        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName, order.fromEntry);
       }
     } else {
       if (isFlat || this.position.direction === 'short') {
@@ -723,7 +725,7 @@ export class StrategyEngine {
         this.openOrAddPosition('short', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         // Closing/reducing a long position
-        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName);
+        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName, order.fromEntry);
       }
     }
 
@@ -844,6 +846,7 @@ export class StrategyEngine {
     price: number,
     commission: number,
     exitName: string,
+    fromEntryLot?: string,
   ): void {
     const closeQuantity = Math.min(quantity, this.position.quantity);
     const pnl =
@@ -903,8 +906,22 @@ export class StrategyEngine {
 
     this.position.quantity -= closeQuantity;
 
-    // Pop lots FIFO
+    // Pop lots FIFO (or target specific lot when fromEntryLot is specified)
     let remaining = closeQuantity;
+    if (fromEntryLot) {
+      // Reduce only the matching entry's lot
+      const lotIndex = this.position.lots.findIndex((l) => l.entryName === fromEntryLot);
+      if (lotIndex >= 0) {
+        const lot = this.position.lots[lotIndex]!;
+        if (lot.quantity <= remaining) {
+          remaining -= lot.quantity;
+          this.position.lots.splice(lotIndex, 1);
+        } else {
+          lot.quantity -= remaining;
+          remaining = 0;
+        }
+      }
+    }
     while (remaining > 0 && this.position.lots.length > 0) {
       const lot = this.position.lots[0]!;
       if (lot.quantity <= remaining) {

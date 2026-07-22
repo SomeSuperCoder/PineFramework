@@ -1238,6 +1238,177 @@ describe('StrategyEngine', () => {
     });
   });
 
+  describe('multi-level exit integration', () => {
+    it('6.1: should fill one limit TP and OCA-cancel the other on next bar', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 4);
+      // Entry fills at open=103 → avgPrice=103
+      engine.updateBar(1, 1001, 103, 105, 100, 103, 1000);
+
+      // Place two take-profit exits at different levels
+      const tp1 = engine.exit('TP1', 2, 0, undefined, 115);
+      const tp2 = engine.exit('TP2', 2, 0, undefined, 120);
+      expect(tp1).toBeDefined();
+      expect(tp2).toBeDefined();
+      expect(tp1!.ocaGroup).toBeDefined();
+      expect(tp2!.ocaGroup).toBe(tp1!.ocaGroup);
+
+      // Bar 2: high=116 hits TP1 at 115, fills it, cancels TP2
+      engine.updateBar(2, 1002, 110, 116, 108, 115, 1000);
+
+      // TP1 should have filled: reduced position by 2
+      const pos = engine.getPosition();
+      expect(pos.quantity).toBe(2);
+      expect(pos.direction).toBe('long');
+
+      // TP2 should be cancelled (no longer pending)
+      const pending = engine.getPendingOrders();
+      expect(pending.length).toBe(0);
+
+      // Should have one trade recorded for the partial exit
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.exitName).toBe('TP1');
+      expect(trades[0]!.quantity).toBe(2);
+    });
+
+    it('6.2: should fill stop loss SL and OCA-cancel TP in bracket', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 3);
+      // Entry fills at open=103 → avgPrice=103
+      engine.updateBar(1, 1001, 103, 105, 100, 103, 1000);
+
+      // Bracket: TP at 115, SL at 98
+      const tp = engine.exit('TP', 3, 0, undefined, 115);
+      const sl = engine.exit('SL', 3, 0, 98);
+      expect(tp).toBeDefined();
+      expect(sl).toBeDefined();
+      expect(tp!.ocaGroup).toBe(sl!.ocaGroup);
+
+      // Bar 2: low=97 hits SL=98, fills it, cancels TP
+      engine.updateBar(2, 1002, 102, 104, 97, 100, 1000);
+
+      // Position should be flat
+      expect(engine.getPosition().direction).toBe('flat');
+      expect(engine.getPosition().quantity).toBe(0);
+
+      // TP should be cancelled
+      expect(engine.getPendingOrders().length).toBe(0);
+
+      // One trade recorded at stop price
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.exitName).toBe('SL');
+      expect(trades[0]!.exitPrice).toBeCloseTo(98, 0);
+    });
+
+    it('6.3: should exit specific entry lot with from_entry under pyramiding', () => {
+      const engine = new StrategyEngine({ pyramiding: 2 });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('First', 'long', 3);
+      engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
+      engine.entry('Second', 'long', 2);
+      engine.updateBar(2, 1002, 103, 108, 102, 107, 1000);
+
+      // Position has two lots: First(3), Second(2)
+      expect(engine.getPosition().quantity).toBe(5);
+
+      // Exit only Second's portion
+      engine.exit('TP2', 5, 0, undefined, 120, undefined, 'Second');
+      engine.updateBar(3, 1003, 110, 122, 108, 120, 1000);
+
+      // Second's 2 units should be gone, First's 3 remain
+      const pos = engine.getPosition();
+      expect(pos.quantity).toBe(3);
+      expect(pos.lots.length).toBe(1);
+      expect(pos.lots[0]!.entryName).toBe('First');
+
+      // Trade should record the correct exit quantity
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.quantity).toBe(2);
+    });
+
+    it('6.4: should activate, ratchet, and trigger trailing stop across multiple bars', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 5);
+      // Entry fills at open=103 → avgPrice=103
+      engine.updateBar(1, 1001, 103, 105, 100, 103, 1000);
+
+      // Trailing stop with offset=20 ticks
+      engine.exit('Trail', 5, 0, undefined, undefined, undefined, undefined, undefined, 20);
+
+      // Bar 2: activates (high=106 >= 103.20), stop=105.80
+      engine.updateBar(2, 1002, 106, 106, 106, 106, 1000);
+      let pending = engine.getPendingOrders();
+      expect(pending.length).toBe(1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(105.80, 1);
+
+      // Bar 3: ratchets (high=108), stop=107.80
+      engine.updateBar(3, 1003, 108, 108, 108, 108, 1000);
+      pending = engine.getPendingOrders();
+      expect(pending[0]!.stopPrice).toBeCloseTo(107.80, 1);
+
+      // Bar 4: triggers (low=107.50 <= 107.80)
+      engine.updateBar(4, 1004, 107, 108, 107.5, 107.5, 1000);
+
+      expect(engine.getPosition().direction).toBe('flat');
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(1);
+      expect(trades[0]!.exitPrice).toBeCloseTo(107.80, 1);
+    });
+
+    it('6.5: should exit partial quantity simulating qty_percent across two bars', () => {
+      const engine = new StrategyEngine();
+
+      engine.updateBar(0, 1000, 100, 105, 95, 102, 1000);
+      engine.entry('Long', 'long', 10);
+      // Entry fills at open=103 → avgPrice=103
+      engine.updateBar(1, 1001, 103, 105, 100, 103, 1000);
+
+      // Exit 30% of position (= 3 contracts) — simulates qty_percent=30
+      engine.exit('TP1', 3, 0, undefined, 110);
+      // Exit remaining 70% (= 7 contracts) — simulates qty_percent=70
+      engine.exit('TP2', 7, 0, undefined, 115);
+
+      // Bar 2: high=112 hits TP1 at 110, fills 3, cancels TP2
+      engine.updateBar(2, 1002, 108, 112, 106, 110, 1000);
+
+      // Position reduced from 10 to 7
+      let pos = engine.getPosition();
+      expect(pos.quantity).toBe(7);
+      expect(pos.direction).toBe('long');
+
+      // TP2 was cancelled because TP1 filled (same OCA group)
+      let pending = engine.getPendingOrders();
+      expect(pending.length).toBe(0);
+
+      // Now place another TP for remaining 7
+      engine.exit('TP3', 7, 0, undefined, 115);
+
+      // Bar 3: high=116 hits TP3 at 115
+      engine.updateBar(3, 1003, 112, 116, 110, 115, 1000);
+
+      // Position flat
+      expect(engine.getPosition().direction).toBe('flat');
+
+      // Two trades: TP1 (3 units) and TP3 (7 units)
+      const trades = engine.getTrades();
+      expect(trades.length).toBe(2);
+      expect(trades[0]!.quantity).toBe(3);
+      expect(trades[0]!.exitName).toBe('TP1');
+      expect(trades[1]!.quantity).toBe(7);
+      expect(trades[1]!.exitName).toBe('TP3');
+    });
+  });
+
   describe('trailing stop behavior', () => {
     it('should not activate until price moves favorably', () => {
       const engine = new StrategyEngine();
