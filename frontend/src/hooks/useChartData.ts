@@ -1136,6 +1136,51 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   executeScriptRef.current = executeScript;
 
+  const exportChartData = useCallback(async (): Promise<string | null> => {
+    try {
+      const indicators: Array<{
+        indicatorId: string;
+        source: string;
+        symbol: string;
+        interval: string;
+        result: import('../types').ScriptResult;
+      }> = [];
+
+      for (const [indId, result] of indicatorResultsRef.current) {
+        const sourceInfo = indicatorSourcesRef.current.get(indId);
+        indicators.push({
+          indicatorId: indId,
+          source: sourceInfo?.source || '',
+          symbol: sourceInfo?.symbol || '',
+          interval: sourceInfo?.interval || '',
+          result,
+        });
+      }
+
+      const payload = {
+        exportedAt: Date.now(),
+        candles,
+        indicators,
+      };
+
+      const response = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.statusText}`);
+      }
+
+      const json = await response.json() as { success: boolean; path: string };
+      return json.path;
+    } catch (err) {
+      console.error('[Export] Error:', err);
+      return null;
+    }
+  }, [candles]);
+
   return {
     candles,
     scriptResult,
@@ -1161,5 +1206,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     }, []),
     indicatorSourcesRef,
     wsRef,
+    exportChartData,
   };
 }

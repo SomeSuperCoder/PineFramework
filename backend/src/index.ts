@@ -14,6 +14,7 @@ import { createSettingsRouter } from './routes/settings.js';
 import { createScriptsRouter } from './routes/scripts.js';
 import { createIndicatorsRouter } from './routes/indicators.js';
 import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
+import { createExportRouter } from './routes/export.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
 import { ScriptFileManager } from './store/ScriptFileManager.js';
@@ -144,6 +145,7 @@ app.use('/api', createSettingsRouter({
 app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
+app.use('/api', createExportRouter());
 
 createWSGateway(server, cache, telegramService);
 

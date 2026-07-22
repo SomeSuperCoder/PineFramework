@@ -95,6 +95,7 @@ function App() {
     removeIndicatorData,
     indicatorSourcesRef,
     wsRef,
+    exportChartData,
   } = useChartData(onIndicatorResult);
 
   const executeScriptRef = useRef(executeScript);
@@ -418,6 +419,22 @@ function App() {
         </button>
         <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
         <div style={{ flex: 1 }} />
+        <button onClick={async () => {
+          const path = await exportChartData();
+          if (path) {
+            alert(`Chart data exported to:\n${path}`);
+          } else {
+            alert('Export failed. Check console for details.');
+          }
+        }} style={{
+          padding: '5px 10px', background: '#1a2a1a', color: '#8bc34a',
+          border: '1px solid #2a4a2a', borderRadius: '4px', cursor: 'pointer',
+          fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '5px',
+        }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v7M3 6l3 3 3-3M2 10h8" /></svg>
+          Export
+        </button>
+        <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
         <button onClick={() => setTelegramOpen(!telegramOpen)} style={{
           padding: '5px 10px',
           background: telegramOpen ? '#3a1a1a' : '#111128',
