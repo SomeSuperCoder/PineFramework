@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import { createTrendBars, SeededRandom } from './deterministicBars.js';
 
 describe('SeededRandom', () => {

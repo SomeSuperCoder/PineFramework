@@ -7,7 +7,7 @@
  * and at the function level where HTTP server setup isn't available.
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 
 // Note: Full HTTP integration tests require a running server.
 // These tests focus on the validation logic and error handling

@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { vi } from 'vitest';
 
 const g = globalThis as any;
 if (!g.window) g.window = { devicePixelRatio: 1 };
@@ -10,11 +10,11 @@ import { LayoutManager } from '../../frontend/src/chart/LayoutManager.js';
 
 function createMockCanvas() {
   const listeners: Record<string, Function[]> = {};
-  const addEventListener = jest.fn((event: string, fn: Function, _opts?: any) => {
+  const addEventListener = vi.fn((event: string, fn: Function, _opts?: any) => {
     if (!listeners[event]) listeners[event] = [];
     listeners[event]!.push(fn);
   });
-  const removeEventListener = jest.fn((event: string, fn: Function) => {
+  const removeEventListener = vi.fn((event: string, fn: Function) => {
     if (listeners[event]) {
       listeners[event] = listeners[event]!.filter((f) => f !== fn);
     }
@@ -40,7 +40,7 @@ function createWheelEvent(overrides: Record<string, any> = {}): WheelEvent {
     ctrlKey: false,
     metaKey: false,
     shiftKey: false,
-    preventDefault: jest.fn(),
+    preventDefault: vi.fn(),
     ...overrides,
   } as unknown as WheelEvent;
 }
@@ -50,7 +50,7 @@ function createMouseEvent(overrides: Record<string, any> = {}): MouseEvent {
     clientX: 500,
     clientY: 300,
     button: 0,
-    preventDefault: jest.fn(),
+    preventDefault: vi.fn(),
     ...overrides,
   } as unknown as MouseEvent;
 }
@@ -60,11 +60,11 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
   let viewport: Viewport;
   let layout: LayoutManager;
   let callbacks: {
-    onCrosshairMove: ReturnType<typeof jest.fn>;
-    onCrosshairHide: ReturnType<typeof jest.fn>;
-    onVisibleRangeChange: ReturnType<typeof jest.fn>;
-    onPriceRangeChange: ReturnType<typeof jest.fn>;
-    onResize: ReturnType<typeof jest.fn>;
+    onCrosshairMove: ReturnType<typeof vi.fn>;
+    onCrosshairHide: ReturnType<typeof vi.fn>;
+    onVisibleRangeChange: ReturnType<typeof vi.fn>;
+    onPriceRangeChange: ReturnType<typeof vi.fn>;
+    onResize: ReturnType<typeof vi.fn>;
   };
   let handler: InteractionHandler;
 
@@ -76,11 +76,11 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
     layout.calculate(1000, 600, 0);
     layout.setPriceRange(100, 200);
     callbacks = {
-      onCrosshairMove: jest.fn(),
-      onCrosshairHide: jest.fn(),
-      onVisibleRangeChange: jest.fn(),
-      onPriceRangeChange: jest.fn(),
-      onResize: jest.fn(),
+      onCrosshairMove: vi.fn(),
+      onCrosshairHide: vi.fn(),
+      onVisibleRangeChange: vi.fn(),
+      onPriceRangeChange: vi.fn(),
+      onResize: vi.fn(),
     };
     handler = new InteractionHandler(canvas as any, viewport, layout, callbacks, 930);
   });
@@ -146,7 +146,7 @@ describe('InteractionHandler - TradingView-style Navigation', () => {
     });
 
     it('should prevent default on middle mouse down', () => {
-      const pd = jest.fn();
+      const pd = vi.fn();
       canvas._emit(
         'mousedown',
         createMouseEvent({ button: 1, clientX: 400, clientY: 300, preventDefault: pd }),
