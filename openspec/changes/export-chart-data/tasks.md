@@ -14,4 +14,4 @@
 - [x] 3.1 Manual test: load an indicator, click export, confirm `.exports/export-*.json` exists with all expected fields
 - [x] 3.2 Manual test: multi-indicator scenario, verify all indicators appear in the export
 - [x] 3.3 Run full test suite to confirm no regressions
-- [ ] 3.4 Commit
+- [x] 3.4 Commit

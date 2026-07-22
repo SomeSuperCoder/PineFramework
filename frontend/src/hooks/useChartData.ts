@@ -1061,6 +1061,17 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                   .map((m) => ({ ...m, barIndex: m.barIndex - seedCount }));
               }
 
+              // Trim seed bar alert triggers — same issue: barIndex is relative
+              // to the combined [seedBars, ...originalBars] array. Without this
+              // fix, every trigger's barIndex is offset by seedCount, causing
+              // labels (▲/▼) and alert triggers (Trail Long/Short) to disagree
+              // by exactly the Hull length (72 for volatility trail).
+              if (seedScriptRes.alertTriggers) {
+                seedScriptRes.alertTriggers = seedScriptRes.alertTriggers
+                  .filter((t) => t.barIndex >= seedCount)
+                  .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
+              }
+
               if (versionRef && version !== undefined && version !== versionRef.current) return;
 
               if (indicatorId) {

@@ -6,6 +6,8 @@ dist/
 .env
 .env.local
 .exports/
+# Runtime chart export snapshots (user-specific, regenerated on demand)
+tests/integration/alert-sanity/export.json
 frontend/dist/
 *.log
 node_modules/
