@@ -2,11 +2,10 @@ import { Router } from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.resolve(__dirname, '..', '..', 'data');
-
-export const statusRouter = Router();
 
 interface HealthCheckResult {
   status: 'ok' | 'degraded' | 'error';
@@ -54,26 +53,50 @@ async function checkBybitApi(): Promise<HealthCheckResult> {
   }
 }
 
-statusRouter.get('/status', async (_req, res) => {
-  const [diskCheck, bybitCheck] = await Promise.all([
-    checkDiskSpace(),
-    checkBybitApi().catch(() => ({ status: 'error' as const, detail: 'Bybit check failed' })),
-  ]);
+export function createStatusRouter(diskCache?: DiskOHLCVCache): Router {
+  const router = Router();
 
-  const checks = {
-    disk: diskCheck,
-    bybit: bybitCheck,
-  };
+  router.get('/status', async (_req, res) => {
+    const [diskCheck, bybitCheck] = await Promise.all([
+      checkDiskSpace(),
+      checkBybitApi().catch(() => ({ status: 'error' as const, detail: 'Bybit check failed' })),
+    ]);
 
-  const allOk = Object.values(checks).every((c) => c.status === 'ok');
-  const anyError = Object.values(checks).some((c) => c.status === 'error');
-  const overallStatus = allOk ? 'ok' : anyError ? 'error' : 'degraded';
+    const checks: Record<string, HealthCheckResult> = {
+      disk: diskCheck,
+      bybit: bybitCheck,
+    };
 
-  res.json({
-    status: overallStatus,
-    version: '0.1.0',
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    checks,
+    // Add disk cache stats if available
+    if (diskCache) {
+      const stats = diskCache.getStats();
+      checks.diskCache = {
+        status: entriesToHealth(stats.diskUsageBytes, stats.maxDiskUsageBytes),
+        detail: `${stats.entries} entries, ${Math.round(stats.diskUsageBytes / 1024)}KB / ${Math.round(stats.maxDiskUsageBytes / (1024 * 1024))}MB used, hit rate ${stats.hitRate}%`,
+      };
+    }
+
+    const allOk = Object.values(checks).every((c) => c.status === 'ok');
+    const anyError = Object.values(checks).some((c) => c.status === 'error');
+    const overallStatus = allOk ? 'ok' : anyError ? 'error' : 'degraded';
+
+    res.json({
+      status: overallStatus,
+      version: '0.1.0',
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      checks,
+    });
   });
-});
+
+  return router;
+}
+
+/** Determine cache health based on usage. */
+function entriesToHealth(usedBytes: number, maxBytes: number): 'ok' | 'degraded' | 'error' {
+  if (maxBytes === 0) return 'error';
+  const ratio = usedBytes / maxBytes;
+  if (ratio >= 0.95) return 'degraded'; // nearly full
+  if (ratio >= 1.0) return 'error';      // over limit
+  return 'ok';
+}

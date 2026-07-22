@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { fetchDexFeeBps, type StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
+import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
 import { logger } from '../utils/logger.js';
 
@@ -27,7 +28,7 @@ export interface BacktestJob {
   completedAt?: number;
 }
 
-export function createBacktestRouter() {
+export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
   const router = Router();
   const jobs = new Map<string, BacktestJob>();
 
@@ -82,6 +83,7 @@ export function createBacktestRouter() {
         job.startDate ? new Date(job.startDate).getTime() : undefined,
         job.endDate ? new Date(job.endDate).getTime() : undefined,
         (p) => updateProgress(job.jobId, p),
+        diskCache,
       );
       updateProgress(job.jobId, 20);
 

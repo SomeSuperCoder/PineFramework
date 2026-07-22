@@ -4,11 +4,12 @@ import { createServer } from 'http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OHLCVCache } from './cache/ohlcv-cache.js';
+import { DiskOHLCVCache } from './cache/DiskOHLCVCache.js';
 import { createOHLCVRouter } from './routes/ohlcv.js';
 import { createBarsRouter } from './routes/bars.js';
 import { executeRouter } from './routes/execute.js';
 import { symbolsRouter } from './routes/symbols.js';
-import { statusRouter } from './routes/status.js';
+import { createStatusRouter } from './routes/status.js';
 import { createBacktestRouter } from './routes/backtest.js';
 import { createSettingsRouter } from './routes/settings.js';
 import { createScriptsRouter } from './routes/scripts.js';
@@ -55,6 +56,9 @@ app.use((req, res, next) => {
 });
 
 const cache = new OHLCVCache(100, 60_000);
+const diskCache = new DiskOHLCVCache({
+  cacheDir: path.join(DATA_DIR, 'ohlcv-cache'),
+});
 
 const telegramConfig = new TelegramConfigStore(TELEGRAM_JSON_PATH);
 const telegramService = new TelegramService({ configStore: telegramConfig });
@@ -66,12 +70,12 @@ const scriptFileManager = new ScriptFileManager(SCRIPTS_DIR, manifestStore);
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
-app.use('/api', createOHLCVRouter(cache));
-app.use('/api', createBarsRouter(cache));
+app.use('/api', createOHLCVRouter(cache, diskCache));
+app.use('/api', createBarsRouter(cache, diskCache));
 app.use('/api', executeRouter);
 app.use('/api', symbolsRouter);
-app.use('/api', statusRouter);
-app.use('/api', createBacktestRouter());
+app.use('/api', createStatusRouter(diskCache));
+app.use('/api', createBacktestRouter(diskCache));
 app.get('/api/telegram/proxy-test', async (_req, res) => {
   const proxy = telegramConfig.getProxy();
   if (!proxy) {

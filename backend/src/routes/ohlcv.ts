@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
+import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
 
 const VALID_INTERVALS = ['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M'];
 const VALID_SYMBOLS = /^[A-Z0-9]{1,20}$/;
 
-export function createOHLCVRouter(cache: OHLCVCache): Router {
+export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache): Router {
   const router = Router();
 
   router.get('/ohlcv', async (req, res) => {
@@ -26,6 +27,7 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
         return;
       }
 
+      // L1: in-memory cache
       if (!end) {
         const cached = cache.get(symbol, interval);
         if (cached && cached.length >= limit) {
@@ -34,6 +36,18 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
         }
       }
 
+      // L2: disk cache (for requests without a specific `end` cursor)
+      if (!end && diskCache && !diskCache.isStale(symbol, interval)) {
+        const diskBars = diskCache.get(symbol, interval);
+        if (diskBars && diskBars.length >= limit) {
+          // Populate L1 from L2 for subsequent requests
+          cache.set(symbol, interval, diskBars);
+          res.json({ symbol, interval, data: diskBars.slice(-limit) });
+          return;
+        }
+      }
+
+      // L3: Bybit API
       let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
       if (end) {
         url += `&end=${end}`;
@@ -59,8 +73,14 @@ export function createOHLCVRouter(cache: OHLCVCache): Router {
         volume: parseFloat(row[5]),
       })).reverse();
 
+      // Write back to both caches
       if (!end) {
         cache.set(symbol, interval, bars);
+        if (diskCache) {
+          diskCache.set(symbol, interval, bars).catch((err) =>
+            console.error('[OHLCV] Disk cache write error:', err),
+          );
+        }
       }
       res.json({ symbol, interval, data: bars, hasMore: bars.length === limit });
     } catch (err) {

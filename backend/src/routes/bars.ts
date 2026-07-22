@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
+import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
 
 const VALID_INTERVALS = ['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M'];
 const VALID_SYMBOLS = /^[A-Z0-9]{1,20}$/;
 
-export function createBarsRouter(cache: OHLCVCache): Router {
+export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache): Router {
   const router = Router();
 
   router.get('/bars', async (req, res) => {
@@ -26,6 +27,7 @@ export function createBarsRouter(cache: OHLCVCache): Router {
         return;
       }
 
+      // L1: in-memory cache
       if (!before) {
         const cached = cache.get(symbol, interval);
         if (cached && cached.length >= count) {
@@ -41,6 +43,25 @@ export function createBarsRouter(cache: OHLCVCache): Router {
         }
       }
 
+      // L2: disk cache (for requests without a specific `before` cursor)
+      if (!before && diskCache && !diskCache.isStale(symbol, interval)) {
+        const diskBars = diskCache.get(symbol, interval);
+        if (diskBars && diskBars.length >= count) {
+          // Populate L1 from L2 for subsequent requests
+          cache.set(symbol, interval, diskBars);
+          res.json({
+            symbol,
+            interval,
+            data: diskBars.slice(-count),
+            returned: count,
+            requested: count,
+            hasMore: diskBars.length >= count,
+          });
+          return;
+        }
+      }
+
+      // L3: Bybit API
       let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${count}`;
       if (before) {
         url += `&end=${before}`;
@@ -65,6 +86,14 @@ export function createBarsRouter(cache: OHLCVCache): Router {
         close: parseFloat(row[4]),
         volume: parseFloat(row[5]),
       })).reverse();
+
+      // Write back to both caches
+      cache.set(symbol, interval, bars);
+      if (diskCache) {
+        diskCache.set(symbol, interval, bars).catch((err) =>
+          console.error('[Bars] Disk cache write error:', err),
+        );
+      }
 
       res.json({
         symbol,
