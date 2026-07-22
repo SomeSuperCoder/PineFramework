@@ -111,6 +111,16 @@ export interface ScriptResult {
   alertConditions?: AlertConditionData[];
   alertTriggers?: AlertTriggerData[];
   hiddenPlotTitles?: string[];
+  /** Per-bar candle color overrides (from barcolor() / plotcandle()).
+   *  Keyed by timestamp (seconds). body = body color, wick = wick color, border = border color.
+   *  offset shifts the color to a future bar (resolved at render time). */
+  barColors?: Array<{
+    time: number;
+    body?: string;
+    wick?: string;
+    border?: string;
+    offset?: number;
+  }>;
 }
 
 export interface TelegramSubscriber {

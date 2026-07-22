@@ -96,6 +96,15 @@ export interface ExecuteResponse {
     barIndex: number;
     timestamp: number;
   }>;
+  /** Per-bar candle color overrides from barcolor() / plotcandle(). Format matches backend: {time, bodyColor?, wickColor?, borderColor?, offset?, color?} */
+  barColors?: Array<{
+    time: number;
+    bodyColor?: string;
+    wickColor?: string;
+    borderColor?: string;
+    offset?: number;
+    color?: string;
+  }>;
   tables?: import('../types').TableData[];
   hiddenPlotKeys?: string[];
 }
@@ -163,6 +172,15 @@ export interface ExecutionResultMessage {
     timestamp: number;
   }>;
   barIndex: number;
+  /** Per-bar candle color overrides from barcolor() / plotcandle(). Format matches backend: {time, bodyColor?, wickColor?, borderColor?, offset?, color?} */
+  barColors?: Array<{
+    time: number;
+    bodyColor?: string;
+    wickColor?: string;
+    borderColor?: string;
+    offset?: number;
+    color?: string;
+  }>;
   tables?: import('../types').TableData[];
   hiddenPlotKeys?: string[];
 }
@@ -239,6 +257,7 @@ export function buildScriptResult(
   boxes?: ExecutionResultMessage['boxes'],
   tables?: import('../types').TableData[],
   hiddenPlotKeys?: string[],
+  barColors?: ExecuteResponse['barColors'],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -314,6 +333,15 @@ export function buildScriptResult(
     }
   }
 
+  // Convert backend barColors (bodyColor/wickColor/borderColor) to ScriptResult format (body/wick/border)
+  const transformedBarColors = barColors?.map((b) => ({
+    time: b.time,
+    body: b.bodyColor ?? b.color,
+    wick: b.wickColor,
+    border: b.borderColor,
+    offset: b.offset,
+  }));
+
   return {
     overlay,
     plots: plotData,
@@ -331,5 +359,6 @@ export function buildScriptResult(
     tables: tables || [],
     hiddenPlotTitles:
       hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
+    barColors: transformedBarColors && transformedBarColors.length > 0 ? transformedBarColors : undefined,
   };
 }

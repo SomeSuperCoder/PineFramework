@@ -324,7 +324,23 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     chart.setMarkers(allShapeMarkers);
     chart.setBgColors(allBgColorsMap);
     chart.setHLines([]);
-    chart.setBarColors(new Map());
+    // Convert ScriptResult.barColors (time-keyed array with body/wick/border/offset) to
+    // Map<number, CandleColorData> keyed by bar index for the chart renderer.
+    const barColorsMap = new Map<number, { body?: string; wick?: string; border?: string }>();
+    const timeToIndex = new Map<number, number>();
+    for (let i = 0; i < data.length; i++) {
+      timeToIndex.set(data[i].time, i);
+    }
+    for (const { result } of allResults) {
+      if (!result.barColors) continue;
+      for (const bc of result.barColors) {
+        const barIdx = timeToIndex.get(bc.time);
+        if (barIdx === undefined) continue;
+        const targetIdx = bc.offset !== undefined ? Math.min(Math.max(0, barIdx + bc.offset), data.length - 1) : barIdx;
+        barColorsMap.set(targetIdx, { body: bc.body, wick: bc.wick, border: bc.border });
+      }
+    }
+    chart.setBarColors(barColorsMap);
 
     chart.endUpdate();
   }, [data, scriptResult, indicatorResults]);

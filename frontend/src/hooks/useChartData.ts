@@ -128,6 +128,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             execResult.boxes,
             execResult.tables,
             execResult.hiddenPlotKeys,
+            execResult.barColors,
           );
 
           const prev = indicatorResultsRef.current.get(indId);
@@ -199,6 +200,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           msg.boxes,
           msg.tables,
           msg.hiddenPlotKeys,
+          msg.barColors,
         );
         indicatorResultsRef.current.set(msg.indicatorId, result);
         onIndicatorResult(msg.indicatorId, result);
@@ -252,6 +254,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         msg.boxes,
         msg.tables,
         msg.hiddenPlotKeys,
+        msg.barColors,
       );
       setScriptResult(result);
     }
@@ -486,6 +489,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.boxes,
                 seedResult.tables,
                 seedResult.hiddenPlotKeys,
+                seedResult.barColors,
               );
 
               // Trim seed bar data from plot results
@@ -556,6 +560,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         result.boxes,
         result.tables,
         result.hiddenPlotKeys,
+        result.barColors,
       );
 
       if (versionRef && version !== undefined && version !== versionRef.current) return;

@@ -182,6 +182,20 @@ export function prependIndicatorResult(
       ? newResult.alertConditions
       : prev.alertConditions;
 
+  // Merge barColors: newResult's entries replace prev's by time, with overlap-aware dedup
+  const mergedBarColors = (() => {
+    const newColors = newResult.barColors || [];
+    const prevColors = prev.barColors || [];
+    if (newColors.length === 0) return prevColors;
+    const prevByTime = new Map(prevColors.map((c) => [c.time, c]));
+    for (const c of newColors) {
+      if (!inOverlap(c.time)) {
+        prevByTime.set(c.time, c);
+      }
+    }
+    return Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
+  })();
+
   return {
     ...prev,
     plots: mergedPlots,
@@ -197,6 +211,7 @@ export function prependIndicatorResult(
     tables: mergedTables,
     alertTriggers: mergedAlertTriggers,
     alertConditions: mergedAlertConditions,
+    barColors: mergedBarColors.length > 0 ? mergedBarColors : undefined,
   };
 }
 
@@ -385,6 +400,18 @@ export function mergeDiffIntoResult(
       )
     : prev.fillColorData;
 
+  // ── Bar colors (diff) ──
+  const mergedBarColors = (() => {
+    if (!msg.barColors || msg.barColors.length === 0) return prev.barColors;
+    const prevColors = prev.barColors || [];
+    const prevByTime = new Map(prevColors.map((c) => [c.time, c]));
+    for (const b of msg.barColors) {
+      prevByTime.set(b.time, { time: b.time, body: b.bodyColor ?? b.color, wick: b.wickColor, border: b.borderColor, offset: b.offset });
+    }
+    const result = Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
+    return result.length > 0 ? result : undefined;
+  })();
+
   // ── Background color ──
   const mergedBgcolor = msg.bgcolor
     ? [
@@ -437,6 +464,7 @@ export function mergeDiffIntoResult(
     plotColors: mergedPlotColors,
     fillColorData: mergedFillColorData,
     bgcolor: mergedBgcolor,
+    barColors: mergedBarColors,
     boxes: mergedBoxes,
     tables: msg.tables || prev.tables,
     alertTriggers: mergedAlertTriggers,
