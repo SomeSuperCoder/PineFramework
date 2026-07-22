@@ -25,14 +25,11 @@ import { HLineRenderer } from './renderers/HLineRenderer.js';
 import { GridRenderer } from './renderers/GridRenderer.js';
 import { AxisRenderer } from './renderers/AxisRenderer.js';
 import { CrosshairRenderer } from './renderers/CrosshairRenderer.js';
+import { PlotSeriesManager } from './plot-series-manager.js';
+import type { PlotSeriesHandle } from './plot-series-manager.js';
+import { ViewportManager } from './viewport-manager.js';
 
-export interface PlotSeriesHandle {
-  name: string;
-  options: PlotRenderOptions;
-  data: PlotSeriesData[];
-  overlay: boolean;
-  paneIndex?: number;
-}
+export type { PlotSeriesHandle };
 
 export interface ChartEventCallbacks {
   onCrosshairMove?: (barIndex: number, price: number) => void;
@@ -65,8 +62,8 @@ export class PineChart {
   private crosshairRenderer: CrosshairRenderer;
 
   private candles: CandlestickData[] = [];
-  private plotSeries: Map<string, PlotSeriesHandle> = new Map();
-  private hiddenPlots: Set<string> = new Set();
+  private plotSeriesManager: PlotSeriesManager;
+  private viewportManager: ViewportManager;
   private shapeMarkers: ShapeMarkerData[] = [];
   private strategyMarkers: StrategyMarkerData[] = [];
   private fills: FillData[] = [];
@@ -81,7 +78,6 @@ export class PineChart {
   private boxes: BoxData[] = [];
   private tables: TableData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
-  private lastIndicatorCount: number = 0;
   private container: HTMLElement;
   private tableContainer: HTMLElement | null = null;
 
@@ -116,6 +112,11 @@ export class PineChart {
       this.options.timeScaleHeight,
       this.options.volumeHeightRatio,
     );
+
+    this.plotSeriesManager = new PlotSeriesManager();
+    this.plotSeriesManager.onLayoutChanged = () => this.resize();
+
+    this.viewportManager = new ViewportManager(this.viewport, this.layout);
 
     this.candlestickRenderer = new CandlestickRenderer();
     this.volumeRenderer = new VolumeRenderer();
@@ -176,7 +177,7 @@ export class PineChart {
     this.offscreen.width = w * dpr;
     this.offscreen.height = h * dpr;
 
-    this.layout.calculate(w * dpr, h * dpr, this.lastIndicatorCount);
+    this.layout.calculate(w * dpr, h * dpr, this.plotSeriesManager.getNonOverlayPaneCount());
     this.interaction.setChartWidth(w * dpr);
     this.markDirty();
     this.eventCallbacks.onResize?.(w, h);
@@ -222,17 +223,21 @@ export class PineChart {
     if (this.candles.length === 0) {
       this.ctx.clearRect(0, 0, w, h);
       this.ctx.drawImage(this.offscreen, 0, 0);
-      console.log('[PC] render SKIP (empty candles)', { plotCount: this.plotSeries.size });
+      console.log('[PC] render SKIP (empty candles)', { plotCount: this.plotSeriesManager.getAllSeries().size });
       return;
     }
 
-    this.updatePriceRange();
-    this.updateVolumeMax();
+    this.viewportManager.updatePriceRange(
+      this.candles,
+      this.plotSeriesManager.getAllSeries(),
+      this.plotSeriesManager.getHiddenPlots(),
+    );
+    this.viewportManager.updateVolumeMax(this.candles);
 
     this.gridRenderer.render(ctx, this.viewport, this.layout, this.options.gridColor);
 
     const allPlots = new Map<string, PlotSeriesData[]>();
-    for (const [key, handle] of this.plotSeries) {
+    for (const [key, handle] of this.plotSeriesManager.getAllSeries()) {
       allPlots.set(key, handle.data);
     }
 
@@ -273,8 +278,8 @@ export class PineChart {
 
     this.renderTeleportLine(ctx);
 
-    for (const [_key, handle] of this.plotSeries) {
-      if (handle.overlay && !this.hiddenPlots.has(handle.name)) {
+    for (const [, handle] of this.plotSeriesManager.getAllSeries()) {
+      if (handle.overlay && !this.plotSeriesManager.isHidden(handle.name)) {
         const nonNull = handle.data.filter(d => d.value !== null).length;
         if (nonNull === 0) console.log('[PC] draw overlay plot ALL NULLS', { name: handle.name, dataLen: handle.data.length });
         this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options);
@@ -295,8 +300,8 @@ export class PineChart {
       ctx.clip();
 
       const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
-      for (const [_key, handle] of this.plotSeries) {
-        if (!handle.overlay && handle.paneIndex === paneIndex && !this.hiddenPlots.has(handle.name)) {
+      for (const [, handle] of this.plotSeriesManager.getAllSeries()) {
+        if (!handle.overlay && handle.paneIndex === paneIndex && !this.plotSeriesManager.isHidden(handle.name)) {
           this.lineRenderer.render(ctx, handle.data, this.candles, this.viewport, this.layout, handle.options, pane);
         }
       }
@@ -622,75 +627,6 @@ export class PineChart {
     return color;
   }
 
-  private updatePriceRange(): void {
-    const range = this.viewport.getVisibleRange();
-    let min = Infinity;
-    let max = -Infinity;
-
-    for (let i = range.start; i < range.end && i < this.candles.length; i++) {
-      const c = this.candles[i];
-      if (c.low < min) min = c.low;
-      if (c.high > max) max = c.high;
-    }
-
-    if (min === Infinity || max === -Infinity) {
-      this.layout.setPriceRange(0, 100);
-      return;
-    }
-
-    const candleRange = max - min || 1;
-
-    for (const [_key, handle] of this.plotSeries) {
-      if (!handle.overlay || this.hiddenPlots.has(handle.name)) continue;
-      for (let i = range.start; i < range.end && i < handle.data.length; i++) {
-        const v = handle.data[i]?.value;
-        if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
-          if (Math.abs(v) < 1e-10) continue;
-          if (v < min) min = v;
-          if (v > max) max = v;
-        }
-      }
-    }
-
-    const totalRange = max - min || 1;
-    if (totalRange > candleRange * 10) {
-      const center = (min + max) / 2;
-      min = center - candleRange * 5;
-      max = center + candleRange * 5;
-    }
-
-    this.layout.setPriceRange(min, max);
-
-    const regions = this.layout.getRegions();
-    for (const pane of regions.indicatorPanes) {
-      let indMin = Infinity;
-      let indMax = -Infinity;
-      const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
-      for (const [_key, handle] of this.plotSeries) {
-        if (handle.overlay || handle.paneIndex !== paneIndex || this.hiddenPlots.has(handle.name)) continue;
-        for (let i = range.start; i < range.end && i < handle.data.length; i++) {
-          const v = handle.data[i]?.value;
-          if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
-            if (v < indMin) indMin = v;
-            if (v > indMax) indMax = v;
-          }
-        }
-      }
-      if (indMin !== Infinity && indMax !== -Infinity) {
-        this.layout.setIndicatorPriceRange(pane.id, indMin, indMax);
-      }
-    }
-  }
-
-  private updateVolumeMax(): void {
-    const range = this.viewport.getVisibleRange();
-    let maxVol = 0;
-    for (let i = range.start; i < range.end && i < this.candles.length; i++) {
-      if (this.candles[i].volume > maxVol) maxVol = this.candles[i].volume;
-    }
-    this.layout.setVolumeMax(maxVol);
-  }
-
   setDrawingLines(lines: DrawingLineData[]): void {
     this.drawingLines = lines;
     this.markDirty();
@@ -724,18 +660,14 @@ export class PineChart {
 
   setCandles(data: CandlestickData[]): void {
     const prevLength = this.candles.length;
-    const wasPrepended = data.length > prevLength && prevLength > 0 && data[0]?.time < this.candles[0]?.time;
-    const added = data.length - prevLength;
+    const prevFirstTime = this.candles[0]?.time;
     this.candles = data;
-    if (wasPrepended) {
-      this.viewport.adjustForPrepend(added);
-    } else {
-      this.viewport.setTotalBars(data.length);
-    }
-    if (prevLength <= 1 && data.length > 1) {
-      const regions = this.layout.getRegions();
-      this.viewport.fitContent(regions.chartArea.width);
-    }
+    this.viewportManager.updateCandles(
+      data,
+      prevLength,
+      prevFirstTime,
+      this.layout.getRegions().chartArea.width,
+    );
     this.markDirty();
   }
 
@@ -745,65 +677,22 @@ export class PineChart {
   }
 
   addPlotSeries(name: string, options: Partial<PlotRenderOptions> = {}, overlay: boolean = true, paneIndex?: number): PlotSeriesHandle {
-    const existing = this.plotSeries.get(name);
-    if (existing) {
-      existing.paneIndex = paneIndex;
-      return existing;
-    }
-    console.warn('[PineChart] addPlotSeries', name);
-    const handle: PlotSeriesHandle = {
-      name,
-      options: {
-        color: options.color ?? '#2196f3',
-        lineWidth: options.lineWidth ?? 1,
-        style: options.style ?? 'line',
-        histbase: options.histbase,
-      },
-      data: [],
-      overlay,
-      paneIndex,
-    };
-    this.plotSeries.set(name, handle);
-    this.recalculateLayout();
-    return handle;
+    return this.plotSeriesManager.addPlotSeries(name, options, overlay, paneIndex);
   }
 
   setPlotData(name: string, data: PlotSeriesData[]): void {
-    const handle = this.plotSeries.get(name);
-    if (handle) {
-      if (data.length === 0) {
-        console.warn('[PineChart] setPlotData EMPTY (skipped)', name);
-        return;
-      }
-      handle.data = data;
-      this.markDirty();
-    }
+    this.plotSeriesManager.setPlotData(name, data);
+    this.markDirty();
   }
 
   setHiddenPlots(names: string[]): void {
-    this.hiddenPlots = new Set(names);
+    this.plotSeriesManager.setHiddenPlots(names);
     this.markDirty();
   }
 
   removeSeries(name: string): void {
-    console.warn('[PineChart] removeSeries', name);
-    this.plotSeries.delete(name);
-    this.recalculateLayout();
+    this.plotSeriesManager.removeSeries(name);
     this.markDirty();
-  }
-
-  private recalculateLayout(): void {
-    const paneIndices = new Set<number>();
-    for (const [, handle] of this.plotSeries) {
-      if (!handle.overlay && handle.paneIndex !== undefined) {
-        paneIndices.add(handle.paneIndex);
-      }
-    }
-    const indicatorCount = paneIndices.size;
-    if (indicatorCount !== this.lastIndicatorCount) {
-      this.lastIndicatorCount = indicatorCount;
-      this.resize();
-    }
   }
 
   setMarkers(markers: ShapeMarkerData[]): void {
@@ -849,15 +738,15 @@ export class PineChart {
   timeScale() {
     return {
       fitContent: () => {
-        this.viewport.fitContent(this.canvas.width);
+        this.viewportManager.fitContent(this.canvas.width);
         this.markDirty();
       },
       scrollTo: (barIndex: number) => {
-        this.viewport.scrollTo(barIndex, this.canvas.width);
+        this.viewportManager.scrollTo(barIndex, this.canvas.width);
         this.markDirty();
       },
       getVisibleRange: () => {
-        return this.viewport.getVisibleRange();
+        return this.viewportManager.getVisibleRange();
       },
       scrollToDate: (_timestamp: number) => {
         this.markDirty();

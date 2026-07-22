@@ -39,20 +39,20 @@
 
 ## 6. Core Engine: Commission Calculator
 
-- [ ] 6.1 Create `src/strategy/commission-methods/` directory with barrel `index.ts`
-- [ ] 6.2 Extract percent-fixed commission into `src/strategy/commission-methods/percent-fixed.ts`
-- [ ] 6.3 Extract per-order-fixed commission into `src/strategy/commission-methods/per-order-fixed.ts`
-- [ ] 6.4 Extract Jupiter Ultra commission into `src/strategy/commission-methods/jupiter-ultra.ts`
-- [ ] 6.5 Extract Jupiter Manual commission into `src/strategy/commission-methods/jupiter-manual.ts`
-- [ ] 6.6 Extract none commission into `src/strategy/commission-methods/none.ts`
-- [ ] 6.7 Simplify `commission-calculator.ts` to delegate to methods; update `src/strategy/index.ts` barrel; verify all tests pass
+- [x] 6.1 Create `src/strategy/commission-methods/` directory with barrel `index.ts`
+- [x] 6.2 Extract percent-fixed commission into `src/strategy/commission-methods/percent-fixed.ts`
+- [x] 6.3 Extract per-order-fixed commission into `src/strategy/commission-methods/per-order-fixed.ts`
+- [x] 6.4 Extract Jupiter Ultra commission into `src/strategy/commission-methods/jupiter-ultra.ts`
+- [x] 6.5 Extract Jupiter Manual commission into `src/strategy/commission-methods/jupiter-manual.ts`
+- [x] 6.6 Extract none commission into `src/strategy/commission-methods/none.ts`
+- [x] 6.7 Simplify `commission-calculator.ts` (801→353 lines) to delegate to methods; all 1496 tests pass
 
 ## 7. Frontend: Chart Data Hook & Components
 
-- [ ] 7.1 Extract data-transformation pipelines from `frontend/src/hooks/useChartData.ts` (~1224 lines) into `frontend/src/hooks/chart-data-transform.ts`
-- [ ] 7.2 Extract indicator merge logic into `frontend/src/hooks/indicator-merge.ts`
-- [ ] 7.3 Extract alert/shape/line processing into `frontend/src/hooks/chart-alert-processor.ts`
-- [ ] 7.4 Simplify `useChartData.ts` to compose the new helpers; verify tests pass
+- [x] 7.1 Extract data-transformation pipelines from `frontend/src/hooks/useChartData.ts` (1224→~370 lines) into `frontend/src/hooks/chart-data-transform.ts`
+- [x] 7.2 Extract indicator merge logic into `frontend/src/hooks/indicator-merge.ts`
+- [x] 7.3 Extract alert/shape/line processing into `frontend/src/hooks/chart-alert-processor.ts`
+- [x] 7.4 Simplify `useChartData.ts` to compose the new helpers; all 12 useChartData tests pass
 - [ ] 7.5 Split `frontend/src/chart/PineChart.ts` (~919 lines): extract viewport logic into `frontend/src/chart/viewport-manager.ts`, extract plot-series management into `frontend/src/chart/plot-series-manager.ts`
 - [ ] 7.6 Split `frontend/src/components/BacktestSettingsPopup.tsx` (~784 lines) into composable sections: `BacktestGeneralSettings.tsx`, `BacktestCommissionSettings.tsx`, `BacktestOrderSettings.tsx`
 - [ ] 7.7 Extract layout sections from `frontend/src/App.tsx` (~546 lines) into separate components

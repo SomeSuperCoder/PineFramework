@@ -1,216 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CandlestickData, ScriptResult, PineScriptError } from '../types';
-
-interface ExecuteResponse {
-  success: boolean;
-  error?: string;
-  overlay: boolean;
-  outputs: Record<string, (number | string | boolean | null)[]>;
-  plotColors?: Record<string, (string | null)[]>;
-  fillColorData?: Record<string, (string | null)[]>;
-  shapes?: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number; overlay?: boolean }>;
-  fills?: Array<{ from: string; to: string; color: string }>;
-  strategyMarkers?: Array<{
-    type: string;
-    name: string;
-    direction: string;
-    action: string;
-    quantity: number;
-    price: number;
-    barIndex: number;
-    timestamp: number;
-    color: string;
-    comment?: string;
-  }>;
-  bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string; extend?: string }>;
-  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
-  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
-  barTimestamps?: number[];
-  maxLookback?: number;
-  alertConditions?: Array<{ id: string; title: string; message: string }>;
-  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
-  tables?: import('../types').TableData[];
-  hiddenPlotKeys?: string[];
-}
-
-interface ExecutionResultMessage {
-  success: boolean;
-  error?: string;
-  overlay: boolean;
-  indicatorId?: string;
-  outputs: Record<string, (number | string | boolean | null)[]>;
-  plotColors?: Record<string, (string | null)[]>;
-  fillColorData?: Record<string, (string | null)[]>;
-  shapes: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number; overlay?: boolean }>;
-  fills: Array<{ from: string; to: string; color: string }>;
-  strategyMarkers: Array<{
-    type: string;
-    name: string;
-    direction: string;
-    action: string;
-    quantity: number;
-    price: number;
-    barIndex: number;
-    timestamp: number;
-    color: string;
-    comment?: string;
-  }>;
-  bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
-  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
-  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
-  barTimestamps?: number[];
-  formingCandle?: boolean;
-  alertConditions?: Array<{ id: string; title: string; message: string }>;
-  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
-  barIndex: number;
-  tables?: import('../types').TableData[];
-  hiddenPlotKeys?: string[];
-}
-
-const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
-
-function buildScriptResult(
-  overlay: boolean,
-  outputs: Record<string, (number | string | boolean | null)[]>,
-  shapes: ExecutionResultMessage['shapes'],
-  fills: ExecutionResultMessage['fills'],
-  strategyMarkers: ExecutionResultMessage['strategyMarkers'],
-  ohlcvData: Array<{ timestamp: number }>,
-  bgcolor?: ExecutionResultMessage['bgcolor'],
-  plotColors?: Record<string, (string | null)[]>,
-  fillColorData?: Record<string, (string | null)[]>,
-  lines?: ExecutionResultMessage['lines'],
-  labels?: ExecutionResultMessage['labels'],
-  barTimestamps?: number[],
-  alertConditions?: Array<{ id: string; title: string; message: string }>,
-  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>,
-  boxes?: ExecutionResultMessage['boxes'],
-  tables?: import('../types').TableData[],
-  hiddenPlotKeys?: string[],
-): ScriptResult {
-  const getTimestamp = (i: number): number | undefined => {
-    if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
-    return ohlcvData[i]?.timestamp;
-  };
-  const plotData: import('../types').PlotData[] = [];
-  let colorIndex = 0;
-  for (const [key, values] of Object.entries(outputs)) {
-    let plotColor: string | undefined;
-    let lineWidth: number | undefined;
-    const lwMatch = key.match(/__lw:(\d+)/);
-    const styleMatch = key.match(/__style:([^_]+)/);
-    if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
-    const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
-    const perBarColors = plotColors?.[key];
-    if (!plotColor) {
-      plotColor = COLORS[colorIndex % COLORS.length];
-    }
-    colorIndex++;
-    const mappedData: Array<{ time: number; value: number | null; color: string | undefined } | null> = values
-      .map((v, i) => {
-        const ts = getTimestamp(i);
-        if (ts === undefined) return null;
-        let numValue: number | null;
-        if (v === null || v === undefined) {
-          numValue = null;
-        } else if (typeof v === 'boolean') {
-          numValue = v ? 1 : 0;
-        } else if (typeof v === 'number') {
-          numValue = v;
-        } else {
-          numValue = null;
-        }
-        return { time: Math.floor(ts / 1000), value: numValue, color: perBarColors?.[i] ?? undefined };
-      });
-    plotData.push({
-      type: plotStyle,
-      data: mappedData.filter((d): d is { time: number; value: number | null; color: string | undefined } => d !== null),
-      color: plotColor,
-      lineWidth,
-      title,
-    });
-  }
-
-  const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
-  // Hidden plot titles — plots with display=display.none (fill-only references
-  // that must not render as visible lines). Strip metadata from raw keys.
-  const hiddenPlotTitles: string[] = (hiddenPlotKeys || []).map((key) => stripMeta(key));
-  const transformFillKey = (rawKey: string) => {
-    const parts = rawKey.split('::');
-    return parts.map(stripMeta).join('::');
-  };
-
-  const shapeData: import('../types').ShapeData[] = (shapes || []).map((s) => ({
-    type: s.style as import('../types').ShapeData['type'],
-    time: Math.floor(s.time / 1000),
-    price: s.price ?? 0,
-    color: s.color,
-    text: s.text,
-    textcolor: s.textcolor,
-    location: s.location as import('../types').ShapeData['location'],
-    overlay: s.overlay,
-  }));
-
-  const transformedFillColorData: Record<string, (string | null)[]> = {};
-  if (fillColorData) {
-    for (const [key, colors] of Object.entries(fillColorData)) {
-      transformedFillColorData[transformFillKey(key)] = colors;
-    }
-  }
-
-  return {
-    overlay,
-    plots: plotData,
-    shapes: shapeData,
-    lines: (lines || []).map((l) => ({
-      points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
-      color: l.color,
-      width: l.width,
-      style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
-      extend: l.extend,
-    })),
-    boxes: (boxes || []).map((b) => ({
-      startTime: Math.floor(b.startTime / 1000),
-      startPrice: b.startPrice,
-      endTime: Math.floor(b.endTime / 1000),
-      endPrice: b.endPrice,
-      borderColor: b.borderColor,
-      backgroundColor: b.backgroundColor,
-    })),
-    labels: (labels || []).map((l) => ({
-      time: Math.floor(l.time / 1000),
-      price: l.price,
-      text: l.text,
-      color: l.color,
-      textColor: l.textColor,
-      style: l.style,
-      size: l.size,
-    })),
-    fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
-    fillColorData: transformedFillColorData,
-    plotColors: plotColors || {},
-    strategyMarkers: (strategyMarkers || []).map((m) => ({
-      type: m.type,
-      name: m.name,
-      direction: m.direction,
-      action: m.action,
-      quantity: m.quantity,
-      price: m.price,
-      barIndex: m.barIndex,
-      timestamp: m.timestamp,
-      color: m.color,
-      comment: m.comment,
-    })),
-    bgcolor: (bgcolor || []).map((b) => ({ time: Math.floor(b.time / 1000), color: b.color })),
-    alertConditions: (alertConditions || []).map((a) => ({ id: a.id, title: a.title, message: a.message })),
-    alertTriggers: (alertTriggers || []).map((t) => ({ alertId: t.alertId, barIndex: t.barIndex, timestamp: t.timestamp })),
-    tables: tables || [],
-    hiddenPlotTitles: hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
-  };
-}
+import type { ExecuteResponse, ExecutionResultMessage } from './chart-data-transform';
+import { buildScriptResult } from './chart-data-transform';
+import { prependIndicatorResult, mergeDiffIntoResult } from './indicator-merge';
 
 export function useChartData(onIndicatorResult?: (indicatorId: string, result: ScriptResult) => void) {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
@@ -299,19 +91,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
       // Execute all indicators FIRST — compute everything before touching
       // any React state. This prevents intermediate renders where candles
-      // are updated but indicator data is stale (causes Y-axis jumping
-      // on lines which are array-index positioned).
+      // are updated but indicator data is stale (causes Y-axis jumping).
       const indicatorUpdates: Array<{ id: string; result: ScriptResult }> = [];
 
       for (const [indId, ind] of indicatorSourcesRef.current) {
         const maxLookback = ind.maxLookback || 0;
         const contextBars = oldBars.slice(0, maxLookback);
         const actualContextSize = contextBars.length;
-        // Bars must be in chronological order: newBars (older) first,
-        // contextBars (newer) last. The engine processes sequentially,
-        // so newBars get history from preceding bars in the array.
-        // The contextBars at the end provide lookback for newBars that
-        // need more history than available within newBars alone.
         const execBars = [...newBars, ...contextBars];
 
         try {
@@ -345,8 +131,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           );
 
           const prev = indicatorResultsRef.current.get(indId);
-          // Build set of overlap bar timestamps (in seconds) so prepend can
-          // purge stale labels/lines/shapes from the recomputed region.
           const overlapTimestamps = new Set<number>();
           for (const bar of contextBars) {
             overlapTimestamps.add(Math.floor(bar.timestamp / 1000));
@@ -354,7 +138,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize, overlapTimestamps) : newResult;
           indicatorUpdates.push({ id: indId, result: merged });
 
-          // Create WS session with full bar set for real-time updates
           if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({
               type: 'execute',
@@ -366,8 +149,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         }
       }
 
-      // Now update ALL React state in one synchronous batch — candles and
-      // indicator results together so the chart never renders with mismatched data.
+      // Now update ALL React state in one synchronous batch
       setCandles(toCandleData(ohlcvDataRef.current));
       for (const { id, result } of indicatorUpdates) {
         indicatorResultsRef.current.set(id, result);
@@ -382,347 +164,17 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
 
-  const prependIndicatorResult = useCallback((prev: ScriptResult, newResult: ScriptResult, addedCount: number, contextSize: number, overlapTimestamps?: Set<number>): ScriptResult => {
-    // The execution result contains entries for BOTH newBars and contextBars.
-    // - First addedCount entries: newBars (some may have null warmup)
-    // - Last contextSize entries: contextBars recomputed with newBars as history
-    //
-    // We prepend the newBar entries and REPLACE the first contextSize entries
-    // of the previous result with the recomputed boundary values. This fixes
-    // the "hill" discontinuity: previously, the first maxLookback bars of each
-    // batch had null warmup values that were never updated when older data
-    // arrived. Now they get properly recomputed.
-    const mergedPlots = prev.plots.map((plot) => {
-      const newPlot = newResult.plots.find((p) => p.title === plot.title);
-      if (newPlot) {
-        const newBarData = newPlot.data.slice(0, addedCount);
-        const boundaryData = newPlot.data.slice(addedCount, addedCount + contextSize);
-        // Replace the first contextSize entries of prev with recomputed boundary
-        const replacedPrev = [...boundaryData, ...plot.data.slice(contextSize)];
-        return { ...plot, data: [...newBarData, ...replacedPrev] };
-      }
-      return plot;
-    });
-    // Add any entirely new plots from newResult
-    for (const newPlot of newResult.plots) {
-      if (!mergedPlots.find((p) => p.title === newPlot.title)) {
-        mergedPlots.push(newPlot);
-      }
-    }
-
-    // The overlap region (first contextSize bars of prev) was RE-EXECUTED with
-    // more lookback history. Pivot-like indicators can change which bars have
-    // labels/lines or what value they carry, so we MUST purge any prev entry
-    // whose timestamp falls in the overlap region — the new execution is
-    // authoritative for those bars. Without this, stale labels persist (e.g. an
-    // old HH label at bar T survives even though the re-execution moved the
-    // pivot to T' or dropped it entirely), causing drift and double labels.
-    const inOverlap = overlapTimestamps
-      ? (t: number) => overlapTimestamps.has(t)
-      : (_t: number) => false;
-
-    const mergedShapes = [
-      ...newResult.shapes,
-      ...prev.shapes.filter((s) => !newResult.shapes.some((n) => n.time === s.time) && !inOverlap(s.time)),
-    ];
-    const mergedFills = [
-      ...(newResult.fills || []),
-      ...(prev.fills || []).filter(
-        (f) => !(newResult.fills || []).some((n) => n.from === f.from && n.to === f.to),
-      ),
-    ];
-    const mergedLines = [
-      ...newResult.lines,
-      ...prev.lines.filter(
-        (l) =>
-          !newResult.lines.some((n) => n.points[0]?.time === l.points[0]?.time) &&
-          (l.points[0]?.time === undefined || !inOverlap(l.points[0].time)),
-      ),
-    ];
-    const mergedLabels = [
-      ...newResult.labels,
-      ...prev.labels.filter(
-        (l) => !newResult.labels.some((n) => n.time === l.time) && !inOverlap(l.time),
-      ),
-    ];
-    const mergedStrategyMarkers = [...(newResult.strategyMarkers || []), ...(prev.strategyMarkers || [])];
-
-    // Prepend fillColorData entries and recompute boundary
-    const mergedFillColorData: Record<string, (string | null)[]> = {};
-    const allFillKeys = new Set([...Object.keys(prev.fillColorData || {}), ...Object.keys(newResult.fillColorData || {})]);
-    for (const key of allFillKeys) {
-      const newColors = newResult.fillColorData?.[key] || [];
-      const prevColors = prev.fillColorData?.[key] || [];
-      const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
-      mergedFillColorData[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
-    }
-
-    // Prepend plotColors entries and recompute boundary
-    const mergedPlotColors: Record<string, (string | null)[]> = {};
-    const allColorKeys = new Set([...Object.keys(prev.plotColors || {}), ...Object.keys(newResult.plotColors || {})]);
-    for (const key of allColorKeys) {
-      const newColors = newResult.plotColors?.[key] || [];
-      const prevColors = prev.plotColors?.[key] || [];
-      const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
-      mergedPlotColors[key] = [...newColors.slice(0, addedCount), ...boundaryColors, ...prevColors.slice(contextSize)];
-    }
-
-    const mergedBgcolor = [...(newResult.bgcolor || []), ...(prev.bgcolor || []).filter((b) => !(newResult.bgcolor || []).some((n) => n.time === b.time) && !inOverlap(b.time))];
-    const mergedBoxes = [
-      ...(newResult.boxes || []),
-      ...(prev.boxes || []).filter(
-        (b) =>
-          !(newResult.boxes || []).some((n) => n.startTime === b.startTime) &&
-          !inOverlap(b.startTime),
-      ),
-    ];
-    // Tables are static dashboard state — use the latest
-    const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
-
-    // Merge alert triggers:
-    // - newResult.alertTriggers covers the prepended region (indices 0..addedCount-1)
-    //   and the re-executed boundary (indices addedCount..addedCount+contextSize-1).
-    // - prev.alertTriggers beyond the boundary need their barIndex shifted by addedCount.
-    // - prev.alertTriggers within the boundary are REPLACED by newResult's entries.
-    const newTriggers = newResult.alertTriggers || [];
-    const prevTriggers = prev.alertTriggers || [];
-    const mergedAlertTriggers: typeof prevTriggers = [
-      // 1. Prepended region: barIndex values stay as-is (they are at the start
-      //    of the full candles array).
-      ...newTriggers.filter((t) => t.barIndex < addedCount),
-      // 2. Re-executed boundary: replace old triggers for these bars.
-      ...newTriggers.filter(
-        (t) => t.barIndex >= addedCount && t.barIndex < addedCount + contextSize,
-      ),
-      // 3. Unchanged tail: shift old barIndex by addedCount so they point
-      //    at the correct candles in the now-larger array.
-      ...prevTriggers
-        .filter((t) => t.barIndex >= contextSize)
-        .map((t) => ({ ...t, barIndex: t.barIndex + addedCount })),
-    ];
-
-    // Merge alert conditions — newResult wins entirely (it has the full list).
-    const mergedAlertConditions =
-      (newResult.alertConditions && newResult.alertConditions.length > 0)
-        ? newResult.alertConditions
-        : prev.alertConditions;
-
-    return {
-      ...prev,
-      plots: mergedPlots,
-      shapes: mergedShapes,
-      fills: mergedFills,
-      lines: mergedLines,
-      labels: mergedLabels,
-      strategyMarkers: mergedStrategyMarkers,
-      fillColorData: mergedFillColorData,
-      plotColors: mergedPlotColors,
-      bgcolor: mergedBgcolor,
-      boxes: mergedBoxes,
-      tables: mergedTables,
-      alertTriggers: mergedAlertTriggers,
-      alertConditions: mergedAlertConditions,
-    };
-  }, []);
-
-  const mergeDiffIntoResult = useCallback((prev: ScriptResult, msg: ExecutionResultMessage): ScriptResult => {
-    const mergedPlots = prev.plots.map((plot) => {
-      const diffKey = Object.keys(msg.outputs).find((k) => {
-        const stripped = k.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
-        return stripped === plot.title || k === plot.title;
-      });
-      if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
-        const diffValue = msg.outputs[diffKey]![0];
-        const numValue = diffValue === null || diffValue === undefined ? null
-          : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
-          : typeof diffValue === 'number' ? diffValue : null;
-        const perBarColors = msg.plotColors?.[diffKey];
-        const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
-        const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
-        if (isNewBar) {
-          const rawTime = msg.barTimestamps?.[msg.barIndex];
-          const newTime = rawTime !== undefined ? Math.floor(rawTime / 1000) : (plot.data[plot.data.length - 1]?.time ?? 0);
-          return {
-            ...plot,
-            data: [...plot.data, { time: newTime, value: numValue, color }],
-          };
-        }
-        const lastEntry = plot.data[plot.data.length - 1];
-        if (lastEntry) {
-          return {
-            ...plot,
-            data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
-          };
-        }
-      } else if ((msg.barIndex ?? 0) >= plot.data.length && plot.data.length > 0) {
-        const lastEntry = plot.data[plot.data.length - 1];
-        const rawTime = msg.barTimestamps?.[msg.barIndex] ?? (lastEntry?.time ?? 0);
-        const newTime = Math.floor(rawTime / 1000);
-        return {
-          ...plot,
-          data: [...plot.data, { time: newTime, value: lastEntry?.value ?? null, color: lastEntry?.color }],
-        };
-      }
-      return plot;
-    });
-
-    const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
-    const transformFillKey = (rawKey: string) => {
-      const parts = rawKey.split('::');
-      return parts.map(stripMeta).join('::');
-    };
-    const diffShapes = (msg.shapes || []).map((s) => ({
-      type: s.style as import('../types').ShapeData['type'],
-      time: Math.floor(s.time / 1000),
-      price: 0,
-      color: s.color,
-      text: s.text,
-      location: s.location as import('../types').ShapeData['location'],
-    }));
-    const mergedShapes = diffShapes.length > 0
-      ? [...prev.shapes.filter((s) => !diffShapes.some((d) => d.time === s.time)), ...diffShapes]
-      : prev.shapes;
-
-    const diffFills = (msg.fills || []).map((f) => ({
-      from: stripMeta(f.from),
-      to: stripMeta(f.to),
-      color: f.color,
-    }));
-    const mergedFills = diffFills.length > 0
-      ? [...(prev.fills || []).filter((f) => !diffFills.some((d) => d.from === f.from && d.to === f.to)), ...diffFills]
-      : (prev.fills || []);
-
-    const diffLines = (msg.lines || []).map((l) => ({
-      points: l.points.map((p) => ({ time: Math.floor(p.time / 1000), price: p.price })),
-      color: l.color,
-      width: l.width,
-      style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
-      extend: l.extend,
-    }));
-    const mergedLines = diffLines.length > 0
-      ? [...prev.lines.filter((l) => !diffLines.some((d) => d.points[0]?.time === l.points[0]?.time)), ...diffLines]
-      : prev.lines;
-
-    const diffLabels = (msg.labels || []).map((l) => ({
-      time: Math.floor(l.time / 1000),
-      price: l.price,
-      text: l.text,
-      color: l.color,
-      textColor: l.textColor,
-      style: l.style,
-      size: l.size,
-    }));
-    const mergedLabels = diffLabels.length > 0
-      ? [...prev.labels.filter((l) => !diffLabels.some((d) => d.time === l.time)), ...diffLabels]
-      : prev.labels;
-
-    const diffStrategyMarkers = (msg.strategyMarkers || []).map((m) => ({
-      type: m.type,
-      name: m.name,
-      direction: m.direction,
-      action: m.action,
-      quantity: m.quantity,
-      price: m.price,
-      barIndex: m.barIndex,
-      timestamp: m.timestamp,
-      color: m.color,
-      comment: m.comment,
-    }));
-    const mergedStrategyMarkers = [...(prev.strategyMarkers || []), ...diffStrategyMarkers];
-
-    const mergedPlotColors = msg.plotColors
-      ? Object.entries(msg.plotColors).reduce((acc, [key, colors]) => {
-          const prevColors = prev.plotColors?.[key];
-          if (prevColors) {
-            acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
-          } else {
-            acc[key] = colors;
-          }
-          return acc;
-        }, {} as Record<string, (string | null)[]>)
-      : prev.plotColors;
-
-    const mergedFillColorData = msg.fillColorData
-      ? Object.entries(msg.fillColorData).reduce((acc, [key, colors]) => {
-          const transformedKey = transformFillKey(key);
-          const prevColors = prev.fillColorData?.[transformedKey];
-          if (prevColors) {
-            acc[transformedKey] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
-          } else {
-            acc[transformedKey] = colors;
-          }
-          return acc;
-        }, {} as Record<string, (string | null)[]>)
-      : prev.fillColorData;
-
-    const mergedBgcolor = msg.bgcolor
-      ? [...(prev.bgcolor || []).slice(0, -msg.bgcolor.length || undefined), ...msg.bgcolor.map((b) => ({ time: Math.floor(b.time / 1000), color: b.color }))]
-      : prev.bgcolor;
-
-    const diffBoxes = (msg.boxes || []).map((b) => ({
-      startTime: Math.floor(b.startTime / 1000),
-      startPrice: b.startPrice,
-      endTime: Math.floor(b.endTime / 1000),
-      endPrice: b.endPrice,
-      borderColor: b.borderColor,
-      backgroundColor: b.backgroundColor,
-    }));
-    const mergedBoxes = diffBoxes.length > 0
-      ? [...(prev.boxes || []).filter((b) => !diffBoxes.some((d) => d.startTime === b.startTime)), ...diffBoxes]
-      : (prev.boxes || []);
-
-    // Diff alert triggers: append only NEW trigger IDs at the forming candle's
-    // barIndex, skipping duplicates that were already delivered on a prior tick
-    // for the same bar (e.g. flipUp staying true across N ticks).
-    const mergedAlertTriggers = msg.alertTriggers?.length > 0
-      ? (() => {
-          const existingKeys = new Set(
-            (prev.alertTriggers ?? []).map((t) => `${t.alertId}:${t.barIndex}`),
-          );
-          const dedupedNew = msg.alertTriggers.filter(
-            (t) => !existingKeys.has(`${t.alertId}:${t.barIndex}`),
-          );
-          return dedupedNew.length > 0
-            ? [...(prev.alertTriggers ?? []), ...dedupedNew]
-            : prev.alertTriggers;
-        })()
-      : prev.alertTriggers;
-
-    return {
-      ...prev,
-      plots: mergedPlots,
-      shapes: mergedShapes,
-      fills: mergedFills,
-      lines: mergedLines,
-      labels: mergedLabels,
-      strategyMarkers: mergedStrategyMarkers,
-      plotColors: mergedPlotColors,
-      fillColorData: mergedFillColorData,
-      bgcolor: mergedBgcolor,
-      boxes: mergedBoxes,
-      // Tables are static dashboard state — replace on any update
-      tables: msg.tables || prev.tables,
-      alertTriggers: mergedAlertTriggers,
-    };
-  }, []);
-
   const handleExecutionResult = useCallback((msg: ExecutionResultMessage) => {
     const ohlcvData = ohlcvDataRef.current;
 
     // Route indicator-specific results to the callback
     if (msg.indicatorId && msg.indicatorId !== 'default' && onIndicatorResult) {
-      // If the indicator was already removed, discard stale results
       if (!indicatorSourcesRef.current.has(msg.indicatorId)) return;
       if (msg.success && msg.outputs) {
-        // Real-time updates (both forming and confirmed candles) carry diff
-        // outputs (single value per key). Merge them into the existing result
-        // instead of replacing it entirely, which would destroy the plot data.
         const sampleKey = Object.keys(msg.outputs)[0];
         const isDiff = msg.formingCandle || (sampleKey && msg.outputs[sampleKey].length === 1 && msg.barTimestamps && msg.barTimestamps.length > 1);
         const prev = indicatorResultsRef.current.get(msg.indicatorId);
         if (isDiff) {
-          // If prev doesn't exist yet (WS update arrived before HTTP result),
-          // skip the update — the HTTP result will provide the full data.
           if (!prev) return;
           const merged = mergeDiffIntoResult(prev, msg);
           indicatorResultsRef.current.set(msg.indicatorId, merged);
@@ -809,7 +261,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         message: msg.error || 'Execution failed',
       }]);
     }
-  }, [onIndicatorResult, mergeDiffIntoResult]);
+  }, [onIndicatorResult]);
 
   const connectWebSocket = useCallback(() => {
     try {
@@ -872,7 +324,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           } else if (data.type === 'execution_result' && data.data) {
             handleExecutionResult({ ...data.data, indicatorId: data.indicatorId });
           } else if (data.type === 'indicator_removed' && data.data) {
-            // Indicator removed by backend cascade (script deleted)
             const removedIds = data.data.indicatorIds as string[] | undefined;
             if (removedIds) {
               for (const id of removedIds) {
@@ -1007,10 +458,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         if (seedBars.length > 0) {
           const originalBars = barsToExecute;
           barsToExecute = [...seedBars, ...barsToExecute];
-          // NOTE: ohlcvDataRef.current is NOT updated here.
-          // Seed bars are only needed for engine lookback computation.
-          // Keeping them out of ohlcvDataRef ensures candle state stays
-          // in sync with plot data (which has seed entries trimmed).
 
           const seedResponse = await fetch('/api/execute', {
             method: 'POST',
@@ -1041,9 +488,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 seedResult.hiddenPlotKeys,
               );
 
-              // Trim seed bar data from plot results — seed bars are not in
-              // ohlcvDataRef (and thus not in candles), so their plot entries
-              // would have no matching candles and break the line renderer.
+              // Trim seed bar data from plot results
               const seedCount = seedBars.length;
               for (const plot of seedScriptRes.plots) {
                 plot.data = plot.data.slice(seedCount);
@@ -1054,20 +499,14 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
                 }
               }
 
-              // Trim seed bar strategy markers — their barIndex is relative to
-              // the combined [seedBars, ...originalBars] array, so offset by
-              // seedCount and drop any that fall within the seed range.
+              // Trim seed bar strategy markers
               if (seedScriptRes.strategyMarkers) {
                 seedScriptRes.strategyMarkers = seedScriptRes.strategyMarkers
                   .filter((m) => m.barIndex >= seedCount)
                   .map((m) => ({ ...m, barIndex: m.barIndex - seedCount }));
               }
 
-              // Trim seed bar alert triggers — same issue: barIndex is relative
-              // to the combined [seedBars, ...originalBars] array. Without this
-              // fix, every trigger's barIndex is offset by seedCount, causing
-              // labels (▲/▼) and alert triggers (Trail Long/Short) to disagree
-              // by exactly the Hull length (72 for volatility trail).
+              // Trim seed bar alert triggers
               if (seedScriptRes.alertTriggers) {
                 seedScriptRes.alertTriggers = seedScriptRes.alertTriggers
                   .filter((t) => t.barIndex >= seedCount)
