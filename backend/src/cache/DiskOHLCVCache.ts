@@ -163,7 +163,7 @@ export class DiskOHLCVCache {
       return null;
     }
 
-    // Read metadata, update lastAccessed
+    // Read metadata
     let meta: CacheMeta;
     try {
       meta = JSON.parse(fs.readFileSync(metaFile, 'utf-8')) as CacheMeta;
@@ -172,10 +172,20 @@ export class DiskOHLCVCache {
       return null;
     }
 
+    // Early-exit: if the requested range can't possibly overlap with cached
+    // data, skip the NDJSON read entirely.
+    // - Requested range is entirely below the oldest cached bar
+    // - Requested range is entirely above the newest cached bar
+    if ((end !== undefined && meta.oldestTimestamp > end) ||
+        (start !== undefined && meta.newestTimestamp < start)) {
+      this.misses++;
+      return null;
+    }
+
     meta.lastAccessed = Date.now();
     this.writeMeta(key, meta);
 
-    // Read bars from NDJSON
+    // Read bars from NDJSON (filtered by range)
     const bars = this.readNdjson(dataFile, start, end);
     if (bars.length === 0) {
       this.misses++;
