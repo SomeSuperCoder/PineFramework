@@ -550,7 +550,9 @@ export class StrategyEngine {
     // (opening a position). Charging on both entry and exit double-counts the
     // commission for a round-trip trade. Per-contract and percent types are
     // still charged per fill since they represent actual per-unit costs.
-    if (isExit) {
+    // NOTE: This only applies to the legacy commission path — the pluggable
+    // commission calculator already determines the correct per-fill amount.
+    if (!this.commissionCalculator && isExit) {
       if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
         commission = 0;
       }

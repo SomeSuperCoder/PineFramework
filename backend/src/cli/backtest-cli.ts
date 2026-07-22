@@ -24,7 +24,7 @@ Options:
   --initial-capital <n>   Starting capital (default: 10000)
   --commission <n>        Commission value (default: 0)
   --commission-type <t>   Commission type: percent, fixed, per_contract, per_order (default: percent)
-  --commission-method <m> Commission method: percent_fixed, per_order_fixed, jupiter_ultra, jupiter_manual, none
+  --commission-method <m> Commission method: jupiter_ultra, jupiter_manual
   --commission-method-settings <json>  JSON string of method-specific settings (e.g. '{"rate":0.001}')
   --slippage <n>          Slippage value (default: 0)
   --default-qty <n>       Default order quantity (default: 1)

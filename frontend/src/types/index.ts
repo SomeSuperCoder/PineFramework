@@ -250,7 +250,7 @@ export interface BacktestResultResponse {
 
 export type DateRangeMode = 'days_back' | 'traditional';
 
-export type CommissionMethodId = 'percent_fixed' | 'per_order_fixed' | 'jupiter_ultra' | 'jupiter_manual' | 'none';
+export type CommissionMethodId = 'jupiter_ultra' | 'jupiter_manual';
 
 export interface BacktestConfig {
   initialCapital: number;

@@ -59,12 +59,9 @@
 export type {
   TradeContext,
   CommissionMethodId,
-  PercentFixedSettings,
-  PerOrderFixedSettings,
   JupiterPairCategory,
   JupiterUltraSettings,
   JupiterManualSettings,
-  PercentCommissionSettings,
   CommissionMethodSettings,
   CommissionConfig,
   CommissionCalculator,
@@ -86,14 +83,8 @@ export {
 // Import calculator classes
 // ---------------------------------------------------------------------------
 
-import {
-  PercentFixedCalculator,
-  PercentCommissionCalculator,
-} from './commission-methods/percent-fixed.js';
-import { PerOrderFixedCalculator } from './commission-methods/per-order-fixed.js';
 import { JupiterUltraCalculator } from './commission-methods/jupiter-ultra.js';
 import { JupiterManualCalculator } from './commission-methods/jupiter-manual.js';
-import { NoneCalculator } from './commission-methods/none.js';
 
 import type {
   CommissionMethodId,
@@ -101,9 +92,6 @@ import type {
   CommissionConfig,
   CommissionMethodDescriptor,
   CommissionMethodSettings,
-  PercentFixedSettings,
-  PercentCommissionSettings,
-  PerOrderFixedSettings,
   JupiterUltraSettings,
   JupiterManualSettings,
   SettingsFieldDescriptor,
@@ -115,12 +103,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 const CALCULATORS: Record<CommissionMethodId, CommissionCalculator> = {
-  percent_fixed: new PercentFixedCalculator(),
-  percent_commission: new PercentCommissionCalculator(),
-  per_order_fixed: new PerOrderFixedCalculator(),
   jupiter_ultra: new JupiterUltraCalculator(),
   jupiter_manual: new JupiterManualCalculator(),
-  none: new NoneCalculator(),
 };
 
 // ---------------------------------------------------------------------------
@@ -128,63 +112,6 @@ const CALCULATORS: Record<CommissionMethodId, CommissionCalculator> = {
 // ---------------------------------------------------------------------------
 
 const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
-  {
-    id: 'percent_fixed',
-    name: 'Percent (Fixed)',
-    description: 'Fixed percentage of trade value (fraction)',
-    enforceLongOnly: false,
-    defaultSettings: { rate: 0.001 } as PercentFixedSettings,
-    settingsFields: [
-      {
-        key: 'rate',
-        label: 'Rate',
-        type: 'number',
-        defaultValue: 0.001,
-        min: 0,
-        max: 1,
-        step: 0.0001,
-        tooltip: 'Commission rate as a fraction (e.g. 0.001 = 0.1%)',
-      },
-    ],
-  },
-  {
-    id: 'percent_commission',
-    name: 'Percent Commission (Legacy)',
-    description:
-      'Percentage commission matching legacy commissionType: percent (e.g. 0.1 = 0.1%)',
-    enforceLongOnly: false,
-    defaultSettings: { rate: 0.1 } as PercentCommissionSettings,
-    settingsFields: [
-      {
-        key: 'rate',
-        label: 'Rate (%)',
-        type: 'number',
-        defaultValue: 0.1,
-        min: 0,
-        max: 100,
-        step: 0.01,
-        tooltip: 'Commission as a percentage (e.g. 0.1 = 0.1%)',
-      },
-    ],
-  },
-  {
-    id: 'per_order_fixed',
-    name: 'Per Order (Fixed)',
-    description: 'Fixed cash amount per order',
-    enforceLongOnly: false,
-    defaultSettings: { amount: 0 } as PerOrderFixedSettings,
-    settingsFields: [
-      {
-        key: 'amount',
-        label: 'Amount',
-        type: 'number',
-        defaultValue: 0,
-        min: 0,
-        step: 0.01,
-        tooltip: 'Flat fee charged per order in account currency',
-      },
-    ],
-  },
   {
     id: 'jupiter_ultra',
     name: 'Jupiter Ultra',
@@ -294,14 +221,6 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
           'SOL/USD price for converting Solana network fees (lamports → USD). 0 disables network fee.',
       },
     ],
-  },
-  {
-    id: 'none',
-    name: 'None',
-    description: 'No commission applied',
-    enforceLongOnly: false,
-    defaultSettings: null,
-    settingsFields: [],
   },
 ];
 

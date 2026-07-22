@@ -14,31 +14,16 @@ const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; descrip
     description:
       'DEX fee (default 25 bps) + 0% Jupiter fee + ~$0.0015 network fee — matches live bot',
   },
-  { id: 'percent_fixed', label: 'Percent (Fixed)', description: 'Percentage of trade value' },
-  { id: 'per_order_fixed', label: 'Per Order (Fixed)', description: 'Fixed amount per order' },
-  { id: 'none', label: 'None', description: 'No commission' },
 ];
 
 function getDefaultMethodSettings(method: CommissionMethodId): Record<string, unknown> | null {
   switch (method) {
-    case 'percent_fixed':
-      return { rate: 0.001 };
-    case 'per_order_fixed':
-      return { amount: 1 };
     case 'jupiter_ultra':
       return { dexFeeBps: 25, solPriceUsd: 150 };
     case 'jupiter_manual':
       return { dexFeeBps: 25, solPriceUsd: 150 };
-    case 'none':
-      return null;
-    default:
-      return null;
   }
 }
-
-// ── Jupiter fee tier auto-detection (simplified, for display only) ──
-
-const JUPITER_METHODS = new Set<CommissionMethodId>(['jupiter_manual', 'jupiter_ultra']);
 
 const STABLECOINS = new Set([
   'USDT',
@@ -468,48 +453,7 @@ export function BacktestCommissionSettings({
           executes swaps via <strong>Jupiter</strong> (Router path — 0% Jupiter commission). Select{' '}
           <strong>Jupiter (Basic Swap)</strong> to match real trading conditions.
         </div>
-      ) : !JUPITER_METHODS.has(commissionMethod) ? (
-        <div
-          style={{
-            marginTop: '8px',
-            padding: '10px 12px',
-            background: '#3a1a00',
-            border: '1px solid #ff6b00',
-            borderRadius: '6px',
-            fontSize: '12px',
-            color: '#ff8c00',
-            lineHeight: 1.5,
-          }}
-        >
-          <strong>⚠️ UNREALISTIC RESULTS</strong>
-          <br />
-          The live trading bot executes swaps via <strong>Jupiter</strong> (Router path — 0% Jupiter
-          commission). Using{' '}
-          <strong>
-            {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.label ?? commissionMethod}
-          </strong>{' '}
-          will produce backtest results that do not reflect real trading conditions. Select{' '}
-          <strong>Jupiter (Basic Swap)</strong> or <strong>Jupiter Ultra</strong> instead.
-        </div>
       ) : null}
-
-      {commissionMethod === 'percent_fixed' && (
-        <div style={{ marginTop: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-            Rate (Percent Fixed)
-          </label>
-          <NumberInput
-            value={((commissionMethodSettings as Record<string, unknown>)?.rate as number) ?? 0.001}
-            onChange={(v) => handleSettingChange('rate', v)}
-            step="0.0001"
-            min={0}
-            max={1}
-          />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-            Percentage of trade value (e.g. 0.001 = 0.1%)
-          </div>
-        </div>
-      )}
 
       {commissionMethod === 'jupiter_ultra' && (
         <div style={{ marginTop: '8px' }}>
@@ -527,23 +471,6 @@ export function BacktestCommissionSettings({
             settings={(commissionMethodSettings as Record<string, unknown>) ?? {}}
             onSettingsChange={(newSettings) => onCommissionMethodSettingsChange(newSettings)}
           />
-        </div>
-      )}
-
-      {commissionMethod === 'per_order_fixed' && (
-        <div style={{ marginTop: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-            Fixed Amount per Order
-          </label>
-          <NumberInput
-            value={((commissionMethodSettings as Record<string, unknown>)?.amount as number) ?? 1}
-            onChange={(v) => handleSettingChange('amount', v)}
-            step="0.01"
-            min={0}
-          />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-            Flat commission amount per order fill
-          </div>
         </div>
       )}
 

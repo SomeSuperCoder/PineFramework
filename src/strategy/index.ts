@@ -52,8 +52,6 @@ export type {
   CommissionMethodDescriptor,
   SettingsFieldDescriptor,
   TradeContext,
-  PercentFixedSettings,
-  PerOrderFixedSettings,
   JupiterUltraSettings,
   JupiterManualSettings,
 } from './commission-calculator.js';

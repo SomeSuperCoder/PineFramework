@@ -29,76 +29,6 @@ function createDeterministicBars(count: number, startPrice: number = 100): Bar[]
 }
 
 describe('BacktestEngine Commission Methods', () => {
-  describe('percent_fixed method', () => {
-    it('should apply percent_fixed commission to backtest trades', () => {
-      const bars = createDeterministicBars(20, 100);
-      const engine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.01 }, // 1%
-      });
-
-      const result = engine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 10) eng.exit('Exit');
-      });
-
-      expect(result.metrics.totalTrades).toBe(1);
-      expect(result.metrics.commission).toBeGreaterThan(0);
-
-      const trade = result.trades[0]!;
-      expect(trade.commission).toBeGreaterThan(0);
-    });
-
-    it('should produce different results than legacy percent commission', () => {
-      const bars = createDeterministicBars(20, 100);
-
-      const legacyEngine = new BacktestEngine({
-        initialCapital: 10000,
-        commission: 1, // 1% as legacy percent
-        commissionType: 'percent',
-      });
-      const legacyResult = legacyEngine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 10) eng.exit('Exit');
-      });
-
-      const pluggableEngine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.01 },
-      });
-      const pluggableResult = pluggableEngine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 10) eng.exit('Exit');
-      });
-
-      // Both should have commission > 0
-      expect(legacyResult.metrics.commission).toBeGreaterThan(0);
-      expect(pluggableResult.metrics.commission).toBeGreaterThan(0);
-    });
-  });
-
-  describe('per_order_fixed method', () => {
-    it('should apply fixed commission per order', () => {
-      const bars = createDeterministicBars(20, 100);
-      const engine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'per_order_fixed',
-        commissionMethodSettings: { amount: 5 },
-      });
-
-      const result = engine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 10) eng.exit('Exit');
-      });
-
-      expect(result.metrics.totalTrades).toBe(1);
-      // trade.commission = exit commission only = $5
-      expect(result.trades[0]!.commission).toBe(5);
-    });
-  });
-
   describe('jupiter_ultra method', () => {
     it('should apply jupiter_ultra commission (backward compat rate)', () => {
       const bars = createDeterministicBars(20, 100);
@@ -255,24 +185,6 @@ describe('BacktestEngine Commission Methods', () => {
     });
   });
 
-  describe('none method', () => {
-    it('should apply zero commission', () => {
-      const bars = createDeterministicBars(20, 100);
-      const engine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'none',
-      });
-
-      const result = engine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 10) eng.exit('Exit');
-      });
-
-      expect(result.metrics.totalTrades).toBe(1);
-      expect(result.metrics.commission).toBe(0);
-    });
-  });
-
   describe('fallback to legacy commission', () => {
     it('should use legacy commission when no method specified', () => {
       const bars = createDeterministicBars(20, 100);
@@ -295,19 +207,19 @@ describe('BacktestEngine Commission Methods', () => {
     it('should prefer commissionMethod over legacy when both set', () => {
       const bars = createDeterministicBars(20, 100);
 
-      // With pluggable method — should be zero
+      // With pluggable method — uses jupiter_manual fee
       const pluggableEngine = new BacktestEngine({
         initialCapital: 10000,
         commission: 100, // high legacy commission
         commissionType: 'fixed',
-        commissionMethod: 'none',
+        commissionMethod: 'jupiter_manual',
       });
       const pluggableResult = pluggableEngine.run(bars, (eng, _bar, index) => {
         if (index === 0) eng.entry('Long', 'long', 10);
         if (index === 10) eng.exit('Exit');
       });
 
-      expect(pluggableResult.metrics.commission).toBe(0);
+      expect(pluggableResult.metrics.commission).toBeGreaterThan(0);
     });
   });
 
@@ -383,39 +295,6 @@ describe('BacktestEngine Commission Methods', () => {
       const finalPos = result.positions[result.positions.length - 1]!;
       expect(finalPos.direction).toBe('flat');
     });
-
-    it('should produce same completed trades as non-Jupiter when using reversal via short entry', () => {
-      const bars = createDeterministicBars(30, 100);
-
-      // Non-Jupiter: long entry, then short entry (reversal) — both execute
-      const normalEngine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.001 },
-      });
-      const normalResult = normalEngine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 15) eng.entry('Short', 'short', 10);
-      });
-
-      // Jupiter: long entry, then short entry (rejected but long is closed)
-      const jupiterEngine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'jupiter_ultra',
-        commissionMethodSettings: { rate: 0.001 },
-      });
-      const jupiterResult = jupiterEngine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 15) eng.entry('Short', 'short', 10);
-      });
-
-      // Both should have at least one completed long trade
-      expect(normalResult.metrics.totalTrades).toBeGreaterThanOrEqual(1);
-      expect(jupiterResult.metrics.totalTrades).toBeGreaterThanOrEqual(1);
-      // Both should have closed the long position
-      expect(normalResult.trades[0]!.direction).toBe('long');
-      expect(jupiterResult.trades[0]!.direction).toBe('long');
-    });
   });
 
   describe('commission in report output', () => {
@@ -423,8 +302,7 @@ describe('BacktestEngine Commission Methods', () => {
       const bars = createDeterministicBars(20, 100);
       const engine = new BacktestEngine({
         initialCapital: 10000,
-        commissionMethod: 'per_order_fixed',
-        commissionMethodSettings: { amount: 1 },
+        commissionMethod: 'jupiter_manual',
       });
 
       const result = engine.run(bars, (eng, _bar, index) => {
@@ -435,31 +313,6 @@ describe('BacktestEngine Commission Methods', () => {
       const report = BacktestEngine.generateReport(result);
       expect(report).toContain('Total Commission');
       expect(report).toContain('$');
-    });
-  });
-
-  describe('multiple trades with commission', () => {
-    it('should accumulate commission across multiple trades', () => {
-      const bars = createDeterministicBars(30, 100);
-      const engine = new BacktestEngine({
-        initialCapital: 10000,
-        commissionMethod: 'per_order_fixed',
-        commissionMethodSettings: { amount: 1 },
-      });
-
-      const result = engine.run(bars, (eng, _bar, index) => {
-        if (index === 0) eng.entry('Long', 'long', 10);
-        if (index === 5) eng.exit('Exit');
-        if (index === 10) eng.entry('Long2', 'long', 10);
-        if (index === 15) eng.exit('Exit2');
-        if (index === 20) eng.entry('Long3', 'long', 10);
-        if (index === 25) eng.exit('Exit3');
-      });
-
-      expect(result.metrics.totalTrades).toBe(3);
-      // Each trade's commission = exit commission only = $1
-      // metrics.commission sums trade.commission across all trades = $3
-      expect(result.metrics.commission).toBeCloseTo(3);
     });
   });
 });

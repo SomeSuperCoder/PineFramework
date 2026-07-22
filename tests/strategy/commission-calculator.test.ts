@@ -12,8 +12,6 @@ import {
 import type {
   TradeContext,
   CommissionConfig,
-  PercentFixedSettings,
-  PerOrderFixedSettings,
   JupiterUltraSettings,
   JupiterManualSettings,
   JupiterPairCategory,
@@ -32,11 +30,8 @@ describe('Commission Calculator', () => {
 
   describe('getCommissionCalculator', () => {
     it('should return a calculator for each built-in method', () => {
-      expect(getCommissionCalculator('percent_fixed')).toBeDefined();
-      expect(getCommissionCalculator('per_order_fixed')).toBeDefined();
       expect(getCommissionCalculator('jupiter_ultra')).toBeDefined();
       expect(getCommissionCalculator('jupiter_manual')).toBeDefined();
-      expect(getCommissionCalculator('none')).toBeDefined();
     });
 
     it('should return undefined for unknown method', () => {
@@ -46,11 +41,11 @@ describe('Commission Calculator', () => {
 
   describe('getCommissionMethodDescriptor', () => {
     it('should return descriptor for known method', () => {
-      const desc = getCommissionMethodDescriptor('percent_fixed');
+      const desc = getCommissionMethodDescriptor('jupiter_ultra');
       expect(desc).toBeDefined();
-      expect(desc!.id).toBe('percent_fixed');
-      expect(desc!.name).toBe('Percent (Fixed)');
-      expect(desc!.enforceLongOnly).toBe(false);
+      expect(desc!.id).toBe('jupiter_ultra');
+      expect(desc!.name).toBe('Jupiter Ultra');
+      expect(desc!.enforceLongOnly).toBe(true);
     });
 
     it('should return undefined for unknown method', () => {
@@ -59,16 +54,12 @@ describe('Commission Calculator', () => {
   });
 
   describe('getAllCommissionMethodDescriptors', () => {
-    it('should return 6 built-in methods', () => {
+    it('should return 2 built-in methods (Jupiter only)', () => {
       const descriptors = getAllCommissionMethodDescriptors();
-      expect(descriptors).toHaveLength(6);
+      expect(descriptors).toHaveLength(2);
       expect(descriptors.map((d) => d.id)).toEqual([
-        'percent_fixed',
-        'percent_commission',
-        'per_order_fixed',
         'jupiter_ultra',
         'jupiter_manual',
-        'none',
       ]);
     });
   });
@@ -82,87 +73,8 @@ describe('Commission Calculator', () => {
       expect(isLongOnlyEnforced('jupiter_manual')).toBe(true);
     });
 
-    it('should return false for percent_fixed', () => {
-      expect(isLongOnlyEnforced('percent_fixed')).toBe(false);
-    });
-
-    it('should return false for per_order_fixed', () => {
-      expect(isLongOnlyEnforced('per_order_fixed')).toBe(false);
-    });
-
-    it('should return false for none', () => {
-      expect(isLongOnlyEnforced('none')).toBe(false);
-    });
-
     it('should return false for unknown method', () => {
       expect(isLongOnlyEnforced('unknown' as any)).toBe(false);
-    });
-  });
-
-  describe('percent_fixed method', () => {
-    it('should calculate commission as tradeValue * rate', () => {
-      const config: CommissionConfig = {
-        method: 'percent_fixed',
-        settings: { rate: 0.001 } as PercentFixedSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      const result = computeCommission(context, config);
-      expect(result).toBeCloseTo(10); // 10000 * 0.001
-    });
-
-    it('should handle zero rate', () => {
-      const config: CommissionConfig = {
-        method: 'percent_fixed',
-        settings: { rate: 0 } as PercentFixedSettings,
-      };
-      const context = makeContext();
-      expect(computeCommission(context, config)).toBe(0);
-    });
-
-    it('should handle high rate (1%)', () => {
-      const config: CommissionConfig = {
-        method: 'percent_fixed',
-        settings: { rate: 0.01 } as PercentFixedSettings,
-      };
-      const context = makeContext({ tradeValue: 5000 });
-      expect(computeCommission(context, config)).toBeCloseTo(50); // 5000 * 0.01
-    });
-
-    it('should handle small trade value', () => {
-      const config: CommissionConfig = {
-        method: 'percent_fixed',
-        settings: { rate: 0.001 } as PercentFixedSettings,
-      };
-      const context = makeContext({ tradeValue: 10 });
-      expect(computeCommission(context, config)).toBeCloseTo(0.01); // 10 * 0.001
-    });
-  });
-
-  describe('per_order_fixed method', () => {
-    it('should return fixed amount regardless of trade size', () => {
-      const config: CommissionConfig = {
-        method: 'per_order_fixed',
-        settings: { amount: 0.5 } as PerOrderFixedSettings,
-      };
-
-      expect(computeCommission(makeContext({ tradeValue: 100 }), config)).toBe(0.5);
-      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBe(0.5);
-    });
-
-    it('should handle zero amount', () => {
-      const config: CommissionConfig = {
-        method: 'per_order_fixed',
-        settings: { amount: 0 } as PerOrderFixedSettings,
-      };
-      expect(computeCommission(makeContext(), config)).toBe(0);
-    });
-
-    it('should handle large fixed amount', () => {
-      const config: CommissionConfig = {
-        method: 'per_order_fixed',
-        settings: { amount: 10 } as PerOrderFixedSettings,
-      };
-      expect(computeCommission(makeContext(), config)).toBe(10);
     });
   });
 
@@ -483,17 +395,6 @@ describe('Commission Calculator', () => {
     });
   });
 
-  describe('none method', () => {
-    it('should always return zero commission', () => {
-      const config: CommissionConfig = {
-        method: 'none',
-        settings: null,
-      };
-      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBe(0);
-      expect(computeCommission(makeContext({ tradeValue: 0 }), config)).toBe(0);
-    });
-  });
-
   describe('unknown method', () => {
     it('should return 0 for unrecognized method', () => {
       const config: CommissionConfig = {
@@ -568,35 +469,6 @@ describe('Commission Calculator', () => {
       // Each new StrategyEngine instance starts with its own order ID counter
     });
 
-    it('should use percent_fixed commission method', () => {
-      const engine = new StrategyEngine({
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.01 }, // 1%
-      });
-
-      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
-      engine.entry('Long', 'long', 10);
-
-      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
-
-      // Commission: 100 * 10 * 0.01 = 10
-      expect(engine.getEquity()).toBeCloseTo(10000 - 10);
-    });
-
-    it('should use per_order_fixed commission method', () => {
-      const engine = new StrategyEngine({
-        commissionMethod: 'per_order_fixed',
-        commissionMethodSettings: { amount: 2.5 },
-      });
-
-      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
-      engine.entry('Long', 'long', 10);
-
-      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
-
-      expect(engine.getEquity()).toBeCloseTo(10000 - 2.5);
-    });
-
     it('should use jupiter_ultra commission method', () => {
       const engine = new StrategyEngine({
         commissionMethod: 'jupiter_ultra',
@@ -629,19 +501,6 @@ describe('Commission Calculator', () => {
       expect(engine.getEquity()).toBeCloseTo(10000 - 2.5015, 4);
     });
 
-    it('should use none commission method (zero commission)', () => {
-      const engine = new StrategyEngine({
-        commissionMethod: 'none',
-      });
-
-      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
-      engine.entry('Long', 'long', 10);
-
-      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
-
-      expect(engine.getEquity()).toBeCloseTo(10000);
-    });
-
     it('should fall back to legacy commission when no method specified', () => {
       const engine = new StrategyEngine({
         commission: 1,
@@ -656,10 +515,9 @@ describe('Commission Calculator', () => {
       expect(engine.getEquity()).toBeCloseTo(10000 - 1);
     });
 
-    it('should record commission on trade when using pluggable method', () => {
+    it('should record commission on trade when using jupiter_manual', () => {
       const engine = new StrategyEngine({
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.01 },
+        commissionMethod: 'jupiter_manual',
       });
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -673,10 +531,10 @@ describe('Commission Calculator', () => {
       const trades = engine.getTrades();
       expect(trades).toHaveLength(1);
       // Entry fills at 100, close fills at 110
-      // Exit commission: 110 * 10 * 0.01 = 11
-      expect(trades[0]!.commission).toBeCloseTo(11);
-      // Trade PnL = (110 - 100) * 10 - 11 = 89
-      expect(trades[0]!.pnl).toBeCloseTo(89);
+      // Exit tradeValue = 110 * 10 = 1100
+      // DEX fee (25 bps) = 1100 * 0.0025 = 2.75
+      // Network fee = 0.0015
+      expect(trades[0]!.commission).toBeCloseTo(2.7515, 4);
     });
 
     it('should enforce long-only when jupiter_ultra is selected', () => {
@@ -700,19 +558,6 @@ describe('Commission Calculator', () => {
       const order = engine.entry('Short', 'short', 10);
 
       expect(order).toBeUndefined();
-    });
-
-    it('should NOT enforce long-only when percent_fixed is selected', () => {
-      const engine = new StrategyEngine({
-        commissionMethod: 'percent_fixed',
-        commissionMethodSettings: { rate: 0.001 },
-      });
-
-      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
-      const order = engine.entry('Short', 'short', 10);
-
-      expect(order).toBeDefined();
-      expect(order!.direction).toBe('short');
     });
 
     it('should enforce long-only in order() method for jupiter_ultra', () => {

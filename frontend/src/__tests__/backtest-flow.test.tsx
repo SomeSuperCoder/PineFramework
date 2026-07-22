@@ -152,7 +152,8 @@ describe('Backtest Flow Integration', () => {
           scriptSource={STRATEGY_SOURCE}
         />
       );
-      const inputs = document.querySelectorAll('input[type="number"]');
+      // NumberInput uses inputMode="decimal" not type="number"
+      const inputs = document.querySelectorAll('input[inputmode="decimal"]');
       expect(inputs.length).toBeGreaterThan(0);
     });
 

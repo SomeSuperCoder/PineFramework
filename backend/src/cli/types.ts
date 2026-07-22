@@ -1,5 +1,5 @@
 export type CliCommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
-export type CliCommissionMethod = 'percent_fixed' | 'per_order_fixed' | 'jupiter_ultra' | 'jupiter_manual' | 'none';
+export type CliCommissionMethod = 'jupiter_ultra' | 'jupiter_manual';
 
 export interface CliOptions {
   scriptPath: string;

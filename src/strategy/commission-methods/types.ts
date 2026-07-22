@@ -21,24 +21,8 @@ export interface TradeContext {
 
 /** Identifies a built-in commission calculation method. */
 export type CommissionMethodId =
-  | 'percent_fixed'
-  | 'percent_commission'
-  | 'per_order_fixed'
   | 'jupiter_ultra'
-  | 'jupiter_manual'
-  | 'none';
-
-/** Settings for the percent_fixed method. */
-export interface PercentFixedSettings {
-  /** Commission rate as a fraction (e.g. 0.001 = 0.1%). */
-  rate: number;
-}
-
-/** Settings for the per_order_fixed method. */
-export interface PerOrderFixedSettings {
-  /** Flat cash amount charged per order. */
-  amount: number;
-}
+  | 'jupiter_manual';
 
 /**
  * Jupiter Ultra fee tier, matched to the actual Jupiter DEX fee schedule.
@@ -77,17 +61,8 @@ export interface JupiterManualSettings {
   dexFeeBps?: number;
 }
 
-/** Settings for the percent_commission method (legacy-compatible). */
-export interface PercentCommissionSettings {
-  /** Commission as a percentage (e.g., 0.1 = 0.1%), matching legacy commissionType: 'percent'. */
-  rate: number;
-}
-
-/** Union of all method-specific settings. */
+/** Union of method-specific settings — only Jupiter methods remain. */
 export type CommissionMethodSettings =
-  | PercentFixedSettings
-  | PercentCommissionSettings
-  | PerOrderFixedSettings
   | JupiterUltraSettings
   | JupiterManualSettings
   | Record<string, never>
