@@ -1,4 +1,8 @@
 export { registerTaBuiltins } from './ta-builtins.js';
+export { registerTaOverlap } from './ta/ta-overlap.js';
+export { registerTaMomentum } from './ta/ta-momentum.js';
+export { registerTaVolatility } from './ta/ta-volatility.js';
+export { registerTaStatistics } from './ta/ta-statistics.js';
 export { registerMathBuiltins } from './math-builtins.js';
 export { registerStrBuiltins } from './str-builtins.js';
 export { registerTimeBuiltins } from './time-builtins.js';
@@ -6,3 +10,9 @@ export { registerColorBuiltins } from './color-builtins.js';
 export { registerPlotBuiltins } from './plot-builtins.js';
 export { registerOtherBuiltins } from './other-builtins.js';
 export { registerStrategyBuiltins } from './strategy-builtins.js';
+export { registerInputBuiltins } from './input-builtins.js';
+export { registerTableBuiltins } from './table-builtins.js';
+export { registerDrawingBuiltins } from './drawing-builtins.js';
+export { registerAlertBuiltins } from './alert-builtins.js';
+export { registerArrayBuiltins } from './array-builtins.js';
+export { registerUtilityBuiltins } from './utility-builtins.js';

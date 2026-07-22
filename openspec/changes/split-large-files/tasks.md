@@ -1,7 +1,7 @@
 ## 1. Core Engine: Builtins (leaf modules, no dependents)
 
-- [ ] 1.1 Split `src/language/runtime/builtins/other-builtins.ts` (~718 lines) into domain modules under `src/language/runtime/builtins/`: `array-builtins.ts`, `color-builtins.ts`, `time-builtins.ts`, `math-builtins.ts`, `utility-builtins.ts`; update `execution-engine.ts` registration calls
-- [ ] 1.2 Split `src/language/runtime/builtins/ta-builtins.ts` (~543 lines) into per-indicator-group modules under `src/language/runtime/builtins/ta/`: `ta-overlap.ts` (sma, ema, hma, etc.), `ta-momentum.ts` (rsi, macd, stoch, etc.), `ta-volatility.ts` (atr, supertrend, etc.), `ta-volume.ts` (obv, etc.), `ta-statistics.ts` (correlation, etc.), `ta-math.ts` (highest, lowest, etc.); update `execution-engine.ts` registration calls
+- [x] 1.1 Split `src/language/runtime/builtins/other-builtins.ts` (~718 lines) into 6 domain modules: `input-builtins.ts`, `table-builtins.ts`, `drawing-builtins.ts`, `alert-builtins.ts`, `array-builtins.ts`, `utility-builtins.ts`; updated `execution-engine.ts` and `builtins/index.ts` barrel
+- [x] 1.2 Split `src/language/runtime/builtins/ta-builtins.ts` (~543 lines) into 4 domain modules under `src/language/runtime/builtins/ta/`: `ta-overlap.ts` (sma, ema, hma), `ta-momentum.ts` (rsi, crossover, crossunder, cross, change), `ta-volatility.ts` (sar, atr), `ta-statistics.ts` (highest, lowest, pivothigh, pivotlow, valuewhen); updated barrel
 
 ## 2. Core Engine: Expression Executor & Execution Engine
 

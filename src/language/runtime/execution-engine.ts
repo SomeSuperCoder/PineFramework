@@ -28,8 +28,13 @@ import {
   registerTimeBuiltins,
   registerColorBuiltins,
   registerPlotBuiltins,
-  registerOtherBuiltins,
   registerStrategyBuiltins,
+  registerInputBuiltins,
+  registerTableBuiltins,
+  registerDrawingBuiltins,
+  registerAlertBuiltins,
+  registerArrayBuiltins,
+  registerUtilityBuiltins,
 } from './builtins/index.js';
 import type {
   ExecutionContext,
@@ -357,7 +362,12 @@ export class ExecutionEngine {
     registerTimeBuiltins(this);
     registerColorBuiltins(this);
     registerPlotBuiltins(this);
-    registerOtherBuiltins(this);
+    registerInputBuiltins(this);
+    registerTableBuiltins(this);
+    registerDrawingBuiltins(this);
+    registerArrayBuiltins(this);
+    registerAlertBuiltins(this);
+    registerUtilityBuiltins(this);
   }
 
   private initializeGlobals(): void {
