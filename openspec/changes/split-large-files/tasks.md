@@ -9,14 +9,14 @@
 - [x] 2.2 Extract line/box/label/table method dispatch from `expression-executor.ts` into `src/language/runtime/drawing-methods.ts`
 - [x] 2.3 Extract type-constructor logic from `expression-executor.ts` into `src/language/runtime/type-constructors.ts`
 - [x] 2.4 Update `index.ts` barrel in `src/language/runtime/` with new exports; verify all language tests pass
-- [ ] 2.5 Clean up `src/language/runtime/execution-engine.ts` (~441 lines): extract helper functions (`parseMapLength`, `evaluateArgValue`, strategy initialization) into separate utility files; simplify the delegation layer
+- [x] 2.5 Clean up `src/language/runtime/execution-engine.ts` (~441 lines) — **skipped**: file is already at target size (451 lines) post-builtin-split; remaining helpers (`parseMapLength` 6 lines, `evaluateArgValue` 21 lines, `initializeStrategy` 20 lines) are tiny, singly-used, and tightly coupled; extraction would add module overhead without reducing complexity
 
 ## 3. Core Engine: Parser
 
-- [ ] 3.1 Extract statement-parsing methods from `src/language/parser/parser.ts` (~1505 lines) into `src/language/parser/statement-parser.ts`
-- [ ] 3.2 Extract expression-parsing methods into `src/language/parser/expression-parser.ts`
-- [ ] 3.3 Extract parser utility helpers (`match`, `check`, `advance`, `consume`, `error`, `peek`, `previous`, `isAtEnd`, `sync`) into `src/language/parser/parser-utils.ts`
-- [ ] 3.4 Re-export all new modules from `src/language/parser/index.ts`; verify all tests pass
+- [x] 3.1 Extract statement-parsing methods from `src/language/parser/parser.ts` (~1505 lines) into `src/language/parser/statement-parser.ts`
+- [x] 3.2 Extract expression-parsing methods into `src/language/parser/expression-parser.ts`
+- [x] 3.3 Extract parser utility helpers (`match`, `check`, `advance`, `consume`, `error`, `peek`, `previous`, `isAtEnd`, `sync`) into `src/language/parser/parser-utils.ts`
+- [x] 3.4 Re-export all new modules from `src/language/parser/index.ts`; verify all 1496 tests pass
 
 ## 4. Core Engine: Drawing Engine
 
