@@ -48,12 +48,22 @@ export interface Order {
   slippage: number;
   commission: number;
   ocaGroup?: string;
+  trailPrice?: number;
+  trailOffset?: number;
 }
 
 export interface FilledOrder extends Order {
   fillPrice: number;
   fillTime: number;
   fillBarIndex: number;
+}
+
+export interface PositionLot {
+  entryName: string;
+  quantity: number;
+  avgPrice: number;
+  timestamp: number;
+  barIndex: number;
 }
 
 export interface Position {
@@ -68,6 +78,8 @@ export interface Position {
   pnlPercent: number;
   commission: number;
   unrealizedPnl: number;
+  /** FIFO queue of entry lots for tracking position composition (used by from_entry). */
+  lots: PositionLot[];
 }
 
 export interface Trade {
@@ -160,6 +172,15 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   marketFillPrice: 'open',
 };
 
+export interface TrailingStopState {
+  orderId: string;
+  trailOffset?: number;
+  trailPrice?: number;
+  highestPrice: number;
+  stopPrice: number;
+  isActivated: boolean;
+}
+
 export interface StrategyMarker {
   type: 'entry' | 'exit' | 'order' | 'close' | 'close_all' | 'cancel' | 'cancel_all';
   orderId: string;
@@ -194,11 +215,15 @@ export class StrategyEngine {
   private commissionConfig: CommissionConfig | undefined;
   private _lastMarkerCount: number = 0;
   private _nextOrderId: number = 0;
+  private _nextOcaGroupId: number = 0;
 
   // Track best/worst prices during an open position for MAE/MFE calculation.
   // These are updated on every bar while a position is open.
   private _tradeHighPrice: number = 0;
   private _tradeLowPrice: number = 0;
+
+  // Trailing stop state, keyed by order ID.
+  private trailingStops: Map<string, TrailingStopState> = new Map();
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -230,6 +255,7 @@ export class StrategyEngine {
       pnlPercent: 0,
       commission: 0,
       unrealizedPnl: 0,
+      lots: [],
     };
     this.pendingOrders = [];
     this.filledOrders = [];
@@ -410,6 +436,9 @@ export class StrategyEngine {
     stopPrice?: number,
     limitPrice?: number,
     comment?: string,
+    fromEntry?: string,
+    trailPrice?: number,
+    trailOffset?: number,
   ): Order | undefined {
     let exitDirection: OrderDirection;
     let exitQuantity: number;
@@ -417,7 +446,18 @@ export class StrategyEngine {
 
     if (this.position.direction !== 'flat' && this.position.quantity > 0) {
       exitDirection = this.position.direction;
-      exitQuantity = Math.min(quantity, this.position.quantity);
+
+      // If fromEntry is specified, compute quantity from matching lots
+      if (fromEntry && this.position.lots.length > 0) {
+        const matchingQty = this.position.lots
+          .filter((l) => l.entryName === fromEntry)
+          .reduce((sum, l) => sum + l.quantity, 0);
+        if (matchingQty <= 0) return undefined;
+        exitQuantity = Math.min(quantity === this.position.quantity ? matchingQty : quantity, matchingQty);
+      } else {
+        exitQuantity = Math.min(quantity, this.position.quantity);
+      }
+
       exitAction = this.position.direction === 'long' ? 'sell' : 'buy';
     } else {
       const pendingEntry = this.pendingOrders.find((o) => o.type === 'market');
@@ -429,8 +469,9 @@ export class StrategyEngine {
 
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
+    const hasTrail = (trailPrice !== undefined && trailPrice > 0) || (trailOffset !== undefined && trailOffset > 0);
     const orderType: OrderType =
-      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : 'market';
+      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : hasTrail ? 'stop' : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -451,6 +492,11 @@ export class StrategyEngine {
       barIndex: this.barIndex,
       slippage: this.config.slippage,
       commission: this.config.commission,
+      ocaGroup: orderType !== 'market' && this.position.direction !== 'flat'
+        ? `oca_${this.position.entryName}`
+        : undefined,
+      trailPrice,
+      trailOffset,
     };
 
     if (orderType === 'market') {
@@ -574,8 +620,13 @@ export class StrategyEngine {
   }
 
   saveState(): object {
+    const trailingStops: Record<string, TrailingStopState> = {};
+    for (const [key, val] of this.trailingStops) {
+      trailingStops[key] = { ...val };
+    }
     return {
-      position: { ...this.position },
+      position: { ...this.position, lots: this.position.lots.map((l) => ({ ...l })) },
+      trailingStops,
       pendingOrders: this.pendingOrders.map((o) => ({ ...o })),
       filledOrders: this.filledOrders.map((o) => ({ ...o })),
       trades: this.trades.map((t) => ({ ...t })),
@@ -590,6 +641,7 @@ export class StrategyEngine {
   restoreState(state: object): void {
     const s = state as {
       position: Position;
+      trailingStops?: Record<string, TrailingStopState>;
       pendingOrders: Order[];
       filledOrders: FilledOrder[];
       trades: Trade[];
@@ -599,8 +651,11 @@ export class StrategyEngine {
       maxDrawdown: number;
       entries: number;
     };
-    this.position = { ...s.position };
+    this.position = { ...s.position, lots: (s.position.lots || []).map((l) => ({ ...l })) };
     this.pendingOrders = s.pendingOrders.map((o) => ({ ...o }));
+    this.trailingStops = new Map(
+      Object.entries(s.trailingStops ?? {}).map(([k, v]) => [k, { ...v }]),
+    );
     this.filledOrders = s.filledOrders.map((o) => ({ ...o }));
     this.trades = s.trades.map((t) => ({ ...t }));
     this.markers = s.markers.map((m) => ({ ...m }));
@@ -752,10 +807,19 @@ export class StrategyEngine {
         pnlPercent: 0,
         commission,
         unrealizedPnl: 0,
+        lots: [{
+          entryName,
+          quantity,
+          avgPrice: price,
+          timestamp: this.timestamp,
+          barIndex: this.barIndex,
+        }],
       };
       // Initialize trade excursion tracking at entry price
       this._tradeHighPrice = price;
       this._tradeLowPrice = price;
+      // Clear any stale trailing stop state from prior position
+      this.trailingStops.clear();
     } else {
       const totalQuantity = this.position.quantity + quantity;
       // Two-product weighted average: compute in two passes to reduce floating-point drift
@@ -764,6 +828,14 @@ export class StrategyEngine {
       this.position.avgPrice = (oldContribution + newContribution) / totalQuantity;
       this.position.quantity = totalQuantity;
       this.position.commission += commission;
+      // Track the new lot for FIFO position composition
+      this.position.lots.push({
+        entryName,
+        quantity,
+        avgPrice: price,
+        timestamp: this.timestamp,
+        barIndex: this.barIndex,
+      });
     }
   }
 
@@ -830,7 +902,24 @@ export class StrategyEngine {
     this.equity += pnl - commission;
 
     this.position.quantity -= closeQuantity;
+
+    // Pop lots FIFO
+    let remaining = closeQuantity;
+    while (remaining > 0 && this.position.lots.length > 0) {
+      const lot = this.position.lots[0]!;
+      if (lot.quantity <= remaining) {
+        remaining -= lot.quantity;
+        this.position.lots.shift();
+      } else {
+        lot.quantity -= remaining;
+        remaining = 0;
+      }
+    }
     if (this.position.quantity <= 0) {
+      // Cancel any remaining pending orders from this position's OCA group
+      if (this.position.entryName) {
+        this.cancelOcaGroup(`oca_${this.position.entryName}`);
+      }
       this.entries = 0;
       this.position = {
         symbol: '',
@@ -844,6 +933,7 @@ export class StrategyEngine {
         pnlPercent: 0,
         commission: 0,
         unrealizedPnl: 0,
+        lots: [],
       };
     }
 
@@ -877,6 +967,7 @@ export class StrategyEngine {
     this.low = low;
 
     this.fillPendingMarketOrders(open, high, low, close);
+    this.updateTrailingStops(high, low);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
 
@@ -966,6 +1057,10 @@ export class StrategyEngine {
           ? (order.limitPrice ?? order.price)
           : (order.stopPrice ?? order.price);
       this.fillOrder(order, fillPrice);
+      // Cancel sibling OCA orders after a fill
+      if (order.ocaGroup) {
+        this.cancelOcaSiblings(order.ocaGroup);
+      }
     }
 
     for (const order of stopLimitTriggers) {
@@ -973,6 +1068,10 @@ export class StrategyEngine {
       const limitHit = order.action === 'buy' ? low <= limitPrice : high >= limitPrice;
       if (limitHit) {
         this.fillOrder(order, limitPrice);
+        // Cancel sibling OCA orders after a fill
+        if (order.ocaGroup) {
+          this.cancelOcaSiblings(order.ocaGroup);
+        }
       } else {
         const limitOrder: Order = {
           ...order,
@@ -984,6 +1083,156 @@ export class StrategyEngine {
         };
         this.pendingOrders.push(limitOrder);
       }
+    }
+  }
+
+  /** Update trailing stop prices for pending orders with trail parameters. */
+  private updateTrailingStops(high: number, low: number): void {
+    const mintick = 0.01;
+
+    for (const order of this.pendingOrders) {
+      if (order.trailOffset === undefined && order.trailPrice === undefined) continue;
+
+      let state = this.trailingStops.get(order.id);
+
+      if (!state) {
+        // Initialize trailing stop state
+        const entryPrice = this.position.avgPrice;
+        let activationPrice: number;
+        let initialStop: number;
+
+        if (order.trailOffset !== undefined && order.trailOffset > 0) {
+          // trail_offset: distance in ticks from extreme price
+          activationPrice = this.position.direction === 'long'
+            ? entryPrice + order.trailOffset * mintick
+            : entryPrice - order.trailOffset * mintick;
+          initialStop = this.position.direction === 'long'
+            ? activationPrice - order.trailOffset * mintick
+            : activationPrice + order.trailOffset * mintick;
+        } else if (order.trailPrice !== undefined && order.trailPrice > 0) {
+          // trail_price: absolute offset from market
+          activationPrice = this.position.direction === 'long'
+            ? entryPrice + order.trailPrice
+            : entryPrice - order.trailPrice;
+          initialStop = this.position.direction === 'long'
+            ? activationPrice - order.trailPrice
+            : activationPrice + order.trailPrice;
+        } else {
+          continue;
+        }
+
+        state = {
+          orderId: order.id,
+          trailOffset: order.trailOffset,
+          trailPrice: order.trailPrice,
+          highestPrice: this.position.direction === 'long' ? entryPrice : entryPrice,
+          stopPrice: initialStop,
+          isActivated: false,
+        };
+        this.trailingStops.set(order.id, state);
+      }
+
+      // Check activation
+      if (!state.isActivated) {
+        // Compute the activation price: entry price + favorable move
+        const actPrice = this.position.direction === 'long'
+          ? this.position.avgPrice + (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0))
+          : this.position.avgPrice - (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0));
+        const activated = this.position.direction === 'long'
+          ? high >= actPrice
+          : low <= actPrice;
+        if (activated) {
+          state.isActivated = true;
+          state.highestPrice = this.position.direction === 'long' ? high : low;
+        }
+      }
+
+      if (state.isActivated) {
+        // Update highest/lowest price seen
+        if (this.position.direction === 'long') {
+          if (high > state.highestPrice) state.highestPrice = high;
+        } else {
+          if (low < state.highestPrice) state.highestPrice = low;
+        }
+
+        // Compute new stop price
+        let newStop: number;
+        if (state.trailOffset !== undefined && state.trailOffset > 0) {
+          newStop = this.position.direction === 'long'
+            ? state.highestPrice - state.trailOffset * mintick
+            : state.highestPrice + state.trailOffset * mintick;
+        } else if (state.trailPrice !== undefined && state.trailPrice > 0) {
+          newStop = this.position.direction === 'long'
+            ? this.currentPrice - state.trailPrice
+            : this.currentPrice + state.trailPrice;
+        } else {
+          continue;
+        }
+
+        // One-way ratchet: stop only moves in favorable direction
+        const stopImproved = this.position.direction === 'long'
+          ? newStop > state.stopPrice
+          : newStop < state.stopPrice;
+
+        if (stopImproved) {
+          state.stopPrice = newStop;
+          // Update the pending order's stopPrice
+          order.stopPrice = newStop;
+        }
+      }
+    }
+  }
+
+  /** Cancel all pending orders in the given OCA group except ones already in the process of being filled. */
+  private cancelOcaSiblings(ocaGroup: string): void {
+    const cancelled: Order[] = [];
+    this.pendingOrders = this.pendingOrders.filter((o) => {
+      if (o.ocaGroup === ocaGroup) {
+        cancelled.push(o);
+        return false;
+      }
+      return true;
+    });
+    for (const order of cancelled) {
+      this.markers.push({
+        type: 'cancel',
+        orderId: order.id,
+        name: order.entryName,
+        direction: order.direction,
+        action: order.action,
+        quantity: order.quantity,
+        price: order.price,
+        barIndex: this.barIndex,
+        timestamp: this.timestamp,
+        color: '#999999',
+      });
+    }
+  }
+
+  /** Cancel all pending orders in a specific OCA group. */
+  private cancelOcaGroup(ocaGroup: string): void {
+    if (!ocaGroup) return;
+    const cancelled: Order[] = [];
+    this.pendingOrders = this.pendingOrders.filter((o) => {
+      if (o.ocaGroup === ocaGroup) {
+        cancelled.push(o);
+        return false;
+      }
+      return true;
+    });
+    for (const order of cancelled) {
+      this.markers.push({
+        type: 'cancel',
+        orderId: order.id,
+        name: order.entryName,
+        direction: order.direction,
+        action: order.action,
+        quantity: order.quantity,
+        price: order.price,
+        barIndex: this.barIndex,
+        timestamp: this.timestamp,
+        color: '#999999',
+      });
     }
   }
 
@@ -1033,6 +1282,10 @@ export class StrategyEngine {
 
   private generateOrderId(): string {
     return `order_${++this._nextOrderId}`;
+  }
+
+  private generateOcaGroupId(): string {
+    return `oca_${++this._nextOcaGroupId}`;
   }
 
   getMaxDrawdown(): number {
@@ -1140,6 +1393,7 @@ export class StrategyEngine {
 
   reset(): void {
     this._nextOrderId = 0;
+    this._nextOcaGroupId = 0;
     this.position = {
       symbol: '',
       direction: 'flat',
@@ -1152,12 +1406,14 @@ export class StrategyEngine {
       pnlPercent: 0,
       commission: 0,
       unrealizedPnl: 0,
+      lots: [],
     };
     this.pendingOrders = [];
     this.filledOrders = [];
     this.trades = [];
     this.markers = [];
     this._lastMarkerCount = 0;
+    this.trailingStops.clear();
     this.equity = this.config.initialCapital;
     this.peakEquity = this.equity;
     this.maxDrawdown = 0;

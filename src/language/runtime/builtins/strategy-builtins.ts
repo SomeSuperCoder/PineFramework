@@ -75,29 +75,78 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
     const restArgs = namedArgs ? rest.slice(0, -1) : rest;
 
     const exitName = typeof name === 'string' ? name : 'exit';
-    const qty =
-      typeof restArgs[0] === 'number'
-        ? restArgs[0]
-        : typeof namedArgs?.qty === 'number'
-          ? namedArgs.qty
-          : undefined;
+    const pos = eng.strategyEngine.getPosition();
+    const mintick = 0.01; // Default tick size (crypto pairs typically 0.01)
+
+    // --- Resolve quantity ---
+    let qty: number | undefined;
+    if (typeof restArgs[0] === 'number') {
+      qty = restArgs[0];
+    } else if (typeof namedArgs?.qty === 'number') {
+      qty = namedArgs.qty;
+    }
+    // qty_percent: resolve to absolute quantity from position size
+    if (namedArgs && typeof namedArgs.qty_percent === 'number' && pos.direction !== 'flat') {
+      const percentQty = Math.floor(pos.quantity * (namedArgs.qty_percent as number) / 100);
+      if (qty === undefined || percentQty < qty) {
+        qty = percentQty;
+      }
+    }
+
     const pr = typeof restArgs[1] === 'number' ? restArgs[1] : 0;
-    const sp =
-      typeof restArgs[2] === 'number'
-        ? restArgs[2]
-        : typeof namedArgs?.stop === 'number'
-          ? namedArgs.stop
-          : undefined;
-    const lp =
-      typeof restArgs[3] === 'number'
-        ? restArgs[3]
-        : typeof namedArgs?.limit === 'number'
-          ? namedArgs.limit
-          : undefined;
+
+    // --- Resolve stop price ---
+    let sp: number | undefined;
+    if (typeof restArgs[2] === 'number') {
+      sp = restArgs[2];
+    } else if (typeof namedArgs?.stop === 'number') {
+      sp = namedArgs.stop;
+    }
+    // loss: resolve ticks to absolute price
+    if (namedArgs && typeof namedArgs.loss === 'number' && pos.direction !== 'flat' && pos.avgPrice > 0) {
+      const lossPrice = pos.direction === 'long'
+        ? pos.avgPrice - (namedArgs.loss as number) * mintick
+        : pos.avgPrice + (namedArgs.loss as number) * mintick;
+      // Use the stop that triggers first: higher for long, lower for short
+      if (sp === undefined || (pos.direction === 'long' ? lossPrice > sp : lossPrice < sp)) {
+        sp = lossPrice;
+      }
+    }
+
+    // --- Resolve limit price ---
+    let lp: number | undefined;
+    if (typeof restArgs[3] === 'number') {
+      lp = restArgs[3];
+    } else if (typeof namedArgs?.limit === 'number') {
+      lp = namedArgs.limit;
+    }
+    // profit: resolve ticks to absolute price
+    if (namedArgs && typeof namedArgs.profit === 'number' && pos.direction !== 'flat' && pos.avgPrice > 0) {
+      const profitPrice = pos.direction === 'long'
+        ? pos.avgPrice + (namedArgs.profit as number) * mintick
+        : pos.avgPrice - (namedArgs.profit as number) * mintick;
+      // Use the limit that triggers first: lower for long, higher for short
+      if (lp === undefined || (pos.direction === 'long' ? profitPrice < lp : profitPrice > lp)) {
+        lp = profitPrice;
+      }
+    }
+
     const cm =
       (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ??
       (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
-    eng.strategyEngine.exit(exitName, qty, pr, sp, lp, cm);
+
+    // --- Parse new named params ---
+    const fromEntry = namedArgs && typeof namedArgs.from_entry === 'string'
+      ? (namedArgs.from_entry as string)
+      : undefined;
+    const trailPrice = namedArgs && typeof namedArgs.trail_price === 'number'
+      ? (namedArgs.trail_price as number)
+      : undefined;
+    const trailOffset = namedArgs && typeof namedArgs.trail_offset === 'number'
+      ? (namedArgs.trail_offset as number)
+      : undefined;
+
+    eng.strategyEngine.exit(exitName, qty, pr, sp, lp, cm, fromEntry, trailPrice, trailOffset);
     return NA;
   });
 
