@@ -238,6 +238,8 @@ export interface BacktestResultResponse {
   buyHoldReturn: number;
 }
 
+export type DateRangeMode = 'days_back' | 'traditional';
+
 export type CommissionMethodId = 'percent_fixed' | 'per_order_fixed' | 'jupiter_ultra' | 'jupiter_manual' | 'none';
 
 export interface BacktestConfig {
