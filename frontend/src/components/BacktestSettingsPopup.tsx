@@ -20,7 +20,6 @@ const defaultConfig: BacktestConfig = {
 
 interface UserSettings {
   initialCapital: number;
-  commission: number;
   daysBack: number;
   dateRangeMode: DateRangeMode;
   startDate: string;
@@ -50,22 +49,14 @@ function saveUserSettings(settings: UserSettings): void {
 }
 
 function buildConfig(scriptParams: Partial<BacktestConfig>, user: UserSettings): BacktestConfig {
-  const base = {
+  return {
     ...defaultConfig,
     ...scriptParams,
     initialCapital: user.initialCapital,
-    commission: user.commission,
+    commission: 0,
+    commissionMethod: user.commissionMethod ?? 'jupiter_manual',
+    commissionMethodSettings: user.commissionMethodSettings ?? null,
   };
-
-  if (user.commissionMethod) {
-    return {
-      ...base,
-      commissionMethod: user.commissionMethod,
-      commissionMethodSettings: user.commissionMethodSettings ?? null,
-    };
-  }
-
-  return base;
 }
 
 export interface BacktestSettingsPopupProps {
@@ -83,29 +74,28 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
   const scriptParams = extractStrategyParams(scriptSource);
 
   const [initialCapital, setInitialCapital] = useState<number>(() => saved?.initialCapital ?? scriptParams.initialCapital ?? defaultConfig.initialCapital);
-  const [commission, setCommission] = useState<number>(() => saved?.commission ?? scriptParams.commission ?? defaultConfig.commission);
   const [daysBack, setDaysBack] = useState<number>(() => saved?.daysBack ?? 30);
   const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>(() => saved?.dateRangeMode ?? 'days_back');
   const [startDate, setStartDate] = useState(() => saved?.startDate ?? '');
   const [endDate, setEndDate] = useState(() => saved?.endDate ?? '');
 
-  const [commissionMethod, setCommissionMethod] = useState<CommissionMethodId | undefined>(
-    () => saved?.commissionMethod ?? undefined,
+  const [commissionMethod, setCommissionMethod] = useState<CommissionMethodId>(
+    () => saved?.commissionMethod ?? 'jupiter_manual',
   );
   const [commissionMethodSettings, setCommissionMethodSettings] = useState<Record<string, unknown> | null>(
-    () => saved?.commissionMethodSettings ?? null,
+    () => saved?.commissionMethodSettings ?? { dexFeeBps: 25, solPriceUsd: 150 },
   );
 
   const [barsExceedLimit, setBarsExceedLimit] = useState(false);
 
   const persist = useCallback((updates: Partial<UserSettings>) => {
     const current: UserSettings = {
-      initialCapital, commission, daysBack, dateRangeMode, startDate, endDate,
+      initialCapital, daysBack, dateRangeMode, startDate, endDate,
       commissionMethod, commissionMethodSettings,
       ...updates,
     };
     saveUserSettings(current);
-  }, [initialCapital, commission, daysBack, dateRangeMode, startDate, endDate, commissionMethod, commissionMethodSettings]);
+  }, [initialCapital, daysBack, dateRangeMode, startDate, endDate, commissionMethod, commissionMethodSettings]);
 
   const handleRun = useCallback(() => {
     let effectiveStartDate = startDate || undefined;
@@ -120,11 +110,11 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
     }
 
     const config = buildConfig(scriptParams, {
-      initialCapital, commission, daysBack, dateRangeMode, startDate, endDate,
+      initialCapital, daysBack, dateRangeMode, startDate, endDate,
       commissionMethod, commissionMethodSettings,
     });
     onRun(config, effectiveStartDate, effectiveEndDate);
-  }, [scriptParams, initialCapital, commission, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
+  }, [scriptParams, initialCapital, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
 
   if (!isOpen) return null;
 
@@ -200,12 +190,10 @@ export function BacktestSettingsPopup({ isOpen, onClose, onRun, scriptSource, ti
             />
 
             <BacktestCommissionSettings
-              commission={commission}
-              onCommissionChange={(v) => { setCommission(v); persist({ commission: v }); }}
               commissionMethod={commissionMethod}
-              onCommissionMethodChange={(method) => { setCommissionMethod(method); }}
+              onCommissionMethodChange={setCommissionMethod}
               commissionMethodSettings={commissionMethodSettings}
-              onCommissionMethodSettingsChange={(settings) => { setCommissionMethodSettings(settings); }}
+              onCommissionMethodSettingsChange={setCommissionMethodSettings}
               symbol={symbol}
             />
           </div>

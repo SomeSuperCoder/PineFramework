@@ -47,19 +47,17 @@ describe('BacktestSettingsPopup', () => {
       const options = Array.from(select.options).map((o) => o.text);
       expect(options).toContain('Jupiter Ultra');
       expect(options).toContain('Jupiter (Basic Swap)');
-      expect(options).toContain('Legacy (from strategy)');
     });
 
-    it('should default to legacy when no saved settings', () => {
+    it('should default to jupiter_manual when no saved settings', () => {
       const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
       const select = container.querySelector('select') as HTMLSelectElement;
-      expect(select.value).toBe('');
+      expect(select.value).toBe('jupiter_manual');
     });
 
     it('should restore saved method from localStorage (backward compat with rate)', () => {
       localStorage.setItem('pine-backtest-settings', JSON.stringify({
         initialCapital: 10000,
-        commission: 0,
         daysBack: 30,
         dateRangeMode: 'days_back',
         startDate: '',
@@ -76,7 +74,6 @@ describe('BacktestSettingsPopup', () => {
     it('should restore saved method with pairCategory from localStorage', () => {
       localStorage.setItem('pine-backtest-settings', JSON.stringify({
         initialCapital: 10000,
-        commission: 0,
         daysBack: 30,
         dateRangeMode: 'days_back',
         startDate: '',
@@ -126,17 +123,6 @@ describe('BacktestSettingsPopup', () => {
       expect(screen.getByText(/Realistic fee model/)).toBeDefined();
     });
 
-    it('should show legacy commission value when no method selected', () => {
-      render(<BacktestSettingsPopup {...defaultProps} />);
-      expect(screen.getByText('Legacy Commission Value')).toBeDefined();
-    });
-
-    it('should hide legacy commission when method is selected', () => {
-      const { container } = render(<BacktestSettingsPopup {...defaultProps} />);
-      selectMethod(container, 'jupiter_ultra');
-
-      expect(screen.queryByText('Legacy Commission Value')).toBeNull();
-    });
   });
 
   describe('persistence', () => {
@@ -175,7 +161,7 @@ describe('BacktestSettingsPopup', () => {
       expect(config.commissionMethodSettings).toEqual(expect.objectContaining({ dexFeeBps: 25, solPriceUsd: 150 }));
     });
 
-    it('should not include commissionMethod when legacy is selected', async () => {
+    it('should always include commissionMethod in config (defaults to jupiter_manual)', async () => {
       const user = userEvent.setup();
       const onRun = vi.fn();
       render(<BacktestSettingsPopup {...defaultProps} onRun={onRun} />);
@@ -185,7 +171,7 @@ describe('BacktestSettingsPopup', () => {
 
       expect(onRun).toHaveBeenCalledTimes(1);
       const config = onRun.mock.calls[0][0];
-      expect(config.commissionMethod).toBeUndefined();
+      expect(config.commissionMethod).toBe('jupiter_manual');
     });
   });
 });

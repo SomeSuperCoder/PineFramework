@@ -174,7 +174,7 @@ describe('Backtest Flow Integration', () => {
       expect(onRun).toHaveBeenCalledTimes(1);
       const [config] = onRun.mock.calls[0];
       expect(config.initialCapital).toBe(10000);
-      expect(config.commission).toBe(0.1);
+      expect(config.commissionMethod).toBe('jupiter_manual');
       expect(config.pyramiding).toBe(2);
     });
 

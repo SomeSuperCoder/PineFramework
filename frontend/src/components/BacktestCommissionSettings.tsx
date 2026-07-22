@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NumberInput } from './NumberInput.js';
 import type { CommissionMethodId } from '../types';
+// NumberInput is used by JupiterBasicConfig and JupiterUltraConfig sub-components
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
   {
@@ -367,18 +368,14 @@ function JupiterUltraConfig({
 // ── Main exported component ──
 
 export interface BacktestCommissionSettingsProps {
-  commission: number;
-  onCommissionChange: (v: number) => void;
-  commissionMethod: CommissionMethodId | undefined;
-  onCommissionMethodChange: (method: CommissionMethodId | undefined) => void;
+  commissionMethod: CommissionMethodId;
+  onCommissionMethodChange: (method: CommissionMethodId) => void;
   commissionMethodSettings: Record<string, unknown> | null;
   onCommissionMethodSettingsChange: (settings: Record<string, unknown> | null) => void;
   symbol?: string;
 }
 
 export function BacktestCommissionSettings({
-  commission,
-  onCommissionChange,
   commissionMethod,
   onCommissionMethodChange,
   commissionMethodSettings,
@@ -391,27 +388,14 @@ export function BacktestCommissionSettings({
     onCommissionMethodSettingsChange(settings);
   };
 
-  const handleSettingChange = (key: string, value: unknown) => {
-    const updated = { ...(commissionMethodSettings ?? {}), [key]: value };
-    onCommissionMethodSettingsChange(updated);
-  };
-
   return (
     <div>
       <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
         Commission Method
       </label>
       <select
-        value={commissionMethod ?? ''}
-        onChange={(e) => {
-          const val = e.target.value as CommissionMethodId | '';
-          if (val) {
-            handleMethodChange(val);
-          } else {
-            onCommissionMethodChange(undefined);
-            onCommissionMethodSettingsChange(null);
-          }
-        }}
+        value={commissionMethod}
+        onChange={(e) => handleMethodChange(e.target.value as CommissionMethodId)}
         style={{
           width: '100%',
           padding: '6px',
@@ -421,39 +405,15 @@ export function BacktestCommissionSettings({
           borderRadius: '4px',
         }}
       >
-        <option value="">Legacy (from strategy)</option>
         {COMMISSION_METHODS.map((m) => (
           <option key={m.id} value={m.id}>
             {m.label}
           </option>
         ))}
       </select>
-      {commissionMethod && (
-        <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-          {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
-        </div>
-      )}
-
-      {commissionMethod === undefined ? (
-        <div
-          style={{
-            marginTop: '8px',
-            padding: '10px 12px',
-            background: '#3a1a00',
-            border: '1px solid #ff6b00',
-            borderRadius: '6px',
-            fontSize: '12px',
-            color: '#ff8c00',
-            lineHeight: 1.5,
-          }}
-        >
-          <strong>⚠️ UNREALISTIC RESULTS</strong>
-          <br />
-          No commission method selected — using legacy strategy parameters. The live trading bot
-          executes swaps via <strong>Jupiter</strong> (Router path — 0% Jupiter commission). Select{' '}
-          <strong>Jupiter (Basic Swap)</strong> to match real trading conditions.
-        </div>
-      ) : null}
+      <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+        {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
+      </div>
 
       {commissionMethod === 'jupiter_ultra' && (
         <div style={{ marginTop: '8px' }}>
@@ -471,18 +431,6 @@ export function BacktestCommissionSettings({
             settings={(commissionMethodSettings as Record<string, unknown>) ?? {}}
             onSettingsChange={(newSettings) => onCommissionMethodSettingsChange(newSettings)}
           />
-        </div>
-      )}
-
-      {!commissionMethod && (
-        <div style={{ marginTop: '8px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-            Legacy Commission Value
-          </label>
-          <NumberInput value={commission} onChange={onCommissionChange} />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
-            Used with commission_type from strategy() declaration
-          </div>
         </div>
       )}
     </div>
