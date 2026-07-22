@@ -20,14 +20,14 @@
 
 ## 4. Core Engine: Drawing Engine
 
-- [ ] 4.1 Create `src/rendering/primitives/` directory with barrel `index.ts`
-- [ ] 4.2 Extract shape/candlestick rendering from `src/rendering/drawing-engine.ts` (~862 lines) into `src/rendering/primitives/candles.ts`
-- [ ] 4.3 Extract label rendering into `src/rendering/primitives/labels.ts`
-- [ ] 4.4 Extract line/path rendering into `src/rendering/primitives/lines.ts`
-- [ ] 4.5 Extract box/rectangle rendering into `src/rendering/primitives/boxes.ts`
-- [ ] 4.6 Extract table rendering into `src/rendering/primitives/tables.ts`
-- [ ] 4.7 Extract grid/axes rendering into `src/rendering/primitives/axes.ts`
-- [ ] 4.8 Update `drawing-engine.ts` to delegate to primitives; verify all tests pass
+- [x] 4.1 Create `src/rendering/primitives/` directory with barrel `index.ts`
+- [x] 4.2 Extract drawing types/interfaces into `src/rendering/primitives/drawing-types.ts` (LineObject, BoxObject, LabelObject, TableObject, etc.)
+- [x] 4.3 Extract label CRUD operations into `src/rendering/primitives/label-operations.ts` (labelNew/Copy/Get/Set/Delete)
+- [x] 4.4 Extract line CRUD operations into `src/rendering/primitives/line-operations.ts` (lineNew/Copy/Get/Set/Delete)
+- [x] 4.5 Extract box CRUD operations into `src/rendering/primitives/box-operations.ts` (boxNew/Copy/Get/Set/Delete)
+- [x] 4.6 Extract table CRUD operations into `src/rendering/primitives/table-operations.ts` (tableNew/Clear/MergeCells/CellSet/Delete)
+- [x] 4.7 Extract linefill/polyline operations into `src/rendering/primitives/linefill-operations.ts`
+- [x] 4.8 Update `drawing-engine.ts` (862→210 lines) to delegate to primitives; all 1496 tests pass
 
 ## 5. Core Engine: Strategy Engine
 
