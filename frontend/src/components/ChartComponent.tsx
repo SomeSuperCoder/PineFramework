@@ -334,7 +334,9 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     for (const { result } of allResults) {
       if (!result.barColors) continue;
       for (const bc of result.barColors) {
-        const barIdx = timeToIndex.get(bc.time);
+        // bc.time is in milliseconds (from engine), data[i].time is in seconds (from toCandleData)
+        const timeSec = Math.floor(bc.time / 1000);
+        const barIdx = timeToIndex.get(timeSec);
         if (barIdx === undefined) continue;
         const targetIdx = bc.offset !== undefined ? Math.min(Math.max(0, barIdx + bc.offset), data.length - 1) : barIdx;
         barColorsMap.set(targetIdx, { body: bc.body, wick: bc.wick, border: bc.border });
