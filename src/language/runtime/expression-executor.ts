@@ -603,11 +603,16 @@ export function executeIndexExpression(
   context: ExecutionContext,
   dispatch: (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext) => PineValue,
 ): PineValue {
-  const obj = dispatch(expr.object, scope, context);
+  // Dispatch the index first — it's needed in all code paths and has no
+  // side-effect from a "current value is NA" ambiguity.
   const index = dispatch(expr.index, scope, context);
+  if (isNa(index)) return NA;
 
-  if (isNa(obj) || isNa(index)) return NA;
-
+  // Handle Identifier objects BEFORE generic obj dispatch, because
+  // dispatch(expr.object) returns the CURRENT value — if that value is
+  // NA (e.g. after "float sup = na" at bar N, sup.getRelative(0) = na),
+  // the naive isNa(obj) check would bail early before we ever get to
+  // the binding history lookup that sup[1] needs.
   if (expr.object.kind === 'Identifier') {
     const objName = expr.object.name;
     if (objName === 'close' || objName === 'open' || objName === 'high' || objName === 'low' || objName === 'volume') {
@@ -628,6 +633,10 @@ export function executeIndexExpression(
     const binding = resolveVariable(scope, objName);
     if (binding) return binding.series.getRelative(index as number);
   }
+
+  // For non-identifier objects, dispatch the object and check NA
+  const obj = dispatch(expr.object, scope, context);
+  if (isNa(obj)) return NA;
 
   // Handle indexing on TA function calls like ta.atr(14)[1]
   if (expr.object.kind === 'CallExpression' && expr.object.callee.kind === 'MemberExpression') {
