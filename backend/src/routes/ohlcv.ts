@@ -27,7 +27,7 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         return;
       }
 
-      // L1: in-memory cache
+      // L1: in-memory cache (only for non-paginated recent-bar requests)
       if (!end) {
         const cached = cache.get(symbol, interval);
         if (cached && cached.length >= limit) {
@@ -36,13 +36,21 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         }
       }
 
-      // L2: disk cache (for requests without a specific `end` cursor)
-      if (!end && diskCache && !diskCache.isStale(symbol, interval)) {
-        const diskBars = diskCache.get(symbol, interval);
-        if (diskBars && diskBars.length >= limit) {
-          // Populate L1 from L2 for subsequent requests
-          cache.set(symbol, interval, diskBars);
-          res.json({ symbol, interval, data: diskBars.slice(-limit) });
+      // L2: disk cache — checked for ALL requests (including paginated scroll-back)
+      if (diskCache && !diskCache.isStale(symbol, interval)) {
+        const diskBars = diskCache.get(symbol, interval, undefined, end ?? undefined);
+        if (diskBars && diskBars.length > 0) {
+          const result = diskBars.slice(-limit);
+          // Warm L1 from L2 for subsequent non-paginated requests
+          if (!end) cache.set(symbol, interval, diskBars);
+          // Determine hasMore: if the oldest returned bar is not the oldest
+          // in cache, there are more cached bars further back.
+          const oldestReturned = result[0]?.timestamp;
+          const oldestOnDisk = diskBars[0]?.timestamp;
+          const hasMore = oldestReturned !== undefined && oldestOnDisk !== undefined
+            ? oldestReturned > oldestOnDisk || result.length >= limit
+            : result.length >= limit;
+          res.json({ symbol, interval, data: result, hasMore });
           return;
         }
       }
@@ -73,14 +81,12 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         volume: parseFloat(row[5]),
       })).reverse();
 
-      // Write back to both caches
-      if (!end) {
-        cache.set(symbol, interval, bars);
-        if (diskCache) {
-          diskCache.set(symbol, interval, bars).catch((err) =>
-            console.error('[OHLCV] Disk cache write error:', err),
-          );
-        }
+      // Write back to BOTH caches (always, even for paginated responses)
+      cache.set(symbol, interval, bars);
+      if (diskCache) {
+        diskCache.set(symbol, interval, bars).catch((err) =>
+          console.error('[OHLCV] Disk cache write error:', err),
+        );
       }
       res.json({ symbol, interval, data: bars, hasMore: bars.length === limit });
     } catch (err) {

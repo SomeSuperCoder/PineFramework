@@ -27,7 +27,7 @@ export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache):
         return;
       }
 
-      // L1: in-memory cache
+      // L1: in-memory cache (only for non-paginated recent-bar requests)
       if (!before) {
         const cached = cache.get(symbol, interval);
         if (cached && cached.length >= count) {
@@ -43,19 +43,28 @@ export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache):
         }
       }
 
-      // L2: disk cache (for requests without a specific `before` cursor)
-      if (!before && diskCache && !diskCache.isStale(symbol, interval)) {
-        const diskBars = diskCache.get(symbol, interval);
-        if (diskBars && diskBars.length >= count) {
-          // Populate L1 from L2 for subsequent requests
-          cache.set(symbol, interval, diskBars);
+      // L2: disk cache — checked for ALL requests (including paginated scroll-back)
+      if (diskCache && !diskCache.isStale(symbol, interval)) {
+        // `before` maps to Bybit's `end` parameter: bars with open_time <= before.
+        // Pass it directly to the disk cache's range filter.
+        const diskBars = diskCache.get(symbol, interval, undefined, before);
+        if (diskBars && diskBars.length > 0) {
+          const result = diskBars.slice(-count);
+          // Warm L1 from L2
+          if (!before) cache.set(symbol, interval, diskBars);
+          // Determine hasMore from cache coverage
+          const oldestReturned = result[0]?.timestamp;
+          const oldestOnDisk = diskBars[0]?.timestamp;
+          const hasMore = oldestReturned !== undefined && oldestOnDisk !== undefined
+            ? oldestReturned > oldestOnDisk || result.length >= count
+            : result.length >= count;
           res.json({
             symbol,
             interval,
-            data: diskBars.slice(-count),
-            returned: count,
+            data: result,
+            returned: result.length,
             requested: count,
-            hasMore: diskBars.length >= count,
+            hasMore,
           });
           return;
         }
@@ -87,7 +96,7 @@ export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache):
         volume: parseFloat(row[5]),
       })).reverse();
 
-      // Write back to both caches
+      // Write back to both caches (always, even for paginated responses)
       cache.set(symbol, interval, bars);
       if (diskCache) {
         diskCache.set(symbol, interval, bars).catch((err) =>

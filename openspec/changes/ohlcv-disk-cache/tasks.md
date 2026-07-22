@@ -60,4 +60,4 @@
 
 - [x] 5.3 Run full test suite: `pnpm test` — 98 test files, 1599 tests pass (no regressions)
 
-- [ ] 5.4 Commit all changes with conventional commit message
+- [x] 5.4 Commit all changes with conventional commit message
