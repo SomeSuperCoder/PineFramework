@@ -81,8 +81,13 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         volume: parseFloat(row[5]),
       })).reverse();
 
-      // Write back to BOTH caches (always, even for paginated responses)
-      cache.set(symbol, interval, bars);
+      // L1 (in-memory) cache: only store non-paginated "most recent" responses.
+      // Paginated scroll-back responses would overwrite recent bars with
+      // historical ones, breaking the initial-load fast path.
+      if (!end) {
+        cache.set(symbol, interval, bars);
+      }
+      // L2 (disk) cache: always persist — accumulates the full history
       if (diskCache) {
         diskCache.set(symbol, interval, bars).catch((err) =>
           console.error('[OHLCV] Disk cache write error:', err),

@@ -96,8 +96,11 @@ export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache):
         volume: parseFloat(row[5]),
       })).reverse();
 
-      // Write back to both caches (always, even for paginated responses)
-      cache.set(symbol, interval, bars);
+      // L1 (in-memory) cache: only store non-paginated "most recent" responses
+      if (!before) {
+        cache.set(symbol, interval, bars);
+      }
+      // L2 (disk) cache: always persist — accumulates the full history
       if (diskCache) {
         diskCache.set(symbol, interval, bars).catch((err) =>
           console.error('[Bars] Disk cache write error:', err),
