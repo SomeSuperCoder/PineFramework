@@ -226,8 +226,36 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           style: l.style, size: l.size,
         });
       }
+      // Resolve Pine Script alert template placeholders
+      const resolveAlertMsg = (msg: string, barIdx: number): string => {
+        const candle = barIdx >= 0 && barIdx < data.length ? data[barIdx] : undefined;
+        return msg
+          .replace(/\{\{ticker\}\}/g, symbol ?? '')
+          .replace(/\{\{interval\}\}/g, interval ?? '')
+          .replace(/\{\{tickerid\}\}/g, symbol ?? '')
+          .replace(/\{\{exchange\}\}/g, '')
+          .replace(/\{\{close\}\}/g, candle ? candle.close.toFixed(2) : '')
+          .replace(/\{\{open\}\}/g, candle ? candle.open.toFixed(2) : '')
+          .replace(/\{\{high\}\}/g, candle ? candle.high.toFixed(2) : '')
+          .replace(/\{\{low\}\}/g, candle ? candle.low.toFixed(2) : '')
+          .replace(/\{\{volume\}\}/g, candle ? candle.volume.toFixed(0) : '')
+          .replace(/\{\{time\}\}/g, candle ? new Date(candle.time * 1000).toISOString() : '');
+      };
+      // Enrich alertTriggers with title/message from alertConditions, resolving placeholders
+      const condMap = new Map<string, import('../types').AlertConditionData>();
+      for (const c of (result.alertConditions || [])) {
+        condMap.set(c.id, c);
+      }
       for (const t of (result.alertTriggers || [])) {
-        allAlertTriggers.push(t);
+        const cond = condMap.get(t.alertId);
+        const rawMsg = cond?.message ?? t.message ?? '';
+        allAlertTriggers.push({
+          alertId: t.alertId,
+          barIndex: t.barIndex,
+          timestamp: t.timestamp,
+          title: cond?.title ?? t.title,
+          message: resolveAlertMsg(rawMsg, t.barIndex),
+        });
       }
       for (const b of (result.boxes || [])) {
         allBoxes.push(b);

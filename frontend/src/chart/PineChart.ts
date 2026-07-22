@@ -327,7 +327,7 @@ export class PineChart {
     this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
     this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
 
-    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor);
+    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers);
 
     this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(this.offscreen, 0, 0);

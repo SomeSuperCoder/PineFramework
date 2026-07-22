@@ -1,4 +1,4 @@
-import type { CandlestickData, PlotSeriesData } from '../types.js';
+import type { CandlestickData, PlotSeriesData, AlertTriggerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
 import { formatAxisLabel, formatTooltipDateTime } from 'pine-framework/utils/time';
@@ -30,6 +30,7 @@ export class CrosshairRenderer {
     viewport: Viewport,
     layout: LayoutManager,
     textColor: string,
+    alerts: AlertTriggerData[] = [],
   ): void {
     if (!this.visible) return;
 
@@ -74,11 +75,10 @@ export class CrosshairRenderer {
       ctx.fillStyle = textColor;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const date = new Date(candle.time * 1000);
       const timeLabel = formatAxisLabel(candle.time);
       ctx.fillText(timeLabel, snappedX, timeScale.y + timeScale.height / 2);
 
-      this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor);
+      this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor, alerts, barIndex);
     }
   }
 
@@ -89,16 +89,38 @@ export class CrosshairRenderer {
     x: number,
     chartArea: { x: number; y: number; width: number; height: number },
     textColor: string,
+    alerts: AlertTriggerData[],
+    barIndex: number,
   ): void {
     const dtLine = formatTooltipDateTime(candle.time);
-    const lines = [
-      dtLine,
-      `O: ${candle.open.toFixed(2)}`,
-      `H: ${candle.high.toFixed(2)}`,
-      `L: ${candle.low.toFixed(2)}`,
-      `C: ${candle.close.toFixed(2)}`,
-      `V: ${candle.volume.toFixed(0)}`,
+    const lines: Array<{ text: string; style: 'date' | 'ohlc' | 'alert' | 'plot' | 'alertCap' }> = [
+      { text: dtLine, style: 'date' },
+      { text: `O: ${candle.open.toFixed(2)}`, style: 'ohlc' },
+      { text: `H: ${candle.high.toFixed(2)}`, style: 'ohlc' },
+      { text: `L: ${candle.low.toFixed(2)}`, style: 'ohlc' },
+      { text: `C: ${candle.close.toFixed(2)}`, style: 'ohlc' },
+      { text: `V: ${candle.volume.toFixed(0)}`, style: 'ohlc' },
     ];
+
+    // Build alert lines for this bar
+    const barAlerts = alerts.filter(a => a.barIndex === barIndex);
+    if (barAlerts.length > 0) {
+      const MAX_ALERTS = 5;
+      const shownAlerts = barAlerts.slice(0, MAX_ALERTS);
+      for (const alert of shownAlerts) {
+        if (!alert.title && !alert.message) continue;
+        const titleLine = `⚠ ${alert.title ?? '(alert)'}`;
+        lines.push({ text: titleLine, style: 'alert' });
+        if (alert.message) {
+          const dest = alert.destination ? ` [${alert.destination}]` : '';
+          lines.push({ text: `  ${alert.message}${dest}`, style: 'alert' });
+        }
+      }
+      if (barAlerts.length > MAX_ALERTS) {
+        const remaining = barAlerts.length - MAX_ALERTS;
+        lines.push({ text: `⚠ +${remaining} more`, style: 'alertCap' });
+      }
+    }
 
     const barTime = Math.floor(candle.time);
     let plotIndex = 0;
@@ -112,7 +134,7 @@ export class CrosshairRenderer {
       }
       if (val !== null && val !== undefined) {
         const name = key.replace(/__color:[^_]+/, '').replace(/__lw:\d+/, '');
-        lines.push(`${name}: ${typeof val === 'number' ? val.toFixed(2) : val}`);
+        lines.push({ text: `${name}: ${typeof val === 'number' ? val.toFixed(2) : val}`, style: 'plot' });
       }
       plotIndex++;
       if (plotIndex > 5) break;
@@ -120,7 +142,14 @@ export class CrosshairRenderer {
 
     const lineHeight = 16;
     const padding = 6;
-    const tooltipWidth = 155;
+    // Measure text width so the tooltip fits its content
+    ctx.font = '11px monospace';
+    let maxTextWidth = 155;
+    for (const { text } of lines) {
+      const w = ctx.measureText(text).width;
+      if (w > maxTextWidth) maxTextWidth = w;
+    }
+    const tooltipWidth = maxTextWidth + padding * 2;
     const tooltipHeight = lines.length * lineHeight + padding * 2;
     let tooltipX = x + 12;
     let tooltipY = chartArea.y + 10;
@@ -136,15 +165,28 @@ export class CrosshairRenderer {
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = textColor;
-    ctx.font = '11px monospace';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     for (let i = 0; i < lines.length; i++) {
-      const isDate = i === 0;
-      const isOHLC = i >= 1 && i <= 4;
-      ctx.fillStyle = isDate ? '#8888aa' : isOHLC ? (candle.close >= candle.open ? '#4caf50' : '#e94560') : textColor;
-      ctx.fillText(lines[i], tooltipX + padding, tooltipY + padding + i * lineHeight);
+      const { text, style } = lines[i];
+      switch (style) {
+        case 'date':
+          ctx.fillStyle = '#8888aa';
+          break;
+        case 'ohlc':
+          ctx.fillStyle = candle.close >= candle.open ? '#4caf50' : '#e94560';
+          break;
+        case 'alert':
+          ctx.fillStyle = '#ffaa44';
+          break;
+        case 'alertCap':
+          ctx.fillStyle = '#cc8844';
+          break;
+        default:
+          ctx.fillStyle = textColor;
+          break;
+      }
+      ctx.fillText(text, tooltipX + padding, tooltipY + padding + i * lineHeight);
     }
   }
 

@@ -71,6 +71,9 @@ export interface AlertTriggerData {
   alertId: string;
   barIndex: number;
   timestamp: number;
+  title?: string;
+  message?: string;
+  destination?: string;
 }
 
 export interface BoxData {
