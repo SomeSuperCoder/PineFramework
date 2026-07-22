@@ -669,9 +669,21 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ? [...(prev.boxes || []).filter((b) => !diffBoxes.some((d) => d.startTime === b.startTime)), ...diffBoxes]
       : (prev.boxes || []);
 
-    // Diff alert triggers: new alerts for the forming/current bar are appended.
-    const mergedAlertTriggers = msg.alertTriggers && msg.alertTriggers.length > 0
-      ? [...(prev.alertTriggers || []), ...msg.alertTriggers]
+    // Diff alert triggers: append only NEW trigger IDs at the forming candle's
+    // barIndex, skipping duplicates that were already delivered on a prior tick
+    // for the same bar (e.g. flipUp staying true across N ticks).
+    const mergedAlertTriggers = msg.alertTriggers?.length > 0
+      ? (() => {
+          const existingKeys = new Set(
+            (prev.alertTriggers ?? []).map((t) => `${t.alertId}:${t.barIndex}`),
+          );
+          const dedupedNew = msg.alertTriggers.filter(
+            (t) => !existingKeys.has(`${t.alertId}:${t.barIndex}`),
+          );
+          return dedupedNew.length > 0
+            ? [...(prev.alertTriggers ?? []), ...dedupedNew]
+            : prev.alertTriggers;
+        })()
       : prev.alertTriggers;
 
     return {
