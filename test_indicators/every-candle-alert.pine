@@ -1,9 +1,0 @@
-//@version=6
-indicator("Every Candle Alert", overlay=true, precision=2)
-
-// This will trigger an alert on every new candle
-alertcondition(barstate.isconfirmed, title="Every Candle Alert", message="New candle confirmed")
-
-// Optional: Visual indicator on chart
-plot(high, color=color.green, linewidth=1, title="High")
-plot(low, color=color.red, linewidth=1, title="Low")
