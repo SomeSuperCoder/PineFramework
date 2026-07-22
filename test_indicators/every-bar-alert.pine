@@ -1,0 +1,8 @@
+//@version=6
+indicator("Every Bar Alert", overlay=true, precision=2)
+
+// Triggers on every bar — condition is always true.
+alertcondition(close == close, title="Every Bar Alert", message="Alert on bar {{bar_index}}")
+
+// Plot to verify execution
+plot(close, color=color.blue, linewidth=1, title="Close")

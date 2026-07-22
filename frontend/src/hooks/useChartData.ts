@@ -478,6 +478,34 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     // Tables are static dashboard state — use the latest
     const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
 
+    // Merge alert triggers:
+    // - newResult.alertTriggers covers the prepended region (indices 0..addedCount-1)
+    //   and the re-executed boundary (indices addedCount..addedCount+contextSize-1).
+    // - prev.alertTriggers beyond the boundary need their barIndex shifted by addedCount.
+    // - prev.alertTriggers within the boundary are REPLACED by newResult's entries.
+    const newTriggers = newResult.alertTriggers || [];
+    const prevTriggers = prev.alertTriggers || [];
+    const mergedAlertTriggers: typeof prevTriggers = [
+      // 1. Prepended region: barIndex values stay as-is (they are at the start
+      //    of the full candles array).
+      ...newTriggers.filter((t) => t.barIndex < addedCount),
+      // 2. Re-executed boundary: replace old triggers for these bars.
+      ...newTriggers.filter(
+        (t) => t.barIndex >= addedCount && t.barIndex < addedCount + contextSize,
+      ),
+      // 3. Unchanged tail: shift old barIndex by addedCount so they point
+      //    at the correct candles in the now-larger array.
+      ...prevTriggers
+        .filter((t) => t.barIndex >= contextSize)
+        .map((t) => ({ ...t, barIndex: t.barIndex + addedCount })),
+    ];
+
+    // Merge alert conditions — newResult wins entirely (it has the full list).
+    const mergedAlertConditions =
+      (newResult.alertConditions && newResult.alertConditions.length > 0)
+        ? newResult.alertConditions
+        : prev.alertConditions;
+
     return {
       ...prev,
       plots: mergedPlots,
@@ -491,6 +519,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       bgcolor: mergedBgcolor,
       boxes: mergedBoxes,
       tables: mergedTables,
+      alertTriggers: mergedAlertTriggers,
+      alertConditions: mergedAlertConditions,
     };
   }, []);
 
@@ -639,6 +669,11 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       ? [...(prev.boxes || []).filter((b) => !diffBoxes.some((d) => d.startTime === b.startTime)), ...diffBoxes]
       : (prev.boxes || []);
 
+    // Diff alert triggers: new alerts for the forming/current bar are appended.
+    const mergedAlertTriggers = msg.alertTriggers && msg.alertTriggers.length > 0
+      ? [...(prev.alertTriggers || []), ...msg.alertTriggers]
+      : prev.alertTriggers;
+
     return {
       ...prev,
       plots: mergedPlots,
@@ -653,6 +688,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       boxes: mergedBoxes,
       // Tables are static dashboard state — replace on any update
       tables: msg.tables || prev.tables,
+      alertTriggers: mergedAlertTriggers,
     };
   }, []);
 

@@ -77,6 +77,10 @@ export interface AlertConditionEntry {
 
 export interface AlertTriggerEntry {
   alertId: string;
+  /** 0-based index within the bars batch passed to `executeBars()`.
+   *  On the frontend this maps directly to the `candles[]` array index,
+   *  and must be shifted by the prepend count whenever older bars are
+   *  inserted at the beginning of the dataset (see `prependIndicatorResult`). */
   barIndex: number;
   timestamp: number;
 }
