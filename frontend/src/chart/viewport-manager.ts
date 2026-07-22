@@ -28,7 +28,7 @@ export class ViewportManager {
     candles: CandlestickData[],
     prevLength: number,
     prevFirstTime: number | undefined,
-    chartWidth: number,
+    _chartWidth: number,
   ): number {
     const added = candles.length - prevLength;
     const wasPrepended =
@@ -104,7 +104,8 @@ export class ViewportManager {
       let indMax = -Infinity;
       const paneIndex = parseInt(pane.id.replace('indicator_', ''), 10);
       for (const [, handle] of allSeries) {
-        if (handle.overlay || handle.paneIndex !== paneIndex || hiddenPlots.has(handle.name)) continue;
+        if (handle.overlay || handle.paneIndex !== paneIndex || hiddenPlots.has(handle.name))
+          continue;
         for (let i = range.start; i < range.end && i < handle.data.length; i++) {
           const v = handle.data[i]?.value;
           if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {

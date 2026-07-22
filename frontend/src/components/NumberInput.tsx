@@ -6,12 +6,17 @@ import { useState, useEffect, type InputHTMLAttributes } from 'react';
  *  the last digit freely. The numeric value is only committed on blur, so the
  *  field stays empty while you're typing.
  */
-export function NumberInput({ value, onChange, style, ...rest }: {
+export function NumberInput({
+  value,
+  onChange,
+  style,
+  ...rest
+}: {
   value: number;
   onChange: (v: number) => void;
   style?: React.CSSProperties;
 } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
-  const [display, setDisplay] = useState(() => value === 0 ? '' : String(value));
+  const [display, setDisplay] = useState(() => (value === 0 ? '' : String(value)));
 
   useEffect(() => {
     setDisplay(value === 0 ? '' : String(value));
@@ -41,7 +46,15 @@ export function NumberInput({ value, onChange, style, ...rest }: {
           (e.target as HTMLInputElement).blur();
         }
       }}
-      style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px', ...style }}
+      style={{
+        width: '100%',
+        padding: '6px',
+        background: '#0f1520',
+        color: '#e0e0e0',
+        border: '1px solid #111128',
+        borderRadius: '4px',
+        ...style,
+      }}
       {...rest}
     />
   );

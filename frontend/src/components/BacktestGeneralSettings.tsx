@@ -11,8 +11,8 @@ const BARS_PER_DAY: Record<string, number> = {
   '30': 48,
   '60': 24,
   '240': 6,
-  'D': 1,
-  'W': Math.round(1 / 7 * 100) / 100,
+  D: 1,
+  W: Math.round((1 / 7) * 100) / 100,
 };
 
 function getMaxDays(timeframe: string): number {
@@ -26,8 +26,14 @@ function estimateBars(timeframe: string, days: number): number {
 }
 
 const TIMEFRAME_LABELS: Record<string, string> = {
-  '1': '1m', '5': '5m', '15': '15m', '30': '30m',
-  '60': '1h', '240': '4h', 'D': '1D', 'W': '1W',
+  '1': '1m',
+  '5': '5m',
+  '15': '15m',
+  '30': '30m',
+  '60': '1h',
+  '240': '4h',
+  D: '1D',
+  W: '1W',
 };
 
 export interface BacktestGeneralSettingsProps {
@@ -61,13 +67,17 @@ export function BacktestGeneralSettings({
   onBarsExceededChange,
 }: BacktestGeneralSettingsProps) {
   const maxDays = getMaxDays(timeframe);
-  const estimatedDays = dateRangeMode === 'days_back' ? daysBack : (() => {
-    if (startDate && endDate) {
-      const diff = (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
-      return Math.max(0, Math.ceil(diff));
-    }
-    return 0;
-  })();
+  const estimatedDays =
+    dateRangeMode === 'days_back'
+      ? daysBack
+      : (() => {
+          if (startDate && endDate) {
+            const diff =
+              (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24);
+            return Math.max(0, Math.ceil(diff));
+          }
+          return 0;
+        })();
   const estimatedBars = estimateBars(timeframe, estimatedDays);
   const exceedsLimit = estimatedBars > MAX_BARS;
 
@@ -78,11 +88,10 @@ export function BacktestGeneralSettings({
   return (
     <>
       <div>
-        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Initial Capital</label>
-        <NumberInput
-          value={initialCapital}
-          onChange={onInitialCapitalChange}
-        />
+        <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
+          Initial Capital
+        </label>
+        <NumberInput value={initialCapital} onChange={onInitialCapitalChange} />
       </div>
 
       <div>
@@ -130,27 +139,61 @@ export function BacktestGeneralSettings({
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>Start Date</label>
-              <input type="date" value={startDate} onChange={(e) => onStartDateChange(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
+              <label
+                style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}
+              >
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px',
+                  background: '#0f1520',
+                  color: '#e0e0e0',
+                  border: '1px solid #111128',
+                  borderRadius: '4px',
+                }}
+              />
             </div>
             <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>End Date</label>
-              <input type="date" value={endDate} onChange={(e) => onEndDateChange(e.target.value)} style={{ width: '100%', padding: '6px', background: '#0f1520', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }} />
+              <label
+                style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}
+              >
+                End Date
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px',
+                  background: '#0f1520',
+                  color: '#e0e0e0',
+                  border: '1px solid #111128',
+                  borderRadius: '4px',
+                }}
+              />
             </div>
           </div>
         )}
       </div>
 
       {estimatedDays > 0 && (
-        <div style={{
-          marginTop: '12px',
-          padding: '8px 12px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          background: exceedsLimit ? '#3a1a1a' : '#1a2a1a',
-          color: exceedsLimit ? '#e94560' : '#4caf50',
-          border: `1px solid ${exceedsLimit ? '#e94560' : '#4caf50'}`,
-        }}>
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '8px 12px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            background: exceedsLimit ? '#3a1a1a' : '#1a2a1a',
+            color: exceedsLimit ? '#e94560' : '#4caf50',
+            border: `1px solid ${exceedsLimit ? '#e94560' : '#4caf50'}`,
+          }}
+        >
           {exceedsLimit
             ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${MAX_BARS}. Max for ${TIMEFRAME_LABELS[timeframe] ?? timeframe} is ~${maxDays} day${maxDays !== 1 ? 's' : ''}.`
             : `~${estimatedBars.toLocaleString()} bars (max ${MAX_BARS})`}

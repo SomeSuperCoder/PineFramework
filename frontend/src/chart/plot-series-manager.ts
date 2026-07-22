@@ -79,9 +79,7 @@ export class PlotSeriesManager {
   }
 
   /** Iterate all series in order, calling fn for each, with break support. */
-  forEachWithBreak(
-    fn: (handle: PlotSeriesHandle) => boolean | void,
-  ): void {
+  forEachWithBreak(fn: (handle: PlotSeriesHandle) => boolean | void): void {
     for (const [, handle] of this.plotSeries) {
       if (fn(handle) === false) break;
     }
