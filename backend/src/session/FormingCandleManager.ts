@@ -16,6 +16,29 @@ export class FormingCandleManager {
   private cachedAlertConditions: Array<{ id: string; title: string; message: string }> = [];
   private version: number | null;
 
+  /**
+   * Tracks the number of alert triggers the last time we called toOutputs()
+   * (i.e. after the most recent confirmed bar).  In confirm() we save this
+   * count before executing the new bar, then compute the diff (new triggers
+   * added during the confirmed-bar run) and stash them as pendingNewTriggers
+   * so the gateway can send Telegram notifications for ONLY the new bar's
+   * triggers, not all accumulated historical triggers.
+   */
+  private lastAlertTriggerCount: number = 0;
+
+  /**
+   * New triggers generated during the most recent confirm() call.
+   * Cleared after the gateway reads them via getPendingNewAlertTriggers().
+   */
+  private _pendingNewTriggers: Array<{ alertId: string; barIndex: number; timestamp: number }> = [];
+
+  /** Returns and clears the pending new triggers from the last confirmed bar. */
+  getPendingNewAlertTriggers(): Array<{ alertId: string; barIndex: number; timestamp: number }> {
+    const result = this._pendingNewTriggers;
+    this._pendingNewTriggers = [];
+    return result;
+  }
+
   constructor(bars: Bar[], contexts: ExecutionContext[], engine: ExecutionEngine, version: number | null) {
     this.bars = bars;
     this.contexts = contexts;
@@ -105,7 +128,20 @@ export class FormingCandleManager {
     lastContext.volume = createSeries('volume', [bar.volume]);
     const context = this.contexts[this.contexts.length - 1]!;
     this.engine.setFormingCandle(false);
+
+    // Save the pre-execution trigger count so we can extract only the
+    // triggers that fire for THIS bar (not all accumulated historical triggers).
+    const preAlertTriggersLen = this.lastAlertTriggerCount;
+
     const execResult = this.engine.executeBar(context);
+
+    // Compute new triggers that were added during this bar's execution.
+    const allTriggers: Array<{ alertId: string; barIndex: number; timestamp: number }> =
+      (execResult.alertTriggers as any) ?? [];
+    const newTriggers = allTriggers.slice(preAlertTriggersLen);
+    this._pendingNewTriggers = newTriggers;
+    this.lastAlertTriggerCount = allTriggers.length;
+
     return this.toOutputs(execResult);
   }
 
@@ -227,6 +263,11 @@ export class FormingCandleManager {
         alertTriggers.push({ alertId: at.alertId, barIndex: at.barIndex, timestamp: at.timestamp });
       }
     }
+
+    // Track the trigger count so confirm() can produce diffs.  This is
+    // also the first point where we learn how many triggers exist after
+    // the initial executeBars() call in ScriptSession.initialize().
+    this.lastAlertTriggerCount = alertTriggers.length;
 
     return {
       success: result.success,

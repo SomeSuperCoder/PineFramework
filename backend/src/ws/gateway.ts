@@ -167,12 +167,17 @@ export function createWSGateway(
           }));
 
           const tgActive = telegramService?.isActive() ?? false;
-          const triggers = outputs.alertTriggers;
-          const hasTriggers = triggers !== undefined && triggers.length > 0;
           const isConfirmed = outputs.isConfirmed ?? false;
 
           if (!isConfirmed) {
-          } else if (tgActive && hasTriggers && telegramService) {
+          } else if (tgActive && telegramService) {
+            // Use ONLY the new triggers from the most recent confirmed bar,
+            // not all accumulated historical triggers.  session.getPendingNewAlertTriggers()
+            // returns the diff and clears them so they are sent only once.
+            const triggers = session.getPendingNewAlertTriggers();
+            if (triggers.length === 0) {
+              console.log(`[WS] reexecuteForTopic: no new alert triggers for indicator ${indicatorId}`);
+            }
             for (const trigger of triggers) {
               const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
               const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
@@ -192,8 +197,6 @@ export function createWSGateway(
             }
           } else if (!tgActive) {
             console.log(`[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`);
-          } else if (!hasTriggers) {
-            console.log(`[WS] reexecuteForTopic: no alert triggers in output, nothing to send`);
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Script re-execution failed';

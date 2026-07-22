@@ -31,4 +31,4 @@
 
 - [x] 5.1 Run full test suite (`pnpm test`) — 84/85 pass, 1 pre-existing failure (hhll-e2e-pivot unrelated)
 - [x] 5.2 Captured final trigger statistics for both indicators from test output
-- [ ] 5.3 Commit all changes with conventional commit message
+- [x] 5.3 Commit all changes with conventional commit message

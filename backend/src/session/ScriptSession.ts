@@ -95,4 +95,14 @@ export class ScriptSession {
 
     return this.formingCandleManager.tick(bar);
   }
+
+  /**
+   * Returns any new alert triggers generated during the last confirmed bar
+   * execution.  Used by the gateway to send Telegram notifications only for
+   * the NEW bar's triggers, not all accumulated historical triggers.
+   * Triggers are returned once and then cleared.
+   */
+  getPendingNewAlertTriggers(): Array<{ alertId: string; barIndex: number; timestamp: number }> {
+    return this.formingCandleManager?.getPendingNewAlertTriggers() ?? [];
+  }
 }
