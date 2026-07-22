@@ -72,6 +72,8 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
   symbolRef.current = symbol;
   const intervalRef = useRef(interval);
   intervalRef.current = interval;
+  const prevFirstTimeRef = useRef<number | undefined>(undefined);
+  const wasPrependedRef = useRef(false);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -83,13 +85,15 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       const sy = symbolRef.current;
       const iv = intervalRef.current;
       try {
-        const barsFetched = await fetchRef.current(sy, iv);
-        if (barsFetched === 0) {
-          // No more historical data available
-          shouldFitRef.current = true;
-        }
+        await fetchRef.current(sy, iv);
+        // Note: we do NOT set shouldFitRef here. fetchOlderOHLCV already
+        // manages hasMoreHistoryRef internally. Calling fitContent() when
+        // scroll-back reaches the end would teleport the user from the
+        // oldest bars back to the newest — the opposite of what they want.
+        //
+        // The chart's prepend handling in setCandles + adjustForPrepend
+        // correctly maintains the viewport position after new bars arrive.
       } finally {
-        if (!isLoadingHistoryRef.current) return;
         isLoadingHistoryRef.current = false;
       }
     };
@@ -112,10 +116,23 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     chart.beginUpdate();
 
     if (data.length > 0) {
+      // Detect prepend: new data starts with an older bar than before
+      wasPrependedRef.current =
+        prevFirstTimeRef.current !== undefined &&
+        data[0]?.time !== undefined &&
+        data[0].time < prevFirstTimeRef.current;
+      prevFirstTimeRef.current = data[0]?.time;
+
       chart.setCandles(data);
 
-      if (shouldFitRef.current) {
+      // If data was prepended (scroll-back), NEVER fitContent — that would
+      // teleport the user from the oldest bars back to the newest ones.
+      if (shouldFitRef.current && !wasPrependedRef.current) {
         chart.timeScale().fitContent();
+        shouldFitRef.current = false;
+      } else {
+        // Clear the flag even if we skipped fitContent so it doesn't
+        // trigger on a future non-prepended update (e.g. timeframe switch).
         shouldFitRef.current = false;
       }
     }
