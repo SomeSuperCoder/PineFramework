@@ -1,4 +1,7 @@
-export { StrategyEngine, DEFAULT_STRATEGY_CONFIG } from './strategy-engine.js';
+export { StrategyEngine } from './strategy-engine.js';
+export { DEFAULT_STRATEGY_CONFIG } from './strategy-types.js';
+export { computeMetrics } from './strategy-metrics.js';
+export { TrailingStopManager } from './trailing-stop-manager.js';
 export type {
   Order,
   FilledOrder,
@@ -14,7 +17,10 @@ export type {
   Account,
   QtyType,
   CommissionType,
-} from './strategy-engine.js';
+  MarketFillPrice,
+  PositionLot,
+  TrailingStopState,
+} from './strategy-types.js';
 
 export { BacktestEngine } from './backtest-engine.js';
 export type { BacktestResult, BacktestConfig } from './backtest-engine.js';

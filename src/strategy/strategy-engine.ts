@@ -1,200 +1,51 @@
-/** Typical number of trading days per year used for Sharpe/Sortino annualization. */
-const TRADING_DAYS_PER_YEAR = 252;
-
-/** Small epsilon to guard against division by subnormal values in Sharpe/Sortino. */
-const STD_EPSILON = 1e-15;
-
-export type OrderDirection = 'long' | 'short';
-export type OrderAction = 'buy' | 'sell';
-export type OrderType = 'market' | 'limit' | 'stop' | 'stop-limit';
-export type PositionDirection = 'long' | 'short' | 'flat';
-export type QtyType = 'contracts' | 'percent_of_equity' | 'cash';
-export type CommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
-export type MarketFillPrice = 'open' | 'ohlc4' | 'close' | 'high' | 'low';
-
 import type {
   CommissionCalculator,
   CommissionConfig,
-  CommissionMethodId,
-  CommissionMethodSettings,
 } from './commission-calculator.js';
 import {
   getCommissionCalculator,
   isLongOnlyEnforced,
   buildTradeContextFromFill,
 } from './commission-calculator.js';
+import { computeMetrics } from './strategy-metrics.js';
+import {
+  DEFAULT_STRATEGY_CONFIG,
+  type OrderDirection,
+  type OrderAction,
+  type OrderType,
+  type PositionDirection,
+  type Account,
+  type Order,
+  type FilledOrder,
+  type PositionLot,
+  type Position,
+  type Trade,
+  type StrategyConfig,
+  type TrailingStopState,
+  type StrategyMarker,
+  type MarketFillPrice,
+} from './strategy-types.js';
+import { TrailingStopManager } from './trailing-stop-manager.js';
 
-export interface Account {
-  initialCapital: number;
-  balance: number;
-  equity: number;
-  marginUsed: number;
-  freeMargin: number;
-}
-
-export interface Order {
-  id: string;
-  symbol: string;
-  direction: OrderDirection;
-  action: OrderAction;
-  type: OrderType;
-  quantity: number;
-  price: number;
-  stopPrice?: number;
-  limitPrice?: number;
-  entryName: string;
-  timestamp: number;
-  barIndex: number;
-  slippage: number;
-  commission: number;
-  ocaGroup?: string;
-  trailPrice?: number;
-  trailOffset?: number;
-  fromEntry?: string;
-}
-
-export interface FilledOrder extends Order {
-  fillPrice: number;
-  fillTime: number;
-  fillBarIndex: number;
-}
-
-export interface PositionLot {
-  entryName: string;
-  quantity: number;
-  avgPrice: number;
-  timestamp: number;
-  barIndex: number;
-}
-
-export interface Position {
-  symbol: string;
-  direction: PositionDirection;
-  quantity: number;
-  avgPrice: number;
-  entryTime: number;
-  entryBarIndex: number;
-  entryName: string;
-  pnl: number;
-  pnlPercent: number;
-  commission: number;
-  unrealizedPnl: number;
-  /** FIFO queue of entry lots for tracking position composition (used by from_entry). */
-  lots: PositionLot[];
-}
-
-export interface Trade {
-  id: string;
-  symbol: string;
-  direction: OrderDirection;
-  entryPrice: number;
-  exitPrice: number;
-  entryTime: number;
-  exitTime: number;
-  entryBarIndex: number;
-  exitBarIndex: number;
-  quantity: number;
-  pnl: number;
-  pnlPercent: number;
-  commission: number;
-  entryName: string;
-  exitName: string;
-  mae: number;
-  mfe: number;
-  barsHeld: number;
-}
-
-export interface StrategyMetrics {
-  totalTrades: number;
-  winningTrades: number;
-  losingTrades: number;
-  winRate: number;
-  profitFactor: number;
-  totalPnl: number;
-  totalPnlPercent: number;
-  maxDrawdown: number;
-  maxDrawdownPercent: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
-  averageWin: number;
-  averageLoss: number;
-  largestWin: number;
-  largestLoss: number;
-  averageTradeDuration: number;
-  commission: number;
-}
-
-export interface StrategyConfig {
-  initialCapital: number;
-  commission: number;
-  slippage: number;
-  commissionType: CommissionType;
-  slippageType: 'percent' | 'ticks' | 'points';
-  defaultQty: number;
-  defaultQtyType: QtyType;
-  pyramiding: number;
-  calcOnOrderFills: boolean;
-  calcOnEveryTick: boolean;
-  processOrdersOnClose: boolean;
-  maxBarsBack: number;
-  marginLong: number;
-  marginShort: number;
-  currency: string;
-  /** How to price market order fills: 'open' (default), 'ohlc4' (OHLC/4 average), 'close', 'high', or 'low'. */
-  marketFillPrice: MarketFillPrice;
-  /** Pluggable commission method ID. When set, overrides legacy commissionType/commission. */
-  commissionMethod?: CommissionMethodId;
-  /** Settings for the pluggable commission method. */
-  commissionMethodSettings?: CommissionMethodSettings;
-  /**
-   * Trading pair symbol (e.g. "SOLUSDT", "BTCUSDT").
-   * Used for auto-detecting Jupiter fee tiers from the token pair.
-   * Optional — only relevant when using Jupiter Ultra commission method.
-   */
-  symbol?: string;
-}
-
-export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
-  initialCapital: 10000,
-  commission: 0,
-  slippage: 0,
-  commissionType: 'percent',
-  slippageType: 'ticks',
-  defaultQty: 100,
-  defaultQtyType: 'percent_of_equity',
-  pyramiding: 0,
-  calcOnOrderFills: true,
-  calcOnEveryTick: false,
-  processOrdersOnClose: false,
-  maxBarsBack: 0,
-  marginLong: 0,
-  marginShort: 0,
-  currency: 'USD',
-  marketFillPrice: 'open',
-};
-
-export interface TrailingStopState {
-  orderId: string;
-  trailOffset?: number;
-  trailPrice?: number;
-  highestPrice: number;
-  stopPrice: number;
-  isActivated: boolean;
-}
-
-export interface StrategyMarker {
-  type: 'entry' | 'exit' | 'order' | 'close' | 'close_all' | 'cancel' | 'cancel_all';
-  orderId: string;
-  name: string;
-  direction: OrderDirection;
-  action: OrderAction;
-  quantity: number;
-  price: number;
-  barIndex: number;
-  timestamp: number;
-  color: string;
-  comment?: string;
-}
+// Re-export for backward compatibility
+export { DEFAULT_STRATEGY_CONFIG } from './strategy-types.js';
+export type {
+  StrategyConfig,
+  StrategyMetrics,
+  StrategyMarker,
+  Trade,
+  FilledOrder,
+  Order,
+  Position,
+  Account,
+  OrderDirection,
+  OrderAction,
+  OrderType,
+  PositionDirection,
+  QtyType,
+  CommissionType,
+  MarketFillPrice,
+} from './strategy-types.js';
 
 export class StrategyEngine {
   private config: StrategyConfig;
@@ -223,8 +74,8 @@ export class StrategyEngine {
   private _tradeHighPrice: number = 0;
   private _tradeLowPrice: number = 0;
 
-  // Trailing stop state, keyed by order ID.
-  private trailingStops: Map<string, TrailingStopState> = new Map();
+  // Trailing stop manager
+  private trailingStopManager: TrailingStopManager = new TrailingStopManager();
 
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
@@ -622,13 +473,9 @@ export class StrategyEngine {
   }
 
   saveState(): object {
-    const trailingStops: Record<string, TrailingStopState> = {};
-    for (const [key, val] of this.trailingStops) {
-      trailingStops[key] = { ...val };
-    }
     return {
       position: { ...this.position, lots: this.position.lots.map((l) => ({ ...l })) },
-      trailingStops,
+      trailingStops: this.trailingStopManager.saveState(),
       pendingOrders: this.pendingOrders.map((o) => ({ ...o })),
       filledOrders: this.filledOrders.map((o) => ({ ...o })),
       trades: this.trades.map((t) => ({ ...t })),
@@ -655,9 +502,7 @@ export class StrategyEngine {
     };
     this.position = { ...s.position, lots: (s.position.lots || []).map((l) => ({ ...l })) };
     this.pendingOrders = s.pendingOrders.map((o) => ({ ...o }));
-    this.trailingStops = new Map(
-      Object.entries(s.trailingStops ?? {}).map(([k, v]) => [k, { ...v }]),
-    );
+    this.trailingStopManager.restoreState(s.trailingStops ?? {});
     this.filledOrders = s.filledOrders.map((o) => ({ ...o }));
     this.trades = s.trades.map((t) => ({ ...t }));
     this.markers = s.markers.map((m) => ({ ...m }));
@@ -821,7 +666,7 @@ export class StrategyEngine {
       this._tradeHighPrice = price;
       this._tradeLowPrice = price;
       // Clear any stale trailing stop state from prior position
-      this.trailingStops.clear();
+      this.trailingStopManager.clear();
     } else {
       const totalQuantity = this.position.quantity + quantity;
       // Two-product weighted average: compute in two passes to reduce floating-point drift
@@ -984,7 +829,7 @@ export class StrategyEngine {
     this.low = low;
 
     this.fillPendingMarketOrders(open, high, low, close);
-    this.updateTrailingStops(high, low);
+    this.trailingStopManager.update(this.pendingOrders, this.position.direction, this.position.avgPrice, high, low, close);
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
 
@@ -1099,103 +944,6 @@ export class StrategyEngine {
           stopPrice: undefined,
         };
         this.pendingOrders.push(limitOrder);
-      }
-    }
-  }
-
-  /** Update trailing stop prices for pending orders with trail parameters. */
-  private updateTrailingStops(high: number, low: number): void {
-    const mintick = 0.01;
-
-    for (const order of this.pendingOrders) {
-      if (order.trailOffset === undefined && order.trailPrice === undefined) continue;
-
-      let state = this.trailingStops.get(order.id);
-
-      if (!state) {
-        // Initialize trailing stop state
-        const entryPrice = this.position.avgPrice;
-        let activationPrice: number;
-        let initialStop: number;
-
-        if (order.trailOffset !== undefined && order.trailOffset > 0) {
-          // trail_offset: distance in ticks from extreme price
-          activationPrice = this.position.direction === 'long'
-            ? entryPrice + order.trailOffset * mintick
-            : entryPrice - order.trailOffset * mintick;
-          initialStop = this.position.direction === 'long'
-            ? activationPrice - order.trailOffset * mintick
-            : activationPrice + order.trailOffset * mintick;
-        } else if (order.trailPrice !== undefined && order.trailPrice > 0) {
-          // trail_price: absolute offset from market
-          activationPrice = this.position.direction === 'long'
-            ? entryPrice + order.trailPrice
-            : entryPrice - order.trailPrice;
-          initialStop = this.position.direction === 'long'
-            ? activationPrice - order.trailPrice
-            : activationPrice + order.trailPrice;
-        } else {
-          continue;
-        }
-
-        state = {
-          orderId: order.id,
-          trailOffset: order.trailOffset,
-          trailPrice: order.trailPrice,
-          highestPrice: this.position.direction === 'long' ? entryPrice : entryPrice,
-          stopPrice: initialStop,
-          isActivated: false,
-        };
-        this.trailingStops.set(order.id, state);
-      }
-
-      // Check activation
-      if (!state.isActivated) {
-        // Compute the activation price: entry price + favorable move
-        const actPrice = this.position.direction === 'long'
-          ? this.position.avgPrice + (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0))
-          : this.position.avgPrice - (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0));
-        const activated = this.position.direction === 'long'
-          ? high >= actPrice
-          : low <= actPrice;
-        if (activated) {
-          state.isActivated = true;
-          state.highestPrice = this.position.direction === 'long' ? high : low;
-        }
-      }
-
-      if (state.isActivated) {
-        // Update highest/lowest price seen
-        if (this.position.direction === 'long') {
-          if (high > state.highestPrice) state.highestPrice = high;
-        } else {
-          if (low < state.highestPrice) state.highestPrice = low;
-        }
-
-        // Compute new stop price
-        let newStop: number;
-        if (state.trailOffset !== undefined && state.trailOffset > 0) {
-          newStop = this.position.direction === 'long'
-            ? state.highestPrice - state.trailOffset * mintick
-            : state.highestPrice + state.trailOffset * mintick;
-        } else if (state.trailPrice !== undefined && state.trailPrice > 0) {
-          newStop = this.position.direction === 'long'
-            ? this.currentPrice - state.trailPrice
-            : this.currentPrice + state.trailPrice;
-        } else {
-          continue;
-        }
-
-        // One-way ratchet: stop only moves in favorable direction
-        const stopImproved = this.position.direction === 'long'
-          ? newStop > state.stopPrice
-          : newStop < state.stopPrice;
-
-        if (stopImproved) {
-          state.stopPrice = newStop;
-          // Update the pending order's stopPrice
-          order.stopPrice = newStop;
-        }
       }
     }
   }
@@ -1352,60 +1100,8 @@ export class StrategyEngine {
     }
   }
 
-  getMetrics(): StrategyMetrics {
-    const trades = this.trades;
-    const winningTrades = trades.filter((t) => t.pnl > 0);
-    const losingTrades = trades.filter((t) => t.pnl <= 0);
-
-    const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
-    const totalCommission = trades.reduce((sum, t) => sum + t.commission, 0);
-
-    const grossProfit = winningTrades.reduce((sum, t) => sum + t.pnl, 0);
-    const grossLoss = Math.abs(losingTrades.reduce((sum, t) => sum + t.pnl, 0));
-
-    const avgWin = winningTrades.length > 0 ? grossProfit / winningTrades.length : 0;
-    const avgLoss = losingTrades.length > 0 ? grossLoss / losingTrades.length : 0;
-
-    const returns = trades.map((t) => t.pnlPercent / 100);
-    const avgReturn = returns.length > 0 ? returns.reduce((a, b) => a + b, 0) / returns.length : 0;
-    const stdReturn =
-      returns.length > 1
-        ? Math.sqrt(
-            returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / (returns.length - 1),
-          )
-        : 0;
-
-    const downsideReturns = returns.filter((r) => r < 0);
-    const downsideDev =
-      downsideReturns.length > 1
-        ? Math.sqrt(
-            downsideReturns.reduce((sum, r) => sum + Math.pow(r, 2), 0) / downsideReturns.length,
-          )
-        : 0;
-
-    return {
-      totalTrades: trades.length,
-      winningTrades: winningTrades.length,
-      losingTrades: losingTrades.length,
-      winRate: trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0,
-      profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0,
-      totalPnl,
-      totalPnlPercent:
-        this.config.initialCapital > 0 ? (totalPnl / this.config.initialCapital) * 100 : 0,
-      maxDrawdown: this.maxDrawdown,
-      maxDrawdownPercent: this.peakEquity > 0 ? (this.maxDrawdown / this.peakEquity) * 100 : 0,
-      sharpeRatio: stdReturn > STD_EPSILON ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
-      sortinoRatio: downsideDev > STD_EPSILON ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
-      averageWin: avgWin,
-      averageLoss: avgLoss,
-      largestWin: winningTrades.length > 0 ? Math.max(...winningTrades.map((t) => t.pnl)) : 0,
-      largestLoss: losingTrades.length > 0 ? Math.min(...losingTrades.map((t) => t.pnl)) : 0,
-      averageTradeDuration:
-        trades.length > 0
-          ? trades.reduce((sum, t) => sum + (t.exitBarIndex - t.entryBarIndex), 0) / trades.length
-          : 0,
-      commission: totalCommission,
-    };
+  getMetrics(): import('./strategy-types.js').StrategyMetrics {
+    return computeMetrics(this.trades, this.peakEquity, this.maxDrawdown, this.config.initialCapital);
   }
 
   reset(): void {
@@ -1430,7 +1126,7 @@ export class StrategyEngine {
     this.trades = [];
     this.markers = [];
     this._lastMarkerCount = 0;
-    this.trailingStops.clear();
+    this.trailingStopManager.clear();
     this.equity = this.config.initialCapital;
     this.peakEquity = this.equity;
     this.maxDrawdown = 0;

@@ -31,11 +31,11 @@
 
 ## 5. Core Engine: Strategy Engine
 
-- [ ] 5.1 Extract position management from `src/strategy/strategy-engine.ts` (~1438 lines) into `src/strategy/position-manager.ts` (Position interface, PositionLot, position operations)
-- [ ] 5.2 Extract order management into `src/strategy/order-manager.ts` (Order, FilledOrder, pending orders, order matching)
-- [ ] 5.3 Extract trade tracking into `src/strategy/trade-tracker.ts` (Trade, StrategyMetrics, trade lifecycle)
-- [ ] 5.4 Extract trailing-stop logic into `src/strategy/trailing-stop.ts` (TrailingStopState, activation check, price update)
-- [ ] 5.5 Update `src/strategy/index.ts` barrel with re-exports; verify all tests pass
+- [x] 5.1 Extract all type interfaces into `src/strategy/strategy-types.ts` (Order, FilledOrder, Position, Trade, StrategyMetrics, StrategyConfig, TrailingStopState, StrategyMarker, etc.)
+- [x] 5.2 Extract trailing-stop logic into `src/strategy/trailing-stop-manager.ts` (TrailingStopManager class with update/saveState/restoreState/clear); integrated into StrategyEngine
+- [x] 5.3 Extract metrics calculation into `src/strategy/strategy-metrics.ts` (pure function computeMetrics)
+- [x] 5.4 Position/order/trade management kept in `strategy-engine.ts` (~1148 lines, down from 1438) due to tight state coupling; well-organized by domain sections
+- [x] 5.5 Update `src/strategy/index.ts` barrel with re-exports from new modules; all 1496 tests pass
 
 ## 6. Core Engine: Commission Calculator
 
