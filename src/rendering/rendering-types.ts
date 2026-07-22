@@ -121,6 +121,20 @@ export interface BgcolorDescriptor {
   barColors: (PineColor | null)[];
 }
 
+/**
+ * Per-candle multi-element color data.
+ * Each field is optional; absent fields fall back to the next in chain:
+ *   element-specific → body → default bull/bear.
+ */
+export interface CandleColorData {
+  /** Body fill color (hex string). */
+  body?: string;
+  /** Wick stroke color (hex string). Falls back to body, then default. */
+  wick?: string;
+  /** Border stroke color (hex string). Falls back to body, then default. */
+  border?: string;
+}
+
 export interface BarcolorOptions {
   color?: ColorInput;
   offset?: number;

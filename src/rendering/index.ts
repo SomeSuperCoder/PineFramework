@@ -44,4 +44,5 @@ export type {
   BgcolorDescriptor,
   BarcolorDescriptor,
   FillDescriptor,
+  CandleColorData,
 } from './rendering-types.js';

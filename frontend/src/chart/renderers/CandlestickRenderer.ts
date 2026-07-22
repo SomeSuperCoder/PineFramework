@@ -1,4 +1,4 @@
-import type { CandlestickData } from '../types.js';
+import type { CandlestickData, CandleColorData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
 
@@ -8,7 +8,7 @@ export class CandlestickRenderer {
     candles: CandlestickData[],
     viewport: Viewport,
     layout: LayoutManager,
-    barColors?: Map<number, string>,
+    candleColors?: Map<number, CandleColorData>,
   ): void {
     const regions = layout.getRegions();
     const { chartArea } = regions;
@@ -27,22 +27,39 @@ export class CandlestickRenderer {
       const lowY = layout.priceToPixel(candle.low, chartArea.y, chartArea.height);
 
       const isBullish = candle.close >= candle.open;
-      const overrideColor = barColors?.get(i);
-      const bodyColor = overrideColor || (isBullish ? '#4caf50' : '#e94560');
+      const defaultColor = isBullish ? '#4caf50' : '#e94560';
+      const override = candleColors?.get(i);
 
-      ctx.strokeStyle = bodyColor;
+      // Resolve colors with fallback chain: element-specific → body → default
+      const bodyColor = override?.body ?? defaultColor;
+      const wickColor = override?.wick ?? override?.body ?? defaultColor;
+      const borderColor = override?.border ?? override?.body ?? defaultColor;
+
+      // Draw wick (high to body top, body bottom to low)
+      ctx.strokeStyle = wickColor;
       ctx.lineWidth = 1;
-
       ctx.beginPath();
+      const bodyTop = Math.min(openY, closeY);
+      const bodyBottom = Math.max(openY, closeY);
+      // Upper wick
       ctx.moveTo(centerX, highY);
+      ctx.lineTo(centerX, bodyTop);
+      // Lower wick
+      ctx.moveTo(centerX, bodyBottom);
       ctx.lineTo(centerX, lowY);
       ctx.stroke();
 
-      const bodyTop = Math.min(openY, closeY);
+      // Draw body
       const bodyHeight = Math.max(1, Math.abs(closeY - openY));
-
       ctx.fillStyle = bodyColor;
       ctx.fillRect(centerX - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+
+      // Draw border (outline around body) if borderColor differs from bodyColor
+      if (borderColor !== bodyColor) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(centerX - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
+      }
     }
   }
 }

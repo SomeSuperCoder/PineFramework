@@ -2,6 +2,7 @@ import type { ExecutionEngine } from './execution-engine.js';
 import {
   type ExecutionContext,
   type FormingCandleResult,
+  type CandleColorEntry,
   type ShapeEntry,
   type LineEntry,
   type LabelEntry,
@@ -312,6 +313,11 @@ export class FormingCandleProcessor {
       diffBgcolor = this.eng.bgcolorData.slice(preBgcolorDataLen);
     }
 
+    let diffBarColors: CandleColorEntry[] = [];
+    if (this.eng.barColorData.length > preBarColorDataLen) {
+      diffBarColors = this.eng.barColorData.slice(preBarColorDataLen) as CandleColorEntry[];
+    }
+
     if (prePlotColors) {
       this.eng.plotColors = prePlotColors;
     } else {
@@ -344,6 +350,7 @@ export class FormingCandleProcessor {
       diffPlotColors: Object.keys(diffPlotColors).length > 0 ? diffPlotColors : undefined,
       diffFillColorData: Object.keys(diffFillColorData).length > 0 ? diffFillColorData : undefined,
       diffBgcolor: diffBgcolor.length > 0 ? diffBgcolor : undefined,
+      diffBarColors: diffBarColors.length > 0 ? diffBarColors : undefined,
       diffAlertTriggers: diffAlertTriggers.length > 0 ? diffAlertTriggers : undefined,
       barTimestamps: actualBarTimestamps,
       barIndex: actualBarIndex,

@@ -268,7 +268,7 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     const warmup = 250;
     const coloredBarsAfterWarmup = barColors
       .slice(warmup)
-      .filter((c): c is { time: number; color: string } => c !== null);
+      .filter((c): c is NonNullable<typeof c> => c !== null && c !== undefined);
     expect(coloredBarsAfterWarmup.length).toBeGreaterThan(0);
 
     // Check if we have shapes (signals were triggered)

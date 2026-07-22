@@ -41,6 +41,7 @@ import type {
   ExecutionResult,
   FormingCandleResult,
   ExecutionSnapshot,
+  CandleColorEntry,
   StrategyMarkerEntry,
   ExecutionMetrics,
   ShapeEntry,
@@ -56,6 +57,7 @@ export {
   type ExecutionContext,
   type ExecutionResult,
   type FormingCandleResult,
+  type CandleColorEntry,
   type StrategyMarkerEntry,
   type ExecutionMetrics,
   type ShapeEntry,
@@ -75,7 +77,7 @@ export class ExecutionEngine {
   /** @internal */ builtins: Map<string, (...args: any[]) => PineValue>;
   /** @internal */ outputs: Map<string, Series>;
   /** @internal */ shapes: ShapeEntry[];
-  /** @internal */ barColorData: Array<{ time: number; color: string }> = [];
+  /** @internal */ barColorData: CandleColorEntry[] = [];
   /** @internal */ bgcolorData: Array<{ time: number; color: string }> = [];
   /** @internal */ alertConditionEntries: AlertConditionEntry[] = [];
   /** @internal */ alertTriggers: AlertTriggerEntry[] = [];

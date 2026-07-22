@@ -48,6 +48,14 @@ export interface ScriptOutputs {
     }>;
   }>;
   barTimestamps?: number[];
+  barColors?: Array<{
+    time: number;
+    bodyColor?: string;
+    wickColor?: string;
+    borderColor?: string;
+    offset?: number;
+    color?: string;
+  }>;
   barIndex: number;
   formingCandle?: boolean;
   isConfirmed?: boolean;

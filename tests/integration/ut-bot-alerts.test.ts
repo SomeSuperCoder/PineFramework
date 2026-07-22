@@ -172,7 +172,7 @@ describe('UT Bot Alerts', () => {
     const bars = createTrendingBars(300, 80);
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
-    const colors = result.barColorData!.map((e) => e.color.toLowerCase());
+    const colors = result.barColorData!.map((e) => (e.bodyColor ?? '').toLowerCase());
     const hasGreen = colors.some((c) => c.includes('4caf50') || c.includes('00ff00'));
     const hasRed = colors.some((c) => c.includes('f44336') || c.includes('ff0000'));
     expect(hasGreen).toBe(true);

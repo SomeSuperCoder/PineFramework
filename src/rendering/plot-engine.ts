@@ -18,6 +18,7 @@ import type {
   FillOptions,
   FillDescriptor,
   ChartPoint,
+  CandleColorData,
 } from './rendering-types.js';
 
 let plotIdCounter = 0;
@@ -45,6 +46,8 @@ export interface PlotOutput {
   bgcolor: BgcolorDescriptor | null;
   barcolor: BarcolorDescriptor | null;
   fills: Map<string, FillDescriptor>;
+  /** Per-bar multi-element candle color overrides. Keyed by bar index. */
+  candleColors?: Map<number, CandleColorData>;
 }
 
 export class ChartPointFactory {
@@ -96,6 +99,7 @@ export class PlotEngine {
   private barcolorData: BarcolorDescriptor | null;
   private fills: Map<string, FillDescriptor>;
   private barIndex: number;
+  private candleColors: Map<number, CandleColorData>;
 
   constructor() {
     this.plots = new Map();
@@ -107,6 +111,7 @@ export class PlotEngine {
     this.barcolorData = null;
     this.fills = new Map();
     this.barIndex = 0;
+    this.candleColors = new Map();
   }
 
   setBarIndex(index: number): void {
@@ -264,6 +269,7 @@ export class PlotEngine {
       bgcolor: this.bgcolorData,
       barcolor: this.barcolorData,
       fills: new Map(this.fills),
+      candleColors: new Map(this.candleColors),
     };
   }
 
@@ -276,6 +282,7 @@ export class PlotEngine {
     this.bgcolorData = null;
     this.barcolorData = null;
     this.fills.clear();
+    this.candleColors.clear();
   }
 
   hline(price: PineValue, options: HlineOptions = {}): void {
@@ -333,6 +340,15 @@ export class PlotEngine {
 
     this.barcolorData.barColors.push(color);
     this.barcolorData.color = color;
+  }
+
+  /**
+   * Set per-bar multi-element candle colors.
+   * @param barIndex - the bar index to color
+   * @param data - color data with optional body, wick, border fields
+   */
+  setCandleColor(barIndex: number, data: CandleColorData): void {
+    this.candleColors.set(barIndex, data);
   }
 
   fill(plot1Title: string, plot2Title: string, options: FillOptions = {}): void {

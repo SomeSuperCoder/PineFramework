@@ -10,6 +10,7 @@ import type {
   BoxData,
   TableData,
   ChartOptions,
+  CandleColorData,
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
 import { Viewport } from './Viewport.js';
@@ -70,7 +71,7 @@ export class PineChart {
   private fillColorData: Record<string, (string | null)[]> = {};
   private hlines: HLineData[] = [];
   private alertTriggers: AlertTriggerData[] = [];
-  private barColors: Map<number, string> = new Map();
+  private candleColors: Map<number, CandleColorData> = new Map();
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
   private teleportLine: { time: number; timestamp: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string; visible: boolean } | null = null;
@@ -270,7 +271,7 @@ export class PineChart {
     ctx.rect(regions.chartArea.x, regions.chartArea.y, regions.chartArea.width, regions.chartArea.height);
     ctx.clip();
 
-    this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.barColors);
+    this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.candleColors);
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 
@@ -725,9 +726,45 @@ export class PineChart {
     this.markDirty();
   }
 
-  setBarColors(colors: Map<number, string>): void {
-    this.barColors = colors;
+  /**
+   * Resolve bar color offsets by shifting entries to their target bar index.
+   * Entries with offset=0 or no offset are kept as-is.
+   * Entries with offset=N are moved N bars forward (positive) or backward (negative).
+   * If multiple entries map to the same bar, the last one wins.
+   * Out-of-range indices are silently clamped to [0, totalBars-1].
+   */
+  private applyOffsets(
+    entries: Array<{ barIndex: number; data: CandleColorData; offset: number }>,
+    totalBars: number,
+  ): Map<number, CandleColorData> {
+    const resolved = new Map<number, CandleColorData>();
+    for (const { barIndex, data, offset } of entries) {
+      const targetIndex = Math.max(0, Math.min(totalBars - 1, barIndex + offset));
+      resolved.set(targetIndex, data);
+    }
+    return resolved;
+  }
+
+  setBarColors(colors: Map<number, CandleColorData>): void {
+    this.candleColors = colors;
     this.markDirty();
+  }
+
+  /**
+   * Set bar colors with offset data. Accepts an array of {barIndex, data, offset}
+   * entries and resolves offsets before storing.
+   */
+  setBarColorsWithOffsets(
+    entries: Array<{ barIndex: number; data: CandleColorData; offset: number }>,
+    totalBars: number,
+  ): void {
+    this.candleColors = this.applyOffsets(entries, totalBars);
+    this.markDirty();
+  }
+
+  /** @deprecated Use setBarColors with CandleColorData map instead. */
+  setCandleColors(colors: Map<number, CandleColorData>): void {
+    this.setBarColors(colors);
   }
 
   setBgColors(colors: Map<number, string>): void {

@@ -224,11 +224,12 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
     return NA;
   });
 
-  eng.builtins.set('barcolor', (colorInput: PineValue): PineValue => {
+  eng.builtins.set('barcolor', (colorInput: PineValue, offsetInput?: PineValue): PineValue => {
     if (isNa(colorInput)) return NA;
     const colorStr = typeof colorInput === 'string' ? colorInput : '#000000';
+    const offset = typeof offsetInput === 'number' ? Math.floor(offsetInput) : 0;
     if (!eng.barColorData) eng.barColorData = [];
-    eng.barColorData.push({ time: eng.currentTimestamp, color: colorStr });
+    eng.barColorData.push({ time: eng.currentTimestamp, bodyColor: colorStr, offset });
     return NA;
   });
 
@@ -239,11 +240,24 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       !Array.isArray(args[args.length - 1])
         ? (args[args.length - 1] as unknown as Record<string, PineValue>)
         : {};
-    let bodyColor = '#000000';
-    if (typeof namedArgs.color === 'string') bodyColor = namedArgs.color;
-    if (bodyColor !== 'na' && bodyColor !== '') {
+    const bodyColor =
+      typeof namedArgs.color === 'string' && namedArgs.color !== 'na' ? namedArgs.color : undefined;
+    const wickColor =
+      typeof namedArgs.wickcolor === 'string' && namedArgs.wickcolor !== 'na'
+        ? namedArgs.wickcolor
+        : undefined;
+    const borderColor =
+      typeof namedArgs.bordercolor === 'string' && namedArgs.bordercolor !== 'na'
+        ? namedArgs.bordercolor
+        : undefined;
+    if (bodyColor || wickColor || borderColor) {
       if (!eng.barColorData) eng.barColorData = [];
-      eng.barColorData.push({ time: eng.currentTimestamp, color: bodyColor });
+      eng.barColorData.push({
+        time: eng.currentTimestamp,
+        bodyColor,
+        wickColor,
+        borderColor,
+      });
     }
     return NA;
   });

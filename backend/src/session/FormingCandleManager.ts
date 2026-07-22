@@ -269,6 +269,15 @@ export class FormingCandleManager {
     // the initial executeBars() call in ScriptSession.initialize().
     this.lastAlertTriggerCount = alertTriggers.length;
 
+    const barColors = (result.barColorData || []).map((b) => ({
+      time: b.time,
+      bodyColor: b.bodyColor ?? undefined,
+      wickColor: b.wickColor ?? undefined,
+      borderColor: b.borderColor ?? undefined,
+      offset: b.offset ?? undefined,
+      color: b.bodyColor ?? undefined,
+    }));
+
     return {
       success: result.success,
       error: result.error,
@@ -281,6 +290,7 @@ export class FormingCandleManager {
       fills,
       strategyMarkers,
       bgcolor: result.bgcolor,
+      barColors: barColors.length > 0 ? barColors : undefined,
       lines,
       labels,
       boxes,
@@ -342,6 +352,15 @@ export class FormingCandleManager {
       size: l.size,
     }));
 
+    const barColors = (result.diffBarColors || []).map((b) => ({
+      time: b.time,
+      bodyColor: b.bodyColor ?? undefined,
+      wickColor: b.wickColor ?? undefined,
+      borderColor: b.borderColor ?? undefined,
+      offset: b.offset ?? undefined,
+      color: b.bodyColor ?? undefined,
+    }));
+
     return {
       success: result.success,
       error: result.error,
@@ -354,6 +373,7 @@ export class FormingCandleManager {
       fills,
       strategyMarkers,
       bgcolor: result.diffBgcolor,
+      barColors: barColors.length > 0 ? barColors : undefined,
       lines,
       labels,
       barTimestamps,

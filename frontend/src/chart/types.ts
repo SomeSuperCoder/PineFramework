@@ -76,6 +76,17 @@ export interface AlertTriggerData {
   destination?: string;
 }
 
+/**
+ * Per-candle multi-element color override.
+ * Each field is an optional hex string. Absent fields fall back to
+ * the next in chain: element-specific → body → default bull/bear.
+ */
+export interface CandleColorData {
+  body?: string;
+  wick?: string;
+  border?: string;
+}
+
 export interface BoxData {
   startTime: number;
   startPrice: number;

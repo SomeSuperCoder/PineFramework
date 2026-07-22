@@ -98,6 +98,20 @@ export interface StrategyMarkerEntry {
   comment?: string;
 }
 
+// ---- Candle color entry ----
+
+export interface CandleColorEntry {
+  time: number;
+  /** Primary body color. Absent = no override. */
+  bodyColor?: string;
+  /** Wick color. Absent = falls back to bodyColor then default bull/bear. */
+  wickColor?: string;
+  /** Border color. Absent = falls back to bodyColor then default bull/bear. */
+  borderColor?: string;
+  /** Bar offset shift (resolved at frontend). */
+  offset?: number;
+}
+
 // ---- Execution context ----
 
 export interface ExecutionContext {
@@ -133,7 +147,7 @@ export interface ExecutionResult {
   barTimestamps?: number[];
   alertConditions?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
-  barColorData?: Array<{ time: number; color: string }>;
+  barColorData?: Array<CandleColorEntry>;
   maxLookback?: number;
 }
 
@@ -149,6 +163,7 @@ export interface FormingCandleResult {
   diffPlotColors?: Record<string, (string | null)[]>;
   diffFillColorData?: Record<string, (string | null)[]>;
   diffBgcolor?: Array<{ time: number; color: string }>;
+  diffBarColors?: Array<CandleColorEntry>;
   diffAlertTriggers?: AlertTriggerEntry[];
   tables?: TableEntry[];
   barTimestamps: number[];
@@ -195,7 +210,7 @@ export interface ExecutionSnapshot {
   lineIdCounter: number;
   labels: LabelEntry[];
   bgcolorData: Array<{ time: number; color: string }>;
-  barColorData: Array<{ time: number; color: string }>;
+  barColorData: Array<CandleColorEntry>;
   sarState: Map<string, SarStateValue>;
   barIndex: number;
   plotColors?: Map<string, (string | null)[]>;

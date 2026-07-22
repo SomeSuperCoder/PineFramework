@@ -87,7 +87,12 @@ executeRouter.post('/execute', async (req, res) => {
 
     const barColors = (result.barColorData || []).map((b) => ({
       time: b.time,
-      color: b.color,
+      bodyColor: b.bodyColor ?? undefined,
+      wickColor: b.wickColor ?? undefined,
+      borderColor: b.borderColor ?? undefined,
+      offset: b.offset ?? undefined,
+      // Backward compat: 'color' alias for bodyColor
+      color: b.bodyColor ?? undefined,
     }));
 
     const strategyMarkers = (result.strategyMarkers || []).map((m) => ({
