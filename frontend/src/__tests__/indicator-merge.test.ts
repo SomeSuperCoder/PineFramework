@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { prependIndicatorResult } from '../hooks/indicator-merge';
-import type { ScriptResult } from '../types';
+import type { ScriptResult, ShapeData, LabelData, BoxData, StrategyMarkerData } from '../types';
 import type { LineData } from '../types';
 
 const EMPTY_RESULT: ScriptResult = {
@@ -186,20 +186,265 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(lineUnmatched!.color).toBe('#00cc00');
 
     // line at 1500 from prev was in overlap and NOT replaced (newResult has
-    // no line with points[0]=1500) → dropped entirely
+    // no line with points[0]=1500) → now SURVIVES the merge (fix: unreplaced
+    // overlap-zone elements are no longer dropped)
     const line1500 = merged.lines.find((l) => l.points[0]?.time === 1500);
-    expect(line1500).toBeUndefined();
+    expect(line1500).toBeDefined();
+    expect(line1500!.extend).toBe('none');
 
     // line at 3000 survives from prev
     const lineC = merged.lines.find((l) => l.points[0]?.time === 3000);
     expect(lineC).toBeDefined();
     expect(lineC!.extend).toBe('right');
 
-    // Should have 3 lines
-    expect(merged.lines).toHaveLength(3);
+    // Should have 4 lines (1000, 1500, 2000, 3000)
+    expect(merged.lines).toHaveLength(4);
   });
 
-  it('should handle border-of-chunk: multiple lines with extend:right in newResult, all fixed by surviving prev', () => {
+  describe('prependIndicatorResult chunk border element fix', () => {
+  const addedCount = 10;
+  const contextSize = 4;
+  // Overlap zone covers timestamps 100-103
+  const overlapTimestamps = new Set<number>([100, 101, 102, 103]);
+
+  it('should keep shape in overlap zone when newResult does not reproduce it', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      shapes: [
+        { type: 'arrowup', time: 101, price: 50000, color: '#00ff00' },
+        { type: 'arrowdown', time: 200, price: 50100, color: '#ff0000' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      shapes: [
+        // newResult also has a shape at time 101 (will replace prev one)
+        { type: 'arrowup', time: 101, price: 50100, color: '#0000ff' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // shape at time 101: replaced by newResult version
+    const shape101 = merged.shapes.find((s) => s.time === 101);
+    expect(shape101).toBeDefined();
+    expect(shape101!.color).toBe('#0000ff'); // from newResult
+    expect(shape101!.price).toBe(50100); // from newResult
+
+    // shape at time 200: in overlap zone, NOT replaced → SURVIVES
+    const shape200 = merged.shapes.find((s) => s.time === 200);
+    expect(shape200).toBeDefined();
+    expect(shape200!.color).toBe('#ff0000'); // from prev
+
+    expect(merged.shapes).toHaveLength(2);
+  });
+
+  it('should replace shape in overlap zone when newResult reproduces it', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      shapes: [
+        { type: 'arrowup', time: 101, price: 50000, color: '#00ff00' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      shapes: [
+        { type: 'arrowup', time: 101, price: 50200, color: '#0000ff' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // shape at time 101 replaced by newResult version
+    const shape101 = merged.shapes.find((s) => s.time === 101);
+    expect(shape101).toBeDefined();
+    expect(shape101!.price).toBe(50200);
+
+    expect(merged.shapes).toHaveLength(1);
+  });
+
+  it('should keep line in overlap zone when newResult does not reproduce it', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        makeLine(101, 201, 50000, 'none'),   // starts in overlap, NOT replaced
+        makeLine(200, 300, 50100, 'none'),
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        makeLine(101, 201, 50000, 'none'),   // reproduces line at 101
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // line at 101: replaced by newResult
+    const line101 = merged.lines.find((l) => l.points[0]?.time === 101);
+    expect(line101).toBeDefined();
+
+    // line at 200: in overlap, NOT replaced → SURVIVES
+    const line200 = merged.lines.find((l) => l.points[0]?.time === 200);
+    expect(line200).toBeDefined();
+    expect(line200!.color).toBe('#ff0000');
+
+    expect(merged.lines).toHaveLength(2);
+  });
+
+  it('should keep label in overlap zone when not replaced', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        { time: 102, price: 50000, text: 'buy', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 300, price: 50100, text: 'sell', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        { time: 102, price: 50200, text: 'BUY!', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // label at 102: replaced by newResult
+    const label102 = merged.labels.find((l) => l.time === 102);
+    expect(label102).toBeDefined();
+    expect(label102!.text).toBe('BUY!');
+    expect(label102!.price).toBe(50200);
+
+    // label at 300: in overlap, NOT replaced → SURVIVES
+    const label300 = merged.labels.find((l) => l.time === 300);
+    expect(label300).toBeDefined();
+    expect(label300!.text).toBe('sell');
+
+    expect(merged.labels).toHaveLength(2);
+  });
+
+  it('should keep box in overlap zone when not replaced', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      boxes: [
+        { startTime: 100, endTime: 200, startPrice: 50000, endPrice: 51000 },
+        { startTime: 300, endTime: 400, startPrice: 50000, endPrice: 51000 },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      boxes: [
+        { startTime: 100, endTime: 200, startPrice: 50500, endPrice: 51500 },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // box at 100: replaced by newResult
+    const box100 = merged.boxes.find((b) => b.startTime === 100);
+    expect(box100).toBeDefined();
+    expect(box100!.startPrice).toBe(50500);
+
+    // box at 300: in overlap, NOT replaced → SURVIVES
+    const box300 = merged.boxes.find((b) => b.startTime === 300);
+    expect(box300).toBeDefined();
+    expect(box300!.startPrice).toBe(50000);
+
+    expect(merged.boxes).toHaveLength(2);
+  });
+
+  it('should keep bgcolor entry in overlap zone when not replaced', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      bgcolor: [
+        { time: 103, color: '#ff0000' },
+        { time: 500, color: '#00ff00' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      bgcolor: [
+        { time: 103, color: '#0000ff' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // bgcolor at 103: replaced by newResult
+    const bg103 = merged.bgcolor?.find((b) => b.time === 103);
+    expect(bg103).toBeDefined();
+    expect(bg103!.color).toBe('#0000ff');
+
+    // bgcolor at 500: in overlap, NOT replaced → SURVIVES
+    const bg500 = merged.bgcolor?.find((b) => b.time === 500);
+    expect(bg500).toBeDefined();
+    expect(bg500!.color).toBe('#00ff00');
+
+    expect(merged.bgcolor).toHaveLength(2);
+  });
+
+  it('should shift prev strategy marker barIndex by addedCount', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      strategyMarkers: [
+        { type: 'entry', name: 'Long', direction: 'long', barIndex: 50, timestamp: 1000, color: '#00ff00' },
+        { type: 'exit', name: 'Exit', direction: 'short', barIndex: 100, timestamp: 2000, color: '#ff0000' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      strategyMarkers: [
+        { type: 'entry', name: 'NewLong', direction: 'long', barIndex: 2, timestamp: 500, color: '#0000ff' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // new marker keeps its barIndex
+    const newMarker = merged.strategyMarkers?.find((m) => m.name === 'NewLong');
+    expect(newMarker).toBeDefined();
+    expect(newMarker!.barIndex).toBe(2);
+
+    // prev markers have barIndex shifted by addedCount (10)
+    const prevLong = merged.strategyMarkers?.find((m) => m.name === 'Long');
+    expect(prevLong).toBeDefined();
+    expect(prevLong!.barIndex).toBe(60); // 50 + 10
+
+    const prevExit = merged.strategyMarkers?.find((m) => m.name === 'Exit');
+    expect(prevExit).toBeDefined();
+    expect(prevExit!.barIndex).toBe(110); // 100 + 10
+
+    expect(merged.strategyMarkers).toHaveLength(3);
+  });
+
+  it('should keep new strategy markers barIndex unchanged', () => {
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      strategyMarkers: [],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      strategyMarkers: [
+        { type: 'entry', name: 'Entry1', direction: 'long', barIndex: 5, timestamp: 1000, color: '#00ff00' },
+        { type: 'exit', name: 'Exit1', direction: 'short', barIndex: 15, timestamp: 2000, color: '#ff0000' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    const entry1 = merged.strategyMarkers?.find((m) => m.name === 'Entry1');
+    expect(entry1).toBeDefined();
+    expect(entry1!.barIndex).toBe(5);
+
+    const exit1 = merged.strategyMarkers?.find((m) => m.name === 'Exit1');
+    expect(exit1).toBeDefined();
+    expect(exit1!.barIndex).toBe(15);
+
+    expect(merged.strategyMarkers).toHaveLength(2);
+  });
+});
+
+it('should handle border-of-chunk: multiple lines with extend:right in newResult, all fixed by surviving prev', () => {
     // When the truncated re-execution produces MANY lines (more S/R
     // level changes than the original), the last line correctly has
     // extend:right, but earlier lines in the batch also had it set

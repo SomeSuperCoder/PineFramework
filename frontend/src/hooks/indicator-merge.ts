@@ -76,7 +76,7 @@ export function prependIndicatorResult(
     ...newResult.shapes,
     ...prev.shapes.filter(
       (s) =>
-        !newResult.shapes.some((n) => n.time === s.time) && !inOverlap(s.time),
+        !newResult.shapes.some((n) => n.time === s.time),
     ),
   ];
   const mergedFills = [
@@ -90,16 +90,15 @@ export function prependIndicatorResult(
   ];
   // ── Lines ──
   // Determine which prev lines survive (not replaced by a matching newResult
-  // line, and not in the overlap zone).
+  // line). Lines in the overlap zone survive when NOT replaced — the
+  // re-execution on a truncated dataset may not reproduce every line.
   const prevLineReplaced = (pl: typeof prev.lines[number]): boolean =>
     newResult.lines.some(
       (nl) => nl.points[0]?.time === pl.points[0]?.time,
     );
-  const prevLineInOverlap = (pl: typeof prev.lines[number]): boolean =>
-    pl.points[0]?.time !== undefined && inOverlap(pl.points[0].time);
 
   const survivingPrevLines = prev.lines.filter(
-    (pl) => !prevLineReplaced(pl) && !prevLineInOverlap(pl),
+    (pl) => !prevLineReplaced(pl),
   );
 
   // Fix lines from newResult that incorrectly have extend:right because
@@ -137,12 +136,15 @@ export function prependIndicatorResult(
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter(
-      (l) => !newResult.labels.some((n) => n.time === l.time) && !inOverlap(l.time),
+      (l) => !newResult.labels.some((n) => n.time === l.time),
     ),
   ];
   const mergedStrategyMarkers = [
     ...(newResult.strategyMarkers || []),
-    ...(prev.strategyMarkers || []),
+    ...(prev.strategyMarkers || []).map((m) => ({
+      ...m,
+      barIndex: m.barIndex + addedCount,
+    })),
   ];
 
   // Prepend fillColorData entries and recompute boundary
@@ -183,16 +185,14 @@ export function prependIndicatorResult(
     ...(newResult.bgcolor || []),
     ...(prev.bgcolor || []).filter(
       (b) =>
-        !(newResult.bgcolor || []).some((n) => n.time === b.time) &&
-        !inOverlap(b.time),
+        !(newResult.bgcolor || []).some((n) => n.time === b.time),
     ),
   ];
   const mergedBoxes = [
     ...(newResult.boxes || []),
     ...(prev.boxes || []).filter(
       (b) =>
-        !(newResult.boxes || []).some((n) => n.startTime === b.startTime) &&
-        !inOverlap(b.startTime),
+        !(newResult.boxes || []).some((n) => n.startTime === b.startTime),
     ),
   ];
   // Tables are static dashboard state — use the latest
