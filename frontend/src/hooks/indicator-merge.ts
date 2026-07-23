@@ -166,7 +166,45 @@ export function prependIndicatorResult(
     return { ...nl, extend: 'none' as const, points: modifiedPoints };
   });
 
-  const mergedLines = [...fixedNewLines, ...survivingPrevLines];
+  // ── Clip new-result lines at chunk boundary ──
+  // Lines from the re-execution on a smaller dataset may extend past the
+  // chunk boundary into territory covered by prev's lines. Clip any line
+  // that starts before the boundary and ends after it.
+  let chunkBoundaryTime = 0;
+  if (overlapTimestamps && overlapTimestamps.size > 0) {
+    chunkBoundaryTime = Math.min(...overlapTimestamps);
+  }
+
+  const clippedNewLines = chunkBoundaryTime > 0
+    ? fixedNewLines.map((line) => {
+        if (line.points.length < 2) return line;
+        const firstPoint = line.points[0];
+        const lastPoint = line.points[line.points.length - 1];
+        if (firstPoint.time >= chunkBoundaryTime || lastPoint.time <= chunkBoundaryTime) {
+          return line; // fully on one side of boundary
+        }
+        // Find the segment that crosses the boundary and clip there
+        for (let i = 0; i < line.points.length - 1; i++) {
+          const p1 = line.points[i];
+          const p2 = line.points[i + 1];
+          if (p1.time <= chunkBoundaryTime && p2.time >= chunkBoundaryTime) {
+            const t = (p2.time - p1.time) > 0
+              ? (chunkBoundaryTime - p1.time) / (p2.time - p1.time)
+              : 0;
+            return {
+              ...line,
+              points: [
+                ...line.points.slice(0, i + 1),
+                { time: chunkBoundaryTime, price: p1.price + t * (p2.price - p1.price) },
+              ],
+            };
+          }
+        }
+        return line;
+      })
+    : fixedNewLines;
+
+  const mergedLines = [...clippedNewLines, ...survivingPrevLines];
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter(
