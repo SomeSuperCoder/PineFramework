@@ -210,7 +210,7 @@ export function prependIndicatorResult(
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter(
-      (l) => !newResult.labels.some((n) => n.time === l.time),
+      (l) => !overlapTimestamps?.has(l.time),
     ),
   ];
   const mergedStrategyMarkers = [
