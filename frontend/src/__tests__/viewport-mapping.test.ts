@@ -36,17 +36,29 @@ describe('Viewport.barIndexToPixel', () => {
   });
 
   // 3.3 — Prepend adjustment
-  it('adjusts firstBarIndex after prepend', () => {
+  it('keeps firstBarIndex at 0 when at left edge after prepend', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(100);
     vp.scrollTo(0, 800);
 
     vp.adjustForPrepend(20);
-    expect(vp.getFirstBarIndex()).toBe(20);
-    // Bar 20 is now the first bar in the viewport (original bar 0 shifted right)
-    expect(vp.barIndexToPixel(20)).toBe(0);
-    // Bar 25 should be at pixel 40
-    expect(vp.barIndexToPixel(25)).toBe(40);
+    // When the user is at the left edge (firstBarIndex = 0),
+    // prepend should keep them there so they can see the new data.
+    expect(vp.getFirstBarIndex()).toBe(0);
+    expect(vp.getTotalBars()).toBe(120);
+  });
+
+  it('shifts firstBarIndex after prepend when scrolled away from left edge', () => {
+    const vp = new Viewport(8);
+    vp.setTotalBars(200);
+    vp.scrollTo(150, 800);
+    // firstBarIndex = 99 after scrollTo(150)
+    expect(vp.getFirstBarIndex()).toBe(99);
+
+    vp.adjustForPrepend(50);
+    // When scrolled away from left edge, prepend shifts the viewport.
+    expect(vp.getFirstBarIndex()).toBe(149);
+    expect(vp.getTotalBars()).toBe(250);
   });
 
   // 3.4 — Inverse relationship

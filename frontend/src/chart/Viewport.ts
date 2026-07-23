@@ -30,7 +30,12 @@ export class Viewport {
 
   adjustForPrepend(added: number): void {
     this.totalBars += added;
-    this.state.firstBarIndex += added;
+    // If the user is at the left edge (firstBarIndex = 0), keep them there
+    // so they can see the newly loaded older data. Otherwise, shift the
+    // viewport to maintain their current view position.
+    if (this.state.firstBarIndex > 0) {
+      this.state.firstBarIndex += added;
+    }
   }
 
   fitContent(chartWidth: number): void {
@@ -85,5 +90,9 @@ export class Viewport {
 
   getBarCount(): number {
     return this.state.barCount;
+  }
+
+  getTotalBars(): number {
+    return this.totalBars;
   }
 }
