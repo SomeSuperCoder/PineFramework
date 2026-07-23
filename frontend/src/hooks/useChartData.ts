@@ -100,10 +100,12 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       prependCountRef.current += addedCount;
 
       // Record chunk border (always tracked — used by export and debug visualization)
+      // Existing borders' barIndexes must be shifted right by addedCount
+      // since the new bars are prepended before them.
       const boundaryTimestamp = ohlcvDataRef.current[0]?.timestamp ?? 0;
       setChunkBorders((prev) => [
-        ...prev,
-        { barIndex: prependCountRef.current, addedCount, timestamp: Math.floor(boundaryTimestamp / 1000) },
+        ...prev.map((b) => ({ ...b, barIndex: b.barIndex + addedCount })),
+        { barIndex: addedCount, addedCount, timestamp: Math.floor(boundaryTimestamp / 1000) },
       ]);
 
       const oldBars = ohlcvDataRef.current;
