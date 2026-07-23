@@ -639,6 +639,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         exportedAt: Date.now(),
         candles,
         indicators,
+        chunkBorders,
       };
 
       const response = await fetch('/api/export', {
