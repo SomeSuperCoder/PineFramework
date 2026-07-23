@@ -79,8 +79,16 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     const chart = chartRef.current;
     if (!chart) return;
 
-    const onRangeChange = async (start: number) => {
-      if (start > 50 || isLoadingHistoryRef.current) return;
+    const onRangeChange = async () => {
+      if (isLoadingHistoryRef.current) return;
+      const chart = chartRef.current;
+      if (!chart) return;
+      const range = chart.timeScale().getVisibleRange();
+      // range.start is the first bar index visible on screen.
+      // Only trigger scroll-back when the user is within 50 bars of
+      // the oldest loaded data (i.e. they've scrolled nearly to the
+      // left edge of the chart).
+      if (range.start > 50) return;
       isLoadingHistoryRef.current = true;
       const sy = symbolRef.current;
       const iv = intervalRef.current;
