@@ -36,19 +36,20 @@ describe('Viewport.barIndexToPixel', () => {
   });
 
   // 3.3 — Prepend adjustment
-  it('keeps firstBarIndex at 0 when near left edge after prepend', () => {
+  it('shifts firstBarIndex by added after prepend at left edge', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(100);
     vp.scrollTo(0, 800);
 
     vp.adjustForPrepend(20);
-    // When the user is near the left edge (firstBarIndex <= SCROLL_BACK_THRESHOLD),
-    // prepend keeps them at 0 so they can see the new data.
-    expect(vp.getFirstBarIndex()).toBe(0);
+    // adjustForPrepend unconditionally shifts firstBarIndex by added,
+    // so the user stays at the same visual position. They can then
+    // scroll left (pan past 0, which is clamped) to see the new data.
+    expect(vp.getFirstBarIndex()).toBe(20);
     expect(vp.getTotalBars()).toBe(120);
   });
 
-  it('keeps firstBarIndex at 0 when at threshold after prepend', () => {
+  it('shifts firstBarIndex by added after prepend near threshold', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(200);
     // scrollTo(81) with barCount=102 gives firstBarIndex = round(81 - 51) = 30
@@ -56,12 +57,13 @@ describe('Viewport.barIndexToPixel', () => {
     expect(vp.getFirstBarIndex()).toBe(30);
 
     vp.adjustForPrepend(50);
-    // firstBarIndex was 30 (<= 50 threshold), so it stays at 0
-    expect(vp.getFirstBarIndex()).toBe(0);
+    // adjustForPrepend unconditionally shifts firstBarIndex by added.
+    // firstBarIndex was 30, so it becomes 80. No threshold clamping.
+    expect(vp.getFirstBarIndex()).toBe(80);
     expect(vp.getTotalBars()).toBe(250);
   });
 
-  it('shifts firstBarIndex after prepend when scrolled past threshold', () => {
+  it('shifts firstBarIndex by added after prepend when scrolled past threshold', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(200);
     vp.scrollTo(150, 800);
@@ -69,7 +71,7 @@ describe('Viewport.barIndexToPixel', () => {
     expect(vp.getFirstBarIndex()).toBe(99);
 
     vp.adjustForPrepend(50);
-    // firstBarIndex was 99 (> 50 threshold), so it shifts by added
+    // Unconditional shift: firstBarIndex 99 + 50 = 149
     expect(vp.getFirstBarIndex()).toBe(149);
     expect(vp.getTotalBars()).toBe(250);
   });

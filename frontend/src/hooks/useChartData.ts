@@ -71,7 +71,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
         return 0;
       }
       const end = oldest.timestamp - 1;
-      const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000&end=${end}`);
+      // Use a small chunk (200 bars) so the next scroll-back triggers after
+      // ~400px of panning (~1/3 viewport width) instead of ~2000px with 1000-bar chunks.
+      const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=200&end=${end}`);
       if (!response.ok) return 0;
       const json = await response.json();
       if (!json.data || json.data.length === 0) {

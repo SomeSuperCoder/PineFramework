@@ -33,15 +33,7 @@ export class Viewport {
 
   adjustForPrepend(added: number): void {
     this.totalBars += added;
-    // When the user is near the left edge (firstBarIndex <= SCROLL_BACK_THRESHOLD),
-    // keep them at 0 so they see the newly loaded older data.
-    // The threshold matches the onRangeChange guard in ChartComponent (50 bars).
-    // Otherwise, shift the viewport to maintain their current view position.
-    if (this.state.firstBarIndex <= Viewport.SCROLL_BACK_THRESHOLD) {
-      this.state.firstBarIndex = 0;
-    } else {
-      this.state.firstBarIndex += added;
-    }
+    this.state.firstBarIndex += added;
   }
 
   fitContent(chartWidth: number): void {
