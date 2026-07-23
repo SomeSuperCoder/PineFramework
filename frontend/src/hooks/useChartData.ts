@@ -4,12 +4,22 @@ import type { ExecuteResponse, ExecutionResultMessage } from './chart-data-trans
 import { buildScriptResult } from './chart-data-transform';
 import { prependIndicatorResult, mergeDiffIntoResult } from './indicator-merge';
 
+export interface ChunkBorder {
+  /** Bar index (0-based) where this chunk boundary falls in the current dataset. */
+  barIndex: number;
+  /** Number of bars in the prepended chunk. */
+  addedCount: number;
+  /** Timestamp (seconds) at the boundary. */
+  timestamp: number;
+}
+
 export function useChartData(onIndicatorResult?: (indicatorId: string, result: ScriptResult) => void) {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
   const [scriptResult, setScriptResult] = useState<ScriptResult | null>(null);
   const [errors, setErrors] = useState<PineScriptError[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [chunkBorders, setChunkBorders] = useState<ChunkBorder[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const subscribedTopicRef = useRef<string | null>(null);
   const lastCodeRef = useRef<string | null>(null);
@@ -42,6 +52,8 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
     indicatorResultsRef.current.clear();
     ohlcvDataRef.current = [];
     historicalDataLoadedRef.current = false;
+    prependCountRef.current = 0;
+    setChunkBorders([]);
     try {
       const response = await fetch(`/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`);
       if (!response.ok) {
@@ -86,6 +98,13 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       const addedCount = json.data.length;
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
+
+      // Record chunk border for debug mode
+      const boundaryTimestamp = ohlcvDataRef.current[0]?.timestamp ?? 0;
+      setChunkBorders((prev) => [
+        ...prev,
+        { barIndex: prependCountRef.current, addedCount, timestamp: Math.floor(boundaryTimestamp / 1000) },
+      ]);
 
       const oldBars = ohlcvDataRef.current;
       const newBars = json.data as typeof ohlcvDataRef.current;
@@ -642,6 +661,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
 
   return {
     candles,
+    chunkBorders,
     scriptResult,
     errors,
     isConnected,

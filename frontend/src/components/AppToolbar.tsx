@@ -4,6 +4,8 @@ export interface AppToolbarProps {
   isStrategy: boolean;
   autoScale: boolean;
   onToggleAutoScale: () => void;
+  debugMode: boolean;
+  onToggleDebugMode: () => void;
   errors: PineScriptError[];
   errorConsoleOpen: boolean;
   onToggleErrorConsole: () => void;
@@ -20,6 +22,8 @@ export function AppToolbar({
   isStrategy,
   autoScale,
   onToggleAutoScale,
+  debugMode,
+  onToggleDebugMode,
   errors,
   errorConsoleOpen,
   onToggleErrorConsole,
@@ -150,6 +154,43 @@ export function AppToolbar({
         </svg>
         {autoScale ? 'Auto Scale' : 'Manual'}
       </button>
+      <button
+        onClick={onToggleDebugMode}
+        style={{
+          padding: '5px 10px',
+          background: debugMode ? '#2a2a10' : '#111128',
+          color: debugMode ? '#ff9800' : '#e0e0e0',
+          border: `1px solid ${debugMode ? '#ff9800' : '#111128'}`,
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '11px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '5px',
+        }}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        >
+          <circle cx="6" cy="6" r="1.5" fill="currentColor" />
+          <path d="M6 3V1" />
+          <path d="M6 11V9" />
+          <path d="M3 6H1" />
+          <path d="M11 6H9" />
+          <path d="M9.5 2.5L8 4" />
+          <path d="M4 8L2.5 9.5" />
+          <path d="M2.5 2.5L4 4" />
+          <path d="M8 8L9.5 9.5" />
+        </svg>
+        Debug
+      </button>
+      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
       <button
         onClick={onOpenGoToDate}
         style={{

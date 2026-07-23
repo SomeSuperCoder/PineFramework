@@ -42,6 +42,7 @@ function App() {
   const [showResultsPopup, setShowResultsPopup] = useState(false);
   const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
+  const [debugMode, setDebugMode] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
@@ -82,6 +83,7 @@ function App() {
 
   const {
     candles,
+    chunkBorders,
     scriptResult,
     errors,
     isConnected,
@@ -367,6 +369,8 @@ function App() {
           onRemoveIndicator={handleRemoveIndicator}
           onEditIndicator={handleEditIndicator}
           forceAutoScale={autoScale}
+          debugMode={debugMode}
+          chunkBorders={chunkBorders}
         />
       </main>
 
@@ -374,6 +378,8 @@ function App() {
         isStrategy={isStrategy}
         autoScale={autoScale}
         onToggleAutoScale={() => setAutoScale(!autoScale)}
+        debugMode={debugMode}
+        onToggleDebugMode={() => setDebugMode(!debugMode)}
         errors={errors}
         errorConsoleOpen={errorConsoleOpen}
         onToggleErrorConsole={() => setErrorConsoleOpen(!errorConsoleOpen)}

@@ -12,6 +12,7 @@ export type {
   BoxData,
   ChartOptions,
   AlertTriggerData,
+  ChunkBorderData,
 } from './types.js';
 export { DEFAULT_OPTIONS } from './types.js';
 export type { PaneRegion, PriceRange } from './LayoutManager.js';

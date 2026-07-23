@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { PineChart, createChart } from '../chart';
-import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData } from '../chart';
+import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
 import type { ScriptResult } from '../types';
 
 interface IndicatorLabel {
@@ -22,6 +22,8 @@ interface ChartComponentProps {
   onRemoveIndicator?: (indicatorId: string) => void;
   onEditIndicator?: (indicatorId: string) => void;
   forceAutoScale?: boolean;
+  debugMode?: boolean;
+  chunkBorders?: ChunkBorderData[];
 }
 
 export interface ChartComponentHandle {
@@ -30,7 +32,7 @@ export interface ChartComponentHandle {
   clearTeleportLine: () => void;
 }
 
-export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false }, ref) {
+export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false, debugMode = false, chunkBorders = [] }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -64,6 +66,14 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
   useEffect(() => {
     chartRef.current?.setForceAutoScale(forceAutoScale);
   }, [forceAutoScale]);
+
+  useEffect(() => {
+    chartRef.current?.setDebugMode(debugMode);
+  }, [debugMode]);
+
+  useEffect(() => {
+    chartRef.current?.setChunkBorders(chunkBorders);
+  }, [chunkBorders]);
 
   const isLoadingHistoryRef = useRef(false);
   const fetchRef = useRef(fetchOlderOHLCV);

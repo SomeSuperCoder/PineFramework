@@ -11,6 +11,7 @@ import type {
   TableData,
   ChartOptions,
   CandleColorData,
+  ChunkBorderData,
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
 import { Viewport } from './Viewport.js';
@@ -78,6 +79,8 @@ export class PineChart {
   private chartLabels: LabelData[] = [];
   private boxes: BoxData[] = [];
   private tables: TableData[] = [];
+  private debugMode: boolean = false;
+  private chunkBorders: ChunkBorderData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
   private container: HTMLElement;
   private tableContainer: HTMLElement | null = null;
@@ -334,6 +337,9 @@ export class PineChart {
     this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
 
     this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers);
+
+    // Debug overlay: chunk borders (only when debug mode is active)
+    this.renderChunkBorders(ctx);
 
     this.ctx.clearRect(0, 0, w, h);
     this.ctx.drawImage(this.offscreen, 0, 0);
@@ -617,6 +623,64 @@ export class PineChart {
     }
   }
 
+  private renderChunkBorders(ctx: CanvasRenderingContext2D): void {
+    if (!this.debugMode || this.chunkBorders.length === 0) return;
+
+    const fullHeight = this.canvas.height;
+    const fullWidth = this.canvas.width;
+
+    ctx.save();
+
+    for (const border of this.chunkBorders) {
+      const x = this.viewport.barIndexToPixel(border.barIndex);
+      if (x < 0 || x > fullWidth) continue;
+
+      // Vertical orange dashed line spanning full chart height
+      ctx.strokeStyle = 'rgba(255, 165, 0, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, fullHeight);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Metadata label: "📦 HH:MM (+N)"
+      const date = new Date(border.timestamp * 1000);
+      const hh = date.getHours().toString().padStart(2, '0');
+      const mm = date.getMinutes().toString().padStart(2, '0');
+      const label = `📦 ${hh}:${mm} (+${border.addedCount})`;
+
+      ctx.font = '10px monospace';
+      const metrics = ctx.measureText(label);
+      const padX = 4;
+      const bw = metrics.width + padX * 2;
+      const bh = 14;
+      let lx = x + 4;
+      const ly = 4;
+
+      // If label would overflow right edge, draw it to the left of the line
+      if (lx + bw > fullWidth - 4) {
+        lx = x - bw - 4;
+      }
+      if (lx < 0) lx = Math.max(4, x + 4); // fallback: clamp
+
+      // Background pill
+      ctx.fillStyle = 'rgba(255, 165, 0, 0.75)';
+      ctx.beginPath();
+      ctx.roundRect(lx, ly, bw, bh, 3);
+      ctx.fill();
+
+      // Text
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, lx + padX, ly + bh / 2);
+    }
+
+    ctx.restore();
+  }
+
   private cssColor(color: string): string {
     if (color.length === 9 && color.startsWith('#')) {
       const r = parseInt(color.slice(1, 3), 16);
@@ -656,6 +720,16 @@ export class PineChart {
 
   setTables(tables: TableData[]): void {
     this.tables = tables;
+    this.markDirty();
+  }
+
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    this.markDirty();
+  }
+
+  setChunkBorders(borders: ChunkBorderData[]): void {
+    this.chunkBorders = borders;
     this.markDirty();
   }
 

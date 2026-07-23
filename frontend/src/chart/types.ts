@@ -127,6 +127,15 @@ export const DEFAULT_OPTIONS: Required<ChartOptions> = {
   timeScaleHeight: 30,
 };
 
+export interface ChunkBorderData {
+  /** Bar index (0-based) where this chunk boundary falls in the current dataset. */
+  barIndex: number;
+  /** Number of bars in the prepended chunk. */
+  addedCount: number;
+  /** Timestamp (seconds) at the boundary. */
+  timestamp: number;
+}
+
 export interface TableCellData {
   text: string;
   text_color: string;
