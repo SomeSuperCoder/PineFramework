@@ -231,6 +231,8 @@ export class ExecutionEngine {
     string,
     { prevAvgGain: number; prevAvgLoss: number; count: number; prevSource: number }
   > = new Map();
+  /** @internal */ pivotLookback: number = 0;
+  /** @internal */ valuewhenLookback: number = 0;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
 
   // ========================================================================
@@ -252,6 +254,17 @@ export class ExecutionEngine {
     for (const key of this.atrState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
     for (const key of this.hmaBuffers.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
     for (const key of this.sarState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    // ta.pivothigh/ta.pivotlow need leftBars + rightBars of OHLC history
+    if (this.pivotLookback > 0) { max = Math.max(max, this.pivotLookback); }
+    // ta.valuewhen needs enough history to find the Nth occurrence;
+    // use the accumulated history length as a proxy for required lookback
+    if (this.valuewhenLookback > 0) { max = Math.max(max, this.valuewhenLookback); }
+    // Scripts using pivots/valuewhen often access series via [] indexing
+    // (e.g. findprevious() loops up to 1000 bars back). Ensure minimum
+    // context so re-execution has enough history for deep series lookback.
+    if (max > 0 && max < 1000 && (this.pivotLookback > 0 || this.valuewhenLookback > 0)) {
+      max = 1000;
+    }
     return max;
   }
 

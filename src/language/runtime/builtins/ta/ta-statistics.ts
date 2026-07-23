@@ -58,6 +58,12 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     const leftBars = args[0] as number;
     const rightBars = args[1] as number;
     if (leftBars < 1 || rightBars < 1) return NA;
+    const lb = Math.trunc(leftBars);
+    const rb = Math.trunc(rightBars);
+    if (lb > 0 && rb > 0) {
+      const needed = lb + rb + 1;
+      if (needed > eng.pivotLookback) eng.pivotLookback = needed;
+    }
     const highArr = eng.ohlcHistory.high;
     const len = highArr.length;
     if (len < leftBars + rightBars + 1) return NA;
@@ -89,6 +95,12 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     const leftBars = args[0] as number;
     const rightBars = args[1] as number;
     if (leftBars < 1 || rightBars < 1) return NA;
+    const lb = Math.trunc(leftBars);
+    const rb = Math.trunc(rightBars);
+    if (lb > 0 && rb > 0) {
+      const needed = lb + rb + 1;
+      if (needed > eng.pivotLookback) eng.pivotLookback = needed;
+    }
     const lowArr = eng.ohlcHistory.low;
     const len = lowArr.length;
     if (len < leftBars + rightBars + 1) return NA;
@@ -125,6 +137,10 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
       } else {
         history.push(NA as any);
       }
+      // Track lookback: need enough history to find the Nth occurrence
+      // The occurrence index is 0-based, so we need at least occ+1 entries
+      const needed = occ + 1;
+      if (needed > eng.valuewhenLookback) eng.valuewhenLookback = needed;
     }
     const idx = history.length - 1 - occ;
     if (idx >= 0 && idx < history.length) {
