@@ -88,34 +88,52 @@ export function prependIndicatorResult(
         ),
     ),
   ];
+  // ── Lines ──
+  // Determine which prev lines survive (not replaced by a matching newResult
+  // line, and not in the overlap zone).
+  const prevLineReplaced = (pl: typeof prev.lines[number]): boolean =>
+    newResult.lines.some(
+      (nl) => nl.points[0]?.time === pl.points[0]?.time,
+    );
+  const prevLineInOverlap = (pl: typeof prev.lines[number]): boolean =>
+    pl.points[0]?.time !== undefined && inOverlap(pl.points[0].time);
+
+  const survivingPrevLines = prev.lines.filter(
+    (pl) => !prevLineReplaced(pl) && !prevLineInOverlap(pl),
+  );
+
   // Fix lines from newResult that incorrectly have extend:right because
   // the re-execution on a smaller dataset didn't see subsequent pivots
-  // that terminated them. E.g., HHLL S/R lines in the overlap zone get
-  // extend:right from the partial re-execution, but the full dataset had
-  // them correctly as extend:none (terminated by later pivots).
-  // If prev had it as none, keep that (full context is authoritative).
+  // that terminated them.
+  //
+  // E.g., HHLL S/R lines: the last resistance/support line in the partial
+  // re-execution has extend:right because no later pivot exists in the
+  // small dataset. But when merged with prev, there IS a later line (from
+  // the full-dataset execution) that should terminate it.  We detect this
+  // by checking whether any surviving prev line starts after this line's
+  // endpoint.
+  //
+  // This is more robust than matching by points[0].time because the
+  // pivot detection (e.g. findprevious()) can produce different S/R
+  // segments on the truncated dataset, making first-point matching fail.
   const fixedNewLines = newResult.lines.map((nl) => {
     if (nl.extend === 'right') {
-      const matchingPrev = prev.lines.find(
-        (pl) => pl.points[0]?.time === nl.points[0]?.time,
-      );
-      if (matchingPrev && matchingPrev.extend === 'none') {
-        return { ...nl, extend: 'none' as const };
+      const endTime = nl.points[nl.points.length - 1]?.time;
+      if (endTime !== undefined) {
+        const hasLaterLine = survivingPrevLines.some(
+          (pl) =>
+            pl.points[0]?.time !== undefined &&
+            pl.points[0].time >= endTime,
+        );
+        if (hasLaterLine) {
+          return { ...nl, extend: 'none' as const };
+        }
       }
     }
     return nl;
   });
 
-  const mergedLines = [
-    ...fixedNewLines,
-    ...prev.lines.filter(
-      (l) =>
-        !newResult.lines.some(
-          (n) => n.points[0]?.time === l.points[0]?.time,
-        ) &&
-        (l.points[0]?.time === undefined || !inOverlap(l.points[0].time)),
-    ),
-  ];
+  const mergedLines = [...fixedNewLines, ...survivingPrevLines];
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter(
