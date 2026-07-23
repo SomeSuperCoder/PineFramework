@@ -99,7 +99,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (addedCount === 0) return 0;
       prependCountRef.current += addedCount;
 
-      // Record chunk border for debug mode
+      // Record chunk border (always tracked — used by export and debug visualization)
       const boundaryTimestamp = ohlcvDataRef.current[0]?.timestamp ?? 0;
       setChunkBorders((prev) => [
         ...prev,
@@ -658,7 +658,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       console.error('[Export] Error:', err);
       return null;
     }
-  }, [candles]);
+  }, [candles, chunkBorders]);
 
   return {
     candles,
