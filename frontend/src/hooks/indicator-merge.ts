@@ -127,22 +127,33 @@ export function prependIndicatorResult(
   // This is more robust than matching by points[0].time because the
   // pivot detection (e.g. findprevious()) can produce different S/R
   // segments on the truncated dataset, making first-point matching fail.
-  const fixedNewLines = newResult.lines.map((nl) => {
-    if (nl.extend === 'right') {
-      const endTime = nl.points[nl.points.length - 1]?.time;
-      if (endTime !== undefined) {
-        const hasLaterLine = survivingPrevLines.some(
-          (pl) =>
-            pl.points[0]?.time !== undefined &&
-            pl.points[0].time >= endTime,
-        );
-        if (hasLaterLine) {
-          return { ...nl, extend: 'none' as const };
-        }
-      }
-    }
-    return nl;
-  });
+  //
+  // IMPORTANT: Only apply this fix when contextSize > 0, meaning there is
+  // actual overlap between the newResult and prev datasets. When contextSize
+  // is 0, the two datasets are DISJOINT — the newResult lines with
+  // extend:right genuinely extend into the gap before the first pivots of
+  // the prev dataset. Applying the fix in this case would remove the right
+  // extension and create a visible gap where no S/R lines exist, causing
+  // labels at the chunk boundary to lose their attached lines.
+  const fixedNewLines =
+    contextSize > 0
+      ? newResult.lines.map((nl) => {
+          if (nl.extend === 'right') {
+            const endTime = nl.points[nl.points.length - 1]?.time;
+            if (endTime !== undefined) {
+              const hasLaterLine = survivingPrevLines.some(
+                (pl) =>
+                  pl.points[0]?.time !== undefined &&
+                  pl.points[0].time >= endTime,
+              );
+              if (hasLaterLine) {
+                return { ...nl, extend: 'none' as const };
+              }
+            }
+          }
+          return nl;
+        })
+      : newResult.lines;
 
   const mergedLines = [...fixedNewLines, ...survivingPrevLines];
   const mergedLabels = [

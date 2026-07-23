@@ -136,6 +136,66 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(lineB!.extend).toBe('right');
   });
 
+  it('should keep extend:right when contextSize is 0 (disjoint datasets)', () => {
+    // When contextSize=0, newResult and prev cover DISJOINT time ranges
+    // (no overlap). The extend:right fix must NOT apply because the
+    // "later" prev line is from a completely different region — removing
+    // the right extension would create a visible gap at the boundary.
+    //
+    // This is the HHLL scenario: partial re-execution on 200 new bars
+    // with zero context bars. newResult produces S/R lines ending at
+    // the last pivot (~bar 794). prev has S/R lines starting at the
+    // first pivot in the old region (~bar 885). The gap is natural —
+    // the newResult line MUST extend right to cover it.
+
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        makeLine(885, 995, 50000, 'none'),   // first S/R line in old region
+        makeLine(995, 9999, 50200, 'right'),  // last S/R line in old region
+      ],
+    };
+
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        makeLine(690, 794, 50500, 'none'),   // S/R line terminated by next pivot
+        makeLine(789, 794, 50800, 'right'),  // LAST S/R line — extend:right is correct
+      ],
+    };
+
+    const merged = prependIndicatorResult(
+      prev,
+      newResult,
+      200,  // addedCount
+      0,    // contextSize = 0 — no overlap!
+      new Set<number>(),  // empty overlap set
+    );
+
+    // newResult line at 789→794 with extend:right must KEEP its right
+    // extension despite prev having lines starting at 885 ≥ 794.
+    const lastNewLine = merged.lines.find(
+      (l) => l.points[0]?.time === 789,
+    );
+    expect(lastNewLine).toBeDefined();
+    expect(lastNewLine!.extend).toBe('right');
+
+    // Prev lines survive unchanged
+    const prevFirstLine = merged.lines.find(
+      (l) => l.points[0]?.time === 885,
+    );
+    expect(prevFirstLine).toBeDefined();
+    expect(prevFirstLine!.extend).toBe('none');
+
+    const prevLastLine = merged.lines.find(
+      (l) => l.points[0]?.time === 995,
+    );
+    expect(prevLastLine).toBeDefined();
+    expect(prevLastLine!.extend).toBe('right');
+
+    expect(merged.lines).toHaveLength(4);
+  });
+
   it('should fix even when newResult line is unmatched in prev (different pivot detection)', () => {
     // This scenario simulates what happens when the HHLL indicator's
     // findprevious() function produces different S/R levels on the
