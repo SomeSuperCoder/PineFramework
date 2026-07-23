@@ -88,8 +88,26 @@ export function prependIndicatorResult(
         ),
     ),
   ];
+  // Fix lines from newResult that incorrectly have extend:right because
+  // the re-execution on a smaller dataset didn't see subsequent pivots
+  // that terminated them. E.g., HHLL S/R lines in the overlap zone get
+  // extend:right from the partial re-execution, but the full dataset had
+  // them correctly as extend:none (terminated by later pivots).
+  // If prev had it as none, keep that (full context is authoritative).
+  const fixedNewLines = newResult.lines.map((nl) => {
+    if (nl.extend === 'right') {
+      const matchingPrev = prev.lines.find(
+        (pl) => pl.points[0]?.time === nl.points[0]?.time,
+      );
+      if (matchingPrev && matchingPrev.extend === 'none') {
+        return { ...nl, extend: 'none' as const };
+      }
+    }
+    return nl;
+  });
+
   const mergedLines = [
-    ...newResult.lines,
+    ...fixedNewLines,
     ...prev.lines.filter(
       (l) =>
         !newResult.lines.some(
