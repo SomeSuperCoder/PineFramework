@@ -36,19 +36,32 @@ describe('Viewport.barIndexToPixel', () => {
   });
 
   // 3.3 — Prepend adjustment
-  it('keeps firstBarIndex at 0 when at left edge after prepend', () => {
+  it('keeps firstBarIndex at 0 when near left edge after prepend', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(100);
     vp.scrollTo(0, 800);
 
     vp.adjustForPrepend(20);
-    // When the user is at the left edge (firstBarIndex = 0),
-    // prepend should keep them there so they can see the new data.
+    // When the user is near the left edge (firstBarIndex <= SCROLL_BACK_THRESHOLD),
+    // prepend keeps them at 0 so they can see the new data.
     expect(vp.getFirstBarIndex()).toBe(0);
     expect(vp.getTotalBars()).toBe(120);
   });
 
-  it('shifts firstBarIndex after prepend when scrolled away from left edge', () => {
+  it('keeps firstBarIndex at 0 when at threshold after prepend', () => {
+    const vp = new Viewport(8);
+    vp.setTotalBars(200);
+    // scrollTo(81) with barCount=102 gives firstBarIndex = round(81 - 51) = 30
+    vp.scrollTo(81, 800);
+    expect(vp.getFirstBarIndex()).toBe(30);
+
+    vp.adjustForPrepend(50);
+    // firstBarIndex was 30 (<= 50 threshold), so it stays at 0
+    expect(vp.getFirstBarIndex()).toBe(0);
+    expect(vp.getTotalBars()).toBe(250);
+  });
+
+  it('shifts firstBarIndex after prepend when scrolled past threshold', () => {
     const vp = new Viewport(8);
     vp.setTotalBars(200);
     vp.scrollTo(150, 800);
@@ -56,7 +69,7 @@ describe('Viewport.barIndexToPixel', () => {
     expect(vp.getFirstBarIndex()).toBe(99);
 
     vp.adjustForPrepend(50);
-    // When scrolled away from left edge, prepend shifts the viewport.
+    // firstBarIndex was 99 (> 50 threshold), so it shifts by added
     expect(vp.getFirstBarIndex()).toBe(149);
     expect(vp.getTotalBars()).toBe(250);
   });

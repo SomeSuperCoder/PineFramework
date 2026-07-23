@@ -5,6 +5,9 @@ export interface ViewportState {
 }
 
 export class Viewport {
+  /** Bars from the left edge at which scroll-back triggers and prepend keeps the viewport at 0. */
+  static readonly SCROLL_BACK_THRESHOLD = 50;
+
   private state: ViewportState;
   private minBarSpacing: number;
   private maxBarSpacing: number;
@@ -30,10 +33,13 @@ export class Viewport {
 
   adjustForPrepend(added: number): void {
     this.totalBars += added;
-    // If the user is at the left edge (firstBarIndex = 0), keep them there
-    // so they can see the newly loaded older data. Otherwise, shift the
-    // viewport to maintain their current view position.
-    if (this.state.firstBarIndex > 0) {
+    // When the user is near the left edge (firstBarIndex <= SCROLL_BACK_THRESHOLD),
+    // keep them at 0 so they see the newly loaded older data.
+    // The threshold matches the onRangeChange guard in ChartComponent (50 bars).
+    // Otherwise, shift the viewport to maintain their current view position.
+    if (this.state.firstBarIndex <= Viewport.SCROLL_BACK_THRESHOLD) {
+      this.state.firstBarIndex = 0;
+    } else {
       this.state.firstBarIndex += added;
     }
   }
