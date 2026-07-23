@@ -122,38 +122,49 @@ export function prependIndicatorResult(
   // small dataset. But when merged with prev, there IS a later line (from
   // the full-dataset execution) that should terminate it.  We detect this
   // by checking whether any surviving prev line starts after this line's
-  // endpoint.
+  // endpoint, and if found, terminate the newResult line at that position.
   //
-  // This is more robust than matching by points[0].time because the
-  // pivot detection (e.g. findprevious()) can produce different S/R
-  // segments on the truncated dataset, making first-point matching fail.
-  //
-  // IMPORTANT: Only apply this fix when contextSize > 0, meaning there is
-  // actual overlap between the newResult and prev datasets. When contextSize
-  // is 0, the two datasets are DISJOINT — the newResult lines with
-  // extend:right genuinely extend into the gap before the first pivots of
-  // the prev dataset. Applying the fix in this case would remove the right
-  // extension and create a visible gap where no S/R lines exist, causing
-  // labels at the chunk boundary to lose their attached lines.
-  const fixedNewLines =
-    contextSize > 0
-      ? newResult.lines.map((nl) => {
-          if (nl.extend === 'right') {
-            const endTime = nl.points[nl.points.length - 1]?.time;
-            if (endTime !== undefined) {
-              const hasLaterLine = survivingPrevLines.some(
-                (pl) =>
-                  pl.points[0]?.time !== undefined &&
-                  pl.points[0].time >= endTime,
-              );
-              if (hasLaterLine) {
-                return { ...nl, extend: 'none' as const };
-              }
-            }
-          }
-          return nl;
-        })
-      : newResult.lines;
+  // Two modes:
+  //   contextSize > 0 (overlap): just set extend:none — the overlap bars
+  //     already cover the boundary correctly.
+  //   contextSize = 0 (disjoint): update the line's last point timestamp to
+  //     the first prev line's start time — bridges the gap between the two
+  //     independent datasets without over-extending past the boundary.
+  //   No later prev line: keep extend:right unchanged (genuinely last).
+  const fixedNewLines = newResult.lines.map((nl) => {
+    if (nl.extend !== 'right') return nl;
+
+    const endTime = nl.points[nl.points.length - 1]?.time;
+    if (endTime === undefined) return nl;
+
+    // Find the earliest surviving prev line whose start time ≥ endTime
+    const nextPrevLine = survivingPrevLines
+      .filter(
+        (pl) =>
+          pl.points[0]?.time !== undefined &&
+          pl.points[0].time >= endTime,
+      )
+      .sort((a, b) => a.points[0].time - b.points[0].time)[0];
+
+    if (!nextPrevLine) return nl; // no later line — keep extend:right
+
+    if (contextSize > 0) {
+      // With overlap context: the boundary is already covered by
+      // recomputed data. Just terminate the line at its current endpoint.
+      return { ...nl, extend: 'none' as const };
+    }
+
+    // Without overlap context (contextSize = 0): the datasets are disjoint.
+    // The newResult line ends at the last bar of the chunk. We extend its
+    // endpoint to the first prev pivot to bridge the gap without
+    // over-extending past the boundary.
+    const modifiedPoints = [...nl.points];
+    modifiedPoints[modifiedPoints.length - 1] = {
+      ...modifiedPoints[modifiedPoints.length - 1],
+      time: nextPrevLine.points[0].time,
+    };
+    return { ...nl, extend: 'none' as const, points: modifiedPoints };
+  });
 
   const mergedLines = [...fixedNewLines, ...survivingPrevLines];
   const mergedLabels = [

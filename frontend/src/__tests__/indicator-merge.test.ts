@@ -136,17 +136,16 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(lineB!.extend).toBe('right');
   });
 
-  it('should keep extend:right when contextSize is 0 (disjoint datasets)', () => {
+  it('should terminate extend:right at first prev pivot when contextSize is 0 (disjoint datasets)', () => {
     // When contextSize=0, newResult and prev cover DISJOINT time ranges
-    // (no overlap). The extend:right fix must NOT apply because the
-    // "later" prev line is from a completely different region — removing
-    // the right extension would create a visible gap at the boundary.
+    // (no overlap). The newResult's last S/R line must be terminated at
+    // the START of the first prev line — bridging the gap without
+    // over-extending past the boundary.
     //
     // This is the HHLL scenario: partial re-execution on 200 new bars
-    // with zero context bars. newResult produces S/R lines ending at
-    // the last pivot (~bar 794). prev has S/R lines starting at the
-    // first pivot in the old region (~bar 885). The gap is natural —
-    // the newResult line MUST extend right to cover it.
+    // with zero context bars. newResult produces S/R line ending at
+    // ~bar 794. prev has first S/R line starting at ~bar 885.
+    // The newResult line should terminate at 885 (first prev pivot).
 
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
@@ -160,7 +159,7 @@ describe('prependIndicatorResult line extend fix', () => {
       ...EMPTY_RESULT,
       lines: [
         makeLine(690, 794, 50500, 'none'),   // S/R line terminated by next pivot
-        makeLine(789, 794, 50800, 'right'),  // LAST S/R line — extend:right is correct
+        makeLine(789, 794, 50800, 'right'),  // LAST S/R line — terminated at first prev pivot
       ],
     };
 
@@ -172,13 +171,15 @@ describe('prependIndicatorResult line extend fix', () => {
       new Set<number>(),  // empty overlap set
     );
 
-    // newResult line at 789→794 with extend:right must KEEP its right
-    // extension despite prev having lines starting at 885 ≥ 794.
+    // newResult line at 789→794 extended to 789→885 (first prev line start)
+    // and extend set to none — bridges the gap without over-extending.
     const lastNewLine = merged.lines.find(
       (l) => l.points[0]?.time === 789,
     );
     expect(lastNewLine).toBeDefined();
-    expect(lastNewLine!.extend).toBe('right');
+    expect(lastNewLine!.extend).toBe('none');
+    expect(lastNewLine!.points[1]?.time).toBe(885); // terminated at first prev pivot
+    expect(lastNewLine!.points[1]?.price).toBe(50800); // price unchanged
 
     // Prev lines survive unchanged
     const prevFirstLine = merged.lines.find(
@@ -555,6 +556,173 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
     const lineB = merged.lines.find((l) => l.points[0]?.time === 2000);
     expect(lineB).toBeDefined();
     expect(lineB!.extend).toBe('right');
+  });
+
+  describe('boundary line termination (contextSize=0)', () => {
+    it('should terminate at first prev pivot when contextSize=0 and later prev line exists', () => {
+      // Simulates HHLL: new chunk ends at bar 794, first prev pivot at 885.
+      // The newResult line with extend:right should be terminated at 885.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(885, 995, 50000, 'none'),
+        ],
+      };
+
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(789, 794, 50800, 'right'),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 200, 0, new Set());
+
+      const line = merged.lines.find((l) => l.points[0]?.time === 789);
+      expect(line).toBeDefined();
+      expect(line!.extend).toBe('none');
+      expect(line!.points[1]?.time).toBe(885); // terminated at first prev pivot
+      expect(line!.points[1]?.price).toBe(50800); // original price preserved
+    });
+
+    it('should keep extend:right when contextSize=0 and no later prev line exists', () => {
+      // No surviving prev line starts after the newResult line's endpoint.
+      // The line is genuinely last — keep extend:right.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(500, 600, 50000, 'none'),  // ends before newResult line
+        ],
+      };
+
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(789, 794, 50800, 'right'),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 200, 0, new Set());
+
+      const line = merged.lines.find((l) => l.points[0]?.time === 789);
+      expect(line).toBeDefined();
+      expect(line!.extend).toBe('right'); // genuinely last — unchanged
+    });
+
+    it('should terminate at earliest prev pivot when multiple later prev lines exist', () => {
+      // Multiple prev lines start after the newResult line's endpoint.
+      // The termination should use the EARLIEST one.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(885, 995, 50000, 'none'),    // first
+          makeLine(995, 9999, 50200, 'right'),  // second
+        ],
+      };
+
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(789, 794, 50800, 'right'),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 200, 0, new Set());
+
+      const line = merged.lines.find((l) => l.points[0]?.time === 789);
+      expect(line).toBeDefined();
+      expect(line!.extend).toBe('none');
+      expect(line!.points[1]?.time).toBe(885); // earliest, not 995
+      expect(line!.points[1]?.price).toBe(50800);
+    });
+
+    it('should not modify points when contextSize>0 (existing behavior preserved)', () => {
+      // When there IS overlap, the extend:right fix should set extend:none
+      // but NOT modify the points (the overlap bars already cover the boundary).
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(1000, 2000, 50000, 'none'),
+          makeLine(2000, 3000, 50200, 'none'),
+          makeLine(3000, 9999, 50500, 'right'),
+        ],
+      };
+
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(1000, 2000, 50000, 'none'),
+          makeLine(2000, 2500, 50200, 'right', '#00ff00'),
+        ],
+      };
+
+      const merged = prependIndicatorResult(
+        prev,
+        newResult,
+        5,  // addedCount
+        5,  // contextSize > 0
+        new Set([2000, 2500]),
+      );
+
+      const lineB = merged.lines.find(
+        (l) => l.points[0]?.time === 2000 && l.points[1]?.time === 2500,
+      );
+      expect(lineB).toBeDefined();
+      expect(lineB!.extend).toBe('none');
+      // Points are NOT modified — endTime stays as original (2500)
+      expect(lineB!.points[1]?.time).toBe(2500);
+      expect(lineB!.points[1]?.price).toBe(50200);
+      expect(lineB!.points).toHaveLength(2); // no extra points added
+    });
+
+    it('should preserve points array integrity when terminating at boundary', () => {
+      // The last point's time is updated, but price and other points are unchanged.
+      // Color, width, and style are preserved from the original newResult line.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          makeLine(885, 995, 50000, 'none'),
+        ],
+      };
+
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        lines: [
+          {
+            points: [
+              { time: 100, price: 51000 },
+              { time: 200, price: 52000 },
+              { time: 300, price: 53000 },
+            ],
+            color: '#00cc00',
+            width: 3,
+            style: 'dashed',
+            extend: 'right',
+          },
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 200, 0, new Set());
+
+      const line = merged.lines.find((l) => l.points.length === 3);
+      expect(line).toBeDefined();
+      expect(line!.extend).toBe('none');
+      // First two points unchanged
+      expect(line!.points[0]).toEqual({ time: 100, price: 51000 });
+      expect(line!.points[1]).toEqual({ time: 200, price: 52000 });
+      // Last point: time updated, price preserved
+      expect(line!.points[2]?.time).toBe(885);
+      expect(line!.points[2]?.price).toBe(53000);
+      // Other properties preserved
+      expect(line!.color).toBe('#00cc00');
+      expect(line!.width).toBe(3);
+      expect(line!.style).toBe('dashed');
+    });
   });
 
   it('should keep multiple prev lines at same start time when newResult only reproduces one', () => {
