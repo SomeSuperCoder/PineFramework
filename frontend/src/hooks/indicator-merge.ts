@@ -89,13 +89,25 @@ export function prependIndicatorResult(
     ),
   ];
   // ── Lines ──
-  // Determine which prev lines survive (not replaced by a matching newResult
-  // line). Lines in the overlap zone survive when NOT replaced — the
-  // re-execution on a truncated dataset may not reproduce every line.
+  // Match prev lines to newResult lines by FULL identity (all points), not
+  // just points[0].time. Using only points[0].time is an over-match that
+  // drops ALL prev lines starting at a given timestamp when newResult has
+  // ANY line starting there — causing labels at chunk borders to lose their
+  // attached lines when the re-execution doesn't reproduce every line.
+  function linesMatch(
+    a: typeof prev.lines[number],
+    b: typeof prev.lines[number],
+  ): boolean {
+    if (a.points.length !== b.points.length) return false;
+    for (let i = 0; i < a.points.length; i++) {
+      if (a.points[i].time !== b.points[i].time) return false;
+      if (a.points[i].price !== b.points[i].price) return false;
+    }
+    return true;
+  }
+
   const prevLineReplaced = (pl: typeof prev.lines[number]): boolean =>
-    newResult.lines.some(
-      (nl) => nl.points[0]?.time === pl.points[0]?.time,
-    );
+    newResult.lines.some((nl) => linesMatch(nl, pl));
 
   const survivingPrevLines = prev.lines.filter(
     (pl) => !prevLineReplaced(pl),

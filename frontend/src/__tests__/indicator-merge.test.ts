@@ -82,18 +82,24 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(lineA!.extend).toBe('none');
 
     // line_B' should have extend:none because survivingPrev line_C starts at 3000 >= endpoint 2500
-    const lineB = merged.lines.find((l) => l.points[0]?.time === 2000);
+    const lineB = merged.lines.find((l) => l.points[0]?.time === 2000 && l.points[1]?.time === 2500);
     expect(lineB).toBeDefined();
     expect(lineB!.extend).toBe('none');
     // Color from newResult (recomputed value is authoritative)
     expect(lineB!.color).toBe('#00ff00');
 
-    // line_C survives from prev (not replaced, not in overlap)
+    // line_B (prev) survives because its endpoint 3000 differs from newResult's 2500
+    const lineBprev = merged.lines.find((l) => l.points[0]?.time === 2000 && l.points[1]?.time === 3000);
+    expect(lineBprev).toBeDefined();
+    expect(lineBprev!.extend).toBe('none');
+    expect(lineBprev!.color).toBe('#ff0000');
+
+    // line_C survives from prev (not replaced)
     const lineC = merged.lines.find((l) => l.points[0]?.time === 3000);
     expect(lineC).toBeDefined();
     expect(lineC!.extend).toBe('right');
 
-    expect(merged.lines).toHaveLength(3);
+    expect(merged.lines).toHaveLength(4);
   });
 
   it('should keep extend:right when no surviving prev line starts after endpoint (genuinely last)', () => {
@@ -185,20 +191,24 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(lineUnmatched!.extend).toBe('none');  // FIXED by surviving prev line
     expect(lineUnmatched!.color).toBe('#00cc00');
 
-    // line at 1500 from prev was in overlap and NOT replaced (newResult has
-    // no line with points[0]=1500) → now SURVIVES the merge (fix: unreplaced
-    // overlap-zone elements are no longer dropped)
+    // line at 1500 from prev survives (not replaced, different endpoint from newResult's 1000→2000)
     const line1500 = merged.lines.find((l) => l.points[0]?.time === 1500);
     expect(line1500).toBeDefined();
     expect(line1500!.extend).toBe('none');
+
+    // line at 1000 from prev also survives because its endpoint 1500 differs
+    // from newResult's 1000→2000 — they are different line segments
+    const line1000prev = merged.lines.find((l) => l.points[0]?.time === 1000 && l.points[1]?.time === 1500);
+    expect(line1000prev).toBeDefined();
+    expect(line1000prev!.extend).toBe('none');
 
     // line at 3000 survives from prev
     const lineC = merged.lines.find((l) => l.points[0]?.time === 3000);
     expect(lineC).toBeDefined();
     expect(lineC!.extend).toBe('right');
 
-    // Should have 4 lines (1000, 1500, 2000, 3000)
-    expect(merged.lines).toHaveLength(4);
+    // Should have 5 lines (1000_prev, 1000_newResult, 1500, 2000, 3000)
+    expect(merged.lines).toHaveLength(5);
   });
 
   describe('prependIndicatorResult chunk border element fix', () => {
@@ -485,5 +495,53 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
     const lineB = merged.lines.find((l) => l.points[0]?.time === 2000);
     expect(lineB).toBeDefined();
     expect(lineB!.extend).toBe('right');
+  });
+
+  it('should keep multiple prev lines at same start time when newResult only reproduces one', () => {
+    // Scenario: a label at chunk border has TWO lines:
+    //   line_1: from pivot to label (starts at pivot, ends at label)
+    //   line_2: from label to next pivot (starts at label, ends at next pivot)
+    // Both lines START at the same time (the pivot time), but have
+    // different endpoints.  If newResult only reproduces one of them,
+    // the other must survive.
+    //
+    // This was broken by the old points[0].time-only matching which
+    // replaces ALL prev lines at a given start time when ANY newResult
+    // line starts there.
+
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        // Two lines starting at same time but different endpoints
+        { points: [{ time: 100, price: 50000 }, { time: 200, price: 50200 }], color: '#ff0000', width: 1, style: 'solid' as const },
+        { points: [{ time: 100, price: 50000 }, { time: 300, price: 50500 }], color: '#00ff00', width: 1, style: 'solid' as const },
+        // Third line starting at different time
+        { points: [{ time: 400, price: 51000 }, { time: 500, price: 51500 }], color: '#0000ff', width: 1, style: 'solid' as const },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      lines: [
+        // Only reproduces ONE line at time 100 (to endpoint 200)
+        { points: [{ time: 100, price: 50000 }, { time: 200, price: 50200 }], color: '#ff0000', width: 1, style: 'solid' as const },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, 10, 4, new Set([100, 200, 300]));
+
+    // line_1 matched exactly → replaced by newResult version
+    const line1 = merged.lines.filter((l) => l.points[0]?.time === 100 && l.points[1]?.time === 200);
+    expect(line1).toHaveLength(1);
+
+    // line_2 at (100→300) DIFFERENT endpoint → NOT replaced → SURVIVES
+    const line2 = merged.lines.find((l) => l.points[0]?.time === 100 && l.points[1]?.time === 300);
+    expect(line2).toBeDefined();
+    expect(line2!.color).toBe('#00ff00');
+
+    // line at 400 → unchanged
+    const line400 = merged.lines.find((l) => l.points[0]?.time === 400);
+    expect(line400).toBeDefined();
+
+    expect(merged.lines).toHaveLength(3);
   });
 });
