@@ -363,46 +363,83 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(merged.lines).toHaveLength(2);
   });
 
-  it('should drop label in overlap zone when newResult does not reproduce it', () => {
-    // When re-execution produces different labels (due to ta.valuewhen state),
-    // prev labels in the overlap zone should be dropped entirely.
+  it('should keep label in overlap zone when newResult has different text+price', () => {
+    // When re-execution produces labels with different text/price (due to ta.valuewhen state),
+    // prev labels in the overlap zone should be KEPT (not dropped) to avoid the "wall" problem.
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
-        { time: 102, price: 50000, text: 'buy', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
-        { time: 105, price: 50100, text: 'sell', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
-        { time: 300, price: 50200, text: 'hold', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 102, price: 50000, text: 'HL', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 105, price: 50100, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 300, price: 50200, text: 'LL', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
       ],
     };
     const newResult: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
-        { time: 102, price: 50300, text: 'BUY!', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
-        // newResult produces label at 105 with different text (re-execution difference)
-        { time: 105, price: 50150, text: 'SELL!', color: '#ff00ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        // newResult produces labels with DIFFERENT text+price (re-execution difference)
+        { time: 102, price: 50300, text: 'LH', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 105, price: 50150, text: 'LL', color: '#ff00ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
       ],
     };
 
     const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
 
-    // label at 102: replaced by newResult
-    const label102 = merged.labels.find((l) => l.time === 102);
-    expect(label102).toBeDefined();
-    expect(label102!.text).toBe('BUY!');
-    expect(label102!.price).toBe(50300);
+    // label at 102: prev has "HL", newResult has "LH" (different text) → BOTH kept
+    const labels102 = merged.labels.filter((l) => l.time === 102);
+    expect(labels102).toHaveLength(2); // both prev and newResult
 
-    // label at 105: replaced by newResult (re-execution produced different label)
-    const label105 = merged.labels.find((l) => l.time === 105);
-    expect(label105).toBeDefined();
-    expect(label105!.text).toBe('SELL!');
-    expect(label105!.price).toBe(50150);
+    // label at 105: prev has "HH", newResult has "LL" (different text) → BOTH kept
+    const labels105 = merged.labels.filter((l) => l.time === 105);
+    expect(labels105).toHaveLength(2); // both prev and newResult
 
     // label at 300: outside overlap → survives unchanged
     const label300 = merged.labels.find((l) => l.time === 300);
     expect(label300).toBeDefined();
-    expect(label300!.text).toBe('hold');
+    expect(label300!.text).toBe('LL');
 
-    expect(merged.labels).toHaveLength(3);
+    expect(merged.labels).toHaveLength(5); // 2+2+1
+  });
+
+  it('should replace label in overlap zone when newResult has same text+price', () => {
+    // When re-execution produces labels with SAME text+price (but different timestamp),
+    // the prev label should be replaced to avoid duplication.
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        { time: 100, price: 50000, text: 'HL', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 200, price: 50100, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        // newResult produces SAME labels at DIFFERENT timestamps
+        { time: 102, price: 50000, text: 'HL', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 202, price: 50100, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // prev label at 100: same text+price as newResult label at 102 → REPLACED
+    const prevLabel100 = merged.labels.find((l) => l.time === 100);
+    expect(prevLabel100).toBeUndefined(); // dropped because newResult has same text+price
+
+    // prev label at 200: same text+price as newResult label at 202 → REPLACED
+    const prevLabel200 = merged.labels.find((l) => l.time === 200);
+    expect(prevLabel200).toBeUndefined(); // dropped because newResult has same text+price
+
+    // newResult labels are kept
+    const newLabel102 = merged.labels.find((l) => l.time === 102);
+    expect(newLabel102).toBeDefined();
+    expect(newLabel102!.text).toBe('HL');
+
+    const newLabel202 = merged.labels.find((l) => l.time === 202);
+    expect(newLabel202).toBeDefined();
+    expect(newLabel202!.text).toBe('HH');
+
+    expect(merged.labels).toHaveLength(2); // only newResult labels
   });
 
   it('should preserve labels outside overlap zone unchanged', () => {

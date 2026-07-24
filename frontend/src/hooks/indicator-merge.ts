@@ -207,11 +207,30 @@ export function prependIndicatorResult(
   const clippedPrevLines = survivingPrevLines.map(clipAtBoundary);
 
   const mergedLines = [...clippedNewLines, ...clippedPrevLines];
+
+  // ── Labels ──
+  // Match labels by (text, price) tuple, not just timestamp. Re-execution
+  // on a truncated dataset may produce labels at different timestamps due
+  // to ta.valuewhen() state differences. We need to detect when a prev
+  // label is "replaced" by a newResult label even if timestamps differ.
+  //
+  // Strategy:
+  //   1. All newResult labels are kept (re-execution is authoritative for overlap zone)
+  //   2. Prev labels are kept UNLESS they have a matching (text, price) in newResult
+  //      AND they are in the overlap zone (same timestamp set as context bars)
+  //   3. This prevents both duplication (old bug) and disappearance (my previous bug)
+  const newLabelKeys = new Set(
+    newResult.labels.map((l) => `${l.text}|${l.price}`),
+  );
   const mergedLabels = [
     ...newResult.labels,
-    ...prev.labels.filter(
-      (l) => !overlapTimestamps?.has(l.time),
-    ),
+    ...prev.labels.filter((l) => {
+      const inOverlap = overlapTimestamps?.has(l.time);
+      if (!inOverlap) return true; // outside overlap → always keep
+      // In overlap: keep only if newResult doesn't have a replacement (same text+price)
+      const key = `${l.text}|${l.price}`;
+      return !newLabelKeys.has(key);
+    }),
   ];
   const mergedStrategyMarkers = [
     ...(newResult.strategyMarkers || []),

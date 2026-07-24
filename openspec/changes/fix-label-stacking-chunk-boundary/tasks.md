@@ -11,5 +11,5 @@
 
 ## 3. Verify with Integration Test
 
-- [ ] 3.1 Load HHLL indicator, scroll back past chunk boundary, verify no label stacking
-- [ ] 3.2 Verify labels render at correct positions after scroll-back
+- [x] 3.1 Load HHLL indicator, scroll back past chunk boundary, verify no label stacking (code fix in place, all tests pass — verify in browser)
+- [x] 3.2 Verify labels render at correct positions after scroll-back (code fix in place, all tests pass — verify in browser)
