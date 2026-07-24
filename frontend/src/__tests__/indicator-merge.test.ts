@@ -363,9 +363,11 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(merged.lines).toHaveLength(2);
   });
 
-  it('should keep label in overlap zone when newResult has different text+price', () => {
-    // When re-execution produces labels with different text/price (due to ta.valuewhen state),
-    // prev labels in the overlap zone should be KEPT (not dropped) to avoid the "wall" problem.
+  it('should replace prev label in overlap zone even when text differs (e.g. HL→LL)', () => {
+    // When re-execution changes pivot classification (different text) at the same bar,
+    // the prev label is dropped and only the new label survives.  The re-execution is
+    // authoritative for the overlap zone — it has more context, so its pivot detection
+    // is correct even when it differs from the initial execution.
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
@@ -377,7 +379,7 @@ describe('prependIndicatorResult line extend fix', () => {
     const newResult: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
-        // newResult produces labels with DIFFERENT text+price (re-execution difference)
+        // newResult produces DIFFERENT classification at same timestamps
         { time: 102, price: 50300, text: 'LH', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
         { time: 105, price: 50150, text: 'LL', color: '#ff00ff', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
       ],
@@ -385,20 +387,23 @@ describe('prependIndicatorResult line extend fix', () => {
 
     const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
 
-    // label at 102: prev has "HL", newResult has "LH" (different text) → BOTH kept
+    // label at 102: prev "HL" is dropped (in overlap). Only "LH" survives.
     const labels102 = merged.labels.filter((l) => l.time === 102);
-    expect(labels102).toHaveLength(2); // both prev and newResult
+    expect(labels102).toHaveLength(1);
+    expect(labels102[0]!.text).toBe('LH');
 
-    // label at 105: prev has "HH", newResult has "LL" (different text) → BOTH kept
+    // label at 105: OUTSIDE overlap → prev "HH" survives alongside new "LL".
+    // Non-overlap bars keep labels from both results — no stacking risk since
+    // they're at different bars (different timestamps).
     const labels105 = merged.labels.filter((l) => l.time === 105);
-    expect(labels105).toHaveLength(2); // both prev and newResult
+    expect(labels105).toHaveLength(2);
 
     // label at 300: outside overlap → survives unchanged
     const label300 = merged.labels.find((l) => l.time === 300);
     expect(label300).toBeDefined();
     expect(label300!.text).toBe('LL');
 
-    expect(merged.labels).toHaveLength(5); // 2+2+1
+    expect(merged.labels).toHaveLength(4); // newResult(102, 105) + prev(105, 300)
   });
 
   it('should replace label in overlap zone when newResult has same text+price', () => {
@@ -446,7 +451,11 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(merged.labels).toHaveLength(3); // newResult(102, 202) + prev(200)
   });
 
-  it('should preserve labels outside overlap zone unchanged', () => {
+  it('should drop prev label in overlap zone and keep outside-overlap labels', () => {
+    // Prev labels in the overlap zone are dropped even if newResult doesn't
+    // reproduce them — the re-execution, having MORE context, may determine
+    // that a bar is no longer a pivot.  Only labels outside the overlap zone
+    // survive from prev; overlap-zone labels come entirely from newResult.
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
@@ -470,15 +479,11 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(label50!.text).toBe('before');
     expect(label50!.price).toBe(50000);
 
-    // label in overlap: prev has DIFFERENT text+price → both labels survive
+    // label in overlap: prev label dropped (only newResult label survives)
     const labels102 = merged.labels.filter((l) => l.time === 102);
-    expect(labels102).toHaveLength(2); // both prev and newResult (different text+price)
-    const newLabel102 = labels102.find((l) => l.text === 'overlap-new');
-    expect(newLabel102).toBeDefined();
-    expect(newLabel102!.price).toBe(50300);
-    const oldLabel102 = labels102.find((l) => l.text === 'overlap-old');
-    expect(oldLabel102).toBeDefined();
-    expect(oldLabel102!.price).toBe(50100);
+    expect(labels102).toHaveLength(1);
+    expect(labels102[0]!.text).toBe('overlap-new');
+    expect(labels102[0]!.price).toBe(50300);
 
     // label after overlap: survives unchanged
     const label500 = merged.labels.find((l) => l.time === 500);
@@ -486,7 +491,7 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(label500!.text).toBe('after');
     expect(label500!.price).toBe(50200);
 
-    expect(merged.labels).toHaveLength(4); // prev(50, 102, 500) + newResult(102)
+    expect(merged.labels).toHaveLength(3); // prev(50, 500) + newResult(102)
   });
 
   it('should produce no duplicates when re-execution produces identical labels', () => {
@@ -947,5 +952,58 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
     expect(line400).toBeDefined();
 
     expect(merged.lines).toHaveLength(3);
+  });
+
+  it('should prevent stacking when re-execution changes label classification at same overlap bar', () => {
+    // Root cause: the HHLL indicator uses ta.valuewhen(not na(pl), pl, 1) to
+    // resolve the previous pivot price.  When the re-execution has MORE
+    // historical context (the new prepended bars), ta.valuewhen finds a
+    // DIFFERENT previous pivot than the initial execution did.  This changes
+    // label classification (e.g. "HL" → "LL" or "HH" → "LH") for the SAME
+    // bar in the overlap zone.  The re-execution is authoritative — its label
+    // replaces the prev label at that timestamp, even though the text differs.
+    //
+    // Without this fix, BOTH labels survive and stack on the same candle.
+
+    // Simulates a first scroll-back: 200 new bars + 1000 context bars.
+    // Bar 5 of the re-execution (T-195) detects a pivot at T-200 → label text "HL".
+    // After a second scroll-back, the re-execution has 200 MORE bars of history,
+    // so ta.valuewhen resolves differently → label at T-200 gets text "LL" instead.
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        // From first scroll-back re-execution: ta.valuewhen found no prior pivot → "HL"
+        { time: 1000, price: 100, text: 'HL', color: '#00ff00', textColor: '#ffffff', style: 'label.style_label_up', size: 'size.normal' },
+        // Labels outside overlap survive unchanged
+        { time: 5000, price: 200, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        // Second scroll-back re-execution: ta.valuewhen now finds a prior pivot → "LL"
+        { time: 1000, price: 98, text: 'LL', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_up', size: 'size.normal' },
+      ],
+    };
+
+    // addedCount=200, contextSize=1000, overlap covers timestamps 1000-1999
+    const overlapTimestamps = new Set<number>([1000, 1001, 1002, 1003, 1999]);
+
+    const merged = prependIndicatorResult(prev, newResult, 200, 1000, overlapTimestamps);
+
+    // Prev label at 1000 ("HL") is DROPPED (in overlap).
+    // New label at 1000 ("LL") is kept.
+    // Only ONE label at timestamp 1000 — stacking prevented.
+    const labels1000 = merged.labels.filter((l) => l.time === 1000);
+    expect(labels1000).toHaveLength(1);
+    expect(labels1000[0]!.text).toBe('LL');
+    expect(labels1000[0]!.price).toBe(98);
+
+    // Prev label at 5000 survives (outside overlap)
+    const label5000 = merged.labels.find((l) => l.time === 5000);
+    expect(label5000).toBeDefined();
+    expect(label5000!.text).toBe('HH');
+
+    expect(merged.labels).toHaveLength(2); // newResult(1000) + prev(5000)
   });
 });

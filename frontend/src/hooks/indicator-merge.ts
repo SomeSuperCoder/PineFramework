@@ -226,27 +226,25 @@ export function prependIndicatorResult(
   //         alone ensures the old version is dropped even when price differs.
   //   3. This prevents both duplication (identical label in both results)
   //      and disappearance (label not reproduced by re-execution survives).
+  // Global dedup by exact (time, text, price) — catch identical labels anywhere
   const newTimeTextPriceKeys = new Set(
     newResult.labels.map((l) => `${l.time}|${l.text ?? ''}|${l.price ?? ''}`),
-  );
-  // Overlap-zone text-only keys: when the re-execution shifts pivot detection
-  // (forming candle OHLC changes), the label price may change too. Matching by
-  // text alone in the overlap zone ensures the old version is dropped.
-  const newTextKeys = new Set(
-    newResult.labels.map((l) => l.text ?? ''),
   );
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter((l) => {
-      // Pass 1: Global dedup — drop exact (time, text, price) duplicates
+      // Pass 1: drop exact (time, text, price) duplicates of newResult labels
       const timeTextPriceKey = `${l.time}|${l.text ?? ''}|${l.price ?? ''}`;
       if (newTimeTextPriceKeys.has(timeTextPriceKey)) return false;
 
-      // Pass 2: Overlap-zone dedup — drop prev labels whose text was reproduced
-      // by re-execution (even if the price shifted due to pivot detection changes)
+      // Pass 2: Overlap zone — the re-execution is authoritative.  It covers
+      // the same bars PLUS new historical context, so its pivot classifications
+      // (or their absence) are correct.  Drop ALL prev labels in the overlap
+      // zone to prevent stacking when the re-execution changes classification
+      // (e.g. "HL" → "LL") or drops a previously detected pivot entirely.
       const inOverlap = overlapTimestamps?.has(l.time);
       if (!inOverlap) return true;
-      return !newTextKeys.has(l.text ?? '');
+      return false;
     }),
   ];
   const mergedStrategyMarkers = [
