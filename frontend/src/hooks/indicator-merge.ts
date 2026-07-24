@@ -220,16 +220,20 @@ export function prependIndicatorResult(
   //      a. Global dedup by exact (time, text, price) — drop any prev label
   //         that is identical to a newResult label, even outside the overlap
   //         zone (safety net for edge cases where the same bar appears in both).
-  //      b. Overlap-zone dedup by (text, price) — when the re-execution shifts
-  //         a label to a nearby bar (e.g. from time 100 → 102), drop the old
-  //         one in the overlap so it doesn't coexist with its replacement.
+  //      b. Overlap-zone dedup by text only — when the re-execution shifts
+  //         pivot detection (forming candle OHLC changes), the label price
+  //         may change too (e.g. price 150.00 → 150.50). Matching by text
+  //         alone ensures the old version is dropped even when price differs.
   //   3. This prevents both duplication (identical label in both results)
   //      and disappearance (label not reproduced by re-execution survives).
   const newTimeTextPriceKeys = new Set(
     newResult.labels.map((l) => `${l.time}|${l.text ?? ''}|${l.price ?? ''}`),
   );
-  const newLabelTextPriceKeys = new Set(
-    newResult.labels.map((l) => `${l.text}|${l.price}`),
+  // Overlap-zone text-only keys: when the re-execution shifts pivot detection
+  // (forming candle OHLC changes), the label price may change too. Matching by
+  // text alone in the overlap zone ensures the old version is dropped.
+  const newTextKeys = new Set(
+    newResult.labels.map((l) => l.text ?? ''),
   );
   const mergedLabels = [
     ...newResult.labels,
@@ -238,12 +242,11 @@ export function prependIndicatorResult(
       const timeTextPriceKey = `${l.time}|${l.text ?? ''}|${l.price ?? ''}`;
       if (newTimeTextPriceKeys.has(timeTextPriceKey)) return false;
 
-      // Pass 2: Overlap-zone dedup — drop prev labels that were "shifted"
-      // to a different timestamp in the re-execution
+      // Pass 2: Overlap-zone dedup — drop prev labels whose text was reproduced
+      // by re-execution (even if the price shifted due to pivot detection changes)
       const inOverlap = overlapTimestamps?.has(l.time);
       if (!inOverlap) return true;
-      const textPriceKey = `${l.text}|${l.price}`;
-      return !newLabelTextPriceKeys.has(textPriceKey);
+      return !newTextKeys.has(l.text ?? '');
     }),
   ];
   const mergedStrategyMarkers = [

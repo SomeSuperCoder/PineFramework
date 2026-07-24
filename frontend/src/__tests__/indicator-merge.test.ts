@@ -520,6 +520,56 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(label200!.text).toBe('HH');
   });
 
+  it('should drop prev label in overlap when same text but shifted price (pivot shift)', () => {
+    // When re-execution shifts pivot detection (forming candle OHLC changes),
+    // the label price may change (e.g. HH at 150.00 → HH at 150.50).
+    // The overlap-zone dedup should still drop the old label by matching on
+    // text alone — the re-execution is authoritative for the overlap zone.
+    const prev: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        { time: 100, price: 150.00, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 102, price: 95.00, text: 'LL', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_up', size: 'size.normal' },
+        { time: 200, price: 200.00, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+      ],
+    };
+    const newResult: ScriptResult = {
+      ...EMPTY_RESULT,
+      labels: [
+        // Same text, different price (pivot shifted due to OHLC change)
+        { time: 100, price: 150.50, text: 'HH', color: '#ff0000', textColor: '#ffffff', style: 'label.style_label_down', size: 'size.normal' },
+        { time: 102, price: 94.50, text: 'LL', color: '#0000ff', textColor: '#ffffff', style: 'label.style_label_up', size: 'size.normal' },
+      ],
+    };
+
+    const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
+
+    // prev label at 100: in overlap, same text as newResult → DROPPED (price shifted)
+    const prevLabel100 = merged.labels.find((l) => l.time === 100 && l.price === 150.00);
+    expect(prevLabel100).toBeUndefined();
+
+    // newResult label at 100: kept
+    const newLabel100 = merged.labels.find((l) => l.time === 100 && l.price === 150.50);
+    expect(newLabel100).toBeDefined();
+
+    // prev label at 102: in overlap, same text as newResult → DROPPED (price shifted)
+    const prevLabel102 = merged.labels.find((l) => l.time === 102 && l.price === 95.00);
+    expect(prevLabel102).toBeUndefined();
+
+    // newResult label at 102: kept
+    const newLabel102 = merged.labels.find((l) => l.time === 102 && l.price === 94.50);
+    expect(newLabel102).toBeDefined();
+
+    // prev label at 200: outside overlap → survives unchanged
+    const label200 = merged.labels.find((l) => l.time === 200);
+    expect(label200).toBeDefined();
+    expect(label200!.text).toBe('HH');
+    expect(label200!.price).toBe(200.00);
+
+    // Total: newResult(100, 102) + prev(200) = 3
+    expect(merged.labels).toHaveLength(3);
+  });
+
   it('should keep box in overlap zone when not replaced', () => {
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
