@@ -24,7 +24,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   const subscribedTopicRef = useRef<string | null>(null);
   const lastCodeRef = useRef<string | null>(null);
   const ohlcvDataRef = useRef<Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }>>([]);
-  const hasMoreHistoryRef = useRef(true);
   const prependCountRef = useRef(0);
   const pendingExecuteRef = useRef<Map<string, { source: string; symbol: string; interval: string; bars?: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> }>>(new Map());
   const onIndicatorRemovedRef = useRef<((indicatorIds: string[]) => void) | null>(null);
@@ -75,11 +74,9 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
   }, [toCandleData]);
 
   const fetchOlderOHLCV = useCallback(async (symbol: string, interval: string): Promise<number> => {
-    if (!hasMoreHistoryRef.current) return 0;
     try {
       const oldest = ohlcvDataRef.current[0];
       if (!oldest || !oldest.timestamp) {
-        hasMoreHistoryRef.current = false;
         return 0;
       }
       const end = oldest.timestamp - 1;
@@ -89,11 +86,7 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (!response.ok) return 0;
       const json = await response.json();
       if (!json.data || json.data.length === 0) {
-        hasMoreHistoryRef.current = false;
         return 0;
-      }
-      if (json.hasMore === false) {
-        hasMoreHistoryRef.current = false;
       }
       const addedCount = json.data.length;
       if (addedCount === 0) return 0;

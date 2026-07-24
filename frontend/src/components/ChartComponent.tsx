@@ -146,9 +146,9 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       const iv = intervalRef.current;
       try {
         await fetchRef.current(sy, iv);
-        // Note: we do NOT set shouldFitRef here. fetchOlderOHLCV already
-        // manages hasMoreHistoryRef internally. Calling fitContent() when
-        // scroll-back reaches the end would teleport the user from the
+        // Note: we do NOT set shouldFitRef here. fetchOlderOHLCV returns 0
+        // on empty response, so no-op is handled naturally. Calling fitContent()
+        // when scroll-back reaches the end would teleport the user from the
         // oldest bars back to the newest — the opposite of what they want.
         //
         // The chart's prepend handling in setCandles + adjustForPrepend
