@@ -61,7 +61,13 @@ export class Viewport {
 
   pan(deltaPixels: number): void {
     const deltaBars = deltaPixels / this.state.barSpacing;
-    this.state.firstBarIndex = Math.round(Math.max(0, this.state.firstBarIndex - deltaBars));
+    // No lower-bound clamp: allow overscroll past the oldest data so the user
+    // can drag past the edge while older data loads asynchronously.  The
+    // renderers use getVisibleRange() (which clamps start to 0) so they never
+    // read negative bar indices.  The scroll-back threshold check in
+    // ChartComponent uses the true firstBarIndex (via timeScale().getFirstBarIndex())
+    // to decide when to trigger a fetch.
+    this.state.firstBarIndex = Math.round(this.state.firstBarIndex - deltaBars);
   }
 
   barIndexToPixel(barIndex: number): number {

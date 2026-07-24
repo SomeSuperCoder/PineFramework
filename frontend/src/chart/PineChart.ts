@@ -859,6 +859,9 @@ export class PineChart {
       getVisibleRange: () => {
         return this.viewportManager.getVisibleRange();
       },
+      getFirstBarIndex: () => {
+        return this.viewportManager.getFirstBarIndex();
+      },
       scrollToDate: (_timestamp: number) => {
         this.markDirty();
       },

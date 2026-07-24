@@ -134,12 +134,13 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       if (isLoadingHistoryRef.current) return;
       const chart = chartRef.current;
       if (!chart) return;
-      const range = chart.timeScale().getVisibleRange();
-      // range.start is the first bar index visible on screen.
-      // Only trigger scroll-back when the user is within 50 bars of
-      // the oldest loaded data (i.e. they've scrolled nearly to the
-      // left edge of the chart).
-      if (range.start > 50) return;
+      // Use the true firstBarIndex (not the clamped visible range start) so
+      // that panning past the data edge (negative firstBarIndex, allowed by
+      // the pan() overscroll fix) doesn't trigger an infinite cascade.  The
+      // guard: only trigger when firstBarIndex <= 50 (i.e. the user is within
+      // 50 bars of — or past — the oldest loaded bar).
+      const firstBarIndex = chart.timeScale().getFirstBarIndex();
+      if (firstBarIndex > 50) return;
       isLoadingHistoryRef.current = true;
       const sy = symbolRef.current;
       const iv = intervalRef.current;

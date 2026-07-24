@@ -142,6 +142,10 @@ export class ViewportManager {
     this.viewport.scrollTo(barIndex, chartWidth);
   }
 
+  getFirstBarIndex(): number {
+    return this.viewport.getFirstBarIndex();
+  }
+
   getVisibleRange(): { start: number; end: number } {
     return this.viewport.getVisibleRange();
   }
