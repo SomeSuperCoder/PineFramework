@@ -246,23 +246,6 @@ export function prependIndicatorResult(
       return !newLabelTextPriceKeys.has(textPriceKey);
     }),
   ];
-
-  // DIAGNOSTIC: Log prepend label merge summary
-  if (newResult.labels.length > 0 || prev.labels.length > 0) {
-    const newLabelSummary = newResult.labels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    const prevLabelSummary = prev.labels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    const mergedLabelSummary = mergedLabels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    const droppedPrev = prev.labels.length - (mergedLabels.length - newResult.labels.length);
-    console.log(`[PREPEND-MERGE] new=${newResult.labels.length} prev=${prev.labels.length} merged=${mergedLabels.length} dropped=${droppedPrev}`, {
-      newLabels: newLabelSummary.slice(0, 300),
-      prevLabels: prevLabelSummary.slice(0, 300),
-      mergedLabels: mergedLabelSummary.slice(0, 300),
-      addedCount,
-      contextSize,
-      overlapSize: overlapTimestamps?.size ?? 0,
-    });
-  }
-
   const mergedStrategyMarkers = [
     ...(newResult.strategyMarkers || []),
     ...(prev.strategyMarkers || []).map((m) => ({
@@ -503,30 +486,25 @@ export function mergeDiffIntoResult(
       : prev.lines;
 
   // ── Labels ──
+  // Dedup by (time, text, price) — not just time. When the forming candle
+  // changes, pivot detection shifts and labels move to different timestamps.
+  // A time-only dedup fails to remove the old label, causing stacking.
   const diffLabels = mapLabels(msg.labels);
+  const diffTimeTextPriceKeys = new Set(
+    diffLabels.map((l) => `${l.time}|${l.text ?? ''}|${l.price ?? ''}`),
+  );
   const mergedLabels =
     diffLabels.length > 0
       ? [
           ...prev.labels.filter(
-            (l) => !diffLabels.some((d) => d.time === l.time),
+            (l) => {
+              const key = `${l.time}|${l.text ?? ''}|${l.price ?? ''}`;
+              return !diffTimeTextPriceKeys.has(key);
+            },
           ),
           ...diffLabels,
         ]
       : prev.labels;
-
-  // DIAGNOSTIC: Log label merge to debug stacking
-  if (diffLabels.length > 0 || prev.labels.length > 0) {
-    const prevLabelSummary = prev.labels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    const diffLabelSummary = diffLabels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    const mergedLabelSummary = mergedLabels.map(l => `${l.time}:${l.text}:${l.price}`).join(', ');
-    console.log(`[LABEL-MERGE] prev=${prev.labels.length} diff=${diffLabels.length} merged=${mergedLabels.length}`, {
-      prevLabels: prevLabelSummary.slice(0, 200),
-      diffLabels: diffLabelSummary.slice(0, 200),
-      mergedLabels: mergedLabelSummary.slice(0, 200),
-      barIndex: msg.barIndex,
-      formingCandle: msg.formingCandle,
-    });
-  }
 
   // ── Strategy markers ──
   const diffStrategyMarkers = mapStrategyMarkers(msg.strategyMarkers);

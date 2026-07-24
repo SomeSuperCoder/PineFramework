@@ -153,11 +153,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
             overlapTimestamps.add(Math.floor(bar.timestamp / 1000));
           }
           const merged = prev ? prependIndicatorResult(prev, newResult, addedCount, actualContextSize, overlapTimestamps) : newResult;
-          // DIAGNOSTIC: Log fetchOlderOHLCV label flow
-          console.log(`[FETCH-OLDER] indicator=${indId} prevLabels=${prev?.labels.length ?? 0} newLabels=${newResult.labels.length} mergedLabels=${merged.labels.length} addedCount=${addedCount}`, {
-            overlapTimestampsSize: overlapTimestamps?.size ?? 0,
-            actualContextSize,
-          });
           indicatorUpdates.push({ id: indId, result: merged });
 
           if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -203,14 +198,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           onIndicatorResult(msg.indicatorId, merged);
           return;
         }
-        // DIAGNOSTIC: Log full result arrival for indicator
-        console.log(`[EXEC-RESULT] Full result for ${msg.indicatorId}`, {
-          labelCount: msg.labels?.length ?? 0,
-          barIndex: msg.barIndex,
-          formingCandle: msg.formingCandle,
-          prevLabelCount: prev?.labels.length ?? 0,
-          outputKeys: Object.keys(msg.outputs).slice(0, 5),
-        });
         const result = buildScriptResult(
           msg.overlay,
           msg.outputs,
@@ -247,12 +234,6 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
       if (msg.formingCandle) {
         setScriptResult((prev) => {
           if (!prev) return prev;
-          // DIAGNOSTIC: Log default indicator forming candle diff
-          console.log(`[DEFAULT-DIFF] forming candle diff`, {
-            prevLabels: prev.labels.length,
-            diffLabels: msg.labels?.length ?? 0,
-            barIndex: msg.barIndex,
-          });
           return mergeDiffIntoResult(prev, msg);
         });
         return;
