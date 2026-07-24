@@ -486,16 +486,12 @@ export function mergeDiffIntoResult(
       : prev.lines;
 
   // ── Labels ──
-  // Dedup by (time, price) not just time: when ta.valuewhen() state differs
-  // between full execution and forming candle, the same pivot can produce
-  // labels at the same bar with different text (e.g. "HH" vs "LH"). Matching
-  // on price prevents accumulation of stale labels across successive diffs.
   const diffLabels = mapLabels(msg.labels);
   const mergedLabels =
     diffLabels.length > 0
       ? [
           ...prev.labels.filter(
-            (l) => !diffLabels.some((d) => d.time === l.time && d.price === l.price),
+            (l) => !diffLabels.some((d) => d.time === l.time),
           ),
           ...diffLabels,
         ]
