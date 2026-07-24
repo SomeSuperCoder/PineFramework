@@ -198,6 +198,14 @@ export function useChartData(onIndicatorResult?: (indicatorId: string, result: S
           onIndicatorResult(msg.indicatorId, merged);
           return;
         }
+        // DIAGNOSTIC: Log full result arrival for indicator
+        console.log(`[EXEC-RESULT] Full result for ${msg.indicatorId}`, {
+          labelCount: msg.labels?.length ?? 0,
+          barIndex: msg.barIndex,
+          formingCandle: msg.formingCandle,
+          prevLabelCount: prev?.labels.length ?? 0,
+          outputKeys: Object.keys(msg.outputs).slice(0, 5),
+        });
         const result = buildScriptResult(
           msg.overlay,
           msg.outputs,
