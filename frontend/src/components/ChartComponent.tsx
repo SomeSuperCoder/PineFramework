@@ -75,6 +75,47 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     chartRef.current?.setChunkBorders(chunkBorders);
   }, [chunkBorders]);
 
+  // Test data bridge for Playwright e2e tests
+  useEffect(() => {
+    if (!debugMode) {
+      // Production safety: clear any stale bridge data
+      if (typeof window !== 'undefined') {
+        if ((window as any).__pineTestData) {
+          delete (window as any).__pineTestData;
+        }
+        if ((window as any).__pineChart) {
+          delete (window as any).__pineChart;
+        }
+      }
+      return;
+    }
+    // Expose chart instance and helpers for test programmatic operations
+    (window as any).__pineChart = chartRef.current;
+    (window as any).__pineFetchOlder = fetchOlderOHLCV;
+    const indicators: Array<{
+      id: string;
+      name: string;
+      labels: Array<{ time: number; price: number; text?: string }>;
+      lines: Array<{ points: Array<{ time: number; price: number }> }>;
+    }> = [];
+    if (indicatorResults) {
+      for (const [id, res] of indicatorResults) {
+        indicators.push({
+          id,
+          name: id,
+          labels: res.labels || [],
+          lines: res.lines || [],
+        });
+      }
+    }
+    (window as any).__pineTestData = {
+      indicators,
+      chunkBorders,
+      labelCount: indicators.reduce((sum, ind) => sum + ind.labels.length, 0),
+      lineCount: indicators.reduce((sum, ind) => sum + ind.lines.length, 0),
+    };
+  }, [debugMode, indicatorResults, chunkBorders]);
+
   const isLoadingHistoryRef = useRef(false);
   const fetchRef = useRef(fetchOlderOHLCV);
   fetchRef.current = fetchOlderOHLCV;

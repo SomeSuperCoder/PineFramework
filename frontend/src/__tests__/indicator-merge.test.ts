@@ -403,7 +403,9 @@ describe('prependIndicatorResult line extend fix', () => {
 
   it('should replace label in overlap zone when newResult has same text+price', () => {
     // When re-execution produces labels with SAME text+price (but different timestamp),
-    // the prev label should be replaced to avoid duplication.
+    // prev labels in the overlap zone are replaced. But prev labels outside the overlap
+    // survive even if newResult has a matching (text, price) at a different timestamp —
+    // they belong to bars that are only in the prev dataset.
     const prev: ScriptResult = {
       ...EMPTY_RESULT,
       labels: [
@@ -422,13 +424,15 @@ describe('prependIndicatorResult line extend fix', () => {
 
     const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize, overlapTimestamps);
 
-    // prev label at 100: same text+price as newResult label at 102 → REPLACED
+    // prev label at 100: in overlap, same text+price as newResult label at 102 → REPLACED
     const prevLabel100 = merged.labels.find((l) => l.time === 100);
-    expect(prevLabel100).toBeUndefined(); // dropped because newResult has same text+price
+    expect(prevLabel100).toBeUndefined(); // dropped because in overlap + same text+price
 
-    // prev label at 200: same text+price as newResult label at 202 → REPLACED
+    // prev label at 200: OUTSIDE overlap, survives even though newResult has same
+    // text+price at time 202 — it's at a different bar not in the overlap zone
     const prevLabel200 = merged.labels.find((l) => l.time === 200);
-    expect(prevLabel200).toBeUndefined(); // dropped because newResult has same text+price
+    expect(prevLabel200).toBeDefined(); // kept — outside overlap zone
+    expect(prevLabel200!.text).toBe('HH');
 
     // newResult labels are kept
     const newLabel102 = merged.labels.find((l) => l.time === 102);
@@ -439,7 +443,7 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(newLabel202).toBeDefined();
     expect(newLabel202!.text).toBe('HH');
 
-    expect(merged.labels).toHaveLength(2); // only newResult labels
+    expect(merged.labels).toHaveLength(3); // newResult(102, 202) + prev(200)
   });
 
   it('should preserve labels outside overlap zone unchanged', () => {
@@ -466,11 +470,15 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(label50!.text).toBe('before');
     expect(label50!.price).toBe(50000);
 
-    // label in overlap: replaced by newResult
-    const label102 = merged.labels.find((l) => l.time === 102);
-    expect(label102).toBeDefined();
-    expect(label102!.text).toBe('overlap-new');
-    expect(label102!.price).toBe(50300);
+    // label in overlap: prev has DIFFERENT text+price → both labels survive
+    const labels102 = merged.labels.filter((l) => l.time === 102);
+    expect(labels102).toHaveLength(2); // both prev and newResult (different text+price)
+    const newLabel102 = labels102.find((l) => l.text === 'overlap-new');
+    expect(newLabel102).toBeDefined();
+    expect(newLabel102!.price).toBe(50300);
+    const oldLabel102 = labels102.find((l) => l.text === 'overlap-old');
+    expect(oldLabel102).toBeDefined();
+    expect(oldLabel102!.price).toBe(50100);
 
     // label after overlap: survives unchanged
     const label500 = merged.labels.find((l) => l.time === 500);
@@ -478,7 +486,7 @@ describe('prependIndicatorResult line extend fix', () => {
     expect(label500!.text).toBe('after');
     expect(label500!.price).toBe(50200);
 
-    expect(merged.labels).toHaveLength(3);
+    expect(merged.labels).toHaveLength(4); // prev(50, 102, 500) + newResult(102)
   });
 
   it('should produce no duplicates when re-execution produces identical labels', () => {

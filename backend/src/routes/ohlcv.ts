@@ -100,5 +100,23 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
     }
   });
 
+  // Seed dataset for deterministic e2e testing
+  router.get('/ohlcv/seed', (_req, res) => {
+    const count = 10_000;
+    const bars: Bar[] = [];
+    let s = 42;
+    const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+    for (let i = 0; i < count; i++) {
+      const phase = (i % 30) / 30;
+      const base = 100 + 10 * Math.sin(phase * Math.PI * 2) + (i / count) * 5;
+      const open = base + (rand() - 0.5) * 2;
+      const close = base + (rand() - 0.5) * 2;
+      const high = Math.max(open, close) + 1 + rand() * 3;
+      const low = Math.min(open, close) - 1 - rand() * 3;
+      bars.push({ timestamp: 1700000000000 + i * 3600000, open, high, low, close, volume: 1000 });
+    }
+    res.json({ symbol: 'SEED', interval: '60', data: bars, hasMore: false });
+  });
+
   return router;
 }

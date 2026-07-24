@@ -216,20 +216,34 @@ export function prependIndicatorResult(
   //
   // Strategy:
   //   1. All newResult labels are kept (re-execution is authoritative for overlap zone)
-  //   2. Prev labels are kept UNLESS they have a matching (text, price) in newResult
-  //      AND they are in the overlap zone (same timestamp set as context bars)
-  //   3. This prevents both duplication (old bug) and disappearance (my previous bug)
-  const newLabelKeys = new Set(
+  //   2. Prev labels are deduped in two passes:
+  //      a. Global dedup by exact (time, text, price) — drop any prev label
+  //         that is identical to a newResult label, even outside the overlap
+  //         zone (safety net for edge cases where the same bar appears in both).
+  //      b. Overlap-zone dedup by (text, price) — when the re-execution shifts
+  //         a label to a nearby bar (e.g. from time 100 → 102), drop the old
+  //         one in the overlap so it doesn't coexist with its replacement.
+  //   3. This prevents both duplication (identical label in both results)
+  //      and disappearance (label not reproduced by re-execution survives).
+  const newTimeTextPriceKeys = new Set(
+    newResult.labels.map((l) => `${l.time}|${l.text ?? ''}|${l.price ?? ''}`),
+  );
+  const newLabelTextPriceKeys = new Set(
     newResult.labels.map((l) => `${l.text}|${l.price}`),
   );
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter((l) => {
+      // Pass 1: Global dedup — drop exact (time, text, price) duplicates
+      const timeTextPriceKey = `${l.time}|${l.text ?? ''}|${l.price ?? ''}`;
+      if (newTimeTextPriceKeys.has(timeTextPriceKey)) return false;
+
+      // Pass 2: Overlap-zone dedup — drop prev labels that were "shifted"
+      // to a different timestamp in the re-execution
       const inOverlap = overlapTimestamps?.has(l.time);
-      if (!inOverlap) return true; // outside overlap → always keep
-      // In overlap: keep only if newResult doesn't have a replacement (same text+price)
-      const key = `${l.text}|${l.price}`;
-      return !newLabelKeys.has(key);
+      if (!inOverlap) return true;
+      const textPriceKey = `${l.text}|${l.price}`;
+      return !newLabelTextPriceKeys.has(textPriceKey);
     }),
   ];
   const mergedStrategyMarkers = [
