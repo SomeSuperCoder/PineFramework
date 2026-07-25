@@ -16,6 +16,11 @@
       "source": "./src/utils/time.ts",
       "types": "./dist/utils/time.d.ts",
       "import": "./dist/utils/time.js"
+    },
+    "./util/candle-string-format": {
+      "source": "./src/util/candle-string-format.ts",
+      "types": "./dist/util/candle-string-format.d.ts",
+      "import": "./dist/util/candle-string-format.js"
     }
   },
   "files": [

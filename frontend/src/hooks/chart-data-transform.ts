@@ -27,7 +27,11 @@ const mapLabels = transformLabels;
 const mapFills = transformFills;
 const mapStrategyMarkers = transformStrategyMarkers;
 const mapBgColor = transformBgColors;
-const mapAlertConditions = transformAlertConditions;
+const mapAlertConditions = (
+  conditions?: Array<{ id: string; title: string; message: string }> | null,
+  formatContext?: { ticker?: string; interval?: string },
+): Array<{ id: string; title: string; message: string }> =>
+  transformAlertConditions(conditions, formatContext);
 const mapAlertTriggers = transformAlertTriggers;
 
 // ---------------------------------------------------------------------------
@@ -190,8 +194,14 @@ export interface ExecutionResultMessage {
 // ---------------------------------------------------------------------------
 
 export const COLORS = [
-  '#2196f3', '#ff9800', '#4caf50', '#e91e63',
-  '#9c27b0', '#00bcd4', '#ff5722', '#607d8b',
+  '#2196f3',
+  '#ff9800',
+  '#4caf50',
+  '#e91e63',
+  '#9c27b0',
+  '#00bcd4',
+  '#ff5722',
+  '#607d8b',
 ];
 
 // ---------------------------------------------------------------------------
@@ -200,7 +210,10 @@ export const COLORS = [
 
 /** Strip line-width and style metadata suffixes from a plot title. */
 export function stripMeta(s: string): string {
-  return s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+  return s
+    .replace(/__lw:\d+/g, '')
+    .replace(/__style:[^_]+/g, '')
+    .trim();
 }
 
 /** Transform a fill color key by stripping metadata from each part. */
@@ -258,6 +271,7 @@ export function buildScriptResult(
   tables?: import('../types').TableData[],
   hiddenPlotKeys?: string[],
   barColors?: ExecuteResponse['barColors'],
+  formatContext?: { ticker?: string; interval?: string },
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -272,9 +286,7 @@ export function buildScriptResult(
     const lwMatch = key.match(/__lw:(\d+)/);
     const styleMatch = key.match(/__style:([^_]+)/);
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    const plotStyle = (styleMatch
-      ? styleMatch[1]
-      : 'line') as import('../types').PlotData['type'];
+    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const perBarColors = plotColors?.[key];
     if (!plotColor) {
@@ -322,9 +334,7 @@ export function buildScriptResult(
   }
 
   // Hidden plot titles — plots with display=display.none
-  const hiddenPlotTitles: string[] = (hiddenPlotKeys || []).map((key) =>
-    stripMeta(key),
-  );
+  const hiddenPlotTitles: string[] = (hiddenPlotKeys || []).map((key) => stripMeta(key));
 
   const transformedFillColorData: Record<string, (string | null)[]> = {};
   if (fillColorData) {
@@ -354,11 +364,11 @@ export function buildScriptResult(
     plotColors: plotColors || {},
     strategyMarkers: mapStrategyMarkers(strategyMarkers),
     bgcolor: mapBgColor(bgcolor),
-    alertConditions: mapAlertConditions(alertConditions),
+    alertConditions: mapAlertConditions(alertConditions, formatContext),
     alertTriggers: mapAlertTriggers(alertTriggers),
     tables: tables || [],
-    hiddenPlotTitles:
-      hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
-    barColors: transformedBarColors && transformedBarColors.length > 0 ? transformedBarColors : undefined,
+    hiddenPlotTitles: hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
+    barColors:
+      transformedBarColors && transformedBarColors.length > 0 ? transformedBarColors : undefined,
   };
 }

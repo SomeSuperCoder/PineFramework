@@ -6,6 +6,7 @@ import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
 import { validateBybitUrl } from '../utils/security.js';
 import { setBroadcastIndicatorRemoved } from './broadcast.js';
+import { formatCandleString } from 'pine-framework';
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -44,7 +45,17 @@ export function createWSGateway(
         const msg = JSON.parse(data.toString()) as {
           topic?: string;
           type?: string;
-          data?: { symbol?: string; interval?: string; open?: string; high?: string; low?: string; close?: string; volume?: string; timestamp?: string; start?: string };
+          data?: {
+            symbol?: string;
+            interval?: string;
+            open?: string;
+            high?: string;
+            low?: string;
+            close?: string;
+            volume?: string;
+            timestamp?: string;
+            start?: string;
+          };
         };
 
         if (msg.topic && msg.topic.startsWith('kline.') && msg.data) {
@@ -59,7 +70,13 @@ export function createWSGateway(
           const volume = parseFloat(String(d.volume || '0'));
           const confirmed = d.confirm === true || d.confirm === 'true';
 
-          if (!timestamp || !isFinite(open) || !isFinite(high) || !isFinite(low) || !isFinite(close)) {
+          if (
+            !timestamp ||
+            !isFinite(open) ||
+            !isFinite(high) ||
+            !isFinite(low) ||
+            !isFinite(close)
+          ) {
             return;
           }
 
@@ -160,11 +177,13 @@ export function createWSGateway(
         try {
           const outputs = session.appendOrUpdateBar(bar, confirmed);
 
-          ws.send(JSON.stringify({
-            type: 'execution_result',
-            indicatorId,
-            data: outputs,
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'execution_result',
+              indicatorId,
+              data: outputs,
+            }),
+          );
 
           const tgActive = telegramService?.isActive() ?? false;
           const isConfirmed = outputs.isConfirmed ?? false;
@@ -176,36 +195,50 @@ export function createWSGateway(
             // returns the diff and clears them so they are sent only once.
             const triggers = session.getPendingNewAlertTriggers();
             if (triggers.length === 0) {
-              console.log(`[WS] reexecuteForTopic: no new alert triggers for indicator ${indicatorId}`);
+              console.log(
+                `[WS] reexecuteForTopic: no new alert triggers for indicator ${indicatorId}`,
+              );
             }
             for (const trigger of triggers) {
               const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
-              const message = condition?.message || `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
+              const message =
+                condition?.message ||
+                `Alert triggered at ${new Date(trigger.timestamp).toISOString()}`;
               const title = condition?.title || trigger.alertId;
               const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
               if (isDuplicateAlert(topic, dedupKey)) {
                 console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
                 continue;
               }
-              console.log(`[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`);
+              console.log(
+                `[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`,
+              );
+              const formattedMessage = formatCandleString(message, {
+                ticker: symbol || undefined,
+                interval: interval || undefined,
+              });
               telegramService.sendAlertToSubscribers(
-                `*${title}*\n\n${message}`,
+                `*${title}*\n\n${formattedMessage}`,
                 trigger.alertId,
                 symbol || undefined,
                 interval || undefined,
               );
             }
           } else if (!tgActive) {
-            console.log(`[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`);
+            console.log(
+              `[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`,
+            );
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Script re-execution failed';
           console.error(`[WS] Script re-execution error for indicator ${indicatorId}:`, message);
-          ws.send(JSON.stringify({
-            type: 'error',
-            indicatorId,
-            data: { message },
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'error',
+              indicatorId,
+              data: { message },
+            }),
+          );
         }
       }
     }
@@ -248,7 +281,12 @@ export function createWSGateway(
     const sub: ClientSubscription = { ws, topics: new Set(), sessions: new Map() };
     clients.set(ws, sub);
 
-    ws.send(JSON.stringify({ type: 'connected', data: { connectionId: Math.random().toString(36).slice(2) } }));
+    ws.send(
+      JSON.stringify({
+        type: 'connected',
+        data: { connectionId: Math.random().toString(36).slice(2) },
+      }),
+    );
 
     ws.on('message', (data: Buffer) => {
       try {
@@ -256,7 +294,13 @@ export function createWSGateway(
           type: string;
           topic?: string;
           indicatorId?: string;
-          data?: { source?: string; symbol?: string; interval?: string; bars?: Bar[]; indicatorId?: string };
+          data?: {
+            source?: string;
+            symbol?: string;
+            interval?: string;
+            bars?: Bar[];
+            indicatorId?: string;
+          };
         };
 
         if (msg.type === 'subscribe' && msg.topic) {
@@ -290,19 +334,17 @@ export function createWSGateway(
             // Delete old session first to prevent reexecuteForTopic from
             // using a stale session during initialization.
             sub.sessions.delete(sessionIndicatorId);
-            const session = new ScriptSession(
-              source,
-              symbol || '',
-              interval || '',
-              bars,
-            );
+            const session = new ScriptSession(source, symbol || '', interval || '', bars);
             session.initialize();
             sub.sessions.set(sessionIndicatorId, session);
             ws.send(JSON.stringify({ type: 'session_ready', indicatorId: sessionIndicatorId }));
           } catch (err) {
-            const message = err instanceof Error ? err.message : 'Script compilation or execution failed';
+            const message =
+              err instanceof Error ? err.message : 'Script compilation or execution failed';
             console.error('[WS] Script execution error:', message);
-            ws.send(JSON.stringify({ type: 'error', indicatorId: sessionIndicatorId, data: { message } }));
+            ws.send(
+              JSON.stringify({ type: 'error', indicatorId: sessionIndicatorId, data: { message } }),
+            );
           }
         } else if (msg.type === 'stop_indicator') {
           const indicatorId = msg.indicatorId || msg.data?.indicatorId;

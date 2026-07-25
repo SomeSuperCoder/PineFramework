@@ -41,8 +41,10 @@ import { parsePairSymbol } from './commission-calculator.js';
  */
 const DEFAULT_SAMPLE_AMOUNT = 10_000_000;
 
-/** Path to the persistent fee cache. */
-const CACHE_PATH = path.join(os.homedir(), '.pine', 'jupiter-fees.json');
+/** Path to the persistent fee cache (lazy — avoids crashing in browser environments without `os.homedir`). */
+function getCachePath(): string {
+  return path.join(os.homedir(), '.pine', 'jupiter-fees.json');
+}
 
 /** Stale threshold for cache entries (30 days). */
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -166,10 +168,10 @@ const memCache = new Map<string, FeeFetchResult>();
 
 function readCacheFile(): CacheFile {
   try {
-    if (!fs.existsSync(CACHE_PATH)) {
+    if (!fs.existsSync(getCachePath())) {
       return { version: 1, entries: {} };
     }
-    const raw = fs.readFileSync(CACHE_PATH, 'utf-8');
+    const raw = fs.readFileSync(getCachePath(), 'utf-8');
     return JSON.parse(raw) as CacheFile;
   } catch {
     return { version: 1, entries: {} };
@@ -178,11 +180,11 @@ function readCacheFile(): CacheFile {
 
 function writeCacheFile(cache: CacheFile): void {
   try {
-    const dir = path.dirname(CACHE_PATH);
+    const dir = path.dirname(getCachePath());
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), 'utf-8');
+    fs.writeFileSync(getCachePath(), JSON.stringify(cache, null, 2), 'utf-8');
   } catch {
     // Non-fatal — persistence is best-effort
   }
@@ -462,8 +464,8 @@ export function getCachedDexFeeBps(symbol: string): FeeFetchResult | undefined {
 export function clearFeeCache(): void {
   memCache.clear();
   try {
-    if (fs.existsSync(CACHE_PATH)) {
-      fs.unlinkSync(CACHE_PATH);
+    if (fs.existsSync(getCachePath())) {
+      fs.unlinkSync(getCachePath());
     }
   } catch {
     // best-effort
@@ -474,5 +476,5 @@ export function clearFeeCache(): void {
  * Get the persistent cache file path (for diagnostics).
  */
 export function getCacheFilePath(): string {
-  return CACHE_PATH;
+  return getCachePath();
 }

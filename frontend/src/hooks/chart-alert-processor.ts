@@ -10,6 +10,7 @@
  */
 
 import { stripMeta } from './chart-data-transform';
+import { formatCandleString } from 'pine-framework';
 
 // ---------------------------------------------------------------------------
 // Shape transformations
@@ -39,9 +40,7 @@ export function transformShape(s: RawShape): import('../types').ShapeData {
   };
 }
 
-export function transformShapes(
-  shapes?: RawShape[] | null,
-): import('../types').ShapeData[] {
+export function transformShapes(shapes?: RawShape[] | null): import('../types').ShapeData[] {
   return (shapes || []).map(transformShape);
 }
 
@@ -75,9 +74,7 @@ export function transformLine(l: RawLine): import('../types').LineData {
   };
 }
 
-export function transformLines(
-  lines?: RawLine[] | null,
-): import('../types').LineData[] {
+export function transformLines(lines?: RawLine[] | null): import('../types').LineData[] {
   return (lines || []).map(transformLine);
 }
 
@@ -107,9 +104,7 @@ export function transformLabel(l: RawLabel): import('../types').LabelData {
   };
 }
 
-export function transformLabels(
-  labels?: RawLabel[] | null,
-): import('../types').LabelData[] {
+export function transformLabels(labels?: RawLabel[] | null): import('../types').LabelData[] {
   return (labels || []).map(transformLabel);
 }
 
@@ -137,9 +132,7 @@ export function transformBox(b: RawBox): import('../types').BoxData {
   };
 }
 
-export function transformBoxes(
-  boxes?: RawBox[] | null,
-): import('../types').BoxData[] {
+export function transformBoxes(boxes?: RawBox[] | null): import('../types').BoxData[] {
   return (boxes || []).map(transformBox);
 }
 
@@ -161,9 +154,7 @@ export function transformFill(f: RawFill): import('../types').FillData {
   };
 }
 
-export function transformFills(
-  fills?: RawFill[] | null,
-): import('../types').FillData[] {
+export function transformFills(fills?: RawFill[] | null): import('../types').FillData[] {
   return (fills || []).map(transformFill);
 }
 
@@ -216,9 +207,7 @@ export interface RawBgColor {
   color: string;
 }
 
-export function transformBgColor(
-  b: RawBgColor,
-): { time: number; color: string } {
+export function transformBgColor(b: RawBgColor): { time: number; color: string } {
   return { time: Math.floor(b.time / 1000), color: b.color };
 }
 
@@ -240,14 +229,17 @@ export interface RawAlertCondition {
 
 export function transformAlertCondition(
   a: RawAlertCondition,
+  formatContext?: { ticker?: string; interval?: string },
 ): { id: string; title: string; message: string } {
-  return { id: a.id, title: a.title, message: a.message };
+  const message = formatContext ? formatCandleString(a.message, formatContext) : a.message;
+  return { id: a.id, title: a.title, message };
 }
 
 export function transformAlertConditions(
   conditions?: RawAlertCondition[] | null,
+  formatContext?: { ticker?: string; interval?: string },
 ): Array<{ id: string; title: string; message: string }> {
-  return (conditions || []).map(transformAlertCondition);
+  return (conditions || []).map((c) => transformAlertCondition(c, formatContext));
 }
 
 export interface RawAlertTrigger {
@@ -256,9 +248,11 @@ export interface RawAlertTrigger {
   timestamp: number;
 }
 
-export function transformAlertTrigger(
-  t: RawAlertTrigger,
-): { alertId: string; barIndex: number; timestamp: number } {
+export function transformAlertTrigger(t: RawAlertTrigger): {
+  alertId: string;
+  barIndex: number;
+  timestamp: number;
+} {
   return {
     alertId: t.alertId,
     barIndex: t.barIndex,

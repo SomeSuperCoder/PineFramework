@@ -1,5 +1,6 @@
 import type { PineValue } from '../language/types/na.js';
 import { isNa } from '../language/types/na.js';
+import { formatCandleString } from '../util/candle-string-format.js';
 
 export type AlertDestination = 'email' | 'webhook' | 'log' | 'popup' | 'sms';
 export type AlertFrequency = 'once_per_bar' | 'once_per_bar_close' | 'all';
@@ -61,6 +62,7 @@ export interface AlertBarData {
   volume: number;
   time: number;
   interval: string;
+  ticker?: string;
 }
 
 export class AlertSystem {
@@ -136,7 +138,22 @@ export class AlertSystem {
     const event: AlertEvent = {
       id,
       conditionId: '',
-      message: this.formatMessage(message),
+      message: formatCandleString(message, {
+        ...(this.currentBarData
+          ? {
+              ticker: this.currentBarData.ticker,
+              interval: this.currentBarData.interval,
+              open: this.currentBarData.open,
+              high: this.currentBarData.high,
+              low: this.currentBarData.low,
+              close: this.currentBarData.close,
+              volume: this.currentBarData.volume,
+              time: this.currentBarData.time,
+            }
+          : {}),
+        bar_index: this.currentBarIndex,
+        timestamp: this.currentTime,
+      }),
       timestamp: this.currentTime,
       barIndex: this.currentBarIndex,
       timeframe: '1D',
@@ -204,7 +221,22 @@ export class AlertSystem {
     const event: AlertEvent = {
       id: generateAlertId(),
       conditionId,
-      message: this.formatMessage(condition.message),
+      message: formatCandleString(condition.message, {
+        ...(this.currentBarData
+          ? {
+              ticker: this.currentBarData.ticker,
+              interval: this.currentBarData.interval,
+              open: this.currentBarData.open,
+              high: this.currentBarData.high,
+              low: this.currentBarData.low,
+              close: this.currentBarData.close,
+              volume: this.currentBarData.volume,
+              time: this.currentBarData.time,
+            }
+          : {}),
+        bar_index: this.currentBarIndex,
+        timestamp: this.currentTime,
+      }),
       timestamp: this.currentTime,
       barIndex: this.currentBarIndex,
       timeframe: condition.timeframe,
@@ -220,30 +252,6 @@ export class AlertSystem {
     if (this.config.enableLogging) {
       this.logEvent(event);
     }
-  }
-
-  private formatMessage(template: string): string {
-    let result = template;
-
-    if (this.currentBarData) {
-      result = result
-        .replace(/\{\{open\}\}/g, String(this.currentBarData.open))
-        .replace(/\{\{high\}\}/g, String(this.currentBarData.high))
-        .replace(/\{\{low\}\}/g, String(this.currentBarData.low))
-        .replace(/\{\{close\}\}/g, String(this.currentBarData.close))
-        .replace(/\{\{volume\}\}/g, String(this.currentBarData.volume))
-        .replace(/\{\{time\}\}/g, new Date(this.currentBarData.time).toISOString())
-        .replace(/\{\{interval\}\}/g, this.currentBarData.interval);
-    }
-
-    result = result
-      .replace(/\{\{bar_index\}\}/g, String(this.currentBarIndex))
-      .replace(/\{\{timestamp\}\}/g, String(this.currentTime))
-      .replace(/\{time\}/g, new Date(this.currentTime).toISOString())
-      .replace(/\{bar_index\}/g, String(this.currentBarIndex))
-      .replace(/\{timestamp\}/g, String(this.currentTime));
-
-    return result;
   }
 
   private logEvent(event: AlertEvent): void {
