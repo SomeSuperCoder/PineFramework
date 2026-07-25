@@ -1,6 +1,23 @@
 import type { PineValue } from '../types/na.js';
 import type { Series } from './series.js';
 import type { RuntimeScope } from './scope.js';
+import type { SourceSpan } from '../../common/source-location.js';
+
+/**
+ * Structured error payload for execution failures.
+ * Carries enough context for callers to render, log, or display
+ * without losing structural information (unlike a bare string).
+ */
+export interface EngineError {
+  /** Human-readable description of the error. */
+  message: string;
+  /** Source location in the original Pine Script (if available). */
+  span?: SourceSpan;
+  /** Bar index at which the error occurred (if available). */
+  barIndex?: number;
+  /** Stack trace (if available from caught Error). */
+  stack?: string;
+}
 
 // ---- Data entry types ----
 
@@ -129,7 +146,7 @@ export interface ExecutionContext {
 
 export interface ExecutionResult {
   success: boolean;
-  error?: string;
+  error?: EngineError;
   version?: number;
   overlay: boolean;
   outputs: Map<string, Series>;
@@ -153,7 +170,7 @@ export interface ExecutionResult {
 
 export interface FormingCandleResult {
   success: boolean;
-  error?: string;
+  error?: string | EngineError;
   overlay: boolean;
   diffOutputs: Record<string, PineValue>;
   diffShapes: ShapeEntry[];

@@ -30,3 +30,20 @@ export class TypeError extends PineError {
     this.name = 'TypeError';
   }
 }
+
+/**
+ * RuntimeError — thrown by the executor when invalid runtime state is detected
+ * (e.g. unexpected NaN, type mismatch, invariant violation).
+ * Extends PineError with an optional barIndex so callers can pinpoint the
+ * failing bar.
+ */
+export class RuntimeError extends PineError {
+  readonly barIndex?: number;
+
+  constructor(message: string, barIndex?: number, span?: SourceSpan) {
+    const suffix = barIndex !== undefined ? ` at bar ${barIndex}` : '';
+    super(`${message}${suffix}`, span);
+    this.name = 'RuntimeError';
+    this.barIndex = barIndex;
+  }
+}

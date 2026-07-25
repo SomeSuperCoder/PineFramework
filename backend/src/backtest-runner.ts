@@ -95,7 +95,10 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
   // Execute
   const execResult = execEngine.executeBars(contexts);
   if (!execResult.success) {
-    return { success: false, error: execResult.error || 'Execution failed' };
+    const msg = execResult.error
+      ? (typeof execResult.error === 'string' ? execResult.error : execResult.error.message)
+      : 'Execution failed';
+    return { success: false, error: msg };
   }
 
   return { success: true, execResult, engine: execEngine };

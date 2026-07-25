@@ -28,6 +28,7 @@ import type {
 import {
   type ExecutionContext,
   type ExecutionResult,
+  type EngineError,
   type StrategyMarkerEntry,
 } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
@@ -35,6 +36,23 @@ import type { RuntimeScope } from './scope.js';
 import type { PineValue } from '../types/na.js';
 import { NA, isNa } from '../types/na.js';
 import { pushBarValues } from './scope.js';
+import { guardFinite } from './float-guards.js';
+
+/**
+ * Sanitise an OHLC value before pushing to history.
+ * Returns the value if it's a finite number, or 0 with a warning otherwise.
+ * This ensures NaN/Infinity/non-number values don't silently corrupt history.
+ */
+function sanitiseOHLC(val: PineValue, field: string, barIndex: number): number {
+  if (typeof val === 'number' && Number.isFinite(val)) {
+    return val;
+  }
+  console.warn(
+    `[Engine] Non-finite ${field} at bar ${barIndex}: ${typeof val === 'number' ? val : typeof val} — using 0`,
+  );
+  const guarded = guardFinite(typeof val === 'number' ? val : NaN);
+  return typeof guarded === 'number' ? guarded : 0;
+}
 
 // ── Module implementation imports ─────────────────────────────────────────────
 // The actual logic for each expression/statement kind.
@@ -105,20 +123,23 @@ export class Interpreter {
       // Accumulate OHLC history so series indexing (close[1], open[2], etc.) works.
       // Each bar context provides only the current bar's values; the engine's ohlcHistory
       // grows one entry per bar, giving executeIndexExpression the full history it needs.
+      // Non-finite or non-numeric OHLC values are warned and coerced to 0.
       {
+        const bi = context.barIndex;
         const o = context.open.getRelative(0);
         const h = context.high.getRelative(0);
         const l = context.low.getRelative(0);
         const c = context.close.getRelative(0);
         const v = context.volume.getRelative(0);
-        this.eng.ohlcHistory.open.push(typeof o === 'number' ? o : 0);
-        this.eng.ohlcHistory.high.push(typeof h === 'number' ? h : 0);
-        this.eng.ohlcHistory.low.push(typeof l === 'number' ? l : 0);
-        this.eng.ohlcHistory.close.push(typeof c === 'number' ? c : 0);
-        this.eng.ohlcHistory.volume.push(typeof v === 'number' ? v : 0);
+        this.eng.ohlcHistory.open.push(sanitiseOHLC(o, 'open', bi));
+        this.eng.ohlcHistory.high.push(sanitiseOHLC(h, 'high', bi));
+        this.eng.ohlcHistory.low.push(sanitiseOHLC(l, 'low', bi));
+        this.eng.ohlcHistory.close.push(sanitiseOHLC(c, 'close', bi));
+        this.eng.ohlcHistory.volume.push(sanitiseOHLC(v, 'volume', bi));
       }
 
       if (this.eng.strategyEngine) {
+        const bi = context.barIndex;
         const openVal = context.open.getRelative(0);
         const highVal = context.high.getRelative(0);
         const lowVal = context.low.getRelative(0);
@@ -126,11 +147,11 @@ export class Interpreter {
         const volVal = context.volume.getRelative(0);
         this.eng.strategyEngine.updateBar(
           context.barIndex, context.timestamp,
-          typeof openVal === 'number' ? openVal : 0,
-          typeof highVal === 'number' ? highVal : 0,
-          typeof lowVal === 'number' ? lowVal : 0,
-          typeof closeVal === 'number' ? closeVal : 0,
-          typeof volVal === 'number' ? volVal : 0,
+          sanitiseOHLC(openVal, 'open', bi),
+          sanitiseOHLC(highVal, 'high', bi),
+          sanitiseOHLC(lowVal, 'low', bi),
+          sanitiseOHLC(closeVal, 'close', bi),
+          sanitiseOHLC(volVal, 'volume', bi),
         );
       }
 
@@ -174,9 +195,18 @@ export class Interpreter {
     } catch (error) {
       const executionTime = performance.now() - startTime;
       this.eng.updateMetrics(false, executionTime);
-      console.error(
-        `[ExecutionEngine] Error at bar ${context.barIndex}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+
+      // Build a structured error payload for the result.
+      // console.error is supplemental (server-side logging) — the error
+      // MUST be present in the returned ExecutionResult.
+      const engineError: EngineError = {
+        message: error instanceof Error ? error.message : String(error),
+        barIndex: context.barIndex,
+        span: error instanceof Error && 'span' in error ? (error as any).span : undefined,
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      console.error(`[ExecutionEngine] ${engineError.message}`, engineError);
+
       this.eng.rollbackToPreviousBar();
 
       const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
@@ -184,7 +214,7 @@ export class Interpreter {
         success: false,
         version: this.eng.sourceProgram.version,
         overlay: this.eng.compiledScript.overlay,
-        error: error instanceof Error ? error.message : String(error),
+        error: engineError,
         outputs: this.eng.outputs,
         shapes: [...this.eng.shapes],
         fills: this.eng.fills,

@@ -16,6 +16,7 @@
  */
 
 import { NA, type PineValue } from '../types/na.js';
+import { RuntimeError } from '../../common/errors.js';
 
 /**
  * Pass through finite numbers; convert NaN/Infinity/-Infinity to Pine NA.
@@ -76,6 +77,48 @@ export function safeUnaryPlus(a: number): PineValue {
  */
 export function isFiniteNumber(val: unknown): val is number {
   return typeof val === 'number' && Number.isFinite(val);
+}
+
+/**
+ * Assert that a value is a finite number.
+ * Throws RuntimeError if the value is NaN, Infinity, -Infinity, or not a number.
+ * Use in non-arithmetic contexts where non-finite values should not propagate silently.
+ *
+ * @param val - The value to check
+ * @param context - Descriptive label for the error message (e.g., "series index", "OHLC push")
+ * @param barIndex - Optional bar index for error context
+ */
+export function ensureFinite(val: unknown, context: string, barIndex?: number): asserts val is number {
+  if (typeof val !== 'number') {
+    throw new RuntimeError(
+      `Expected finite number for ${context}, got ${typeof val}`,
+      barIndex,
+    );
+  }
+  if (!Number.isFinite(val)) {
+    throw new RuntimeError(
+      `Non-finite value for ${context}: ${val}`,
+      barIndex,
+    );
+  }
+}
+
+/**
+ * Assert that a value is a number (finite or not).
+ * Throws RuntimeError if the value is not a number type.
+ * Use when you need to distinguish "not a number type" from "non-finite".
+ *
+ * @param val - The value to check
+ * @param context - Descriptive label for the error message
+ * @param barIndex - Optional bar index for error context
+ */
+export function expectNumber(val: unknown, context: string, barIndex?: number): asserts val is number {
+  if (typeof val !== 'number') {
+    throw new RuntimeError(
+      `Expected number for ${context}, got ${typeof val}`,
+      barIndex,
+    );
+  }
 }
 
 /**

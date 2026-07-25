@@ -137,7 +137,7 @@ export function executePineScript(
   bars: Bar[],
 ): {
   success: boolean;
-  error?: string;
+  error?: string | import('./language/runtime/execution-types.js').EngineError;
   outputs: Map<string, import('./language/runtime/series.js').Series>;
   shapes: import('./language/runtime/execution-engine.js').ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;

@@ -252,6 +252,12 @@ export class Compiler {
   private types = new Map<string, PineType>();
   private builder = createIRBuilder();
   private callIdCounter = 0;
+  /** Tracks nesting depth of function bodies; >0 means inside a function. */
+  private functionDepth = 0;
+  /** Tracks nesting depth of loop bodies (for/while); >0 means inside a loop. */
+  private loopDepth = 0;
+  /** Set of variable names declared as const — used to reject reassignment. */
+  private constVariables = new Set<string>();
 
   compile(program: ProgramNode): CompileResult {
     this.scope = createScope();
@@ -339,12 +345,52 @@ export class Compiler {
         );
         break;
       case 'IfStatement':
+        this.inferExpressionType(stmt.condition);
+        for (const s of stmt.thenBranch) this.compileStatement(s);
+        if (stmt.elseBranch) {
+          for (const s of stmt.elseBranch) this.compileStatement(s);
+        }
+        break;
       case 'ForStatement':
+        if (stmt.start) this.inferExpressionType(stmt.start);
+        if (stmt.end) this.inferExpressionType(stmt.end);
+        if (stmt.step) this.inferExpressionType(stmt.step);
+        if (stmt.iterable) this.inferExpressionType(stmt.iterable);
+        this.loopDepth++;
+        for (const s of stmt.body) this.compileStatement(s);
+        this.loopDepth--;
+        break;
       case 'WhileStatement':
+        this.inferExpressionType(stmt.condition);
+        this.loopDepth++;
+        for (const s of stmt.body) this.compileStatement(s);
+        this.loopDepth--;
+        break;
       case 'SwitchStatement':
+        this.inferExpressionType(stmt.expression);
+        for (const caseNode of stmt.cases) {
+          if (caseNode.value) this.inferExpressionType(caseNode.value);
+          for (const s of caseNode.body) this.compileStatement(s);
+        }
+        if (stmt.defaultCase) {
+          for (const s of stmt.defaultCase) this.compileStatement(s);
+        }
+        break;
       case 'ReturnStatement':
+        if (this.functionDepth === 0) {
+          throw new CompileError('Return statement outside function context', stmt.span);
+        }
+        if (stmt.value) this.inferExpressionType(stmt.value);
+        break;
       case 'BreakStatement':
+        if (this.loopDepth === 0) {
+          throw new CompileError('Break statement outside loop context', stmt.span);
+        }
+        break;
       case 'ContinueStatement':
+        if (this.loopDepth === 0) {
+          throw new CompileError('Continue statement outside loop context', stmt.span);
+        }
         break;
       default:
         throw new CompileError(`Unsupported statement: ${stmt.kind}`, stmt.span);
@@ -372,6 +418,9 @@ export class Compiler {
       }
     }
 
+    if (decl.isConst) {
+      this.constVariables.add(decl.name);
+    }
     declareVariable(this.scope, decl.name, varType);
     this.globals.push({
       name: decl.name,
@@ -410,6 +459,13 @@ export class Compiler {
       if (!existing) {
         throw new CompileError(`Undefined variable: ${name}`, stmt.span);
       }
+      // Reject assignment to const variables (reassignment, not initialisation)
+      if (this.constVariables.has(name)) {
+        throw new CompileError(
+          `Cannot assign to const variable '${name}'`,
+          stmt.span,
+        );
+      }
       if (!isAssignable(valueType, existing)) {
         throw new CompileError(
           `Cannot assign ${valueType.toString()} to ${existing.toString()}`,
@@ -417,9 +473,22 @@ export class Compiler {
         );
       }
       this.builder.emit(IROpCode.StoreVar, stmt.span, name, stmt.operator);
-    } else {
+    } else if (
+      stmt.target.kind === 'MemberExpression' ||
+      stmt.target.kind === 'IndexExpression' ||
+      stmt.target.kind === 'ArrayExpression'
+    ) {
+      // Validate the target is a structurally assignable expression.
+      // MemberExpression: property set on a mutable object
+      // IndexExpression:  element set on a mutable array/map
+      // ArrayExpression:  destructuring assignment
       this.inferExpressionType(stmt.target);
       this.builder.emit(IROpCode.StoreVar, stmt.span, 'indexed', stmt.operator);
+    } else {
+      throw new CompileError(
+        `Invalid assignment target: ${stmt.target.kind} expressions are not assignable`,
+        stmt.span,
+      );
     }
   }
 
@@ -523,12 +592,22 @@ export class Compiler {
             });
           }
         }
+        // Most Pine Script built-in functions return series<float>.
+        // This fallback is a known approximation — proper function return-type
+        // resolution would require a builtin type registry.
         return seriesOf(FLOAT_TYPE);
       }
-      case 'MemberExpression':
+      case 'MemberExpression': {
+        // For known namespace members, attempt property type inference.
+        // For unknown objects, fall back to series<float> as Pine Script
+        // conventions expect time-series access on most member expressions.
         return seriesOf(FLOAT_TYPE);
-      case 'IndexExpression':
+      }
+      case 'IndexExpression': {
+        // Series/array indexing returns the element type.
+        // Without full type info at compile time, fall back to series<float>.
         return seriesOf(FLOAT_TYPE);
+      }
       case 'ArrayExpression':
         return typeFromAnnotation('array', {
           typeArguments:
@@ -536,8 +615,12 @@ export class Compiler {
         });
       case 'MapExpression':
         return typeFromAnnotation('map', { typeArguments: [ANY_TYPE, ANY_TYPE] });
-      case 'FunctionExpression':
+      case 'FunctionExpression': {
+        this.functionDepth++;
+        for (const s of expr.body) this.compileStatement(s);
+        this.functionDepth--;
         return ANY_TYPE;
+      }
       case 'ParenthesizedExpression':
         return this.inferExpressionType(expr.expression);
       case 'SwitchExpression': {
@@ -552,8 +635,15 @@ export class Compiler {
         }
         return resultType;
       }
-      default:
-        return ANY_TYPE;
+      default: {
+        // Exhaustiveness check: if this fails to compile at the type level,
+        // a new ExpressionNode kind was added without a corresponding case.
+        expr satisfies never;
+        throw new CompileError(
+          `Unrecognised expression kind: ${(expr as any).kind || 'unknown'}`,
+          (expr as any).span,
+        );
+      }
     }
   }
 }

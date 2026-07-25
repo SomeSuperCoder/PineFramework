@@ -20,7 +20,7 @@ import type {
 } from '../parser/ast/nodes.js';
 import { NA, pineTruthy, type PineValue, isNa } from '../types/na.js';
 import { FLOAT_TYPE, INT_TYPE } from '../types/pine-types.js';
-import { safeAdd, safeSub, safeMul, safeDiv } from './float-guards.js';
+import { safeAdd, safeSub, safeMul, safeDiv, guardFinite } from './float-guards.js';
 import {
   type RuntimeScope,
   createRuntimeScope,
@@ -108,12 +108,19 @@ export function executeAssignment(
       } else {
         const c = typeof current === 'number' ? current : 0;
         const v = typeof value === 'number' ? value : 0;
-        switch (stmt.operator) {
-          case '+=': result = safeAdd(c, v); break;
-          case '-=': result = safeSub(c, v); break;
-          case '*=': result = safeMul(c, v); break;
-          case '/=': result = safeDiv(c, v); break;
-          case ':=': result = value; break;
+        // Guard against NaN/Infinity propagation through compound assignment
+        const guardedC = guardFinite(c);
+        const guardedV = guardFinite(v);
+        if (isNa(guardedC) || isNa(guardedV)) {
+          result = NA;
+        } else {
+          switch (stmt.operator) {
+            case '+=': result = safeAdd(guardedC as number, guardedV as number); break;
+            case '-=': result = safeSub(guardedC as number, guardedV as number); break;
+            case '*=': result = safeMul(guardedC as number, guardedV as number); break;
+            case '/=': result = safeDiv(guardedC as number, guardedV as number); break;
+            case ':=': result = value; break;
+          }
         }
       }
     }
@@ -140,12 +147,19 @@ export function executeAssignment(
         } else {
           const c = typeof current === 'number' ? current : 0;
           const v = typeof value === 'number' ? value : 0;
-          switch (stmt.operator) {
-            case '+=': result = safeAdd(c, v); break;
-            case '-=': result = safeSub(c, v); break;
-            case '*=': result = safeMul(c, v); break;
-            case '/=': result = safeDiv(c, v); break;
-            case ':=': result = value; break;
+          // Guard against NaN/Infinity propagation through compound assignment
+          const guardedC = guardFinite(c);
+          const guardedV = guardFinite(v);
+          if (isNa(guardedC) || isNa(guardedV)) {
+            result = NA;
+          } else {
+            switch (stmt.operator) {
+              case '+=': result = safeAdd(guardedC as number, guardedV as number); break;
+              case '-=': result = safeSub(guardedC as number, guardedV as number); break;
+              case '*=': result = safeMul(guardedC as number, guardedV as number); break;
+              case '/=': result = safeDiv(guardedC as number, guardedV as number); break;
+              case ':=': result = value; break;
+            }
           }
         }
       }

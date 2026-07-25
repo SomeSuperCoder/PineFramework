@@ -38,7 +38,8 @@ export async function runMultiSymbolBacktest(
     results.push(result);
 
     if (result.status === 'failed') {
-      process.stderr.write(`  ✗ ${symbol}: ${result.error}\n`);
+      const errMsg = typeof result.error === 'string' ? result.error : result.error?.message ?? 'Unknown error';
+      process.stderr.write(`  ✗ ${symbol}: ${errMsg}\n`);
     } else {
       process.stderr.write(
         `  ✓ ${symbol}: PnL ${result.metrics!.netProfitPercent >= 0 ? '+' : ''}${result.metrics!.netProfitPercent.toFixed(2)}%  PF ${result.metrics!.profitFactor.toFixed(2)}  WinRate ${result.metrics!.winRate.toFixed(1)}%\n`,

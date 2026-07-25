@@ -1,5 +1,5 @@
 import { rma, ema as emaFunc, sma as smaFunc } from './moving-averages.js';
-import { isNearZero, guardFinite } from '../language/runtime/float-guards.js';
+import { isNearZero } from '../language/runtime/float-guards.js';
 
 export function rsi(source: number[], length: number): number[] {
   if (length <= 0 || source.length === 0) {

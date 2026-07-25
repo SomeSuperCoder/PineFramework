@@ -46,7 +46,10 @@ export async function runSymbolBacktest(
     });
 
     if (!pipelineResult.success) {
-      return { symbol, status: 'failed', error: pipelineResult.error || 'Execution failed' };
+      const msg = pipelineResult.error
+        ? (typeof pipelineResult.error === 'string' ? pipelineResult.error : pipelineResult.error.message)
+        : 'Execution failed';
+      return { symbol, status: 'failed', error: msg };
     }
 
     const metricsResult = computeBacktestMetrics(bars, pipelineResult.engine!);

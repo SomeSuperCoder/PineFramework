@@ -25,7 +25,7 @@ import {
   safePow,
   safeUnaryMinus,
   safeUnaryPlus,
-  isFiniteNumber,
+  ensureFinite,
 } from './float-guards.js';
 import {
   type RuntimeScope,
@@ -105,14 +105,18 @@ export function executeIdentifier(
     const high = context.high.getRelative(0);
     const low = context.low.getRelative(0);
     if (isNa(high) || isNa(low)) return NA;
-    return safeAdd(high as number, low as number) as number / 2;
+    const sum = safeAdd(high as number, low as number);
+    if (isNa(sum)) return NA;
+    return guardFinite((sum as number) / 2);
   }
   if (expr.name === 'hlc3') {
     const high = context.high.getRelative(0);
     const low = context.low.getRelative(0);
     const close = context.close.getRelative(0);
     if (isNa(high) || isNa(low) || isNa(close)) return NA;
-    return ((high as number) + (low as number) + (close as number)) / 3;
+    const sum = safeAdd(safeAdd(high as number, low as number) as number, close as number);
+    if (isNa(sum)) return NA;
+    return guardFinite((sum as number) / 3);
   }
   if (expr.name === 'ohlc4') {
     const open = context.open.getRelative(0);
@@ -120,7 +124,9 @@ export function executeIdentifier(
     const low = context.low.getRelative(0);
     const close = context.close.getRelative(0);
     if (isNa(open) || isNa(high) || isNa(low) || isNa(close)) return NA;
-    return ((open as number) + (high as number) + (low as number) + (close as number)) / 4;
+    const sum = safeAdd(safeAdd(safeAdd(open as number, high as number) as number, low as number) as number, close as number);
+    if (isNa(sum)) return NA;
+    return guardFinite((sum as number) / 4);
   }
   if (expr.name === 'na') return NA;
 
@@ -179,10 +185,27 @@ export function executeBinaryExpression(
     case '**': return safePow(left as number, right as number);
     case '==': return left === right;
     case '!=': return left !== right;
-    case '<': return (left as number) < (right as number);
-    case '>': return (left as number) > (right as number);
-    case '<=': return (left as number) <= (right as number);
-    case '>=': return (left as number) >= (right as number);
+    case '<': {
+      // Guard against NaN comparisons (NaN < x → false, IEEE 754)
+      if (typeof left !== 'number' || typeof right !== 'number') return NA;
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return NA;
+      return left < right;
+    }
+    case '>': {
+      if (typeof left !== 'number' || typeof right !== 'number') return NA;
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return NA;
+      return left > right;
+    }
+    case '<=': {
+      if (typeof left !== 'number' || typeof right !== 'number') return NA;
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return NA;
+      return left <= right;
+    }
+    case '>=': {
+      if (typeof left !== 'number' || typeof right !== 'number') return NA;
+      if (!Number.isFinite(left) || !Number.isFinite(right)) return NA;
+      return left >= right;
+    }
     default: throw new Error(`Unsupported binary operator: ${expr.operator}`);
   }
 }
@@ -531,6 +554,9 @@ export function executeIndexExpression(
   // side-effect from a "current value is NA" ambiguity.
   const index = dispatch(expr.index, scope, context);
   if (isNa(index)) return NA;
+  // Guard: index must be a finite number (non-finite or non-numeric indices
+  // indicate a programming error and should be surfaced, not silently ignored).
+  ensureFinite(index, 'series index expression', context.barIndex);
 
   // Handle Identifier objects BEFORE generic obj dispatch, because
   // dispatch(expr.object) returns the CURRENT value — if that value is
