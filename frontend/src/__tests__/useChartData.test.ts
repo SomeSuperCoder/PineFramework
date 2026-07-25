@@ -842,6 +842,77 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     expect(result.current.candles.length).toBe(1000);
   });
 
+  // ── Scenario: confirmed kline updates candle after forming tick ──
+  it('WS confirmed kline updates candle to final close price', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    // Connect WS
+    const ws = wsInstances[0];
+    act(() => ws.simulateOpen());
+
+    // Subscribe
+    act(() => {
+      result.current.subscribe('BTCUSDT', '1d');
+    });
+
+    // Simulate forming tick (price 105)
+    const lastBar = bars1k[bars1k.length - 1];
+    act(() => {
+      ws.simulateMessage({
+        type: 'kline',
+        data: {
+          interval: '1d',
+          symbol: 'BTCUSDT',
+          timestamp: lastBar.timestamp,
+          open: lastBar.open,
+          high: lastBar.high + 10,
+          low: lastBar.low,
+          close: lastBar.close + 5, // forming price 105
+          volume: lastBar.volume,
+          confirmed: false,
+        },
+      });
+    });
+
+    // Candle should update to forming price
+    expect(result.current.candles[result.current.candles.length - 1].close).toBe(lastBar.close + 5);
+
+    // Simulate confirmed tick (price 110) — same timestamp, but confirmed
+    act(() => {
+      ws.simulateMessage({
+        type: 'kline',
+        data: {
+          interval: '1d',
+          symbol: 'BTCUSDT',
+          timestamp: lastBar.timestamp, // same timestamp
+          open: lastBar.open,
+          high: lastBar.high + 20,
+          low: lastBar.low,
+          close: lastBar.close + 10, // confirmed price 110
+          volume: lastBar.volume + 50,
+          confirmed: true,
+        },
+      });
+    });
+
+    // BUG: With <= guard, confirmed tick is dropped, candle stays at 105
+    // EXPECTED: Candle should update to confirmed price 110
+    expect(result.current.candles[result.current.candles.length - 1].close).toBe(lastBar.close + 10);
+
+    // ohlcvDataRef should also be updated to confirmed price
+    expect(result.current.ohlcvDataRef.current[result.current.ohlcvDataRef.current.length - 1].close).toBe(lastBar.close + 10);
+  });
+
   // ── Scenario: timeframe switch + indicator re-execution ──────────
   it('after timeframe switch, indicator results from old timeframe are stale', async () => {
     const bars1d = makeBars(BASE_TS + 1_000_000, 1000, 86400_000);

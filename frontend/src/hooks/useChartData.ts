@@ -454,9 +454,9 @@ export function useChartData(
               return;
             }
 
-            // Detect duplicate/stale replay on WS reconnect
-            if (k.timestamp <= lastKlineTimestampRef.current) {
-              console.debug('[WS] Duplicate or stale kline skipped', {
+            // Reject stale klines (older than last seen timestamp)
+            if (k.timestamp < lastKlineTimestampRef.current) {
+              console.debug('[WS] Stale kline skipped', {
                 timestamp: k.timestamp,
                 lastTimestamp: lastKlineTimestampRef.current,
                 interval: k.interval,
@@ -464,7 +464,20 @@ export function useChartData(
               });
               return;
             }
-            lastKlineTimestampRef.current = k.timestamp;
+
+            // Same timestamp: allow confirmed ticks (candle close) to pass through,
+            // but skip duplicate forming ticks. This is critical because both forming
+            // and confirmed ticks share the same Bybit start timestamp.
+            if (k.timestamp === lastKlineTimestampRef.current && !k.confirmed) {
+              return;
+            }
+
+            // Advance watermark only on confirmed ticks (final candle close).
+            // Forming ticks update the candle in-place without advancing, so
+            // the confirmed tick for the same period can still pass through.
+            if (k.confirmed) {
+              lastKlineTimestampRef.current = k.timestamp;
+            }
 
             // Instrumentation: log price delta vs last candle
             setCandles((prev) => {
