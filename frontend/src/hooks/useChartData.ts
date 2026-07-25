@@ -124,6 +124,7 @@ export function useChartData(
       historicalDataLoadedRef.current = false;
       prependCountRef.current = 0;
       setChunkBorders([]);
+      lastKlineTimestampRef.current = 0; // Reset watermark on new data load
       try {
         const response = await fetch(
           `/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`,
@@ -134,6 +135,15 @@ export function useChartData(
         const json = await response.json();
         ohlcvDataRef.current = json.data;
         historicalDataLoadedRef.current = true;
+        // Diagnostic: log REST data boundaries
+        if (json.data && json.data.length > 0) {
+          const first = json.data[0];
+          const last = json.data[json.data.length - 1];
+          console.log(`[DIAG] REST loaded ${json.data.length} bars for ${symbol} ${interval}`, {
+            first: { ts: first.timestamp, open: first.open, high: first.high, low: first.low, close: first.close },
+            last: { ts: last.timestamp, open: last.open, high: last.high, low: last.low, close: last.close },
+          });
+        }
         setCandles(toCandleData(json.data));
       } catch (err) {
         console.error('Failed to fetch OHLCV:', err);
@@ -437,6 +447,12 @@ export function useChartData(
           const data = JSON.parse(event.data);
           if (data.type === 'kline' && data.data) {
             const k = data.data;
+            // Diagnostic: log raw WS kline data
+            console.log(`[DIAG] WS kline raw`, {
+              symbol: k.symbol, interval: k.interval, ts: k.timestamp,
+              open: k.open, high: k.high, low: k.low, close: k.close,
+              confirmed: k.confirmed, volume: k.volume,
+            });
             const topic = `kline.${k.interval}.${k.symbol}`;
             if (topic !== subscribedTopicRef.current) {
               return;
@@ -504,11 +520,21 @@ export function useChartData(
               if (!historicalDataLoadedRef.current) return prev;
               const newCandles = [...prev];
               const last = newCandles[newCandles.length - 1];
-              if (last && last.time === candle.time) {
+              const action = (last && last.time === candle.time) ? 'REPLACE' : 'PUSH';
+              if (action === 'REPLACE') {
                 newCandles[newCandles.length - 1] = candle;
               } else {
                 newCandles.push(candle);
               }
+              // Diagnostic: log candle update result
+              const lastNew = newCandles[newCandles.length - 1];
+              console.log(`[DIAG] Candle ${action}`, {
+                candleTime: candle.time,
+                lastTime: last?.time,
+                open: lastNew.open, high: lastNew.high, low: lastNew.low, close: lastNew.close,
+                totalCandles: newCandles.length,
+                watermark: lastKlineTimestampRef.current,
+              });
               return newCandles;
             });
             if (k.timestamp) {
