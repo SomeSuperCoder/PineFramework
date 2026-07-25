@@ -236,6 +236,8 @@ export class Interpreter {
         return { ...lastResult, strategyMarkers: allMarkers, maxLookback: this.eng.getMaxLookback() };
       }
       allMarkers.push(...lastResult.strategyMarkers);
+      // Accumulate runtime lookback from TA functions (pivots, SMA, EMA, etc.)
+      this.eng.runtimeMaxBarsBack = Math.max(this.eng.runtimeMaxBarsBack, this.eng.getMaxLookback());
     }
 
     // Final pass: convert any remaining NaN/Infinity across all outputs to NA
@@ -292,13 +294,14 @@ export class Interpreter {
    * outputs from bar 0 (they have no declared warmup period).
    */
   private applyLookbackFilter(): void {
-    const declared = this.eng.compiledScript.maxBarsBack;
-    if (declared <= 0) return;
+    // Use effective lookback (max of declared and runtime-detected from TA functions)
+    const effective = this.eng.getEffectiveMaxBarsBack();
+    if (effective <= 0) return;
 
     const timestamps = this.eng.barTimestamps;
     if (timestamps.length === 0) return;
 
-    const warmupCount = Math.min(declared, timestamps.length);
+    const warmupCount = Math.min(effective, timestamps.length);
     if (warmupCount === 0) return;
 
     const warmupTimestamps = new Set(timestamps.slice(0, warmupCount));

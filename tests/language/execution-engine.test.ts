@@ -30,9 +30,8 @@ function executeScript(source: string, bars: ExecutionContext[] = []): Execution
     bars = [createBarContext()];
   }
 
-  for (const bar of bars) {
-    engine.executeBar(bar);
-  }
+  // Use executeBars() to trigger runtime lookback tracking and filtering
+  engine.executeBars(bars);
 
   return engine;
 }
@@ -276,6 +275,90 @@ describe('ExecutionEngine', () => {
         const { ast } = parse(source);
         const result = compile(ast);
         expect(result.ir.maxBarsBack).toBe(20); // TA lookback inside loop
+      });
+    });
+
+    describe('Runtime lookback filtering', () => {
+      it('should filter warmup bars from runtime-detected pivot lookback', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          ph = ta.pivothigh(5, 5)
+          plot(ph, "ph")
+        `;
+        const bars = Array.from({ length: 30 }, (_, i) => createBarContext({
+          barIndex: i,
+          close: createSeries('close', [100 + Math.sin(i * 0.3) * 5]),
+          high: createSeries('high', [105 + Math.sin(i * 0.3) * 5]),
+          low: createSeries('low', [95 + Math.sin(i * 0.3) * 5]),
+        }));
+        const engine = executeScript(source, bars);
+        const output = engine.getOutput('ph');
+        expect(output).toBeDefined();
+        // First 11 bars should be null (warmup from pivot lookback 5+5+1=11)
+        for (let i = 0; i < 11 && i < output!.values.length; i++) {
+          expect(output!.values[i]).toBeNull();
+        }
+      });
+
+      it('should filter warmup bars from runtime-detected SMA lookback', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          s = ta.sma(close, 20)
+          plot(s, "sma")
+        `;
+        const bars = Array.from({ length: 50 }, (_, i) => createBarContext({
+          barIndex: i,
+          close: createSeries('close', [100 + i]),
+        }));
+        const engine = executeScript(source, bars);
+        const output = engine.getOutput('sma');
+        expect(output).toBeDefined();
+        // First 20 bars should be null (warmup from SMA lookback)
+        for (let i = 0; i < 20 && i < output!.values.length; i++) {
+          expect(output!.values[i]).toBeNull();
+        }
+      });
+
+      it('should use declared maxBarsBack when explicit', () => {
+        const source = `
+          //@version=6
+          indicator("Test", max_bars_back=30)
+          x = close
+          plot(x, "x")
+        `;
+        const bars = Array.from({ length: 50 }, (_, i) => createBarContext({
+          barIndex: i,
+          close: createSeries('close', [100 + i]),
+        }));
+        const engine = executeScript(source, bars);
+        const output = engine.getOutput('x');
+        expect(output).toBeDefined();
+        // First 30 bars should be null (declared maxBarsBack)
+        for (let i = 0; i < 30 && i < output!.values.length; i++) {
+          expect(output!.values[i]).toBeNull();
+        }
+      });
+
+      it('should not filter when no TA functions used', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          x = close + 1
+          plot(x, "x")
+        `;
+        const bars = Array.from({ length: 10 }, (_, i) => createBarContext({
+          barIndex: i,
+          close: createSeries('close', [100 + i]),
+        }));
+        const engine = executeScript(source, bars);
+        const output = engine.getOutput('x');
+        expect(output).toBeDefined();
+        // No bars should be null (no TA functions, no lookback)
+        for (let i = 0; i < output!.values.length; i++) {
+          expect(output!.values[i]).not.toBeNull();
+        }
       });
     });
 
