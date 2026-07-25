@@ -195,21 +195,16 @@ function detectLookbackInStatements(stmts: StatementNode[]): number {
           maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.elseBranch));
         }
         break;
-      case 'ForStatement':
-        if (stmt.start) {
-          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.start));
-        }
-        if (stmt.end) {
-          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.end));
-        }
-        if (stmt.step) {
-          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.step));
-        }
-        if (stmt.iterable) {
-          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.iterable));
-        }
+      case 'ForStatement': {
+        // Recurse into loop body for nested TA calls and [] indexing
+        // NOTE: We do NOT treat the for-loop upper bound as lookback.
+        // A `for x=1 to 1000` searches up to 1000 bars back, but that's
+        // search depth, not warmup. The script can produce valid output
+        // (labels, plots) well before bar 1000 — the loop just hasn't
+        // found what it's looking for yet.
         maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.body));
         break;
+      }
       case 'WhileStatement':
         maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.condition));
         maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.body));

@@ -250,6 +250,33 @@ describe('ExecutionEngine', () => {
         const result = compile(ast);
         expect(result.ir.maxBarsBack).toBe(0); // variable not detected
       });
+
+      it('should not treat for-loop bound as lookback (search depth ≠ warmup)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          for x=1 to 1000
+            if close[x] > close
+              plot(close, "found")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        // for-loop bound is search depth, not warmup — labels form before bar 1000
+        expect(result.ir.maxBarsBack).toBe(0);
+      });
+
+      it('should detect TA calls inside for-loop bodies', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          for x=0 to 50
+            s = ta.sma(close, 20)
+            plot(s, "sma")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(20); // TA lookback inside loop
+      });
     });
 
     it('should parse max_bars_back from strategy declaration', () => {
