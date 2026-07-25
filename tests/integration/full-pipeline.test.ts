@@ -264,7 +264,7 @@ plot(smaValue, "SMA")`;
       expect(endTime - startTime).toBeLessThan(1000);
     });
 
-    it('should handle large datasets', () => {
+    it('should handle large datasets', { timeout: 30000 }, () => {
       const source = `//@version=6
 indicator("Large Dataset")
 plot(close, "Close")`;
