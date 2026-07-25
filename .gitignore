@@ -10,6 +10,7 @@ dist/
 tests/integration/alert-sanity/export.json
 frontend/dist/
 *.log
+logs/
 node_modules/
 test-*.mjs
 *.tsbuildinfo

@@ -81,6 +81,15 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         volume: parseFloat(row[5]),
       })).reverse();
 
+      // Diagnostic: log REST response boundaries
+      if (bars.length > 0) {
+        console.log(`[DIAG] Bybit REST response for ${symbol} ${interval}:`, {
+          count: bars.length,
+          first: bars[0],
+          last: bars[bars.length - 1]
+        });
+      }
+
       // L1 (in-memory) cache: only store non-paginated "most recent" responses.
       // Paginated scroll-back responses would overwrite recent bars with
       // historical ones, breaking the initial-load fast path.

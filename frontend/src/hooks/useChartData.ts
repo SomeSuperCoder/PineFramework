@@ -139,10 +139,9 @@ export function useChartData(
         if (json.data && json.data.length > 0) {
           const first = json.data[0];
           const last = json.data[json.data.length - 1];
-          console.log(`[DIAG] REST loaded ${json.data.length} bars for ${symbol} ${interval}`, {
-            first: { ts: first.timestamp, open: first.open, high: first.high, low: first.low, close: first.close },
-            last: { ts: last.timestamp, open: last.open, high: last.high, low: last.low, close: last.close },
-          });
+          console.log(`[DIAG] REST loaded ${json.data.length} bars for ${symbol} ${interval}`);
+          console.log(`[DIAG] REST first bar — ts=${first.timestamp} o=${first.open} h=${first.high} l=${first.low} c=${first.close}`);
+          console.log(`[DIAG] REST last bar  — ts=${last.timestamp} o=${last.open} h=${last.high} l=${last.low} c=${last.close} v=${last.volume}`);
         }
         setCandles(toCandleData(json.data));
       } catch (err) {
@@ -453,6 +452,8 @@ export function useChartData(
               open: k.open, high: k.high, low: k.low, close: k.close,
               confirmed: k.confirmed, volume: k.volume,
             });
+            // Also log as flat string for text-only log captures
+            console.log(`[DIAG] WS kline flat — symbol=${k.symbol} interval=${k.interval} ts=${k.timestamp} o=${k.open} h=${k.high} l=${k.low} c=${k.close} v=${k.volume} confirmed=${k.confirmed}`);
             const topic = `kline.${k.interval}.${k.symbol}`;
             if (topic !== subscribedTopicRef.current) {
               return;
@@ -500,9 +501,11 @@ export function useChartData(
               const lastCandle = prev[prev.length - 1];
               if (lastCandle) {
                 const deltaPct = ((k.close - lastCandle.close) / lastCandle.close * 100).toFixed(2);
-                console.debug(
-                  `[WS] kline ${k.symbol} ${k.interval} close Δ ${deltaPct}% — ` +
-                  `hist: ${lastCandle.close}, rt: ${k.close}`
+                console.warn(
+                  `[DIAG] WS vs REST merge: symbol=${k.symbol} interval=${k.interval} ` +
+                  `histClose=${lastCandle.close} wsClose=${k.close} Δ=${deltaPct}% ` +
+                  `histOpen=${lastCandle.open} wsOpen=${k.open} ` +
+                  `histTime=${lastCandle.time} wsTime=${Math.floor(k.timestamp / 1000)}`
                 );
               }
               return prev; // read-only inspection, no mutation
@@ -516,6 +519,17 @@ export function useChartData(
               close: k.close,
               volume: k.volume,
             };
+            // Diagnostic: compare WS data to ohlcvDataRef (canonical source)
+            {
+              const lastOhlcv = ohlcvDataRef.current[ohlcvDataRef.current.length - 1];
+              if (lastOhlcv) {
+                const lastOhlcvTime = Math.floor(lastOhlcv.timestamp / 1000);
+                console.log(`[DIAG] WS vs ohlcvRef — candleTime=${candle.time} ohlcvTime=${lastOhlcvTime} ` +
+                  `candleClose=${candle.close} ohlcvClose=${lastOhlcv.close} ` +
+                  `candleOpen=${candle.open} ohlcvOpen=${lastOhlcv.open} ` +
+                  `match=${candle.time === lastOhlcvTime ? 'YES (REPLACE)' : 'PUSH new candle'}`);
+              }
+            }
             setCandles((prev) => {
               if (!historicalDataLoadedRef.current) return prev;
               const newCandles = [...prev];
@@ -535,6 +549,9 @@ export function useChartData(
                 totalCandles: newCandles.length,
                 watermark: lastKlineTimestampRef.current,
               });
+              console.log(`[DIAG] Candle flat — action=${action} candleTime=${candle.time} ` +
+                `o=${candle.open} h=${candle.high} l=${candle.low} c=${candle.close} v=${candle.volume} ` +
+                `totalCandles=${newCandles.length}`);
               return newCandles;
             });
             if (k.timestamp) {
