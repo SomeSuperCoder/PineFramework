@@ -1,29 +1,11 @@
 import { useEffect } from 'react';
 import { NumberInput } from './NumberInput.js';
 import type { DateRangeMode } from '../types';
-
-const MAX_BARS = 1500;
-
-const BARS_PER_DAY: Record<string, number> = {
-  '1': 1440,
-  '5': 288,
-  '15': 96,
-  '30': 48,
-  '60': 24,
-  '240': 6,
-  D: 1,
-  W: Math.round((1 / 7) * 100) / 100,
-};
-
-function getMaxDays(timeframe: string): number {
-  const barsPerDay = BARS_PER_DAY[timeframe] ?? 24;
-  return Math.floor(MAX_BARS / barsPerDay);
-}
-
-function estimateBars(timeframe: string, days: number): number {
-  const barsPerDay = BARS_PER_DAY[timeframe] ?? 24;
-  return Math.ceil(barsPerDay * days);
-}
+import {
+  SAFE_AMOUNT_OF_CANDLES,
+  estimateBars,
+  sliderBounds,
+} from '../utils/candleLimit';
 
 const TIMEFRAME_LABELS: Record<string, string> = {
   '1': '1m',
@@ -66,7 +48,15 @@ export function BacktestGeneralSettings({
   timeframe,
   onBarsExceededChange,
 }: BacktestGeneralSettingsProps) {
-  const maxDays = getMaxDays(timeframe);
+  const { min: minDays, max: maxDays } = sliderBounds(timeframe);
+
+  // Clamp daysBack if it exceeds the current max (e.g., after timeframe switch)
+  useEffect(() => {
+    if (daysBack > maxDays) {
+      onDaysBackChange(maxDays);
+    }
+  }, [maxDays, daysBack, onDaysBackChange]);
+
   const estimatedDays =
     dateRangeMode === 'days_back'
       ? daysBack
@@ -79,7 +69,7 @@ export function BacktestGeneralSettings({
           return 0;
         })();
   const estimatedBars = estimateBars(timeframe, estimatedDays);
-  const exceedsLimit = estimatedBars > MAX_BARS;
+  const exceedsLimit = estimatedBars > SAFE_AMOUNT_OF_CANDLES;
 
   useEffect(() => {
     onBarsExceededChange?.(exceedsLimit);
@@ -128,12 +118,25 @@ export function BacktestGeneralSettings({
         </div>
         {dateRangeMode === 'days_back' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <NumberInput
+            <input
+              type="range"
               value={daysBack}
-              onChange={onDaysBackChange}
-              min={1}
-              style={{ width: '80px' }}
+              onChange={(e) => onDaysBackChange(Number(e.target.value))}
+              min={minDays}
+              max={maxDays}
+              step={1}
+              style={{ flex: 1, accentColor: '#2196f3' }}
             />
+            <span
+              style={{
+                color: '#e0e0e0',
+                fontSize: '13px',
+                minWidth: '60px',
+                textAlign: 'right',
+              }}
+            >
+              {daysBack}
+            </span>
             <span style={{ color: '#aaa', fontSize: '12px' }}>days back from today</span>
           </div>
         ) : (
@@ -195,8 +198,8 @@ export function BacktestGeneralSettings({
           }}
         >
           {exceedsLimit
-            ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${MAX_BARS}. Max for ${TIMEFRAME_LABELS[timeframe] ?? timeframe} is ~${maxDays} day${maxDays !== 1 ? 's' : ''}.`
-            : `~${estimatedBars.toLocaleString()} bars (max ${MAX_BARS})`}
+            ? `~${estimatedBars.toLocaleString()} bars exceeds limit of ${SAFE_AMOUNT_OF_CANDLES}. Max for ${TIMEFRAME_LABELS[timeframe] ?? timeframe} is ~${maxDays} day${maxDays !== 1 ? 's' : ''}.`
+            : `~${estimatedBars.toLocaleString()} bars (max ${SAFE_AMOUNT_OF_CANDLES})`}
         </div>
       )}
     </>
