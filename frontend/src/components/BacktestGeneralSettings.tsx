@@ -117,28 +117,45 @@ export function BacktestGeneralSettings({
           </button>
         </div>
         {dateRangeMode === 'days_back' ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input
-              type="range"
-              value={daysBack}
-              onChange={(e) => onDaysBackChange(Number(e.target.value))}
-              min={minDays}
-              max={maxDays}
-              step={1}
-              style={{ flex: 1, accentColor: '#2196f3' }}
-            />
-            <span
-              style={{
-                color: '#e0e0e0',
-                fontSize: '13px',
-                minWidth: '60px',
-                textAlign: 'right',
-              }}
-            >
-              {daysBack}
-            </span>
-            <span style={{ color: '#aaa', fontSize: '12px' }}>days back from today</span>
-          </div>
+          minDays === maxDays ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  color: '#e0e0e0',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                }}
+              >
+                {maxDays}
+              </span>
+              <span style={{ color: '#888', fontSize: '12px' }}>
+                day{maxDays !== 1 ? 's' : ''} (only option — slider locked)
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="range"
+                value={daysBack}
+                onChange={(e) => onDaysBackChange(Number(e.target.value))}
+                min={minDays}
+                max={maxDays}
+                step={1}
+                style={{ flex: 1, accentColor: '#2196f3' }}
+              />
+              <span
+                style={{
+                  color: '#e0e0e0',
+                  fontSize: '13px',
+                  minWidth: '60px',
+                  textAlign: 'right',
+                }}
+              >
+                {daysBack}
+              </span>
+              <span style={{ color: '#aaa', fontSize: '12px' }}>days back from today</span>
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ flex: 1 }}>
