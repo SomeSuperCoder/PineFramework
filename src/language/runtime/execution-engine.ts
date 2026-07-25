@@ -234,6 +234,8 @@ export class ExecutionEngine {
   /** @internal */ pivotLookback: number = 0;
   /** @internal */ valuewhenLookback: number = 0;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
+  /** @internal */ cumulativeBarCount: number = 0;
+  /** @internal */ runtimeMaxBarsBack: number = 0;
 
   // ========================================================================
   // PUBLIC API
@@ -266,6 +268,28 @@ export class ExecutionEngine {
       max = 1000;
     }
     return max;
+  }
+
+  /**
+   * Get the effective max bars back — the maximum of:
+   * 1. The declared `max_bars_back` from the script's `indicator()`/`strategy()` declaration
+   * 2. The runtime-computed lookback from TA function state maps
+   *
+   * The runtime lookback is populated during execution, so it may be 0
+   * before the first `executeBars()` call and grow after each bar.
+   */
+  getEffectiveMaxBarsBack(): number {
+    const declared = this.compiledScript.maxBarsBack || 0;
+    return Math.max(declared, this.runtimeMaxBarsBack);
+  }
+
+  /** Returns true if there is enough accumulated history for the current script. */
+  isLookbackSatisfied(): boolean {
+    const maxBack = this.getEffectiveMaxBarsBack();
+    if (maxBack === 0) return true; // No lookback requirement
+    // cumulativeBarCount is the count of bars pushed so far,
+    // which equals the number of bars already accumulated in OHLC history.
+    return this.cumulativeBarCount >= maxBack;
   }
 
   /** Delegate to interpreter */

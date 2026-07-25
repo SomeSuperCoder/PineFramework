@@ -45,6 +45,150 @@ function expectPlot(engine: ExecutionEngine, name: string, expected: unknown): v
 }
 
 describe('ExecutionEngine', () => {
+  describe('Lookback detection', () => {
+    it('should parse max_bars_back from indicator declaration', () => {
+      const source = `
+        //@version=6
+        indicator("Test", max_bars_back=50)
+        plot(close, "c")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      expect(result.ir.maxBarsBack).toBe(50);
+    });
+
+    it('should default maxBarsBack to 0 when not declared', () => {
+      const source = `
+        //@version=6
+        indicator("Test")
+        plot(close, "c")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      expect(result.ir.maxBarsBack).toBe(0);
+    });
+
+    it('should parse max_bars_back from strategy declaration', () => {
+      const source = `
+        //@version=6
+        strategy("Test", max_bars_back=100)
+        plot(close, "c")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      expect(result.ir.maxBarsBack).toBe(100);
+    });
+
+    it('should return effective maxBarsBack from getEffectiveMaxBarsBack()', () => {
+      const source = `
+        //@version=6
+        indicator("Test", max_bars_back=50)
+        x = close
+        plot(x, "x")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      const engine = new ExecutionEngine(result);
+      // With declaration only (no TA functions yet), runtime=0
+      expect(engine.getEffectiveMaxBarsBack()).toBe(50);
+    });
+  });
+
+  describe('Lookback gating (output filtering)', () => {
+    it('should filter bar colors from warmup bars when max_bars_back is declared', () => {
+      const source = `
+        //@version=6
+        indicator("Test", max_bars_back=10)
+        barcolor(close > open ? color.green : color.red)
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      const engine = new ExecutionEngine(result);
+
+      const bars = Array.from({ length: 20 }, (_, i) => ({
+        barIndex: i,
+        barCount: 20,
+        timestamp: 1700000000000 + i * 3600000,
+        open: createSeries('open', [100 + i]),
+        high: createSeries('high', [105 + i]),
+        low: createSeries('low', [95 + i]),
+        close: createSeries('close', [100 + i]),
+        volume: createSeries('volume', [1000000]),
+      }));
+      const execResult = engine.executeBars(bars);
+
+      // Bar colors from warmup bars (0-9) should be removed
+      const warmupTimestamps = new Set(bars.slice(0, 10).map((b) => b.timestamp));
+      const warmupColors = execResult.barColorData.filter((c) => warmupTimestamps.has(c.time));
+      expect(warmupColors.length).toBe(0);
+      // Non-warmup bar colors should remain
+      expect(execResult.barColorData.length).toBeGreaterThan(0);
+    });
+
+    it('should set output values to null for warmup bars with declared max_bars_back', () => {
+      const source = `
+        //@version=6
+        indicator("Test", max_bars_back=10)
+        plot(close, "c")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      const engine = new ExecutionEngine(result);
+
+      const bars = Array.from({ length: 20 }, (_, i) => ({
+        barIndex: i,
+        barCount: 20,
+        timestamp: 1700000000000 + i * 3600000,
+        open: createSeries('open', [100 + i]),
+        high: createSeries('high', [105 + i]),
+        low: createSeries('low', [95 + i]),
+        close: createSeries('close', [100 + i]),
+        volume: createSeries('volume', [1000000]),
+      }));
+      const execResult = engine.executeBars(bars);
+
+      const output = execResult.outputs.get('c');
+      expect(output).toBeDefined();
+      expect(output!.values.length).toBe(20); // Full bar count preserved
+      // First 10 values should be null (warmup)
+      for (let i = 0; i < 10; i++) {
+        expect(output!.values[i]).toBeNull();
+      }
+      // Last 10 values should be non-null
+      for (let i = 10; i < 20; i++) {
+        expect(output!.values[i]).not.toBeNull();
+      }
+    });
+
+    it('should preserve all outputs when executed via executeBar (not executeBars)', () => {
+      const source = `
+        //@version=6
+        indicator("Test", max_bars_back=10)
+        plot(close, "c")
+      `;
+      const { ast } = parse(source);
+      const result = compile(ast);
+      const engine = new ExecutionEngine(result);
+
+      const bar = {
+        barIndex: 0,
+        barCount: 1,
+        timestamp: Date.now(),
+        open: createSeries('open', [100]),
+        high: createSeries('high', [105]),
+        low: createSeries('low', [95]),
+        close: createSeries('close', [102]),
+        volume: createSeries('volume', [1000000]),
+      };
+      const execResult = engine.executeBar(bar);
+      expect(execResult.success).toBe(true);
+      // executeBar is not filtered, values are preserved
+      const output = execResult.outputs.get('c');
+      expect(output).toBeDefined();
+      expect(output!.last()).toBe(102);
+    });
+  });
+
   describe('Basic execution', () => {
     it('should execute a simple indicator script and compute values', () => {
       const source = `

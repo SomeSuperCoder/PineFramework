@@ -48,12 +48,17 @@ export class Compiler {
     }
 
     let overlay = program.scriptKind === 'strategy';
+    let maxBarsBack = 0;
     for (const arg of program.scriptArgs) {
       if (arg.name === 'overlay') {
         if (arg.value.kind === 'BooleanLiteral') {
           overlay = arg.value.value;
         } else if (arg.value.kind === 'NumberLiteral') {
           overlay = arg.value.value !== 0;
+        }
+      } else if (arg.name === 'max_bars_back') {
+        if (arg.value.kind === 'NumberLiteral') {
+          maxBarsBack = arg.value.value;
         }
       }
     }
@@ -63,6 +68,7 @@ export class Compiler {
       scriptKind: program.scriptKind,
       scriptName: program.scriptName,
       overlay,
+      maxBarsBack,
       globals: this.globals,
       functions: this.functions,
       main: this.builder.instructions,

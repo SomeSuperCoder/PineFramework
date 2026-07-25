@@ -48,6 +48,7 @@ export interface CompiledScript {
   scriptKind: 'indicator' | 'strategy' | 'library';
   scriptName: string;
   overlay: boolean;
+  maxBarsBack: number;
   globals: IRGlobal[];
   functions: IRFunction[];
   main: IRInstruction[];

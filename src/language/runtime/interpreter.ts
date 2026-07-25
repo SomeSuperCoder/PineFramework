@@ -138,6 +138,15 @@ export class Interpreter {
         this.executeStatement(stmt, this.eng.globalScope, context);
       }
 
+      // Track cumulative bar count for lookback computation
+      this.eng.cumulativeBarCount++;
+
+      // Track runtime lookback from TA state maps
+      this.eng.runtimeMaxBarsBack = Math.max(
+        this.eng.runtimeMaxBarsBack,
+        this.eng.getMaxLookback(),
+      );
+
       const executionTime = performance.now() - startTime;
       this.eng.updateMetrics(true, executionTime);
 
@@ -232,7 +241,99 @@ export class Interpreter {
     // Final pass: convert any remaining NaN/Infinity across all outputs to NA
     this.sanitizeOutputs();
 
-    return { ...lastResult, strategyMarkers: allMarkers, maxLookback: this.eng.getMaxLookback() };
+    // Lookback filtering: null out outputs and remove drawings from bars
+    // where the script's lookback period is not satisfied.
+    this.applyLookbackFilter();
+
+    // Rebuild result from filtered engine state (executeBar copies arrays,
+    // so lastResult reflects pre-filter state)
+    const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
+    return {
+      success: true,
+      version: this.eng.sourceProgram.version,
+      overlay: this.eng.compiledScript.overlay,
+      outputs: this.eng.outputs,
+      shapes: [...this.eng.shapes],
+      fills: this.eng.fills,
+      strategyMarkers: allMarkers,
+      bgcolor: [...this.eng.bgcolorData],
+      plotColors: this.eng.plotColors,
+      fillColorData: this.eng.fillColorData,
+      hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
+      lines: activeLines,
+      labels: [...this.eng.labels],
+      boxes: [...this.eng.boxes.values()],
+      tables: [...this.eng.tables.values()],
+      barTimestamps: [...this.eng.barTimestamps],
+      alertConditions: this.eng.alertConditionEntries,
+      alertTriggers: [...this.eng.alertTriggers],
+      barColorData: [...this.eng.barColorData],
+      maxLookback: this.eng.getMaxLookback(),
+    };
+  }
+
+  /**
+   * Filter outputs and drawing objects produced during warmup bars where
+   * the script's lookback period was not satisfied. This fixes the "labels
+   * stacking on the oldest candle" bug.
+   *
+   * Only the DECLARED `max_bars_back` (explicitly set in the script's
+   * indicator()/strategy() declaration) is used for filtering. Runtime-
+   * computed lookback is ignored because it can include inflated values
+   * from internal state requirements (e.g., the pivot 1000-bar minimum)
+   * that don't correspond to actual visual output warmup needs.
+   *
+   * When max_bars_back is declared:
+   * - Output plot values are nulled for warmup bars
+   * - Shapes, labels, lines, bar colors, and bgcolor are removed
+   *
+   * When max_bars_back is NOT declared, no filtering is applied. This
+   * is safe because scripts without explicit max_bars_back produce
+   * outputs from bar 0 (they have no declared warmup period).
+   */
+  private applyLookbackFilter(): void {
+    const declared = this.eng.compiledScript.maxBarsBack;
+    if (declared <= 0) return;
+
+    const timestamps = this.eng.barTimestamps;
+    if (timestamps.length === 0) return;
+
+    const warmupCount = Math.min(declared, timestamps.length);
+    if (warmupCount === 0) return;
+
+    const warmupTimestamps = new Set(timestamps.slice(0, warmupCount));
+
+    // Null output plot values for warmup bars
+    for (const [, series] of this.eng.outputs) {
+      for (let i = 0; i < warmupCount && i < series.values.length; i++) {
+        series.values[i] = null;
+      }
+    }
+    for (const [, colors] of this.eng.plotColors) {
+      for (let i = 0; i < warmupCount && i < colors.length; i++) {
+        colors[i] = null;
+      }
+    }
+    for (const [, colors] of this.eng.fillColorData) {
+      for (let i = 0; i < warmupCount && i < colors.length; i++) {
+        colors[i] = null;
+      }
+    }
+
+    // Filter shapes (the primary source of stacked labels on the oldest candle)
+    this.eng.shapes = this.eng.shapes.filter((s) => !warmupTimestamps.has(s.time));
+    // Filter labels
+    this.eng.labels = this.eng.labels.filter((l) => !warmupTimestamps.has(l.time));
+    // Filter lines (x1 is timestamp for bar_time based lines)
+    for (const [id, line] of this.eng.lines) {
+      if (warmupTimestamps.has(line.x1)) {
+        this.eng.lines.delete(id);
+      }
+    }
+    // Filter bar colors
+    this.eng.barColorData = this.eng.barColorData.filter((c) => !warmupTimestamps.has(c.time));
+    // Filter bgcolor
+    this.eng.bgcolorData = this.eng.bgcolorData.filter((c) => !warmupTimestamps.has(c.time));
   }
 
   executeRealtimeBar(context: ExecutionContext): ExecutionResult {
