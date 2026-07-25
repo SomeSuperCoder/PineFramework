@@ -10,9 +10,17 @@ The engine SHALL implement strategy mode with strategy.entry(), strategy.exit(),
 - **WHEN** strategy.entry() is called
 - **THEN** the engine SHALL create a new trade entry with direction and size
 
+#### Scenario: strategy.entry() stores marker with action, quantity, price, and comment
+- **WHEN** strategy.entry() is called with optional `comment` parameter
+- **THEN** the resulting `StrategyMarker` SHALL include `type: 'entry'`, `action`, `quantity`, `price`, and `comment` (if provided) so the frontend can display these in the bar tooltip
+
 #### Scenario: strategy.exit()
 - **WHEN** strategy.exit() is called
 - **THEN** the engine SHALL create an exit order with optional stop-loss and take-profit
+
+#### Scenario: strategy.exit() stores marker with action, quantity, price, and comment
+- **WHEN** strategy.exit() is called with optional `comment` parameter
+- **THEN** the resulting `StrategyMarker` SHALL include `type: 'exit'`, `action`, `quantity`, `price`, and `comment` (if provided) so the frontend can display these in the bar tooltip
 
 #### Scenario: strategy.close()
 - **WHEN** strategy.close() is called

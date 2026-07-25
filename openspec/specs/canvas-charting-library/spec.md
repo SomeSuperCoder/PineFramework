@@ -22,6 +22,10 @@ The frontend SHALL implement a custom charting library using HTML5 Canvas for re
 - **WHEN** the user hovers over the chart
 - **THEN** a crosshair line SHALL track the mouse position with OHLC values in a tooltip
 
+#### Scenario: Grid and Crosshair with Strategy Marker Data
+- **WHEN** the user hovers over the chart
+- **THEN** a crosshair line SHALL track the mouse position with OHLC values in a tooltip, and the tooltip SHALL additionally display strategy marker details (type, name, direction, quantity, price, comment) for the hovered bar when markers are present
+
 #### Scenario: Zoom and Pan
 - **WHEN** the user scrolls or drags on the chart
 - **THEN** the chart viewport SHALL zoom or pan accordingly
