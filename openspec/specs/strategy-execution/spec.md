@@ -22,6 +22,10 @@ The engine SHALL implement strategy mode with strategy.entry(), strategy.exit(),
 - **WHEN** strategy.exit() is called with optional `comment` parameter
 - **THEN** the resulting `StrategyMarker` SHALL include `type: 'exit'`, `action`, `quantity`, `price`, and `comment` (if provided) so the frontend can display these in the bar tooltip
 
+#### Scenario: strategy.exit() with rich parameters
+- **WHEN** strategy.exit() is called with any combination of limit, stop, profit, loss, trail_price, trail_offset, qty, qty_percent, or from_entry
+- **THEN** the engine SHALL create exit orders matching the specified parameters
+
 #### Scenario: strategy.close()
 - **WHEN** strategy.close() is called
 - **THEN** the engine SHALL close the current position
@@ -48,15 +52,23 @@ The engine SHALL implement strategy mode with strategy.entry(), strategy.exit(),
 
 #### Scenario: Broker Emulation
 - **WHEN** backtesting strategy orders
-- **THEN** the engine SHALL emulate broker fill mechanics
+- **THEN** the engine SHALL emulate broker fill mechanics including OCA cancellation
 
 #### Scenario: Partial Exit Sizing
-- **WHEN** strategy.exit() is called with qty parameter
+- **WHEN** strategy.exit() is called with qty or qty_percent parameter
 - **THEN** the engine SHALL exit only the specified quantity rather than full position
 
 #### Scenario: Stop Loss Exit
 - **WHEN** strategy.exit() is called with `stop=entryPrice * 0.95`
 - **THEN** the engine SHALL compute the dynamic stop price from an expression
+
+#### Scenario: Multi-Level Exits with OCA
+- **WHEN** multiple strategy.exit() calls exist for the same entry
+- **THEN** the engine SHALL group them in an OCA group such that filling one cancels the others
+
+#### Scenario: From Entry Targeting
+- **WHEN** strategy.exit() includes `from_entry` parameter and pyramiding is active
+- **THEN** the engine SHALL only exit the portion of the position attributed to that specific entry
 
 #### Scenario: Default Strategy ID Auto-Generation
 - **WHEN** strategy() declaration lacks an explicit ID

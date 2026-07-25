@@ -17,3 +17,10 @@ The backend SHALL provide an Express-based API server with WebSocket support for
 #### Scenario: Script Execution via API
 - **WHEN** a script execution request is received
 - **THEN** the backend SHALL execute the script and return results
+
+### Requirement: Health and Status Endpoint
+The server SHALL expose a health/status endpoint that reports overall system health including disk cache statistics.
+
+#### Scenario: Status includes disk cache stats
+- **WHEN** querying `GET /api/status`
+- **THEN** the response SHALL include `checks.diskCache` with fields: `entries` (number of cached symbol/interval pairs), `hitRate` (percentage), `diskUsageBytes` (total bytes on disk), `maxDiskUsageBytes` (configured limit)

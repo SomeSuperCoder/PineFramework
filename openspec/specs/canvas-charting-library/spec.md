@@ -10,6 +10,10 @@ The frontend SHALL implement a custom charting library using HTML5 Canvas for re
 - **WHEN** OHLC or candlestick data is received
 - **THEN** the chart SHALL render candles with proper open/high/low/close
 
+#### Scenario: Y-axis outlier clamping
+- **WHEN** a candle's high or low would compress the visible price range beyond `candleRange × 20`
+- **THEN** the Y-axis SHALL be clamped to prevent outlier values from distorting the chart view
+
 #### Scenario: Chart Type Switching
 - **WHEN** the user switches chart type
 - **THEN** the chart SHALL re-render in the selected mode (line, area, bar, etc.)
@@ -25,6 +29,10 @@ The frontend SHALL implement a custom charting library using HTML5 Canvas for re
 #### Scenario: Grid and Crosshair with Strategy Marker Data
 - **WHEN** the user hovers over the chart
 - **THEN** a crosshair line SHALL track the mouse position with OHLC values in a tooltip, and the tooltip SHALL additionally display strategy marker details (type, name, direction, quantity, price, comment) for the hovered bar when markers are present
+
+#### Scenario: Grid and Crosshair with Alert Data
+- **WHEN** the user hovers over the chart
+- **THEN** a crosshair line SHALL track the mouse position with OHLC values in a tooltip, and the tooltip SHALL additionally display alert trigger details for the hovered bar when alerts are present
 
 #### Scenario: Zoom and Pan
 - **WHEN** the user scrolls or drags on the chart
