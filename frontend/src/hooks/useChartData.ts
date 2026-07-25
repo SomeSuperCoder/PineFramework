@@ -25,6 +25,7 @@ export function useChartData(
   const wsRef = useRef<WebSocket | null>(null);
   const subscribedTopicRef = useRef<string | null>(null);
   const lastCodeRef = useRef<string | null>(null);
+  const lastKlineTimestampRef = useRef<number>(0);
   const ohlcvDataRef = useRef<
     Array<{
       timestamp: number;
@@ -440,8 +441,44 @@ export function useChartData(
             if (topic !== subscribedTopicRef.current) {
               return;
             }
+            if (!k.timestamp) return;
             const time = Math.floor(k.timestamp / 1000);
             if (!time || time <= 0) return;
+
+            // Belt-and-suspenders: reject NaN/Infinity at frontend entry
+            if (
+              !isFinite(k.open) || !isFinite(k.high) ||
+              !isFinite(k.low) || !isFinite(k.close)
+            ) {
+              console.warn('[WS] Rejected kline with non-finite prices', k);
+              return;
+            }
+
+            // Detect duplicate/stale replay on WS reconnect
+            if (k.timestamp <= lastKlineTimestampRef.current) {
+              console.debug('[WS] Duplicate or stale kline skipped', {
+                timestamp: k.timestamp,
+                lastTimestamp: lastKlineTimestampRef.current,
+                interval: k.interval,
+                symbol: k.symbol,
+              });
+              return;
+            }
+            lastKlineTimestampRef.current = k.timestamp;
+
+            // Instrumentation: log price delta vs last candle
+            setCandles((prev) => {
+              const lastCandle = prev[prev.length - 1];
+              if (lastCandle) {
+                const deltaPct = ((k.close - lastCandle.close) / lastCandle.close * 100).toFixed(2);
+                console.debug(
+                  `[WS] kline ${k.symbol} ${k.interval} close Δ ${deltaPct}% — ` +
+                  `hist: ${lastCandle.close}, rt: ${k.close}`
+                );
+              }
+              return prev; // read-only inspection, no mutation
+            });
+
             const candle: CandlestickData = {
               time,
               open: k.open,

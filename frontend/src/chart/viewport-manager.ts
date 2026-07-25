@@ -96,6 +96,17 @@ export class ViewportManager {
       max = center + candleRange * 5;
     }
 
+    // Clamp Y-axis against outlier candles: never zoom out past 20× the
+    // visible candle range so a single rogue tick doesn't compress the chart.
+    {
+      const clampedRange = max - min || 1;
+      if (clampedRange > candleRange * 20) {
+        const center = (min + max) / 2;
+        min = center - candleRange * 10;
+        max = center + candleRange * 10;
+      }
+    }
+
     this.layout.setPriceRange(min, max);
 
     const regions = this.layout.getRegions();

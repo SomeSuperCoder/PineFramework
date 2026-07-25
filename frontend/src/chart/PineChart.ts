@@ -274,7 +274,17 @@ export class PineChart {
     ctx.rect(regions.chartArea.x, regions.chartArea.y, regions.chartArea.width, regions.chartArea.height);
     ctx.clip();
 
-    this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, this.candleColors);
+    // Debug mode: highlight the last (forming) candle in blue (#2196f3)
+    // so the live-updating bar is visually distinct at a glance.
+    let renderCandleColors: Map<number, CandleColorData>;
+    if (this.debugMode && this.candles.length > 0) {
+      renderCandleColors = new Map(this.candleColors);
+      renderCandleColors.set(this.candles.length - 1, { body: '#2196f3', wick: '#2196f3', border: '#2196f3' });
+    } else {
+      renderCandleColors = this.candleColors;
+    }
+
+    this.candlestickRenderer.render(ctx, this.candles, this.viewport, this.layout, renderCandleColors);
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 

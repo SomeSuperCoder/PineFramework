@@ -20,6 +20,38 @@ const BYBIT_WS_URL = (() => {
   return url;
 })();
 
+/** Track the most recent confirmed bar per topic for price-reasonability checks. */
+const lastConfirmedBarByTopic = new Map<string, Bar>();
+
+/**
+ * Reject a bar if its prices are clearly unreasonable.
+ * Returns a rejected-reason string or null if the bar passes.
+ */
+export function rejectIfUnreasonable(bar: Bar, prevBar?: Bar): string | null {
+  if (!isFinite(bar.open) || !isFinite(bar.high) || !isFinite(bar.low) || !isFinite(bar.close)) {
+    return 'non-finite price';
+  }
+  if (bar.open <= 0 || bar.high <= 0 || bar.low <= 0 || bar.close <= 0) {
+    return 'zero or negative price';
+  }
+  if (bar.high < bar.low) {
+    return 'high < low';
+  }
+  if (bar.open < bar.low || bar.open > bar.high) {
+    return 'open outside high-low range';
+  }
+  if (bar.close < bar.low || bar.close > bar.high) {
+    return 'close outside high-low range';
+  }
+  if (prevBar && prevBar.close > 0) {
+    const changeRatio = Math.abs(bar.close - prevBar.close) / prevBar.close;
+    if (changeRatio > 0.5) {
+      return `close Δ ${(changeRatio * 100).toFixed(0)}% from previous close (${prevBar.close} → ${bar.close})`;
+    }
+  }
+  return null;
+}
+
 export function createWSGateway(
   server: Server,
   cache: OHLCVCache,
@@ -84,8 +116,46 @@ export function createWSGateway(
           const topicParts = msg.topic.split('.');
           const symbol = topicParts[2] || '';
           const interval = String(d.interval || topicParts[1] || '');
+          if (!symbol || !interval) return;
+
+          // Price sanity check — reject clearly invalid ticks
+          {
+            const topicKey = `${symbol}:${interval}`;
+            const prevBar = lastConfirmedBarByTopic.get(topicKey);
+            const rejectReason = rejectIfUnreasonable(bar, prevBar);
+            if (rejectReason) {
+              console.warn(`[WS] Rejected kline tick for ${symbol} ${interval}: ${rejectReason}`, { open, high, low, close, volume, timestamp });
+              return;
+            }
+            if (confirmed) {
+              lastConfirmedBarByTopic.set(topicKey, bar);
+            }
+          }
+
+          // Instrumentation: log price delta vs last confirmed bar
+          {
+            const topicKey = `${symbol}:${interval}`;
+            const prevBar = lastConfirmedBarByTopic.get(topicKey);
+            if (prevBar && prevBar.timestamp !== bar.timestamp) {
+              const delta = ((bar.close - prevBar.close) / prevBar.close * 100).toFixed(2);
+              console.debug(`[WS] ${symbol} ${interval} kline close Δ ${delta}% — prev: ${prevBar.close}, current: ${bar.close}`);
+            }
+          }
+
+          // Merge single-bar WS update into cache instead of replacing
           if (symbol && interval) {
-            cache.set(symbol, interval, [bar]);
+            const existing = cache.get(symbol, interval);
+            if (existing && existing.length > 0) {
+              const idx = existing.findIndex(b => b.timestamp === bar.timestamp);
+              if (idx >= 0) {
+                existing[idx] = bar;
+              } else {
+                existing.push(bar);
+              }
+              cache.set(symbol, interval, existing);
+            } else {
+              cache.set(symbol, interval, [bar]);
+            }
           }
 
           broadcast(msg.topic, {
