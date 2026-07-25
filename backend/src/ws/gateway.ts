@@ -158,6 +158,12 @@ export function createWSGateway(
             }
           }
 
+          // Diagnostic: log raw Bybit WS data and computed bar
+          const rawBybit = { start: d.start, dtimestamp: d.timestamp, interval: d.interval,
+            rawOpen: d.open, rawHigh: d.high, rawLow: d.low, rawClose: d.close,
+            confirm: d.confirm };
+          console.log(`[DIAG] Bybit WS raw → broadcast`, { topic: msg.topic, rawBybit, parsed: bar, confirmed });
+
           broadcast(msg.topic, {
             type: 'kline',
             data: { symbol, interval, ...bar, confirmed },
