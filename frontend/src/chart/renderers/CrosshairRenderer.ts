@@ -1,7 +1,49 @@
-import type { CandlestickData, PlotSeriesData, AlertTriggerData } from '../types.js';
+import type { CandlestickData, PlotSeriesData, AlertTriggerData, StrategyMarkerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
 import { formatAxisLabel, formatTooltipDateTime } from 'pine-framework/utils/time';
+
+export type MarkerTooltipStyle = 'entryLong' | 'entryShort' | 'exit' | 'close' | 'order' | 'cancel' | 'markerCap';
+export type TooltipLineStyle = 'date' | 'ohlc' | 'alert' | 'plot' | 'alertCap' | 'markerDesc' | MarkerTooltipStyle;
+
+type TooltipLine = { text: string; style: TooltipLineStyle };
+
+function getMarkerLineStyle(type: string, direction?: string): MarkerTooltipStyle {
+  if (type === 'entry') {
+    return direction === 'short' ? 'entryShort' : 'entryLong';
+  }
+  switch (type) {
+    case 'exit': return 'exit';
+    case 'close': return 'close';
+    case 'order': return 'order';
+    case 'cancel': return 'cancel';
+    default: return 'order';
+  }
+}
+
+function getMarkerColor(style: MarkerTooltipStyle): string {
+  switch (style) {
+    case 'entryLong': return '#4caf50';
+    case 'entryShort': return '#e91e63';
+    case 'exit': return '#ff9800';
+    case 'close': return '#f44336';
+    case 'order': return '#ffeb3b';
+    case 'cancel': return '#999999';
+    case 'markerCap': return '#888888';
+  }
+}
+
+function getMarkerLabel(type: string, name: string, direction?: string): string {
+  if (type === 'entry') {
+    const arrow = direction === 'short' ? '▼' : '▲';
+    return `${arrow} ${name}`;
+  }
+  if (type === 'exit') return `▼ ${name}`;
+  if (type === 'close') return `✕ ${name}`;
+  if (type === 'order') return `◇ ${name}`;
+  if (type === 'cancel' || type === 'cancel_all') return `— ${name}`;
+  return name;
+}
 
 export class CrosshairRenderer {
   private hoveredBarIndex: number = -1;
@@ -31,6 +73,7 @@ export class CrosshairRenderer {
     layout: LayoutManager,
     textColor: string,
     alerts: AlertTriggerData[] = [],
+    strategyMarkers: StrategyMarkerData[] = [],
   ): void {
     if (!this.visible) return;
 
@@ -78,7 +121,7 @@ export class CrosshairRenderer {
       const timeLabel = formatAxisLabel(candle.time);
       ctx.fillText(timeLabel, snappedX, timeScale.y + timeScale.height / 2);
 
-      this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor, alerts, barIndex);
+      this.renderTooltip(ctx, candle, allPlots, snappedX, chartArea, textColor, alerts, strategyMarkers, barIndex);
     }
   }
 
@@ -90,10 +133,11 @@ export class CrosshairRenderer {
     chartArea: { x: number; y: number; width: number; height: number },
     textColor: string,
     alerts: AlertTriggerData[],
+    strategyMarkers: StrategyMarkerData[],
     barIndex: number,
   ): void {
     const dtLine = formatTooltipDateTime(candle.time);
-    const lines: Array<{ text: string; style: 'date' | 'ohlc' | 'alert' | 'plot' | 'alertCap' }> = [
+    const lines: TooltipLine[] = [
       { text: dtLine, style: 'date' },
       { text: `O: ${candle.open.toFixed(2)}`, style: 'ohlc' },
       { text: `H: ${candle.high.toFixed(2)}`, style: 'ohlc' },
@@ -102,7 +146,43 @@ export class CrosshairRenderer {
       { text: `V: ${candle.volume.toFixed(0)}`, style: 'ohlc' },
     ];
 
-    // Build alert lines for this bar
+    // Build strategy marker lines for this bar (inserted between OHLC and alerts)
+    const barMarkers = strategyMarkers.filter(m => m.barIndex === barIndex);
+    if (barMarkers.length > 0) {
+      const MAX_MARKERS = 5;
+      const shownMarkers = barMarkers.slice(0, MAX_MARKERS);
+      for (const marker of shownMarkers) {
+        const titleStyle = getMarkerLineStyle(marker.type, marker.direction);
+        const titleLine = getMarkerLabel(marker.type, marker.name || marker.type, marker.direction);
+        lines.push({ text: titleLine, style: titleStyle });
+
+        // Build details line: quantity, price, action
+        const details: string[] = [];
+        if (marker.quantity != null) {
+          details.push(`qty: ${marker.quantity}`);
+        }
+        if (marker.price != null && marker.price > 0) {
+          details.push(`@ ${marker.price.toFixed(2)}`);
+        }
+        if (marker.action) {
+          details.push(marker.action);
+        }
+        if (details.length > 0) {
+          lines.push({ text: `  ${details.join(' · ')}`, style: titleStyle });
+        }
+
+        // Show comment as indented description line if present
+        if (marker.comment && marker.comment !== 'reverse') {
+          lines.push({ text: `  ${marker.comment}`, style: 'markerDesc' });
+        }
+      }
+      if (barMarkers.length > MAX_MARKERS) {
+        const remaining = barMarkers.length - MAX_MARKERS;
+        lines.push({ text: `+${remaining} more`, style: 'markerCap' });
+      }
+    }
+
+    // Build alert lines for this bar (after markers)
     const barAlerts = alerts.filter(a => a.barIndex === barIndex);
     if (barAlerts.length > 0) {
       const MAX_ALERTS = 5;
@@ -182,8 +262,14 @@ export class CrosshairRenderer {
         case 'alertCap':
           ctx.fillStyle = '#cc8844';
           break;
-        default:
+        case 'markerDesc':
+          ctx.fillStyle = '#aaaaaa';
+          break;
+        case 'plot':
           ctx.fillStyle = textColor;
+          break;
+        default:
+          ctx.fillStyle = getMarkerColor(style as MarkerTooltipStyle);
           break;
       }
       ctx.fillText(text, tooltipX + padding, tooltipY + padding + i * lineHeight);

@@ -346,7 +346,7 @@ export class PineChart {
     this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
     this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
 
-    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers);
+    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers, this.strategyMarkers);
 
     // Debug overlay: chunk borders (only when debug mode is active)
     this.renderChunkBorders(ctx);

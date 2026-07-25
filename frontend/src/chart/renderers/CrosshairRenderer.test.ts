@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CrosshairRenderer } from './CrosshairRenderer';
-import type { AlertTriggerData, CandlestickData, PlotSeriesData } from '../types';
+import type { AlertTriggerData, CandlestickData, PlotSeriesData, StrategyMarkerData } from '../types';
 import type { Viewport } from '../Viewport';
 import type { LayoutManager } from '../LayoutManager';
 
@@ -135,6 +135,157 @@ describe('CrosshairRenderer', () => {
 
     // Set a mouse position so render() proceeds past the visibility check
     renderer.setPosition(200, 200);
+  });
+
+  describe('renderTooltip - strategy marker scenarios', () => {
+    it('4.1 should render tooltip without marker section when bar has no markers', () => {
+      const markers: StrategyMarkerData[] = [];
+      renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+
+      expect(ctx.fillText).toHaveBeenCalled();
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should not contain any marker-related symbols (▲ ▼ ✕ ◇ —)
+      const markerSymbols = calls.filter((call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        (call[0].includes('▲') || call[0].includes('▼') || call[0].includes('✕') ||
+         call[0].includes('◇') || call[0].includes('—'))
+      );
+      expect(markerSymbols.length).toBe(0);
+    });
+
+    it('4.2 should render entry marker with name, direction, quantity, price', () => {
+      const markers: StrategyMarkerData[] = [
+        { type: 'entry', name: 'LongEntry', direction: 'long', action: 'buy', quantity: 100, price: 50000, barIndex: 0, timestamp: 1000000, color: '#4caf50' },
+      ];
+      renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should show the marker name with arrow prefix
+      const nameCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▲') && call[0].includes('LongEntry')
+      );
+      expect(nameCall).toBeDefined();
+
+      // Should show quantity and price
+      const detailsCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('qty: 100') && call[0].includes('50000')
+      );
+      expect(detailsCall).toBeDefined();
+
+      // Should show action
+      const actionCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('buy')
+      );
+      expect(actionCall).toBeDefined();
+    });
+
+    it('4.3 should render exit marker with comment as description line', () => {
+      const markers: StrategyMarkerData[] = [
+        { type: 'exit', name: 'Exit Long', direction: 'long', action: 'sell', quantity: 100, price: 52000, barIndex: 0, timestamp: 1000000, color: '#ff9800', comment: 'Take profit at resistance' },
+      ];
+      renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should show exit marker name with ▼
+      const nameCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▼') && call[0].includes('Exit Long')
+      );
+      expect(nameCall).toBeDefined();
+
+      // Should show comment as description line (indented)
+      const commentCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('Take profit at resistance')
+      );
+      expect(commentCall).toBeDefined();
+    });
+
+    it('4.4 should render entry and exit on same bar in correct order', () => {
+      const markers: StrategyMarkerData[] = [
+        { type: 'entry', name: 'Long Entry', direction: 'long', action: 'buy', quantity: 100, price: 50000, barIndex: 0, timestamp: 1000000, color: '#4caf50' },
+        { type: 'exit', name: 'Exit', direction: 'long', action: 'sell', quantity: 100, price: 52000, barIndex: 0, timestamp: 1000000, color: '#ff9800' },
+      ];
+      renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should show both entry and exit markers
+      const entryCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▲') && call[0].includes('Long Entry')
+      );
+      expect(entryCall).toBeDefined();
+
+      const exitCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▼') && call[0].includes('Exit')
+      );
+      expect(exitCall).toBeDefined();
+
+      // Entry should come before exit in the calls array
+      const entryIndex = calls.findIndex((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▲') && call[0].includes('Long Entry')
+      );
+      const exitIndex = calls.findIndex((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▼') && call[0].includes('Exit')
+      );
+      expect(entryIndex).toBeLessThan(exitIndex);
+    });
+
+    it('4.5 should cap at 5 markers and show "+N more" when limit exceeded', () => {
+      const markers: StrategyMarkerData[] = Array.from({ length: 8 }, (_, i) => ({
+        type: 'entry' as const,
+        name: `Entry ${i + 1}`,
+        direction: 'long' as const,
+        action: 'buy' as const,
+        quantity: 100,
+        price: 50000 + i,
+        barIndex: 0,
+        timestamp: 1000000,
+        color: '#4caf50',
+      }));
+
+      renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should show "+N more" cap line
+      const capCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('+3 more')
+      );
+      expect(capCall).toBeDefined();
+
+      // Should NOT show Entry 6 (index 5)
+      const sixthCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('Entry 6')
+      );
+      expect(sixthCall).toBeUndefined();
+    });
+
+    it('4.6 should gracefully handle StrategyMarkerData without optional fields', () => {
+      const markers: StrategyMarkerData[] = [
+        { type: 'entry', name: 'Minimal Entry', direction: 'long', barIndex: 0, timestamp: 1000000, color: '#4caf50' },
+      ];
+      // No action, quantity, or price fields
+
+      expect(() => {
+        renderer.render(ctx, candles, allPlots, viewport, layout, '#ffffff', [], markers);
+      }).not.toThrow();
+
+      const calls = (ctx.fillText as ReturnType<typeof vi.fn>).mock.calls;
+
+      // Should still render the marker name (arrow + name)
+      const nameCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('▲') && call[0].includes('Minimal Entry')
+      );
+      expect(nameCall).toBeDefined();
+
+      // Should NOT render quantity (not available)
+      const qtyCall = calls.find((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('qty')
+      );
+      expect(qtyCall).toBeUndefined();
+    });
   });
 
   describe('renderTooltip - alert scenarios', () => {

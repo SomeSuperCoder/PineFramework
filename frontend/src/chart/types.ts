@@ -30,6 +30,9 @@ export interface StrategyMarkerData {
   type: string;
   name: string;
   direction: string;
+  action?: string;
+  quantity?: number;
+  price?: number;
   timestamp: number;
   color: string;
   comment?: string;
