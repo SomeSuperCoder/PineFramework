@@ -219,6 +219,52 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     expect(allShapes).toHaveLength(0);
   });
 
+  // --- Label-to-entry alignment (from merged ema-cross-strategy-alignment) ---
+
+  it('strategy entry markers should align with label bars (same condition)', () => {
+    // Both labels and entries are created by the same condition:
+    // longCondition → label "Long Cross" + strategy.entry("Long")
+    // shortCondition → label "Short Cross" + strategy.entry("Short")
+    const bars = createCrossoverBars();
+    const { ast } = parse(strategySource);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const contexts = barsToContext(bars);
+    const result = engine.executeBars(contexts);
+
+    const entryMarkers = result.strategyMarkers.filter((m) => m.type === 'entry');
+
+    // Map labels to bar indices
+    const labelBarIndices = result.labels
+      .map((label) => {
+        const barIdx = bars.findIndex((b) => b.timestamp === label.time);
+        return { barIdx, text: label.text };
+      })
+      .filter((l) => l.text === 'Long Cross' || l.text === 'Short Cross');
+
+    const longLabelBars = labelBarIndices
+      .filter((l) => l.text === 'Long Cross')
+      .map((l) => l.barIdx)
+      .sort((a, b) => a - b);
+    const shortLabelBars = labelBarIndices
+      .filter((l) => l.text === 'Short Cross')
+      .map((l) => l.barIdx)
+      .sort((a, b) => a - b);
+
+    const longEntryBars = entryMarkers
+      .filter((m) => m.name === 'Long')
+      .map((m) => m.barIndex)
+      .sort((a, b) => a - b);
+    const shortEntryBars = entryMarkers
+      .filter((m) => m.name === 'Short')
+      .map((m) => m.barIndex)
+      .sort((a, b) => a - b);
+
+    // Each label should have a matching entry on the same bar
+    expect(longEntryBars).toEqual(longLabelBars);
+    expect(shortEntryBars).toEqual(shortLabelBars);
+  });
+
   // --- Full marker dump for manual inspection -----------------------------
 
   it('logs all markers for inspection', () => {

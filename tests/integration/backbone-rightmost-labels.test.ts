@@ -378,12 +378,28 @@ describe('S/R backbone — rightmost labels have lines', () => {
     console.log(`Last 3 all have lines: ${allHaveLines}`);
 
     // Full mapping
-    console.log(`\n=== LABEL→LINE MAP ===`);
+    console.log(`\n=== LABEL\u2192LINE MAP ===`);
     for (const label of sortedLabels) {
       const match = initLines.find(
         (l) => Math.abs(l.y1 - label.price) < 0.01 || Math.abs(l.y2 - label.price) < 0.01,
       );
-      console.log(`${label.text} @ ${label.price.toFixed(2)} → ${match ? 'y1=' + match.y1?.toFixed(2) + ' x1=' + match.x1 : 'NONE'}`);
+      console.log(`${label.text} @ ${label.price.toFixed(2)} \u2192 ${match ? 'y1=' + match.y1?.toFixed(2) + ' x1=' + match.x1 : 'NONE'}`);
     }
+
+    // Assertions — backbone detection works correctly
+    expect(initLabels.length).toBeGreaterThan(0);
+    expect(initLines.length).toBeGreaterThan(0);
+
+    // Both HH and HL (bull) and LH and LL (bear) pivots are detected
+    expect(hh.length).toBeGreaterThan(0);
+    expect(hl.length).toBeGreaterThan(0);
+    expect(lh.length).toBeGreaterThan(0);
+    expect(ll.length).toBeGreaterThan(0);
+
+    // At least some pivots of each type have backbone lines
+    expect(hhHave.length).toBeGreaterThan(0);
+    expect(hlHave.length).toBeGreaterThan(0);
+    expect(lhHave.length).toBeGreaterThan(0);
+    expect(llHave.length).toBeGreaterThan(0);
   });
 });

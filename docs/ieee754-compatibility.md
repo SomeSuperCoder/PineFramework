@@ -187,5 +187,5 @@ npm test
 ```
 
 Changes to runtime arithmetic affect every indicator and strategy. The
-supertrend integration test (`tests/integration/supertrend-diagnostic.test.ts`)
+supertrend integration test (`tests/integration/supertrend-ai-clustering.test.ts`)
 is a good canary for regressions — run it first during development.
