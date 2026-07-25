@@ -257,9 +257,13 @@ export class DiskOHLCVCache {
 
     const now = Date.now();
 
-    // If the newest bar is historical (older than the threshold), it's permanent
+    // If the newest bar is more than historicalThresholdMs old, the cache
+    // contains only completed candles that won't change.  But we still need
+    // to periodically refresh to pick up NEWER bars beyond the cached range
+    // (e.g. when the app was stopped for hours and restarted).  Fall back to
+    // historicalThresholdMs as the max time allowed since the last fetch.
     if (now - meta.newestTimestamp >= this.historicalThresholdMs) {
-      return false;
+      return now - meta.lastFetchedAt >= this.historicalThresholdMs;
     }
 
     // Recent window: check if the last fetch was too long ago
