@@ -27,6 +27,229 @@ import {
   IROpCode,
 } from './ir.js';
 
+/**
+ * TA function lookback detection map.
+ * Key: function name (without "ta." prefix)
+ * Value: arg index that holds the period length, or -1 for special handling
+ */
+const TA_LOOKBACK_ARGS: Record<string, number> = {
+  sma: 1,
+  ema: 1,
+  hma: 1,
+  rsi: 1,
+  atr: 0,
+  highest: 1,
+  lowest: 1,
+  valuewhen: 2,
+};
+
+// Pivot functions sum both args
+const PIVOT_FUNCTIONS = new Set(['pivothigh', 'pivotlow']);
+
+// OHLCV identifiers that support history indexing
+const OHLCV_IDENTIFIERS = new Set(['close', 'open', 'high', 'low', 'volume']);
+
+/**
+ * Extract a constant number from an expression node.
+ * Returns the number if it's a NumberLiteral, otherwise undefined.
+ */
+function extractConstant(node: ExpressionNode): number | undefined {
+  if (node.kind === 'NumberLiteral') return node.value;
+  return undefined;
+}
+
+/**
+ * Walk an expression node and return the maximum lookback period detected.
+ */
+function detectLookbackInExpression(expr: ExpressionNode): number {
+  let maxLookback = 0;
+
+  switch (expr.kind) {
+    case 'CallExpression': {
+      // Check if this is a ta.* function call
+      if (expr.callee.kind === 'MemberExpression' &&
+          expr.callee.object.kind === 'Identifier' &&
+          expr.callee.object.name === 'ta') {
+        const funcName = expr.callee.property;
+
+        // Pivot functions: sum both args
+        if (PIVOT_FUNCTIONS.has(funcName) && expr.arguments.length >= 2) {
+          const left = extractConstant(expr.arguments[0]);
+          const right = extractConstant(expr.arguments[1]);
+          if (left !== undefined && right !== undefined) {
+            maxLookback = Math.max(maxLookback, left + right);
+          }
+        }
+        // Standard TA functions with known period arg position
+        else if (funcName in TA_LOOKBACK_ARGS) {
+          const argIdx = TA_LOOKBACK_ARGS[funcName];
+          if (argIdx < expr.arguments.length) {
+            const period = extractConstant(expr.arguments[argIdx]);
+            if (period !== undefined) {
+              maxLookback = Math.max(maxLookback, period);
+            }
+          }
+        }
+      }
+
+      // Recurse into all arguments
+      for (const arg of expr.arguments) {
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(arg));
+      }
+      break;
+    }
+
+    case 'IndexExpression': {
+      // Check for constant offset indexing: close[N], variableName[N]
+      if (expr.object.kind === 'Identifier' && expr.index.kind === 'NumberLiteral') {
+        const objName = expr.object.name;
+        const offset = expr.index.value;
+        // Detect on OHLCV identifiers or user-defined variables
+        if (OHLCV_IDENTIFIERS.has(objName) || offset > 0) {
+          maxLookback = Math.max(maxLookback, offset);
+        }
+      }
+      // Recurse into object and index
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.object));
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.index));
+      break;
+    }
+
+    case 'BinaryExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.left));
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.right));
+      break;
+
+    case 'UnaryExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.operand));
+      break;
+
+    case 'TernaryExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.condition));
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.consequent));
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.alternate));
+      break;
+
+    case 'ArrayExpression':
+      for (const elem of expr.elements) {
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(elem));
+      }
+      break;
+
+    case 'FunctionExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInStatements(expr.body));
+      break;
+
+    // ParenthesizedExpression, SwitchExpression, MapExpression — recurse into sub-expressions
+    case 'ParenthesizedExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.expression));
+      break;
+
+    case 'MapExpression':
+      for (const entry of expr.entries) {
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(entry.key));
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(entry.value));
+      }
+      break;
+
+    case 'SwitchExpression':
+      maxLookback = Math.max(maxLookback, detectLookbackInExpression(expr.expression));
+      for (const cs of expr.cases) {
+        if (cs.value) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(cs.value));
+        }
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(cs.result));
+      }
+      break;
+
+    // Leaf nodes: Identifier, NumberLiteral, StringLiteral, etc. — no lookback
+  }
+
+  return maxLookback;
+}
+
+/**
+ * Walk statement nodes and return the maximum lookback period detected.
+ */
+function detectLookbackInStatements(stmts: StatementNode[]): number {
+  let maxLookback = 0;
+
+  for (const stmt of stmts) {
+    switch (stmt.kind) {
+      case 'VariableDeclaration':
+        if (stmt.initializer) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.initializer));
+        }
+        break;
+      case 'Assignment':
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.target));
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.value));
+        break;
+      case 'ExpressionStatement':
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.expression));
+        break;
+      case 'IfStatement':
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.condition));
+        maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.thenBranch));
+        if (stmt.elseBranch) {
+          maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.elseBranch));
+        }
+        break;
+      case 'ForStatement':
+        if (stmt.start) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.start));
+        }
+        if (stmt.end) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.end));
+        }
+        if (stmt.step) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.step));
+        }
+        if (stmt.iterable) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.iterable));
+        }
+        maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.body));
+        break;
+      case 'WhileStatement':
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.condition));
+        maxLookback = Math.max(maxLookback, detectLookbackInStatements(stmt.body));
+        break;
+      case 'SwitchStatement':
+        maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.expression));
+        for (const cs of stmt.cases) {
+          if (cs.value) {
+            maxLookback = Math.max(maxLookback, detectLookbackInExpression(cs.value));
+          }
+          maxLookback = Math.max(maxLookback, detectLookbackInStatements(cs.body));
+        }
+        break;
+      case 'ReturnStatement':
+        if (stmt.value) {
+          maxLookback = Math.max(maxLookback, detectLookbackInExpression(stmt.value));
+        }
+        break;
+      case 'TypeDeclaration':
+      case 'ImportStatement':
+      case 'ExportStatement':
+      case 'BreakStatement':
+      case 'ContinueStatement':
+        // No lookback in these statement types
+        break;
+    }
+  }
+
+  return maxLookback;
+}
+
+/**
+ * Statically detect the minimum lookback period required by analyzing the AST.
+ * Only detects constant (numeric literal) periods from TA function args and [] indexing.
+ * Returns 0 if no lookback can be determined at compile time.
+ */
+function detectLookbackFromAST(program: ProgramNode): number {
+  return detectLookbackInStatements(program.body);
+}
+
 export class Compiler {
   private scope: ScopeFrame = createScope();
   private globals: CompiledScript['globals'] = [];
@@ -61,6 +284,11 @@ export class Compiler {
           maxBarsBack = arg.value.value;
         }
       }
+    }
+
+    // Auto-detect lookback from AST when not explicitly declared
+    if (maxBarsBack === 0) {
+      maxBarsBack = detectLookbackFromAST(program);
     }
 
     const ir: CompiledScript = {

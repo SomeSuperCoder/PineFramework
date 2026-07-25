@@ -68,6 +68,190 @@ describe('ExecutionEngine', () => {
       expect(result.ir.maxBarsBack).toBe(0);
     });
 
+    describe('Compile-time lookback auto-detection', () => {
+      it('should detect lookback from ta.sma(src, 50)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          s = ta.sma(close, 50)
+          plot(s, "sma")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(50);
+      });
+
+      it('should detect lookback from ta.atr(14)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          a = ta.atr(14)
+          plot(a, "atr")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(14);
+      });
+
+      it('should detect lookback from ta.rsi(src, 14)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          r = ta.rsi(close, 14)
+          plot(r, "rsi")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(14);
+      });
+
+      it('should detect lookback from ta.ema(src, 20)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          e = ta.ema(close, 20)
+          plot(e, "ema")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(20);
+      });
+
+      it('should detect lookback from ta.pivothigh(leftBars, rightBars)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          p = ta.pivothigh(5, 3)
+          plot(p, "ph")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(8); // 5 + 3
+      });
+
+      it('should detect lookback from ta.pivotlow(leftBars, rightBars)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          p = ta.pivotlow(10, 5)
+          plot(p, "pl")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(15); // 10 + 5
+      });
+
+      it('should detect lookback from close[20] indexing', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          prev = close[20]
+          plot(prev, "prev")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(20);
+      });
+
+      it('should detect lookback from open[100] indexing', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          prev = open[100]
+          plot(prev, "prev")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(100);
+      });
+
+      it('should take MAX of multiple lookback sources', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          s = ta.sma(close, 50)
+          prev = close[100]
+          plot(s + prev, "combined")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(100); // max(50, 100)
+      });
+
+      it('should detect lookback from ta.valuewhen(cond, src, 3)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          v = ta.valuewhen(close > open, close, 3)
+          plot(v, "vw")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(3);
+      });
+
+      it('should detect lookback from ta.highest(src, 20)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          h = ta.highest(close, 20)
+          plot(h, "highest")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(20);
+      });
+
+      it('should detect lookback from ta.lowest(src, 30)', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          l = ta.lowest(close, 30)
+          plot(l, "lowest")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(30);
+      });
+
+      it('should return 0 when no lookback detected', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          x = close + open
+          plot(x, "x")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(0);
+      });
+
+      it('should not override explicit max_bars_back declaration', () => {
+        const source = `
+          //@version=6
+          indicator("Test", max_bars_back=30)
+          s = ta.sma(close, 50)
+          plot(s, "sma")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(30); // declared takes precedence
+      });
+
+      it('should skip detection for variable period arguments', () => {
+        const source = `
+          //@version=6
+          indicator("Test")
+          len = 50
+          s = ta.sma(close, len)
+          plot(s, "sma")
+        `;
+        const { ast } = parse(source);
+        const result = compile(ast);
+        expect(result.ir.maxBarsBack).toBe(0); // variable not detected
+      });
+    });
+
     it('should parse max_bars_back from strategy declaration', () => {
       const source = `
         //@version=6
