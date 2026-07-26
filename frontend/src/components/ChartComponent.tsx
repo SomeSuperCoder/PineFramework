@@ -101,6 +101,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }>;
       orphanedValueCounts: Record<string, number>;
       orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }>;
+      totalBars: number;
     }
     const indicators: IndicatorDiagnostics[] = [];
     if (indicatorResults) {
@@ -186,6 +187,9 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           }
         }
 
+        // Total bars from plot data length
+        const totalBars = res.plots.length > 0 ? res.plots[0].data.length : 0;
+
         indicators.push({
           id,
           name: id,
@@ -195,6 +199,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           boundaryNullDensities,
           orphanedValueCounts,
           orphanedAtBorders,
+          totalBars,
         });
       }
     }

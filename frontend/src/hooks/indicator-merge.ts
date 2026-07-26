@@ -47,21 +47,15 @@ export function prependIndicatorResult(
     const newPlot = newResult.plots.find((p) => p.title === plot.title);
     if (newPlot) {
       const newBarData = newPlot.data.slice(0, addedCount);
-      const boundaryData = newPlot.data.slice(
+      // Replace the first contextSize entries of prev with recomputed boundary.
+      // The re-execution is authoritative for the boundary zone — use its
+      // values unconditionally. Keeping old data when new is null caused
+      // "orphaned uncolored line" bugs where raw data extended past the
+      // warmup zone while plotColors correctly respected it.
+      const replacedPrev = newPlot.data.slice(
         addedCount,
         addedCount + contextSize,
-      );
-      // Replace the first contextSize entries of prev with recomputed boundary,
-      // but only where the re-execution produced valid (non-null) values.
-      // When the re-execution's warmup is larger than the original's,
-      // boundaryData contains nulls at positions where prev had valid values.
-      // Blindly overwriting creates gaps at chunk borders.
-      const replacedPrev = boundaryData.map((entry, i) => {
-        if (entry.value === null && plot.data[i]?.value !== null) {
-          return plot.data[i]!; // keep prev valid data
-        }
-        return entry;
-      }).concat(plot.data.slice(contextSize));
+      ).concat(plot.data.slice(contextSize));
       return { ...plot, data: [...newBarData, ...replacedPrev] };
     }
     return plot;
@@ -260,7 +254,8 @@ export function prependIndicatorResult(
   ];
 
   // Prepend fillColorData entries and recompute boundary.
-  // Same conditional logic as plots: keep prev color when new is null.
+  // Same logic as plotColors: boundary zone uses new result unconditionally —
+  // the re-execution is authoritative for that region.
   const mergedFillColorData: Record<string, (string | null)[]> = {};
   const allFillKeys = new Set([
     ...Object.keys(prev.fillColorData || {}),
@@ -269,19 +264,21 @@ export function prependIndicatorResult(
   for (const key of allFillKeys) {
     const newColors = newResult.fillColorData?.[key] || [];
     const prevColors = prev.fillColorData?.[key] || [];
-    const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
-    const replacedBoundary = boundaryColors.map((c, i) => {
-      if (c === null && prevColors[i] !== null) return prevColors[i];
-      return c;
-    });
     mergedFillColorData[key] = [
       ...newColors.slice(0, addedCount),
-      ...replacedBoundary,
+      ...newColors.slice(addedCount, addedCount + contextSize),
       ...prevColors.slice(contextSize),
     ];
   }
 
-  // Prepend plotColors entries and recompute boundary
+  // Prepend plotColors entries and recompute boundary.
+  //
+  // IMPORTANT: Unlike raw plot data, plotColors in the boundary zone ALWAYS
+  // uses the new result's values unconditionally. The re-execution is
+  // authoritative for the boundary — it knows the correct warmup state and
+  // trend conditions. Keeping old plotColors (from a previous execution with
+  // different context) causes "orphaned uncolored line" bugs where raw data
+  // has values but plotColors is stale/null, or vice versa.
   const mergedPlotColors: Record<string, (string | null)[]> = {};
   const allColorKeys = new Set([
     ...Object.keys(prev.plotColors || {}),
@@ -290,14 +287,9 @@ export function prependIndicatorResult(
   for (const key of allColorKeys) {
     const newColors = newResult.plotColors?.[key] || [];
     const prevColors = prev.plotColors?.[key] || [];
-    const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
-    const replacedBoundary = boundaryColors.map((c, i) => {
-      if (c === null && prevColors[i] !== null) return prevColors[i];
-      return c;
-    });
     mergedPlotColors[key] = [
       ...newColors.slice(0, addedCount),
-      ...replacedBoundary,
+      ...newColors.slice(addedCount, addedCount + contextSize),
       ...prevColors.slice(contextSize),
     ];
   }
