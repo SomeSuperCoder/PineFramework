@@ -63,7 +63,7 @@ test.describe('Chunk boundary invariants', () => {
    * Read __pineTestData — returns null if not yet populated.
    */
   async function getTestData(page: Page): Promise<{
-    indicators: Array<{ id: string; labels: any[]; lines: any[] }>;
+    indicators: Array<{ id: string; labels: any[]; lines: any[]; plotNullCounts: Record<string, number>; boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }> }>;
     chunkBorders: Array<{ barIndex: number; addedCount: number; timestamp: number }>;
     labelCount: number;
     lineCount: number;
@@ -157,6 +157,18 @@ test.describe('Chunk boundary invariants', () => {
       data.chunkBorders.length,
       `[${chunkLabel}] at least one chunk border recorded`,
     ).toBeGreaterThanOrEqual(0);
+
+    // 5. plotNullCounts is exposed for each indicator (diagnostic field)
+    for (const ind of data.indicators) {
+      expect(
+        ind.plotNullCounts,
+        `[${chunkLabel}] indicator "${ind.id}": plotNullCounts is defined`,
+      ).toBeDefined();
+      expect(
+        typeof ind.plotNullCounts,
+        `[${chunkLabel}] indicator "${ind.id}": plotNullCounts is an object`,
+      ).toBe('object');
+    }
   }
 
   test('HHLL labels === lines across chunk boundaries, no duplicates, no wall', async ({ page }) => {

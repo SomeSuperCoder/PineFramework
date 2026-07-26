@@ -92,19 +92,61 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     // Expose chart instance and helpers for test programmatic operations
     (window as any).__pineChart = chartRef.current;
     (window as any).__pineFetchOlder = fetchOlderOHLCV;
-    const indicators: Array<{
+    interface IndicatorDiagnostics {
       id: string;
       name: string;
       labels: Array<{ time: number; price: number; text?: string }>;
       lines: Array<{ points: Array<{ time: number; price: number }> }>;
-    }> = [];
+      plotNullCounts: Record<string, number>;
+      boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }>;
+    }
+    const indicators: IndicatorDiagnostics[] = [];
     if (indicatorResults) {
       for (const [id, res] of indicatorResults) {
+        // Compute per-plot null counts from plotColors
+        const plotNullCounts: Record<string, number> = {};
+        if (res.plotColors) {
+          for (const [key, colors] of Object.entries(res.plotColors)) {
+            plotNullCounts[key] = colors.filter((c) => c === null).length;
+          }
+        }
+        if (res.fillColorData) {
+          for (const [key, colors] of Object.entries(res.fillColorData)) {
+            // Include fillColorData in null counts if not already tracked
+            if (!(key in plotNullCounts)) {
+              plotNullCounts[key] = colors.filter((c) => c === null).length;
+            }
+          }
+        }
+
+        // Compute boundary null densities: nulls in 50-bar window around each chunk border
+        const boundaryNullDensities: IndicatorDiagnostics['boundaryNullDensities'] = [];
+        if (chunkBorders.length > 0 && res.plotColors) {
+          const allPlotColors = Object.values(res.plotColors);
+          const totalBars = allPlotColors.length > 0 ? allPlotColors[0].length : 0;
+          for (const border of chunkBorders) {
+            // Use the bar index directly if available, otherwise find by timestamp
+            const borderIdx = border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
+            if (borderIdx < 0) continue;
+            const windowStart = Math.max(0, borderIdx - 50);
+            const windowEnd = Math.min(totalBars, borderIdx + 50);
+            let nullCount = 0;
+            for (const colors of allPlotColors) {
+              for (let i = windowStart; i < windowEnd; i++) {
+                if (colors[i] === null) nullCount++;
+              }
+            }
+            boundaryNullDensities.push({ borderIndex: borderIdx, nullCount, totalBars: windowEnd - windowStart });
+          }
+        }
+
         indicators.push({
           id,
           name: id,
           labels: res.labels || [],
           lines: res.lines || [],
+          plotNullCounts,
+          boundaryNullDensities,
         });
       }
     }
