@@ -202,7 +202,11 @@ export function useChartData(
 
         for (const [indId, ind] of indicatorSourcesRef.current) {
           const maxLookback = ind.maxLookback || 0;
-          const contextBars = oldBars.slice(0, maxLookback);
+          // Always fetch at least as many context bars as the chunk size (200)
+          // to ensure the boundary region is outside the warmup zone, even if
+          // the stored maxLookback is stale (from before the engine fix).
+          const contextSize = Math.max(maxLookback, newBars.length);
+          const contextBars = oldBars.slice(0, contextSize);
           const actualContextSize = contextBars.length;
           const execBars = [...newBars, ...contextBars];
 
@@ -215,6 +219,14 @@ export function useChartData(
             if (!execResponse.ok) continue;
             const execResult: ExecuteResponse = await execResponse.json();
             if (!execResult.success || execResult.error) continue;
+
+            // Update maxLookback from the re-execution result — the engine may
+            // report a higher lookback than the stored value (e.g. after the
+            // getMaxLookback() fix for ta.highest/ta.lowest/runtimeSeriesLookback).
+            // This ensures subsequent chunk loads fetch enough context bars.
+            if (execResult.maxLookback && execResult.maxLookback > ind.maxLookback) {
+              ind.maxLookback = execResult.maxLookback;
+            }
 
             const newResult = buildScriptResult(
               execResult.overlay,
@@ -701,7 +713,7 @@ export function useChartData(
         let barsToExecute = existingBars;
         if (!barsToExecute) {
           if (ohlcvDataRef.current.length > 0) {
-            barsToExecute = ohlcvDataRef.current as typeof barsToExecute;
+            barsToExecute = ohlcvDataRef.current;
           } else {
             const ohlcvResponse = await fetch(
               `/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=1000`,
@@ -709,10 +721,10 @@ export function useChartData(
             if (!ohlcvResponse.ok) throw new Error('Failed to fetch bars for execution');
             const ohlcvJson = await ohlcvResponse.json();
             ohlcvDataRef.current = ohlcvJson.data;
-            barsToExecute = ohlcvJson.data as typeof barsToExecute;
+            barsToExecute = ohlcvJson.data;
           }
         } else {
-          ohlcvDataRef.current = existingBars;
+          ohlcvDataRef.current = existingBars!;
         }
         if (!barsToExecute) throw new Error('No bars available for execution');
 
