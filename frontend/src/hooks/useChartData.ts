@@ -37,6 +37,7 @@ export function useChartData(
     }>
   >([]);
   const prependCountRef = useRef(0);
+  const oldestFetchedTsRef = useRef(0); // Guard against interleaved fetchOlderOHLCV calls
   const pendingExecuteRef = useRef<
     Map<
       string,
@@ -125,6 +126,7 @@ export function useChartData(
       prependCountRef.current = 0;
       setChunkBorders([]);
       lastKlineTimestampRef.current = 0; // Reset watermark on new data load
+      oldestFetchedTsRef.current = 0; // Reset fetch guard on new data load
       try {
         const response = await fetch(
           `/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`,
@@ -167,6 +169,12 @@ export function useChartData(
         if (!oldest || !oldest.timestamp) {
           return 0;
         }
+        // Guard: if we already fetched from this exact timestamp, skip to
+        // prevent interleaved/duplicate fetches during rapid scrolling.
+        if (oldest.timestamp === oldestFetchedTsRef.current) {
+          return 0;
+        }
+        oldestFetchedTsRef.current = oldest.timestamp;
         const end = oldest.timestamp - 1;
         // Use a small chunk (200 bars) so the next scroll-back triggers after
         // ~400px of panning (~1/3 viewport width) instead of ~2000px with 1000-bar chunks.
