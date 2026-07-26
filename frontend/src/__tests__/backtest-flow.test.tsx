@@ -124,6 +124,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
       expect(screen.queryByText('Backtest Settings')).not.toBeInTheDocument();
@@ -136,6 +137,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
       expect(screen.getByText('Backtest Settings')).toBeInTheDocument();
@@ -150,6 +152,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
       // NumberInput uses inputMode="decimal" not type="number"
@@ -165,6 +168,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={onRun}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
 
@@ -186,6 +190,7 @@ describe('Backtest Flow Integration', () => {
           onClose={onClose}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
 
@@ -203,6 +208,7 @@ describe('Backtest Flow Integration', () => {
           onClose={onClose}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
 
@@ -219,6 +225,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={vi.fn()}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
 
@@ -234,6 +241,7 @@ describe('Backtest Flow Integration', () => {
           onClose={vi.fn()}
           onRun={onRun}
           scriptSource={STRATEGY_SOURCE}
+          timeframe="1d"
         />
       );
 

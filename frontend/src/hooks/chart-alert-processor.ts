@@ -70,7 +70,7 @@ export function transformLine(l: RawLine): import('../types').LineData {
     color: l.color,
     width: l.width,
     style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
-    extend: l.extend,
+    extend: l.extend as 'none' | 'left' | 'right' | 'both' | undefined,
   };
 }
 

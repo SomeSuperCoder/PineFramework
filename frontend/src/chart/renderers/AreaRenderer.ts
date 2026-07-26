@@ -101,7 +101,7 @@ export class AreaRenderer {
    *  opaque (at the 'from' plot) to transparent (at the 'to' plot). */
   private renderGradientPolygon(
     ctx: CanvasRenderingContext2D,
-    points: Array<{ upper: number; lower: number; fromY: number; toY: number }>,
+    points: Array<{ x: number; upper: number; lower: number; fromY: number; toY: number }>,
     color: string,
   ): void {
     // Average fromY and toY across all points to get the gradient axis

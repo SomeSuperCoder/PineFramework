@@ -3,6 +3,7 @@ import type { TableEntry } from '../execution-types.js';
 import { NA, type PineValue } from '../../types/na.js';
 
 export function registerTableBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   // table.new(position, columns, rows, ...namedArgs) → table ID
@@ -22,7 +23,8 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
       columns,
       rows,
       bgcolor: typeof namedArgs.bgcolor === 'string' ? namedArgs.bgcolor : '#00000000',
-      border_color: typeof namedArgs.border_color === 'string' ? namedArgs.border_color : '#00000000',
+      border_color:
+        typeof namedArgs.border_color === 'string' ? namedArgs.border_color : '#00000000',
       border_width: typeof namedArgs.border_width === 'number' ? namedArgs.border_width : 1,
       frame_color: typeof namedArgs.frame_color === 'string' ? namedArgs.frame_color : '#00000000',
       frame_width: typeof namedArgs.frame_width === 'number' ? namedArgs.frame_width : 1,
@@ -50,12 +52,27 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const existing = table.cells[key];
     table.cells[key] = {
       text,
-      text_color: typeof namedArgs.text_color === 'string' ? namedArgs.text_color : (existing?.text_color ?? '#000000'),
-      text_halign: typeof namedArgs.text_halign === 'string' ? namedArgs.text_halign : (existing?.text_halign ?? 'center'),
-      text_valign: typeof namedArgs.text_valign === 'string' ? namedArgs.text_valign : (existing?.text_valign ?? 'center'),
-      bgcolor: typeof namedArgs.bgcolor === 'string' ? namedArgs.bgcolor : (existing?.bgcolor ?? '#00000000'),
+      text_color:
+        typeof namedArgs.text_color === 'string'
+          ? namedArgs.text_color
+          : (existing?.text_color ?? '#000000'),
+      text_halign:
+        typeof namedArgs.text_halign === 'string'
+          ? namedArgs.text_halign
+          : (existing?.text_halign ?? 'center'),
+      text_valign:
+        typeof namedArgs.text_valign === 'string'
+          ? namedArgs.text_valign
+          : (existing?.text_valign ?? 'center'),
+      bgcolor:
+        typeof namedArgs.bgcolor === 'string'
+          ? namedArgs.bgcolor
+          : (existing?.bgcolor ?? '#00000000'),
       width: typeof namedArgs.width === 'number' ? namedArgs.width : (existing?.width ?? 0),
-      text_size: typeof namedArgs.text_size === 'string' ? namedArgs.text_size : (existing?.text_size ?? 'normal'),
+      text_size:
+        typeof namedArgs.text_size === 'string'
+          ? namedArgs.text_size
+          : (existing?.text_size ?? 'normal'),
       tooltip: typeof namedArgs.tooltip === 'string' ? namedArgs.tooltip : '',
     };
     return NA;
@@ -101,7 +118,16 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     if (!table) return NA;
     const key = `${row},${column}`;
     if (!table.cells[key]) {
-      table.cells[key] = { text, text_color: '#000000', text_halign: 'center', text_valign: 'center', bgcolor: '#00000000', width: 0, text_size: 'normal', tooltip: '' };
+      table.cells[key] = {
+        text,
+        text_color: '#000000',
+        text_halign: 'center',
+        text_valign: 'center',
+        bgcolor: '#00000000',
+        width: 0,
+        text_size: 'normal',
+        tooltip: '',
+      };
     } else {
       table.cells[key].text = text;
     }
@@ -117,7 +143,16 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     if (!table) return NA;
     const key = `${row},${column}`;
     if (!table.cells[key]) {
-      table.cells[key] = { text: '', text_color: color, text_halign: 'center', text_valign: 'center', bgcolor: '#00000000', width: 0, text_size: 'normal', tooltip: '' };
+      table.cells[key] = {
+        text: '',
+        text_color: color,
+        text_halign: 'center',
+        text_valign: 'center',
+        bgcolor: '#00000000',
+        width: 0,
+        text_size: 'normal',
+        tooltip: '',
+      };
     } else {
       table.cells[key].text_color = color;
     }
@@ -133,7 +168,16 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     if (!table) return NA;
     const key = `${row},${column}`;
     if (!table.cells[key]) {
-      table.cells[key] = { text: '', text_color: '#000000', text_halign: 'center', text_valign: 'center', bgcolor: color, width: 0, text_size: 'normal', tooltip: '' };
+      table.cells[key] = {
+        text: '',
+        text_color: '#000000',
+        text_halign: 'center',
+        text_valign: 'center',
+        bgcolor: color,
+        width: 0,
+        text_size: 'normal',
+        tooltip: '',
+      };
     } else {
       table.cells[key].bgcolor = color;
     }
@@ -149,7 +193,16 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     if (!table) return NA;
     const key = `${row},${column}`;
     if (!table.cells[key]) {
-      table.cells[key] = { text: '', text_color: '#000000', text_halign: 'center', text_valign: 'center', bgcolor: '#00000000', width, text_size: 'normal', tooltip: '' };
+      table.cells[key] = {
+        text: '',
+        text_color: '#000000',
+        text_halign: 'center',
+        text_valign: 'center',
+        bgcolor: '#00000000',
+        width,
+        text_size: 'normal',
+        tooltip: '',
+      };
     } else {
       table.cells[key].width = width;
     }

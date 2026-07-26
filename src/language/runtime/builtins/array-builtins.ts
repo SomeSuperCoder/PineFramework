@@ -2,6 +2,7 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { type PineValue } from '../../types/na.js';
 
 export function registerArrayBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('array.new_float', (_size: PineValue): PineValue => {

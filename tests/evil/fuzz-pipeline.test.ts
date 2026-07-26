@@ -227,10 +227,7 @@ function buildEngine(script: string): ExecutionEngine | null {
   }
 }
 
-function tryPipeline(
-  script: string,
-  contexts: ExecutionContext[],
-): FuzzResult {
+function tryPipeline(script: string, contexts: ExecutionContext[]): FuzzResult {
   // Parse
   let ast: ReturnType<typeof parse>['ast'];
   try {

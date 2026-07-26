@@ -1,11 +1,6 @@
 import { ParseError } from '../../common/errors.js';
-import { spanBetween, type SourceSpan } from '../../common/source-location.js';
-import type {
-  ExpressionNode,
-  StatementNode,
-  TypeAnnotationNode,
-  TypeFieldNode,
-} from './ast/nodes.js';
+import { spanBetween } from '../../common/source-location.js';
+import type { ExpressionNode, StatementNode, TypeAnnotationNode } from './ast/nodes.js';
 import { Token, TokenType } from './tokenizer.js';
 
 /**
@@ -163,11 +158,7 @@ export class ParserBase {
   // Node factories
   // ==========================================================================
 
-  protected makeBinary(
-    left: ExpressionNode,
-    operator: string,
-    right: ExpressionNode,
-  ) {
+  protected makeBinary(left: ExpressionNode, operator: string, right: ExpressionNode) {
     return {
       kind: 'BinaryExpression' as const,
       span: spanBetween(left.span.start, right.span.end),

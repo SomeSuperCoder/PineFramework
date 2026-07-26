@@ -84,7 +84,7 @@ describe('S/R backbone — rightmost labels have lines', () => {
       const leftStart = Math.max(0, startBar - 5);
       for (let j = leftStart; j < startBar; j++) {
         if (j < bars.length) continue; // might already be set
-        const trend = (pivotPrice - prevPivotPrice) / (startBar - (leftStart));
+        const trend = (pivotPrice - prevPivotPrice) / (startBar - leftStart);
         const t = (j - leftStart) / (startBar - leftStart);
         const price = prevPivotPrice + trend * (j - leftStart);
 
@@ -158,7 +158,8 @@ describe('S/R backbone — rightmost labels have lines', () => {
     //   HH prices: 120, 140, 160, 180, 200, 220
     const phase1HL = [115, 135, 155, 175, 195, 215, 235, 255, 275];
     const phase1HH = [120, 140, 160, 180, 200, 220, 240, 260, 280];
-    let hIdx = 0, lIdx = 0;
+    let hIdx = 0,
+      lIdx = 0;
 
     for (let i = 10; i < 200; i += 11) {
       const cycle = Math.floor((i - 10) / 11);
@@ -203,7 +204,8 @@ describe('S/R backbone — rightmost labels have lines', () => {
     //   LL prices: 270, 250, 230, 210, 190, 170, 150
     const phase2LH = [275, 255, 235, 215, 195, 175, 155];
     const phase2LL = [270, 250, 230, 210, 190, 170, 150];
-    hIdx = 0; lIdx = 0;
+    hIdx = 0;
+    lIdx = 0;
 
     for (let i = 200; i < 350; i += 11) {
       const cycle = Math.floor((i - 200) / 11);
@@ -244,7 +246,8 @@ describe('S/R backbone — rightmost labels have lines', () => {
     //   HH prices: 170, 190, 210, 230, 250, 270, 290
     const phase3HL = [165, 185, 205, 225, 245, 265, 285];
     const phase3HH = [170, 190, 210, 230, 250, 270, 290];
-    hIdx = 0; lIdx = 0;
+    hIdx = 0;
+    lIdx = 0;
 
     for (let i = 350; i < 500; i += 11) {
       const cycle = Math.floor((i - 350) / 11);
@@ -311,7 +314,8 @@ describe('S/R backbone — rightmost labels have lines', () => {
 
     const sortedLines = [...initLines].sort((a, b) => a.x1 - b.x1);
     console.log(`\nLines:`);
-    for (const l of sortedLines) console.log(`  x1=${l.x1} y1=${l.y1?.toFixed(2)} x2=${l.x2} y2=${l.y2?.toFixed(2)}`);
+    for (const l of sortedLines)
+      console.log(`  x1=${l.x1} y1=${l.y1?.toFixed(2)} x2=${l.x2} y2=${l.y2?.toFixed(2)}`);
 
     // ── Check last 3 labels ────────────────────────────────────────────────
     const last3 = sortedLabels.slice(0, 3);
@@ -321,7 +325,9 @@ describe('S/R backbone — rightmost labels have lines', () => {
       const match = initLines.find(
         (l) => Math.abs(l.y1 - label.price) < 0.01 || Math.abs(l.y2 - label.price) < 0.01,
       );
-      console.log(`${label.text} @ ${label.price.toFixed(2)} → ${match ? `LINE at y=${match.y1?.toFixed(2)}` : 'NO LINE'}`);
+      console.log(
+        `${label.text} @ ${label.price.toFixed(2)} → ${match ? `LINE at y=${match.y1?.toFixed(2)}` : 'NO LINE'}`,
+      );
       if (!match) allHaveLines = false;
     }
 
@@ -329,13 +335,20 @@ describe('S/R backbone — rightmost labels have lines', () => {
     const dump = (name: string) => {
       const b = (engine as any).globalScope?.variables?.get?.(name);
       if (!b) return;
-      const v = b.series.values.slice(-40).map((x: any) =>
-        x === null || x === undefined || typeof x === 'symbol' ? 'na'
-        : typeof x === 'number' ? x.toFixed(2) : String(x)
-      );
+      const v = b.series.values
+        .slice(-40)
+        .map((x: any) =>
+          x === null || x === undefined || typeof x === 'symbol'
+            ? 'na'
+            : typeof x === 'number'
+              ? x.toFixed(2)
+              : String(x),
+        );
       console.log(`\n${name} last 40 (len=${b.series.length}): ${v}`);
     };
-    dump('res'); dump('sup'); dump('trend');
+    dump('res');
+    dump('sup');
+    dump('trend');
 
     // ── Forming-candle ticks ────────────────────────────────────────────────
     const fcp = new FormingCandleProcessor(engine);
@@ -356,24 +369,30 @@ describe('S/R backbone — rightmost labels have lines', () => {
       const labels = [...engine.labels].sort((a, b) => b.time - a.time);
       const lines = [...engine.lines.values()];
       const last3t = labels.slice(0, 3);
-      console.log(`\n=== TICK ${t}: diffLbl=${r.diffLabels.length} diffLn=${r.diffLines.length} ===`);
+      console.log(
+        `\n=== TICK ${t}: diffLbl=${r.diffLabels.length} diffLn=${r.diffLines.length} ===`,
+      );
       for (const lbl of last3t) {
-        const m = lines.find(ln => Math.abs(ln.y1 - lbl.price) < 0.01 || Math.abs(ln.y2 - lbl.price) < 0.01);
+        const m = lines.find(
+          (ln) => Math.abs(ln.y1 - lbl.price) < 0.01 || Math.abs(ln.y2 - lbl.price) < 0.01,
+        );
         console.log(`  ${lbl.text} @ ${lbl.price.toFixed(2)} → ${m ? 'LINE' : 'NO LINE'}`);
       }
     }
 
     // ── Summary ─────────────────────────────────────────────────────────────
-    const hh = sortedLabels.filter(l => l.text === 'HH');
-    const hl = sortedLabels.filter(l => l.text === 'HL');
-    const lh = sortedLabels.filter(l => l.text === 'LH');
-    const ll = sortedLabels.filter(l => l.text === 'LL');
-    const hhHave = hh.filter(l => initLines.some(ln => Math.abs(ln.y1 - l.price) < 0.01));
-    const hlHave = hl.filter(l => initLines.some(ln => Math.abs(ln.y1 - l.price) < 0.01));
-    const lhHave = lh.filter(l => initLines.some(ln => Math.abs(ln.y1 - l.price) < 0.01));
-    const llHave = ll.filter(l => initLines.some(ln => Math.abs(ln.y1 - l.price) < 0.01));
+    const hh = sortedLabels.filter((l) => l.text === 'HH');
+    const hl = sortedLabels.filter((l) => l.text === 'HL');
+    const lh = sortedLabels.filter((l) => l.text === 'LH');
+    const ll = sortedLabels.filter((l) => l.text === 'LL');
+    const hhHave = hh.filter((l) => initLines.some((ln) => Math.abs(ln.y1 - l.price) < 0.01));
+    const hlHave = hl.filter((l) => initLines.some((ln) => Math.abs(ln.y1 - l.price) < 0.01));
+    const lhHave = lh.filter((l) => initLines.some((ln) => Math.abs(ln.y1 - l.price) < 0.01));
+    const llHave = ll.filter((l) => initLines.some((ln) => Math.abs(ln.y1 - l.price) < 0.01));
 
-    console.log(`\nHH lines: ${hhHave.length}/${hh.length}  HL lines: ${hlHave.length}/${hl.length}`);
+    console.log(
+      `\nHH lines: ${hhHave.length}/${hh.length}  HL lines: ${hlHave.length}/${hl.length}`,
+    );
     console.log(`LH lines: ${lhHave.length}/${lh.length}  LL lines: ${llHave.length}/${ll.length}`);
     console.log(`Last 3 all have lines: ${allHaveLines}`);
 
@@ -383,7 +402,9 @@ describe('S/R backbone — rightmost labels have lines', () => {
       const match = initLines.find(
         (l) => Math.abs(l.y1 - label.price) < 0.01 || Math.abs(l.y2 - label.price) < 0.01,
       );
-      console.log(`${label.text} @ ${label.price.toFixed(2)} \u2192 ${match ? 'y1=' + match.y1?.toFixed(2) + ' x1=' + match.x1 : 'NONE'}`);
+      console.log(
+        `${label.text} @ ${label.price.toFixed(2)} \u2192 ${match ? 'y1=' + match.y1?.toFixed(2) + ' x1=' + match.x1 : 'NONE'}`,
+      );
     }
 
     // Assertions — backbone detection works correctly

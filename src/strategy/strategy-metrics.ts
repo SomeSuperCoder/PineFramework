@@ -2,9 +2,19 @@
  * Strategy metrics calculation.
  * Pure function computing performance metrics from a list of trades.
  */
-import { TRADING_DAYS_PER_YEAR, STD_EPSILON, type Trade, type StrategyMetrics } from './strategy-types.js';
+import {
+  TRADING_DAYS_PER_YEAR,
+  STD_EPSILON,
+  type Trade,
+  type StrategyMetrics,
+} from './strategy-types.js';
 
-export function computeMetrics(trades: Trade[], peakEquity: number, maxDrawdown: number, initialCapital: number): StrategyMetrics {
+export function computeMetrics(
+  trades: Trade[],
+  peakEquity: number,
+  maxDrawdown: number,
+  initialCapital: number,
+): StrategyMetrics {
   const winningTrades = trades.filter((t) => t.pnl > 0);
   const losingTrades = trades.filter((t) => t.pnl <= 0);
 
@@ -41,12 +51,13 @@ export function computeMetrics(trades: Trade[], peakEquity: number, maxDrawdown:
     winRate: trades.length > 0 ? (winningTrades.length / trades.length) * 100 : 0,
     profitFactor: grossLoss > 0 ? grossProfit / grossLoss : grossProfit > 0 ? Infinity : 0,
     totalPnl,
-    totalPnlPercent:
-      initialCapital > 0 ? (totalPnl / initialCapital) * 100 : 0,
+    totalPnlPercent: initialCapital > 0 ? (totalPnl / initialCapital) * 100 : 0,
     maxDrawdown,
     maxDrawdownPercent: peakEquity > 0 ? (maxDrawdown / peakEquity) * 100 : 0,
-    sharpeRatio: stdReturn > STD_EPSILON ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
-    sortinoRatio: downsideDev > STD_EPSILON ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
+    sharpeRatio:
+      stdReturn > STD_EPSILON ? (avgReturn / stdReturn) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
+    sortinoRatio:
+      downsideDev > STD_EPSILON ? (avgReturn / downsideDev) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0,
     averageWin: avgWin,
     averageLoss: avgLoss,
     largestWin: winningTrades.length > 0 ? Math.max(...winningTrades.map((t) => t.pnl)) : 0,

@@ -20,9 +20,7 @@ export interface TradeContext {
 }
 
 /** Identifies a built-in commission calculation method. */
-export type CommissionMethodId =
-  | 'jupiter_ultra'
-  | 'jupiter_manual';
+export type CommissionMethodId = 'jupiter_ultra' | 'jupiter_manual';
 
 /**
  * Jupiter Ultra fee tier, matched to the actual Jupiter DEX fee schedule.

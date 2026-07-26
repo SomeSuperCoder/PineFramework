@@ -48,15 +48,15 @@ plot(c2, "c2")`;
     const bars = generateBars(3);
     const result = engine.execute(source, bars);
     const out = result.outputs;
-    
+
     // c1 values should be valid 6 or 8 hex char colors
     const c1val = (out.get('c1') as any)?.last() as string;
     const c2val = (out.get('c2') as any)?.last() as string;
-    
+
     // Both should be valid hex colors — at most 8 hex chars (RRGGBBAA)
     expect(c1val).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
     expect(c2val).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
-    
+
     // c2 should have the same base color as c1 but different alpha
     const base1 = c1val.slice(1, 7);
     const base2 = c2val.slice(1, 7);
@@ -87,7 +87,7 @@ fill(p1, p2, color=color.new(col, 20))`;
     expect(colors.length).toBe(30);
 
     // Every non-null color must be valid #RRGGBB or #RRGGBBAA (never longer)
-    const nonNull = colors.filter(c => c !== null);
+    const nonNull = colors.filter((c) => c !== null);
     expect(nonNull.length).toBeGreaterThan(0);
     for (const c of nonNull) {
       expect(c).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
@@ -120,7 +120,7 @@ fill(p1, p2, color=na)`;
     const result = engine.execute(source, bars);
 
     const colors = result.fillColorData!.get('High::Low')!;
-    expect(colors.every(c => c === null)).toBe(true);
+    expect(colors.every((c) => c === null)).toBe(true);
   });
 
   test('Real ZL indicator produces valid per-bar fill colors', () => {
@@ -153,17 +153,17 @@ fill(p_basis, p_price, hl2, basis, na, color.new(trend_col, 20))`;
     expect(key).toBe('ZL__lw:2::Price__lw:1');
 
     const colors = fcd.get(key)!;
-    const nonNull = colors.filter(c => c !== null);
+    const nonNull = colors.filter((c) => c !== null);
     const unique = new Set(nonNull);
 
     expect(nonNull.length).toBeGreaterThan(0);
     expect(unique.size).toBeGreaterThanOrEqual(1);
-    
+
     // All non-null colors must be valid (max 8 hex chars)
     for (const c of nonNull) {
       expect(c).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
     }
-    
+
     // fills[0].color should also be valid
     expect(result.fills[0].color).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
   });

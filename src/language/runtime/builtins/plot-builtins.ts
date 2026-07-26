@@ -3,6 +3,7 @@ import { NA, isNa, type PineValue } from '../../types/na.js';
 import { createSeries } from '../series.js';
 
 export function registerPlotBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set(
@@ -55,6 +56,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       typeof lastArg === 'object' &&
       lastArg !== null &&
       !Array.isArray(lastArg) &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       !(lastArg as any).__isSeries
         ? (lastArg as unknown as Record<string, PineValue>)
         : undefined;
@@ -160,6 +162,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       typeof lastArg === 'object' &&
       lastArg !== null &&
       !Array.isArray(lastArg) &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       !(lastArg as any).__isSeries
         ? (lastArg as unknown as Record<string, PineValue>)
         : undefined;
@@ -268,6 +271,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       typeof lastArg === 'object' &&
       lastArg !== null &&
       !Array.isArray(lastArg) &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       !(lastArg as any).__isSeries
         ? (lastArg as unknown as Record<string, PineValue>)
         : undefined;

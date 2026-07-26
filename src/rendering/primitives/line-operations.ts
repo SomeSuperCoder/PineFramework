@@ -53,10 +53,7 @@ export function lineNew(
   return line;
 }
 
-export function lineCopy(
-  lines: Map<string, LineObject>,
-  lineId: string,
-): LineObject | undefined {
+export function lineCopy(lines: Map<string, LineObject>, lineId: string): LineObject | undefined {
   const original = lines.get(lineId);
   if (!original) return undefined;
 
@@ -84,10 +81,7 @@ export function lineGetColor(
   return { ...line.color };
 }
 
-export function lineGetWidth(
-  lines: Map<string, LineObject>,
-  lineId: string,
-): number | undefined {
+export function lineGetWidth(lines: Map<string, LineObject>, lineId: string): number | undefined {
   const line = lines.get(lineId);
   if (!line) return undefined;
   return line.width;
@@ -136,38 +130,22 @@ export function lineSetLine(
   if (!isNaOrNull(y2)) line.y2 = y2 as number;
 }
 
-export function lineSetX1(
-  lines: Map<string, LineObject>,
-  lineId: string,
-  x: PineValue,
-): void {
+export function lineSetX1(lines: Map<string, LineObject>, lineId: string, x: PineValue): void {
   const line = lines.get(lineId);
   if (line && !isNaOrNull(x)) line.x1 = x as number;
 }
 
-export function lineSetY1(
-  lines: Map<string, LineObject>,
-  lineId: string,
-  y: PineValue,
-): void {
+export function lineSetY1(lines: Map<string, LineObject>, lineId: string, y: PineValue): void {
   const line = lines.get(lineId);
   if (line && !isNaOrNull(y)) line.y1 = y as number;
 }
 
-export function lineSetX2(
-  lines: Map<string, LineObject>,
-  lineId: string,
-  x: PineValue,
-): void {
+export function lineSetX2(lines: Map<string, LineObject>, lineId: string, x: PineValue): void {
   const line = lines.get(lineId);
   if (line && !isNaOrNull(x)) line.x2 = x as number;
 }
 
-export function lineSetY2(
-  lines: Map<string, LineObject>,
-  lineId: string,
-  y: PineValue,
-): void {
+export function lineSetY2(lines: Map<string, LineObject>, lineId: string, y: PineValue): void {
   const line = lines.get(lineId);
   if (line && !isNaOrNull(y)) line.y2 = y as number;
 }
@@ -217,9 +195,6 @@ export function lineSetEditable(
   if (line && !isNaOrNull(editable)) line.editable = editable as boolean;
 }
 
-export function lineDelete(
-  lines: Map<string, LineObject>,
-  lineId: string,
-): void {
+export function lineDelete(lines: Map<string, LineObject>, lineId: string): void {
   lines.delete(lineId);
 }

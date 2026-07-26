@@ -201,9 +201,8 @@ export function linreg(source: number[], length: number): number[] {
   }
 
   const result: number[] = [];
-  // Precompute sumX, sumX2, meanX — these are constant for a given length
+  // Precompute sumX, meanX — these are constant for a given length
   const sumX = (length * (length - 1)) / 2;
-  const sumX2 = ((length - 1) * length * (2 * length - 1)) / 6;
   const meanX = sumX / length;
 
   for (let i = 0; i < source.length; i++) {
@@ -213,13 +212,10 @@ export function linreg(source: number[], length: number): number[] {
     }
 
     let sumY = 0;
-    let sumXY = 0;
 
     for (let j = 0; j < length; j++) {
-      const x = j;
       const y = source[i - j]!;
       sumY += y;
-      sumXY += x * y;
     }
 
     const meanY = sumY / length;

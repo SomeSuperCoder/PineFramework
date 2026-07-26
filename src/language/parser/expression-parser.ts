@@ -2,7 +2,6 @@ import { spanBetween, type SourceSpan } from '../../common/source-location.js';
 import type {
   ArgumentNode,
   ArrayExpressionNode,
-  BinaryExpressionNode,
   CallExpressionNode,
   ColorLiteralNode,
   ExpressionNode,
@@ -155,6 +154,7 @@ export class ExpressionParser extends ParserBase {
   private parsePostfix(): ExpressionNode {
     let expr: ExpressionNode = this.parsePrimary();
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       if (this.isAtEnd()) break;
       if (this.peek().span.start.line > expr.span.end.line) break;
@@ -281,7 +281,7 @@ export class ExpressionParser extends ParserBase {
     };
   }
 
-  private parseNamedArgument(): ArgumentNode {
+  protected parseNamedArgument(): ArgumentNode {
     const start = this.peek().span.start;
     let name: string;
     if (this.match(TokenType.Identifier)) {
@@ -426,7 +426,7 @@ export class ExpressionParser extends ParserBase {
   // Functions & parameters
   // ==========================================================================
 
-  private parseFunctionExpression(
+  protected parseFunctionExpression(
     name: string | undefined,
     start: SourceSpan['start'],
   ): FunctionExpressionNode {

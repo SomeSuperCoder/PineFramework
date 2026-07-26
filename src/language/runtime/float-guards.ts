@@ -88,18 +88,16 @@ export function isFiniteNumber(val: unknown): val is number {
  * @param context - Descriptive label for the error message (e.g., "series index", "OHLC push")
  * @param barIndex - Optional bar index for error context
  */
-export function ensureFinite(val: unknown, context: string, barIndex?: number): asserts val is number {
+export function ensureFinite(
+  val: unknown,
+  context: string,
+  barIndex?: number,
+): asserts val is number {
   if (typeof val !== 'number') {
-    throw new RuntimeError(
-      `Expected finite number for ${context}, got ${typeof val}`,
-      barIndex,
-    );
+    throw new RuntimeError(`Expected finite number for ${context}, got ${typeof val}`, barIndex);
   }
   if (!Number.isFinite(val)) {
-    throw new RuntimeError(
-      `Non-finite value for ${context}: ${val}`,
-      barIndex,
-    );
+    throw new RuntimeError(`Non-finite value for ${context}: ${val}`, barIndex);
   }
 }
 
@@ -112,12 +110,13 @@ export function ensureFinite(val: unknown, context: string, barIndex?: number): 
  * @param context - Descriptive label for the error message
  * @param barIndex - Optional bar index for error context
  */
-export function expectNumber(val: unknown, context: string, barIndex?: number): asserts val is number {
+export function expectNumber(
+  val: unknown,
+  context: string,
+  barIndex?: number,
+): asserts val is number {
   if (typeof val !== 'number') {
-    throw new RuntimeError(
-      `Expected number for ${context}, got ${typeof val}`,
-      barIndex,
-    );
+    throw new RuntimeError(`Expected number for ${context}, got ${typeof val}`, barIndex);
   }
 }
 
@@ -157,7 +156,7 @@ export interface KahanAccumulator {
 export function kahanAdd(acc: KahanAccumulator, value: number): void {
   const y = value - acc.comp;
   const t = acc.sum + y;
-  acc.comp = (t - acc.sum) - y;
+  acc.comp = t - acc.sum - y;
   acc.sum = t;
 }
 

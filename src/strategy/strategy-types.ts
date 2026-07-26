@@ -16,10 +16,7 @@ export type QtyType = 'contracts' | 'percent_of_equity' | 'cash';
 export type CommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
 export type MarketFillPrice = 'open' | 'ohlc4' | 'close' | 'high' | 'low';
 
-import type {
-  CommissionMethodId,
-  CommissionMethodSettings,
-} from './commission-calculator.js';
+import type { CommissionMethodId, CommissionMethodSettings } from './commission-calculator.js';
 
 export interface Account {
   initialCapital: number;

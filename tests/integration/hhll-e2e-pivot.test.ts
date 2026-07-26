@@ -17,7 +17,14 @@ describe('HHLL End-to-End Pivot Test', () => {
 
     // Build 30 bars with explicit pivot highs and lows
     // Using lb=5, rb=5 defaults - pivots need 5 bars on each side
-    const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+    const bars: Array<{
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }> = [];
     const ts = 1700000000000;
 
     // Create base bars with gradual uptrend
@@ -63,11 +70,26 @@ describe('HHLL End-to-End Pivot Test', () => {
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -76,11 +98,15 @@ describe('HHLL End-to-End Pivot Test', () => {
     console.log(`\n=== RESULTS with controlled pivot data ===`);
     console.log(`Labels: ${result.labels?.length ?? 0}`);
     for (const l of result.labels ?? []) {
-      console.log(`  Label: text="${l.text}" price=${l.price.toFixed(2)} color=${l.color} barTime=${l.time}`);
+      console.log(
+        `  Label: text="${l.text}" price=${l.price.toFixed(2)} color=${l.color} barTime=${l.time}`,
+      );
     }
     console.log(`Lines: ${result.lines?.length ?? 0}`);
     for (const l of result.lines ?? []) {
-      console.log(`  Line: x1=${l.x1} y1=${l.y1.toFixed(2)} x2=${l.x2} y2=${l.y2.toFixed(2)} color=${l.color}`);
+      console.log(
+        `  Line: x1=${l.x1} y1=${l.y1.toFixed(2)} x2=${l.x2} y2=${l.y2.toFixed(2)} color=${l.color}`,
+      );
     }
 
     // Should have at least some labels
@@ -99,7 +125,14 @@ plot(prevPl, "prevPl")`;
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
 
-    const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+    const bars: Array<{
+      timestamp: number;
+      open: number;
+      high: number;
+      low: number;
+      close: number;
+      volume: number;
+    }> = [];
     const ts = 1700000000000;
 
     for (let i = 0; i < 20; i++) {
@@ -132,11 +165,26 @@ plot(prevPl, "prevPl")`;
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map(b => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map(b => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map(b => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map(b => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map(b => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);

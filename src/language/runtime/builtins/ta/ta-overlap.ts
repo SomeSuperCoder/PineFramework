@@ -4,6 +4,7 @@ import { guardFinite, isFiniteNumber } from '../../float-guards.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
 export function registerTaOverlap(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('ta.sma', (source: PineValue, length: PineValue): PineValue => {

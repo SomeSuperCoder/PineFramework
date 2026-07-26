@@ -42,10 +42,7 @@ export function linefillNew(
   return linefill;
 }
 
-export function linefillDelete(
-  linefills: Map<string, LinefillObject>,
-  linefillId: string,
-): void {
+export function linefillDelete(linefills: Map<string, LinefillObject>, linefillId: string): void {
   linefills.delete(linefillId);
 }
 
@@ -123,9 +120,6 @@ export function polylineNew(
   return polyline;
 }
 
-export function polylineDelete(
-  polylines: Map<string, PolylineObject>,
-  polylineId: string,
-): void {
+export function polylineDelete(polylines: Map<string, PolylineObject>, polylineId: string): void {
   polylines.delete(polylineId);
 }

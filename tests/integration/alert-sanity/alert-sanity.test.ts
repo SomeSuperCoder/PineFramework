@@ -21,7 +21,14 @@ const __dirname = dirname(__filename);
 
 interface ExportData {
   exportedAt: number;
-  candles: Array<{ time: number; open: number; high: number; low: number; close: number; volume: number }>;
+  candles: Array<{
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>;
   indicators: Array<{
     indicatorId: string;
     source: string;
@@ -56,10 +63,18 @@ describe('Alert Sanity', () => {
   const downLabels = result.labels.filter((l) => l.text === '▼');
 
   // Index triggers by alertId
-  const alert1Triggers = result.alertTriggers.filter((t) => t.alertId === 'alert_1').sort((a, b) => a.barIndex - b.barIndex); // Trail Long
-  const alert2Triggers = result.alertTriggers.filter((t) => t.alertId === 'alert_2').sort((a, b) => a.barIndex - b.barIndex); // Trail Short
-  const alert3Triggers = result.alertTriggers.filter((t) => t.alertId === 'alert_3').sort((a, b) => a.barIndex - b.barIndex); // Bull Retest
-  const alert4Triggers = result.alertTriggers.filter((t) => t.alertId === 'alert_4').sort((a, b) => a.barIndex - b.barIndex); // Bear Retest
+  const alert1Triggers = result.alertTriggers
+    .filter((t) => t.alertId === 'alert_1')
+    .sort((a, b) => a.barIndex - b.barIndex); // Trail Long
+  const alert2Triggers = result.alertTriggers
+    .filter((t) => t.alertId === 'alert_2')
+    .sort((a, b) => a.barIndex - b.barIndex); // Trail Short
+  const alert3Triggers = result.alertTriggers
+    .filter((t) => t.alertId === 'alert_3')
+    .sort((a, b) => a.barIndex - b.barIndex); // Bull Retest
+  const alert4Triggers = result.alertTriggers
+    .filter((t) => t.alertId === 'alert_4')
+    .sort((a, b) => a.barIndex - b.barIndex); // Bear Retest
 
   // Diamond shapes (retest markers)
   const bullDiamonds = result.shapes.filter((s) => s.text === '◆' && s.type === 'diamond');
@@ -124,7 +139,9 @@ describe('Alert Sanity', () => {
 
   it('each ▼ label should have a matching alert_2 trigger at the SAME barIndex', () => {
     const labelIndices = new Set(
-      downLabels.map((l) => candleTimeToIdx.get(l.time)).filter((i): i is number => i !== undefined),
+      downLabels
+        .map((l) => candleTimeToIdx.get(l.time))
+        .filter((i): i is number => i !== undefined),
     );
     const triggerIndices = new Set(alert2Triggers.map((t) => t.barIndex));
 
@@ -145,7 +162,9 @@ describe('Alert Sanity', () => {
 
       // Try offsets 0..100 and find the one that maximises matches
       const labelIndices = new Set(
-        upLabels.map((l) => candleTimeToIdx.get(l.time)).filter((i): i is number => i !== undefined),
+        upLabels
+          .map((l) => candleTimeToIdx.get(l.time))
+          .filter((i): i is number => i !== undefined),
       );
 
       let bestOffset = -1;
@@ -163,7 +182,9 @@ describe('Alert Sanity', () => {
         }
       }
 
-      console.log(`[detect] alert_1 offset from labels: best match at offset=${bestOffset} (${bestMatches}/${labelIndices.size} labels matched)`);
+      console.log(
+        `[detect] alert_1 offset from labels: best match at offset=${bestOffset} (${bestMatches}/${labelIndices.size} labels matched)`,
+      );
       // If bestOffset > 0 and bestMatches == labelIndices.size, the triggers are shifted
       // by `bestOffset` bars (likely the seed bar count = hullLen = 72)
       expect(bestOffset).toBe(0);
@@ -173,7 +194,9 @@ describe('Alert Sanity', () => {
       if (downLabels.length === 0 || alert2Triggers.length === 0) return;
 
       const labelIndices = new Set(
-        downLabels.map((l) => candleTimeToIdx.get(l.time)).filter((i): i is number => i !== undefined),
+        downLabels
+          .map((l) => candleTimeToIdx.get(l.time))
+          .filter((i): i is number => i !== undefined),
       );
 
       let bestOffset = -1;
@@ -191,7 +214,9 @@ describe('Alert Sanity', () => {
         }
       }
 
-      console.log(`[detect] alert_2 offset from labels: best match at offset=${bestOffset} (${bestMatches}/${labelIndices.size} labels matched)`);
+      console.log(
+        `[detect] alert_2 offset from labels: best match at offset=${bestOffset} (${bestMatches}/${labelIndices.size} labels matched)`,
+      );
       expect(bestOffset).toBe(0);
     });
   });

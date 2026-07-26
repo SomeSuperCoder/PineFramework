@@ -2,12 +2,13 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
 
 export function registerColorBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set(
     'color.new',
     (color: PineValue, transp: PineValue, _namedOrNamed?: PineValue): PineValue => {
-      if (isNa(color)) return NA;  // color.new(na, ...) should return na
+      if (isNa(color)) return NA; // color.new(na, ...) should return na
       const c = typeof color === 'string' ? color : '#2196f3';
       const t = isNa(transp) ? 0 : (transp as number);
       const alpha = Math.round(Math.max(0, Math.min(100, 100 - t)) * 2.55);

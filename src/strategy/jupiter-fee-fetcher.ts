@@ -265,9 +265,7 @@ interface SwapInfoWithFee {
 /**
  * Compute the DEX fee in bps from a single route step.
  */
-function computeStepBps(step: {
-  swapInfo: SwapInfoWithFee;
-}): number {
+function computeStepBps(step: { swapInfo: SwapInfoWithFee }): number {
   const inAmount = Number.parseInt(step.swapInfo.inAmount, 10);
   const outAmount = Number.parseInt(step.swapInfo.outAmount, 10);
 

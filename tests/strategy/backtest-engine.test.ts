@@ -32,14 +32,14 @@ function createBars(count: number, startPrice: number = 100): Bar[] {
 function fixedBars(): Bar[] {
   const t = Date.now();
   return [
-    { timestamp: t,       open: 100, high: 105, low: 95,  close: 102, volume: 1000 },
-    { timestamp: t + 1,   open: 102, high: 105, low: 100, close: 103, volume: 1000 },
-    { timestamp: t + 2,   open: 104, high: 106, low: 103, close: 105, volume: 1000 },
-    { timestamp: t + 3,   open: 108, high: 112, low: 107, close: 110, volume: 1000 },
-    { timestamp: t + 4,   open: 111, high: 116, low: 110, close: 115, volume: 1000 },
-    { timestamp: t + 5,   open: 113, high: 114, low: 108, close: 110, volume: 1000 },
-    { timestamp: t + 6,   open: 109, high: 110, low: 104, close: 106, volume: 1000 },
-    { timestamp: t + 7,   open: 105, high: 108, low: 103, close: 107, volume: 1000 },
+    { timestamp: t, open: 100, high: 105, low: 95, close: 102, volume: 1000 },
+    { timestamp: t + 1, open: 102, high: 105, low: 100, close: 103, volume: 1000 },
+    { timestamp: t + 2, open: 104, high: 106, low: 103, close: 105, volume: 1000 },
+    { timestamp: t + 3, open: 108, high: 112, low: 107, close: 110, volume: 1000 },
+    { timestamp: t + 4, open: 111, high: 116, low: 110, close: 115, volume: 1000 },
+    { timestamp: t + 5, open: 113, high: 114, low: 108, close: 110, volume: 1000 },
+    { timestamp: t + 6, open: 109, high: 110, low: 104, close: 106, volume: 1000 },
+    { timestamp: t + 7, open: 105, high: 108, low: 103, close: 107, volume: 1000 },
   ];
 }
 
@@ -210,12 +210,12 @@ describe('BacktestEngine', () => {
       // Custom bars: entry at 100, then uptrend, then retracement to trigger
       const t = Date.now();
       const trailBars: Bar[] = [
-        { timestamp: t,       open: 98,  high: 102, low: 97,  close: 100, volume: 1000 },
-        { timestamp: t + 1,   open: 100, high: 102, low: 99,  close: 101, volume: 1000 },
-        { timestamp: t + 2,   open: 103, high: 107, low: 102, close: 106, volume: 1000 },
-        { timestamp: t + 3,   open: 107, high: 108, low: 107, close: 107, volume: 1000 },
-        { timestamp: t + 4,   open: 106, high: 108, low: 104, close: 105, volume: 1000 },
-        { timestamp: t + 5,   open: 103, high: 104, low: 99,  close: 100, volume: 1000 },
+        { timestamp: t, open: 98, high: 102, low: 97, close: 100, volume: 1000 },
+        { timestamp: t + 1, open: 100, high: 102, low: 99, close: 101, volume: 1000 },
+        { timestamp: t + 2, open: 103, high: 107, low: 102, close: 106, volume: 1000 },
+        { timestamp: t + 3, open: 107, high: 108, low: 107, close: 107, volume: 1000 },
+        { timestamp: t + 4, open: 106, high: 108, low: 104, close: 105, volume: 1000 },
+        { timestamp: t + 5, open: 103, high: 104, low: 99, close: 100, volume: 1000 },
       ];
 
       const result = engine.run(trailBars, (eng, _bar, index) => {
@@ -242,7 +242,7 @@ describe('BacktestEngine', () => {
       //        low=104, stopHit = 104 <= 107.70 → YES → fills on bar 4
 
       expect(result.metrics.totalTrades).toBe(1);
-      expect(result.trades[0]!.exitPrice).toBeCloseTo(107.70, 1);
+      expect(result.trades[0]!.exitPrice).toBeCloseTo(107.7, 1);
     });
   });
 });

@@ -6,7 +6,6 @@ import {
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
-
 function createBarContext(overrides: Partial<ExecutionContext> = {}): ExecutionContext {
   return {
     barIndex: 0,
@@ -286,12 +285,14 @@ describe('ExecutionEngine', () => {
           ph = ta.pivothigh(5, 5)
           plot(ph, "ph")
         `;
-        const bars = Array.from({ length: 30 }, (_, i) => createBarContext({
-          barIndex: i,
-          close: createSeries('close', [100 + Math.sin(i * 0.3) * 5]),
-          high: createSeries('high', [105 + Math.sin(i * 0.3) * 5]),
-          low: createSeries('low', [95 + Math.sin(i * 0.3) * 5]),
-        }));
+        const bars = Array.from({ length: 30 }, (_, i) =>
+          createBarContext({
+            barIndex: i,
+            close: createSeries('close', [100 + Math.sin(i * 0.3) * 5]),
+            high: createSeries('high', [105 + Math.sin(i * 0.3) * 5]),
+            low: createSeries('low', [95 + Math.sin(i * 0.3) * 5]),
+          }),
+        );
         const engine = executeScript(source, bars);
         const output = engine.getOutput('ph');
         expect(output).toBeDefined();
@@ -308,10 +309,12 @@ describe('ExecutionEngine', () => {
           s = ta.sma(close, 20)
           plot(s, "sma")
         `;
-        const bars = Array.from({ length: 50 }, (_, i) => createBarContext({
-          barIndex: i,
-          close: createSeries('close', [100 + i]),
-        }));
+        const bars = Array.from({ length: 50 }, (_, i) =>
+          createBarContext({
+            barIndex: i,
+            close: createSeries('close', [100 + i]),
+          }),
+        );
         const engine = executeScript(source, bars);
         const output = engine.getOutput('sma');
         expect(output).toBeDefined();
@@ -328,10 +331,12 @@ describe('ExecutionEngine', () => {
           x = close
           plot(x, "x")
         `;
-        const bars = Array.from({ length: 50 }, (_, i) => createBarContext({
-          barIndex: i,
-          close: createSeries('close', [100 + i]),
-        }));
+        const bars = Array.from({ length: 50 }, (_, i) =>
+          createBarContext({
+            barIndex: i,
+            close: createSeries('close', [100 + i]),
+          }),
+        );
         const engine = executeScript(source, bars);
         const output = engine.getOutput('x');
         expect(output).toBeDefined();
@@ -348,10 +353,12 @@ describe('ExecutionEngine', () => {
           x = close + 1
           plot(x, "x")
         `;
-        const bars = Array.from({ length: 10 }, (_, i) => createBarContext({
-          barIndex: i,
-          close: createSeries('close', [100 + i]),
-        }));
+        const bars = Array.from({ length: 10 }, (_, i) =>
+          createBarContext({
+            barIndex: i,
+            close: createSeries('close', [100 + i]),
+          }),
+        );
         const engine = executeScript(source, bars);
         const output = engine.getOutput('x');
         expect(output).toBeDefined();

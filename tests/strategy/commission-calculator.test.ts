@@ -57,10 +57,7 @@ describe('Commission Calculator', () => {
     it('should return 2 built-in methods (Jupiter only)', () => {
       const descriptors = getAllCommissionMethodDescriptors();
       expect(descriptors).toHaveLength(2);
-      expect(descriptors.map((d) => d.id)).toEqual([
-        'jupiter_ultra',
-        'jupiter_manual',
-      ]);
+      expect(descriptors.map((d) => d.id)).toEqual(['jupiter_ultra', 'jupiter_manual']);
     });
   });
 
@@ -124,7 +121,11 @@ describe('Commission Calculator', () => {
     ])('should charge %s tier: %d bps', (category, bps, tradeValue, expectedCommission) => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: category as JupiterPairCategory, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: category as JupiterPairCategory,
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue });
       // bps / 10000 = decimal fraction
@@ -134,7 +135,12 @@ describe('Commission Calculator', () => {
     it('should use custom rate when pairCategory is "custom"', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'custom', rate: 0.002, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'custom',
+          rate: 0.002,
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       expect(computeCommission(context, config)).toBeCloseTo(20); // 10000 * 0.002
@@ -143,7 +149,12 @@ describe('Commission Calculator', () => {
     it('should ignore rate field when a named tier is set', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'sol_stable', rate: 0.1, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'sol_stable',
+          rate: 0.1,
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 10000 });
       // 2 bps = 0.02% = tradeValue * 0.0002
@@ -165,7 +176,11 @@ describe('Commission Calculator', () => {
     it('should handle small trade values with sol_stable tier', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'sol_stable', dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'sol_stable',
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 50 });
       // 2 bps = 0.0002 = 50 * 0.0002 = 0.01
@@ -175,7 +190,11 @@ describe('Commission Calculator', () => {
     it('should handle zero trade value', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'new_token', dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'new_token',
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       const context = makeContext({ tradeValue: 0 });
       expect(computeCommission(context, config)).toBe(0);
@@ -186,7 +205,11 @@ describe('Commission Calculator', () => {
     it('should add DEX fee and network fee on top of Jupiter tiered fee', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'default', dexFeeBps: 25, solPriceUsd: 150 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'default',
+          dexFeeBps: 25,
+          solPriceUsd: 150,
+        } as JupiterUltraSettings,
       };
       // Jupiter 10 bps = 10000 * 0.001 = 10
       // DEX 25 bps = 10000 * 0.0025 = 25
@@ -198,7 +221,11 @@ describe('Commission Calculator', () => {
     it('should add only DEX fee + network fee when Jupiter tier is 0 bps', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'jupiter_ecosystem', dexFeeBps: 25, solPriceUsd: 150 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'jupiter_ecosystem',
+          dexFeeBps: 25,
+          solPriceUsd: 150,
+        } as JupiterUltraSettings,
       };
       // Jupiter fee = 0, DEX = 25 bps = 25, network = 0.0015
       expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(25.0015, 4);
@@ -286,7 +313,11 @@ describe('Commission Calculator', () => {
     it('should prefer explicit pairCategory over symbol auto-detection', () => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
-        settings: { pairCategory: 'pegged_asset', dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
+        settings: {
+          pairCategory: 'pegged_asset',
+          dexFeeBps: 0,
+          solPriceUsd: 0,
+        } as JupiterUltraSettings,
       };
       // Even though the symbol is SOLUSDT (sol_stable), explicit pairCategory wins
       const context: TradeContext = {
@@ -353,7 +384,7 @@ describe('Commission Calculator', () => {
         settings: { solPriceUsd: 0 } as JupiterManualSettings,
       };
       // dexFeeBps defaults to 25 → 1000 * 0.0025 = 2.50
-      expect(computeCommission(makeContext({ tradeValue: 1000 }), config)).toBeCloseTo(2.50, 4);
+      expect(computeCommission(makeContext({ tradeValue: 1000 }), config)).toBeCloseTo(2.5, 4);
     });
 
     it('should return only network fee when DEX fee is 0', () => {

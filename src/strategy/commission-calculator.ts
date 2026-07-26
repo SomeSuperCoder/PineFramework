@@ -59,10 +59,10 @@
 export type {
   TradeContext,
   CommissionMethodId,
+  CommissionMethodSettings,
   JupiterPairCategory,
   JupiterUltraSettings,
   JupiterManualSettings,
-  CommissionMethodSettings,
   CommissionConfig,
   CommissionCalculator,
   CommissionMethodDescriptor,
@@ -74,10 +74,7 @@ export type {
 // Re-export utilities for backward compatibility
 // ---------------------------------------------------------------------------
 
-export {
-  parsePairSymbol,
-  detectJupiterPairCategory,
-} from './commission-methods/utils.js';
+export { parsePairSymbol, detectJupiterPairCategory } from './commission-methods/utils.js';
 
 // ---------------------------------------------------------------------------
 // Import calculator classes
@@ -91,10 +88,8 @@ import type {
   CommissionCalculator,
   CommissionConfig,
   CommissionMethodDescriptor,
-  CommissionMethodSettings,
   JupiterUltraSettings,
   JupiterManualSettings,
-  SettingsFieldDescriptor,
   TradeContext,
 } from './commission-methods/types.js';
 
@@ -132,8 +127,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         options: [
           {
             value: 'jupiter_ecosystem',
-            label:
-              'Jupiter Ecosystem (0 bps) — SOL/Stable → JUP/JLP/jupSOL',
+            label: 'Jupiter Ecosystem (0 bps) — SOL/Stable → JUP/JLP/jupSOL',
           },
           {
             value: 'pegged_asset',
@@ -162,8 +156,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         min: 0,
         max: 0.01,
         step: 0.0001,
-        tooltip:
-          'Custom fee rate (used when Pair Category is "Custom Rate").',
+        tooltip: 'Custom fee rate (used when Pair Category is "Custom Rate").',
       },
       {
         key: 'dexFeeBps',
@@ -270,10 +263,7 @@ export function isLongOnlyEnforced(methodId: CommissionMethodId): boolean {
  * This is the main entry point that the StrategyEngine should call
  * when a commissionMethod is configured. Falls back to 0 for unknown methods.
  */
-export function computeCommission(
-  context: TradeContext,
-  config: CommissionConfig,
-): number {
+export function computeCommission(context: TradeContext, config: CommissionConfig): number {
   const calculator = CALCULATORS[config.method];
   if (!calculator) return 0;
   return calculator.calculate(context, config);
@@ -314,6 +304,8 @@ export function buildTradeContextFromTrade(params: {
   entryPrice: number;
   exitPrice: number;
   quantity: number;
+  /** True if this is an entry context, false for exit/reporting. Defaults to true. */
+  isEntry?: boolean;
   /** Trading pair symbol for Jupiter tier auto-detection. */
   symbol?: string;
 }): TradeContext {
@@ -324,6 +316,7 @@ export function buildTradeContextFromTrade(params: {
     exitPrice: params.exitPrice,
     quantity: params.quantity,
     tradeValue,
+    isEntry: params.isEntry ?? true,
     symbol: params.symbol,
   };
 }

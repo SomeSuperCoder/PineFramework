@@ -67,9 +67,11 @@ function detectLookbackInExpression(expr: ExpressionNode): number {
   switch (expr.kind) {
     case 'CallExpression': {
       // Check if this is a ta.* function call
-      if (expr.callee.kind === 'MemberExpression' &&
-          expr.callee.object.kind === 'Identifier' &&
-          expr.callee.object.name === 'ta') {
+      if (
+        expr.callee.kind === 'MemberExpression' &&
+        expr.callee.object.kind === 'Identifier' &&
+        expr.callee.object.name === 'ta'
+      ) {
         const funcName = expr.callee.property;
 
         // Pivot functions: sum both args
@@ -308,6 +310,7 @@ export class Compiler {
     return { ir, source: program };
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private assignCallIds(node: any): void {
     if (!node || typeof node !== 'object') return;
     if (node.kind === 'CallExpression') {
@@ -461,10 +464,7 @@ export class Compiler {
       }
       // Reject assignment to const variables (reassignment, not initialisation)
       if (this.constVariables.has(name)) {
-        throw new CompileError(
-          `Cannot assign to const variable '${name}'`,
-          stmt.span,
-        );
+        throw new CompileError(`Cannot assign to const variable '${name}'`, stmt.span);
       }
       if (!isAssignable(valueType, existing)) {
         throw new CompileError(
@@ -640,7 +640,9 @@ export class Compiler {
         // a new ExpressionNode kind was added without a corresponding case.
         expr satisfies never;
         throw new CompileError(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           `Unrecognised expression kind: ${(expr as any).kind || 'unknown'}`,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (expr as any).span,
         );
       }

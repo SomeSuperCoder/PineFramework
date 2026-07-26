@@ -1119,8 +1119,8 @@ describe('StrategyEngine', () => {
 
       const pos = engine.getPosition();
       expect(pos.lots.length).toBe(2);
-      expect(pos.lots[0]!.quantity).toBe(1);  // First lot reduced from 3 to 1
-      expect(pos.lots[1]!.quantity).toBe(2);  // Second lot untouched
+      expect(pos.lots[0]!.quantity).toBe(1); // First lot reduced from 3 to 1
+      expect(pos.lots[1]!.quantity).toBe(2); // Second lot untouched
       expect(pos.quantity).toBe(3);
     });
 
@@ -1349,12 +1349,12 @@ describe('StrategyEngine', () => {
       engine.updateBar(2, 1002, 106, 106, 106, 106, 1000);
       let pending = engine.getPendingOrders();
       expect(pending.length).toBe(1);
-      expect(pending[0]!.stopPrice).toBeCloseTo(105.80, 1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(105.8, 1);
 
       // Bar 3: ratchets (high=108), stop=107.80
       engine.updateBar(3, 1003, 108, 108, 108, 108, 1000);
       pending = engine.getPendingOrders();
-      expect(pending[0]!.stopPrice).toBeCloseTo(107.80, 1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(107.8, 1);
 
       // Bar 4: triggers (low=107.50 <= 107.80)
       engine.updateBar(4, 1004, 107, 108, 107.5, 107.5, 1000);
@@ -1362,7 +1362,7 @@ describe('StrategyEngine', () => {
       expect(engine.getPosition().direction).toBe('flat');
       const trades = engine.getTrades();
       expect(trades.length).toBe(1);
-      expect(trades[0]!.exitPrice).toBeCloseTo(107.80, 1);
+      expect(trades[0]!.exitPrice).toBeCloseTo(107.8, 1);
     });
 
     it('6.5: should exit partial quantity simulating qty_percent across two bars', () => {
@@ -1382,12 +1382,12 @@ describe('StrategyEngine', () => {
       engine.updateBar(2, 1002, 108, 112, 106, 110, 1000);
 
       // Position reduced from 10 to 7
-      let pos = engine.getPosition();
+      const pos = engine.getPosition();
       expect(pos.quantity).toBe(7);
       expect(pos.direction).toBe('long');
 
       // TP2 was cancelled because TP1 filled (same OCA group)
-      let pending = engine.getPendingOrders();
+      const pending = engine.getPendingOrders();
       expect(pending.length).toBe(0);
 
       // Now place another TP for remaining 7
@@ -1452,7 +1452,7 @@ describe('StrategyEngine', () => {
       expect(pending.length).toBe(1);
       expect(pending[0]!.stopPrice).toBeDefined();
       // With highest=106, offset=20*0.01=0.20, stop = 106 - 0.20 = 105.80
-      expect(pending[0]!.stopPrice).toBeCloseTo(105.80, 1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(105.8, 1);
     });
 
     it('should ratchet stop up on new highs and not down', () => {
@@ -1475,12 +1475,12 @@ describe('StrategyEngine', () => {
       engine.updateBar(3, 1003, 108, 108, 108, 108, 1000);
       pending = engine.getPendingOrders();
       expect(pending[0]!.stopPrice).toBeGreaterThan(stopAfterBar2);
-      expect(pending[0]!.stopPrice).toBeCloseTo(107.80, 1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(107.8, 1);
 
       // Bar 4: lower high=107.9 (<108), low=107.9 above stop=107.80, stop should NOT go down
       engine.updateBar(4, 1004, 107.9, 107.9, 107.9, 107.9, 1000);
       pending = engine.getPendingOrders();
-      expect(pending[0]!.stopPrice).toBeCloseTo(107.80, 1);
+      expect(pending[0]!.stopPrice).toBeCloseTo(107.8, 1);
     });
 
     it('should trigger exit when price hits trailing stop', () => {
@@ -1506,7 +1506,7 @@ describe('StrategyEngine', () => {
       expect(engine.getPosition().direction).toBe('flat');
       const trades = engine.getTrades();
       expect(trades.length).toBe(1);
-      expect(trades[0]!.exitPrice).toBeCloseTo(107.80, 1);
+      expect(trades[0]!.exitPrice).toBeCloseTo(107.8, 1);
     });
   });
 });

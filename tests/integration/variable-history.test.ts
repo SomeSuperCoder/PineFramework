@@ -1,6 +1,9 @@
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Variable history via := operator', () => {
@@ -23,12 +26,29 @@ plot(x)`;
       volume: 1000,
     }));
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -62,16 +82,36 @@ plot(prev)`;
 
     const bars = Array.from({ length: 5 }, (_, i) => ({
       timestamp: 1700000000000 + i * 3600000,
-      open: 100 + i, high: 102 + i, low: 99 + i, close: 101 + i,
+      open: 100 + i,
+      high: 102 + i,
+      low: 99 + i,
+      close: 101 + i,
       volume: 1000,
     }));
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);

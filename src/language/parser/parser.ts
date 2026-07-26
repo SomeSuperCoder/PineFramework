@@ -1,6 +1,6 @@
 import { ParseError } from '../../common/errors.js';
 import type { ProgramNode } from './ast/nodes.js';
-import { extractVersion, Token, Tokenizer, TokenType } from './tokenizer.js';
+import { extractVersion, Token, Tokenizer } from './tokenizer.js';
 import { StatementParser } from './statement-parser.js';
 
 export interface ParseResult {

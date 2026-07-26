@@ -60,9 +60,7 @@ interface MismatchRecord {
 }
 
 /** Build id→title map from alertConditions array. */
-function buildIdToTitleMap(
-  conditions: Array<{ id: string; title: string }>,
-): Map<string, string> {
+function buildIdToTitleMap(conditions: Array<{ id: string; title: string }>): Map<string, string> {
   const map = new Map<string, string>();
   for (const c of conditions) map.set(c.id, c.title);
   return map;
@@ -150,17 +148,13 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     const triggerTitlesByBarIdx = new Map<number, string[]>();
     for (const t of triggers) {
       const title = idToTitle.get(t.alertId) ?? t.alertId;
-      if (!triggerTitlesByBarIdx.has(t.barIndex))
-        triggerTitlesByBarIdx.set(t.barIndex, []);
+      if (!triggerTitlesByBarIdx.has(t.barIndex)) triggerTitlesByBarIdx.set(t.barIndex, []);
       triggerTitlesByBarIdx.get(t.barIndex)!.push(title);
     }
 
     // Cross-validate every bar
     const mismatches: MismatchRecord[] = [];
-    const allBarIndices = new Set([
-      ...labelsByBarIdx.keys(),
-      ...triggerTitlesByBarIdx.keys(),
-    ]);
+    const allBarIndices = new Set([...labelsByBarIdx.keys(), ...triggerTitlesByBarIdx.keys()]);
 
     for (const barIdx of allBarIndices) {
       const barLabels = labelsByBarIdx.get(barIdx) ?? [];
@@ -237,12 +231,8 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     }
 
     console.log(`\n📋 ALL FLIP EVENTS (${flipEvents.length} total):`);
-    console.log(
-      'barIdx | timestamp           | dir | label | triggers',
-    );
-    console.log(
-      '-------+---------------------+-----+-------+-------------------------------',
-    );
+    console.log('barIdx | timestamp           | dir | label | triggers');
+    console.log('-------+---------------------+-----+-------+-------------------------------');
     for (const fe of flipEvents) {
       const ts = new Date(fe.timestamp).toISOString();
       const tStr = fe.triggerTitles.join(', ') || '(none)';
@@ -310,9 +300,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
       // Resolve tick trigger titles
       for (const tickT of tickTriggers) {
         const tickTitle = idToTitle.get(tickT.alertId) ?? tickT.alertId;
-        const matched = newConfirmTriggers.some(
-          (ct) => ct.alertId === tickT.alertId,
-        );
+        const matched = newConfirmTriggers.some((ct) => ct.alertId === tickT.alertId);
         if (!matched) {
           phantomTriggers++;
           console.log(
@@ -326,8 +314,8 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     if (phantomTriggers > 0) {
       console.log(
         '  (Note: phantom triggers from ticks are expected — forming candles\n' +
-        '   use speculative close values. FormingCandleManager._pendingNewTriggers\n' +
-        '   filters them out in production.)',
+          '   use speculative close values. FormingCandleManager._pendingNewTriggers\n' +
+          '   filters them out in production.)',
       );
     }
   });
@@ -365,9 +353,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
 
   it('should have all trigger barIndexes within [0, bars.length-1]', () => {
     const triggers = result.alertTriggers ?? [];
-    const outOfRange = triggers.filter(
-      (t) => t.barIndex < 0 || t.barIndex >= bars.length,
-    );
+    const outOfRange = triggers.filter((t) => t.barIndex < 0 || t.barIndex >= bars.length);
 
     if (outOfRange.length > 0) {
       console.log(`\n❌ Out-of-range barIndex in triggers:`);

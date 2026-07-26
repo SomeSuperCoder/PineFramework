@@ -233,7 +233,7 @@ describe('Kahan summation', () => {
   it('accumulates correctly with small values after large ones', () => {
     const acc = kahanZero();
     kahanAdd(acc, 1e12);
-    kahanAdd(acc, 1.0);           // lost with naive, preserved with Kahan
+    kahanAdd(acc, 1.0); // lost with naive, preserved with Kahan
     kahanAdd(acc, -1e12);
     expect(kahanValue(acc)).toBe(1.0);
   });

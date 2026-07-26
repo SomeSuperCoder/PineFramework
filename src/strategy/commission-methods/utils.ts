@@ -3,10 +3,7 @@
  * Extracted from commission-calculator.ts.
  */
 
-import type {
-  CommissionMethodSettings,
-  JupiterPairCategory,
-} from './types.js';
+import type { CommissionMethodSettings, JupiterPairCategory } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -70,10 +67,7 @@ export function calculateSolanaNetworkFee(
 // ---------------------------------------------------------------------------
 
 /** Maps each Jupiter pair category to its fee in basis points (1 bps = 0.01%). */
-export const JUPITER_FEE_BPS: Record<
-  Exclude<JupiterPairCategory, 'custom'>,
-  number
-> = {
+export const JUPITER_FEE_BPS: Record<Exclude<JupiterPairCategory, 'custom'>, number> = {
   jupiter_ecosystem: 0, // 0%
   pegged_asset: 0, // 0%
   sol_stable: 2, // 0.02%
@@ -88,27 +82,46 @@ export const JUPITER_FEE_BPS: Record<
 
 /** Recognised stablecoin symbols (uppercase). */
 const STABLECOINS = new Set([
-  'USDT', 'USDC', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'USD', 'USDE', 'FDUSD', 'USDD',
+  'USDT',
+  'USDC',
+  'DAI',
+  'BUSD',
+  'TUSD',
+  'FRAX',
+  'USD',
+  'USDE',
+  'FDUSD',
+  'USDD',
 ]);
 
 /** Recognised liquid-staking-token symbols (uppercase). */
-const LST_TOKENS = new Set([
-  'MSOL', 'STSOL', 'BSOL', 'JUPSOL',
-]);
+const LST_TOKENS = new Set(['MSOL', 'STSOL', 'BSOL', 'JUPSOL']);
 
 /** Jupiter ecosystem tokens (uppercase). */
-const JUPITER_ECOSYSTEM_TOKENS = new Set([
-  'JUP', 'JLP', 'JUPSOL',
-]);
+const JUPITER_ECOSYSTEM_TOKENS = new Set(['JUP', 'JLP', 'JUPSOL']);
 
 /**
  * Known quote-currency suffixes used to decompose exchange pair symbols.
  * Ordered longest-first to match greedily (e.g. "USDT" before "USD").
  */
 const KNOWN_QUOTE_CURRENCIES = [
-  'USDT', 'USDC', 'BUSD', 'FDUSD', 'USDD', 'TUSD', 'FRAX',
-  'USD', 'DAI',
-  'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'DOT',
+  'USDT',
+  'USDC',
+  'BUSD',
+  'FDUSD',
+  'USDD',
+  'TUSD',
+  'FRAX',
+  'USD',
+  'DAI',
+  'BTC',
+  'ETH',
+  'SOL',
+  'BNB',
+  'XRP',
+  'ADA',
+  'DOGE',
+  'DOT',
 ];
 
 type TokenType = 'jupiter_ecosystem' | 'sol' | 'lst' | 'stablecoin' | 'other';
@@ -128,9 +141,7 @@ function classifyToken(token: string): TokenType {
  * Handles both concatenated (e.g. "SOLUSDT") and separator-delimited
  * (e.g. "SOL/USDT", "SOL-USDT") formats.
  */
-export function parsePairSymbol(
-  symbol: string,
-): { base: string; quote: string } | undefined {
+export function parsePairSymbol(symbol: string): { base: string; quote: string } | undefined {
   // Try separator-based first
   const sepMatch = symbol.match(/^([A-Za-z0-9]+)[/_-]([A-Za-z0-9]+)$/);
   if (sepMatch) {

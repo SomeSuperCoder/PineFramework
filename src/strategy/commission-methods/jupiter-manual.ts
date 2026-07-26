@@ -9,11 +9,7 @@
  * See https://developers.jup.ag/docs/swap
  */
 
-import type {
-  TradeContext,
-  CommissionConfig,
-  CommissionCalculator,
-} from './types.js';
+import type { TradeContext, CommissionConfig, CommissionCalculator } from './types.js';
 import { getDexFeeBps, calculateSolanaNetworkFee } from './utils.js';
 
 class JupiterManualCalculator implements CommissionCalculator {

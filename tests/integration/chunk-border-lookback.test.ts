@@ -133,4 +133,31 @@ describe('Chunk border lookback', () => {
     expect(engine.runtimeSeriesLookback).toBeGreaterThanOrEqual(70);
     expect(engine.getMaxLookback()).toBeGreaterThanOrEqual(70);
   });
+
+  it('plotColors boundary region has valid values with sufficient context', () => {
+    const allBars = createTrendingBars(400, 80);
+
+    // Execute with full context (200 new + 200 context)
+    const contextBars = allBars.slice(0, 200);
+    const newBars = allBars.slice(200);
+    const { engine, result } = runEngine(source, [...newBars, ...contextBars]);
+    expect(result.success).toBe(true);
+
+    // Find the visible basis plot color key
+    const plotColors = result.plotColors;
+    expect(plotColors).toBeDefined();
+    const keys = Array.from(plotColors!.keys());
+    expect(keys.length).toBeGreaterThan(0);
+    // Use the first key that's not the hidden Price plot
+    const basisKey = keys.find((k) => !k.startsWith('Price')) ?? keys[0];
+    const basisColors = plotColors!.get(basisKey);
+    expect(basisColors).toBeDefined();
+    expect(basisColors!.length).toBe(400);
+
+    // Boundary region (200-400) should have mostly valid colors
+    // (at most a few nulls from the very start of the warmup)
+    const boundaryColors = basisColors!.slice(200, 400);
+    const nullCount = boundaryColors.filter((c) => c === null).length;
+    expect(nullCount).toBeLessThanOrEqual(5);
+  });
 });

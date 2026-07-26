@@ -21,6 +21,7 @@ function stableRound(value: number, precision: number): number {
 }
 
 export function registerMathBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('math.max', (...args: PineValue[]): PineValue => {

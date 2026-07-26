@@ -38,13 +38,41 @@ interface ExecMsg {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
-  shapes: Array<{ style: string; location: string; color: string; time: number; text: string; price?: number; overlay?: boolean }>;
+  shapes: Array<{
+    style: string;
+    location: string;
+    color: string;
+    time: number;
+    text: string;
+    price?: number;
+    overlay?: boolean;
+  }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<any>;
   bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
-  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
-  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
+  lines?: Array<{
+    points: Array<{ time: number; price: number }>;
+    color: string;
+    width?: number;
+    style?: string;
+  }>;
+  labels?: Array<{
+    time: number;
+    price: number;
+    text: string;
+    color?: string;
+    textColor?: string;
+    style?: string;
+    size?: string;
+  }>;
+  boxes?: Array<{
+    startTime: number;
+    startPrice: number;
+    endTime: number;
+    endPrice: number;
+    borderColor?: string;
+    backgroundColor?: string;
+  }>;
   barTimestamps?: number[];
   formingCandle?: boolean;
   alertConditions?: Array<any>;
@@ -54,7 +82,16 @@ interface ExecMsg {
   hiddenPlotKeys?: string[];
 }
 
-const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
+const COLORS = [
+  '#2196f3',
+  '#ff9800',
+  '#4caf50',
+  '#e91e63',
+  '#9c27b0',
+  '#00bcd4',
+  '#ff5722',
+  '#607d8b',
+];
 
 function buildScriptResult(
   overlay: boolean,
@@ -87,59 +124,95 @@ function buildScriptResult(
     const lwMatch = key.match(/__lw:(\d+)/);
     const styleMatch = key.match(/__style:([^_]+)/);
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    const plotStyle = (styleMatch ? styleMatch[1] : 'line');
+    const plotStyle = styleMatch ? styleMatch[1] : 'line';
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const perBarColors = plotColors?.[key];
     if (!plotColor) plotColor = COLORS[colorIndex % COLORS.length];
     colorIndex++;
-    const mappedData = values
-      .map((v, i) => {
-        const ts = getTimestamp(i);
-        if (ts === undefined) return null;
-        let numValue: number | null;
-        if (v === null || v === undefined) numValue = null;
-        else if (typeof v === 'boolean') numValue = v ? 1 : 0;
-        else if (typeof v === 'number') numValue = v;
-        else numValue = null;
-        return { time: Math.floor(ts / 1000), value: numValue, color: perBarColors?.[i] ?? undefined };
-      });
+    const mappedData = values.map((v, i) => {
+      const ts = getTimestamp(i);
+      if (ts === undefined) return null;
+      let numValue: number | null;
+      if (v === null || v === undefined) numValue = null;
+      else if (typeof v === 'boolean') numValue = v ? 1 : 0;
+      else if (typeof v === 'number') numValue = v;
+      else numValue = null;
+      return {
+        time: Math.floor(ts / 1000),
+        value: numValue,
+        color: perBarColors?.[i] ?? undefined,
+      };
+    });
     plotData.push({
-      type: plotStyle, data: mappedData.filter((d): any => d !== null),
-      color: plotColor, lineWidth, title,
+      type: plotStyle,
+      data: mappedData.filter((d): any => d !== null),
+      color: plotColor,
+      lineWidth,
+      title,
     });
   }
 
-  const stripMeta = (s: string) => s.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '').trim();
+  const stripMeta = (s: string) =>
+    s
+      .replace(/__lw:\d+/g, '')
+      .replace(/__style:[^_]+/g, '')
+      .trim();
   const hiddenPlotTitlesList: string[] = (hiddenPlotKeys || []).map((key) => stripMeta(key));
 
   return {
     overlay,
     plots: plotData,
     shapes: (shapes || []).map((s) => ({
-      type: s.style as any, time: Math.floor(s.time / 1000), price: s.price ?? 0,
-      color: s.color, text: s.text, textcolor: s.textcolor,
-      location: s.location as any, overlay: s.overlay,
+      type: s.style as any,
+      time: Math.floor(s.time / 1000),
+      price: s.price ?? 0,
+      color: s.color,
+      text: s.text,
+      textcolor: s.textcolor,
+      location: s.location as any,
+      overlay: s.overlay,
     })),
     lines: (lines || []).map((l) => ({
       points: l.points.map((p: any) => ({ time: Math.floor(p.time / 1000), price: p.price })),
-      color: l.color, width: l.width,
+      color: l.color,
+      width: l.width,
       style: l.style as 'solid' | 'dotted' | 'dashed' | undefined,
     })),
     labels: (labels || []).map((l) => ({
-      time: Math.floor(l.time / 1000), price: l.price, text: l.text,
-      color: l.color, textColor: l.textColor, style: l.style, size: l.size,
+      time: Math.floor(l.time / 1000),
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textColor,
+      style: l.style,
+      size: l.size,
     })),
-    fills: (fills || []).map((f) => ({ from: stripMeta(f.from), to: stripMeta(f.to), color: f.color })),
+    fills: (fills || []).map((f) => ({
+      from: stripMeta(f.from),
+      to: stripMeta(f.to),
+      color: f.color,
+    })),
     fillColorData: fillColorData || {},
     plotColors: plotColors || {},
     strategyMarkers: (strategyMarkers || []).map((m: any) => ({ ...m })),
     bgcolor: (bgcolor || []).map((b: any) => ({ time: Math.floor(b.time / 1000), color: b.color })),
-    alertConditions: (alertConditions || []).map((a: any) => ({ id: a.id, title: a.title, message: a.message })),
-    alertTriggers: (alertTriggers || []).map((t: any) => ({ alertId: t.alertId, barIndex: t.barIndex, timestamp: t.timestamp })),
+    alertConditions: (alertConditions || []).map((a: any) => ({
+      id: a.id,
+      title: a.title,
+      message: a.message,
+    })),
+    alertTriggers: (alertTriggers || []).map((t: any) => ({
+      alertId: t.alertId,
+      barIndex: t.barIndex,
+      timestamp: t.timestamp,
+    })),
     boxes: (boxes || []).map((b: any) => ({
-      startTime: Math.floor(b.startTime / 1000), startPrice: b.startPrice,
-      endTime: Math.floor(b.endTime / 1000), endPrice: b.endPrice,
-      borderColor: b.borderColor, backgroundColor: b.backgroundColor,
+      startTime: Math.floor(b.startTime / 1000),
+      startPrice: b.startPrice,
+      endTime: Math.floor(b.endTime / 1000),
+      endPrice: b.endPrice,
+      borderColor: b.borderColor,
+      backgroundColor: b.backgroundColor,
     })),
     tables: tables || [],
     hiddenPlotTitles: hiddenPlotTitlesList.length > 0 ? hiddenPlotTitlesList : undefined,
@@ -154,62 +227,116 @@ function mergeDiffIntoResult(prev: ScriptResult, msg: ExecMsg): ScriptResult {
     });
     if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
       const diffValue = msg.outputs[diffKey]![0];
-      const numValue = diffValue === null || diffValue === undefined ? null
-        : typeof diffValue === 'boolean' ? (diffValue ? 1 : 0)
-        : typeof diffValue === 'number' ? diffValue : null;
+      const numValue =
+        diffValue === null || diffValue === undefined
+          ? null
+          : typeof diffValue === 'boolean'
+            ? diffValue
+              ? 1
+              : 0
+            : typeof diffValue === 'number'
+              ? diffValue
+              : null;
       const perBarColors = msg.plotColors?.[diffKey];
-      const color = perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
+      const color =
+        perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
       const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
       if (isNewBar) {
         const rawTime = msg.barTimestamps?.[msg.barIndex];
-        const newTime = rawTime !== undefined ? Math.floor(rawTime / 1000) : (plot.data[plot.data.length - 1]?.time ?? 0);
+        const newTime =
+          rawTime !== undefined
+            ? Math.floor(rawTime / 1000)
+            : (plot.data[plot.data.length - 1]?.time ?? 0);
         return { ...plot, data: [...plot.data, { time: newTime, value: numValue, color }] };
       }
       const lastEntry = plot.data[plot.data.length - 1];
       if (lastEntry) {
-        return { ...plot, data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }] };
+        return {
+          ...plot,
+          data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
+        };
       }
     } else if ((msg.barIndex ?? 0) >= plot.data.length && plot.data.length > 0) {
       const lastEntry = plot.data[plot.data.length - 1];
-      const rawTime = msg.barTimestamps?.[msg.barIndex] ?? (lastEntry?.time ?? 0);
+      const rawTime = msg.barTimestamps?.[msg.barIndex] ?? lastEntry?.time ?? 0;
       const newTime = Math.floor(rawTime / 1000);
-      return { ...plot, data: [...plot.data, { time: newTime, value: lastEntry?.value ?? null, color: lastEntry?.color }] };
+      return {
+        ...plot,
+        data: [
+          ...plot.data,
+          { time: newTime, value: lastEntry?.value ?? null, color: lastEntry?.color },
+        ],
+      };
     }
     return plot;
   });
 
   const diffShapes = (msg.shapes || []).map((s: any) => ({
-    type: s.style as any, time: Math.floor(s.time / 1000), price: 0,
-    color: s.color, text: s.text, location: s.location as any,
+    type: s.style as any,
+    time: Math.floor(s.time / 1000),
+    price: 0,
+    color: s.color,
+    text: s.text,
+    location: s.location as any,
   }));
-  const mergedShapes = diffShapes.length > 0
-    ? [...prev.shapes.filter((s: any) => !diffShapes.some((d: any) => d.time === s.time)), ...diffShapes]
-    : prev.shapes;
+  const mergedShapes =
+    diffShapes.length > 0
+      ? [
+          ...prev.shapes.filter((s: any) => !diffShapes.some((d: any) => d.time === s.time)),
+          ...diffShapes,
+        ]
+      : prev.shapes;
 
   const diffLines = (msg.lines || []).map((l: any) => ({
     points: l.points.map((p: any) => ({ time: Math.floor(p.time / 1000), price: p.price })),
-    color: l.color, width: l.width, style: l.style as any,
+    color: l.color,
+    width: l.width,
+    style: l.style as any,
   }));
-  const mergedLines = diffLines.length > 0
-    ? [...prev.lines.filter((l: any) => !diffLines.some((d: any) => d.points[0]?.time === l.points[0]?.time)), ...diffLines]
-    : prev.lines;
+  const mergedLines =
+    diffLines.length > 0
+      ? [
+          ...prev.lines.filter(
+            (l: any) => !diffLines.some((d: any) => d.points[0]?.time === l.points[0]?.time),
+          ),
+          ...diffLines,
+        ]
+      : prev.lines;
 
   const diffLabels = (msg.labels || []).map((l: any) => ({
-    time: Math.floor(l.time / 1000), price: l.price, text: l.text,
-    color: l.color, textColor: l.textColor, style: l.style, size: l.size,
+    time: Math.floor(l.time / 1000),
+    price: l.price,
+    text: l.text,
+    color: l.color,
+    textColor: l.textColor,
+    style: l.style,
+    size: l.size,
   }));
-  const mergedLabels = diffLabels.length > 0
-    ? [...prev.labels.filter((l: any) => !diffLabels.some((d: any) => d.time === l.time)), ...diffLabels]
-    : prev.labels;
+  const mergedLabels =
+    diffLabels.length > 0
+      ? [
+          ...prev.labels.filter((l: any) => !diffLabels.some((d: any) => d.time === l.time)),
+          ...diffLabels,
+        ]
+      : prev.labels;
 
   const diffBoxes = (msg.boxes || []).map((b: any) => ({
-    startTime: Math.floor(b.startTime / 1000), startPrice: b.startPrice,
-    endTime: Math.floor(b.endTime / 1000), endPrice: b.endPrice,
-    borderColor: b.borderColor, backgroundColor: b.backgroundColor,
+    startTime: Math.floor(b.startTime / 1000),
+    startPrice: b.startPrice,
+    endTime: Math.floor(b.endTime / 1000),
+    endPrice: b.endPrice,
+    borderColor: b.borderColor,
+    backgroundColor: b.backgroundColor,
   }));
-  const mergedBoxes = diffBoxes.length > 0
-    ? [...(prev.boxes || []).filter((b: any) => !diffBoxes.some((d: any) => d.startTime === b.startTime)), ...diffBoxes]
-    : (prev.boxes || []);
+  const mergedBoxes =
+    diffBoxes.length > 0
+      ? [
+          ...(prev.boxes || []).filter(
+            (b: any) => !diffBoxes.some((d: any) => d.startTime === b.startTime),
+          ),
+          ...diffBoxes,
+        ]
+      : prev.boxes || [];
 
   return {
     ...prev,
@@ -223,12 +350,23 @@ function mergeDiffIntoResult(prev: ScriptResult, msg: ExecMsg): ScriptResult {
 
 // ---- Fixture helpers ----
 
-function loadBars(): { timestamp: number; open: number; high: number; low: number; close: number; volume: number }[] {
+function loadBars(): {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}[] {
   const raw = JSON.parse(fs.readFileSync('./tests/fixtures/solusdt-5m-jul17.json', 'utf-8'));
   if (raw.retCode !== 0) throw new Error(`Bybit API error: ${raw.retMsg}`);
   return raw.result.list.reverse().map((k: any[]) => ({
-    timestamp: Number(k[0]), open: Number(k[1]), high: Number(k[2]),
-    low: Number(k[3]), close: Number(k[4]), volume: Number(k[5]),
+    timestamp: Number(k[0]),
+    open: Number(k[1]),
+    high: Number(k[2]),
+    low: Number(k[3]),
+    close: Number(k[4]),
+    volume: Number(k[5]),
   }));
 }
 
@@ -237,11 +375,26 @@ function buildContexts(bars: ReturnType<typeof loadBars>): ExecutionContext[] {
     barIndex: i,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -270,30 +423,57 @@ describe('Q-Trend real-time plot/shape correctness', () => {
       for (const [key, colors] of httpResult.plotColors) plotColors[key] = Array.from(colors);
     }
 
-    const httpShapes = httpResult.shapes as any[] || [];
+    const httpShapes = (httpResult.shapes as any[]) || [];
     const httpLines = (httpResult.lines || []).map((l: any) => ({
       points: [
-        { time: l.xloc === 'bar_index' ? (httpResult.barTimestamps?.[l.x1] ?? l.x1) : l.x1, price: l.y1 },
-        { time: l.xloc === 'bar_index' ? (httpResult.barTimestamps?.[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+        {
+          time: l.xloc === 'bar_index' ? (httpResult.barTimestamps?.[l.x1] ?? l.x1) : l.x1,
+          price: l.y1,
+        },
+        {
+          time: l.xloc === 'bar_index' ? (httpResult.barTimestamps?.[l.x2] ?? l.x2) : l.x2,
+          price: l.y2,
+        },
       ],
-      color: l.color, width: l.width,
-      style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
+      color: l.color,
+      width: l.width,
+      style:
+        l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
     }));
     const httpLabels = (httpResult.labels || []).map((l: any) => ({
-      time: l.time, price: l.price, text: l.text,
-      color: l.color, textColor: l.textcolor, style: l.style, size: l.size,
+      time: l.time,
+      price: l.price,
+      text: l.text,
+      color: l.color,
+      textColor: l.textcolor,
+      style: l.style,
+      size: l.size,
     }));
 
     const initialResult = buildScriptResult(
-      httpResult.overlay, outputs, httpShapes, httpResult.fills || [],
-      httpResult.strategyMarkers || [], testBars, httpResult.bgcolor,
-      plotColors, undefined, httpLines, httpLabels,
-      httpResult.barTimestamps, httpResult.alertConditions, httpResult.alertTriggers,
-      httpResult.boxes, httpResult.tables, httpResult.hiddenPlotKeys,
+      httpResult.overlay,
+      outputs,
+      httpShapes,
+      httpResult.fills || [],
+      httpResult.strategyMarkers || [],
+      testBars,
+      httpResult.bgcolor,
+      plotColors,
+      undefined,
+      httpLines,
+      httpLabels,
+      httpResult.barTimestamps,
+      httpResult.alertConditions,
+      httpResult.alertTriggers,
+      httpResult.boxes,
+      httpResult.tables,
+      httpResult.hiddenPlotKeys,
     );
 
     console.log(`\n=== Phase 1: Initial HTTP (${testBars.length} bars) ===`);
-    console.log(`Plots (trend line) data length: ${initialResult.plots.find((p: any) => p.title === 'trend line')?.data?.length ?? 'MISSING'}`);
+    console.log(
+      `Plots (trend line) data length: ${initialResult.plots.find((p: any) => p.title === 'trend line')?.data?.length ?? 'MISSING'}`,
+    );
     console.log(`Shapes (labels/arrows) count: ${initialResult.shapes.length}`);
 
     const trendLinePlot = initialResult.plots.find((p: any) => p.title === 'trend line');
@@ -310,7 +490,9 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     // Verify: the trend line has a value for the bar immediately before each shape
     const shapeTimestamps = new Set(initialResult.shapes.map((s: any) => s.time));
     const trendLineTimestamps = new Set(trendLinePlot.data.map((d: any) => d.time));
-    const shapesWithoutTrend = initialResult.shapes.filter((s: any) => !trendLineTimestamps.has(s.time));
+    const shapesWithoutTrend = initialResult.shapes.filter(
+      (s: any) => !trendLineTimestamps.has(s.time),
+    );
     console.log(`\nShapes at timestamps NOT in trend line: ${shapesWithoutTrend.length}`);
     for (const s of shapesWithoutTrend.slice(0, 5)) {
       console.log(`  time=${s.time} text="${s.text}"`);
@@ -330,7 +512,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
       // equals the NEW length (not the old length). This is the same-index
       // for all ticks of the same forming candle.
       const tickCtx: ExecutionContext = {
-        barIndex: testBars.length,        // index of the new forming bar
+        barIndex: testBars.length, // index of the new forming bar
         barCount: testBars.length + 1,
         timestamp: newBarTimestamp,
         open: createSeries('open', [lastBar.close]),
@@ -348,28 +530,47 @@ describe('Q-Trend real-time plot/shape correctness', () => {
         overlay: tickResult.overlay,
         outputs: tickResult.diffOutputs as any,
         shapes: tickResult.diffShapes.map((s: any) => ({
-          style: s.style, location: s.location, color: s.color,
-          time: s.time, text: s.text, overlay: s.overlay ?? true,
+          style: s.style,
+          location: s.location,
+          color: s.color,
+          time: s.time,
+          text: s.text,
+          overlay: s.overlay ?? true,
         })),
         fills: tickResult.diffFills,
         strategyMarkers: [],
         lines: tickResult.diffLines.map((l: any) => ({
           points: [
-            { time: l.xloc === 'bar_index' ? (tickResult.barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
-            { time: l.xloc === 'bar_index' ? (tickResult.barTimestamps[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+            {
+              time: l.xloc === 'bar_index' ? (tickResult.barTimestamps[l.x1] ?? l.x1) : l.x1,
+              price: l.y1,
+            },
+            {
+              time: l.xloc === 'bar_index' ? (tickResult.barTimestamps[l.x2] ?? l.x2) : l.x2,
+              price: l.y2,
+            },
           ],
-          color: l.color, width: l.width,
-          style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
+          color: l.color,
+          width: l.width,
+          style:
+            l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
         })),
         labels: tickResult.diffLabels.map((l: any) => ({
-          time: l.time, price: l.price, text: l.text,
-          color: l.color, textColor: l.textcolor, style: l.style, size: l.size,
+          time: l.time,
+          price: l.price,
+          text: l.text,
+          color: l.color,
+          textColor: l.textcolor,
+          style: l.style,
+          size: l.size,
         })),
         boxes: [],
         barTimestamps: tickResult.barTimestamps,
         barIndex: tickResult.barIndex,
         formingCandle: true,
-        alertConditions: [], alertTriggers: [], tables: [],
+        alertConditions: [],
+        alertTriggers: [],
+        tables: [],
       };
 
       mergedResult = mergeDiffIntoResult(mergedResult, tickMsg);
@@ -391,13 +592,15 @@ describe('Q-Trend real-time plot/shape correctness', () => {
 
     // Debug: what new shapes got added during ticks?
     const newShapes = mergedResult.shapes.filter(
-      (s: any) => !initialResult.shapes.some((is: any) => is.time === s.time && is.type === s.type)
+      (s: any) => !initialResult.shapes.some((is: any) => is.time === s.time && is.type === s.type),
     );
     console.log(`New shapes added during ticks: ${newShapes.length}`);
     for (const ns of newShapes) {
       console.log(`  time=${ns.time} type=${ns.type} text="${ns.text}"`);
       const matchingTrend = trendAfterTicks.data.find((d: any) => d.time === ns.time);
-      console.log(`  → matching trend point: ${matchingTrend ? `YES (value=${matchingTrend.value})` : 'NO'}`);
+      console.log(
+        `  → matching trend point: ${matchingTrend ? `YES (value=${matchingTrend.value})` : 'NO'}`,
+      );
     }
 
     // Check no shapes lost their trend line neighbor
@@ -445,28 +648,54 @@ describe('Q-Trend real-time plot/shape correctness', () => {
       overlay: confirmResult.overlay,
       indicatorId: 'test',
       outputs: confirmOutputs,
-      shapes: (confirmResult.shapes as any[] || []).map((s: any) => ({
-        style: s.style, location: s.location, color: s.color,
-        time: s.time, text: s.text, overlay: s.overlay,
+      shapes: ((confirmResult.shapes as any[]) || []).map((s: any) => ({
+        style: s.style,
+        location: s.location,
+        color: s.color,
+        time: s.time,
+        text: s.text,
+        overlay: s.overlay,
       })),
       fills: confirmResult.fills || [],
       strategyMarkers: confirmResult.strategyMarkers || [],
       lines: (confirmResult.lines || []).map((l: any) => ({
         points: [
-          { time: l.xloc === 'bar_index' ? (confirmResult.barTimestamps?.[l.x1] ?? l.x1) : l.x1, price: l.y1 },
-          { time: l.xloc === 'bar_index' ? (confirmResult.barTimestamps?.[l.x2] ?? l.x2) : l.x2, price: l.y2 },
+          {
+            time: l.xloc === 'bar_index' ? (confirmResult.barTimestamps?.[l.x1] ?? l.x1) : l.x1,
+            price: l.y1,
+          },
+          {
+            time: l.xloc === 'bar_index' ? (confirmResult.barTimestamps?.[l.x2] ?? l.x2) : l.x2,
+            price: l.y2,
+          },
         ],
-        color: l.color, width: l.width,
-        style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
+        color: l.color,
+        width: l.width,
+        style:
+          l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
       })),
       labels: (confirmResult.labels || []).map((l: any) => ({
-        time: l.time, price: l.price, text: l.text,
-        color: l.color, textColor: l.textcolor, style: l.style, size: l.size,
+        time: l.time,
+        price: l.price,
+        text: l.text,
+        color: l.color,
+        textColor: l.textcolor,
+        style: l.style,
+        size: l.size,
       })),
       boxes: (confirmResult.boxes || []).map((b: any) => ({
-        startTime: b.left < (confirmResult.barTimestamps?.length ?? 0) ? (confirmResult.barTimestamps?.[b.left] ?? 0) : 0,
-        startPrice: b.top, endTime: b.right < (confirmResult.barTimestamps?.length ?? 0) ? (confirmResult.barTimestamps?.[b.right] ?? 0) : 0,
-        endPrice: b.bottom, borderColor: b.border_color, backgroundColor: b.bgcolor,
+        startTime:
+          b.left < (confirmResult.barTimestamps?.length ?? 0)
+            ? (confirmResult.barTimestamps?.[b.left] ?? 0)
+            : 0,
+        startPrice: b.top,
+        endTime:
+          b.right < (confirmResult.barTimestamps?.length ?? 0)
+            ? (confirmResult.barTimestamps?.[b.right] ?? 0)
+            : 0,
+        endPrice: b.bottom,
+        borderColor: b.border_color,
+        backgroundColor: b.bgcolor,
       })),
       barTimestamps: confirmResult.barTimestamps,
       barIndex: confirmResult.barTimestamps ? confirmResult.barTimestamps.length - 1 : 0,
@@ -481,11 +710,23 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     // it would go through buildScriptResult (full replacement).
     // But first let's check what the full replacement produces:
     const confirmedResult = buildScriptResult(
-      confirmMsg.overlay, confirmMsg.outputs, confirmMsg.shapes, confirmMsg.fills,
-      confirmMsg.strategyMarkers, extendedBars, confirmMsg.bgcolor,
-      confirmColors, undefined, confirmMsg.lines, confirmMsg.labels,
-      confirmMsg.barTimestamps, confirmMsg.alertConditions, confirmMsg.alertTriggers,
-      confirmMsg.boxes, confirmMsg.tables, confirmMsg.hiddenPlotKeys,
+      confirmMsg.overlay,
+      confirmMsg.outputs,
+      confirmMsg.shapes,
+      confirmMsg.fills,
+      confirmMsg.strategyMarkers,
+      extendedBars,
+      confirmMsg.bgcolor,
+      confirmColors,
+      undefined,
+      confirmMsg.lines,
+      confirmMsg.labels,
+      confirmMsg.barTimestamps,
+      confirmMsg.alertConditions,
+      confirmMsg.alertTriggers,
+      confirmMsg.boxes,
+      confirmMsg.tables,
+      confirmMsg.hiddenPlotKeys,
     );
 
     console.log(`\n=== Phase 3a: Confirmed bar full replacement (indicator WS) ===`);
@@ -500,7 +741,9 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     // Check orphans
     const shapeTimesConfirmed = new Set(confirmedResult.shapes.map((s: any) => s.time));
     const trendTimesConfirmed = new Set(trendConfirmed.data.map((d: any) => d.time));
-    const orphansConfirmed = confirmedResult.shapes.filter((s: any) => !trendTimesConfirmed.has(s.time));
+    const orphansConfirmed = confirmedResult.shapes.filter(
+      (s: any) => !trendTimesConfirmed.has(s.time),
+    );
     console.log(`Shapes at timestamps NOT in trend line: ${orphansConfirmed.length}`);
     if (orphansConfirmed.length > 0) {
       console.log(`  First 5 orphans:`);
@@ -511,7 +754,9 @@ describe('Q-Trend real-time plot/shape correctness', () => {
           .map((d: any) => ({ time: d.time, diff: Math.abs(d.time - o.time) }))
           .sort((a: any, b: any) => a.diff - b.diff)
           .slice(0, 3);
-        console.log(`    Nearest trend line timestamps: ${nearest.map((n: any) => `${n.time} (diff=${n.diff})`).join(', ')}`);
+        console.log(
+          `    Nearest trend line timestamps: ${nearest.map((n: any) => `${n.time} (diff=${n.diff})`).join(', ')}`,
+        );
       }
     }
     // Currently we expect 0 orphans — this is the invariant the user expects
@@ -546,14 +791,26 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     // 3. Then apply a full replacement via buildScriptResult
     // 4. Check orphans again
     console.log(`\n=== Scenario: mergeDiff then full replacement ===`);
-    
+
     // Already did ticks above (mergedResult), now apply full replacement
     const fullResult = buildScriptResult(
-      confirmMsg.overlay, confirmMsg.outputs, confirmMsg.shapes, confirmMsg.fills,
-      confirmMsg.strategyMarkers, extendedBars, confirmMsg.bgcolor,
-      confirmColors, undefined, confirmMsg.lines, confirmMsg.labels,
-      confirmMsg.barTimestamps, confirmMsg.alertConditions, confirmMsg.alertTriggers,
-      confirmMsg.boxes, confirmMsg.tables, confirmMsg.hiddenPlotKeys,
+      confirmMsg.overlay,
+      confirmMsg.outputs,
+      confirmMsg.shapes,
+      confirmMsg.fills,
+      confirmMsg.strategyMarkers,
+      extendedBars,
+      confirmMsg.bgcolor,
+      confirmColors,
+      undefined,
+      confirmMsg.lines,
+      confirmMsg.labels,
+      confirmMsg.barTimestamps,
+      confirmMsg.alertConditions,
+      confirmMsg.alertTriggers,
+      confirmMsg.boxes,
+      confirmMsg.tables,
+      confirmMsg.hiddenPlotKeys,
     );
 
     const trendFull = fullResult.plots.find((p: any) => p.title === 'trend line');

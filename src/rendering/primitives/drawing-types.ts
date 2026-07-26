@@ -2,7 +2,7 @@
  * Drawing object types for Pine Script runtime.
  * Extracted from drawing-engine.ts for reusability.
  */
-import type { PineColor, ColorInput } from '../../config/color-system.js';
+import type { PineColor } from '../../config/color-system.js';
 import type {
   LineStyle,
   ExtendDirection,

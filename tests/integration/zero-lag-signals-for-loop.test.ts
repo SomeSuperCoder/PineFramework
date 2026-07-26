@@ -248,9 +248,7 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     // After warmup, values should be in a reasonable range around price
     for (let i = 300; i < 320; i++) {
       if (basisValues[i] !== null) {
-        expect(Math.abs(basisValues[i]! - bars[i].close)).toBeLessThan(
-          bars[i].close * 0.5,
-        );
+        expect(Math.abs(basisValues[i]! - bars[i].close)).toBeLessThan(bars[i].close * 0.5);
       }
     }
   });
@@ -275,7 +273,9 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     if (result.shapes.length > 0) {
       console.log(`Found ${result.shapes.length} shapes`);
       for (const shape of result.shapes.slice(0, 5)) {
-        console.log(`  shape: style=${shape.style} location=${shape.location} text="${shape.text}" color=${shape.color}`);
+        console.log(
+          `  shape: style=${shape.style} location=${shape.location} text="${shape.text}" color=${shape.color}`,
+        );
       }
     }
   });

@@ -1,7 +1,4 @@
-import type {
-  CommissionCalculator,
-  CommissionConfig,
-} from './commission-calculator.js';
+import type { CommissionCalculator, CommissionConfig } from './commission-calculator.js';
 import {
   getCommissionCalculator,
   isLongOnlyEnforced,
@@ -11,19 +8,15 @@ import { computeMetrics } from './strategy-metrics.js';
 import {
   DEFAULT_STRATEGY_CONFIG,
   type OrderDirection,
-  type OrderAction,
   type OrderType,
-  type PositionDirection,
   type Account,
   type Order,
   type FilledOrder,
-  type PositionLot,
   type Position,
   type Trade,
   type StrategyConfig,
   type TrailingStopState,
   type StrategyMarker,
-  type MarketFillPrice,
 } from './strategy-types.js';
 import { TrailingStopManager } from './trailing-stop-manager.js';
 
@@ -39,7 +32,6 @@ export type {
   Position,
   Account,
   OrderDirection,
-  OrderAction,
   OrderType,
   PositionDirection,
   QtyType,
@@ -60,14 +52,11 @@ export class StrategyEngine {
   private barIndex: number;
   private timestamp: number;
   private currentPrice: number;
-  private high: number;
-  private low: number;
   private entries: number;
   private commissionCalculator: CommissionCalculator | undefined;
   private commissionConfig: CommissionConfig | undefined;
   private _lastMarkerCount: number = 0;
   private _nextOrderId: number = 0;
-  private _nextOcaGroupId: number = 0;
 
   // Track best/worst prices during an open position for MAE/MFE calculation.
   // These are updated on every bar while a position is open.
@@ -119,8 +108,6 @@ export class StrategyEngine {
     this.barIndex = 0;
     this.timestamp = 0;
     this.currentPrice = 0;
-    this.high = 0;
-    this.low = 0;
     this.entries = 0;
   }
 
@@ -305,7 +292,10 @@ export class StrategyEngine {
           .filter((l) => l.entryName === fromEntry)
           .reduce((sum, l) => sum + l.quantity, 0);
         if (matchingQty <= 0) return undefined;
-        exitQuantity = Math.min(quantity === this.position.quantity ? matchingQty : quantity, matchingQty);
+        exitQuantity = Math.min(
+          quantity === this.position.quantity ? matchingQty : quantity,
+          matchingQty,
+        );
       } else {
         exitQuantity = Math.min(quantity, this.position.quantity);
       }
@@ -321,9 +311,19 @@ export class StrategyEngine {
 
     const hasStop = stopPrice !== undefined && stopPrice > 0;
     const hasLimit = limitPrice !== undefined && limitPrice > 0;
-    const hasTrail = (trailPrice !== undefined && trailPrice > 0) || (trailOffset !== undefined && trailOffset > 0);
+    const hasTrail =
+      (trailPrice !== undefined && trailPrice > 0) ||
+      (trailOffset !== undefined && trailOffset > 0);
     const orderType: OrderType =
-      hasStop && hasLimit ? 'stop-limit' : hasStop ? 'stop' : hasLimit ? 'limit' : hasTrail ? 'stop' : 'market';
+      hasStop && hasLimit
+        ? 'stop-limit'
+        : hasStop
+          ? 'stop'
+          : hasLimit
+            ? 'limit'
+            : hasTrail
+              ? 'stop'
+              : 'market';
 
     if (orderType === 'market' && price === 0) {
       price = this.currentPrice;
@@ -344,9 +344,10 @@ export class StrategyEngine {
       barIndex: this.barIndex,
       slippage: this.config.slippage,
       commission: this.config.commission,
-      ocaGroup: orderType !== 'market' && this.position.direction !== 'flat'
-        ? `oca_${this.position.entryName}`
-        : undefined,
+      ocaGroup:
+        orderType !== 'market' && this.position.direction !== 'flat'
+          ? `oca_${this.position.entryName}`
+          : undefined,
       trailPrice,
       trailOffset,
       fromEntry,
@@ -564,7 +565,13 @@ export class StrategyEngine {
         this.openOrAddPosition('long', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         // Closing/reducing a short position
-        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName, order.fromEntry);
+        this.closeOrReducePosition(
+          order.quantity,
+          adjustedPrice,
+          commission,
+          order.entryName,
+          order.fromEntry,
+        );
       }
     } else {
       if (isFlat || this.position.direction === 'short') {
@@ -572,7 +579,13 @@ export class StrategyEngine {
         this.openOrAddPosition('short', order.quantity, adjustedPrice, commission, order.entryName);
       } else {
         // Closing/reducing a long position
-        this.closeOrReducePosition(order.quantity, adjustedPrice, commission, order.entryName, order.fromEntry);
+        this.closeOrReducePosition(
+          order.quantity,
+          adjustedPrice,
+          commission,
+          order.entryName,
+          order.fromEntry,
+        );
       }
     }
 
@@ -656,13 +669,15 @@ export class StrategyEngine {
         pnlPercent: 0,
         commission,
         unrealizedPnl: 0,
-        lots: [{
-          entryName,
-          quantity,
-          avgPrice: price,
-          timestamp: this.timestamp,
-          barIndex: this.barIndex,
-        }],
+        lots: [
+          {
+            entryName,
+            quantity,
+            avgPrice: price,
+            timestamp: this.timestamp,
+            barIndex: this.barIndex,
+          },
+        ],
       };
       // Initialize trade excursion tracking at entry price
       this._tradeHighPrice = price;
@@ -827,11 +842,15 @@ export class StrategyEngine {
     this.barIndex = barIndex;
     this.timestamp = timestamp;
     this.currentPrice = close;
-    this.high = high;
-    this.low = low;
-
     this.fillPendingMarketOrders(open, high, low, close);
-    this.trailingStopManager.update(this.pendingOrders, this.position.direction, this.position.avgPrice, high, low, close);
+    this.trailingStopManager.update(
+      this.pendingOrders,
+      this.position.direction,
+      this.position.avgPrice,
+      high,
+      low,
+      close,
+    );
     this.processPendingOrders(high, low);
     this.updatePositionPnL(close);
 
@@ -1051,10 +1070,6 @@ export class StrategyEngine {
     return `order_${++this._nextOrderId}`;
   }
 
-  private generateOcaGroupId(): string {
-    return `oca_${++this._nextOcaGroupId}`;
-  }
-
   getMaxDrawdown(): number {
     return this.maxDrawdown;
   }
@@ -1103,12 +1118,16 @@ export class StrategyEngine {
   }
 
   getMetrics(): import('./strategy-types.js').StrategyMetrics {
-    return computeMetrics(this.trades, this.peakEquity, this.maxDrawdown, this.config.initialCapital);
+    return computeMetrics(
+      this.trades,
+      this.peakEquity,
+      this.maxDrawdown,
+      this.config.initialCapital,
+    );
   }
 
   reset(): void {
     this._nextOrderId = 0;
-    this._nextOcaGroupId = 0;
     this.position = {
       symbol: '',
       direction: 'flat',

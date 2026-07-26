@@ -38,15 +38,7 @@ export const evilPrices: number[] = [
 ];
 
 /** Array of NaN-like or missing values that should all resolve to "not a valid number". */
-export const nanVariants: unknown[] = [
-  NaN,
-  undefined,
-  null,
-  NA,
-  'NaN',
-  Infinity,
-  -Infinity,
-];
+export const nanVariants: unknown[] = [NaN, undefined, null, NA, 'NaN', Infinity, -Infinity];
 
 // =============================================================================
 // Factory: evil bar context
@@ -77,10 +69,19 @@ export function makeEvilBarContext(
     barCount,
     timestamp: Date.now(),
     open: createSeries('open', openVals),
-    high: createSeries('high', openVals.map((v) => v + 5)),
-    low: createSeries('low', closeVals.map((v) => v - 5)),
+    high: createSeries(
+      'high',
+      openVals.map((v) => v + 5),
+    ),
+    low: createSeries(
+      'low',
+      closeVals.map((v) => v - 5),
+    ),
     close: createSeries('close', closeVals),
-    volume: createSeries('volume', Array.from({ length: barCount }, () => 1000)),
+    volume: createSeries(
+      'volume',
+      Array.from({ length: barCount }, () => 1000),
+    ),
     ...overrides,
   };
 }
@@ -88,10 +89,7 @@ export function makeEvilBarContext(
 /**
  * Create an evil context where all OHLCV series contain a specific value.
  */
-export function makeConstantEvilContext(
-  value: number,
-  barCount = 1,
-): ExecutionContext {
+export function makeConstantEvilContext(value: number, barCount = 1): ExecutionContext {
   return makeEvilBarContext(
     {
       open: createSeries('open', Array(barCount).fill(value)),
@@ -113,10 +111,7 @@ export function makeConstantEvilContext(
  * If compilation fails, the error is caught and re-thrown for the test to assert on.
  * If `expectSuccess` is false, returns the caught error instead.
  */
-export function compileEvilScript(
-  source: string,
-  expectSuccess = true,
-): ExecutionEngine | Error {
+export function compileEvilScript(source: string, expectSuccess = true): ExecutionEngine | Error {
   try {
     const { ast } = parse(source);
     const result = compile(ast);
@@ -132,10 +127,7 @@ export function compileEvilScript(
  * Parse, compile, and execute a script over a set of bars.
  * Returns the engine ready for assertions.
  */
-export function executeEvilScript(
-  source: string,
-  bars?: ExecutionContext[],
-): ExecutionEngine {
+export function executeEvilScript(source: string, bars?: ExecutionContext[]): ExecutionEngine {
   const engine = compileEvilScript(source) as ExecutionEngine;
   const ctxs = bars ?? [makeEvilBarContext()];
   for (const ctx of ctxs) {

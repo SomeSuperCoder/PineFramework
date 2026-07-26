@@ -1,15 +1,26 @@
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 // Generate bars with clear zigzag pattern for reliable pivot detection
 function createZigzagBars(count: number): Array<{
-  timestamp: number; open: number; high: number; low: number; close: number; volume: number;
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }> {
   const bars: Array<any> = [];
   let s = 42;
-  const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+  const rand = () => {
+    s = (s * 16807 + 0) % 2147483647;
+    return s / 2147483647;
+  };
 
   // Create a wave: peaks at bars 20, 50, 80, ... troughs at 35, 65, 95, ...
   for (let i = 0; i < count; i++) {
@@ -42,16 +53,37 @@ plot(result)`;
 
     const bars = Array.from({ length: 3 }, (_, i) => ({
       timestamp: 1700000000000 + i * 3600000,
-      open: 100, high: 102, low: 99, close: 101, volume: 1000,
+      open: 100,
+      high: 102,
+      low: 99,
+      close: 101,
+      volume: 1000,
     }));
 
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -73,12 +105,29 @@ plot(pl, "pl")`;
     const engine = new ExecutionEngine(compiled);
 
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -87,9 +136,9 @@ plot(pl, "pl")`;
     const phSeries = result.outputs.get('ph');
     const plSeries = result.outputs.get('pl');
 
-    const phCount = phSeries?.values.filter(v => v !== null && typeof v === 'number').length ?? 0;
-    const plCount = plSeries?.values.filter(v => v !== null && typeof v === 'number').length ?? 0;
-    
+    const phCount = phSeries?.values.filter((v) => v !== null && typeof v === 'number').length ?? 0;
+    const plCount = plSeries?.values.filter((v) => v !== null && typeof v === 'number').length ?? 0;
+
     console.log(`PivotHighs: ${phCount}, PivotLows: ${plCount} out of ${bars.length} bars`);
 
     // With zigzag data and lb=5, rb=5, we should get many pivots
@@ -176,7 +225,10 @@ plot(sup, "sup", display=display.none)`;
     function createZigzagBars(count: number): Array<any> {
       const bars: Array<any> = [];
       let s = 42;
-      const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+      const rand = () => {
+        s = (s * 16807 + 0) % 2147483647;
+        return s / 2147483647;
+      };
       for (let i = 0; i < count; i++) {
         const phase = (i % 30) / 30;
         const base = 100 + 10 * Math.sin(phase * Math.PI * 2) + (i / count) * 5;
@@ -195,12 +247,29 @@ plot(sup, "sup", display=display.none)`;
     const engine = new ExecutionEngine(compiled);
 
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -234,7 +303,9 @@ plot(sup, "sup", display=display.none)`;
     // Show first few rechange bars with the corresponding res value
     for (let i = 0; i < Math.min(reS.values.length, 30); i++) {
       if (reS.values[i] === 1 || seS.values[i] === 1) {
-        console.log(`  Bar ${i}: rechange=${reS.values[i]}, suchange=${seS.values[i]}, res=${resS.values[i]}, sup=${supS.values[i]}`);
+        console.log(
+          `  Bar ${i}: rechange=${reS.values[i]}, suchange=${seS.values[i]}, res=${resS.values[i]}, sup=${supS.values[i]}`,
+        );
       }
     }
   });
@@ -319,17 +390,38 @@ plot(e, "e")`;
 
     const bars = Array.from({ length: 60 }, (_, i) => ({
       timestamp: 1700000000000 + i * 3600000,
-      open: 100, high: 105, low: 95, close: 101, volume: 1000,
+      open: 100,
+      high: 105,
+      low: 95,
+      close: 101,
+      volume: 1000,
     }));
 
     const engine = new ExecutionEngine(compiled);
     const contexts: ExecutionContext[] = bars.map((bar, i) => ({
-      barIndex: i, barCount: bars.length, timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -345,13 +437,15 @@ plot(e, "e")`;
     // findprevious() should return [90, 115, 95, 110]
     // a=zz=120
     // b=l1=90, c=l2=115, d=l3=95, e=l4=110
-    
-    console.log(`Bar 50: a=${aSeries?.values[50]}, b=${bSeries?.values[50]}, c=${cSeries?.values[50]}, d=${dSeries?.values[50]}, e=${eSeries?.values[50]}`);
+
+    console.log(
+      `Bar 50: a=${aSeries?.values[50]}, b=${bSeries?.values[50]}, c=${cSeries?.values[50]}, d=${dSeries?.values[50]}, e=${eSeries?.values[50]}`,
+    );
 
     expect(aSeries?.values[50]).toBe(120); // zz at current bar
-    expect(bSeries?.values[50]).toBe(90);  // nearest low pivot (40)
+    expect(bSeries?.values[50]).toBe(90); // nearest low pivot (40)
     expect(cSeries?.values[50]).toBe(115); // high after that (30)
-    expect(dSeries?.values[50]).toBe(95);  // low after that (20)
+    expect(dSeries?.values[50]).toBe(95); // low after that (20)
     expect(eSeries?.values[50]).toBe(110); // high after that (10)
   });
 });

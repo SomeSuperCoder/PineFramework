@@ -2,6 +2,7 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
 
 export function registerDrawingBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   // ── Position namespace constants ─────────────────────────────────────────

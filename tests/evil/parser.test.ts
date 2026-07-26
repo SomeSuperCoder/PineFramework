@@ -106,7 +106,7 @@ describe('Evil parser — bracket/paren mismatches', () => {
 
 describe('Evil parser — unterminated string literals', () => {
   it('throws ParseError for unterminated single-quoted string', () => {
-    const source = "//@version=6\nindicator(\"Test\")\nx = 'hello\n";
+    const source = '//@version=6\nindicator("Test")\nx = \'hello\n';
     expect(() => parse(source)).toThrow(ParseError);
   });
 

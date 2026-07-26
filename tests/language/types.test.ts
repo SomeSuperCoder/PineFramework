@@ -440,8 +440,8 @@ describe('Pine type system', () => {
       expect(isAssignable(INT_TYPE, FLOAT_TYPE)).toBe(true);
     });
 
-    it('disallows float to int assignment', () => {
-      expect(isAssignable(FLOAT_TYPE, INT_TYPE)).toBe(false);
+    it('allows float to int assignment (Pine Script implicitly truncates)', () => {
+      expect(isAssignable(FLOAT_TYPE, INT_TYPE)).toBe(true);
     });
 
     it('allows na to any type', () => {

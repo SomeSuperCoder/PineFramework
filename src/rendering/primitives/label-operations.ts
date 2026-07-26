@@ -77,23 +77,17 @@ export function labelGetText(
   return labels.get(labelId)?.text;
 }
 
-export function labelGetColor(
-  labels: Map<string, LabelObject>,
-  labelId: string) {
+export function labelGetColor(labels: Map<string, LabelObject>, labelId: string) {
   const label = labels.get(labelId);
   return label ? { ...label.color } : undefined;
 }
 
-export function labelGetTextColor(
-  labels: Map<string, LabelObject>,
-  labelId: string) {
+export function labelGetTextColor(labels: Map<string, LabelObject>, labelId: string) {
   const label = labels.get(labelId);
   return label ? { ...label.textcolor } : undefined;
 }
 
-export function labelGetSize(
-  labels: Map<string, LabelObject>,
-  labelId: string): Size | undefined {
+export function labelGetSize(labels: Map<string, LabelObject>, labelId: string): Size | undefined {
   return labels.get(labelId)?.size;
 }
 
@@ -112,20 +106,12 @@ export function labelSetText(
   if (size !== undefined && !isNaOrNull(size)) label.size = size as Size;
 }
 
-export function labelSetX(
-  labels: Map<string, LabelObject>,
-  labelId: string,
-  x: PineValue,
-): void {
+export function labelSetX(labels: Map<string, LabelObject>, labelId: string, x: PineValue): void {
   const label = labels.get(labelId);
   if (label && !isNaOrNull(x)) label.x = x as number;
 }
 
-export function labelSetY(
-  labels: Map<string, LabelObject>,
-  labelId: string,
-  y: PineValue,
-): void {
+export function labelSetY(labels: Map<string, LabelObject>, labelId: string, y: PineValue): void {
   const label = labels.get(labelId);
   if (label && !isNaOrNull(y)) label.y = y as number;
 }
@@ -175,9 +161,6 @@ export function labelSetTooltip(
   if (label && !isNaOrNull(tooltip)) label.tooltip = String(tooltip);
 }
 
-export function labelDelete(
-  labels: Map<string, LabelObject>,
-  labelId: string,
-): void {
+export function labelDelete(labels: Map<string, LabelObject>, labelId: string): void {
   labels.delete(labelId);
 }

@@ -31,7 +31,7 @@ function createMockCtx(): CanvasRenderingContext2D {
     arcTo: stub,
     closePath: stub,
     rect: stub,
-    measureText: vi.fn(() => ({ width: 60 })) as (text: string) => TextMetrics,
+    measureText: vi.fn(() => ({ width: 60 } as unknown as TextMetrics)),
     globalAlpha: 1,
     strokeStyle: '',
     fillStyle: '',

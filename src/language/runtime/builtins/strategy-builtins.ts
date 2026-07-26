@@ -3,6 +3,7 @@ import type { OrderDirection } from '../../../strategy/strategy-engine.js';
 import { NA, type PineValue } from '../../types/na.js';
 
 export function registerStrategyBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set(
@@ -44,16 +45,18 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
       }
 
       const entryName = typeof name === 'string' ? name : 'entry';
-      const sp = typeof restArgs[2] === 'number'
-        ? restArgs[2]
-        : typeof namedArgs?.stop === 'number'
-          ? namedArgs.stop
-          : undefined;
-      const lp = typeof restArgs[3] === 'number'
-        ? restArgs[3]
-        : typeof namedArgs?.limit === 'number'
-          ? namedArgs.limit
-          : undefined;
+      const sp =
+        typeof restArgs[2] === 'number'
+          ? restArgs[2]
+          : typeof namedArgs?.stop === 'number'
+            ? namedArgs.stop
+            : undefined;
+      const lp =
+        typeof restArgs[3] === 'number'
+          ? restArgs[3]
+          : typeof namedArgs?.limit === 'number'
+            ? namedArgs.limit
+            : undefined;
       const cm =
         (typeof restArgs[4] === 'string' ? restArgs[4] : undefined) ??
         (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
@@ -87,7 +90,7 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
     }
     // qty_percent: resolve to absolute quantity from position size
     if (namedArgs && typeof namedArgs.qty_percent === 'number' && pos.direction !== 'flat') {
-      const percentQty = Math.floor(pos.quantity * (namedArgs.qty_percent as number) / 100);
+      const percentQty = Math.floor((pos.quantity * (namedArgs.qty_percent as number)) / 100);
       if (qty === undefined || percentQty < qty) {
         qty = percentQty;
       }
@@ -103,10 +106,16 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
       sp = namedArgs.stop;
     }
     // loss: resolve ticks to absolute price
-    if (namedArgs && typeof namedArgs.loss === 'number' && pos.direction !== 'flat' && pos.avgPrice > 0) {
-      const lossPrice = pos.direction === 'long'
-        ? pos.avgPrice - (namedArgs.loss as number) * mintick
-        : pos.avgPrice + (namedArgs.loss as number) * mintick;
+    if (
+      namedArgs &&
+      typeof namedArgs.loss === 'number' &&
+      pos.direction !== 'flat' &&
+      pos.avgPrice > 0
+    ) {
+      const lossPrice =
+        pos.direction === 'long'
+          ? pos.avgPrice - (namedArgs.loss as number) * mintick
+          : pos.avgPrice + (namedArgs.loss as number) * mintick;
       // Use the stop that triggers first: higher for long, lower for short
       if (sp === undefined || (pos.direction === 'long' ? lossPrice > sp : lossPrice < sp)) {
         sp = lossPrice;
@@ -121,10 +130,16 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
       lp = namedArgs.limit;
     }
     // profit: resolve ticks to absolute price
-    if (namedArgs && typeof namedArgs.profit === 'number' && pos.direction !== 'flat' && pos.avgPrice > 0) {
-      const profitPrice = pos.direction === 'long'
-        ? pos.avgPrice + (namedArgs.profit as number) * mintick
-        : pos.avgPrice - (namedArgs.profit as number) * mintick;
+    if (
+      namedArgs &&
+      typeof namedArgs.profit === 'number' &&
+      pos.direction !== 'flat' &&
+      pos.avgPrice > 0
+    ) {
+      const profitPrice =
+        pos.direction === 'long'
+          ? pos.avgPrice + (namedArgs.profit as number) * mintick
+          : pos.avgPrice - (namedArgs.profit as number) * mintick;
       // Use the limit that triggers first: lower for long, higher for short
       if (lp === undefined || (pos.direction === 'long' ? profitPrice < lp : profitPrice > lp)) {
         lp = profitPrice;
@@ -136,15 +151,18 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
       (typeof namedArgs?.comment === 'string' ? namedArgs.comment : undefined);
 
     // --- Parse new named params ---
-    const fromEntry = namedArgs && typeof namedArgs.from_entry === 'string'
-      ? (namedArgs.from_entry as string)
-      : undefined;
-    const trailPrice = namedArgs && typeof namedArgs.trail_price === 'number'
-      ? (namedArgs.trail_price as number)
-      : undefined;
-    const trailOffset = namedArgs && typeof namedArgs.trail_offset === 'number'
-      ? (namedArgs.trail_offset as number)
-      : undefined;
+    const fromEntry =
+      namedArgs && typeof namedArgs.from_entry === 'string'
+        ? (namedArgs.from_entry as string)
+        : undefined;
+    const trailPrice =
+      namedArgs && typeof namedArgs.trail_price === 'number'
+        ? (namedArgs.trail_price as number)
+        : undefined;
+    const trailOffset =
+      namedArgs && typeof namedArgs.trail_offset === 'number'
+        ? (namedArgs.trail_offset as number)
+        : undefined;
 
     eng.strategyEngine.exit(exitName, qty, pr, sp, lp, cm, fromEntry, trailPrice, trailOffset);
     return NA;
@@ -192,12 +210,7 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
 
   eng.builtins.set(
     'strategy.order',
-    (
-      name: PineValue,
-      direction: PineValue,
-      quantity?: PineValue,
-      price?: PineValue,
-    ): PineValue => {
+    (name: PineValue, direction: PineValue, quantity?: PineValue, price?: PineValue): PineValue => {
       if (!eng.strategyEngine) return NA;
       const orderName = typeof name === 'string' ? name : 'order';
       const dir: OrderDirection = direction === 'short' ? 'short' : 'long';

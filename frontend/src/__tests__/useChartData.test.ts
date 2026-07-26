@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useChartData } from '../hooks/useChartData';
-import type { ScriptResult } from '../types';
 
 // ─── Mock types ───────────────────────────────────────────────────
 interface MockBar {
@@ -24,26 +23,8 @@ function makeBars(startTs: number, count: number, step = 86400_000): MockBar[] {
 // Use timestamps well above 0 to avoid toCandleData filtering
 const BASE_TS = 100_000_000_000; // ~1973 (safely positive)
 
-const EMPTY_RESULT: ScriptResult = {
-  overlay: true,
-  plots: [],
-  shapes: [],
-  lines: [],
-  boxes: [],
-  labels: [],
-  tables: [],
-  fills: [],
-  fillColorData: {},
-  plotColors: {},
-  strategyMarkers: [],
-};
 
-function makeIndicatorResult(data: Array<{ time: number; value: number | null }>): ScriptResult {
-  return {
-    ...EMPTY_RESULT,
-    plots: [{ type: 'line', data, color: '#2196f3', title: 'SMA' }],
-  };
-}
+
 
 // ─── Fetch mock ───────────────────────────────────────────────────
 let fetchMock: ReturnType<typeof vi.fn>;
@@ -265,7 +246,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
 
     // The execute call should have used 1500 bars (the existing data)
     const executeCall = fetchMock.mock.calls.find(
-      (c: [string, RequestInit]) => c[0] === '/api/execute' && c[1]?.method === 'POST'
+      (c) => (c as [string, RequestInit])[0] === '/api/execute' && (c as [string, RequestInit])[1]?.method === 'POST'
     );
     expect(executeCall).toBeDefined();
     const body = JSON.parse((executeCall as [string, RequestInit])[1].body as string);
@@ -573,7 +554,6 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     // Step 2: execute indicator with lookback
     const seedBars = makeBars(BASE_TS + 900 * 86_400_000, maxLookback);
     const allInitBars = [...seedBars, ...bars1k];
-    const initOutputs = allInitBars.map((_, i) => (i >= maxLookback ? 100 + i : null));
 
     // Mock #1: initial /api/execute (returns maxLookback)
     fetchMock.mockResolvedValueOnce({
@@ -613,7 +593,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     expect(ind1!.plots[0].data.length).toBe(1000);
 
     // Helper: verify all plot entry times exist in candles
-    function verifyAlignment(label: string) {
+    function verifyAlignment(_label?: string) {
       const candleTimes = new Set(result.current.candles.map(c => c.time));
       const ind = result.current.indicatorResultsRef?.current?.get('ind-1');
       expect(ind).toBeDefined();

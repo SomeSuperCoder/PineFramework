@@ -173,13 +173,13 @@ int x = true
       expect(() => compile(ast)).toThrow(CompileError);
     });
 
-    it('disallows float to int assignment', () => {
+    it('allows float to int assignment (Pine Script implicitly truncates)', () => {
       const source = `//@version=6
 indicator("Test")
 int x = 3.14
 `;
       const { ast } = parse(source);
-      expect(() => compile(ast)).toThrow(CompileError);
+      expect(() => compile(ast)).not.toThrow();
     });
 
     it('disallows string to int assignment', () => {

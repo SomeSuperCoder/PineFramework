@@ -55,10 +55,10 @@ export interface LabelData {
   time: number;
   price: number;
   text: string;
-  color: string;
-  textColor: string;
-  style: string;
-  size: string;
+  color?: string;
+  textColor?: string;
+  style?: string;
+  size?: string;
 }
 
 export interface TableCellData {
@@ -90,6 +90,12 @@ export interface AlertConditionData {
   message: string;
 }
 
+export interface FillData {
+  from: string;
+  to: string;
+  color: string;
+}
+
 export interface ScriptResult {
   overlay: boolean;
   plots: PlotData[];
@@ -100,11 +106,7 @@ export interface ScriptResult {
   tables: TableData[];
   bgcolor?: { time: number; color: string }[];
   barcolor?: { time: number; color: string }[];
-  fills?: Array<{
-    from: string;
-    to: string;
-    color: string;
-  }>;
+  fills?: FillData[];
   fillColorData?: Record<string, (string | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   strategyMarkers?: StrategyMarkerData[];

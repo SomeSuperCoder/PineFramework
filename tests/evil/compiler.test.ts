@@ -63,13 +63,12 @@ x := 1
 });
 
 describe('Evil compiler — type mismatch in variable declaration', () => {
-  it('throws CompileError when float initializer assigned to int variable', () => {
-    expectCompileError(
-      `//@version=6
+  it('allows float initializer assigned to int variable (Pine Script truncates)', () => {
+    const { ast } = parse(`//@version=6
 indicator("Test")
 int x = 3.14
-`,
-    );
+`);
+    expect(() => compile(ast)).not.toThrow();
   });
 
   it('throws CompileError when bool initializer assigned to float variable', () => {

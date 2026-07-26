@@ -136,9 +136,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       });
 
       if (!pipelineResult.success) {
-        const msg = pipelineResult.error
-          ? (typeof pipelineResult.error === 'string' ? pipelineResult.error : pipelineResult.error.message)
-          : 'Execution failed';
+        const msg = pipelineResult.error ?? 'Execution failed';
         throw new Error(msg);
       }
 

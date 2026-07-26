@@ -101,7 +101,7 @@ describe('BacktestEngine Commission Methods', () => {
       expect(result.metrics.totalTrades).toBe(1);
       // Exit fill tradeValue = 104 * 10 = 1040
       // DEX fee (25 bps): 1040 * 0.0025 = 2.60
-      expect(result.metrics.commission).toBeCloseTo(2.60, 4);
+      expect(result.metrics.commission).toBeCloseTo(2.6, 4);
     });
 
     it('should charge 2 bps for sol_stable tier (no DEX fee)', () => {

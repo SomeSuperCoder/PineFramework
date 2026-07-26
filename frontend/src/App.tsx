@@ -31,11 +31,11 @@ function App() {
 
   const [timeframe, setTimeframe] = useState(() => {
     const saved = localStorage.getItem('pine-timeframe');
-    return INTERVALS.some(i => i.value === saved) ? saved : '1';
+    return saved && INTERVALS.some(i => i.value === saved) ? saved : '1';
   });
   const [symbol, setSymbol] = useState(() => {
     const saved = localStorage.getItem('pine-symbol');
-    return SYMBOLS.includes(saved) ? saved : 'BTCUSDT';
+    return saved && SYMBOLS.includes(saved) ? saved : 'BTCUSDT';
   });
   const [dataVersion, setDataVersion] = useState(0);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
@@ -227,7 +227,7 @@ function App() {
 
   const handleStrategyReplace = useCallback(async () => {
     if (!strategyConflict) return;
-    const { pendingScriptId, pendingSource, existingName } = strategyConflict;
+    const { pendingScriptId, pendingSource } = strategyConflict;
     setStrategyConflict(null);
 
     const existing = findExistingStrategy();

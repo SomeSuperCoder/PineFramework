@@ -37,11 +37,17 @@ import type { ExecutionEngine } from './execution-engine.js';
 // nested statement execution without manual plumbing at every level.
 
 export class BreakSignal extends Error {
-  constructor() { super('break'); this.name = 'BreakSignal'; }
+  constructor() {
+    super('break');
+    this.name = 'BreakSignal';
+  }
 }
 
 export class ContinueSignal extends Error {
-  constructor() { super('continue'); this.name = 'ContinueSignal'; }
+  constructor() {
+    super('continue');
+    this.name = 'ContinueSignal';
+  }
 }
 
 export type ExecuteExpressionFn = (
@@ -77,7 +83,14 @@ export function executeVariableDeclaration(
   if (existing) {
     existing.series.push(value);
   } else {
-    const binding = declareVariable(scope, decl.name, FLOAT_TYPE, decl.isVar, decl.isVarip, decl.isConst);
+    const binding = declareVariable(
+      scope,
+      decl.name,
+      FLOAT_TYPE,
+      decl.isVar,
+      decl.isVarip,
+      decl.isConst,
+    );
     binding.series.push(value);
   }
   return value;
@@ -115,11 +128,21 @@ export function executeAssignment(
           result = NA;
         } else {
           switch (stmt.operator) {
-            case '+=': result = safeAdd(guardedC as number, guardedV as number); break;
-            case '-=': result = safeSub(guardedC as number, guardedV as number); break;
-            case '*=': result = safeMul(guardedC as number, guardedV as number); break;
-            case '/=': result = safeDiv(guardedC as number, guardedV as number); break;
-            case ':=': result = value; break;
+            case '+=':
+              result = safeAdd(guardedC as number, guardedV as number);
+              break;
+            case '-=':
+              result = safeSub(guardedC as number, guardedV as number);
+              break;
+            case '*=':
+              result = safeMul(guardedC as number, guardedV as number);
+              break;
+            case '/=':
+              result = safeDiv(guardedC as number, guardedV as number);
+              break;
+            case ':=':
+              result = value;
+              break;
           }
         }
       }
@@ -154,11 +177,21 @@ export function executeAssignment(
             result = NA;
           } else {
             switch (stmt.operator) {
-              case '+=': result = safeAdd(guardedC as number, guardedV as number); break;
-              case '-=': result = safeSub(guardedC as number, guardedV as number); break;
-              case '*=': result = safeMul(guardedC as number, guardedV as number); break;
-              case '/=': result = safeDiv(guardedC as number, guardedV as number); break;
-              case ':=': result = value; break;
+              case '+=':
+                result = safeAdd(guardedC as number, guardedV as number);
+                break;
+              case '-=':
+                result = safeSub(guardedC as number, guardedV as number);
+                break;
+              case '*=':
+                result = safeMul(guardedC as number, guardedV as number);
+                break;
+              case '/=':
+                result = safeDiv(guardedC as number, guardedV as number);
+                break;
+              case ':=':
+                result = value;
+                break;
             }
           }
         }

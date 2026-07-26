@@ -24,4 +24,17 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'error',
     'prettier/prettier': 'error',
   },
+  overrides: [
+    {
+      files: ['tests/**/*.ts', '**/*.test.ts', '**/*.test.tsx', '**/__tests__/**'],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/no-unused-vars': 'off',
+        '@typescript-eslint/no-unsafe-function-type': 'off',
+        'no-constant-condition': 'off',
+        'prefer-const': 'off',
+        'no-useless-escape': 'off',
+      },
+    },
+  ],
 };

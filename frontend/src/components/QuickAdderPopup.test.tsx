@@ -176,7 +176,7 @@ describe('QuickAdderPopup', () => {
       await waitFor(() => {
         expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
       });
-      const input = screen.getByPlaceholderText(/Search indicators/i);
+      screen.getByPlaceholderText(/Search indicators/i);
       await user.keyboard('{Enter}');
       expect(onAdd).toHaveBeenCalledWith('1', mockScripts[0].source);
     });

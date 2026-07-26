@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { prependIndicatorResult } from '../hooks/indicator-merge';
-import type { ScriptResult, ShapeData, LabelData, BoxData, StrategyMarkerData } from '../types';
+import type { ScriptResult } from '../types';
 import type { LineData } from '../types';
 
 const EMPTY_RESULT: ScriptResult = {

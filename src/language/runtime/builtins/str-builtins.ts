@@ -2,6 +2,7 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
 
 export function registerStrBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('str.format', (template: PineValue, ...args: PineValue[]): PineValue => {
@@ -36,13 +37,10 @@ export function registerStrBuiltins(engine: ExecutionEngine): void {
     return (str as string).includes(substring as string);
   });
 
-  eng.builtins.set(
-    'str.replace',
-    (str: PineValue, from: PineValue, to: PineValue): PineValue => {
-      if (isNa(str) || isNa(from) || isNa(to)) return NA;
-      return (str as string).replace(from as string, to as string);
-    },
-  );
+  eng.builtins.set('str.replace', (str: PineValue, from: PineValue, to: PineValue): PineValue => {
+    if (isNa(str) || isNa(from) || isNa(to)) return NA;
+    return (str as string).replace(from as string, to as string);
+  });
 
   eng.builtins.set('str.split', (str: PineValue, separator: PineValue): PineValue => {
     if (isNa(str) || isNa(separator)) return NA;

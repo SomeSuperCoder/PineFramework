@@ -9,7 +9,12 @@
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
-import { makeEvilBarContext, expectNa, expectOutputNa, makeConstantEvilContext } from './helpers.js';
+import {
+  makeEvilBarContext,
+  expectNa,
+  expectOutputNa,
+  makeConstantEvilContext,
+} from './helpers.js';
 import { NA } from '../../src/language/types/na.js';
 
 /** Helper: compile+execute script returning engine. */
@@ -139,12 +144,15 @@ describe('Evil TA — ATR with edge periods', () => {
 
 describe('Evil TA — constant-price series', () => {
   it('sma(close, 5) on constant series returns 100 after warmup', () => {
-    const engine = execOverConstantBars(`
+    const engine = execOverConstantBars(
+      `
       //@version=6
       indicator("Test")
       x = ta.sma(close, 5)
       plot(x, "x")
-    `, 50);
+    `,
+      50,
+    );
     const out = engine.getOutput('x');
     expect(out).toBeDefined();
     const val = out!.last();
@@ -155,12 +163,15 @@ describe('Evil TA — constant-price series', () => {
   });
 
   it('rsi(close, 14) on constant-price series returns NA', () => {
-    const engine = execOverConstantBars(`
+    const engine = execOverConstantBars(
+      `
       //@version=6
       indicator("Test")
       x = ta.rsi(close, 14)
       plot(x, "x")
-    `, 50);
+    `,
+      50,
+    );
     // RSI on constant price has no change, should be na
     const out = engine.getOutput('x');
     expect(out).toBeDefined();

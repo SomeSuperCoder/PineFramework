@@ -9,7 +9,7 @@ describe('Viewport.barIndexToPixel', () => {
     vp.fitContent(800);
     // After fitContent, firstBarIndex may be > 0 if totalBars > visible count.
     // Set state directly for deterministic test.
-    const state = vp.getState();
+    vp.getState();
     // Override to known state via scrollTo
     vp.scrollTo(0, 800);
     expect(vp.barIndexToPixel(0)).toBe(0);

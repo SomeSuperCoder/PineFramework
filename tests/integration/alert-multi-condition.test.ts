@@ -11,9 +11,22 @@ import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js'
 import { createSeries } from '../../src/language/runtime/series.js';
 import { createTrendBars, prependBars } from '../helpers/deterministicBars.js';
 import { EVERY_BAR_ALERT_SOURCE } from '../fixtures/every-bar-alert.js';
-import { HHLL_SOURCE, HHLL_ALERT_COUNT, HHLL_CONDITION_TITLES } from '../fixtures/higher-high-lower-low.js';
-import { VOLATILITY_TRAIL_SOURCE, VOLATILITY_TRAIL_ALERT_COUNT, VOLATILITY_TRAIL_CONDITION_TITLES } from '../fixtures/volatility-trail.js';
-import type { AlertTriggerEntry, AlertConditionEntry, LabelEntry, ShapeEntry } from '../../src/language/runtime/execution-types.js';
+import {
+  HHLL_SOURCE,
+  HHLL_ALERT_COUNT,
+  HHLL_CONDITION_TITLES,
+} from '../fixtures/higher-high-lower-low.js';
+import {
+  VOLATILITY_TRAIL_SOURCE,
+  VOLATILITY_TRAIL_ALERT_COUNT,
+  VOLATILITY_TRAIL_CONDITION_TITLES,
+} from '../fixtures/volatility-trail.js';
+import type {
+  AlertTriggerEntry,
+  AlertConditionEntry,
+  LabelEntry,
+  ShapeEntry,
+} from '../../src/language/runtime/execution-types.js';
 
 // ─── Shared helpers ─────────────────────────────────────────────────
 
@@ -25,11 +38,26 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
     barIndex: i,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
   }));
   const result = engine.executeBars(contexts);
   return { engine, bars, result };
@@ -50,11 +78,7 @@ function expectValidTriggers(
 }
 
 /** Log trigger-per-bar distribution. */
-function logTriggerDistribution(
-  triggers: AlertTriggerEntry[],
-  totalBars: number,
-  label: string,
-) {
+function logTriggerDistribution(triggers: AlertTriggerEntry[], totalBars: number, label: string) {
   const perBar = new Map<number, number>();
   for (const t of triggers) {
     perBar.set(t.barIndex, (perBar.get(t.barIndex) ?? 0) + 1);
@@ -67,7 +91,9 @@ function logTriggerDistribution(
     .sort((a, b) => b[1] - a[1]) // sort by count descending
     .slice(0, 10);
 
-  console.log(`  [${label}] Distribution: ${triggers.length} triggers, ${barsWithTriggers}/${totalBars} bars (${pct}%), max ${maxPerBar}/bar`);
+  console.log(
+    `  [${label}] Distribution: ${triggers.length} triggers, ${barsWithTriggers}/${totalBars} bars (${pct}%), max ${maxPerBar}/bar`,
+  );
   console.log(`  [${label}] Top trigger-dense bars: ${JSON.stringify(sample)}`);
 }
 
@@ -106,7 +132,9 @@ describe('higher-high-lower-low.pine alerts', () => {
       expect(condition.message).toBeTruthy();
     }
 
-    console.log(`  [HHLL-conditions] ${result.alertConditions!.length} conditions: ${titles.join(', ')}`);
+    console.log(
+      `  [HHLL-conditions] ${result.alertConditions!.length} conditions: ${titles.join(', ')}`,
+    );
   });
 
   // ── 2.3: prepend scenario ──────────────────────────────────────
@@ -129,8 +157,12 @@ describe('higher-high-lower-low.pine alerts', () => {
     // For triggers that exist in BOTH runs (matching timestamp), verify the
     // barIndex is shifted by PREPEND. Stateful indicators may produce different
     // triggers with more history, so we only check the intersection.
-    const firstByTime = new Map(firstResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]));
-    const secondByTime = new Map(secondResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]));
+    const firstByTime = new Map(
+      firstResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]),
+    );
+    const secondByTime = new Map(
+      secondResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]),
+    );
     let matchedCount = 0;
     for (const [ts, firstT] of firstByTime) {
       const secondT = secondByTime.get(ts);
@@ -141,7 +173,9 @@ describe('higher-high-lower-low.pine alerts', () => {
     }
     expect(matchedCount).toBeGreaterThan(0);
 
-    console.log(`  [HHLL-prepend] ${firstResult.alertTriggers!.length} triggers → ${secondResult.alertTriggers!.length} after prepend, ${matchedCount} matched with correct shift`);
+    console.log(
+      `  [HHLL-prepend] ${firstResult.alertTriggers!.length} triggers → ${secondResult.alertTriggers!.length} after prepend, ${matchedCount} matched with correct shift`,
+    );
   });
 
   // ── 2.4: distribution logging ──────────────────────────────────
@@ -189,7 +223,9 @@ describe('volatility-trail.pine alerts', () => {
       expect(condition.message).toBeTruthy();
     }
 
-    console.log(`  [vol-trail-conditions] ${result.alertConditions!.length} conditions: ${titles.join(', ')}`);
+    console.log(
+      `  [vol-trail-conditions] ${result.alertConditions!.length} conditions: ${titles.join(', ')}`,
+    );
   });
 
   // ── 3.3: cross-validation flip labels ↔ alerts ─────────────────
@@ -202,10 +238,14 @@ describe('volatility-trail.pine alerts', () => {
 
     // alert_1 = "Trail Long" (flipUp), alert_2 = "Trail Short" (flipDn)
     const flipUpTriggers = new Set(
-      triggers.filter((t: AlertTriggerEntry) => t.alertId === 'alert_1').map((t: AlertTriggerEntry) => t.timestamp),
+      triggers
+        .filter((t: AlertTriggerEntry) => t.alertId === 'alert_1')
+        .map((t: AlertTriggerEntry) => t.timestamp),
     );
     const flipDnTriggers = new Set(
-      triggers.filter((t: AlertTriggerEntry) => t.alertId === 'alert_2').map((t: AlertTriggerEntry) => t.timestamp),
+      triggers
+        .filter((t: AlertTriggerEntry) => t.alertId === 'alert_2')
+        .map((t: AlertTriggerEntry) => t.timestamp),
     );
 
     // "▲" labels = up triangle, "▼" labels = down triangle
@@ -233,7 +273,9 @@ describe('volatility-trail.pine alerts', () => {
       expect(flipDnTriggers.has(ts)).toBe(true);
     }
 
-    console.log(`  [vol-trail-flip] ${flipUpTriggers.size} flipUp ↔ ${upLabelTimes.size} ▲ labels, ${flipDnTriggers.size} flipDn ↔ ${downLabelTimes.size} ▼ labels`);
+    console.log(
+      `  [vol-trail-flip] ${flipUpTriggers.size} flipUp ↔ ${upLabelTimes.size} ▲ labels, ${flipDnTriggers.size} flipDn ↔ ${downLabelTimes.size} ▼ labels`,
+    );
   });
 
   // ── 3.4: cross-validation retest shapes ↔ alerts ───────────────
@@ -246,18 +288,26 @@ describe('volatility-trail.pine alerts', () => {
 
     // alert_3 = "Bull Retest" (bullRTok), alert_4 = "Bear Retest" (bearRTok)
     const bullRTTriggers = new Set(
-      triggers.filter((t: AlertTriggerEntry) => t.alertId === 'alert_3').map((t: AlertTriggerEntry) => t.timestamp),
+      triggers
+        .filter((t: AlertTriggerEntry) => t.alertId === 'alert_3')
+        .map((t: AlertTriggerEntry) => t.timestamp),
     );
     const bearRTTriggers = new Set(
-      triggers.filter((t: AlertTriggerEntry) => t.alertId === 'alert_4').map((t: AlertTriggerEntry) => t.timestamp),
+      triggers
+        .filter((t: AlertTriggerEntry) => t.alertId === 'alert_4')
+        .map((t: AlertTriggerEntry) => t.timestamp),
     );
 
     // plotchar stores the character in `style` (not `text`), location.belowbar for bull, abovebar for bear
     const bullShapeTimes = new Set(
-      shapes.filter((s: ShapeEntry) => s.style === '◆' && s.location === 'belowbar').map((s: ShapeEntry) => s.time),
+      shapes
+        .filter((s: ShapeEntry) => s.style === '◆' && s.location === 'belowbar')
+        .map((s: ShapeEntry) => s.time),
     );
     const bearShapeTimes = new Set(
-      shapes.filter((s: ShapeEntry) => s.style === '◆' && s.location === 'abovebar').map((s: ShapeEntry) => s.time),
+      shapes
+        .filter((s: ShapeEntry) => s.style === '◆' && s.location === 'abovebar')
+        .map((s: ShapeEntry) => s.time),
     );
 
     // Every bull retest trigger must have a matching ◆ (belowbar) shape
@@ -277,7 +327,9 @@ describe('volatility-trail.pine alerts', () => {
       expect(bearRTTriggers.has(ts)).toBe(true);
     }
 
-    console.log(`  [vol-trail-retest] ${bullRTTriggers.size} bullRT ↔ ${bullShapeTimes.size} ◆(below), ${bearRTTriggers.size} bearRT ↔ ${bearShapeTimes.size} ◆(above)`);
+    console.log(
+      `  [vol-trail-retest] ${bullRTTriggers.size} bullRT ↔ ${bullShapeTimes.size} ◆(below), ${bearRTTriggers.size} bearRT ↔ ${bearShapeTimes.size} ◆(above)`,
+    );
   });
 
   // ── 3.5: prepend scenario ──────────────────────────────────────
@@ -296,8 +348,12 @@ describe('volatility-trail.pine alerts', () => {
     expectValidTriggers(secondResult.alertTriggers!, largerBars, 'vol-trail-prepend');
 
     // For triggers that exist in BOTH runs, verify barIndex shift
-    const firstByTime = new Map(firstResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]));
-    const secondByTime = new Map(secondResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]));
+    const firstByTime = new Map(
+      firstResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]),
+    );
+    const secondByTime = new Map(
+      secondResult.alertTriggers!.map((t: AlertTriggerEntry) => [t.timestamp, t]),
+    );
     let matchedCount = 0;
     for (const [ts, firstT] of firstByTime) {
       const secondT = secondByTime.get(ts);
@@ -308,7 +364,9 @@ describe('volatility-trail.pine alerts', () => {
     }
     expect(matchedCount).toBeGreaterThan(0);
 
-    console.log(`  [vol-trail-prepend] ${firstResult.alertTriggers!.length} triggers → ${secondResult.alertTriggers!.length} after prepend, ${matchedCount} matched with correct shift`);
+    console.log(
+      `  [vol-trail-prepend] ${firstResult.alertTriggers!.length} triggers → ${secondResult.alertTriggers!.length} after prepend, ${matchedCount} matched with correct shift`,
+    );
   });
 
   // ── 3.6: forming-candle diff merge test ────────────────────────
@@ -358,6 +416,8 @@ describe('volatility-trail.pine alerts', () => {
       seen.add(key);
     }
 
-    console.log(`  [vol-trail-diff] ${prevTriggers.length} triggers + ${diffTriggers.length} diff = ${mergedTriggers.length} total, no dupes`);
+    console.log(
+      `  [vol-trail-diff] ${prevTriggers.length} triggers + ${diffTriggers.length} diff = ${mergedTriggers.length} total, no dupes`,
+    );
   });
 });

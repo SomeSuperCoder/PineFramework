@@ -4,7 +4,13 @@
  */
 import type { PineValue } from '../../language/types/na.js';
 import { parseColor, type ColorInput } from '../../config/color-system.js';
-import type { LineStyle, XLocation, Size, TextHorizontalAlignment, TextVerticalAlignment } from '../rendering-types.js';
+import type {
+  LineStyle,
+  XLocation,
+  Size,
+  TextHorizontalAlignment,
+  TextVerticalAlignment,
+} from '../rendering-types.js';
 import type { BoxObject } from './drawing-types.js';
 import { isNaOrNull, toNumber, generateDrawingId } from './drawing-helpers.js';
 
@@ -79,10 +85,7 @@ export function boxNew(
   return box;
 }
 
-export function boxCopy(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): BoxObject | undefined {
+export function boxCopy(boxes: Map<string, BoxObject>, boxId: string): BoxObject | undefined {
   const original = boxes.get(boxId);
   if (!original) return undefined;
 
@@ -92,73 +95,43 @@ export function boxCopy(
   return copy;
 }
 
-export function boxGetLeft(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): number | undefined {
+export function boxGetLeft(boxes: Map<string, BoxObject>, boxId: string): number | undefined {
   return boxes.get(boxId)?.left;
 }
 
-export function boxGetTop(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): number | undefined {
+export function boxGetTop(boxes: Map<string, BoxObject>, boxId: string): number | undefined {
   return boxes.get(boxId)?.top;
 }
 
-export function boxGetRight(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): number | undefined {
+export function boxGetRight(boxes: Map<string, BoxObject>, boxId: string): number | undefined {
   return boxes.get(boxId)?.right;
 }
 
-export function boxGetBottom(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): number | undefined {
+export function boxGetBottom(boxes: Map<string, BoxObject>, boxId: string): number | undefined {
   return boxes.get(boxId)?.bottom;
 }
 
-export function boxGetBgColor(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-) {
+export function boxGetBgColor(boxes: Map<string, BoxObject>, boxId: string) {
   const box = boxes.get(boxId);
   return box ? { ...box.bgcolor } : undefined;
 }
 
-export function boxGetBorderColor(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-) {
+export function boxGetBorderColor(boxes: Map<string, BoxObject>, boxId: string) {
   const box = boxes.get(boxId);
   return box ? { ...box.border_color } : undefined;
 }
 
-export function boxSetLeft(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-  left: PineValue,
-): void {
+export function boxSetLeft(boxes: Map<string, BoxObject>, boxId: string, left: PineValue): void {
   const box = boxes.get(boxId);
   if (box && !isNaOrNull(left)) box.left = left as number;
 }
 
-export function boxSetTop(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-  top: PineValue,
-): void {
+export function boxSetTop(boxes: Map<string, BoxObject>, boxId: string, top: PineValue): void {
   const box = boxes.get(boxId);
   if (box && !isNaOrNull(top)) box.top = top as number;
 }
 
-export function boxSetRight(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-  right: PineValue,
-): void {
+export function boxSetRight(boxes: Map<string, BoxObject>, boxId: string, right: PineValue): void {
   const box = boxes.get(boxId);
   if (box && !isNaOrNull(right)) box.right = right as number;
 }
@@ -208,11 +181,7 @@ export function boxSetBorderStyle(
   if (box) box.border_style = style;
 }
 
-export function boxSetText(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-  text: PineValue,
-): void {
+export function boxSetText(boxes: Map<string, BoxObject>, boxId: string, text: PineValue): void {
   const box = boxes.get(boxId);
   if (box && !isNaOrNull(text)) box.text = String(text);
 }
@@ -226,11 +195,7 @@ export function boxSetTextColor(
   if (box) box.text_color = parseColor(color);
 }
 
-export function boxSetTextSize(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-  size: Size,
-): void {
+export function boxSetTextSize(boxes: Map<string, BoxObject>, boxId: string, size: Size): void {
   const box = boxes.get(boxId);
   if (box) box.text_size = size;
 }
@@ -253,9 +218,6 @@ export function boxSetTextValign(
   if (box) box.text_valign = valign;
 }
 
-export function boxDelete(
-  boxes: Map<string, BoxObject>,
-  boxId: string,
-): void {
+export function boxDelete(boxes: Map<string, BoxObject>, boxId: string): void {
   boxes.delete(boxId);
 }

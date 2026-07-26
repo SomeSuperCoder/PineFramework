@@ -21,9 +21,7 @@ describe('Compiler — no silent failures', () => {
   // ===========================================================================
 
   it('valid script compiles without error', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nplot(close)'),
-    ).not.toThrow();
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nplot(close)')).not.toThrow();
   });
 
   // ===========================================================================
@@ -31,27 +29,23 @@ describe('Compiler — no silent failures', () => {
   // ===========================================================================
 
   it('throws CompileError for return outside function', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nreturn 1'),
-    ).toThrow(CompileError);
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nreturn 1')).toThrow(CompileError);
   });
 
   it('throws CompileError for break outside loop', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nif true\n  break'),
-    ).toThrow(CompileError);
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nif true\n  break')).toThrow(
+      CompileError,
+    );
   });
 
   it('throws CompileError for continue outside loop', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nif true\n  continue'),
-    ).toThrow(CompileError);
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nif true\n  continue')).toThrow(
+      CompileError,
+    );
   });
 
   it('allows return inside function', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nf(x) =>\n  return x'),
-    ).not.toThrow();
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nf(x) =>\n  return x')).not.toThrow();
   });
 
   it('allows break inside for loop', () => {
@@ -71,15 +65,13 @@ describe('Compiler — no silent failures', () => {
   // ===========================================================================
 
   it('throws CompileError for const reassignment', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nconst x = 5\nx := 10'),
-    ).toThrow(CompileError);
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nconst x = 5\nx := 10')).toThrow(
+      CompileError,
+    );
   });
 
   it('allows non-const variable reassignment', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nx = 5\nx := 10'),
-    ).not.toThrow();
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nx = 5\nx := 10')).not.toThrow();
   });
 
   // ===========================================================================
@@ -87,21 +79,15 @@ describe('Compiler — no silent failures', () => {
   // ===========================================================================
 
   it('rejects assignment to literal', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\n5 = 10'),
-    ).toThrow(CompileError);
+    expect(() => parseAndCompile('//@version=6\nindicator("")\n5 = 10')).toThrow(CompileError);
   });
 
   it('accepts assignment to identifier', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nx = 10'),
-    ).not.toThrow();
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nx = 10')).not.toThrow();
   });
 
   it('accepts compound assignment', () => {
-    expect(() =>
-      parseAndCompile('//@version=6\nindicator("")\nx = 10\nx += 5'),
-    ).not.toThrow();
+    expect(() => parseAndCompile('//@version=6\nindicator("")\nx = 10\nx += 5')).not.toThrow();
   });
 
   // ===========================================================================

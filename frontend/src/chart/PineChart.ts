@@ -75,7 +75,7 @@ export class PineChart {
   private candleColors: Map<number, CandleColorData> = new Map();
   private bgColors: Map<number, string> = new Map();
   private drawingLines: DrawingLineData[] = [];
-  private teleportLine: { time: number; timestamp: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string; visible: boolean } | null = null;
+  private teleportLine: { time?: number; timestamp: number; color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string; visible: boolean } | null = null;
   private chartLabels: LabelData[] = [];
   private boxes: BoxData[] = [];
   private tables: TableData[] = [];
@@ -509,7 +509,7 @@ export class PineChart {
       ctx.font = 'bold 11px Arial';
       const text = this.teleportLine.label;
       const metrics = ctx.measureText(text);
-      const padX = 6, padY = 2;
+      const padX = 6;
       const bw = metrics.width + padX * 2;
       const bh = 18;
       const bx = x - bw / 2;

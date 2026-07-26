@@ -251,7 +251,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     const allColors = result.plotColors!.get('Two-Pole Filter__lw:3')!;
-    const postWarmupColors = allColors.slice(WARMUP_BARS).filter((c: any) => c !== null) as string[];
+    const postWarmupColors = allColors
+      .slice(WARMUP_BARS)
+      .filter((c: any) => c !== null) as string[];
     expect(postWarmupColors.length).toBeGreaterThan(0);
     const lower = postWarmupColors.map((c) => c.toLowerCase());
     // Check that we see color variety across the post-warmup range
@@ -282,7 +284,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     // Check post-warmup values are changing (not all identical)
-    const vals = (series.values as (number | null)[]).slice(WARMUP_BARS).filter((v): v is number => v !== null);
+    const vals = (series.values as (number | null)[])
+      .slice(WARMUP_BARS)
+      .filter((v): v is number => v !== null);
     expect(vals.length).toBeGreaterThan(0);
     for (let i = 1; i < Math.min(20, vals.length); i++) {
       expect(vals[i]!).not.toBe(vals[i - 1]!);
@@ -294,7 +298,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
-    const vals = (series.values as (number | null)[]).slice(WARMUP_BARS).filter((v): v is number => v !== null);
+    const vals = (series.values as (number | null)[])
+      .slice(WARMUP_BARS)
+      .filter((v): v is number => v !== null);
     expect(vals.length).toBeGreaterThan(0);
     for (let i = 0; i < vals.length; i++) {
       expect(vals[i]!).toBeGreaterThan(0);
@@ -307,7 +313,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     // Pick the first non-null value after warmup (it should be > 0 since prices are positive)
-    const vals = (series.values as (number | null)[]).slice(WARMUP_BARS).filter((v): v is number => v !== null);
+    const vals = (series.values as (number | null)[])
+      .slice(WARMUP_BARS)
+      .filter((v): v is number => v !== null);
     expect(vals.length).toBeGreaterThan(0);
     const firstVal = vals[0]!;
     expect(firstVal).not.toBe(0);

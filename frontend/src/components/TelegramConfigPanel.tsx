@@ -52,7 +52,7 @@ async function saveProxyConfig(proxy: { host: string; port: number; username?: s
   });
 }
 
-export function TelegramConfigPanel({ alertConditions, isOpen, onToggle }: TelegramConfigPanelProps) {
+export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigPanelProps) {
   const [config, setConfig] = useState<TelegramConfig | null>(null);
   const [botToken, setBotToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,7 +60,7 @@ export function TelegramConfigPanel({ alertConditions, isOpen, onToggle }: Teleg
   const [testSending, setTestSending] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [alertPrefs, setAlertPrefs] = useState<Record<string, Record<number, boolean>>>({});
-  const [proxy, setProxy] = useState<ProxyConfig | null>(null);
+  const [, setProxy] = useState<ProxyConfig | null>(null);
   const [proxyHost, setProxyHost] = useState('');
   const [proxyPort, setProxyPort] = useState('');
   const [proxyUsername, setProxyUsername] = useState('');

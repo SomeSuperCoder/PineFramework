@@ -83,9 +83,12 @@ describe('Evil forming candle — zero volume', () => {
     const engine = createEngine(5);
     engine.setFormingCandle(true);
 
-    const zeroVolCtx = makeEvilBarContext({
-      volume: createSeries('volume', [0]),
-    }, 6);
+    const zeroVolCtx = makeEvilBarContext(
+      {
+        volume: createSeries('volume', [0]),
+      },
+      6,
+    );
 
     expect(() => {
       engine.computeFormingCandle(zeroVolCtx);
@@ -100,9 +103,12 @@ describe('Evil forming candle — extreme prices', () => {
     const engine = createEngine(5);
     engine.setFormingCandle(true);
 
-    const nanCtx = makeEvilBarContext({
-      close: createSeries('close', [NaN]),
-    }, 6);
+    const nanCtx = makeEvilBarContext(
+      {
+        close: createSeries('close', [NaN]),
+      },
+      6,
+    );
 
     expect(() => {
       engine.computeFormingCandle(nanCtx);
@@ -115,9 +121,12 @@ describe('Evil forming candle — extreme prices', () => {
     const engine = createEngine(5);
     engine.setFormingCandle(true);
 
-    const infCtx = makeEvilBarContext({
-      close: createSeries('close', [Infinity]),
-    }, 6);
+    const infCtx = makeEvilBarContext(
+      {
+        close: createSeries('close', [Infinity]),
+      },
+      6,
+    );
 
     expect(() => {
       engine.computeFormingCandle(infCtx);
@@ -130,9 +139,12 @@ describe('Evil forming candle — extreme prices', () => {
     const engine = createEngine(5);
     engine.setFormingCandle(true);
 
-    const negCtx = makeEvilBarContext({
-      close: createSeries('close', [-100]),
-    }, 6);
+    const negCtx = makeEvilBarContext(
+      {
+        close: createSeries('close', [-100]),
+      },
+      6,
+    );
 
     expect(() => {
       engine.computeFormingCandle(negCtx);

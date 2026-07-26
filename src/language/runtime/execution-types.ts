@@ -74,7 +74,7 @@ export interface TableEntry {
   border_width: number;
   frame_color: string;
   frame_width: number;
-  cells: Record<string, TableCellEntry>;  // key: "row,col"
+  cells: Record<string, TableCellEntry>; // key: "row,col"
 }
 
 export interface BoxEntry {

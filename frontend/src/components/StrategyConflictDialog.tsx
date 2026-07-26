@@ -1,5 +1,3 @@
-import React from 'react';
-
 export interface StrategyConflictDialogProps {
   isOpen: boolean;
   existingName: string;

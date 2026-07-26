@@ -28,7 +28,7 @@ interface ChartComponentProps {
 
 export interface ChartComponentHandle {
   scrollToDate: (timestampSeconds: number) => void;
-  setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed' }) => void;
+  setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => void;
   clearTeleportLine: () => void;
 }
 
@@ -365,7 +365,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         allShapeMarkers.push({
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
-          shape: s.style || s.type,
+          shape: s.type,
           color: s.color || '#2196f3',
           text: s.text || undefined,
           textcolor: s.textcolor,

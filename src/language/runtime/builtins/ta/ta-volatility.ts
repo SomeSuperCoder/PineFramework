@@ -3,6 +3,7 @@ import { guardFinite, isFiniteNumber } from '../../float-guards.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
 export function registerTaVolatility(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('ta.sar', (start: PineValue, inc: PineValue, max: PineValue): PineValue => {
@@ -11,8 +12,7 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number')
-      return NA;
+    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
 
     const afStart = typeof start === 'number' ? start : 0.02;
     const afInc = typeof inc === 'number' ? inc : 0.02;
@@ -84,16 +84,16 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
       return state.sar;
     }
 
-    const prevLow1 = state.prevLow1;
-    const prevLow2 = state.prevLow2;
-    const prevHigh1 = state.prevHigh1;
-    const prevHigh2 = state.prevHigh2;
-    const prevEp = state.prevEp;
+    const prevLow1: number = state.prevLow1;
+    const prevLow2: number = state.prevLow2;
+    const prevHigh1: number = state.prevHigh1;
+    const prevHigh2: number = state.prevHigh2;
+    const prevEp: number = state.prevEp;
 
     if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) {
       return NA;
     }
-    let sar = guardFinite(state.prevSar + state.af * (state.ep - state.prevSar));
+    let sar = guardFinite(state.prevSar + state.af * (state.ep - state.prevSar)) as number;
     if (isNa(sar)) return NA;
 
     if (state.trend === 'up') {
@@ -144,8 +144,7 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number')
-      return NA;
+    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
     const prevClose = ctx.close.getRelative(1);
     const tr = Math.max(
       high - low,

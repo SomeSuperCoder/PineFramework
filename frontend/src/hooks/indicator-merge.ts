@@ -12,7 +12,6 @@
 
 import type { ScriptResult } from '../types';
 import {
-  stripMeta,
   transformFillKey,
   mapShapes,
   mapLines,
@@ -20,9 +19,6 @@ import {
   mapBoxes,
   mapFills,
   mapStrategyMarkers,
-  mapBgColor,
-  mapAlertConditions,
-  mapAlertTriggers,
 } from './chart-data-transform';
 import type { ExecutionResultMessage } from './chart-data-transform';
 
@@ -556,15 +552,17 @@ export function mergeDiffIntoResult(
   })();
 
   // ── Background color ──
-  const mergedBgcolor = msg.bgcolor
-    ? [
-        ...(prev.bgcolor || []).slice(0, -(msg.bgcolor.length || undefined)),
-        ...msg.bgcolor.map((b) => ({
-          time: Math.floor(b.time / 1000),
-          color: b.color,
-        })),
-      ]
-    : prev.bgcolor;
+  let mergedBgcolor = prev.bgcolor;
+  if (msg.bgcolor) {
+    const bg = msg.bgcolor;
+    mergedBgcolor = [
+      ...(prev.bgcolor || []).slice(0, bg.length > 0 ? -bg.length : undefined),
+      ...bg.map((b) => ({
+        time: Math.floor(b.time / 1000),
+        color: b.color,
+      })),
+    ];
+  }
 
   // ── Boxes ──
   const diffBoxes = mapBoxes(msg.boxes);
@@ -579,15 +577,16 @@ export function mergeDiffIntoResult(
       : prev.boxes || [];
 
   // ── Alert triggers (deduped by alertId+barIndex) ──
+  const diffAlertTriggers = msg.alertTriggers;
   const mergedAlertTriggers =
-    msg.alertTriggers?.length > 0
+    diffAlertTriggers && diffAlertTriggers.length > 0
       ? (() => {
           const existingKeys = new Set(
             (prev.alertTriggers ?? []).map(
               (t) => `${t.alertId}:${t.barIndex}`,
             ),
           );
-          const dedupedNew = msg.alertTriggers.filter(
+          const dedupedNew = diffAlertTriggers.filter(
             (t) => !existingKeys.has(`${t.alertId}:${t.barIndex}`),
           );
           return dedupedNew.length > 0

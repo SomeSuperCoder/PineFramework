@@ -1,7 +1,10 @@
 import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
-import { ExecutionEngine, type ExecutionContext } from '../../src/language/runtime/execution-engine.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Line Builtin Test', () => {
@@ -32,11 +35,26 @@ if bar_index == 15
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);
@@ -73,7 +91,10 @@ if bar_index == 15
     }> = [];
     let price = 100;
     let s = 42;
-    const rand = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+    const rand = () => {
+      s = (s * 16807 + 0) % 2147483647;
+      return s / 2147483647;
+    };
     for (let i = 0; i < count; i++) {
       const open = price;
       let drift: number;
@@ -92,11 +113,26 @@ if bar_index == 15
       barIndex: i,
       barCount: bars.length,
       timestamp: bar.timestamp,
-      open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-      high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-      low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-      close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-      volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
     }));
 
     const result = engine.executeBars(contexts);

@@ -4,8 +4,8 @@
  */
 import type { PineValue } from '../../language/types/na.js';
 import { parseColor, type ColorInput } from '../../config/color-system.js';
-import type { TextHorizontalAlignment, Size } from '../rendering-types.js';
-import type { TableObject, TableCell } from './drawing-types.js';
+import type { TextHorizontalAlignment, TextVerticalAlignment, Size } from '../rendering-types.js';
+import type { TableObject } from './drawing-types.js';
 import { isNaOrNull, toNumber, toString, generateDrawingId } from './drawing-helpers.js';
 
 export function tableNew(
@@ -50,10 +50,7 @@ export function tableNew(
   return table;
 }
 
-export function tableClear(
-  tables: Map<string, TableObject>,
-  tableId: string,
-): void {
+export function tableClear(tables: Map<string, TableObject>, tableId: string): void {
   const table = tables.get(tableId);
   if (table) table.cells.clear();
 }
@@ -121,9 +118,6 @@ export function tableCellSet(
   });
 }
 
-export function tableDelete(
-  tables: Map<string, TableObject>,
-  tableId: string,
-): void {
+export function tableDelete(tables: Map<string, TableObject>, tableId: string): void {
   tables.delete(tableId);
 }

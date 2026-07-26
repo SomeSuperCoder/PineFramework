@@ -44,11 +44,26 @@ function buildContexts(bars: ReturnType<typeof loadBars>): ExecutionContext[] {
     barIndex: i,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -139,8 +154,8 @@ describe('Forming Candle Accumulation', () => {
             const extra = vals.slice(expected);
             throw new Error(
               `Variable '${name}' length ${vals.length} after tick ${tick + 1}/${numTicks} ` +
-              `(expected ${expected}). First extra value: ${JSON.stringify(extra[0])}. ` +
-              `This indicates cloneRuntimeScope preserved post-tick entries without truncation.`
+                `(expected ${expected}). First extra value: ${JSON.stringify(extra[0])}. ` +
+                `This indicates cloneRuntimeScope preserved post-tick entries without truncation.`,
             );
           }
         }

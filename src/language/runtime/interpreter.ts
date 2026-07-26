@@ -34,7 +34,7 @@ import {
 import type { ExecutionEngine } from './execution-engine.js';
 import type { RuntimeScope } from './scope.js';
 import type { PineValue } from '../types/na.js';
-import { NA, isNa } from '../types/na.js';
+import { NA } from '../types/na.js';
 import { pushBarValues } from './scope.js';
 import { guardFinite } from './float-guards.js';
 
@@ -146,7 +146,8 @@ export class Interpreter {
         const closeVal = context.close.getRelative(0);
         const volVal = context.volume.getRelative(0);
         this.eng.strategyEngine.updateBar(
-          context.barIndex, context.timestamp,
+          context.barIndex,
+          context.timestamp,
           sanitiseOHLC(openVal, 'open', bi),
           sanitiseOHLC(highVal, 'high', bi),
           sanitiseOHLC(lowVal, 'low', bi),
@@ -171,6 +172,7 @@ export class Interpreter {
       const executionTime = performance.now() - startTime;
       this.eng.updateMetrics(true, executionTime);
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
       return {
         success: true,
@@ -202,6 +204,7 @@ export class Interpreter {
       const engineError: EngineError = {
         message: error instanceof Error ? error.message : String(error),
         barIndex: context.barIndex,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         span: error instanceof Error && 'span' in error ? (error as any).span : undefined,
         stack: error instanceof Error ? error.stack : undefined,
       };
@@ -209,6 +212,7 @@ export class Interpreter {
 
       this.eng.rollbackToPreviousBar();
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
       return {
         success: false,
@@ -248,6 +252,7 @@ export class Interpreter {
       plotColors: this.eng.plotColors,
       fillColorData: this.eng.fillColorData,
       hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       lines: [...this.eng.lines.values()].map((l: any) => ({ ...l })),
       labels: [...this.eng.labels],
       boxes: [...this.eng.boxes.values()],
@@ -263,11 +268,18 @@ export class Interpreter {
       lastResult = this.executeBar(bar);
       if (!lastResult.success) {
         this.sanitizeOutputs();
-        return { ...lastResult, strategyMarkers: allMarkers, maxLookback: this.eng.getMaxLookback() };
+        return {
+          ...lastResult,
+          strategyMarkers: allMarkers,
+          maxLookback: this.eng.getMaxLookback(),
+        };
       }
       allMarkers.push(...lastResult.strategyMarkers);
       // Accumulate runtime lookback from TA functions (pivots, SMA, EMA, etc.)
-      this.eng.runtimeMaxBarsBack = Math.max(this.eng.runtimeMaxBarsBack, this.eng.getMaxLookback());
+      this.eng.runtimeMaxBarsBack = Math.max(
+        this.eng.runtimeMaxBarsBack,
+        this.eng.getMaxLookback(),
+      );
     }
 
     // Final pass: convert any remaining NaN/Infinity across all outputs to NA
@@ -279,6 +291,7 @@ export class Interpreter {
 
     // Rebuild result from filtered engine state (executeBar copies arrays,
     // so lastResult reflects pre-filter state)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
     return {
       success: true,
@@ -380,6 +393,7 @@ export class Interpreter {
    * NOT per-bar, so intermediate NaN during warmup isn't prematurely overwritten.
    */
   private sanitizeOutputs(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function walk(v: any): any {
       if (v === null || v === undefined) return v;
       if (typeof v === 'number') {
@@ -396,10 +410,10 @@ export class Interpreter {
       return v;
     }
     const outputs = this.eng.outputs;
-    for (const key of Object.keys(outputs)) {
-      const val = outputs[key];
+    for (const key of outputs.keys()) {
+      const val = outputs.get(key);
       if (val !== null && val !== undefined) {
-        outputs[key] = walk(val);
+        outputs.set(key, walk(val));
       }
     }
   }
@@ -439,47 +453,133 @@ export class Interpreter {
 
   // ── Individual statement implementations ──────────────────────────────────
 
-  executeVariableDeclaration(decl: VariableDeclarationNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeVariableDeclaration(this.eng, decl, scope, context, this.executeExpression.bind(this));
+  executeVariableDeclaration(
+    decl: VariableDeclarationNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeVariableDeclaration(
+      this.eng,
+      decl,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+    );
   }
 
-  executeAssignment(stmt: AssignmentNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
+  executeAssignment(
+    stmt: AssignmentNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
     return executeAssignment(this.eng, stmt, scope, context, this.executeExpression.bind(this));
   }
 
-  executeExpressionStatement(stmt: ExpressionStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeExpressionStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this));
+  executeExpressionStatement(
+    stmt: ExpressionStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeExpressionStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+    );
   }
 
-  executeIfStatement(stmt: IfStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeIfStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this), this.executeStatement.bind(this));
+  executeIfStatement(
+    stmt: IfStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeIfStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+      this.executeStatement.bind(this),
+    );
   }
 
-  executeForStatement(stmt: ForStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeForStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this), this.executeStatement.bind(this));
+  executeForStatement(
+    stmt: ForStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeForStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+      this.executeStatement.bind(this),
+    );
   }
 
-  executeWhileStatement(stmt: WhileStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeWhileStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this), this.executeStatement.bind(this));
+  executeWhileStatement(
+    stmt: WhileStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeWhileStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+      this.executeStatement.bind(this),
+    );
   }
 
-  executeSwitchStatement(stmt: SwitchStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeSwitchStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this), this.executeStatement.bind(this));
+  executeSwitchStatement(
+    stmt: SwitchStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeSwitchStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+      this.executeStatement.bind(this),
+    );
   }
 
-  executeTypeDeclaration(stmt: TypeDeclarationNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
+  executeTypeDeclaration(
+    stmt: TypeDeclarationNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
     return executeTypeDeclaration(this.eng, stmt, scope, context);
   }
 
-  executeReturnStatement(stmt: ReturnStatementNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeReturnStatement(this.eng, stmt, scope, context, this.executeExpression.bind(this));
+  executeReturnStatement(
+    stmt: ReturnStatementNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeReturnStatement(
+      this.eng,
+      stmt,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+    );
   }
 
   // ==========================================================================
   // EXPRESSION DISPATCH
   // ==========================================================================
 
-  executeExpression(expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
+  executeExpression(
+    expr: ExpressionNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
     const d = this.executeExpression.bind(this); // dispatch callback for module functions
 
     switch (expr.kind) {
@@ -526,7 +626,17 @@ export class Interpreter {
   // These are kept as instance methods so tests can monkey-patch them.
   // They delegate to the module functions.
 
-  executeTernaryExpression(expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext): PineValue {
-    return executeTernaryExpression(this.eng, expr, scope, context, this.executeExpression.bind(this));
+  executeTernaryExpression(
+    expr: ExpressionNode,
+    scope: RuntimeScope,
+    context: ExecutionContext,
+  ): PineValue {
+    return executeTernaryExpression(
+      this.eng,
+      expr,
+      scope,
+      context,
+      this.executeExpression.bind(this),
+    );
   }
 }

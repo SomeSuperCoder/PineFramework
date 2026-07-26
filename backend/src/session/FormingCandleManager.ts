@@ -280,7 +280,7 @@ export class FormingCandleManager {
 
     return {
       success: result.success,
-      error: result.error,
+      error: toErrorMessage(result.error),
       version: this.version ?? result.version,
       overlay: result.overlay,
       outputs,
@@ -363,7 +363,7 @@ export class FormingCandleManager {
 
     return {
       success: result.success,
-      error: result.error,
+      error: toErrorMessage(result.error),
       version: this.version ?? undefined,
       overlay: result.overlay,
       outputs,
@@ -384,4 +384,11 @@ export class FormingCandleManager {
       alertTriggers: result.diffAlertTriggers ?? [],
     };
   }
+}
+
+/** Convert EngineError | string | undefined to a plain string for ScriptOutputs. */
+function toErrorMessage(err: string | { message?: string } | undefined): string | undefined {
+  if (typeof err === 'string') return err;
+  if (err && err.message) return err.message;
+  return undefined;
 }

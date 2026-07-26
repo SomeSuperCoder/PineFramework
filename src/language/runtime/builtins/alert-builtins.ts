@@ -2,6 +2,7 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, pineTruthy, type PineValue } from '../../types/na.js';
 
 export function registerAlertBuiltins(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('alertcondition', (...args: PineValue[]): PineValue => {
@@ -13,8 +14,7 @@ export function registerAlertBuiltins(engine: ExecutionEngine): void {
         : {};
     const condition = args[0] ?? NA;
     const titleVal =
-      namedArgs['title'] ??
-      (args.length > 1 && typeof args[1] === 'string' ? args[1] : undefined);
+      namedArgs['title'] ?? (args.length > 1 && typeof args[1] === 'string' ? args[1] : undefined);
     const msgVal =
       namedArgs['message'] ??
       (args.length > 2 && typeof args[2] === 'string' ? args[2] : undefined);

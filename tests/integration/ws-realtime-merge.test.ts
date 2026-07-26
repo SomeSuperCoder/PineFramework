@@ -50,11 +50,26 @@ function buildContexts(bars: ReturnType<typeof loadBars>): ExecutionContext[] {
     barIndex: i,
     barCount: bars.length,
     timestamp: bar.timestamp,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.open)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map((b) => b.volume)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.open),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map((b) => b.volume),
+    ),
   }));
 }
 
@@ -153,7 +168,9 @@ describe('WS Real-Time Merge Correctness', () => {
         diffs.push(`Shape at time ${time}: style changed "${initialS.style}" → "${wsS.style}"`);
       }
       if (wsS.location !== initialS.location) {
-        diffs.push(`Shape at time ${time}: location changed "${initialS.location}" → "${wsS.location}"`);
+        diffs.push(
+          `Shape at time ${time}: location changed "${initialS.location}" → "${wsS.location}"`,
+        );
       }
     }
 

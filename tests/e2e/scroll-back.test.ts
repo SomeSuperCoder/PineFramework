@@ -22,9 +22,11 @@ test.describe('OHLCV scroll-back', () => {
     await expect(canvas).toBeVisible({ timeout: 10_000 });
 
     // Wait for initial data
-    await expect.poll(() => ohlcvRequests.length, {
-      timeout: 15_000,
-    }).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() => ohlcvRequests.length, {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(1);
 
     await page.waitForTimeout(2000);
 

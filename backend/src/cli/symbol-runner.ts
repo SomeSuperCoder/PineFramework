@@ -46,9 +46,7 @@ export async function runSymbolBacktest(
     });
 
     if (!pipelineResult.success) {
-      const msg = pipelineResult.error
-        ? (typeof pipelineResult.error === 'string' ? pipelineResult.error : pipelineResult.error.message)
-        : 'Execution failed';
+      const msg = pipelineResult.error ?? 'Execution failed';
       return { symbol, status: 'failed', error: msg };
     }
 

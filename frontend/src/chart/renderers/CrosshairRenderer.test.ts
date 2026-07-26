@@ -54,7 +54,7 @@ function createMockCtx(): CanvasRenderingContext2D {
     getContextAttributes: stub as () => any,
     getLineDash: stub as () => number[],
     getTransform: stub as () => DOMMatrix,
-    measureText: vi.fn(() => ({ width: 60 })) as (text: string) => TextMetrics,
+    measureText: vi.fn(() => ({ width: 60 } as unknown as TextMetrics)),
     strokeStyle: '',
     fillStyle: '',
     lineWidth: 1,

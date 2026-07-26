@@ -38,7 +38,7 @@ export async function runMultiSymbolBacktest(
     results.push(result);
 
     if (result.status === 'failed') {
-      const errMsg = typeof result.error === 'string' ? result.error : result.error?.message ?? 'Unknown error';
+      const errMsg = result.error ?? 'Unknown error';
       process.stderr.write(`  ✗ ${symbol}: ${errMsg}\n`);
     } else {
       process.stderr.write(

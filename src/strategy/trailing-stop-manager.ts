@@ -20,13 +20,18 @@ export class TrailingStopManager {
   }
 
   restoreState(state: Record<string, TrailingStopState>): void {
-    this.trailingStops = new Map(
-      Object.entries(state).map(([k, v]) => [k, { ...v }]),
-    );
+    this.trailingStops = new Map(Object.entries(state).map(([k, v]) => [k, { ...v }]));
   }
 
   /** Update trailing stop prices for pending orders with trail parameters. */
-  update(pendingOrders: Order[], positionDirection: PositionDirection, avgPrice: number, high: number, low: number, currentPrice: number): void {
+  update(
+    pendingOrders: Order[],
+    positionDirection: PositionDirection,
+    avgPrice: number,
+    high: number,
+    low: number,
+    currentPrice: number,
+  ): void {
     const mintick = 0.01;
 
     for (const order of pendingOrders) {
@@ -42,20 +47,24 @@ export class TrailingStopManager {
 
         if (order.trailOffset !== undefined && order.trailOffset > 0) {
           // trail_offset: distance in ticks from extreme price
-          activationPrice = positionDirection === 'long'
-            ? entryPrice + order.trailOffset * mintick
-            : entryPrice - order.trailOffset * mintick;
-          initialStop = positionDirection === 'long'
-            ? activationPrice - order.trailOffset * mintick
-            : activationPrice + order.trailOffset * mintick;
+          activationPrice =
+            positionDirection === 'long'
+              ? entryPrice + order.trailOffset * mintick
+              : entryPrice - order.trailOffset * mintick;
+          initialStop =
+            positionDirection === 'long'
+              ? activationPrice - order.trailOffset * mintick
+              : activationPrice + order.trailOffset * mintick;
         } else if (order.trailPrice !== undefined && order.trailPrice > 0) {
           // trail_price: absolute offset from market
-          activationPrice = positionDirection === 'long'
-            ? entryPrice + order.trailPrice
-            : entryPrice - order.trailPrice;
-          initialStop = positionDirection === 'long'
-            ? activationPrice - order.trailPrice
-            : activationPrice + order.trailPrice;
+          activationPrice =
+            positionDirection === 'long'
+              ? entryPrice + order.trailPrice
+              : entryPrice - order.trailPrice;
+          initialStop =
+            positionDirection === 'long'
+              ? activationPrice - order.trailPrice
+              : activationPrice + order.trailPrice;
         } else {
           continue;
         }
@@ -74,12 +83,17 @@ export class TrailingStopManager {
       // Check activation
       if (!state.isActivated) {
         // Compute the activation price: entry price + favorable move
-        const actPrice = positionDirection === 'long'
-          ? avgPrice + (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0))
-          : avgPrice - (state.trailOffset !== undefined ? state.trailOffset * mintick : (state.trailPrice ?? 0));
-        const activated = positionDirection === 'long'
-          ? high >= actPrice
-          : low <= actPrice;
+        const actPrice =
+          positionDirection === 'long'
+            ? avgPrice +
+              (state.trailOffset !== undefined
+                ? state.trailOffset * mintick
+                : (state.trailPrice ?? 0))
+            : avgPrice -
+              (state.trailOffset !== undefined
+                ? state.trailOffset * mintick
+                : (state.trailPrice ?? 0));
+        const activated = positionDirection === 'long' ? high >= actPrice : low <= actPrice;
         if (activated) {
           state.isActivated = true;
           state.highestPrice = positionDirection === 'long' ? high : low;
@@ -97,21 +111,22 @@ export class TrailingStopManager {
         // Compute new stop price
         let newStop: number;
         if (state.trailOffset !== undefined && state.trailOffset > 0) {
-          newStop = positionDirection === 'long'
-            ? state.highestPrice - state.trailOffset * mintick
-            : state.highestPrice + state.trailOffset * mintick;
+          newStop =
+            positionDirection === 'long'
+              ? state.highestPrice - state.trailOffset * mintick
+              : state.highestPrice + state.trailOffset * mintick;
         } else if (state.trailPrice !== undefined && state.trailPrice > 0) {
-          newStop = positionDirection === 'long'
-            ? currentPrice - state.trailPrice
-            : currentPrice + state.trailPrice;
+          newStop =
+            positionDirection === 'long'
+              ? currentPrice - state.trailPrice
+              : currentPrice + state.trailPrice;
         } else {
           continue;
         }
 
         // One-way ratchet: stop only moves in favorable direction
-        const stopImproved = positionDirection === 'long'
-          ? newStop > state.stopPrice
-          : newStop < state.stopPrice;
+        const stopImproved =
+          positionDirection === 'long' ? newStop > state.stopPrice : newStop < state.stopPrice;
 
         if (stopImproved) {
           state.stopPrice = newStop;

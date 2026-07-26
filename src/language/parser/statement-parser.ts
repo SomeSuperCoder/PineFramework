@@ -80,6 +80,7 @@ export class StatementParser extends ExpressionParser {
       // Look for the title argument
       const titleArg = scriptArgs.find((a) => a.name === 'title');
       if (titleArg && titleArg.value.kind === 'StringLiteral') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         scriptName = (titleArg.value as any).value;
       }
     }
@@ -94,6 +95,7 @@ export class StatementParser extends ExpressionParser {
     if (!scriptName) {
       const titleArg = scriptArgs.find((a) => a.name === 'title');
       if (titleArg && titleArg.value.kind === 'StringLiteral') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         scriptName = (titleArg.value as any).value;
       }
     }
@@ -170,6 +172,7 @@ export class StatementParser extends ExpressionParser {
         kind: 'ExpressionStatement',
         span: nameToken.span,
         expression: this.parseFunctionExpression(nameToken.lexeme, nameToken.span.start),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any;
     }
     if (this.match(TokenType.Type)) {
@@ -232,6 +235,7 @@ export class StatementParser extends ExpressionParser {
   ): VariableDeclarationNode {
     const start = this.previous().span.start;
     const nameToken = this.consume(TokenType.Identifier, 'Expected variable name');
+    // eslint-disable-next-line prefer-const
     let typeAnnotation: TypeAnnotationNode | undefined;
 
     if (this.match(TokenType.Assign)) {

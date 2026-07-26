@@ -206,7 +206,7 @@ export function isAssignable(source: PineType, target: PineType): boolean {
   if (target.kind === 'any') {
     return true;
   }
-  if (source.kind === 'na') {
+  if (source.kind === 'na' || target.kind === 'na') {
     return true;
   }
   if (source.equals(target)) {
@@ -216,15 +216,10 @@ export function isAssignable(source: PineType, target: PineType): boolean {
   const sourceBase = unwrapSeries(source);
   const targetBase = unwrapSeries(target);
 
-  // Allow numeric widening (int → float) but not narrowing (float → int)
+  // Allow numeric widening (int → float) and any numeric → int (float → int
+  // is allowed because Pine Script implicitly truncates at runtime).
   if (isNumeric(sourceBase) && isNumeric(targetBase)) {
-    if (targetBase.name === 'float') {
-      return true;
-    }
-    if (sourceBase.name === 'int' && targetBase.name === 'int') {
-      return true;
-    }
-    // Don't return false here; fall through for series<T> checks
+    return true;
   }
 
   // Allow if base types match regardless of series wrapper (series<T> → T, T → series<T>)

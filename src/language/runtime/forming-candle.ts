@@ -11,7 +11,7 @@ import {
 import { type PineValue } from '../types/na.js';
 import { RingBuffer } from './ring-buffer.js';
 import { createSeries, type Series } from './series.js';
-import { cloneRuntimeScope } from './scope.js';
+import { cloneRuntimeScope, type RuntimeScope } from './scope.js';
 
 export class FormingCandleProcessor {
   private eng: ExecutionEngine;
@@ -28,6 +28,7 @@ export class FormingCandleProcessor {
         error: result.error,
         overlay: this.eng.compiledScript.overlay,
         diffOutputs: Object.fromEntries(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Array.from(result.outputs as Map<string, any>).map(([k, s]) => [k, (s as any).last()]),
         ),
         diffShapes: [...result.shapes],
@@ -48,52 +49,69 @@ export class FormingCandleProcessor {
     const preTimestampsLen = this.eng.barTimestamps.length;
     const preTotalBars = this.eng.metrics.totalBars;
     const preAlertTriggersLen = this.eng.alertTriggers.length;
-    const preSmaBuffers = this.eng.smaBuffers.size > 0
-      ? new Map([...this.eng.smaBuffers].map(([k, v]) => [k, v instanceof RingBuffer ? v.toArray() : [...v]]))
-      : undefined;
-    const preEmaState = this.eng.emaState.size > 0
-      ? new Map([...this.eng.emaState].map(([k, v]) => [k, { ...v }]))
-      : undefined;
-    const preCrossPrevValues = this.eng.crossPrevValues.size > 0
-      ? new Map(this.eng.crossPrevValues)
-      : undefined;
-    const preChangePrevValues = this.eng.changePrevValues.size > 0
-      ? new Map(this.eng.changePrevValues)
-      : undefined;
-    const preHighestBuffers = this.eng.highestBuffers.size > 0
-      ? new Map([...this.eng.highestBuffers].map(([k, v]) => [k, [...v]]))
-      : undefined;
-    const preLowestBuffers = this.eng.lowestBuffers.size > 0
-      ? new Map([...this.eng.lowestBuffers].map(([k, v]) => [k, [...v]]))
-      : undefined;
-    const prePlotColors = this.eng.plotColors.size > 0
-      ? new Map([...this.eng.plotColors].map(([k, v]) => [k, [...v]]))
-      : undefined;
-    const preFillColorData = this.eng.fillColorData.size > 0
-      ? new Map([...this.eng.fillColorData].map(([k, v]) => [k, [...v]]))
-      : undefined;
+    const preSmaBuffers =
+      this.eng.smaBuffers.size > 0
+        ? new Map(
+            [...this.eng.smaBuffers].map(([k, v]) => [
+              k,
+              v instanceof RingBuffer ? v.toArray() : [...v],
+            ]),
+          )
+        : undefined;
+    const preEmaState =
+      this.eng.emaState.size > 0
+        ? new Map([...this.eng.emaState].map(([k, v]) => [k, { ...v }]))
+        : undefined;
+    const preCrossPrevValues =
+      this.eng.crossPrevValues.size > 0 ? new Map(this.eng.crossPrevValues) : undefined;
+    const preChangePrevValues =
+      this.eng.changePrevValues.size > 0 ? new Map(this.eng.changePrevValues) : undefined;
+    const preHighestBuffers =
+      this.eng.highestBuffers.size > 0
+        ? new Map([...this.eng.highestBuffers].map(([k, v]) => [k, [...v]]))
+        : undefined;
+    const preLowestBuffers =
+      this.eng.lowestBuffers.size > 0
+        ? new Map([...this.eng.lowestBuffers].map(([k, v]) => [k, [...v]]))
+        : undefined;
+    const prePlotColors =
+      this.eng.plotColors.size > 0
+        ? new Map([...this.eng.plotColors].map(([k, v]) => [k, [...v]]))
+        : undefined;
+    const preFillColorData =
+      this.eng.fillColorData.size > 0
+        ? new Map([...this.eng.fillColorData].map(([k, v]) => [k, [...v]]))
+        : undefined;
     const preBgcolorDataLen = this.eng.bgcolorData.length;
-    const preRsiState = this.eng.rsiState.size > 0
-      ? new Map([...this.eng.rsiState].map(([k, v]) => [k, { ...v }]))
-      : undefined;
-    const preAtrState = this.eng.atrState.size > 0
-      ? new Map([...this.eng.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]))
-      : undefined;
-    const preHmaBuffers = this.eng.hmaBuffers.size > 0
-      ? new Map([...this.eng.hmaBuffers].map(([k, v]) => [
-          k,
-          { half: [...v.half], full: [...v.full], diff: [...v.diff] },
-        ]))
-      : undefined;
-    const preSarState = this.eng.sarState.size > 0
-      ? new Map([...this.eng.sarState].map(([k, v]) => [k, { ...v }]))
-      : undefined;
-    const preFunctionPersistentScopes = this.eng.functionPersistentScopes.size > 0
-      ? new Map([...this.eng.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]))
-      : undefined;
-    const preValuewhenHistory = this.eng.valuewhenHistory && this.eng.valuewhenHistory.size > 0
-      ? new Map([...this.eng.valuewhenHistory].map(([k, v]) => [k, [...v]]))
-      : undefined;
+    const preRsiState =
+      this.eng.rsiState.size > 0
+        ? new Map([...this.eng.rsiState].map(([k, v]) => [k, { ...v }]))
+        : undefined;
+    const preAtrState =
+      this.eng.atrState.size > 0
+        ? new Map([...this.eng.atrState].map(([k, v]) => [k, { ...v, values: [...v.values] }]))
+        : undefined;
+    const preHmaBuffers =
+      this.eng.hmaBuffers.size > 0
+        ? new Map(
+            [...this.eng.hmaBuffers].map(([k, v]) => [
+              k,
+              { half: [...v.half], full: [...v.full], diff: [...v.diff] },
+            ]),
+          )
+        : undefined;
+    const preSarState =
+      this.eng.sarState.size > 0
+        ? new Map([...this.eng.sarState].map(([k, v]) => [k, { ...v }]))
+        : undefined;
+    const preFunctionPersistentScopes =
+      this.eng.functionPersistentScopes.size > 0
+        ? new Map([...this.eng.functionPersistentScopes].map(([k, v]) => [k, cloneRuntimeScope(v)]))
+        : undefined;
+    const preValuewhenHistory =
+      this.eng.valuewhenHistory && this.eng.valuewhenHistory.size > 0
+        ? new Map([...this.eng.valuewhenHistory].map(([k, v]) => [k, [...v]]))
+        : undefined;
     const preBarColorDataLen = this.eng.barColorData.length;
     const preBoxesSize = this.eng.boxes.size;
     const preBoxIdCounter = this.eng.boxIdCounter;
@@ -118,8 +136,6 @@ export class FormingCandleProcessor {
     }
 
     const result = this.eng.executeBar(context);
-
-
 
     // Capture the actual bar state BEFORE restoration — the frontend needs
     // the real barIndex and barTimestamps so it can correctly append a new
@@ -294,7 +310,7 @@ export class FormingCandleProcessor {
 
     const diffPlotColors: Record<string, (string | null)[]> = {};
     for (const [key, colors] of this.eng.plotColors) {
-      const preColors = prePlotColors.get(key);
+      const preColors = prePlotColors?.get(key);
       if (!preColors || colors.length > preColors.length) {
         diffPlotColors[key] = colors.slice(preColors?.length ?? 0);
       }
@@ -302,7 +318,7 @@ export class FormingCandleProcessor {
 
     const diffFillColorData: Record<string, (string | null)[]> = {};
     for (const [key, colors] of this.eng.fillColorData) {
-      const preColors = preFillColorData.get(key);
+      const preColors = preFillColorData?.get(key);
       if (!preColors || colors.length > preColors.length) {
         diffFillColorData[key] = colors.slice(preColors?.length ?? 0);
       }

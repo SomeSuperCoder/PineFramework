@@ -2,6 +2,8 @@ import { NA, isNa, type PineValue } from '../../../types/na.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
 export function registerTaStatistics(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
   eng.builtins.set('ta.highest', (source: PineValue, length: PineValue): PineValue => {
@@ -120,32 +122,37 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     return candidateValue;
   });
 
-  eng.builtins.set('ta.valuewhen', (condition: PineValue, source: PineValue, occurrence: PineValue): PineValue => {
-    const occ = typeof occurrence === 'number' ? Math.trunc(occurrence) : 0;
-    if (occ < 0) return NA;
-    const key = `valuewhen_${eng.currentCallSiteId}`;
-    if (!eng.valuewhenHistory) {
-      eng.valuewhenHistory = new Map();
-    }
-    if (!eng.valuewhenHistory.has(key)) {
-      eng.valuewhenHistory.set(key, []);
-    }
-    const history: number[] = eng.valuewhenHistory.get(key)!;
-    if (condition && condition !== 0 && condition !== false) {
-      if (typeof source === 'number') {
-        history.push(source);
-      } else {
-        history.push(NA as any);
+  eng.builtins.set(
+    'ta.valuewhen',
+    (condition: PineValue, source: PineValue, occurrence: PineValue): PineValue => {
+      const occ = typeof occurrence === 'number' ? Math.trunc(occurrence) : 0;
+      if (occ < 0) return NA;
+      const key = `valuewhen_${eng.currentCallSiteId}`;
+      if (!eng.valuewhenHistory) {
+        eng.valuewhenHistory = new Map();
       }
-      // Track lookback: need enough history to find the Nth occurrence
-      // The occurrence index is 0-based, so we need at least occ+1 entries
-      const needed = occ + 1;
-      if (needed > eng.valuewhenLookback) eng.valuewhenLookback = needed;
-    }
-    const idx = history.length - 1 - occ;
-    if (idx >= 0 && idx < history.length) {
-      return history[idx]!;
-    }
-    return NA;
-  });
+      if (!eng.valuewhenHistory.has(key)) {
+        eng.valuewhenHistory.set(key, []);
+      }
+      const history: number[] = eng.valuewhenHistory.get(key)!;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (condition && condition !== 0 && (condition as any) !== false) {
+        if (typeof source === 'number') {
+          history.push(source);
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          history.push(NA as any);
+        }
+        // Track lookback: need enough history to find the Nth occurrence
+        // The occurrence index is 0-based, so we need at least occ+1 entries
+        const needed = occ + 1;
+        if (needed > eng.valuewhenLookback) eng.valuewhenLookback = needed;
+      }
+      const idx = history.length - 1 - occ;
+      if (idx >= 0 && idx < history.length) {
+        return history[idx]!;
+      }
+      return NA;
+    },
+  );
 }

@@ -324,7 +324,7 @@ export class Tokenizer {
         while (this.isDigit(this.peek())) {
           this.advance();
         }
-      } else if (nextChar === '\0' || /[\s\n()\[\]{},;+\-*/%<>=!&|]/.test(nextChar)) {
+      } else if (nextChar === '\0' || /[\s\n()[\]{},;+\-*/%<>=!&|]/.test(nextChar)) {
         // Float with trailing dot (e.g., 0.) - consume the dot
         isFloat = true;
         this.advance(); // consume the dot
