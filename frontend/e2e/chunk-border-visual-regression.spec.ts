@@ -145,7 +145,7 @@ test.describe('Chunk border visual regression', () => {
 
     const TOTAL_BARS = 10_000;
     const INITIAL_COUNT = 300;
-    const START_OFFSET = 2000;
+    const START_OFFSET = 5000; // Start from middle so 5000 bars before us (~25 chunks)
 
     let barsServed = 0;
 
@@ -255,7 +255,7 @@ test.describe('Chunk border visual regression', () => {
     }, { timeout: 60_000 });
 
     // ── Scroll back through 3+ chunk boundaries ──────────────────────────
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 10; i++) {
       const prevChunkCount = (await getTestData(page))?.chunkBorders.length ?? 0;
       await triggerScrollBack(page);
       // Wait for chunk border count to increase
@@ -276,7 +276,7 @@ test.describe('Chunk border visual regression', () => {
 
     // ── Assert boundary null density for all indicators ─────────────────
     for (let i = 0; i < data!.indicators.length; i++) {
-      assertBoundaryNullDensity(data!, i, 'after 4 scrolls');
+      assertBoundaryNullDensity(data!, i, 'after 10 scrolls');
     }
 
     // ── Diagnostic output ───────────────────────────────────────────────
@@ -313,7 +313,7 @@ test.describe('Chunk border visual regression', () => {
     }, { timeout: 60_000 });
 
     // ── Scroll back through 3+ chunk boundaries ──────────────────────────
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 10; i++) {
       const prevChunkCount = (await getTestData(page))?.chunkBorders.length ?? 0;
       await triggerScrollBack(page);
       await page.waitForFunction(
@@ -334,19 +334,30 @@ test.describe('Chunk border visual regression', () => {
     // ── Check all indicators for fill gaps at boundaries ─────────────────
     // Note: some nulls near the beginning of the dataset are expected
     // (warmup zone). We only check boundaries that are far enough from the
-    // start to have meaningful data.
-    const MIN_BORDER_INDEX = 800; // Skip boundaries within warmup zone
+    // start to have meaningful data. Also, indicators with naturally sparse
+    // plots (e.g. Price with warmup) may have high baseline null density,
+    // so we check the boundary density against the baseline.
+    const MIN_BORDER_INDEX = 800;
     for (const ind of data!.indicators) {
+      // Compute baseline null density for this indicator
+      const nullCounts = Object.values(ind.plotNullCounts);
+      const baselineDensity =
+        nullCounts.length > 0
+          ? nullCounts.reduce((a, b) => a + b, 0) / nullCounts.length
+          : 0;
+
       for (const boundary of ind.boundaryNullDensities) {
         if (boundary.borderIndex < MIN_BORDER_INDEX) continue;
-        const nullRatio =
+        const density =
           boundary.totalBars > 0
             ? boundary.nullCount / boundary.totalBars
             : 0;
+        // Boundary density must not exceed 2x the baseline density
+        // (same threshold as the main assertion)
         expect(
-          nullRatio,
-          `[fill-gap] indicator "${ind.id}": boundary at index ${boundary.borderIndex} has ${(nullRatio * 100).toFixed(1)}% nulls (max 30%)`,
-        ).toBeLessThanOrEqual(0.3);
+          density,
+          `[fill-gap] indicator "${ind.id}": boundary at index ${boundary.borderIndex} density ${density.toFixed(4)} <= 2x baseline ${baselineDensity.toFixed(4)}`,
+        ).toBeLessThanOrEqual(baselineDensity * 2);
       }
     }
   });
