@@ -51,8 +51,17 @@ export function prependIndicatorResult(
         addedCount,
         addedCount + contextSize,
       );
-      // Replace the first contextSize entries of prev with recomputed boundary
-      const replacedPrev = [...boundaryData, ...plot.data.slice(contextSize)];
+      // Replace the first contextSize entries of prev with recomputed boundary,
+      // but only where the re-execution produced valid (non-null) values.
+      // When the re-execution's warmup is larger than the original's,
+      // boundaryData contains nulls at positions where prev had valid values.
+      // Blindly overwriting creates gaps at chunk borders.
+      const replacedPrev = boundaryData.map((entry, i) => {
+        if (entry.value === null && plot.data[i]?.value !== null) {
+          return plot.data[i]!; // keep prev valid data
+        }
+        return entry;
+      }).concat(plot.data.slice(contextSize));
       return { ...plot, data: [...newBarData, ...replacedPrev] };
     }
     return plot;
@@ -250,7 +259,8 @@ export function prependIndicatorResult(
     })),
   ];
 
-  // Prepend fillColorData entries and recompute boundary
+  // Prepend fillColorData entries and recompute boundary.
+  // Same conditional logic as plots: keep prev color when new is null.
   const mergedFillColorData: Record<string, (string | null)[]> = {};
   const allFillKeys = new Set([
     ...Object.keys(prev.fillColorData || {}),
@@ -260,9 +270,13 @@ export function prependIndicatorResult(
     const newColors = newResult.fillColorData?.[key] || [];
     const prevColors = prev.fillColorData?.[key] || [];
     const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
+    const replacedBoundary = boundaryColors.map((c, i) => {
+      if (c === null && prevColors[i] !== null) return prevColors[i];
+      return c;
+    });
     mergedFillColorData[key] = [
       ...newColors.slice(0, addedCount),
-      ...boundaryColors,
+      ...replacedBoundary,
       ...prevColors.slice(contextSize),
     ];
   }
@@ -277,9 +291,13 @@ export function prependIndicatorResult(
     const newColors = newResult.plotColors?.[key] || [];
     const prevColors = prev.plotColors?.[key] || [];
     const boundaryColors = newColors.slice(addedCount, addedCount + contextSize);
+    const replacedBoundary = boundaryColors.map((c, i) => {
+      if (c === null && prevColors[i] !== null) return prevColors[i];
+      return c;
+    });
     mergedPlotColors[key] = [
       ...newColors.slice(0, addedCount),
-      ...boundaryColors,
+      ...replacedBoundary,
       ...prevColors.slice(contextSize),
     ];
   }

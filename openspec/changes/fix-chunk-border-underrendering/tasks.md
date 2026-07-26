@@ -51,3 +51,15 @@ Test that executing with sufficient context matches full-dataset execution for t
 - [x] Manual visual testing
 
 Load the indicator, scroll left, verify no persistent NA gaps.
+
+---
+
+## Task 6: Fix warmup null overwrite in prependIndicatorResult
+
+- [x] Conditional boundary merge — only replace prev data where new data is non-null
+
+**File:** `frontend/src/hooks/indicator-merge.ts`
+
+When the re-execution's warmup (`effective`) is larger than the original execution's warmup, `boundaryData` contains null entries at positions where `prev.data` had valid values. The current merge unconditionally replaces the first `contextSize` entries, overwriting valid data with nulls.
+
+Fix: only replace an entry when `boundaryData[i].value !== null`. When null, keep `prev.data[i]`.
