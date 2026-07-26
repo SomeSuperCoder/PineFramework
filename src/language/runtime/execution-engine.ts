@@ -1,21 +1,9 @@
-import type {
-  ProgramNode,
-  ExpressionNode,
-  FunctionExpressionNode,
-  StatementNode,
-} from '../parser/ast/nodes.js';
+import type { ProgramNode, FunctionExpressionNode, StatementNode } from '../parser/ast/nodes.js';
 import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { type PineValue } from '../types/na.js';
-import {
-  StrategyEngine,
-  type StrategyMarker,
-} from '../../strategy/strategy-engine.js';
+import { StrategyEngine, type StrategyMarker } from '../../strategy/strategy-engine.js';
 import { parseStrategyDeclaration, getStrategyConfig } from '../script-declarations.js';
-import {
-  type RuntimeScope,
-  createRuntimeScope,
-  declareVariable,
-} from './scope.js';
+import { type RuntimeScope, createRuntimeScope, declareVariable } from './scope.js';
 import { type Series } from './series.js';
 import { RingBuffer } from './ring-buffer.js';
 import { Interpreter } from './interpreter.js';
@@ -74,6 +62,7 @@ export class ExecutionEngine {
   /** @internal */ globalScope: RuntimeScope;
   /** @internal */ functions: Map<string, FunctionExpressionNode>;
   /** @internal */ functionPersistentScopes: Map<string, RuntimeScope>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   /** @internal */ builtins: Map<string, (...args: any[]) => PineValue>;
   /** @internal */ outputs: Map<string, Series>;
   /** @internal */ shapes: ShapeEntry[];
@@ -184,7 +173,8 @@ export class ExecutionEngine {
     string,
     { prev: number; count: number; sum: number; initialized: boolean }
   > = new Map();
-  /** @internal */ hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> = new Map();
+  /** @internal */ hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> =
+    new Map();
   /** @internal */ sarState: Map<
     string,
     {
@@ -223,7 +213,8 @@ export class ExecutionEngine {
   /** @internal */ inputs: Map<string, { type: string; default: PineValue }> = new Map();
   /** @internal */ crossPrevValues: Map<string, { src: number; cmp: number }> = new Map();
   /** @internal */ changePrevValues: Map<string, number> = new Map();
-  /** @internal */ atrState: Map<string, { prev: number; count: number; values: PineValue[] }> = new Map();
+  /** @internal */ atrState: Map<string, { prev: number; count: number; values: PineValue[] }> =
+    new Map();
   /** @internal */ highestBuffers: Map<string, number[]> = new Map();
   /** @internal */ lowestBuffers: Map<string, number[]> = new Map();
   /** @internal */ currentCallSiteId = 0;
@@ -233,9 +224,11 @@ export class ExecutionEngine {
   > = new Map();
   /** @internal */ pivotLookback: number = 0;
   /** @internal */ valuewhenLookback: number = 0;
+  /** @internal */ valuewhenHistory?: Map<string, number[]>;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
   /** @internal */ cumulativeBarCount: number = 0;
   /** @internal */ runtimeMaxBarsBack: number = 0;
+  /** @internal */ runtimeSeriesLookback: number = 0;
 
   // ========================================================================
   // PUBLIC API
@@ -250,16 +243,42 @@ export class ExecutionEngine {
 
   getMaxLookback(): number {
     let max = 0;
-    for (const key of this.smaBuffers.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
-    for (const key of this.emaState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
-    for (const key of this.rsiState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
-    for (const key of this.atrState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
-    for (const key of this.hmaBuffers.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
-    for (const key of this.sarState.keys()) { max = Math.max(max, this.parseMapLength(key.split('_'))); }
+    for (const key of this.smaBuffers.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.emaState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.rsiState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.atrState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.hmaBuffers.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.sarState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.highestBuffers.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.lowestBuffers.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
     // ta.pivothigh/ta.pivotlow need leftBars + rightBars of OHLC history
-    if (this.pivotLookback > 0) { max = Math.max(max, this.pivotLookback); }
+    if (this.pivotLookback > 0) {
+      max = Math.max(max, this.pivotLookback);
+    }
     // ta.valuewhen needs enough history to find the Nth occurrence
-    if (this.valuewhenLookback > 0) { max = Math.max(max, this.valuewhenLookback); }
+    if (this.valuewhenLookback > 0) {
+      max = Math.max(max, this.valuewhenLookback);
+    }
+    // Runtime series indexing (close[1], myVar[70], etc.)
+    if (this.runtimeSeriesLookback > 0) {
+      max = Math.max(max, this.runtimeSeriesLookback);
+    }
     return max;
   }
 
@@ -455,22 +474,23 @@ export class ExecutionEngine {
     this.registerStrategyBuiltins();
   }
 
-  private evaluateArgValue(expr: ExpressionNode): unknown {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private evaluateArgValue(expr: any): unknown {
     switch (expr.kind) {
       case 'NumberLiteral':
-        return (expr as any).value;
+        return expr.value;
       case 'StringLiteral':
-        return (expr as any).value;
+        return expr.value;
       case 'BooleanLiteral':
-        return (expr as any).value;
+        return expr.value;
       case 'Identifier':
-        return (expr as any).name;
+        return expr.name;
       case 'MemberExpression': {
-        const obj = this.evaluateArgValue((expr as any).object);
+        const obj = this.evaluateArgValue(expr.object);
         if (typeof obj === 'string') {
-          return `${obj}.${(expr as any).property}`;
+          return `${obj}.${expr.property}`;
         }
-        return (expr as any).property;
+        return expr.property;
       }
       default:
         return undefined;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Expression execution — extracted from interpreter.ts (S-007).
  *
@@ -9,10 +10,7 @@
  * at construction time via initExpressionExecutor().
  */
 
-import type {
-  ExpressionNode,
-  StatementNode,
-} from '../parser/ast/nodes.js';
+import type { ExpressionNode, StatementNode } from '../parser/ast/nodes.js';
 import { NA, isNa, pineTruthy, type PineValue } from '../types/na.js';
 import { FLOAT_TYPE } from '../types/pine-types.js';
 import {
@@ -66,10 +64,12 @@ export function initExpressionExecutor(executeStmt: ExecuteStatementFn): void {
 // DISPATCH_TABLE below and called from the Interpreter class's dispatcher.
 // ============================================================================
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function executeNumberLiteral(expr: any): PineValue {
   return expr.value;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function executeStringLiteral(expr: any): PineValue {
   return expr.value;
 }
@@ -124,7 +124,10 @@ export function executeIdentifier(
     const low = context.low.getRelative(0);
     const close = context.close.getRelative(0);
     if (isNa(open) || isNa(high) || isNa(low) || isNa(close)) return NA;
-    const sum = safeAdd(safeAdd(safeAdd(open as number, high as number) as number, low as number) as number, close as number);
+    const sum = safeAdd(
+      safeAdd(safeAdd(open as number, high as number) as number, low as number) as number,
+      close as number,
+    );
     if (isNa(sum)) return NA;
     return guardFinite((sum as number) / 4);
   }
@@ -176,15 +179,23 @@ export function executeBinaryExpression(
 
   switch (expr.operator) {
     case '+':
-      if (typeof left === 'string' || typeof right === 'string') return String(left) + String(right);
+      if (typeof left === 'string' || typeof right === 'string')
+        return String(left) + String(right);
       return safeAdd(left as number, right as number);
-    case '-': return safeSub(left as number, right as number);
-    case '*': return safeMul(left as number, right as number);
-    case '/': return safeDiv(left as number, right as number);
-    case '%': return safeMod(left as number, right as number);
-    case '**': return safePow(left as number, right as number);
-    case '==': return left === right;
-    case '!=': return left !== right;
+    case '-':
+      return safeSub(left as number, right as number);
+    case '*':
+      return safeMul(left as number, right as number);
+    case '/':
+      return safeDiv(left as number, right as number);
+    case '%':
+      return safeMod(left as number, right as number);
+    case '**':
+      return safePow(left as number, right as number);
+    case '==':
+      return left === right;
+    case '!=':
+      return left !== right;
     case '<': {
       // Guard against NaN comparisons (NaN < x → false, IEEE 754)
       if (typeof left !== 'number' || typeof right !== 'number') return NA;
@@ -206,7 +217,8 @@ export function executeBinaryExpression(
       if (!Number.isFinite(left) || !Number.isFinite(right)) return NA;
       return left >= right;
     }
-    default: throw new Error(`Unsupported binary operator: ${expr.operator}`);
+    default:
+      throw new Error(`Unsupported binary operator: ${expr.operator}`);
   }
 }
 
@@ -220,10 +232,14 @@ export function executeUnaryExpression(
   const operand = dispatch(expr.operand, scope, context);
   if (isNa(operand)) return NA;
   switch (expr.operator) {
-    case '-': return safeUnaryMinus(operand as number);
-    case '+': return safeUnaryPlus(operand as number);
-    case 'not': return !pineTruthy(operand);
-    default: throw new Error(`Unsupported unary operator: ${expr.operator}`);
+    case '-':
+      return safeUnaryMinus(operand as number);
+    case '+':
+      return safeUnaryPlus(operand as number);
+    case 'not':
+      return !pineTruthy(operand);
+    default:
+      throw new Error(`Unsupported unary operator: ${expr.operator}`);
   }
 }
 
@@ -288,7 +304,15 @@ export function executeCallExpression(
 
     const func = eng.functions.get(funcName);
     if (func) {
-      return executeFunctionCall(eng, func, args, expr.arguments, scope, context, `${funcName}@${expr.callId}`);
+      return executeFunctionCall(
+        eng,
+        func,
+        args,
+        expr.arguments,
+        scope,
+        context,
+        `${funcName}@${expr.callId}`,
+      );
     }
   }
 
@@ -336,7 +360,8 @@ export function executeCallExpression(
       const tableMethod = eng.builtins.get(`table.${methodName}`);
       if (tableMethod) {
         eng.currentCallSiteId = expr.callId;
-        const builtinArgs = Object.keys(namedArgs).length > 0 ? [obj, ...args, namedArgs] : [obj, ...args];
+        const builtinArgs =
+          Object.keys(namedArgs).length > 0 ? [obj, ...args, namedArgs] : [obj, ...args];
         return tableMethod(...builtinArgs);
       }
     }
@@ -351,15 +376,29 @@ export function executeCallExpression(
     const methodFunc = eng.functions.get(methodName);
     if (methodFunc) {
       const methodArgExprs = [expr.callee.object, ...expr.arguments];
-      return executeFunctionCall(eng, methodFunc, [obj, ...args], methodArgExprs, scope, context, `${methodName}@${expr.callId}`);
+      return executeFunctionCall(
+        eng,
+        methodFunc,
+        [obj, ...args],
+        methodArgExprs,
+        scope,
+        context,
+        `${methodName}@${expr.callId}`,
+      );
     }
 
     // Drawing object methods on returned IDs
     if (typeof obj === 'number') {
       if (methodName === 'delete') {
         // Generic delete — works on both lines and boxes
-        if (eng.lines.has(obj)) { eng.lines.delete(obj); return true; }
-        if (eng.boxes.has(obj)) { eng.boxes.delete(obj); return true; }
+        if (eng.lines.has(obj)) {
+          eng.lines.delete(obj);
+          return true;
+        }
+        if (eng.boxes.has(obj)) {
+          eng.boxes.delete(obj);
+          return true;
+        }
         return true;
       }
       const line = eng.lines.get(obj);
@@ -418,7 +457,18 @@ function executeFunctionCall(
         if (argBinding) {
           // Built-in series (close, high, etc.) use a different history lookup
           // path in executeIndexExpression — skip aliasing for those.
-          const builtInNames = new Set(['close', 'open', 'high', 'low', 'volume', 'time', 'hl2', 'hlc3', 'ohlc4', 'bar_index']);
+          const builtInNames = new Set([
+            'close',
+            'open',
+            'high',
+            'low',
+            'volume',
+            'time',
+            'hl2',
+            'hlc3',
+            'ohlc4',
+            'bar_index',
+          ]);
           if (!builtInNames.has(argName)) {
             const paramBinding = resolveVariable(funcScope, param.name);
             if (paramBinding) {
@@ -427,7 +477,7 @@ function executeFunctionCall(
               // history-reference resolves against the original variable's
               // full timeseries.
               paramBinding.series = argBinding.series;
-              continue;  // skip the normal declare+setVariableValue path
+              continue; // skip the normal declare+setVariableValue path
             }
           }
         }
@@ -444,7 +494,9 @@ function executeFunctionCall(
   }
 
   if (!_executeStmt) {
-    throw new Error('expression-executor: executeStatement not initialized (call initExpressionExecutor first)');
+    throw new Error(
+      'expression-executor: executeStatement not initialized (call initExpressionExecutor first)',
+    );
   }
   let result: PineValue = NA;
   for (const stmt of func.body) {
@@ -454,24 +506,44 @@ function executeFunctionCall(
 }
 
 /** Lightweight expression dispatch for parameter defaults (no monkey-patch support needed). */
-const _defaultDispatch: (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext) => PineValue =
-  (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext): PineValue => {
-    switch (expr.kind) {
-      case 'NumberLiteral': return executeNumberLiteral(expr);
-      case 'StringLiteral': return executeStringLiteral(expr);
-      case 'BooleanLiteral': return executeBooleanLiteral(expr);
-      case 'ColorLiteral': return executeColorLiteral(expr);
-      case 'NaLiteral': return executeNaLiteral(expr);
-      case 'Identifier': return executeIdentifier(null as any, expr, scope, context);
-      case 'BinaryExpression': return executeBinaryExpression(null as any, expr, scope, context, _defaultDispatch);
-      case 'UnaryExpression': return executeUnaryExpression(null as any, expr, scope, context, _defaultDispatch);
-      case 'TernaryExpression': return executeTernaryExpression(null as any, expr, scope, context, _defaultDispatch);
-      case 'CallExpression': return executeCallExpression(null as any, expr, scope, context, _defaultDispatch);
-      case 'MemberExpression': return executeMemberExpression(null as any, expr, scope, context, _defaultDispatch);
-      case 'ParenthesizedExpression': return executeParenthesizedExpression(null as any, expr, scope, context, _defaultDispatch);
-      default: return NA;
-    }
-  };
+const _defaultDispatch: (
+  expr: ExpressionNode,
+  scope: RuntimeScope,
+  context: ExecutionContext,
+) => PineValue = (
+  expr: ExpressionNode,
+  scope: RuntimeScope,
+  context: ExecutionContext,
+): PineValue => {
+  switch (expr.kind) {
+    case 'NumberLiteral':
+      return executeNumberLiteral(expr);
+    case 'StringLiteral':
+      return executeStringLiteral(expr);
+    case 'BooleanLiteral':
+      return executeBooleanLiteral(expr);
+    case 'ColorLiteral':
+      return executeColorLiteral(expr);
+    case 'NaLiteral':
+      return executeNaLiteral(expr);
+    case 'Identifier':
+      return executeIdentifier(null as any, expr, scope, context);
+    case 'BinaryExpression':
+      return executeBinaryExpression(null as any, expr, scope, context, _defaultDispatch);
+    case 'UnaryExpression':
+      return executeUnaryExpression(null as any, expr, scope, context, _defaultDispatch);
+    case 'TernaryExpression':
+      return executeTernaryExpression(null as any, expr, scope, context, _defaultDispatch);
+    case 'CallExpression':
+      return executeCallExpression(null as any, expr, scope, context, _defaultDispatch);
+    case 'MemberExpression':
+      return executeMemberExpression(null as any, expr, scope, context, _defaultDispatch);
+    case 'ParenthesizedExpression':
+      return executeParenthesizedExpression(null as any, expr, scope, context, _defaultDispatch);
+    default:
+      return NA;
+  }
+};
 
 export function executeMemberExpression(
   eng: ExecutionEngine,
@@ -485,47 +557,96 @@ export function executeMemberExpression(
 
     if (objName === 'color') {
       const colorMap: Record<string, string> = {
-        blue: '#2196F3', red: '#F44336', green: '#4CAF50', orange: '#FF9800',
-        purple: '#9C27B0', yellow: '#FFEB3B', cyan: '#00BCD4', black: '#000000',
-        white: '#FFFFFF', gray: '#9E9E9E', lime: '#8BC34A', teal: '#009688',
-        maroon: '#800000', navy: '#000080', olive: '#808000', aqua: '#00FFFF',
-        fuchsia: '#FF00FF', silver: '#C0C0C0',
+        blue: '#2196F3',
+        red: '#F44336',
+        green: '#4CAF50',
+        orange: '#FF9800',
+        purple: '#9C27B0',
+        yellow: '#FFEB3B',
+        cyan: '#00BCD4',
+        black: '#000000',
+        white: '#FFFFFF',
+        gray: '#9E9E9E',
+        lime: '#8BC34A',
+        teal: '#009688',
+        maroon: '#800000',
+        navy: '#000080',
+        olive: '#808000',
+        aqua: '#00FFFF',
+        fuchsia: '#FF00FF',
+        silver: '#C0C0C0',
       };
       return colorMap[expr.property] || '#' + expr.property;
     }
-    if (objName === 'shape' || objName === 'location' || objName === 'size' ||
-        objName === 'text' || objName === 'linewidth' || objName === 'linecap' ||
-        objName === 'linejoin' || objName === 'textalign' ||
-        objName === 'line' || objName === 'label' || objName === 'plot' ||
-        objName === 'barmerge' || objName === 'xloc' || objName === 'yloc' ||
-        objName === 'format' || objName === 'display' ||
-        objName === 'extend' ||
-        objName === 'alert' || objName === '__strategy.commission__') {
+    if (
+      objName === 'shape' ||
+      objName === 'location' ||
+      objName === 'size' ||
+      objName === 'text' ||
+      objName === 'linewidth' ||
+      objName === 'linecap' ||
+      objName === 'linejoin' ||
+      objName === 'textalign' ||
+      objName === 'line' ||
+      objName === 'label' ||
+      objName === 'plot' ||
+      objName === 'barmerge' ||
+      objName === 'xloc' ||
+      objName === 'yloc' ||
+      objName === 'format' ||
+      objName === 'display' ||
+      objName === 'extend' ||
+      objName === 'alert' ||
+      objName === '__strategy.commission__'
+    ) {
       return expr.property;
     }
     if (objName === 'math') {
-      const mathConstants: Record<string, number> = { pi: Math.PI, e: Math.E, phi: (1 + Math.sqrt(5)) / 2 };
+      const mathConstants: Record<string, number> = {
+        pi: Math.PI,
+        e: Math.E,
+        phi: (1 + Math.sqrt(5)) / 2,
+      };
       if (expr.property in mathConstants) return mathConstants[expr.property]!;
-      const mathProps: Record<string, PineValue> = { pi: Math.PI, e: Math.E, phi: 1.618033988749895 };
+      const mathProps: Record<string, PineValue> = {
+        pi: Math.PI,
+        e: Math.E,
+        phi: 1.618033988749895,
+      };
       return mathProps[expr.property] ?? NA;
     }
     if (objName === 'syminfo') {
-      const syminfoProps: Record<string, PineValue> = { tickerid: 'SYMBOL', mintick: 0.01, pointvalue: 1, pricescale: 100, currency: 'USD' };
+      const syminfoProps: Record<string, PineValue> = {
+        tickerid: 'SYMBOL',
+        mintick: 0.01,
+        pointvalue: 1,
+        pricescale: 100,
+        currency: 'USD',
+      };
       return syminfoProps[expr.property] ?? expr.property;
     }
     if (objName === 'strategy') {
       const strategyConstants: Record<string, PineValue> = {
-        long: 'long', short: 'short', percent_of_equity: 'percent_of_equity', fixed: 'fixed', currency: 'currency',
+        long: 'long',
+        short: 'short',
+        percent_of_equity: 'percent_of_equity',
+        fixed: 'fixed',
+        currency: 'currency',
       };
       if (expr.property === 'commission') return '__strategy.commission__';
       if (expr.property in strategyConstants) return strategyConstants[expr.property]!;
-      if (expr.property === 'position_size' && eng.strategyEngine) return eng.strategyEngine.getPosition().quantity;
-      if (expr.property === 'position_avg_price' && eng.strategyEngine) return eng.strategyEngine.getPosition().avgPrice;
+      if (expr.property === 'position_size' && eng.strategyEngine)
+        return eng.strategyEngine.getPosition().quantity;
+      if (expr.property === 'position_avg_price' && eng.strategyEngine)
+        return eng.strategyEngine.getPosition().avgPrice;
     }
     if (objName === 'barstate') {
       const barstateProps: Record<string, PineValue> = {
-        isfirst: context.barIndex === 0, islast: context.barIndex === context.barCount - 1,
-        isnew: true, isconfirmed: !eng.isFormingCandle, ishistory: true,
+        isfirst: context.barIndex === 0,
+        islast: context.barIndex === context.barCount - 1,
+        isnew: true,
+        isconfirmed: !eng.isFormingCandle,
+        ishistory: true,
       };
       return barstateProps[expr.property] ?? NA;
     }
@@ -558,6 +679,13 @@ export function executeIndexExpression(
   // indicate a programming error and should be surfaced, not silently ignored).
   ensureFinite(index, 'series index expression', context.barIndex);
 
+  // Track runtime lookback: any positive-integer series index (close[1], myVar[70], etc.)
+  // means the script needs at least that many historical bars.
+  const idx = index as number;
+  if (Number.isInteger(idx) && idx > 0) {
+    eng.runtimeSeriesLookback = Math.max(eng.runtimeSeriesLookback, idx);
+  }
+
   // Handle Identifier objects BEFORE generic obj dispatch, because
   // dispatch(expr.object) returns the CURRENT value — if that value is
   // NA (e.g. after "float sup = na" at bar N, sup.getRelative(0) = na),
@@ -565,7 +693,13 @@ export function executeIndexExpression(
   // the binding history lookup that sup[1] needs.
   if (expr.object.kind === 'Identifier') {
     const objName = expr.object.name;
-    if (objName === 'close' || objName === 'open' || objName === 'high' || objName === 'low' || objName === 'volume') {
+    if (
+      objName === 'close' ||
+      objName === 'open' ||
+      objName === 'high' ||
+      objName === 'low' ||
+      objName === 'volume'
+    ) {
       // Use the engine's accumulated OHLC history so close[1], open[2], etc. resolve
       // correctly even when bar contexts only carry a single value (O(n) memory).
       const history = getOHLCHistory(objName, eng);
@@ -591,7 +725,11 @@ export function executeIndexExpression(
   // Handle indexing on TA function calls like ta.atr(14)[1]
   if (expr.object.kind === 'CallExpression' && expr.object.callee.kind === 'MemberExpression') {
     const member = expr.object.callee;
-    if (member.object.kind === 'Identifier' && member.object.name === 'ta' && member.property === 'atr') {
+    if (
+      member.object.kind === 'Identifier' &&
+      member.object.name === 'ta' &&
+      member.property === 'atr'
+    ) {
       const args = expr.object.arguments.map((arg: any) => dispatch(arg, scope, context));
       const len = Math.trunc(typeof args[0] === 'number' ? args[0] : 14);
       if (len > 0) {
@@ -618,12 +756,18 @@ export function executeIndexExpression(
 
 function getOHLCHistory(name: string, eng: ExecutionEngine): number[] {
   switch (name) {
-    case 'close': return eng.ohlcHistory.close;
-    case 'open': return eng.ohlcHistory.open;
-    case 'high': return eng.ohlcHistory.high;
-    case 'low': return eng.ohlcHistory.low;
-    case 'volume': return eng.ohlcHistory.volume;
-    default: throw new Error(`Unknown OHLCSeries: ${name}`);
+    case 'close':
+      return eng.ohlcHistory.close;
+    case 'open':
+      return eng.ohlcHistory.open;
+    case 'high':
+      return eng.ohlcHistory.high;
+    case 'low':
+      return eng.ohlcHistory.low;
+    case 'volume':
+      return eng.ohlcHistory.volume;
+    default:
+      throw new Error(`Unknown OHLCSeries: ${name}`);
   }
 }
 
