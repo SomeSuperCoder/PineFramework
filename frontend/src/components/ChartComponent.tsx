@@ -99,6 +99,8 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       lines: Array<{ points: Array<{ time: number; price: number }> }>;
       plotNullCounts: Record<string, number>;
       boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }>;
+      orphanedValueCounts: Record<string, number>;
+      orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }>;
     }
     const indicators: IndicatorDiagnostics[] = [];
     if (indicatorResults) {
@@ -112,9 +114,54 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         }
         if (res.fillColorData) {
           for (const [key, colors] of Object.entries(res.fillColorData)) {
-            // Include fillColorData in null counts if not already tracked
             if (!(key in plotNullCounts)) {
               plotNullCounts[key] = colors.filter((c) => c === null).length;
+            }
+          }
+        }
+
+        // Detect orphaned values: plotColors is null but raw data has a value.
+        // This means the line extends past the warmup zone uncolored.
+        // Skip hidden plots (display=display.none) — identified by having
+        // all-null plotColors (no bar is ever colored).
+        const orphanedValueCounts: Record<string, number> = {};
+        for (const plot of res.plots) {
+          const key = plot.title;
+          const colors = res.plotColors?.[key];
+          if (!colors) continue;
+          const hasNonNullColor = colors.some((c) => c !== null);
+          if (!hasNonNullColor) continue;
+          let orphaned = 0;
+          for (let i = 0; i < Math.min(plot.data.length, colors.length); i++) {
+            if (colors[i] === null && plot.data[i].value !== null) {
+              orphaned++;
+            }
+          }
+          if (orphaned > 0) orphanedValueCounts[key] = orphaned;
+        }
+
+        // Detect orphaned values near chunk borders: positions within 50 bars
+        // of a chunk border where plotColors is null but raw data has a value.
+        const orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }> = [];
+        if (chunkBorders.length > 0) {
+          for (const plot of res.plots) {
+            const key = plot.title;
+            const colors = res.plotColors?.[key];
+            if (!colors) continue;
+            const hasNonNullColor = colors.some((c) => c !== null);
+            if (!hasNonNullColor) continue;
+            for (const border of chunkBorders) {
+              const borderIdx = border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
+              if (borderIdx < 0) continue;
+              const windowStart = Math.max(0, borderIdx - 50);
+              const windowEnd = Math.min(plot.data.length, colors.length, borderIdx + 50);
+              let count = 0;
+              for (let i = windowStart; i < windowEnd; i++) {
+                if (colors[i] === null && plot.data[i].value !== null) {
+                  count++;
+                }
+              }
+              if (count > 0) orphanedAtBorders.push({ plotKey: key, borderIndex: borderIdx, count });
             }
           }
         }
@@ -125,7 +172,6 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           const allPlotColors = Object.values(res.plotColors);
           const totalBars = allPlotColors.length > 0 ? allPlotColors[0].length : 0;
           for (const border of chunkBorders) {
-            // Use the bar index directly if available, otherwise find by timestamp
             const borderIdx = border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
             if (borderIdx < 0) continue;
             const windowStart = Math.max(0, borderIdx - 50);
@@ -147,6 +193,8 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           lines: res.lines || [],
           plotNullCounts,
           boundaryNullDensities,
+          orphanedValueCounts,
+          orphanedAtBorders,
         });
       }
     }
