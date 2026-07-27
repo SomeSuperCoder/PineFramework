@@ -1,12 +1,12 @@
 ## 1. Core Engine — State Machine & Bot Lifecycle
 
-- [ ] 1.1 Create `src/trading/` module directory structure with `state-machine.ts`, `bot-engine.ts`, `types.ts`, `index.ts`
-- [ ] 1.2 Implement generic `StateMachine<T>` class with typed states, transition guards, and event hooks (Design: Decision 2; Spec: trading-engine)
-- [ ] 1.3 Define bot state enum (`Idle`, `Starting`, `Running`, `Stopping`, `Stopped`, `Error`) with all valid transitions (Design: Decision 2)
-- [ ] 1.4 Implement `BotEngine` class that owns the state machine, manages initialization sequence, and provides `start()`, `stop()`, `emergencyStop()`, `reset()` methods (Spec: trading-engine)
-- [ ] 1.5 Implement state transition logging with timestamps, from/to states, and reason (Spec: trading-engine — Scenario: State transitions are logged)
-- [ ] 1.6 Add unit tests for `StateMachine<T>` covering all transitions and invalid transitions
-- [ ] 1.7 Add unit tests for `BotEngine` lifecycle (Idle → Starting → Running → Stopping → Stopped)
+- [x] 1.1 Create `src/trading/` module directory structure with `state-machine.ts`, `bot-engine.ts`, `types.ts`, `index.ts`
+- [x] 1.2 Implement generic `StateMachine<T>` class with typed states, transition guards, and event hooks (Design: Decision 2; Spec: trading-engine)
+- [x] 1.3 Define bot state enum (`Idle`, `Starting`, `Running`, `Stopping`, `Stopped`, `Error`) with all valid transitions (Design: Decision 2)
+- [x] 1.4 Implement `BotEngine` class that owns the state machine, manages initialization sequence, and provides `start()`, `stop()`, `emergencyStop()`, `reset()` methods (Spec: trading-engine)
+- [x] 1.5 Implement state transition logging with timestamps, from/to states, and reason (Spec: trading-engine — Scenario: State transitions are logged)
+- [x] 1.6 Add unit tests for `StateMachine<T>` covering all transitions and invalid transitions
+- [x] 1.7 Add unit tests for `BotEngine` lifecycle (Idle → Starting → Running → Stopping → Stopped)
 
 ## 2. Wallet Management
 

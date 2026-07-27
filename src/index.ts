@@ -2,6 +2,7 @@ export const VERSION = '0.1.0';
 
 export * from './language/index.js';
 export * from './data/index.js';
+export * from './trading/index.js';
 export * from './analysis/index.js';
 export * from './config/index.js';
 export * from './rendering/index.js';
