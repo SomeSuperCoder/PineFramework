@@ -192,18 +192,22 @@ plot(volatility)
         expect(mergedPlot.data[i].value).toBe(newPlot!.data[i].value);
       }
 
-      // In the overlap zone: where newResult has null (warmup), prev values must be preserved
+      // In the overlap zone:
+      //   - newResult non-null → authoritative (correct warmup state)
+      //   - newResult null but prev non-null → prev preserved (null-safe fallback)
+      //   - Both null → backfilled from first valid post-warmup value (not asserted)
       const overlapSection = mergedPlot.data.slice(addedCount, addedCount + actualContextSize);
       for (let i = 0; i < overlapSection.length; i++) {
         const newVal = newPlot!.data[addedCount + i].value;
         const prevVal = prevPlot!.data[i].value;
-        if (newVal === null && prevVal !== null) {
+        if (newVal !== null) {
+          // New value is non-null → authoritative (replaces prev)
+          expect(overlapSection[i].value).toBe(newVal);
+        } else if (prevVal !== null) {
           // Warmup null: prev value preserved
           expect(overlapSection[i].value).toBe(prevVal);
-        } else {
-          // Non-null or both null: new value used (or null preserved)
-          expect(overlapSection[i].value).toBe(newVal);
         }
+        // else both null: no assertion — backfill may have filled the gap
       }
 
       // After overlap zone: prev values unchanged (but shifted by addedCount)

@@ -1365,5 +1365,95 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
       expect(merged.fillColorData!['fill_up'][2]).toBeNull();
       expect(merged.fillColorData!['fill_up'][3]).toBeNull();
     });
+
+    it('2.12 should backfill plot data values from first valid post-warmup when both prev and new have null in overlap', () => {
+      // Scenario: plot warmup (6 bars) > addedCount (2 bars). The new exec
+      // has null plot values for overlap entries 0..3 (warmup extends 4 bars
+      // past addedCount). Prev ALSO has nulls at those bars. The fix should
+      // backfill from the first valid value in the overlap.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('Zero Lag Basis', [
+            { time: 0, value: null },  // overlap[0] — prev null
+            { time: 1, value: null },  // overlap[1] — prev null
+            { time: 2, value: null },  // overlap[2] — prev null
+            { time: 3, value: null },  // overlap[3] — prev null
+            { time: 4, value: null },  // overlap[4] — prev null
+            { time: 5, value: 200 },   // overlap[5] — prev valid (but past contextSize=4, so not in overlap)
+            { time: 6, value: 201 },   // after overlap
+          ]),
+        ],
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('Zero Lag Basis', [
+            { time: -2, value: null },  // new bar
+            { time: -1, value: null },  // new bar
+            // overlap — first 4 null (warmup), last 2 valid (past warmup)
+            { time: 0, value: null },   // overlap[0] = null
+            { time: 1, value: null },   // overlap[1] = null
+            { time: 2, value: null },   // overlap[2] = null
+            { time: 3, value: null },   // overlap[3] = null
+            { time: 4, value: 300 },    // overlap[4] = valid (firstValidIdx)
+            { time: 5, value: 301 },    // overlap[5] = valid
+          ]),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 2, 6);
+
+      // merged = [2 new nulls] + [6 overlap (4 backfilled + 2 valid)] + [prev.slice(6) = prev[6..6] = 1 entry]
+      // Total: 9 entries, indices 0..8
+
+      // New bars → null (warmup)
+      expect(merged.plots[0].data[0].value).toBeNull();
+      expect(merged.plots[0].data[1].value).toBeNull();
+
+      // Overlap entries 0..3: both prev and new are null
+      // Should be BACKFILLED with first valid value in overlap: 300 (overlap[4])
+      for (let i = 2; i <= 5; i++) {
+        expect(merged.plots[0].data[i].value).toBe(300);
+      }
+
+      // Overlap entries 4..5: new is valid → authoritative
+      expect(merged.plots[0].data[6].value).toBe(300);
+      expect(merged.plots[0].data[7].value).toBe(301);
+
+      // After overlap → prev value preserved (prev[6] = 201)
+      expect(merged.plots[0].data[8].value).toBe(201);
+      expect(merged.plots[0].data).toHaveLength(9);
+    });
+
+    it('2.13 should not backfill plot data when first valid index is at position 0 (no warmup gap)', () => {
+      // When warmup <= addedCount, the first valid value in the overlap is
+      // at index 0. Backfill should NOT trigger because i < 0 is never true.
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: 100 },  // overlap — prev valid
+          ]),
+        ],
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -1, value: null },  // new bar
+            { time: 0, value: 200 },    // overlap[0] = valid
+          ]),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 1);
+
+      // New bar → null
+      expect(merged.plots[0].data[0].value).toBeNull();
+      // Overlap[0]: new is valid → replaces prev
+      expect(merged.plots[0].data[1].value).toBe(200);
+    });
   });
 });

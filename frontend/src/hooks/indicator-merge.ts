@@ -47,18 +47,32 @@ export function prependIndicatorResult(
     const newPlot = newResult.plots.find((p) => p.title === plot.title);
     if (newPlot) {
       const newBarData = newPlot.data.slice(0, addedCount);
-      // Merge the overlap region with null-safe preservation.
+      // Merge the overlap region with null-safe preservation + backfill.
       // When the re-execution has a valid (non-null) value, it is
       // authoritative and replaces the prev value. When the re-execution
       // produced null (warmup zone not satisfied), keep the prev value
       // to prevent rendering gaps at chunk borders.
-      // This naturally "heals" as context accumulates — once enough bars
-      // are loaded, the re-execution's warmup is satisfied and non-null
-      // values overwrite the preserved prev entries.
+      //
+      // Backfill when BOTH are null (warmup > addedCount): scan forward
+      // for the first valid value in the overlap and use it to fill the
+      // gap. This prevents rendering gaps at chunk borders where the
+      // warmup zone extends past the chunk size — same strategy as the
+      // fillColorData and plotColors merges.
       const overlapFromNew = newPlot.data.slice(addedCount, addedCount + contextSize);
-      const replacedPrev = overlapFromNew.map((v, i) =>
-        v.value !== null ? v : (plot.data[i] ?? v)
-      ).concat(plot.data.slice(contextSize));
+      const firstValidIdx = overlapFromNew.findIndex(
+        (v) => v.value !== null && v.value !== undefined,
+      );
+      const replacedPrev = overlapFromNew.map((v, i) => {
+        if (v.value !== null && v.value !== undefined) return v;
+        const prevEntry = plot.data[i];
+        if (prevEntry && prevEntry.value !== null && prevEntry.value !== undefined)
+          return prevEntry;
+        // Both null — backfill from the first valid post-warmup entry
+        if (firstValidIdx >= 0 && i < firstValidIdx) {
+          return { ...overlapFromNew[firstValidIdx], time: v.time };
+        }
+        return v;
+      }).concat(plot.data.slice(contextSize));
       return { ...plot, data: [...newBarData, ...replacedPrev] };
     }
     return plot;
