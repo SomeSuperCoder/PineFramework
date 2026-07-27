@@ -418,6 +418,7 @@ function App() {
 
       {botDashboardOpen && botStatus && (
         <LiveDashboard
+          backendUrl={backendUrl}
           status={botStatus}
           logs={botLogs}
           onClose={() => setBotDashboardOpen(false)}
