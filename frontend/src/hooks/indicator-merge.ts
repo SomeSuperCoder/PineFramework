@@ -47,14 +47,17 @@ export function prependIndicatorResult(
     const newPlot = newResult.plots.find((p) => p.title === plot.title);
     if (newPlot) {
       const newBarData = newPlot.data.slice(0, addedCount);
-      // Replace the first contextSize entries of prev with recomputed boundary.
-      // The re-execution is authoritative for the boundary zone — use its
-      // values unconditionally. Keeping old data when new is null caused
-      // "orphaned uncolored line" bugs where raw data extended past the
-      // warmup zone while plotColors correctly respected it.
-      const replacedPrev = newPlot.data.slice(
-        addedCount,
-        addedCount + contextSize,
+      // Merge the overlap region with null-safe preservation.
+      // When the re-execution has a valid (non-null) value, it is
+      // authoritative and replaces the prev value. When the re-execution
+      // produced null (warmup zone not satisfied), keep the prev value
+      // to prevent rendering gaps at chunk borders.
+      // This naturally "heals" as context accumulates — once enough bars
+      // are loaded, the re-execution's warmup is satisfied and non-null
+      // values overwrite the preserved prev entries.
+      const overlapFromNew = newPlot.data.slice(addedCount, addedCount + contextSize);
+      const replacedPrev = overlapFromNew.map((v, i) =>
+        v.value !== null ? v : (plot.data[i] ?? v)
       ).concat(plot.data.slice(contextSize));
       return { ...plot, data: [...newBarData, ...replacedPrev] };
     }
@@ -254,8 +257,15 @@ export function prependIndicatorResult(
   ];
 
   // Prepend fillColorData entries and recompute boundary.
-  // Same logic as plotColors: boundary zone uses new result unconditionally —
-  // the re-execution is authoritative for that region.
+  // Uses null-safe overlap merge: when the re-execution has a valid color,
+  // it replaces the prev value. When null (warmup zone not satisfied),
+  // the prev value is preserved to prevent rendering gaps.
+  //
+  // Backfill strategy for persistent warmup nulls: when both new AND prev
+  // have null at the same overlap position (because warmup > addedCount),
+  // scan forward for the first valid color in the overlap and backfill.
+  // This prevents rendering gaps at chunk borders where the fill warmup
+  // zone extends past the chunk size.
   const mergedFillColorData: Record<string, (string | null)[]> = {};
   const allFillKeys = new Set([
     ...Object.keys(prev.fillColorData || {}),
@@ -264,21 +274,42 @@ export function prependIndicatorResult(
   for (const key of allFillKeys) {
     const newColors = newResult.fillColorData?.[key] || [];
     const prevColors = prev.fillColorData?.[key] || [];
+    const overlapNewFillColors = newColors.slice(addedCount, addedCount + contextSize);
+    // Find the first valid color in the overlap region (past the warmup zone)
+    const firstValidIdx = overlapNewFillColors.findIndex(
+      (c) => c !== null && c !== undefined,
+    );
     mergedFillColorData[key] = [
       ...newColors.slice(0, addedCount),
-      ...newColors.slice(addedCount, addedCount + contextSize),
+      ...overlapNewFillColors.map((c, i) => {
+        if (c !== null) return c;
+        if (prevColors[i] !== null && prevColors[i] !== undefined)
+          return prevColors[i];
+        // Both null — backfill from the first valid post-warmup color in the
+        // new execution, so the gap at the chunk border is filled with a
+        // reasonable color instead of rendering nothing. Once more chunk data
+        // accumulates, the warmup zone shrinks and later prepends overwrite
+        // these backfilled entries with correct values.
+        if (firstValidIdx >= 0 && i < firstValidIdx) {
+          return overlapNewFillColors[firstValidIdx];
+        }
+        return null;
+      }),
       ...prevColors.slice(contextSize),
     ];
   }
 
   // Prepend plotColors entries and recompute boundary.
   //
-  // IMPORTANT: Unlike raw plot data, plotColors in the boundary zone ALWAYS
-  // uses the new result's values unconditionally. The re-execution is
-  // authoritative for the boundary — it knows the correct warmup state and
-  // trend conditions. Keeping old plotColors (from a previous execution with
-  // different context) causes "orphaned uncolored line" bugs where raw data
-  // has values but plotColors is stale/null, or vice versa.
+  // Uses null-safe overlap merge: when the re-execution has a valid color,
+  // it is authoritative (correct warmup state & trend conditions). When null
+  // (warmup zone not satisfied), keep the prev color to prevent rendering
+  // gaps. This is the same approach as raw plot data — unlike the previous
+  // unconditional replacement which fixed "orphaned uncolored line" bugs but
+  // introduced warmup gap bugs at chunk borders.
+  //
+  // Same backfill strategy as fillColorData: when both new and prev have null
+  // (warmup > addedCount), backfill from the first valid color in the overlap.
   const mergedPlotColors: Record<string, (string | null)[]> = {};
   const allColorKeys = new Set([
     ...Object.keys(prev.plotColors || {}),
@@ -287,9 +318,21 @@ export function prependIndicatorResult(
   for (const key of allColorKeys) {
     const newColors = newResult.plotColors?.[key] || [];
     const prevColors = prev.plotColors?.[key] || [];
+    const overlapNewColors = newColors.slice(addedCount, addedCount + contextSize);
+    const firstValidIdx = overlapNewColors.findIndex(
+      (c) => c !== null && c !== undefined,
+    );
     mergedPlotColors[key] = [
       ...newColors.slice(0, addedCount),
-      ...newColors.slice(addedCount, addedCount + contextSize),
+      ...overlapNewColors.map((c, i) => {
+        if (c !== null) return c;
+        if (prevColors[i] !== null && prevColors[i] !== undefined)
+          return prevColors[i];
+        if (firstValidIdx >= 0 && i < firstValidIdx) {
+          return overlapNewColors[firstValidIdx];
+        }
+        return null;
+      }),
       ...prevColors.slice(contextSize),
     ];
   }

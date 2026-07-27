@@ -898,4 +898,472 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
 
     expect(merged.lines).toHaveLength(3);
   });
+
+  describe('warmup-aware merge (null-safe overlap)', () => {
+    const addedCount = 10;
+    const contextSize = 4;
+
+    function makePlot(title: string, data: Array<{ time: number; value: number | null }>, color = '#ff0000') {
+      return {
+        type: 'line' as const,
+        title,
+        data,
+        color,
+      };
+    }
+
+    it('2.1 should keep prev value when newResult has null (warmup) in overlap', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: 100 },  // position 0 → overlap zone
+            { time: 1, value: 101 },  // position 1 → overlap zone
+            { time: 2, value: 102 },  // position 2 → overlap zone
+            { time: 3, value: 103 },  // position 3 → overlap zone
+            { time: 4, value: 104 },  // position 4 → after overlap
+          ]),
+        ],
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -10, value: null },  // new bar (addedCount)
+            { time: -9, value: null },   // new bar (addedCount)
+            { time: -8, value: null },   // new bar (addedCount)
+            { time: -7, value: null },   // new bar (addedCount)
+            { time: -6, value: null },   // new bar (addedCount)
+            { time: -5, value: null },   // new bar (addedCount)
+            { time: -4, value: null },   // new bar (addedCount)
+            { time: -3, value: null },   // new bar (addedCount)
+            { time: -2, value: null },   // new bar (addedCount)
+            { time: -1, value: null },   // new bar (addedCount)
+            // overlap zone — all null (warmup)
+            { time: 0, value: null },    // overlap[0] = null
+            { time: 1, value: null },    // overlap[1] = null
+            { time: 2, value: null },    // overlap[2] = null
+            { time: 3, value: null },    // overlap[3] = null
+          ]),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, addedCount, contextSize);
+
+      const mergedPlot = merged.plots.find((p) => p.title === 'MA');
+      expect(mergedPlot).toBeDefined();
+      // New bars → null (warmup)
+      expect(mergedPlot!.data[0].value).toBeNull();
+      expect(mergedPlot!.data[9].value).toBeNull();
+      // Overlap zone → prev values preserved (because newResult has null)
+      expect(mergedPlot!.data[10].value).toBe(100); // prev preserved
+      expect(mergedPlot!.data[11].value).toBe(101);
+      expect(mergedPlot!.data[12].value).toBe(102);
+      expect(mergedPlot!.data[13].value).toBe(103);
+      // After overlap → prev value preserved
+      expect(mergedPlot!.data[14].value).toBe(104);
+      // Total length: 10 new + 10 (4 overlap + 6 after overlap from prev with contextSize offset)
+      expect(mergedPlot!.data).toHaveLength(15);
+    });
+
+    it('2.2 should keep null when both prev and newResult have null', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: null },   // overlap — prev also null
+            { time: 1, value: 101 },
+          ]),
+        ],
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -1, value: null },   // new bar (addedCount=1)
+            { time: 0, value: null },    // overlap[0] = null
+          ]),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 1);
+
+      const mergedPlot = merged.plots.find((p) => p.title === 'MA');
+      expect(mergedPlot).toBeDefined();
+      // New bar → null (warmup)
+      expect(mergedPlot!.data[0].value).toBeNull();
+      // Overlap: both had null → stays null
+      expect(mergedPlot!.data[1].value).toBeNull();
+      // After overlap → prev value
+      expect(mergedPlot!.data[2].value).toBe(101);
+    });
+
+    it('2.3 should replace prev value when newResult has non-null in overlap', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: 100 },   // overlap — prev has valid
+            { time: 1, value: 101 },
+          ]),
+        ],
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -1, value: null },   // new bar (addedCount=1)
+            { time: 0, value: 200 },     // overlap[0] = non-null → authoritative
+          ]),
+        ],
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 1);
+
+      const mergedPlot = merged.plots.find((p) => p.title === 'MA');
+      expect(mergedPlot).toBeDefined();
+      // New bar → null (warmup)
+      expect(mergedPlot!.data[0].value).toBeNull();
+      // Overlap: newResult has non-null → replaces prev
+      expect(mergedPlot!.data[1].value).toBe(200);
+      // After overlap → prev value
+      expect(mergedPlot!.data[2].value).toBe(101);
+    });
+
+    it('2.4 should heal as context accumulates across multiple prepends', () => {
+      // Simulate: chunk1 (added=10, context=4, all warmup nulls)
+      // Then chunk2 adds more context, and re-exec produces non-null for overlap
+
+      // Step 1: first prepend with insufficient context — warmup nulls
+      const prev1: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: 100 },
+            { time: 1, value: 101 },
+            { time: 2, value: 102 },
+            { time: 3, value: 103 },
+            { time: 4, value: 104 },
+          ]),
+        ],
+      };
+      const newResult1: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -10, value: null },
+            { time: -9, value: null },
+            { time: -8, value: null },
+            { time: -7, value: null },
+            { time: -6, value: null },
+            { time: -5, value: null },
+            { time: -4, value: null },
+            { time: -3, value: null },
+            { time: -2, value: null },
+            { time: -1, value: null },
+            // overlap — all null (warmup)
+            { time: 0, value: null },
+            { time: 1, value: null },
+            { time: 2, value: null },
+            { time: 3, value: null },
+          ]),
+        ],
+      };
+
+      const merged1 = prependIndicatorResult(prev1, newResult1, 10, 4);
+
+      // After step 1: new bars = null, overlap = prev preserved
+      const ma1 = merged1.plots.find((p) => p.title === 'MA')!;
+      expect(ma1.data[10].value).toBe(100); // prev preserved
+      expect(ma1.data[11].value).toBe(101);
+      expect(ma1.data[12].value).toBe(102);
+      expect(ma1.data[13].value).toBe(103);
+      expect(ma1.data[14].value).toBe(104); // after overlap
+
+      // Step 2: second prepend with MORE context — non-null for overlap
+      const prev2 = merged1;
+      const newResult2: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -20, value: null },
+            { time: -19, value: null },
+            { time: -18, value: null },
+            { time: -17, value: null },
+            { time: -16, value: null },
+            { time: -15, value: null },
+            { time: -14, value: null },
+            { time: -13, value: null },
+            { time: -12, value: null },
+            { time: -11, value: null },
+            // overlap — NOW has non-null values (context sufficient)
+            { time: -10, value: 999 },
+            { time: -9, value: 998 },
+            { time: -8, value: 997 },
+            { time: -7, value: 996 },
+            { time: -6, value: 995 },
+            { time: -5, value: 994 },
+            { time: -4, value: 993 },
+            { time: -3, value: 992 },
+            { time: -2, value: 991 },
+            { time: -1, value: 990 },
+          ]),
+        ],
+      };
+
+      const merged2 = prependIndicatorResult(prev2, newResult2, 10, 10);
+
+      // After step 2: new bars = null, overlap = NOW replaced with fresh values
+      const ma2 = merged2.plots.find((p) => p.title === 'MA')!;
+      expect(ma2.data[10].value).toBe(999);  // healed! fresh value from re-exec
+      expect(ma2.data[11].value).toBe(998);
+      expect(ma2.data[12].value).toBe(997);
+      expect(ma2.data[13].value).toBe(996);
+      expect(ma2.data[14].value).toBe(995);
+      expect(ma2.data[15].value).toBe(994);
+      expect(ma2.data[16].value).toBe(993);
+      expect(ma2.data[17].value).toBe(992);
+      expect(ma2.data[18].value).toBe(991);
+      expect(ma2.data[19].value).toBe(990);
+      // After overlap (indices 20-24) — prev values from merged1 preserved
+      expect(ma2.data[20].value).toBe(100);
+    });
+
+    it('2.5 should keep prev plotColor when newResult has null (warmup) in overlap', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plotColors: {
+          'MA': [null, '#00ff00', '#ff0000', '#0000ff', '#ffff00'],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plotColors: {
+          'MA': [
+            // new bar colors (addedCount = 2)
+            null, null,
+            // overlap — all null (warmup)
+            null, null, null, null,
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 2, 4);
+
+      // New bars → null (warmup)
+      expect(merged.plotColors!['MA'][0]).toBeNull();
+      expect(merged.plotColors!['MA'][1]).toBeNull();
+      // Overlap zone → prev colors preserved (null-safe)
+      // prev[0..3] had [null, '#00ff00', '#ff0000', '#0000ff']
+      expect(merged.plotColors!['MA'][2]).toBeNull();     // prev[0] = null (was null too)
+      expect(merged.plotColors!['MA'][3]).toBe('#00ff00'); // prev[1] preserved
+      expect(merged.plotColors!['MA'][4]).toBe('#ff0000'); // prev[2] preserved
+      expect(merged.plotColors!['MA'][5]).toBe('#0000ff'); // prev[3] preserved
+      // After overlap → prev[4] = #ffff00
+      expect(merged.plotColors!['MA'][6]).toBe('#ffff00');
+    });
+
+    it('2.6 should keep prev fillColorData when newResult has null (warmup) in overlap', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': ['#ff0000', '#00ff00', '#0000ff'],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [
+            // new bar colors (addedCount = 2)
+            null, null,
+            // overlap — all null (warmup)
+            null, null, null,
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 2, 3);
+
+      // New bars → null (warmup)
+      expect(merged.fillColorData!['fill_up'][0]).toBeNull();
+      expect(merged.fillColorData!['fill_up'][1]).toBeNull();
+      // Overlap zone → prev colors preserved
+      expect(merged.fillColorData!['fill_up'][2]).toBe('#ff0000'); // prev[0] preserved
+      expect(merged.fillColorData!['fill_up'][3]).toBe('#00ff00'); // prev[1] preserved
+      expect(merged.fillColorData!['fill_up'][4]).toBe('#0000ff'); // prev[2] preserved
+    });
+
+    it('2.7 should backfill fillColorData from first valid post-warmup when both prev and new have null in overlap', () => {
+      // Scenario: fill warmup (8 bars) > addedCount (2 bars). The new exec
+      // has null fill colors for overlap entries 0..5 (warmup extends 6 bars
+      // past addedCount). Prev ALSO has nulls at those bars (from a previous
+      // prepend with the same warmup issue). The fix should backfill from
+      // the first valid post-warmup color.
+
+      // prev has 9 entries: 6 null (overlap zone) + 3 valid (after overlap)
+      // prev[0..5] = null (overlap entries, from prior prepend warmup)
+      // prev[6..8] = valid (after overlap = prev.slice(contextSize=8) = prev[8..8] = 1 entry)
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'basis::price': [
+            null, null, null, null, null, null,
+            '#00ff00', '#ff0000', '#00ff00',
+          ],
+        },
+      };
+      // new has 10 entries: 2 new bars + 8 overlap
+      // new[0..1] = null (new bars, warmup)
+      // new[2..7] = null (overlap, warmup extends 6 bars into overlap)
+      // new[8..9] = valid (overlap, past warmup)
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'basis::price': [
+            null, null,
+            null, null, null, null, null, null, '#ff0000', '#00ff00',
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 2, 8);
+
+      // merged = [2 new nulls] + [8 overlap (backfilled)] + [prev.slice(8) = prev[8..8] = 1 entry]
+      // Total: 11 entries, indices 0..10
+
+      // New bars → null (warmup)
+      expect(merged.fillColorData!['basis::price'][0]).toBeNull();
+      expect(merged.fillColorData!['basis::price'][1]).toBeNull();
+
+      // Overlap entries 0..5: both prev and new are null
+      // Should be BACKFILLED with first valid color in overlap: '#ff0000' (overlap index 6)
+      for (let i = 2; i <= 7; i++) {
+        expect(merged.fillColorData!['basis::price'][i]).toBe('#ff0000');
+      }
+
+      // Overlap entries 6..7: new is valid → authoritative (replaces prev)
+      expect(merged.fillColorData!['basis::price'][8]).toBe('#ff0000');
+      expect(merged.fillColorData!['basis::price'][9]).toBe('#00ff00');
+
+      // After overlap → prev value (prev[8] = '#00ff00')
+      expect(merged.fillColorData!['basis::price'][10]).toBe('#00ff00');
+      expect(merged.fillColorData!['basis::price'].length).toBe(11);
+    });
+
+    it('2.8 should backfill plotColors from first valid post-warmup when both prev and new have null in overlap', () => {
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plotColors: {
+          'MA': [
+            // All null in overlap zone
+            null, null, null,
+          ],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plotColors: {
+          'MA': [
+            // new bar colors (addedCount = 1)
+            null,
+            // overlap — first 2 null (warmup), last 1 valid
+            null, null, '#00ff00',
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 3);
+
+      // New bar → null
+      expect(merged.plotColors!['MA'][0]).toBeNull();
+      // Overlap 0..1: both null → backfill with '#00ff00' (first valid)
+      expect(merged.plotColors!['MA'][1]).toBe('#00ff00'); // backfilled!
+      expect(merged.plotColors!['MA'][2]).toBe('#00ff00'); // backfilled!
+      // Overlap 2: new has '#00ff00' → authoritative
+      expect(merged.plotColors!['MA'][3]).toBe('#00ff00');
+    });
+
+    it('2.9 should not backfill when prev has valid colors even if new is null', () => {
+      // If prev has valid colors, the null-safe merge should preserve them
+      // (no backfill needed). The backfill should only activate when BOTH
+      // are null.
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': ['#ff0000', '#00ff00', '#0000ff'],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [
+            null, null, null,
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 2);
+
+      // Overlap: prev has valid colors → preserved
+      expect(merged.fillColorData!['fill_up'][1]).toBe('#ff0000'); // prev[0] preserved
+      expect(merged.fillColorData!['fill_up'][2]).toBe('#00ff00'); // prev[1] preserved
+    });
+
+    it('2.10 should not backfill when first valid index is at position 0 (no warmup gap at overlap)', () => {
+      // When warmup <= addedCount, the first valid entry in the overlap is
+      // at index 0. The backfill should NOT trigger because i < 0 is never true.
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [null, '#00ff00'],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [
+            null,
+            '#ff0000',  // overlap[0] = valid (warmup satisfied before overlap)
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 1);
+
+      const data = merged.fillColorData!['fill_up'];
+      expect(data[0]).toBeNull();
+      // overlap[0] is valid → replaces prev[0]
+      expect(data[1]).toBe('#ff0000');
+      // After overlap: prev after contextSize (1) → prev[1] = '#00ff00'
+      expect(data[2]).toBe('#00ff00');
+    });
+
+    it('2.11 should handle empty overlap (no valid colors) without backfill', () => {
+      // Edge case: ALL entries in the overlap are null (extremely long warmup).
+      // firstValidIdx = -1 → no backfill, keep null.
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [null, null, null],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        fillColorData: {
+          'fill_up': [
+            null,
+            null, null, null,  // overlap — all null
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 3);
+
+      // All null → stays null (no backfill when no valid color exists)
+      expect(merged.fillColorData!['fill_up'][0]).toBeNull();
+      expect(merged.fillColorData!['fill_up'][1]).toBeNull();
+      expect(merged.fillColorData!['fill_up'][2]).toBeNull();
+      expect(merged.fillColorData!['fill_up'][3]).toBeNull();
+    });
+  });
 });
