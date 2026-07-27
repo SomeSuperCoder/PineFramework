@@ -53,11 +53,20 @@ export function createBotWSGateway(
     if (!engine) {
       ws.send(JSON.stringify({
         channel: 'bot:snapshot',
+        type: 'snapshot',
         data: {
           status: {
             state: 'Idle',
-            initialized: false,
+            strategyName: '(not configured)',
+            dex: 'jupiter-swap',
+            walletPublicKey: null,
+            startedAt: null,
+            uptimeMs: 0,
+            balance: 0,
+            realizedPnl: 0,
+            unrealizedPnl: 0,
             positions: [],
+            exposure: 0,
             errors: [],
           },
         },
@@ -67,6 +76,7 @@ export function createBotWSGateway(
 
     ws.send(JSON.stringify({
       channel: 'bot:snapshot',
+      type: 'snapshot',
       data: { status: engine.getSnapshot() },
     }));
   }
