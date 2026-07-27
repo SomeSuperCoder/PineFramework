@@ -60,6 +60,8 @@ export function useChartData(
   const indicatorSourcesRef = useRef<
     Map<string, { source: string; symbol: string; interval: string; maxLookback: number }>
   >(new Map());
+  /** Incremented each time an indicator is removed, used to discard stale HTTP results. */
+  const indicatorGenerationRef = useRef<Map<string, number>>(new Map());
   const historicalDataLoadedRef = useRef(false);
   const executeScriptRef = useRef<
     | ((
@@ -707,6 +709,13 @@ export function useChartData(
       indicatorId?: string,
     ) => {
       setErrors([]);
+      // Capture generation at start to detect indicator removal during async execution
+      const capturedGen = indicatorId ? indicatorGenerationRef.current.get(indicatorId) : undefined;
+      const isStale = () => {
+        if (!indicatorId) return false;
+        return indicatorGenerationRef.current.get(indicatorId) !== capturedGen;
+      };
+
       if (indicatorId) {
         indicatorSourcesRef.current.set(indicatorId, {
           source: code,
@@ -735,6 +744,7 @@ export function useChartData(
           ohlcvDataRef.current = existingBars!;
         }
         if (!barsToExecute) throw new Error('No bars available for execution');
+        if (isStale()) return;
 
         const response = await fetch('/api/execute', {
           method: 'POST',
@@ -748,6 +758,7 @@ export function useChartData(
         }
 
         const result: ExecuteResponse = await response.json();
+        if (isStale()) return;
 
         if (!result.success || result.error) {
           if (versionRef && version !== undefined && version !== versionRef.current) return;
@@ -768,6 +779,7 @@ export function useChartData(
         }
 
         if (maxLookback > 0) {
+          if (isStale()) return;
           const neededSeed = maxLookback;
           const seedBars = await fetchSeedBars(symbol, interval, neededSeed);
           if (seedBars.length > 0) {
@@ -782,6 +794,7 @@ export function useChartData(
 
             if (seedResponse.ok) {
               const seedResult: ExecuteResponse = await seedResponse.json();
+              if (isStale()) return;
               if (seedResult.success && !seedResult.error) {
                 const seedScriptRes = buildScriptResult(
                   seedResult.overlay,
@@ -832,6 +845,7 @@ export function useChartData(
                 }
 
                 if (versionRef && version !== undefined && version !== versionRef.current) return;
+                if (isStale()) return;
 
                 if (indicatorId) {
                   onIndicatorResult?.(indicatorId, seedScriptRes);
@@ -892,6 +906,7 @@ export function useChartData(
         );
 
         if (versionRef && version !== undefined && version !== versionRef.current) return;
+        if (isStale()) return;
 
         if (indicatorId) {
           onIndicatorResult?.(indicatorId, scriptRes);
@@ -925,6 +940,7 @@ export function useChartData(
         }
       } catch (error) {
         if (versionRef && version !== undefined && version !== versionRef.current) return;
+        if (isStale()) return;
         setErrors([
           {
             type: 'error',
@@ -1004,6 +1020,9 @@ export function useChartData(
       onIndicatorRemovedRef.current = cb;
     }, []),
     removeIndicatorData: useCallback((indicatorId: string) => {
+      // Increment generation to invalidate any in-flight HTTP execution for this indicator
+      const gen = (indicatorGenerationRef.current.get(indicatorId) ?? 0) + 1;
+      indicatorGenerationRef.current.set(indicatorId, gen);
       indicatorResultsRef.current.delete(indicatorId);
       indicatorSourcesRef.current.delete(indicatorId);
       pendingExecuteRef.current.delete(indicatorId);

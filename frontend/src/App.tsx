@@ -270,10 +270,13 @@ function App() {
   }, [indicatorManager.indicators]);
 
   const handleRemoveIndicator = async (indicatorId: string) => {
+    // 1. Fire-and-forget: notify server to stop real-time updates
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
     }
-    await indicatorManager.removeIndicator(indicatorId);
+
+    // 2. Synchronous cleanup FIRST — purge refs and state before any await
+    //    This closes the race window where HTTP results could arrive after removal.
     removeIndicatorData(indicatorId);
     setIndicatorResults((prev) => {
       const next = new Map(prev);
@@ -286,6 +289,10 @@ function App() {
       lastIndicatorsRef.current = next;
       return next;
     });
+    setDataVersion((v) => v + 1);
+
+    // 3. Server-side cleanup (HTTP DELETE) — async, safe to await after state cleanup
+    await indicatorManager.removeIndicator(indicatorId);
   };
 
   const strategySource = (() => {

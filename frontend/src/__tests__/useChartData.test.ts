@@ -955,4 +955,84 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     const staleResult = result.current.indicatorResultsRef?.current?.get('ind-1');
     expect(staleResult).toBeUndefined();
   });
+
+  // ── Scenario: generation counter discards late execution result ──
+  it('discards late HTTP execution result after indicator removal', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+
+    // Initial OHLCV fetch
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    // Mock execute response (no maxLookback to avoid seed path)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: bars1k.map(() => 100) },
+        barTimestamps: bars1k.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    // Start indicator execution WITHOUT awaiting it
+    const execPromise = result.current.executeScript(
+      'indicator', 'BTCUSDT', '1d', undefined, undefined, undefined, 'ind-1',
+    );
+
+    // Remove the indicator mid-flight — this increments the generation counter,
+    // which should cause the in-flight execution to discard its result.
+    result.current.removeIndicatorData('ind-1');
+
+    // Now let the execution finish
+    await act(async () => {
+      await execPromise;
+    });
+
+    // The result should NOT be stored since the indicator was removed mid-flight
+    const storedResult = result.current.indicatorResultsRef?.current?.get('ind-1');
+    expect(storedResult).toBeUndefined();
+  });
+
+  // ── Scenario: normal execution stores result when not removed ──
+  it('stores execution result when indicator is not removed', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true, json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true, overlay: true,
+        outputs: { sma: bars1k.map(() => 100) },
+        barTimestamps: bars1k.map(b => b.timestamp),
+        shapes: [], fills: [], strategyMarkers: [],
+      }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript(
+        'indicator', 'BTCUSDT', '1d', undefined, undefined, undefined, 'ind-1',
+      );
+    });
+
+    const storedResult = result.current.indicatorResultsRef?.current?.get('ind-1');
+    expect(storedResult).toBeDefined();
+    expect(storedResult!.plots[0].data.length).toBe(1000);
+  });
 });
