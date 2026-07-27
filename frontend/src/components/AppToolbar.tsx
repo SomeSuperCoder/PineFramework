@@ -232,7 +232,7 @@ export function AppToolbar({
         Go to Date
       </button>
       <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
-      {isStrategy && backendUrl && (
+      {backendUrl && (
         <>
           <TradingBotControlButton
             backendUrl={backendUrl}
