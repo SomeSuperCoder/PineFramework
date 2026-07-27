@@ -44,14 +44,14 @@
 
 ## 5. Risk Management
 
-- [ ] 5.1 Implement `DailyStopLoss` tracker — configurable threshold, timezone-aware reset, cumulative realized loss tracking (Spec: risk-management — Requirement: Daily Stop Loss)
-- [ ] 5.2 Wire daily stop loss into bot engine: prevent new entries when breached, allow exits (Spec: risk-management — Scenario: Threshold breached)
-- [ ] 5.3 Implement optional immediate-close-all mode when daily stop loss triggers (Spec: risk-management — Scenario: Optional immediate close)
-- [ ] 5.4 Implement `EmergencyStop` procedure — cancel pending, close positions, stop execution, audit log (Spec: risk-management — Requirement: Emergency Stop)
-- [ ] 5.5 Implement `SafeShutdown` sequence — reject entries → finish bar → close positions → persist → terminate (Design: Decision 9; Spec: risk-management — Requirement: Safe Shutdown)
-- [ ] 5.6 Implement SIGTERM/SIGINT handler that triggers safe shutdown (Design: Decision 9; Spec: risk-management — Requirement: Safe Shutdown)
-- [ ] 5.7 Add unit tests for daily stop loss threshold, reset, and emergency stop flow
-- [ ] 5.8 Add integration test for SIGTERM signal handling
+- [x] 5.1 Implement `DailyStopLoss` tracker — configurable threshold, timezone-aware reset, cumulative realized loss tracking (Spec: risk-management — Requirement: Daily Stop Loss)
+- [x] 5.2 Wire daily stop loss into bot engine via RiskManager: prevent new entries when breached, allow exits (Spec: risk-management — Scenario: Threshold breached)
+- [x] 5.3 Implement optional immediate-close-all mode when daily stop loss triggers (Spec: risk-management — Scenario: Optional immediate close)
+- [x] 5.4 Implement `EmergencyStop` procedure — cancel pending, close positions, stop execution, audit log (Spec: risk-management — Requirement: Emergency Stop)
+- [x] 5.5 Implement `SafeShutdown` sequence — reject entries → finish bar → close positions → persist → terminate via RiskManager (Design: Decision 9; Spec: risk-management — Requirement: Safe Shutdown)
+- [x] 5.6 Implement SIGTERM/SIGINT handler via ShutdownHandler with hook system (Design: Decision 9; Spec: risk-management — Requirement: Safe Shutdown)
+- [x] 5.7 Add unit tests for daily stop loss threshold, reset, and emergency stop flow
+- [x] 5.8 Add unit tests for SIGTERM signal handler registration, hook execution, and failure resilience
 
 ## 6. Backend Services — WebSocket, Trade History, Telegram
 
