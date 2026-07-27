@@ -67,7 +67,7 @@ function App() {
   const chartRef = useRef<ChartComponentHandle>(null);
 
   const backendUrl = `http://${window.location.hostname}:8081`;
-  const { connected: botConnected, status: botStatus, logs: botLogs } = useBotWebSocket(backendUrl);
+  const { connected: botConnected, status: botStatus, logs: botLogs, autoSelectProgress, autoSelectResult } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -422,6 +422,8 @@ function App() {
           status={botStatus}
           logs={botLogs}
           onClose={() => setBotDashboardOpen(false)}
+          autoSelectProgress={autoSelectProgress}
+          autoSelectResult={autoSelectResult}
         />
       )}
 

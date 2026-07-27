@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // ---- Types ----
 
@@ -60,6 +60,20 @@ export function useBotWebSocket(backendUrl: string) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Auto-select progress state
+  const [autoSelectProgress, setAutoSelectProgress] = useState<{
+    current: number;
+    total: number;
+    pair: { symbol: string; timeframe: string };
+    phase: string;
+  } | null>(null);
+  const [autoSelectResult, setAutoSelectResult] = useState<{
+    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
+    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
+    evaluatedCount: number;
+    failedCount: number;
+  } | null>(null);
+
   const connect = useCallback(() => {
     const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/bot';
     const ws = new WebSocket(wsUrl);
@@ -92,6 +106,14 @@ export function useBotWebSocket(backendUrl: string) {
           });
         } else if (msg.channel === 'bot:metrics') {
           setStatus((prev) => prev ? { ...prev, ...msg.data } : null);
+        } else if (msg.channel === 'bot:autoSelect') {
+          if (msg.type === 'progress') {
+            setAutoSelectProgress(msg.data);
+            setAutoSelectResult(null);
+          } else if (msg.type === 'complete') {
+            setAutoSelectProgress(null);
+            setAutoSelectResult(msg.data);
+          }
         }
       } catch { /* ignore parse errors */ }
     };
@@ -111,7 +133,14 @@ export function useBotWebSocket(backendUrl: string) {
     };
   }, [connect]);
 
-  return { connected, status, logs };
+  // Reset auto-select state when status changes to non-idle (bot started)
+  useEffect(() => {
+    if (status?.state === 'Running' || status?.state === 'Starting') {
+      setAutoSelectProgress(null);
+    }
+  }, [status?.state]);
+
+  return { connected, status, logs, autoSelectProgress, autoSelectResult };
 }
 
 // ---- Wallet Import Panel ----
@@ -236,13 +265,70 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
 
 // ---- Bot Configuration Panel ----
 
-function BotConfigPanel({ backendUrl, onConfigured }: {
+const VALID_TIMEFRAMES = new Set(['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M']);
+
+/** Check strategy source for patterns that are incompatible with live spot trading. */
+function checkStrategyCompatibility(source: string): string[] {
+  const warnings: string[] = [];
+
+  // Remove comments and strings to avoid false positives
+  let cleaned = source
+    // Remove single-line comments
+    .replace(/\/\/.*$/gm, '')
+    // Remove multi-line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    // Remove template literals
+    .replace(/`[^`]*`/g, '')
+    // Remove single-quoted strings
+    .replace(/'[^']*'/g, '')
+    // Remove double-quoted strings
+    .replace(/"[^"]*"/g, '');
+
+  if (/strategy\.short\b/.test(cleaned)) {
+    warnings.push('This strategy uses short positions (strategy.short). Spot trading only supports long positions.');
+  }
+
+  if (/strategy\.entry\s*\([^)]*\blimit\s*=/.test(cleaned)) {
+    warnings.push('Limit orders (limit=) are not supported by DEX swaps. Market orders will be used.');
+  }
+
+  if (/strategy\.exit\s*\([^)]*\bshort\b/.test(cleaned)) {
+    warnings.push('This strategy uses short exits (strategy.exit with short). Spot trading does not support short positions.');
+  }
+
+  if (/\bstrategy\.openprofit\b/.test(cleaned)) {
+    warnings.push('strategy.openprofit may report different values in live trading vs backtesting.');
+  }
+
+  return warnings;
+}
+
+function parsePairLine(line: string): { symbol: string; timeframe: string } | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { symbol: parts[0]!, timeframe: '60' };
+  return { symbol: parts[0]!, timeframe: parts[1]! };
+}
+
+export interface ConfigValues {
+  strategySource: string;
+  dex: string;
+  pairs: Array<{ symbol: string; timeframe: string }>;
+  maxDailyLoss: number;
+  timezone: string;
+  closeOnLoss: boolean;
+  autoSelect: boolean;
+}
+
+function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
   backendUrl: string;
   onConfigured: () => void;
+  onConfigValues?: (values: ConfigValues) => void;
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
-  const [pairsText, setPairsText] = useState('SOLUSDT\nBTCUSDT\nETHUSDT');
+  const [pairsText, setPairsText] = useState('SOLUSDT 60\nBTCUSDT 240\nETHUSDT 60\nSOLUSDT 15');
   const [maxDailyLoss, setMaxDailyLoss] = useState('50');
   const [timezone, setTimezone] = useState('UTC');
   const [closeOnLoss, setCloseOnLoss] = useState(false);
@@ -250,13 +336,31 @@ function BotConfigPanel({ backendUrl, onConfigured }: {
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
 
+  const compatibilityWarnings = useMemo(
+    () => checkStrategyCompatibility(strategySource),
+    [strategySource]
+  );
+
+  const parsedPairs = pairsText
+    .split('\n')
+    .map(parsePairLine)
+    .filter((p): p is NonNullable<typeof p> => p !== null);
+
+  const invalidTimeframeLines = pairsText
+    .split('\n')
+    .map((line, i) => {
+      const p = parsePairLine(line);
+      if (p && !VALID_TIMEFRAMES.has(p.timeframe)) return i + 1;
+      return null;
+    })
+    .filter((i): i is number => i !== null);
+
   const handleConfigure = async () => {
     if (!strategySource.trim()) {
       setError('Paste your Pine Script strategy source code');
       return;
     }
-    const pairs = pairsText.split('\n').map((s) => s.trim()).filter(Boolean);
-    if (pairs.length === 0) {
+    if (parsedPairs.length === 0) {
       setError('Enter at least one trading pair');
       return;
     }
@@ -269,7 +373,7 @@ function BotConfigPanel({ backendUrl, onConfigured }: {
         body: JSON.stringify({
           strategySource: strategySource.trim(),
           dex,
-          pairs: pairs.map((s) => ({ symbol: s, timeframe: '60' })),
+          pairs: parsedPairs,
           risk: { maxDailyLoss: Number(maxDailyLoss), dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
           autoSelect,
         }),
@@ -278,6 +382,15 @@ function BotConfigPanel({ backendUrl, onConfigured }: {
       if (!res.ok) {
         setError(data.error || 'Configuration failed');
       } else {
+        onConfigValues?.({
+          strategySource: strategySource.trim(),
+          dex,
+          pairs: parsedPairs,
+          maxDailyLoss: Number(maxDailyLoss),
+          timezone,
+          closeOnLoss,
+          autoSelect,
+        });
         onConfigured();
       }
     } catch {
@@ -362,10 +475,11 @@ function BotConfigPanel({ backendUrl, onConfigured }: {
           </label>
         </div>
         <div>
-          <span style={{ color: '#888', fontSize: 11 }}>Trading Pairs (one per line):</span>
+          <span style={{ color: '#888', fontSize: 11 }}>Trading Pairs (SYMBOL TIMEFRAME per line):</span>
           <textarea
             value={pairsText}
             onChange={(e) => setPairsText(e.target.value)}
+            placeholder="SOLUSDT 60&#10;BTCUSDT 240&#10;ETHUSDT 60&#10;SOLUSDT 15"
             rows={3}
             style={{
               width: '100%', background: '#111128', color: '#e0e0e0',
@@ -373,8 +487,32 @@ function BotConfigPanel({ backendUrl, onConfigured }: {
               fontSize: 11, fontFamily: 'monospace', resize: 'vertical', marginTop: 4,
             }}
           />
+          {invalidTimeframeLines.length > 0 && (
+            <div style={{ color: '#ff9800', fontSize: 10, marginTop: 4 }}>
+              ⚠ Lines {invalidTimeframeLines.join(', ')} have unrecognized timeframes. Valid: 1, 3, 5, 15, 30, 60, 120, 240, D, W, M
+            </div>
+          )}
+          <div style={{ color: '#666', fontSize: 10, marginTop: 2 }}>
+            {parsedPairs.length} pair{parsedPairs.length !== 1 ? 's' : ''} parsed
+            {parsedPairs.length > 0 && (
+              <span>: {parsedPairs.map(p => `${p.symbol} ${p.timeframe}`).join(', ')}</span>
+            )}
+          </div>
         </div>
         {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}
+        {compatibilityWarnings.length > 0 && (
+          <div style={{
+            background: '#2a2010', border: '1px solid #ff9800', borderRadius: 4,
+            padding: '6px 10px', marginTop: 4,
+          }}>
+            <div style={{ color: '#ff9800', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+              ⚠ Live Trading Compatibility Notes
+            </div>
+            {compatibilityWarnings.map((w, i) => (
+              <div key={i} style={{ color: '#e0a040', fontSize: 10 }}>{w}</div>
+            ))}
+          </div>
+        )}
         <button
           onClick={handleConfigure}
           disabled={configuring}
@@ -551,6 +689,316 @@ export function TradingBotControlButton({
   );
 }
 
+// ---- Setup Wizard ----
+
+function SetupWizard({
+  backendUrl,
+  initialWallet,
+  onStart,
+  onClose,
+  autoSelectProgress,
+  autoSelectResult,
+}: {
+  backendUrl: string;
+  initialWallet: WalletInfo;
+  onStart: () => Promise<void>;
+  onClose: () => void;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string } | null;
+  autoSelectResult?: {
+    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
+    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
+    evaluatedCount: number;
+    failedCount: number;
+  } | null;
+}) {
+  const [step, setStep] = useState<'wallet' | 'config' | 'review'>(
+    initialWallet.hasWallet ? 'config' : 'wallet'
+  );
+  const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
+  const [configApplied, setConfigApplied] = useState(false);
+  const [configValues, setConfigValues] = useState<ConfigValues | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
+
+  const isStepComplete = {
+    wallet: wallet.hasWallet,
+    config: configApplied,
+    review: true,
+  };
+
+  const handleStart = async () => {
+    setStarting(true);
+    setStartError('');
+    try {
+      await onStart();
+    } catch {
+      setStartError('Failed to start bot');
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const StepDot = ({ s, label }: { s: typeof step; label: string }) => {
+    const idx = ['wallet', 'config', 'review'].indexOf(s) + 1;
+    const active = step === s;
+    const done = ['wallet', 'config', 'review'].indexOf(s) < ['wallet', 'config', 'review'].indexOf(step);
+    return (
+      <span
+        onClick={done ? () => setStep(s) : undefined}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          color: active ? '#fff' : done ? '#4caf50' : '#555',
+          cursor: done ? 'pointer' : 'default',
+          fontSize: 11, fontWeight: active ? 600 : 400,
+          padding: '4px 8px',
+        }}
+      >
+        <span style={{
+          width: 18, height: 18, borderRadius: '50%',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: active ? '#1a3a6a' : done ? '#1a3328' : '#222',
+          border: `1px solid ${active ? '#64b5f6' : done ? '#4caf50' : '#333'}`,
+          fontSize: 10, fontWeight: 700, color: active ? '#64b5f6' : done ? '#4caf50' : '#555',
+        }}>
+          {done ? '✓' : idx}
+        </span>
+        {label}
+      </span>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Step indicator */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', paddingBottom: 8 }}>
+        <StepDot s="wallet" label="Wallet" />
+        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <StepDot s="config" label="Config" />
+        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <StepDot s="review" label="Review" />
+        <div style={{ flex: 1 }} />
+        <button onClick={onClose} style={{
+          padding: '4px 10px', background: 'transparent', color: '#888',
+          border: 'none', cursor: 'pointer', fontSize: 14,
+        }}>
+          ✕
+        </button>
+      </div>
+
+      {/* Step 1: Wallet */}
+      {step === 'wallet' && (
+        <div>
+          <WalletImportPanel backendUrl={backendUrl} wallet={wallet} onWalletChange={setWallet} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <button
+              onClick={() => setStep('config')}
+              disabled={!wallet.hasWallet}
+              style={{
+                padding: '6px 20px', background: wallet.hasWallet ? '#1a3a6a' : '#111',
+                color: wallet.hasWallet ? '#64b5f6' : '#555',
+                border: `1px solid ${wallet.hasWallet ? '#64b5f6' : '#333'}`,
+                borderRadius: 4, cursor: wallet.hasWallet ? 'pointer' : 'default',
+                fontSize: 11, fontWeight: 600,
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Config */}
+      {step === 'config' && (
+        <div>
+          <BotConfigPanel
+            backendUrl={backendUrl}
+            onConfigured={() => { setConfigApplied(true); setStep('review'); }}
+            onConfigValues={(v) => setConfigValues(v)}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+            <button
+              onClick={() => setStep('wallet')}
+              style={{
+                padding: '6px 14px', background: 'transparent', color: '#888',
+                border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              ← Back
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Review & Start */}
+      {step === 'review' && (
+        <div>
+          <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+            Review & Start
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+            <div>
+              <span style={{ color: '#888' }}>Wallet: </span>
+              <span style={{ color: '#4caf50' }}>
+                {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
+              </span>
+            </div>
+            {configValues && (
+              <>
+                <div>
+                  <span style={{ color: '#888' }}>Strategy: </span>
+                  <span style={{ color: '#e0e0e0' }}>
+                    {configValues.strategySource.split('\n')[0]?.substring(0, 60) || '(pasted)'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>DEX: </span>
+                  <span style={{ color: '#e0e0e0' }}>{configValues.dex}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Pairs: </span>
+                  <span style={{ color: '#e0e0e0' }}>
+                    {configValues.pairs.map(p => `${p.symbol} ${p.timeframe}`).join(', ')}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Max Daily Loss: </span>
+                  <span style={{ color: '#e0e0e0' }}>${configValues.maxDailyLoss}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Timezone: </span>
+                  <span style={{ color: '#e0e0e0' }}>{configValues.timezone}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Auto-Select: </span>
+                  <span style={{ color: configValues.autoSelect ? '#ff9800' : '#888' }}>
+                    {configValues.autoSelect ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {startError && (
+            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{startError}</div>
+          )}
+
+          {/* Auto-Select Progress */}
+          {autoSelectProgress && (
+            <div style={{
+              marginTop: 12, padding: 12, background: '#111128', borderRadius: 6,
+              border: '1px solid #ff9800',
+            }}>
+              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>
+                Auto-Select: Evaluating Pairs
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{
+                  flex: 1, height: 6, background: '#222', borderRadius: 3, overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}%`,
+                    height: '100%', background: '#ff9800', borderRadius: 3,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <span style={{ color: '#888', fontSize: 10, whiteSpace: 'nowrap' }}>
+                  {autoSelectProgress.current}/{autoSelectProgress.total}
+                </span>
+              </div>
+              <div style={{ color: '#e0e0e0', fontSize: 11 }}>
+                <span style={{ color: '#888' }}>Current: </span>
+                {autoSelectProgress.pair.symbol} ({autoSelectProgress.pair.timeframe})
+                <span style={{ color: '#888', marginLeft: 8 }}>
+                  [{autoSelectProgress.phase}]
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Auto-Select Results */}
+          {autoSelectResult && (
+            <div style={{
+              marginTop: 12, padding: 12, background: '#0d1a10', borderRadius: 6,
+              border: '1px solid #4caf50',
+            }}>
+              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>
+                Auto-Select Complete
+              </div>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>
+                Evaluated {autoSelectResult.evaluatedCount} pair
+                {autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
+                {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {autoSelectResult.ranking.slice(0, 5).map((r, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '4px 8px', background: i === 0 ? '#1a3328' : 'transparent',
+                    borderRadius: 3,
+                  }}>
+                    <span style={{
+                      color: i === 0 ? '#4caf50' : '#e0e0e0',
+                      fontWeight: i === 0 ? 700 : 400,
+                      fontSize: 11,
+                    }}>
+                      {i === 0 ? '★ ' : ''}{r.label}
+                    </span>
+                    <span style={{ color: '#888', fontSize: 10 }}>
+                      {r.metrics.profitFactor != null && `PF: ${r.metrics.profitFactor.toFixed(2)}`}
+                      {r.metrics.sharpeRatio != null && `  Sharpe: ${r.metrics.sharpeRatio.toFixed(2)}`}
+                    </span>
+                  </div>
+                ))}
+                {autoSelectResult.ranking.length > 5 && (
+                  <div style={{ color: '#666', fontSize: 10, textAlign: 'center', marginTop: 2 }}>
+                    +{autoSelectResult.ranking.length - 5} more
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <button
+              onClick={() => setStep('config')}
+              disabled={!!autoSelectProgress}
+              style={{
+                padding: '6px 14px', background: 'transparent', color: '#888',
+                border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
+                fontSize: 11,
+              }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={handleStart}
+              disabled={starting || !!autoSelectProgress}
+              style={{
+                padding: '8px 24px', background: starting ? '#1a3328' : '#1a3328',
+                color: '#4caf50', border: '1px solid #4caf50', borderRadius: 4,
+                cursor: (starting || !!autoSelectProgress) ? 'wait' : 'pointer',
+                fontSize: 12, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                opacity: (starting || !!autoSelectProgress) ? 0.7 : 1,
+              }}
+            >
+              {starting ? 'Starting...' : (
+                <>
+                  <svg width="12" height="12" viewBox="0 0 10 10" fill="#4caf50">
+                    <polygon points="2,0 9,5 2,10" />
+                  </svg>
+                  Start Bot
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Live Dashboard (Status / Metrics / Logs) ----
 
 function MetricValue({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -567,11 +1015,20 @@ export function LiveDashboard({
   status,
   logs,
   onClose,
+  autoSelectProgress,
+  autoSelectResult,
 }: {
   backendUrl: string;
   status: BotStatusSnapshot;
   logs: LogEntry[];
   onClose: () => void;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string } | null;
+  autoSelectResult?: {
+    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
+    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
+    evaluatedCount: number;
+    failedCount: number;
+  } | null;
 }) {
   const [view, setView] = useState<'setup' | 'status' | 'metrics' | 'logs'>(
     status.state === 'Idle' || status.state === 'Stopped' ? 'setup' : 'status'
@@ -581,7 +1038,6 @@ export function LiveDashboard({
     hasWallet: !!status.walletPublicKey,
     publicKey: status.walletPublicKey ?? undefined,
   });
-  const [configApplied, setConfigApplied] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch wallet status on mount
@@ -652,7 +1108,7 @@ export function LiveDashboard({
     status.state === 'Error' ? '#e94560' :
     status.state === 'Idle' ? '#888' : '#ff9800';
 
-  const isReady = wallet.hasWallet && (configApplied || status.state !== 'Idle');
+  const isReady = wallet.hasWallet;
 
   return (
     <div
@@ -685,8 +1141,7 @@ export function LiveDashboard({
             disabled={loading || !isReady}
             title={
               !wallet.hasWallet ? 'Import a wallet first' :
-              !configApplied ? 'Apply configuration first' :
-              'Start Live Trading Bot'
+              'Start Live Trading Bot (configure in Setup tab)'
             }
             style={{
               padding: '5px 12px', background: isReady ? '#1a3328' : '#111',
@@ -766,15 +1221,16 @@ export function LiveDashboard({
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
         {/* ---- Setup Tab (Idle/Stopped) ---- */}
         {view === 'setup' && (
-          <div>
-            <WalletImportPanel backendUrl={backendUrl} wallet={wallet} onWalletChange={setWallet} />
-            <BotConfigPanel backendUrl={backendUrl} onConfigured={() => setConfigApplied(true)} />
-            {configApplied && (
-              <div style={{ color: '#4caf50', fontSize: 11, marginTop: 8 }}>
-                ✓ Configuration applied. Click Start Bot to begin trading.
-              </div>
-            )}
-          </div>
+          <SetupWizard
+            backendUrl={backendUrl}
+            initialWallet={wallet}
+            onStart={async () => {
+              await sendCommand('start');
+            }}
+            onClose={onClose}
+            autoSelectProgress={autoSelectProgress}
+            autoSelectResult={autoSelectResult}
+          />
         )}
 
         {/* ---- Status Tab ---- */}

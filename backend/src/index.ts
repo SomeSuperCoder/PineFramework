@@ -185,7 +185,24 @@ if (ENABLE_TRADING_BOT) {
         dex: config.dex,
         metric: config.autoSelectMetric ?? 'profitFactor',
       });
-      const result = await selector.select(defaultCandidates);
+      const result = await selector.select(defaultCandidates, (progress) => {
+        botWS.broadcast({
+          channel: 'bot:autoSelect',
+          type: 'progress',
+          data: progress,
+        });
+      });
+      botWS.broadcast({
+        channel: 'bot:autoSelect',
+        type: 'complete',
+        data: {
+          best: result.best,
+          ranking: result.ranking,
+          metric: result.metric,
+          evaluatedCount: result.evaluatedCount,
+          failedCount: result.failedCount,
+        },
+      });
       return [result.best.pair];
     },
   });
