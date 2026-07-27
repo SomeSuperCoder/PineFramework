@@ -16,6 +16,8 @@ import { createScriptsRouter } from './routes/scripts.js';
 import { createIndicatorsRouter } from './routes/indicators.js';
 import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
+import { createBotRouter } from './routes/bot.js';
+import { createBotWSGateway } from './ws/bot-gateway.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
 import { ScriptFileManager } from './store/ScriptFileManager.js';
@@ -24,6 +26,9 @@ import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
 import { TelegramService } from './telegram/TelegramService.js';
 import { migrateLegacyScripts } from './migration.js';
 import { logger } from './utils/logger.js';
+
+// ── Feature flags ──
+const ENABLE_TRADING_BOT = process.env.ENABLE_TRADING_BOT === 'true';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
@@ -150,6 +155,72 @@ app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 app.use('/api', createExportRouter());
+
+// ── Trading Bot (feature-gated) ──
+if (ENABLE_TRADING_BOT) {
+  const { BotEngine, AutoMarketSelector, WalletManager, InMemoryWalletStorage } = await import('pine-framework');
+  const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
+
+  const defaultCandidates = [
+    { symbol: 'BTCUSDT', timeframe: '60' },
+    { symbol: 'ETHUSDT', timeframe: '60' },
+    { symbol: 'SOLUSDT', timeframe: '60' },
+    { symbol: 'DOGEUSDT', timeframe: '60' },
+    { symbol: 'ADAUSDT', timeframe: '60' },
+    { symbol: 'AVAXUSDT', timeframe: '60' },
+    { symbol: 'LINKUSDT', timeframe: '60' },
+    { symbol: 'DOTUSDT', timeframe: '60' },
+  ];
+
+  const barFetcher = new BybitBarFetcher();
+  const backtestRunner = new LiveBacktestRunner();
+
+  const botEngine = new BotEngine({
+    onAutoSelect: async (config) => {
+      const selector = new AutoMarketSelector({
+        barFetcher,
+        backtestRunner,
+        script: config.strategySource,
+        dex: config.dex,
+        metric: config.autoSelectMetric ?? 'profitFactor',
+      });
+      const result = await selector.select(defaultCandidates);
+      return [result.best.pair];
+    },
+  });
+
+  // Wallet manager (uses in-memory storage; Phase 2 should use persistent storage)
+  const walletManager = new WalletManager(
+    new InMemoryWalletStorage(),
+    process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
+  );
+
+  // Mount bot REST API routes
+  app.use('/api', createBotRouter({
+    getEngine: () => botEngine,
+    getWalletManager: () => walletManager,
+  }));
+
+  // Mount bot WebSocket gateway and wire engine events to WS clients
+  const botWS = createBotWSGateway(server, () => botEngine);
+
+  // Wire engine events → WebSocket broadcast
+  botEngine.on('stateChange', (event) => {
+    botWS.broadcast({
+      channel: 'bot:state',
+      data: { current: event.current, previous: event.previous, reason: event.reason, timestamp: event.timestamp },
+    });
+  });
+
+  botEngine.on('error', (error) => {
+    botWS.broadcast({
+      channel: 'bot:log',
+      data: { timestamp: error.timestamp, level: 'error', message: `[${error.code}] ${error.message}` },
+    });
+  });
+
+  logger.info('Trading bot API enabled (ENABLE_TRADING_BOT=true)');
+}
 
 createWSGateway(server, cache, telegramService);
 

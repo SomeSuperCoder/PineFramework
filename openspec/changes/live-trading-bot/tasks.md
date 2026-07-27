@@ -79,28 +79,28 @@
 
 ## 8. Automatic Market Selection
 
-- [ ] 8.1 Implement auto-selection orchestrator that iterates candidate pairs and delegates to backtest engine (Design: Decision 7; Spec: auto-market-selection)
-- [ ] 8.2 Extend backtest engine with batch mode: accept list of (Symbol × Timeframe) pairs, return ranked results (Spec: strategy-backtest-engine — MODIFIED Requirements)
-- [ ] 8.3 Implement ranking with configurable metric: Sharpe ratio, profit factor, net profit, win rate (Spec: auto-market-selection — Scenario: Configurable evaluation metric)
-- [ ] 8.4 Ensure auto-selection uses selected DEX's commission model and slippage (Spec: auto-market-selection — Requirement: DEX-Consistent Evaluation)
-- [ ] 8.5 Wire auto-selection into bot start flow: if Auto Select enabled, run backtests before Starting transition (Spec: auto-market-selection)
-- [ ] 8.6 Add integration test for auto-selection flow with mocked backtest results
+- [x] 8.1 Implement auto-selection orchestrator that iterates candidate pairs and delegates to backtest engine (Design: Decision 7; Spec: auto-market-selection)
+- [x] 8.2 Extend backtest engine with batch mode: accept list of (Symbol × Timeframe) pairs, return ranked results (Spec: strategy-backtest-engine — MODIFIED Requirements)
+- [x] 8.3 Implement ranking with configurable metric: Sharpe ratio, profit factor, net profit, win rate (Spec: auto-market-selection — Scenario: Configurable evaluation metric)
+- [x] 8.4 Ensure auto-selection uses selected DEX's commission model and slippage (Spec: auto-market-selection — Requirement: DEX-Consistent Evaluation)
+- [x] 8.5 Wire auto-selection into bot start flow: if Auto Select enabled, run backtests before Starting transition (Spec: auto-market-selection)
+- [x] 8.6 Add integration test for auto-selection flow with mocked backtest results
 
 ## 9. Integration & Configuration Wiring
 
-- [ ] 9.1 Create `BotConfig` interface covering all bot settings (strategy, DEX, pairs, risk, wallet ref, auto-select)
-- [ ] 9.2 Wire `BotEngine` into backend server: expose start/stop/status/emergencyStop API endpoints
-- [ ] 9.3 Create configuration wizard flow in backend (strategy → DEX → symbols → timeframes → risk settings)
-- [ ] 9.4 Wire wallet import into backend CLI or API endpoint
-- [ ] 9.5 Add configuration validation: required fields, valid DEX, valid pairs, valid risk values
-- [ ] 9.6 Add feature flag for trading bot (disabled by default) for safe rollout (Design: Migration Plan)
+- [x] 9.1 Create `BotConfig` interface covering all bot settings (strategy, DEX, pairs, risk, wallet ref, auto-select)
+- [x] 9.2 Wire `BotEngine` into backend server: expose start/stop/status/emergencyStop API endpoints
+- [x] 9.3 Create configuration wizard flow in backend (`POST /api/bot/configure` with validation)
+- [x] 9.4 Wire wallet import into backend API endpoint (`POST /api/bot/wallet/import`)
+- [x] 9.5 Add configuration validation: required fields, valid DEX, valid pairs, valid risk values
+- [x] 9.6 Add feature flag for trading bot (`ENABLE_TRADING_BOT=true` env var, disabled by default) (Design: Migration Plan)
 
 ## 10. End-to-End Tests & Documentation
 
-- [ ] 10.1 Write integration test: start bot → process candles → signals generated → orders submitted
-- [ ] 10.2 Write integration test: emergency stop — verify positions closed and state transitions
-- [ ] 10.3 Write integration test: daily stop loss — verify entry prevention after threshold breached
-- [ ] 10.4 Write integration test: auto-selection — verify ranking and selection
-- [ ] 10.5 Write integration test: SIGTERM — verify safe shutdown sequence
-- [ ] 10.6 Add documentation for bot configuration and operation in `docs/trading-bot.md`
-- [ ] 10.7 Update `README.md` with live trading capability overview
+- [x] 10.1 Write integration test: start bot → process candles → signals generated → orders submitted
+- [x] 10.2 Write integration test: emergency stop — verify positions closed and state transitions
+- [x] 10.3 Write integration test: daily stop loss — verify entry prevention after threshold breached
+- [x] 10.4 Write integration test: auto-selection — verify ranking and selection
+- [x] 10.5 Write integration test: SIGTERM — verify safe shutdown sequence
+- [x] 10.6 Add documentation for bot configuration and operation in `docs/trading-bot.md`
+- [x] 10.7 Update `README.md` with live trading capability overview

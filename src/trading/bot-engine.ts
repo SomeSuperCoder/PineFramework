@@ -8,7 +8,7 @@
  */
 
 import { BotState, ErrorSeverity } from './types.js';
-import type { BotConfig, BotError, StateTransition, BotStatusSnapshot, PositionSummary } from './types.js';
+import type { BotConfig, BotError, StateTransition, BotStatusSnapshot, PositionSummary, PairConfig } from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 
@@ -33,9 +33,19 @@ export interface BotEventMap {
   stateChange: (event: { previous: BotState; current: BotState; reason: string; timestamp: number }) => void;
   error: (error: BotError) => void;
   configUpdate: (config: BotConfig) => void;
+  /** Emitted when auto-selection completes. */
+  autoSelectionComplete: (result: { best: PairConfig; ranking: Array<{ pair: PairConfig; label: string }> }) => void;
 }
 
-type BotEventListener<T extends keyof BotEventMap> = BotEventMap[T];
+export interface BotEngineOptions {
+  logger?: BotLogger;
+  /**
+   * Optional callback invoked when auto-selection is enabled.
+   * Receives the current config and returns a list of selected pairs.
+   * If not provided, auto-selection will throw an error when enabled.
+   */
+  onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
+}
 
 /**
  * Central controller for the live trading bot.
@@ -44,6 +54,7 @@ type BotEventListener<T extends keyof BotEventMap> = BotEventMap[T];
 export class BotEngine {
   private readonly stateMachine: StateMachine<BotState>;
   private readonly logger: BotLogger;
+  private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -52,8 +63,9 @@ export class BotEngine {
   /** Current positions (in-memory; will be managed by scheduler in Phase 2). */
   private _positions: PositionSummary[] = [];
 
-  constructor(logger?: BotLogger) {
-    this.logger = logger ?? consoleLogger;
+  constructor(options?: BotEngineOptions) {
+    this.logger = options?.logger ?? consoleLogger;
+    this.onAutoSelect = options?.onAutoSelect;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -119,6 +131,7 @@ export class BotEngine {
   /**
    * Start the bot.
    * Transitions: Idle → Starting → Running (or → Error on failure)
+   * If autoSelect is enabled, runs market selection before starting.
    */
   async start(): Promise<void> {
     if (this.state !== BotState.Idle && this.state !== BotState.Stopped) {
@@ -126,6 +139,24 @@ export class BotEngine {
     }
     if (!this._config) {
       throw new Error('Cannot start bot without configuration. Call configure() first.');
+    }
+
+    // Run auto-selection if enabled
+    if (this._config.autoSelect) {
+      if (!this.onAutoSelect) {
+        throw new Error(
+          'Auto-select is enabled but no onAutoSelect callback was provided to BotEngine. ' +
+          'Provide an onAutoSelect implementation or disable autoSelect.',
+        );
+      }
+      this.logger.info('Auto-selection enabled — evaluating candidate pairs');
+      const selectedPairs = await this.onAutoSelect(this._config);
+      if (selectedPairs.length === 0) {
+        throw new Error('Auto-selection returned no pairs. Cannot start bot.');
+      }
+      this._config = { ...this._config, pairs: selectedPairs };
+      this.logger.info('Auto-selection complete', { pairs: selectedPairs.map((p) => `${p.symbol}:${p.timeframe}`) });
+      this.emit('configUpdate', this._config);
     }
 
     await this.stateMachine.transition(BotState.Starting, 'User requested start');

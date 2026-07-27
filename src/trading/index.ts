@@ -34,7 +34,6 @@ export * from './risk/index.js';
 
 export { Scheduler, Mutex, pairIdToString, parsePairId } from './scheduler.js';
 export type {
-  PairId,
   ClosedCandle,
   TradeSignal,
   SchedulerOptions,
@@ -56,3 +55,13 @@ export type {
 
 export { TradingTelegramBot } from './telegram-bot.js';
 export type { TelegramSender, TradingNotificationOptions } from './telegram-bot.js';
+
+export { AutoMarketSelector } from './auto-select.js';
+export type {
+  RankingMetric,
+  CandidateEvaluation,
+  AutoSelectionResult,
+  SelectionProgressCallback,
+  BarFetcher,
+  BacktestRunner,
+} from './auto-select.js';
