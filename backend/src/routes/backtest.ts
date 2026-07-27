@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { fetchDexFeeBps, type StrategyConfig } from 'pine-framework';
+import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
+import type { StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';

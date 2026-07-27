@@ -9,7 +9,7 @@
 import type { Bar } from 'pine-framework';
 import type { DexKind } from 'pine-framework';
 import type { BarFetcher, BacktestRunner } from 'pine-framework';
-import { fetchDexFeeBps } from 'pine-framework';
+import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import { runBacktestPipeline } from '../backtest-runner.js';
 

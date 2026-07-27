@@ -17,9 +17,8 @@ import {
   BotState,
   ErrorSeverity,
   AutoMarketSelector,
-  WalletManager,
-  InMemoryWalletStorage,
 } from 'pine-framework';
+import { WalletManager, InMemoryWalletStorage } from 'pine-framework/trading/wallet';
 import type { BotConfig, PairConfig, BarFetcher, BacktestRunner } from 'pine-framework';
 
 // ── Helpers ──

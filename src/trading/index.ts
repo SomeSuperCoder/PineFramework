@@ -42,7 +42,8 @@ export type {
   OrderSubmitter,
 } from './scheduler.js';
 
-export { TradeHistoryStore } from './trade-history-store.js';
+// Note: TradeHistoryStore is NOT re-exported here because it depends on
+// node:fs and node:path. Backend code imports it from the subpath export.
 export type { HistoryConfig, DebugSnapshot, TradeStats } from './trade-history-store.js';
 
 export { DashboardWsService } from './dashboard-ws.js';

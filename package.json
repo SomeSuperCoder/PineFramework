@@ -12,6 +12,21 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./trading/wallet": {
+      "source": "./src/trading/wallet/wallet-manager.ts",
+      "types": "./dist/trading/wallet/wallet-manager.d.ts",
+      "import": "./dist/trading/wallet/wallet-manager.js"
+    },
+    "./trading/trade-history-store": {
+      "source": "./src/trading/trade-history-store.ts",
+      "types": "./dist/trading/trade-history-store.d.ts",
+      "import": "./dist/trading/trade-history-store.js"
+    },
+    "./strategy/jupiter-fee-fetcher": {
+      "source": "./src/strategy/jupiter-fee-fetcher.ts",
+      "types": "./dist/strategy/jupiter-fee-fetcher.d.ts",
+      "import": "./dist/strategy/jupiter-fee-fetcher.js"
+    },
     "./utils/time": {
       "source": "./src/utils/time.ts",
       "types": "./dist/utils/time.d.ts",

@@ -17,7 +17,7 @@
 
 import { Router } from 'express';
 import type { BotEngine, BotConfig } from 'pine-framework';
-import type { WalletManager } from 'pine-framework';
+import type { WalletManager } from 'pine-framework/trading/wallet';
 
 export interface BotRouterOptions {
   getEngine: () => BotEngine | null;

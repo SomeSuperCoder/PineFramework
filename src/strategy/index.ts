@@ -56,10 +56,7 @@ export type {
   JupiterManualSettings,
 } from './commission-calculator.js';
 
-export {
-  fetchDexFeeBps,
-  getCachedDexFeeBps,
-  clearFeeCache,
-  getCacheFilePath,
-} from './jupiter-fee-fetcher.js';
+// Note: fetchDexFeeBps, getCachedDexFeeBps, clearFeeCache, getCacheFilePath
+// are NOT re-exported here because jupiter-fee-fetcher depends on node:fs,
+// node:path, and node:os. Backend code imports them from the subpath export.
 export type { FeeFetchResult } from './jupiter-fee-fetcher.js';

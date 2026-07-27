@@ -158,7 +158,8 @@ app.use('/api', createExportRouter());
 
 // ── Trading Bot (feature-gated) ──
 if (ENABLE_TRADING_BOT) {
-  const { BotEngine, AutoMarketSelector, WalletManager, InMemoryWalletStorage } = await import('pine-framework');
+  const { BotEngine, AutoMarketSelector } = await import('pine-framework');
+  const { WalletManager, InMemoryWalletStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
 
   const defaultCandidates = [

@@ -1,4 +1,5 @@
-import { fetchDexFeeBps, type StrategyConfig } from 'pine-framework';
+import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
+import type { StrategyConfig } from 'pine-framework';
 import type { SymbolResult, SymbolMetrics } from './types.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
