@@ -42,3 +42,17 @@ export type {
   CandleProcessor,
   OrderSubmitter,
 } from './scheduler.js';
+
+export { TradeHistoryStore } from './trade-history-store.js';
+export type { HistoryConfig, DebugSnapshot, TradeStats } from './trade-history-store.js';
+
+export { DashboardWsService } from './dashboard-ws.js';
+export type {
+  WsClient,
+  DashboardMessage,
+  LogEntry,
+  MetricsSnapshot,
+} from './dashboard-ws.js';
+
+export { TradingTelegramBot } from './telegram-bot.js';
+export type { TelegramSender, TradingNotificationOptions } from './telegram-bot.js';

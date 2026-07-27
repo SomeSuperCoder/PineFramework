@@ -55,14 +55,14 @@
 
 ## 6. Backend Services — WebSocket, Trade History, Telegram
 
-- [ ] 6.1 Implement WebSocket channels in backend: `bot:state`, `bot:metrics`, `bot:position`, `bot:log`, `bot:trade` (Design: Decision 6; Spec: live-dashboard)
-- [ ] 6.2 Implement snapshot + delta pattern: full state on connect, deltas thereafter (Design: Decision 6)
-- [ ] 6.3 Implement `TradeHistoryStore` — JSONL file writer with append, read, and query operations (Design: Decision 8; Spec: trade-history)
-- [ ] 6.4 Implement debug snapshot capture: logs, market data, order lifecycle, balance evolution (Spec: trade-history — Requirement: Debug History)
-- [ ] 6.5 Extend Telegram notification service with live trading event types (Spec: telegram-notification — MODIFIED Requirements)
-- [ ] 6.6 Add Telegram notification for: bot start/stop, position open/close, emergency stop, daily loss, errors (Spec: telegram-notification)
-- [ ] 6.7 Add unit tests for WebSocket snapshot/delta pattern and TradeHistoryStore
-- [ ] 6.8 Add unit tests for Telegram notification formatting for all new event types
+- [x] 6.1 Implement WebSocket channels in `DashboardWsService`: `bot:state`, `bot:metrics`, `bot:position`, `bot:log`, `bot:trade` (Design: Decision 6; Spec: live-dashboard)
+- [x] 6.2 Implement snapshot + delta pattern: full state on connect via sendSnapshot, deltas via broadcast methods (Design: Decision 6)
+- [x] 6.3 Implement `TradeHistoryStore` — JSONL file writer with append, read, and query operations (Design: Decision 8; Spec: trade-history)
+- [x] 6.4 Implement debug snapshot capture via saveDebugSnapshot with logs, market data, order lifecycle, balance evolution (Spec: trade-history — Requirement: Debug History)
+- [x] 6.5 Extend Telegram notification via `TradingTelegramBot` with live trading event types (Spec: telegram-notification — MODIFIED Requirements)
+- [x] 6.6 Add Telegram notification for: bot start/stop, position open/close, emergency stop, daily loss, errors (Spec: telegram-notification)
+- [x] 6.7 Add unit tests for WebSocket snapshot/delta pattern and TradeHistoryStore
+- [x] 6.8 Add unit tests for Telegram notification formatting for all new event types
 
 ## 7. Frontend — Bot Controls & Live Dashboard
 
