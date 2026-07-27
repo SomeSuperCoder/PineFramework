@@ -1,4 +1,5 @@
 import type { PineScriptError } from '../types';
+import { TradingBotControlButton, type BotStateT } from './TradingBotPanel';
 
 export interface AppToolbarProps {
   isStrategy: boolean;
@@ -16,6 +17,11 @@ export interface AppToolbarProps {
   onOpenBacktest: () => void;
   onOpenGoToDate: () => void;
   onExport: () => Promise<void>;
+  backendUrl: string;
+  botState: BotStateT;
+  botConnected: boolean;
+  botDashboardOpen: boolean;
+  onToggleBotDashboard: () => void;
 }
 
 export function AppToolbar({
@@ -34,6 +40,11 @@ export function AppToolbar({
   onOpenBacktest,
   onOpenGoToDate,
   onExport,
+  backendUrl,
+  botState,
+  botConnected,
+  botDashboardOpen,
+  onToggleBotDashboard,
 }: AppToolbarProps) {
   return (
     <div
@@ -221,6 +232,18 @@ export function AppToolbar({
         Go to Date
       </button>
       <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
+      {isStrategy && backendUrl && (
+        <>
+          <TradingBotControlButton
+            backendUrl={backendUrl}
+            botState={botState}
+            connected={botConnected}
+            onToggleDashboard={onToggleBotDashboard}
+            dashboardOpen={botDashboardOpen}
+          />
+          <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
+        </>
+      )}
       <div style={{ flex: 1 }} />
       <button
         onClick={onExport}

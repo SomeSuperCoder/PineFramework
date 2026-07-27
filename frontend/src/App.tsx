@@ -12,6 +12,7 @@ import { AppToolbar } from './components/AppToolbar';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
+import { useBotWebSocket, LiveDashboard } from './components/TradingBotPanel';
 import type { ScriptResult, BacktestConfig } from './types';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
@@ -64,6 +65,10 @@ function App() {
     return saved ? JSON.parse(saved) : { date: '', time: '' };
   });
   const chartRef = useRef<ChartComponentHandle>(null);
+
+  const backendUrl = `http://${window.location.hostname}:8081`;
+  const { connected: botConnected, status: botStatus, logs: botLogs } = useBotWebSocket(backendUrl);
+  const [botDashboardOpen, setBotDashboardOpen] = useState(false);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -404,7 +409,20 @@ function App() {
             alert('Export failed. Check console for details.');
           }
         }}
+        backendUrl={backendUrl}
+        botState={botStatus?.state ?? 'Idle'}
+        botConnected={botConnected}
+        botDashboardOpen={botDashboardOpen}
+        onToggleBotDashboard={() => setBotDashboardOpen((v) => !v)}
       />
+
+      {botDashboardOpen && botStatus && botStatus.state !== 'Idle' && (
+        <LiveDashboard
+          status={botStatus}
+          logs={botLogs}
+          onClose={() => setBotDashboardOpen(false)}
+        />
+      )}
 
       <ErrorConsole
         errors={errors}

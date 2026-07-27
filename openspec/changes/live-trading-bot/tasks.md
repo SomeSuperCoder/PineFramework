@@ -66,16 +66,16 @@
 
 ## 7. Frontend — Bot Controls & Live Dashboard
 
-- [ ] 7.1 Add bottom panel section with Start Bot / Stop Bot buttons (Spec: frontend-application — MODIFIED Requirements)
-- [ ] 7.2 Wire Start/Stop buttons to backend API endpoints with state reflection (Spec: frontend-application — Scenario: Frontend reflects backend state)
-- [ ] 7.3 Implement WebSocket connection from frontend to backend for dashboard data stream (Spec: live-dashboard — Requirement: Continuous Updates)
-- [ ] 7.4 Build Live Status section: state indicator, strategy name, DEX, wallet, duration, balance, PnL (Spec: live-dashboard — Requirement: Live Status Display)
-- [ ] 7.5 Build Positions table: symbol, side, size, entry price, current PnL per position (Spec: live-dashboard — Scenario: Positions)
-- [ ] 7.6 Build Metrics panel: trade count, win rate, avg win/loss, profit factor, drawdown, fees, latency (Spec: live-dashboard — Requirement: Performance Metrics)
-- [ ] 7.7 Build streaming Log Viewer: scrollable, auto-updating, categorized log entries (Spec: live-dashboard — Requirement: Live Log Stream)
-- [ ] 7.8 Implement Emergency Stop button in dashboard (Spec: risk-management — Scenario: Emergency stop from frontend)
-- [ ] 7.9 Add WebSocket auto-reconnect logic on disconnect (Spec: live-dashboard — Scenario: Reconnect on disconnect)
-- [ ] 7.10 Verify dashboard never blocks trading engine — closing UI leaves bot running (Spec: frontend-application — Scenario: Frontend does not block trading)
+- [x] 7.1 Add bottom panel section with Start Bot / Stop Bot buttons (Spec: frontend-application — MODIFIED Requirements)
+- [x] 7.2 Wire Start/Stop buttons to backend API endpoints with state reflection (Spec: frontend-application — Scenario: Frontend reflects backend state)
+- [x] 7.3 Implement WebSocket connection from frontend to backend for dashboard data stream (Spec: live-dashboard — Requirement: Continuous Updates)
+- [x] 7.4 Build Live Status section: state indicator, strategy name, DEX, wallet, duration, balance, PnL (Spec: live-dashboard — Requirement: Live Status Display)
+- [x] 7.5 Build Positions table: symbol, side, size, entry price, current PnL per position (Spec: live-dashboard — Scenario: Positions)
+- [x] 7.6 Build Metrics panel: trade count, win rate, avg win/loss, profit factor, drawdown, fees, latency (Spec: live-dashboard — Requirement: Performance Metrics)
+- [x] 7.7 Build streaming Log Viewer: scrollable, auto-updating, categorized log entries (Spec: live-dashboard — Requirement: Live Log Stream)
+- [x] 7.8 Implement Emergency Stop button in dashboard (Spec: risk-management — Scenario: Emergency stop from frontend)
+- [x] 7.9 Add WebSocket auto-reconnect logic on disconnect (Spec: live-dashboard — Scenario: Reconnect on disconnect)
+- [x] 7.10 Verify dashboard never blocks trading engine — closing UI leaves bot running (Spec: frontend-application — Scenario: Frontend does not block trading)
 
 ## 8. Automatic Market Selection
 
