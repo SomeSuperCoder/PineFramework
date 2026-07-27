@@ -28,7 +28,7 @@ import { migrateLegacyScripts } from './migration.js';
 import { logger } from './utils/logger.js';
 
 // ── Feature flags ──
-const ENABLE_TRADING_BOT = process.env.ENABLE_TRADING_BOT === 'true';
+const ENABLE_TRADING_BOT = process.env.ENABLE_TRADING_BOT !== 'false';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, '..', 'data');
