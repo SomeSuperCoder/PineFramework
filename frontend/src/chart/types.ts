@@ -10,7 +10,8 @@ export interface CandlestickData {
 export interface PlotSeriesData {
   time: number;
   value: number | null;
-  color?: string;
+  /** null = invisible (no per-bar color), undefined = use plot default */
+  color?: string | null;
 }
 
 export interface ShapeMarkerData {

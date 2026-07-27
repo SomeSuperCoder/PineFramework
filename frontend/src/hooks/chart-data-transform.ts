@@ -296,7 +296,7 @@ export function buildScriptResult(
     const mappedData: Array<{
       time: number;
       value: number | null;
-      color: string | undefined;
+      color: string | null | undefined;
     } | null> = values.map((v, i) => {
       const ts = getTimestamp(i);
       if (ts === undefined) return null;
@@ -313,7 +313,7 @@ export function buildScriptResult(
       return {
         time: Math.floor(ts / 1000),
         value: numValue,
-        color: perBarColors?.[i] ?? undefined,
+        color: perBarColors?.[i],
       };
     });
     plotData.push({
@@ -324,7 +324,7 @@ export function buildScriptResult(
         ): d is {
           time: number;
           value: number | null;
-          color: string | undefined;
+          color: string | null | undefined;
         } => d !== null,
       ),
       color: plotColor,

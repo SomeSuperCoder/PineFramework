@@ -79,6 +79,7 @@ export class LineRenderer {
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
+        if (d.color === null) { prevX = undefined; prevY = undefined; continue; }
         ctx.strokeStyle = d.color ?? options.color;
         ctx.beginPath();
         ctx.moveTo(prevX, prevY);
@@ -114,6 +115,7 @@ export class LineRenderer {
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       if (prevX !== undefined && prevY !== undefined) {
+        if (d.color === null) { prevX = undefined; prevY = undefined; continue; }
         const segmentColor = d.color ?? options.color;
         ctx.strokeStyle = segmentColor;
         ctx.beginPath();
@@ -147,6 +149,7 @@ export class LineRenderer {
     for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
+      if (d.color === null) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.strokeStyle = d.color ?? options.color;
@@ -174,6 +177,7 @@ export class LineRenderer {
     for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
+      if (d.color === null) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       const top = Math.min(baseY, y);
@@ -200,6 +204,7 @@ export class LineRenderer {
     for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
+      if (d.color === null) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.moveTo(x + radius, y);
@@ -224,6 +229,7 @@ export class LineRenderer {
     for (let i = 0; i < limit; i++) {
       const d = data[i];
       if (d.value === null || d.value === undefined) continue;
+      if (d.color === null) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
       ctx.beginPath();
