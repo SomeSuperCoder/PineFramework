@@ -10,9 +10,12 @@ The frontend SHALL provide UI for adding, removing, reordering, and configuring 
 - **WHEN** the user clicks "Add Indicator"
 - **THEN** a dialog SHALL show available scripts with search/filter
 
-#### Scenario: Remove Indicator
+#### Scenario: Remove Indicator with Plot Cleanup
 - **WHEN** the user clicks remove on an indicator
-- **THEN** the indicator SHALL be removed and its pane closed
+- **THEN** the indicator SHALL be removed
+- **AND** all plot series belonging to that indicator SHALL be removed from the chart
+- **AND** the indicator pane SHALL be closed if this was the last indicator in that pane
+- **AND** any in-flight computation for that indicator SHALL be discarded
 
 #### Scenario: Reorder Indicators
 - **WHEN** the user drags an indicator in the list

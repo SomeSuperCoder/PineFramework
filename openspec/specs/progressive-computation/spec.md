@@ -28,6 +28,12 @@ The system SHALL compute indicators progressively — compute for visible range 
 - **THEN** the system SHALL maintain the candle in an uncalculated state
 - **AND** the candle SHALL be computed when lookback is satisfied by additional loaded data
 
+#### Scenario: Cancellation-Safe Progressive Computation
+- **WHEN** an indicator is removed during progressive computation
+- **THEN** the computation SHALL be interrupted
+- **AND** no partial results SHALL be plotted for the removed indicator
+- **AND** any plot series from that indicator SHALL be removed from the chart
+
 ### Requirement: Overlap Zone Label Merge
 When merging labels from a re-executed indicator with previous results, the system SHALL replace ALL labels in the overlap zone with the re-execution result, instead of deduplicating by timestamp.
 

@@ -34,6 +34,8 @@ The system SHALL expose current indicator result data to Playwright via `window.
 - **THEN** `window.__pineTestData` SHALL be defined
 - **AND** it SHALL contain the current labels, lines, and chunkBorders for each indicator
 - **AND** it SHALL be updated after each chunk load and re-execution
+- **AND** each indicator entry SHALL contain a `plotNullCounts` field (`Record<string, number>`)
+- **AND** each indicator entry SHALL contain a `boundaryNullDensities` field (`Array<{ borderIndex: number; nullCount: number; totalBars: number }>`)
 
 #### Scenario: Production Safety
 - **WHEN** the chart renders without debug mode

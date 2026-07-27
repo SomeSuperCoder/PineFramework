@@ -42,7 +42,7 @@ The type system SHALL implement Series types for time-series data and support ar
 - **THEN** the type system SHALL support map operations
 
 ### Requirement: NA Value Semantics
-The type system SHALL implement Pine's `na` (not available) value semantics.
+The type system SHALL implement Pine's `na` (not available) value semantics, and SHALL report errors when type invariants are violated at runtime.
 
 #### Scenario: NA Propagation
 - **WHEN** operations involve `na` values
@@ -51,6 +51,14 @@ The type system SHALL implement Pine's `na` (not available) value semantics.
 #### Scenario: NA in Logical Operations
 - **WHEN** logical AND/OR has `na` operands
 - **THEN** the type system SHALL treat `na` as false (Pine Script boolean semantics)
+
+#### Scenario: Type Error Messages Include Context
+- **WHEN** a type error occurs at compile time
+- **THEN** the type system SHALL provide clear, descriptive error messages with source span
+
+#### Scenario: Runtime type mismatch throws structured error
+- **WHEN** a runtime operation receives a PineValue of unexpected type
+- **THEN** the executor SHALL throw a structured error with source context rather than silently returning NA or crashing
 
 ### Requirement: Simple Type Qualifier
 The type system SHALL support the `simple` type qualifier as a prefix to type declarations, similar to the `series` qualifier.

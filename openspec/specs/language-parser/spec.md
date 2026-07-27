@@ -41,6 +41,10 @@ The parser SHALL parse Pine Script v5 and v6 syntax including all language const
 - **WHEN** a valid Pine Script program is parsed
 - **THEN** the AST SHALL preserve all semantic information needed for execution
 
+#### Scenario: No Silent Recovery from Malformed Input
+- **WHEN** any malformed input is encountered (unmatched delimiters, missing operands, incomplete annotations, unrecognised tokens)
+- **THEN** the parser SHALL throw a `ParseError` with source location — it SHALL NOT silently recover by returning a partial AST without error
+
 #### Scenario: Named Arguments
 - **WHEN** function calls use named arguments (`identifier = expression`)
 - **THEN** the parser SHALL parse them as named arguments and include them in the AST
@@ -83,3 +87,14 @@ The compiler SHALL validate type consistency, perform scope resolution, and prod
 #### Scenario: Expression Type Inference
 - **WHEN** comparison operators (>, <, >=, <=) are used
 - **THEN** the compiler SHALL infer the result type as `bool` instead of `float`
+
+### Requirement: No Partial AST on Unrecoverable Error
+The parser SHALL NOT return a partially-parsed AST when it encounters an error from which it cannot recover. If any parse error occurs, the `parse()` function SHALL throw rather than returning an incomplete program.
+
+#### Scenario: Unrecoverable parse error throws
+- **WHEN** a parse error occurs during tokenization or parsing
+- **THEN** the `parse()` function SHALL throw a `ParseError` rather than returning a malformed `ParseResult`
+
+#### Scenario: No silent error accumulation
+- **WHEN** multiple parse errors occur
+- **THEN** the parser SHALL throw on the first unrecoverable error (fail-fast) rather than accumulating errors silently
