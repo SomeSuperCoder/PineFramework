@@ -1455,5 +1455,62 @@ it('should handle border-of-chunk: multiple lines with extend:right in newResult
       // Overlap[0]: new is valid → replaces prev
       expect(merged.plots[0].data[1].value).toBe(200);
     });
+
+    it('2.14 should re-apply mergedPlotColors to plot data entries (stale colors from pre-backfill merge)', () => {
+      // Scenario: plotColors has nulls at overlap (warmup > addedCount), but
+      // mergedPlotColors backfills them. The plot data entries may carry stale
+      // null colors from buildScriptResult. The fix should apply the corrected
+      // mergedPlotColors to the plot data entries so the LineRenderer gets
+      // non-null colors.
+
+      const prev: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: 0, value: null },  // overlap[0] — null value
+            { time: 1, value: 100 },   // overlap[1] — valid value (color null from buildScriptResult)
+            { time: 2, value: 101 },   // overlap[2] — valid value (color null from buildScriptResult)
+            { time: 3, value: 102 },   // after overlap
+          ]),
+        ],
+        plotColors: {
+          'MA': [
+            null, null, null,  // overlap — all null (stale, pre-backfill)
+          ],
+        },
+      };
+      const newResult: ScriptResult = {
+        ...EMPTY_RESULT,
+        plots: [
+          makePlot('MA', [
+            { time: -1, value: null },  // new bar
+            { time: 0, value: null },   // overlap[0] = null value
+            { time: 1, value: 200 },    // overlap[1] = valid value
+            { time: 2, value: 201 },    // overlap[2] = valid value
+          ]),
+        ],
+        plotColors: {
+          'MA': [
+            null,           // new bar color (warmup)
+            null, null,     // overlap[0..1] = null color (warmup)
+            '#00ff00',      // overlap[2] = valid color (past warmup)
+          ],
+        },
+      };
+
+      const merged = prependIndicatorResult(prev, newResult, 1, 3);
+
+      // Validate mergedPlotColors (backfill should have filled nulls)
+      expect(merged.plotColors!['MA'][0]).toBeNull();       // new bar — null (warmup)
+      expect(merged.plotColors!['MA'][1]).toBe('#00ff00');   // overlap[0] — both null → backfilled!
+      expect(merged.plotColors!['MA'][2]).toBe('#00ff00');   // overlap[1] — both null → backfilled!
+      expect(merged.plotColors!['MA'][3]).toBe('#00ff00');   // overlap[2] — authoritative
+
+      // Validate plot data entries now have colors from mergedPlotColors
+      expect(merged.plots[0].data[0].color).toBeNull();           // new bar
+      expect(merged.plots[0].data[1].color).toBe('#00ff00');      // overlap[0] — backfilled color!
+      expect(merged.plots[0].data[2].color).toBe('#00ff00');      // overlap[1] — backfilled color!
+      expect(merged.plots[0].data[3].color).toBe('#00ff00');      // overlap[2] — authoritative
+    });
   });
 });

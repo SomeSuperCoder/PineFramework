@@ -402,6 +402,25 @@ export function prependIndicatorResult(
     return Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
   })();
 
+  // ── Re-apply plotColors to plot data entries ──
+  // The plotColors merge above may fill nulls with backfilled colors, but the
+  // plot data entries carry their own per-bar colors that were set during
+  // buildScriptResult (before backfill existed). Apply the (now-corrected)
+  // mergedPlotColors to the plot data so the LineRenderer gets non-null colors.
+  for (const [colorKey, colors] of Object.entries(mergedPlotColors)) {
+    const plotTitle = colorKey
+      .replace(/__lw:\d+/g, '')
+      .replace(/__style:[^_]+/g, '');
+    const plot = mergedPlots.find((p) => p.title === plotTitle);
+    if (plot) {
+      for (let i = 0; i < plot.data.length && i < colors.length; i++) {
+        if (colors[i] !== undefined) {
+          plot.data[i] = { ...plot.data[i], color: colors[i] };
+        }
+      }
+    }
+  }
+
   return {
     ...prev,
     plots: mergedPlots,
