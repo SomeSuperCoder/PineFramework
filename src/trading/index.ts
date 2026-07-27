@@ -27,3 +27,5 @@ export type { StateMachineConfig, StateChangeHandler, TransitionGuard } from './
 
 export { BotEngine } from './bot-engine.js';
 export type { BotLogger, BotEventMap } from './bot-engine.js';
+
+export * from './wallet/index.js';

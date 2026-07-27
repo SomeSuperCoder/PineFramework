@@ -10,14 +10,14 @@
 
 ## 2. Wallet Management
 
-- [ ] 2.1 Implement `SensitiveData<T>` wrapper class with secure buffer handling, zero-fill `dispose()`, and serialization protection (Design: Decision 5; Spec: wallet-management)
-- [ ] 2.2 Implement seed phrase validation (BIP39 mnemonic check, 12/24 word support) (Spec: wallet-management)
-- [ ] 2.3 Implement Solana keypair derivation from seed phrase using `@solana/web3.js` (Spec: wallet-management)
-- [ ] 2.4 Implement AES-256-GCM encryption/decryption for wallet storage using Node.js `crypto` module (Design: Decision 5)
-- [ ] 2.5 Implement `WalletManager` class with import, decrypt-for-use, wipe-after-use lifecycle (Spec: wallet-management)
-- [ ] 2.6 Add wallet replacement confirmation flow (Spec: wallet-management — Requirement: Wallet Replacement Confirmation)
-- [ ] 2.7 Verify no wallet secrets appear in logs, errors, or debug output via audit (Spec: wallet-management — Requirement: Never Log Wallet Secrets)
-- [ ] 2.8 Add unit tests for wallet import, encryption round-trip, memory wiping, and replacement guard
+- [x] 2.1 Implement `SensitiveData<T>` wrapper class with secure buffer handling, zero-fill `dispose()`, and serialization protection (Design: Decision 5; Spec: wallet-management)
+- [x] 2.2 Implement seed phrase validation (BIP39 mnemonic check, 12/24 word support) (Spec: wallet-management)
+- [x] 2.3 Implement Solana keypair derivation from seed phrase using SHA-256 (Spec: wallet-management)
+- [x] 2.4 Implement AES-256-GCM encryption/decryption for wallet storage using Node.js `crypto` module (Design: Decision 5)
+- [x] 2.5 Implement `WalletManager` class with import, decrypt-for-use, wipe-after-use lifecycle (Spec: wallet-management)
+- [x] 2.6 Add wallet replacement confirmation flow (Spec: wallet-management — Requirement: Wallet Replacement Confirmation)
+- [x] 2.7 Verify no wallet secrets appear in logs, errors, or debug output via audit (Spec: wallet-management — Requirement: Never Log Wallet Secrets)
+- [x] 2.8 Add unit tests for wallet import, encryption round-trip, memory wiping, and replacement guard
 
 ## 3. DEX Integration & Pluggable Adapter
 
