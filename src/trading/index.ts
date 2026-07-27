@@ -30,3 +30,14 @@ export type { BotLogger, BotEventMap } from './bot-engine.js';
 
 export * from './wallet/index.js';
 export * from './dex/index.js';
+
+export { Scheduler, Mutex, pairIdToString, parsePairId } from './scheduler.js';
+export type {
+  PairId,
+  ClosedCandle,
+  TradeSignal,
+  SchedulerOptions,
+  SchedulerStats,
+  CandleProcessor,
+  OrderSubmitter,
+} from './scheduler.js';

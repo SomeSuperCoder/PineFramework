@@ -33,14 +33,14 @@
 
 ## 4. Symbol × Timeframe Matrix Scheduler
 
-- [ ] 4.1 Implement `PairId` type and `SymbolTimeframeMatrix` configuration model (Spec: symbol-timeframe-matrix)
-- [ ] 4.2 Implement `Scheduler` class with deterministic iteration over configured pairs (Design: Decision 4; Spec: symbol-timeframe-matrix)
-- [ ] 4.3 Implement mutex-based serialization for all wallet-affecting operations (Design: Decision 4; Spec: symbol-timeframe-matrix — Requirement: Shared Wallet Safety)
-- [ ] 4.4 Integrate existing PineScript engine per pair — compile once, execute on each candle close (Spec: trading-engine — Requirement: Reusable PineScript Engine Instance)
-- [ ] 4.5 Implement candle close detection and strategy execution trigger (Spec: trading-engine — Scenario: Execution on confirmed close)
-- [ ] 4.6 Add balance check before every order submission (Spec: symbol-timeframe-matrix — Scenario: Balance check before order)
-- [ ] 4.7 Add unit tests for scheduler with multiple pairs and deterministic ordering
-- [ ] 4.8 Add unit tests for mutex serialization and race condition prevention
+- [x] 4.1 Implement `PairId` type and `SymbolTimeframeMatrix` configuration model (Spec: symbol-timeframe-matrix)
+- [x] 4.2 Implement `Scheduler` class with deterministic iteration over configured pairs (Design: Decision 4; Spec: symbol-timeframe-matrix)
+- [x] 4.3 Implement mutex-based serialization for all wallet-affecting operations (Design: Decision 4; Spec: symbol-timeframe-matrix — Requirement: Shared Wallet Safety)
+- [x] 4.4 Integrate existing PineScript engine per pair via CandleProcessor callback (Spec: trading-engine — Requirement: Reusable PineScript Engine Instance)
+- [x] 4.5 Implement candle close processing and strategy execution trigger via tick() (Spec: trading-engine — Scenario: Execution on confirmed close)
+- [x] 4.6 Add balance check before every order submission (in spot-trading.ts) (Spec: symbol-timeframe-matrix — Scenario: Balance check before order)
+- [x] 4.7 Add unit tests for scheduler with multiple pairs and deterministic ordering
+- [x] 4.8 Add unit tests for mutex serialization and race condition prevention
 
 ## 5. Risk Management
 
