@@ -416,7 +416,7 @@ function App() {
         onToggleBotDashboard={() => setBotDashboardOpen((v) => !v)}
       />
 
-      {botDashboardOpen && botStatus && botStatus.state !== 'Idle' && (
+      {botDashboardOpen && botStatus && (
         <LiveDashboard
           status={botStatus}
           logs={botLogs}

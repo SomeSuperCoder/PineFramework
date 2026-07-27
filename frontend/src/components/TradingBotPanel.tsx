@@ -140,20 +140,18 @@ export function TradingBotControlButton({
   const isError = botState === 'Error';
   const transitioning = botState === 'Starting' || botState === 'Stopping';
 
-  if (isStopped && !dashboardOpen) return null;
-
   return (
     <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
-      {isStopped && dashboardOpen && (
+      {isStopped && (
         <button
-          onClick={() => sendCommand('start')}
+          onClick={dashboardOpen ? () => sendCommand('start') : onToggleDashboard}
           disabled={loading}
-          title="Start Live Trading Bot"
+          title={dashboardOpen ? 'Start Live Trading Bot' : 'Show Bot Dashboard'}
           style={{
             padding: '5px 10px',
-            background: '#1a3328',
-            color: '#4caf50',
-            border: '1px solid #4caf50',
+            background: dashboardOpen ? '#1a3328' : '#111128',
+            color: dashboardOpen ? '#4caf50' : '#888',
+            border: `1px solid ${dashboardOpen ? '#4caf50' : '#333'}`,
             borderRadius: '4px',
             cursor: loading ? 'wait' : 'pointer',
             fontSize: '11px',
@@ -242,7 +240,7 @@ export function TradingBotControlButton({
       {transitioning && (
         <span style={{ color: '#ff9800', fontSize: '11px', fontStyle: 'italic' }}>{botState}...</span>
       )}
-      {botState !== 'Idle' && (
+      {(botState !== 'Idle' || dashboardOpen) && (
         <button
           onClick={onToggleDashboard}
           title={dashboardOpen ? 'Hide Dashboard' : 'Show Dashboard'}
@@ -263,7 +261,7 @@ export function TradingBotControlButton({
           </svg>
         </button>
       )}
-      {!connected && botState !== 'Idle' && (
+      {!connected && (botState !== 'Idle' || dashboardOpen) && (
         <span style={{ color: '#ff9800', fontSize: '10px', marginLeft: '2px' }} title="Reconnecting...">
           ○
         </span>
