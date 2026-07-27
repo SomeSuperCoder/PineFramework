@@ -21,15 +21,15 @@
 
 ## 3. DEX Integration & Pluggable Adapter
 
-- [ ] 3.1 Define `DexAdapter` abstract class with `quote()`, `swap()`, `getBalance()`, `getTransactionStatus()` methods (Design: Decision 3; Spec: dex-integration)
-- [ ] 3.2 Define `CommissionModel` interface and implement fee calculation structure (Spec: dex-integration — Requirement: Commission Models Per DEX)
-- [ ] 3.3 Implement `JupiterSwapAdapter` — quote, swap execution via Jupiter Swap API (Spec: dex-integration)
-- [ ] 3.4 Implement `JupiterUltraAdapter` — quote, swap execution via Jupiter Ultra API (Spec: dex-integration)
-- [ ] 3.5 Implement spot trading logic: USDC→Asset for buys, Asset→USDC for sells (Spec: dex-integration — Requirement: Spot Trading Only)
-- [ ] 3.6 Implement DEX selection mechanism so the user can choose which adapter to use (Spec: dex-integration — Scenario: DEX selection)
-- [ ] 3.7 Add retry-with-backoff for swap failures and notification on persistent failure (Spec: dex-integration — Scenario: Swap failure handling)
-- [ ] 3.8 Add unit tests for `JupiterSwapAdapter` and `JupiterUltraAdapter` with mocked API responses
-- [ ] 3.9 Add `@solana/web3.js`, `@jup-ag/api` to package.json dependencies
+- [x] 3.1 Define `DexAdapter` abstract class with `quote()`, `swap()`, `getBalance()`, `getTransactionStatus()` methods (Design: Decision 3; Spec: dex-integration)
+- [x] 3.2 Define `CommissionModel` interface and implement fee calculation structure (Spec: dex-integration — Requirement: Commission Models Per DEX)
+- [x] 3.3 Implement `JupiterSwapAdapter` — quote, swap execution via Jupiter Swap API (Spec: dex-integration)
+- [x] 3.4 Implement `JupiterUltraAdapter` — quote, swap execution via Jupiter Ultra API (Spec: dex-integration)
+- [x] 3.5 Implement spot trading logic: USDC→Asset for buys, Asset→USDC for sells (Spec: dex-integration — Requirement: Spot Trading Only)
+- [x] 3.6 Implement DEX selection mechanism via registry so the user can choose which adapter to use (Spec: dex-integration — Scenario: DEX selection)
+- [x] 3.7 Add retry-with-backoff for swap failures and notification on persistent failure (Spec: dex-integration — Scenario: Swap failure handling)
+- [x] 3.8 Add unit tests for `JupiterSwapAdapter` and `JupiterUltraAdapter` with mocked API responses and registry
+- [x] 3.9 Add `@solana/web3.js`, `@jup-ag/api` to package.json dependencies
 
 ## 4. Symbol × Timeframe Matrix Scheduler
 
