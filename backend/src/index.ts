@@ -159,7 +159,7 @@ app.use('/api', createExportRouter());
 // ── Trading Bot (feature-gated) ──
 if (ENABLE_TRADING_BOT) {
   const { BotEngine, AutoMarketSelector } = await import('pine-framework');
-  const { WalletManager, InMemoryWalletStorage, EncryptedFileStorage, isWalletEncrypted } = await import('pine-framework/trading/wallet');
+  const { WalletManager, EncryptedFileStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
 
   const defaultCandidates = [
@@ -207,12 +207,9 @@ if (ENABLE_TRADING_BOT) {
     },
   });
 
-  // Wallet manager — uses encrypted file storage if wallet.enc exists, otherwise in-memory
-  const walletStorage = isWalletEncrypted(DATA_DIR)
-    ? new EncryptedFileStorage(DATA_DIR)
-    : new InMemoryWalletStorage();
+  // Wallet manager — always use encrypted file storage for persistence
   const walletManager = new WalletManager(
-    walletStorage,
+    new EncryptedFileStorage(DATA_DIR),
     process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
   );
 
