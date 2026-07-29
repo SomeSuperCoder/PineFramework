@@ -184,6 +184,7 @@ if (ENABLE_TRADING_BOT) {
         script: config.strategySource,
         dex: config.dex,
         metric: config.autoSelectMetric ?? 'profitFactor',
+        concurrency: 4,
       });
       const result = await selector.select(defaultCandidates, (progress) => {
         botWS.broadcast({

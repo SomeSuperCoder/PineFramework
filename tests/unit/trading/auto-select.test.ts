@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AutoMarketSelector } from '../../../src/trading/auto-select.js';
+import { AutoMarketSelector, runParallel } from '../../../src/trading/auto-select.js';
 import type { BarFetcher, BacktestRunner, CandidateEvaluation, AutoSelectionResult } from '../../../src/trading/auto-select.js';
 import type { PairConfig } from '../../../src/trading/types.js';
 
@@ -154,5 +154,43 @@ describe('AutoMarketSelector', () => {
     });
     const getMetricSharpe = (selectorSharpe as any).getMetricValue.bind(selectorSharpe);
     expect(getMetricSharpe(evaluation)).toBe(2.0);
+  });
+
+  it('should run tasks in parallel with bounded concurrency', async () => {
+    const tasks = [
+      vi.fn().mockResolvedValue(1),
+      vi.fn().mockResolvedValue(2),
+      vi.fn().mockResolvedValue(3),
+    ];
+    const results = await runParallel(tasks, 2);
+    expect(results).toEqual([
+      { success: true, value: 1 },
+      { success: true, value: 2 },
+      { success: true, value: 3 },
+    ]);
+    tasks.forEach(t => expect(t).toHaveBeenCalledTimes(1));
+  });
+
+  it('should call progress callback with statuses map', async () => {
+    const barFetcher = createMockBarFetcher();
+    const backtestRunner = createMockBacktestRunner();
+    const onProgress = vi.fn();
+
+    const selector = new AutoMarketSelector({
+      barFetcher,
+      backtestRunner,
+      script: SCRIPT,
+      dex: 'jupiter-swap',
+    });
+
+    await selector.select(CANDIDATES, onProgress);
+
+    expect(onProgress).toHaveBeenCalled();
+    // First call should have statuses map
+    const firstCall = onProgress.mock.calls[0][0];
+    expect(firstCall.statuses).toBeDefined();
+    expect(Object.keys(firstCall.statuses)).toHaveLength(2);
+    expect(firstCall.statuses['BTCUSDT (60)']).toBeDefined();
+    expect(firstCall.statuses['ETHUSDT (60)']).toBeDefined();
   });
 });

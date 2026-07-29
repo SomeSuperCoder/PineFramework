@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { StrategySelector } from './StrategySelector';
-import { PairMatrixTable } from './PairMatrixTable';
 
 // ---- Types ----
 
@@ -70,6 +69,7 @@ export function useBotWebSocket(backendUrl: string) {
     total: number;
     pair: { symbol: string; timeframe: string };
     phase: string;
+    statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>;
   } | null>(null);
   const [autoSelectResult, setAutoSelectResult] = useState<{
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
@@ -154,6 +154,64 @@ export function useBotWebSocket(backendUrl: string) {
   }, [status?.state]);
 
   return { connected, status, logs, autoSelectProgress, autoSelectResult, connectionFailed };
+}
+
+// ---- Auto-Select Progress Grid ----
+
+type CandidateStatus = { phase: string; status: 'pending' | 'active' | 'done' | 'failed' };
+
+function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
+  switch (status) {
+    case 'pending':
+      return <span style={{ color: '#555', fontSize: 11 }}>—</span>;
+    case 'active':
+      return <span style={{ color: '#ff9800', fontSize: 11, animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>;
+    case 'done':
+      return <span style={{ color: '#4caf50', fontSize: 11 }}>✓</span>;
+    case 'failed':
+      return <span style={{ color: '#e94560', fontSize: 11 }}>✗</span>;
+  }
+}
+
+function AutoSelectGrid({
+  statuses,
+  ranking,
+}: {
+  statuses: Record<string, CandidateStatus>;
+  ranking?: Array<{ label: string; metrics: Record<string, number> }>;
+}) {
+  const entries = Object.entries(statuses);
+  return (
+    <div style={{
+      marginTop: 8, padding: 8, background: '#111128', borderRadius: 6,
+      border: '1px solid #333', maxHeight: 200, overflow: 'auto',
+    }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 80px 60px 60px',
+        gap: '2px 8px',
+        fontSize: 10,
+      }}>
+        <div style={{ color: '#666', fontWeight: 600 }}>Pair</div>
+        <div style={{ color: '#666', fontWeight: 600 }}>Phase</div>
+        <div style={{ color: '#666', fontWeight: 600 }}>Status</div>
+        <div style={{ color: '#666', fontWeight: 600 }}>Metric</div>
+        {entries.map(([key, st]) => {
+          const rankEntry = ranking?.find(r => r.label === key);
+          return (
+            <React.Fragment key={key}>
+              <div style={{ color: '#e0e0e0' }}>{key}</div>
+              <div style={{ color: '#888' }}>{st.phase}</div>
+              <div><StatusIcon status={st.status} /></div>
+              <div style={{ color: '#888' }}>
+                {rankEntry?.metrics.profitFactor != null && `PF ${rankEntry.metrics.profitFactor.toFixed(1)}`}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ---- Wallet Import Panel ----
@@ -319,11 +377,9 @@ function checkStrategyCompatibility(source: string): string[] {
 export interface ConfigValues {
   strategySource: string;
   dex: string;
-  pairs: Array<{ symbol: string; timeframe: string }>;
   maxDailyLoss: number;
   timezone: string;
   closeOnLoss: boolean;
-  autoSelect: boolean;
 }
 
 function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
@@ -333,15 +389,9 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
-  const [parsedPairs, setParsedPairs] = useState<Array<{ symbol: string; timeframe: string }>>([
-    { symbol: 'SOLUSDT', timeframe: '60' },
-    { symbol: 'BTCUSDT', timeframe: '240' },
-    { symbol: 'ETHUSDT', timeframe: '60' },
-  ]);
   const [maxDailyLoss, setMaxDailyLoss] = useState('50');
   const [timezone, setTimezone] = useState('UTC');
   const [closeOnLoss, setCloseOnLoss] = useState(false);
-  const [autoSelect, setAutoSelect] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
 
@@ -355,10 +405,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
       setError('Select a strategy or paste your Pine Script strategy source code');
       return;
     }
-    if (parsedPairs.length === 0) {
-      setError('Enter at least one trading pair');
-      return;
-    }
     setConfiguring(true);
     setError('');
     try {
@@ -368,9 +414,9 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
         body: JSON.stringify({
           strategySource: strategySource.trim(),
           dex,
-          pairs: parsedPairs,
+          pairs: [], // Auto-select determines pairs
           risk: { maxDailyLoss: Number(maxDailyLoss), dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
-          autoSelect,
+          autoSelect: true,
         }),
       });
       const data = await res.json();
@@ -380,11 +426,9 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
         onConfigValues?.({
           strategySource: strategySource.trim(),
           dex,
-          pairs: parsedPairs,
           maxDailyLoss: Number(maxDailyLoss),
           timezone,
           closeOnLoss,
-          autoSelect,
         });
         onConfigured();
       }
@@ -454,19 +498,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
             />
             Close all on loss
           </label>
-          <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input
-              type="checkbox"
-              checked={autoSelect}
-              onChange={(e) => setAutoSelect(e.target.checked)}
-            />
-            Auto-select
-          </label>
         </div>
-        <PairMatrixTable
-          value={parsedPairs}
-          onChange={setParsedPairs}
-        />
         {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}
         {compatibilityWarnings.length > 0 && (
           <div style={{
@@ -648,7 +680,7 @@ function SetupWizard({
   initialWallet: WalletInfo;
   onStart: () => Promise<void>;
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }> } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
@@ -795,9 +827,7 @@ function SetupWizard({
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Pairs: </span>
-                  <span style={{ color: '#e0e0e0' }}>
-                    {configValues.pairs.map(p => `${p.symbol} ${p.timeframe}`).join(', ')}
-                  </span>
+                  <span style={{ color: '#ff9800' }}>Auto-select (evaluating all candidates)</span>
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Max Daily Loss: </span>
@@ -806,12 +836,6 @@ function SetupWizard({
                 <div>
                   <span style={{ color: '#888' }}>Timezone: </span>
                   <span style={{ color: '#e0e0e0' }}>{configValues.timezone}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>Auto-Select: </span>
-                  <span style={{ color: configValues.autoSelect ? '#ff9800' : '#888' }}>
-                    {configValues.autoSelect ? 'Enabled' : 'Disabled'}
-                  </span>
                 </div>
               </>
             )}
@@ -827,30 +851,10 @@ function SetupWizard({
               marginTop: 12, padding: 12, background: '#111128', borderRadius: 6,
               border: '1px solid #ff9800',
             }}>
-              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>
-                Auto-Select: Evaluating Pairs
+              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+                Auto-Select: Evaluating Pairs ({autoSelectProgress.current}/{autoSelectProgress.total})
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <div style={{
-                  flex: 1, height: 6, background: '#222', borderRadius: 3, overflow: 'hidden',
-                }}>
-                  <div style={{
-                    width: `${(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}%`,
-                    height: '100%', background: '#ff9800', borderRadius: 3,
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
-                <span style={{ color: '#888', fontSize: 10, whiteSpace: 'nowrap' }}>
-                  {autoSelectProgress.current}/{autoSelectProgress.total}
-                </span>
-              </div>
-              <div style={{ color: '#e0e0e0', fontSize: 11 }}>
-                <span style={{ color: '#888' }}>Current: </span>
-                {autoSelectProgress.pair.symbol} ({autoSelectProgress.pair.timeframe})
-                <span style={{ color: '#888', marginLeft: 8 }}>
-                  [{autoSelectProgress.phase}]
-                </span>
-              </div>
+              <AutoSelectGrid statuses={autoSelectProgress.statuses} />
             </div>
           )}
 
@@ -860,39 +864,28 @@ function SetupWizard({
               marginTop: 12, padding: 12, background: '#0d1a10', borderRadius: 6,
               border: '1px solid #4caf50',
             }}>
-              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 8 }}>
+              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
                 Auto-Select Complete
               </div>
-              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
                 Evaluated {autoSelectResult.evaluatedCount} pair
                 {autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
                 {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {autoSelectResult.ranking.slice(0, 5).map((r, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '4px 8px', background: i === 0 ? '#1a3328' : 'transparent',
-                    borderRadius: 3,
-                  }}>
-                    <span style={{
-                      color: i === 0 ? '#4caf50' : '#e0e0e0',
-                      fontWeight: i === 0 ? 700 : 400,
-                      fontSize: 11,
-                    }}>
-                      {i === 0 ? '★ ' : ''}{r.label}
-                    </span>
-                    <span style={{ color: '#888', fontSize: 10 }}>
-                      {r.metrics.profitFactor != null && `PF: ${r.metrics.profitFactor.toFixed(2)}`}
-                      {r.metrics.sharpeRatio != null && `  Sharpe: ${r.metrics.sharpeRatio.toFixed(2)}`}
-                    </span>
-                  </div>
-                ))}
-                {autoSelectResult.ranking.length > 5 && (
-                  <div style={{ color: '#666', fontSize: 10, textAlign: 'center', marginTop: 2 }}>
-                    +{autoSelectResult.ranking.length - 5} more
-                  </div>
+              <AutoSelectGrid
+                statuses={Object.fromEntries(
+                  autoSelectResult.ranking.map(r => [r.label, { phase: 'backtesting', status: 'done' as const }])
                 )}
+                ranking={autoSelectResult.ranking}
+              />
+              <div style={{ marginTop: 8, padding: '6px 8px', background: '#1a3328', borderRadius: 3 }}>
+                <span style={{ color: '#4caf50', fontWeight: 700, fontSize: 11 }}>
+                  ★ Best: {autoSelectResult.best.label}
+                </span>
+                <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
+                  PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
+                  {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
+                </span>
               </div>
             </div>
           )}
@@ -1062,7 +1055,7 @@ export function LiveDashboard({
   status: BotStatusSnapshot;
   logs: LogEntry[];
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }> } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
@@ -1457,25 +1450,24 @@ export function LiveDashboard({
           {/* Auto-Select Results */}
           {autoSelectResult && (
             <div style={{ marginTop: 16 }}>
-              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Auto-Select Results</div>
-              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>
+              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Auto-Select Results</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
                 Evaluated {autoSelectResult.evaluatedCount} pair{autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
                 {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {autoSelectResult.ranking.slice(0, 5).map((r, i) => (
-                  <div key={i} style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '4px 8px', background: i === 0 ? '#1a3328' : 'transparent', borderRadius: 3,
-                  }}>
-                    <span style={{ color: i === 0 ? '#4caf50' : '#e0e0e0', fontWeight: i === 0 ? 700 : 400, fontSize: 11 }}>
-                      {i === 0 ? '★ ' : ''}{r.label}
-                    </span>
-                    <span style={{ color: '#888', fontSize: 10 }}>
-                      {r.metrics.profitFactor != null && `PF: ${r.metrics.profitFactor.toFixed(2)}`}
-                    </span>
-                  </div>
-                ))}
+              <AutoSelectGrid
+                statuses={Object.fromEntries(
+                  autoSelectResult.ranking.map(r => [r.label, { phase: 'backtesting', status: 'done' as const }])
+                )}
+                ranking={autoSelectResult.ranking}
+              />
+              <div style={{ marginTop: 6, padding: '6px 8px', background: '#1a3328', borderRadius: 3 }}>
+                <span style={{ color: '#4caf50', fontWeight: 700, fontSize: 11 }}>
+                  ★ Best: {autoSelectResult.best.label}
+                </span>
+                <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
+                  PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
+                </span>
               </div>
             </div>
           )}
