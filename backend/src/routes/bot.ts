@@ -162,8 +162,8 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         res.status(400).json({ success: false, error: 'Invalid "dex". Must be "jupiter-swap" or "jupiter-ultra"' });
         return;
       }
-      if (!Array.isArray(pairs) || pairs.length === 0) {
-        res.status(400).json({ success: false, error: 'Missing or invalid "pairs" (non-empty array required)' });
+      if (!Array.isArray(pairs) || (pairs.length === 0 && !autoSelect)) {
+        res.status(400).json({ success: false, error: 'Missing or invalid "pairs" (non-empty array required when autoSelect is false)' });
         return;
       }
       if (!risk || typeof risk !== 'object') {

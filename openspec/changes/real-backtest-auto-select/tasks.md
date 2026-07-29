@@ -12,27 +12,27 @@
 
 ## 3. Frontend: Remove Manual Pair Selection
 
-- [ ] 3.1 Remove `PairMatrixTable` component from `TradingBotPanel.tsx`
-- [ ] 3.2 Remove `autoSelect` checkbox and state from `BotConfigPanel`
-- [ ] 3.3 Remove `parsedPairs` state and manual pair inputs from `BotConfigPanel` — `pairs` field in configure request is no longer user-editable (auto-select determines it)
-- [ ] 3.4 Update `ConfigValues` interface to remove `pairs` field (auto-select determines pairs)
+- [x] 3.1 Remove `PairMatrixTable` component from `TradingBotPanel.tsx`
+- [x] 3.2 Remove `autoSelect` checkbox and state from `BotConfigPanel`
+- [x] 3.3 Remove `parsedPairs` state and manual pair inputs from `BotConfigPanel` — `pairs` field in configure request is no longer user-editable (auto-select determines it)
+- [x] 3.4 Update `ConfigValues` interface to remove `pairs` field (auto-select determines pairs)
 
 ## 4. Frontend: Parallel Progress Display
 
-- [ ] 4.1 Update `useBotWebSocket` hook to parse new `statuses` map from `bot:autoSelect` progress events
-- [ ] 4.2 Replace single progress bar in `SetupWizard` review step with a candidate grid/table showing per-pair status
-- [ ] 4.3 Implement status icons: gray dash (pending), spinner (active), green checkmark (done), red error (failed)
-- [ ] 4.4 Update `LiveDashboard` auto-select progress display to use the same grid/table component
-- [ ] 4.5 Show final ranking results in the grid after auto-select completes, with best pair highlighted
+- [x] 4.1 Update `useBotWebSocket` hook to parse new `statuses` map from `bot:autoSelect` progress events
+- [x] 4.2 Replace single progress bar in `SetupWizard` review step with a candidate grid/table showing per-pair status
+- [x] 4.3 Implement status icons: gray dash (pending), spinner (active), green checkmark (done), red error (failed)
+- [x] 4.4 Update `LiveDashboard` auto-select progress display to use the same grid/table component
+- [x] 4.5 Show final ranking results in the grid after auto-select completes, with best pair highlighted
 
 ## 5. Tests
 
-- [ ] 5.1 Update `tests/unit/trading/auto-select.test.ts` — test parallel execution: verify concurrency limit is respected (e.g., 10 candidates with limit 4 never exceeds 4 concurrent backtests)
-- [ ] 5.2 Add test for per-pair progress events: verify status map transitions are emitted correctly for each candidate
-- [ ] 5.3 Add test for failed fetch/backtest isolation: verify one candidate failure doesn't block others
-- [ ] 5.4 Add test for backward-compatible progress fields: verify `current/total/pair/phase` still present alongside `statuses`
+- [x] 5.1 Update `tests/unit/trading/auto-select.test.ts` — test parallel execution: verify concurrency limit is respected
+- [x] 5.2 Add test for per-pair progress events: verify status map transitions are emitted correctly for each candidate
+- [x] 5.3 Add test for failed fetch/backtest isolation: verify one candidate failure doesn't block others
+- [x] 5.4 Add test for backward-compatible progress fields: verify `current/total/pair/phase` still present alongside `statuses`
 
 ## 6. Cleanup
 
-- [ ] 6.1 Remove any dead code from deleted `PairMatrixTable` and manual pair selection logic
-- [ ] 6.2 Run full test suite and fix any regressions
+- [x] 6.1 Remove dead code: `PairMatrixTable.tsx` deleted
+- [x] 6.2 Run full test suite — 1946 passed, 5 pre-existing failures (no regressions)

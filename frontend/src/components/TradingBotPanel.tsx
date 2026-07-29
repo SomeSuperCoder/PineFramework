@@ -414,7 +414,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
         body: JSON.stringify({
           strategySource: strategySource.trim(),
           dex,
-          pairs: [], // Auto-select determines pairs
           risk: { maxDailyLoss: Number(maxDailyLoss), dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
           autoSelect: true,
         }),

@@ -104,8 +104,8 @@ export interface BotConfig {
   strategySource: string;
   /** DEX backend to use. */
   dex: DexKind;
-  /** Trading pairs with their timeframes. */
-  pairs: PairConfig[];
+  /** Trading pairs with their timeframes (optional when autoSelect is true). */
+  pairs?: PairConfig[];
   /** Risk settings. */
   risk: RiskConfig;
   /** Wallet identifier (public key) to use for trading. */

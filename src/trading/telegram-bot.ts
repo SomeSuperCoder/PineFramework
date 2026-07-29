@@ -72,7 +72,7 @@ export class TradingTelegramBot {
     const message =
       '*🤖 Bot Started*\n\n'
       + `DEX: \`${escapeMarkdown(config.dex)}\`\n`
-      + `Pairs: \`${config.pairs.length}\`\n`
+      + `Pairs: \`${config.pairs?.length ?? 0}\`\n`
       + `Daily Loss Limit: \`$${config.risk.maxDailyLoss}\``;
 
     await this.broadcast(message);

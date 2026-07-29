@@ -124,7 +124,7 @@ export class BotEngine {
       throw new Error(`Cannot configure bot in state: ${this.state}. Must be Idle or Stopped.`);
     }
     this._config = config;
-    this.logger.info('Bot configured', { dex: config.dex, pairs: config.pairs.length, risk: config.risk });
+    this.logger.info('Bot configured', { dex: config.dex, pairs: config.pairs?.length ?? 0, risk: config.risk });
     this.emit('configUpdate', config);
   }
 
