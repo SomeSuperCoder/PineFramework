@@ -1072,16 +1072,17 @@ export function LiveDashboard({
 }) {
   const [loading, setLoading] = useState(false);
   const [wallet, setWallet] = useState<WalletInfo>({
-    hasWallet: !!status.walletPublicKey,
-    publicKey: status.walletPublicKey ?? undefined,
+    hasWallet: false,
+    publicKey: undefined,
   });
   const [walletLocked, setWalletLocked] = useState(false);
+  const [walletLoaded, setWalletLoaded] = useState(false);
   const [pinnedToBottom, setPinnedToBottom] = useState(() => {
     return localStorage.getItem('pine-bot-dashboard-pinned') === 'true';
   });
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch wallet status on mount
+  // Fetch wallet status on mount — don't assume anything until we know
   useEffect(() => {
     fetch(`${backendUrl}/api/bot/wallet/status`)
       .then((r) => r.json())
@@ -1091,7 +1092,10 @@ export function LiveDashboard({
           setWalletLocked(data.locked);
         }
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error('[LiveDashboard] Failed to fetch wallet status:', err);
+      })
+      .finally(() => setWalletLoaded(true));
   }, [backendUrl]);
 
   // Auto-scroll logs
@@ -1175,6 +1179,24 @@ export function LiveDashboard({
 
   // Idle/Stopped view — centered setup wizard
   if (isIdle) {
+    // Show a minimal loading state while wallet status is being fetched
+    if (!walletLoaded) {
+      return (
+        <div style={rootStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
+            <span style={{ color: '#888', fontSize: 14, fontWeight: 600 }}>Bot Dashboard</span>
+            <div style={{ flex: 1 }} />
+            <button onClick={onClose} style={{
+              padding: '4px 10px', background: 'transparent', color: '#888',
+              border: 'none', cursor: 'pointer', fontSize: 14,
+            }}>✕</button>
+          </div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 12 }}>
+            Loading wallet status…
+          </div>
+        </div>
+      );
+    }
     return (
       <div style={rootStyle}>
         {/* Header */}

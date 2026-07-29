@@ -322,7 +322,8 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const hasWallet = await wm.hasWallet();
       const locked = hasWallet ? wm.isLocked() : false;
-      res.json({ success: true, hasWallet, locked });
+      const publicKey = hasWallet ? await wm.getPublicKey() : null;
+      res.json({ success: true, hasWallet, locked, publicKey });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ success: false, error: message });
