@@ -1252,8 +1252,8 @@ export function LiveDashboard({
           </button>
         </div>
 
-        {/* Show unlock screen if wallet is locked, otherwise show setup wizard */}
-        {walletLocked ? (
+        {/* Show unlock screen if wallet exists and is locked, otherwise show setup wizard */}
+        {wallet.hasWallet && walletLocked ? (
           <UnlockScreen backendUrl={backendUrl} onUnlock={handleUnlock} />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>

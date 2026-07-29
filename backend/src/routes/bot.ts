@@ -316,12 +316,12 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     try {
       const wm = getWalletManager();
       if (!wm) {
-        res.json({ success: true, hasWallet: false, locked: true });
+        res.json({ success: true, hasWallet: false, locked: false });
         return;
       }
 
       const hasWallet = await wm.hasWallet();
-      const locked = hasWallet ? wm.isLocked() : true;
+      const locked = hasWallet ? wm.isLocked() : false;
       res.json({ success: true, hasWallet, locked });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
