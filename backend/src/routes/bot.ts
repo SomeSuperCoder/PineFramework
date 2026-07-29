@@ -162,7 +162,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         res.status(400).json({ success: false, error: 'Invalid "dex". Must be "jupiter-swap" or "jupiter-ultra"' });
         return;
       }
-      if (!Array.isArray(pairs) || (pairs.length === 0 && !autoSelect)) {
+      if (autoSelect) {
+        // autoSelect determines pairs — nothing to validate here
+      } else if (!Array.isArray(pairs) || pairs.length === 0) {
         res.status(400).json({ success: false, error: 'Missing or invalid "pairs" (non-empty array required when autoSelect is false)' });
         return;
       }
@@ -184,7 +186,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
       const config: BotConfig = {
         strategySource: strategySource as string,
         dex: dex as BotConfig['dex'],
-        pairs: pairs as BotConfig['pairs'],
+        ...(Array.isArray(pairs) && pairs.length > 0 ? { pairs } : {}),
         risk: {
           maxDailyLoss: riskObj.maxDailyLoss as number,
           dailyLossTimezone: riskObj.dailyLossTimezone as string,
