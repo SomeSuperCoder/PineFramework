@@ -11,7 +11,10 @@
  * @module trading
  */
 
-import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { createHash, randomBytes, createCipheriv, createDecipheriv, pbkdf2Sync } from 'node:crypto';
+import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { SensitiveData } from './sensitive-data.js';
 
 // ---- Types ----
@@ -31,6 +34,8 @@ export interface EncryptedWallet {
   publicKey: string;
   /** When this wallet was created. */
   createdAt: number;
+  /** When this wallet was last updated. */
+  updatedAt: number;
 }
 
 export interface WalletKeypair {
@@ -44,7 +49,6 @@ const KEY_ITERATIONS = 600_000;
 const KEY_LENGTH = 32; // 256-bit
 const IV_LENGTH = 16; // 128-bit
 const SALT_LENGTH = 32;
-const AUTH_TAG_LENGTH = 16;
 
 // BIP39 English wordlist is 2048 words. We validate against a minimal set of
 // known valid BIP39 words. For full BIP39 compliance we'd need the full wordlist,
@@ -102,12 +106,10 @@ export function validateSeedPhrase(phrase: string): SeedPhraseValidation {
 
 /**
  * Derive an encryption key from a passphrase and salt using PBKDF2.
+ * Uses 600,000 iterations with SHA-512 per OWASP 2023 recommendations.
  */
 function deriveKey(passphrase: string, salt: Buffer): Buffer {
-  return createHash('sha256')
-    .update(passphrase)
-    .update(salt)
-    .digest();
+  return pbkdf2Sync(passphrase, salt, KEY_ITERATIONS, KEY_LENGTH, 'sha512');
 }
 
 // ---- Encryption / Decryption ----
@@ -137,6 +139,7 @@ export function encryptSeedPhrase(
     .digest('hex')
     .substring(0, 32);
 
+  const now = Date.now();
   return {
     algorithm: 'aes-256-gcm',
     iv: iv.toString('hex'),
@@ -144,7 +147,8 @@ export function encryptSeedPhrase(
     ciphertext: ciphertext.toString('hex'),
     salt: salt.toString('hex'),
     publicKey,
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -220,12 +224,62 @@ export class InMemoryWalletStorage implements WalletStorage {
   }
 }
 
+/**
+ * Encrypted file-based wallet storage.
+ * Persists the encrypted wallet to a JSON file on disk.
+ */
+export class EncryptedFileStorage implements WalletStorage {
+  private filePath: string;
+
+  constructor(dataDir: string) {
+    this.filePath = path.join(dataDir, 'wallet.enc');
+  }
+
+  async save(_key: string, wallet: EncryptedWallet): Promise<void> {
+    const dir = path.dirname(this.filePath);
+    if (!existsSync(dir)) {
+      await mkdir(dir, { recursive: true });
+    }
+    const data = JSON.stringify(wallet, null, 2);
+    await writeFile(this.filePath, data, 'utf-8');
+  }
+
+  async load(_key: string): Promise<EncryptedWallet | null> {
+    try {
+      if (!existsSync(this.filePath)) {
+        return null;
+      }
+      const data = await readFile(this.filePath, 'utf-8');
+      return JSON.parse(data) as EncryptedWallet;
+    } catch {
+      return null;
+    }
+  }
+
+  async exists(_key: string): Promise<boolean> {
+    return existsSync(this.filePath);
+  }
+
+  async delete(_key: string): Promise<void> {
+    if (existsSync(this.filePath)) {
+      await unlink(this.filePath);
+    }
+  }
+}
+
+/**
+ * Check if a wallet encrypted file exists at the given data directory.
+ */
+export function isWalletEncrypted(dataDir: string): boolean {
+  return existsSync(path.join(dataDir, 'wallet.enc'));
+}
+
 export class WalletManager {
   private storage: WalletStorage;
   private configPassphrase: string;
   private currentWalletKey: string | null = null;
   private decryptedKeypair: SensitiveData<WalletKeypair> | null = null;
-  private replacementCallback: (() => Promise<boolean>) | null = null;
+  private unlocked = false;
 
   constructor(storage: WalletStorage, configPassphrase: string) {
     this.storage = storage;
@@ -236,6 +290,11 @@ export class WalletManager {
   async hasWallet(): Promise<boolean> {
     // Check all keys in storage — we use a fixed key for now
     return this.storage.exists('default');
+  }
+
+  /** Whether the wallet is locked (not decrypted in memory). */
+  isLocked(): boolean {
+    return !this.unlocked;
   }
 
   /** Get the public key of the currently imported wallet. */
@@ -286,6 +345,7 @@ export class WalletManager {
     const encrypted = encryptSeedPhrase(seedPhrase, this.configPassphrase);
     await this.storage.save('default', encrypted);
     this.currentWalletKey = 'default';
+    this.unlocked = true;
 
     // Note: seed phrase string is immutable in JS — it will be garbage collected.
     // The variable goes out of scope at function return.
@@ -328,6 +388,78 @@ export class WalletManager {
       this.decryptedKeypair.dispose();
       this.decryptedKeypair = null;
     }
+    this.unlocked = false;
+  }
+
+  /**
+   * Unlock the wallet with a password.
+   * Decrypts the seed phrase and derives the keypair into memory.
+   *
+   * @param password - The password to decrypt the wallet
+   * @returns The public key of the wallet
+   */
+  async unlock(password: string): Promise<string> {
+    const encrypted = await this.storage.load('default');
+    if (!encrypted) {
+      throw new Error('No wallet imported. Import a wallet first.');
+    }
+
+    // Try to decrypt — will throw if password is wrong
+    const seedPhrase = decryptSeedPhrase(encrypted, password);
+    const keypair = deriveKeypairFromSeed(seedPhrase);
+
+    // Store decrypted keypair
+    this.decryptedKeypair = new SensitiveData(keypair);
+    this.currentWalletKey = 'default';
+    this.configPassphrase = password;
+    this.unlocked = true;
+
+    return keypair.publicKey;
+  }
+
+  /**
+   * Lock the wallet — wipe decrypted keypair from memory.
+   */
+  lock(): void {
+    this.wipeKeypair();
+    this.unlocked = false;
+  }
+
+  /**
+   * Change the wallet password.
+   * Re-encrypts the seed phrase with the new password.
+   *
+   * @param currentPassword - The current password
+   * @param newPassword - The new password to encrypt with
+   */
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    const encrypted = await this.storage.load('default');
+    if (!encrypted) {
+      throw new Error('No wallet imported.');
+    }
+
+    // Decrypt with current password
+    const seedPhrase = decryptSeedPhrase(encrypted, currentPassword);
+
+    // Re-encrypt with new password
+    const newEncrypted = encryptSeedPhrase(seedPhrase, newPassword);
+    // Preserve original createdAt
+    newEncrypted.createdAt = encrypted.createdAt;
+    newEncrypted.updatedAt = Date.now();
+
+    await this.storage.save('default', newEncrypted);
+    this.configPassphrase = newPassword;
+  }
+
+  /**
+   * Forgot password — delete the encrypted wallet file.
+   * Preserves all other bot data (logs, metrics, settings).
+   */
+  async forgotPassword(): Promise<void> {
+    this.wipeKeypair();
+    await this.storage.delete('default');
+    this.currentWalletKey = null;
+    this.unlocked = false;
   }
 
   /**
@@ -347,5 +479,6 @@ export class WalletManager {
     this.wipeKeypair();
     await this.storage.delete('default');
     this.currentWalletKey = null;
+    this.unlocked = false;
   }
 }

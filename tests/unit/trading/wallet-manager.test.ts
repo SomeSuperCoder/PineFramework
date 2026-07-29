@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SensitiveData } from '../../../src/trading/wallet/sensitive-data.js';
 import {
   validateSeedPhrase,
@@ -7,7 +7,12 @@ import {
   deriveKeypairFromSeed,
   WalletManager,
   InMemoryWalletStorage,
+  EncryptedFileStorage,
+  isWalletEncrypted,
 } from '../../../src/trading/wallet/wallet-manager.js';
+import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import path from 'node:path';
+import { tmpdir } from 'node:os';
 
 // ---- SensitiveData Tests ----
 
@@ -290,5 +295,143 @@ describe('WalletManager', () => {
     await manager.importWallet(seedPhrase);
     await expect(manager.removeWallet(async () => false)).rejects.toThrow('declined');
     expect(await manager.hasWallet()).toBe(true);
+  });
+
+  it('should track locked/unlocked state', async () => {
+    expect(manager.isLocked()).toBe(true);
+    await manager.importWallet(seedPhrase);
+    expect(manager.isLocked()).toBe(false);
+    manager.lock();
+    expect(manager.isLocked()).toBe(true);
+  });
+
+  it('should unlock with correct password', async () => {
+    await manager.importWallet(seedPhrase);
+    manager.lock();
+    expect(manager.isLocked()).toBe(true);
+
+    const pk = await manager.unlock(passphrase);
+    expect(pk).toBeTruthy();
+    expect(manager.isLocked()).toBe(false);
+  }, 15000); // PBKDF2 is slow
+
+  it('should fail to unlock with wrong password', async () => {
+    await manager.importWallet(seedPhrase);
+    manager.lock();
+    await expect(manager.unlock('wrong-password')).rejects.toThrow();
+  }, 15000); // PBKDF2 is slow
+
+  it('should change password successfully', async () => {
+    await manager.importWallet(seedPhrase);
+    const originalPk = await manager.getPublicKey();
+
+    await manager.changePassword(passphrase, 'new-password-123');
+    expect(await manager.getPublicKey()).toBe(originalPk);
+
+    // Should work with new password
+    manager.lock();
+    const pk = await manager.unlock('new-password-123');
+    expect(pk).toBeTruthy();
+  }, 15000); // PBKDF2 is slow
+
+  it('should fail to change password with wrong current password', async () => {
+    await manager.importWallet(seedPhrase);
+    await expect(
+      manager.changePassword('wrong-password', 'new-password-123'),
+    ).rejects.toThrow();
+  });
+
+  it('should forget password and delete wallet', async () => {
+    await manager.importWallet(seedPhrase);
+    expect(await manager.hasWallet()).toBe(true);
+
+    await manager.forgotPassword();
+    expect(await manager.hasWallet()).toBe(false);
+    expect(manager.isLocked()).toBe(true);
+  });
+});
+
+// ---- EncryptedFileStorage Tests ----
+
+describe('EncryptedFileStorage', () => {
+  const testDir = path.join(tmpdir(), 'wallet-test-' + Date.now());
+  let storage: EncryptedFileStorage;
+
+  beforeEach(() => {
+    if (!existsSync(testDir)) {
+      mkdirSync(testDir, { recursive: true });
+    }
+    storage = new EncryptedFileStorage(testDir);
+  });
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should save and load wallet', async () => {
+    const wallet = encryptSeedPhrase('test seed phrase', 'password123');
+    await storage.save('default', wallet);
+    const loaded = await storage.load('default');
+    expect(loaded).toBeTruthy();
+    expect(loaded?.publicKey).toBe(wallet.publicKey);
+    expect(loaded?.ciphertext).toBe(wallet.ciphertext);
+  });
+
+  it('should return null for non-existent wallet', async () => {
+    const loaded = await storage.load('default');
+    expect(loaded).toBeNull();
+  });
+
+  it('should check existence correctly', async () => {
+    expect(await storage.exists('default')).toBe(false);
+    const wallet = encryptSeedPhrase('test seed', 'password');
+    await storage.save('default', wallet);
+    expect(await storage.exists('default')).toBe(true);
+  });
+
+  it('should delete wallet', async () => {
+    const wallet = encryptSeedPhrase('test seed', 'password');
+    await storage.save('default', wallet);
+    expect(await storage.exists('default')).toBe(true);
+    await storage.delete('default');
+    expect(await storage.exists('default')).toBe(false);
+  });
+
+  it('should handle corrupted file gracefully', async () => {
+    const wallet = encryptSeedPhrase('test seed', 'password');
+    await storage.save('default', wallet);
+    // Corrupt the file
+    const fs = await import('node:fs/promises');
+    await fs.writeFile(path.join(testDir, 'wallet.enc'), 'not valid json');
+    const loaded = await storage.load('default');
+    expect(loaded).toBeNull();
+  });
+});
+
+// ---- isWalletEncrypted Tests ----
+
+describe('isWalletEncrypted', () => {
+  const testDir = path.join(tmpdir(), 'wallet-encrypted-test-' + Date.now());
+
+  afterEach(() => {
+    if (existsSync(testDir)) {
+      rmSync(testDir, { recursive: true, force: true });
+    }
+  });
+
+  it('should return false when no wallet file exists', () => {
+    expect(isWalletEncrypted(testDir)).toBe(false);
+  });
+
+  it('should return true when wallet file exists', async () => {
+    if (!existsSync(testDir)) {
+      mkdirSync(testDir, { recursive: true });
+    }
+    const storage = new EncryptedFileStorage(testDir);
+    const wallet = encryptSeedPhrase('test seed', 'password');
+    await storage.save('default', wallet);
+    expect(isWalletEncrypted(testDir)).toBe(true);
   });
 });

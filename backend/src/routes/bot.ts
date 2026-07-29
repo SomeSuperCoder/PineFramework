@@ -306,5 +306,174 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     }
   });
 
+  // ── Password management endpoints ──
+
+  /**
+   * GET /bot/wallet/status
+   * Get wallet lock status without exposing seed phrase.
+   */
+  router.get('/bot/wallet/status', async (_req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.json({ success: true, hasWallet: false, locked: true });
+        return;
+      }
+
+      const hasWallet = await wm.hasWallet();
+      const locked = hasWallet ? wm.isLocked() : true;
+      res.json({ success: true, hasWallet, locked });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * POST /bot/wallet/set-password
+   * Import wallet with password encryption.
+   * Accepts seedPhrase + password, encrypts and persists wallet.
+   */
+  router.post('/bot/wallet/set-password', async (req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      const { seedPhrase, password } = req.body as Record<string, unknown>;
+      if (!seedPhrase || typeof seedPhrase !== 'string') {
+        res.status(400).json({ success: false, error: 'Missing or invalid "seedPhrase" (string required)' });
+        return;
+      }
+      if (!password || typeof password !== 'string' || password.length < 8) {
+        res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+        return;
+      }
+
+      // Check if wallet already exists — require confirmation
+      const hasWallet = await wm.hasWallet();
+      const confirmReplace = req.body.confirmReplace === true;
+
+      if (hasWallet) {
+        if (!confirmReplace) {
+          res.status(409).json({
+            success: false,
+            error: 'A wallet is already imported. Set "confirmReplace: true" to replace it.',
+            needsConfirm: true,
+          });
+          return;
+        }
+      }
+
+      const publicKey = await wm.importWallet(
+        seedPhrase,
+        hasWallet ? async () => true : undefined,
+      );
+
+      res.json({ success: true, publicKey });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * POST /bot/wallet/unlock
+   * Unlock wallet with password.
+   */
+  router.post('/bot/wallet/unlock', async (req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      const { password } = req.body as Record<string, unknown>;
+      if (!password || typeof password !== 'string') {
+        res.status(400).json({ success: false, error: 'Missing or invalid "password" (string required)' });
+        return;
+      }
+
+      const publicKey = await wm.unlock(password);
+      res.json({ success: true, publicKey });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(401).json({ success: false, error: 'Invalid password' });
+    }
+  });
+
+  /**
+   * POST /bot/wallet/lock
+   * Lock wallet — wipe decrypted keypair from memory.
+   */
+  router.post('/bot/wallet/lock', async (_req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      wm.lock();
+      res.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * POST /bot/wallet/forgot-password
+   * Delete encrypted wallet file, preserve bot data.
+   */
+  router.post('/bot/wallet/forgot-password', async (_req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      await wm.forgotPassword();
+      res.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * POST /bot/wallet/change-password
+   * Change wallet password.
+   */
+  router.post('/bot/wallet/change-password', async (req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      const { currentPassword, newPassword } = req.body as Record<string, unknown>;
+      if (!currentPassword || typeof currentPassword !== 'string') {
+        res.status(400).json({ success: false, error: 'Missing "currentPassword"' });
+        return;
+      }
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+        res.status(400).json({ success: false, error: 'New password must be at least 8 characters' });
+        return;
+      }
+
+      await wm.changePassword(currentPassword, newPassword);
+      res.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(401).json({ success: false, error: 'Invalid current password' });
+    }
+  });
+
   return router;
 }

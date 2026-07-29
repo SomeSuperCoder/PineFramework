@@ -16,7 +16,7 @@
  * 2. Zeroed on dispose()
  * 3. Not included in string representations
  */
-export class SensitiveData<T extends { dispose?: () => void; toString?: () => string }> {
+export class SensitiveData<T extends object> {
   private _value: T | null;
   private _disposed = false;
 
@@ -51,7 +51,7 @@ export class SensitiveData<T extends { dispose?: () => void; toString?: () => st
         v.fill(0);
       }
       // Call custom dispose if available
-      if (typeof v.dispose === 'function') {
+      if ('dispose' in v && typeof v.dispose === 'function') {
         try {
           v.dispose();
         } catch {
@@ -75,7 +75,7 @@ export class SensitiveData<T extends { dispose?: () => void; toString?: () => st
   }
 
   /** Prevent JSON serialization of the raw value. */
-  toJSON(): Record<string, never> {
+  toJSON(): Record<string, unknown> {
     return { __sensitive__: true };
   }
 

@@ -164,6 +164,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   onWalletChange: (w: WalletInfo) => void;
 }) {
   const [seedPhrase, setSeedPhrase] = useState('');
+  const [password, setPassword] = useState('');
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
@@ -174,13 +175,17 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
       setError('Seed phrase must be 12 or 24 words');
       return;
     }
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
     setImporting(true);
     setError('');
     try {
-      const res = await fetch(`${backendUrl}/api/bot/wallet/import`, {
+      const res = await fetch(`${backendUrl}/api/bot/wallet/set-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seedPhrase: seedPhrase.trim(), confirmReplace }),
+        body: JSON.stringify({ seedPhrase: seedPhrase.trim(), password, confirmReplace }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -192,6 +197,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
       } else {
         onWalletChange({ hasWallet: true, publicKey: data.publicKey });
         setSeedPhrase('');
+        setPassword('');
       }
     } catch {
       setError('Network error — is the backend running?');
@@ -248,6 +254,17 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
               fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
             }}
           />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Set encryption password (min 8 chars)"
+            style={{
+              width: '100%', background: '#111128', color: '#e0e0e0',
+              border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
+              fontSize: 11, boxSizing: 'border-box',
+            }}
+          />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <label style={{ color: '#888', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
@@ -259,11 +276,11 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             </label>
             <button
               onClick={handleImport}
-              disabled={importing || !seedPhrase.trim()}
+              disabled={importing || !seedPhrase.trim() || !password}
               style={{
                 padding: '4px 12px', background: '#1a3328', color: '#4caf50',
                 border: '1px solid #4caf50', borderRadius: 3, cursor: importing ? 'wait' : 'pointer',
-                fontSize: 10, fontWeight: 600, opacity: importing || !seedPhrase.trim() ? 0.6 : 1,
+                fontSize: 10, fontWeight: 600, opacity: importing || !seedPhrase.trim() || !password ? 0.6 : 1,
               }}
             >
               {importing ? 'Importing...' : 'Import Wallet'}
@@ -944,6 +961,108 @@ function MetricValue({ label, value, color }: { label: string; value: string; co
   );
 }
 
+function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: (publicKey: string) => void }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+
+  const handleUnlock = async () => {
+    if (!password) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${backendUrl}/api/bot/wallet/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Invalid password');
+      } else {
+        onUnlock(data.publicKey);
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!confirm('This will delete your encrypted wallet. You can re-import with your seed phrase later. Continue?')) return;
+    setLoading(true);
+    try {
+      await fetch(`${backendUrl}/api/bot/wallet/forgot-password`, { method: 'POST' });
+      window.location.reload();
+    } catch {
+      setError('Network error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      flex: 1, gap: 16, padding: 32,
+    }}>
+      <div style={{ fontSize: 48, opacity: 0.3 }}>🔒</div>
+      <div style={{ color: '#888', fontSize: 14, fontWeight: 600 }}>Wallet Locked</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 280 }}>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+          placeholder="Enter password to unlock"
+          autoFocus
+          style={{
+            width: '100%', background: '#111128', color: '#e0e0e0',
+            border: '1px solid #333', borderRadius: 4, padding: '8px 12px',
+            fontSize: 12, boxSizing: 'border-box',
+          }}
+        />
+        <button
+          onClick={handleUnlock}
+          disabled={loading || !password}
+          style={{
+            padding: '8px 16px', background: '#1a3328', color: '#4caf50',
+            border: '1px solid #4caf50', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+            fontSize: 12, fontWeight: 600, opacity: loading || !password ? 0.6 : 1,
+          }}
+        >
+          {loading ? 'Unlocking...' : 'Unlock'}
+        </button>
+        {error && <div style={{ color: '#e94560', fontSize: 11, textAlign: 'center' }}>{error}</div>}
+        <button
+          onClick={() => setShowForgot(!showForgot)}
+          style={{
+            background: 'none', border: 'none', color: '#666',
+            cursor: 'pointer', fontSize: 10, marginTop: 8,
+          }}
+        >
+          Forgot password?
+        </button>
+        {showForgot && (
+          <button
+            onClick={handleForgotPassword}
+            disabled={loading}
+            style={{
+              padding: '6px 12px', background: '#2a1520', color: '#e94560',
+              border: '1px solid #e94560', borderRadius: 4, cursor: 'pointer',
+              fontSize: 10,
+            }}
+          >
+            Erase wallet and start fresh
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function LiveDashboard({
   backendUrl,
   status,
@@ -969,6 +1088,7 @@ export function LiveDashboard({
     hasWallet: !!status.walletPublicKey,
     publicKey: status.walletPublicKey ?? undefined,
   });
+  const [walletLocked, setWalletLocked] = useState(false);
   const [pinnedToBottom, setPinnedToBottom] = useState(() => {
     return localStorage.getItem('pine-bot-dashboard-pinned') === 'true';
   });
@@ -976,11 +1096,12 @@ export function LiveDashboard({
 
   // Fetch wallet status on mount
   useEffect(() => {
-    fetch(`${backendUrl}/api/bot/wallet`)
+    fetch(`${backendUrl}/api/bot/wallet/status`)
       .then((r) => r.json())
       .then((data) => {
         if (data.success) {
           setWallet({ hasWallet: data.hasWallet, publicKey: data.publicKey });
+          setWalletLocked(data.locked);
         }
       })
       .catch(() => {});
@@ -998,6 +1119,18 @@ export function LiveDashboard({
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
+  };
+
+  const handleLock = async () => {
+    try {
+      await fetch(`${backendUrl}/api/bot/wallet/lock`, { method: 'POST' });
+      setWalletLocked(true);
+    } catch { /* ignore */ }
+  };
+
+  const handleUnlock = (publicKey: string) => {
+    setWalletLocked(false);
+    setWallet({ hasWallet: true, publicKey });
   };
 
   const togglePin = () => {
@@ -1033,7 +1166,7 @@ export function LiveDashboard({
     status.state === 'Error' ? '#e94560' :
     status.state === 'Idle' ? '#888' : '#ff9800';
 
-  const isReady = wallet.hasWallet;
+  const isReady = wallet.hasWallet && !walletLocked;
 
   const rootStyle: React.CSSProperties = pinnedToBottom
     ? {
@@ -1064,12 +1197,26 @@ export function LiveDashboard({
             <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11 }}>
               {status.state}
             </span>
+            {wallet.hasWallet && (
+              <span
+                style={{
+                  padding: '2px 8px', borderRadius: 4, fontSize: 10,
+                  background: walletLocked ? '#2a1520' : '#1a3328',
+                  color: walletLocked ? '#e94560' : '#4caf50',
+                  cursor: 'pointer',
+                }}
+                onClick={walletLocked ? undefined : handleLock}
+                title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
+              >
+                {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
+              </span>
+            )}
           </span>
           <div style={{ flex: 1 }} />
           <button
             onClick={() => sendCommand('start')}
             disabled={loading || !isReady}
-            title={!wallet.hasWallet ? 'Import a wallet first' : 'Start Live Trading Bot'}
+            title={!wallet.hasWallet ? 'Import a wallet first' : walletLocked ? 'Unlock wallet first' : 'Start Live Trading Bot'}
             style={{
               padding: '6px 16px', background: isReady ? '#1a3328' : '#111',
               color: isReady ? '#4caf50' : '#555',
@@ -1105,19 +1252,23 @@ export function LiveDashboard({
           </button>
         </div>
 
-        {/* Centered setup wizard */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
-          <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
-            <SetupWizard
-              backendUrl={backendUrl}
-              initialWallet={wallet}
-              onStart={async () => { await sendCommand('start'); }}
-              onClose={onClose}
-              autoSelectProgress={autoSelectProgress}
-              autoSelectResult={autoSelectResult}
-            />
+        {/* Show unlock screen if wallet is locked, otherwise show setup wizard */}
+        {walletLocked ? (
+          <UnlockScreen backendUrl={backendUrl} onUnlock={handleUnlock} />
+        ) : (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+            <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
+              <SetupWizard
+                backendUrl={backendUrl}
+                initialWallet={wallet}
+                onStart={async () => { await sendCommand('start'); }}
+                onClose={onClose}
+                autoSelectProgress={autoSelectProgress}
+                autoSelectResult={autoSelectResult}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
@@ -1132,6 +1283,20 @@ export function LiveDashboard({
           <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
             {status.state}
           </span>
+          {wallet.hasWallet && (
+            <span
+              style={{
+                padding: '2px 8px', borderRadius: 4, fontSize: 10,
+                background: walletLocked ? '#2a1520' : '#1a3328',
+                color: walletLocked ? '#e94560' : '#4caf50',
+                cursor: 'pointer',
+              }}
+              onClick={walletLocked ? undefined : handleLock}
+              title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
+            >
+              {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
+            </span>
+          )}
         </span>
         <div style={{ flex: 1 }} />
         {/* Action buttons */}
