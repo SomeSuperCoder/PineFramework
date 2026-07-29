@@ -61,6 +61,8 @@ export function useBotWebSocket(backendUrl: string) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [connectionFailed, setConnectionFailed] = useState(false);
+  const connectAttemptsRef = useRef(0);
 
   // Auto-select progress state
   const [autoSelectProgress, setAutoSelectProgress] = useState<{
@@ -79,8 +81,13 @@ export function useBotWebSocket(backendUrl: string) {
   const connect = useCallback(() => {
     const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/bot';
     const ws = new WebSocket(wsUrl);
+    connectAttemptsRef.current++;
 
-    ws.onopen = () => setConnected(true);
+    ws.onopen = () => {
+      setConnected(true);
+      setConnectionFailed(false);
+      connectAttemptsRef.current = 0;
+    };
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
@@ -121,6 +128,10 @@ export function useBotWebSocket(backendUrl: string) {
     };
     ws.onclose = () => {
       setConnected(false);
+      // After 5 failed attempts (~15 seconds), show connection failed
+      if (connectAttemptsRef.current >= 5) {
+        setConnectionFailed(true);
+      }
       reconnectTimerRef.current = setTimeout(connect, 3000);
     };
     ws.onerror = () => ws.close();
@@ -142,7 +153,7 @@ export function useBotWebSocket(backendUrl: string) {
     }
   }, [status?.state]);
 
-  return { connected, status, logs, autoSelectProgress, autoSelectResult };
+  return { connected, status, logs, autoSelectProgress, autoSelectResult, connectionFailed };
 }
 
 // ---- Wallet Import Panel ----

@@ -67,7 +67,7 @@ function App() {
   const chartRef = useRef<ChartComponentHandle>(null);
 
   const backendUrl = `http://${window.location.hostname}:8081`;
-  const { connected: botConnected, status: botStatus, logs: botLogs, autoSelectProgress, autoSelectResult } = useBotWebSocket(backendUrl);
+  const { connected: botConnected, status: botStatus, logs: botLogs, autoSelectProgress, autoSelectResult, connectionFailed: botConnectionFailed } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -430,6 +430,37 @@ function App() {
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
             />
+          ) : botConnectionFailed ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+              <div style={{ color: '#e94560', fontSize: 16, fontWeight: 600 }}>Cannot Connect to Bot Backend</div>
+              <div style={{ color: '#888', fontSize: 12, textAlign: 'center', maxWidth: 400 }}>
+                The WebSocket connection to the backend server failed.
+                Make sure the backend is running on port 8081.
+              </div>
+              <div style={{ color: '#555', fontSize: 11, fontFamily: 'monospace' }}>
+                {backendUrl}/ws/bot
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: '8px 20px', background: '#1a1a2e', color: '#64b5f6',
+                  border: '1px solid #64b5f6', borderRadius: 4, cursor: 'pointer',
+                  fontSize: 12, marginTop: 8,
+                }}
+              >
+                Retry Connection
+              </button>
+              <button
+                onClick={() => setBotDashboardOpen(false)}
+                style={{
+                  padding: '6px 16px', background: 'transparent', color: '#888',
+                  border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
+                  fontSize: 11, marginTop: 8,
+                }}
+              >
+                Close Dashboard
+              </button>
+            </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
               <div style={{ color: '#888', fontSize: 14 }}>Connecting to bot...</div>
@@ -442,7 +473,7 @@ function App() {
                   fontSize: 11, marginTop: 16,
                 }}
               >
-                Close
+                Cancel
               </button>
             </div>
           )}
