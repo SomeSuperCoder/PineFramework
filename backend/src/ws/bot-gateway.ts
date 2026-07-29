@@ -26,7 +26,19 @@ export function createBotWSGateway(
   server: Server,
   getEngine: () => BotEngine | null,
 ): BotWSBroadcaster {
-  const wss = new WebSocketServer({ server, path: '/ws/bot' });
+  // Use noServer mode to avoid conflicts with the main /ws gateway
+  const wss = new WebSocketServer({ noServer: true });
+
+  // Handle upgrade requests for /ws/bot path
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+    if (url.pathname === '/ws/bot') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+    // Let other handlers (like /ws gateway) handle their own paths
+  });
 
   wss.on('connection', (ws: WebSocket) => {
     // Send full snapshot immediately on connect

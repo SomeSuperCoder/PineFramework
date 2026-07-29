@@ -57,10 +57,22 @@ export function createWSGateway(
   cache: OHLCVCache,
   telegramService?: TelegramService,
 ): void {
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  // Use noServer mode to avoid conflicts with the bot /ws/bot gateway
+  const wss = new WebSocketServer({ noServer: true });
   const clients = new Map<WebSocket, ClientSubscription>();
   let bybitWs: WebSocket | null = null;
   const topicCallbacks = new Map<string, Set<WebSocket>>();
+
+  // Handle upgrade requests for /ws path (but NOT /ws/bot)
+  server.on('upgrade', (request, socket, head) => {
+    const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+    if (url.pathname === '/ws') {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    }
+    // Let other handlers (like /ws/bot gateway) handle their own paths
+  });
 
   function connectToBybit(): void {
     if (bybitWs && bybitWs.readyState === WebSocket.OPEN) return;
