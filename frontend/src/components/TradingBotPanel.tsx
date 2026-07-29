@@ -514,32 +514,30 @@ export function TradingBotControlButton({
 
   return (
     <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
-      {isStopped && (
-        <button
-          onClick={dashboardOpen ? () => sendCommand('start') : onToggleDashboard}
-          disabled={loading}
-          title={dashboardOpen ? 'Start Live Trading Bot' : 'Show Bot Dashboard'}
-          style={{
-            padding: '5px 10px',
-            background: dashboardOpen ? '#1a3328' : '#111128',
-            color: dashboardOpen ? '#4caf50' : '#888',
-            border: `1px solid ${dashboardOpen ? '#4caf50' : '#333'}`,
-            borderRadius: '4px',
-            cursor: loading ? 'wait' : 'pointer',
-            fontSize: '11px',
-            fontWeight: 600,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-            <polygon points="2,0 9,5 2,10" />
-          </svg>
-          Bot
-        </button>
-      )}
+      <button
+        onClick={isStopped && dashboardOpen ? () => sendCommand('start') : onToggleDashboard}
+        disabled={loading}
+        title={isStopped && dashboardOpen ? 'Start Live Trading Bot' : dashboardOpen ? 'Hide Dashboard' : 'Show Bot Dashboard'}
+        style={{
+          padding: '5px 10px',
+          background: dashboardOpen ? '#1a3328' : '#111128',
+          color: dashboardOpen ? '#4caf50' : '#888',
+          border: `1px solid ${dashboardOpen ? '#4caf50' : '#333'}`,
+          borderRadius: '4px',
+          cursor: loading ? 'wait' : 'pointer',
+          fontSize: '11px',
+          fontWeight: 600,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          opacity: loading ? 0.7 : 1,
+        }}
+      >
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+          <polygon points="2,0 9,5 2,10" />
+        </svg>
+        Bot Dashboard
+      </button>
       {isRunning && (
         <>
           <button
@@ -564,7 +562,7 @@ export function TradingBotControlButton({
             <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
               <rect x="1" y="1" width="8" height="8" rx="1" />
             </svg>
-            Bot
+            Stop Bot
           </button>
           <button
             onClick={() => sendCommand('emergency-stop')}
@@ -611,27 +609,6 @@ export function TradingBotControlButton({
       )}
       {transitioning && (
         <span style={{ color: '#ff9800', fontSize: '11px', fontStyle: 'italic' }}>{botState}...</span>
-      )}
-      {(botState !== 'Idle' || dashboardOpen) && (
-        <button
-          onClick={onToggleDashboard}
-          title={dashboardOpen ? 'Hide Dashboard' : 'Show Dashboard'}
-          style={{
-            padding: '5px 6px',
-            background: dashboardOpen ? '#1a1a2e' : 'transparent',
-            color: dashboardOpen ? '#fff' : '#666',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            display: 'inline-flex',
-            alignItems: 'center',
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d={dashboardOpen ? 'M8 7L5 4 2 7' : 'M2 3l3 3 3-3'} />
-          </svg>
-        </button>
       )}
       {!connected && (botState !== 'Idle' || dashboardOpen) && (
         <span style={{ color: '#ff9800', fontSize: '10px', marginLeft: '2px' }} title="Reconnecting...">

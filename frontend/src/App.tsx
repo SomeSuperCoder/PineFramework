@@ -416,19 +416,36 @@ function App() {
         onToggleBotDashboard={() => setBotDashboardOpen((v) => !v)}
       />
 
-      {botDashboardOpen && botStatus && (
+      {botDashboardOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           zIndex: 1000, background: '#0d0d18', display: 'flex', flexDirection: 'column',
         }}>
-          <LiveDashboard
-            backendUrl={backendUrl}
-            status={botStatus}
-            logs={botLogs}
-            onClose={() => setBotDashboardOpen(false)}
-            autoSelectProgress={autoSelectProgress}
-            autoSelectResult={autoSelectResult}
-          />
+          {botStatus ? (
+            <LiveDashboard
+              backendUrl={backendUrl}
+              status={botStatus}
+              logs={botLogs}
+              onClose={() => setBotDashboardOpen(false)}
+              autoSelectProgress={autoSelectProgress}
+              autoSelectResult={autoSelectResult}
+            />
+          ) : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+              <div style={{ color: '#888', fontSize: 14 }}>Connecting to bot...</div>
+              <div style={{ color: '#555', fontSize: 11 }}>Waiting for WebSocket connection</div>
+              <button
+                onClick={() => setBotDashboardOpen(false)}
+                style={{
+                  padding: '6px 16px', background: '#1a1a2e', color: '#888',
+                  border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
+                  fontSize: 11, marginTop: 16,
+                }}
+              >
+                Close
+              </button>
+            </div>
+          )}
         </div>
       )}
 
