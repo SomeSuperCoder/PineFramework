@@ -417,14 +417,19 @@ function App() {
       />
 
       {botDashboardOpen && botStatus && (
-        <LiveDashboard
-          backendUrl={backendUrl}
-          status={botStatus}
-          logs={botLogs}
-          onClose={() => setBotDashboardOpen(false)}
-          autoSelectProgress={autoSelectProgress}
-          autoSelectResult={autoSelectResult}
-        />
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 1000, background: '#0d0d18', display: 'flex', flexDirection: 'column',
+        }}>
+          <LiveDashboard
+            backendUrl={backendUrl}
+            status={botStatus}
+            logs={botLogs}
+            onClose={() => setBotDashboardOpen(false)}
+            autoSelectProgress={autoSelectProgress}
+            autoSelectResult={autoSelectResult}
+          />
+        </div>
       )}
 
       <ErrorConsole

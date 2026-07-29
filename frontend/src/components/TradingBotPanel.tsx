@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { StrategySelector } from './StrategySelector';
+import { PairMatrixTable } from './PairMatrixTable';
 
 // ---- Types ----
 
@@ -263,10 +265,6 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   );
 }
 
-// ---- Bot Configuration Panel ----
-
-const VALID_TIMEFRAMES = new Set(['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M']);
-
 /** Check strategy source for patterns that are incompatible with live spot trading. */
 function checkStrategyCompatibility(source: string): string[] {
   const warnings: string[] = [];
@@ -303,14 +301,6 @@ function checkStrategyCompatibility(source: string): string[] {
   return warnings;
 }
 
-function parsePairLine(line: string): { symbol: string; timeframe: string } | null {
-  const trimmed = line.trim();
-  if (!trimmed) return null;
-  const parts = trimmed.split(/\s+/);
-  if (parts.length === 1) return { symbol: parts[0]!, timeframe: '60' };
-  return { symbol: parts[0]!, timeframe: parts[1]! };
-}
-
 export interface ConfigValues {
   strategySource: string;
   dex: string;
@@ -328,7 +318,11 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
-  const [pairsText, setPairsText] = useState('SOLUSDT 60\nBTCUSDT 240\nETHUSDT 60\nSOLUSDT 15');
+  const [parsedPairs, setParsedPairs] = useState<Array<{ symbol: string; timeframe: string }>>([
+    { symbol: 'SOLUSDT', timeframe: '60' },
+    { symbol: 'BTCUSDT', timeframe: '240' },
+    { symbol: 'ETHUSDT', timeframe: '60' },
+  ]);
   const [maxDailyLoss, setMaxDailyLoss] = useState('50');
   const [timezone, setTimezone] = useState('UTC');
   const [closeOnLoss, setCloseOnLoss] = useState(false);
@@ -341,23 +335,9 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
     [strategySource]
   );
 
-  const parsedPairs = pairsText
-    .split('\n')
-    .map(parsePairLine)
-    .filter((p): p is NonNullable<typeof p> => p !== null);
-
-  const invalidTimeframeLines = pairsText
-    .split('\n')
-    .map((line, i) => {
-      const p = parsePairLine(line);
-      if (p && !VALID_TIMEFRAMES.has(p.timeframe)) return i + 1;
-      return null;
-    })
-    .filter((i): i is number => i !== null);
-
   const handleConfigure = async () => {
     if (!strategySource.trim()) {
-      setError('Paste your Pine Script strategy source code');
+      setError('Select a strategy or paste your Pine Script strategy source code');
       return;
     }
     if (parsedPairs.length === 0) {
@@ -406,16 +386,10 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
         Configuration
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <textarea
+        <StrategySelector
+          backendUrl={backendUrl}
           value={strategySource}
-          onChange={(e) => setStrategySource(e.target.value)}
-          placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"
-          rows={4}
-          style={{
-            width: '100%', background: '#111128', color: '#e0e0e0',
-            border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
-            fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
-          }}
+          onChange={(src) => { setStrategySource(src); }}
         />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label style={{ color: '#888', fontSize: 11 }}>
@@ -474,31 +448,10 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
             Auto-select
           </label>
         </div>
-        <div>
-          <span style={{ color: '#888', fontSize: 11 }}>Trading Pairs (SYMBOL TIMEFRAME per line):</span>
-          <textarea
-            value={pairsText}
-            onChange={(e) => setPairsText(e.target.value)}
-            placeholder="SOLUSDT 60&#10;BTCUSDT 240&#10;ETHUSDT 60&#10;SOLUSDT 15"
-            rows={3}
-            style={{
-              width: '100%', background: '#111128', color: '#e0e0e0',
-              border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
-              fontSize: 11, fontFamily: 'monospace', resize: 'vertical', marginTop: 4,
-            }}
-          />
-          {invalidTimeframeLines.length > 0 && (
-            <div style={{ color: '#ff9800', fontSize: 10, marginTop: 4 }}>
-              ⚠ Lines {invalidTimeframeLines.join(', ')} have unrecognized timeframes. Valid: 1, 3, 5, 15, 30, 60, 120, 240, D, W, M
-            </div>
-          )}
-          <div style={{ color: '#666', fontSize: 10, marginTop: 2 }}>
-            {parsedPairs.length} pair{parsedPairs.length !== 1 ? 's' : ''} parsed
-            {parsedPairs.length > 0 && (
-              <span>: {parsedPairs.map(p => `${p.symbol} ${p.timeframe}`).join(', ')}</span>
-            )}
-          </div>
-        </div>
+        <PairMatrixTable
+          value={parsedPairs}
+          onChange={setParsedPairs}
+        />
         {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}
         {compatibilityWarnings.length > 0 && (
           <div style={{
@@ -715,16 +668,9 @@ function SetupWizard({
     initialWallet.hasWallet ? 'config' : 'wallet'
   );
   const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
-  const [configApplied, setConfigApplied] = useState(false);
   const [configValues, setConfigValues] = useState<ConfigValues | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
-
-  const isStepComplete = {
-    wallet: wallet.hasWallet,
-    config: configApplied,
-    review: true,
-  };
 
   const handleStart = async () => {
     setStarting(true);
@@ -812,7 +758,7 @@ function SetupWizard({
         <div>
           <BotConfigPanel
             backendUrl={backendUrl}
-            onConfigured={() => { setConfigApplied(true); setStep('review'); }}
+            onConfigured={() => { setStep('review'); }}
             onConfigValues={(v) => setConfigValues(v)}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
@@ -1030,13 +976,13 @@ export function LiveDashboard({
     failedCount: number;
   } | null;
 }) {
-  const [view, setView] = useState<'setup' | 'status' | 'metrics' | 'logs'>(
-    status.state === 'Idle' || status.state === 'Stopped' ? 'setup' : 'status'
-  );
   const [loading, setLoading] = useState(false);
   const [wallet, setWallet] = useState<WalletInfo>({
     hasWallet: !!status.walletPublicKey,
     publicKey: status.walletPublicKey ?? undefined,
+  });
+  const [pinnedToBottom, setPinnedToBottom] = useState(() => {
+    return localStorage.getItem('pine-bot-dashboard-pinned') === 'true';
   });
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -1066,6 +1012,14 @@ export function LiveDashboard({
     }
   };
 
+  const togglePin = () => {
+    setPinnedToBottom((prev) => {
+      const next = !prev;
+      localStorage.setItem('pine-bot-dashboard-pinned', String(next));
+      return next;
+    });
+  };
+
   const fmtDur = (ms: number): string => {
     if (ms <= 0) return '\u2014';
     const h = Math.floor(ms / 3600000);
@@ -1086,23 +1040,6 @@ export function LiveDashboard({
   const isError = status.state === 'Error';
   const transitioning = status.state === 'Starting' || status.state === 'Stopping';
 
-  const TabBtn = ({ tab, label }: { tab: typeof view; label: string }) => (
-    <button
-      onClick={() => setView(tab)}
-      style={{
-        padding: '4px 16px',
-        background: view === tab ? '#1a1a2e' : 'transparent',
-        color: view === tab ? '#fff' : '#888',
-        border: 'none',
-        cursor: 'pointer',
-        fontSize: '11px',
-        fontWeight: view === tab ? 600 : 400,
-      }}
-    >
-      {label}
-    </button>
-  );
-
   const stateColor =
     status.state === 'Running' ? '#4caf50' :
     status.state === 'Error' ? '#e94560' :
@@ -1110,9 +1047,8 @@ export function LiveDashboard({
 
   const isReady = wallet.hasWallet;
 
-  return (
-    <div
-      style={{
+  const rootStyle: React.CSSProperties = pinnedToBottom
+    ? {
         background: '#0d0d18',
         borderTop: '1px solid #222',
         borderBottom: '1px solid #222',
@@ -1120,35 +1056,38 @@ export function LiveDashboard({
         height: '320px',
         display: 'flex',
         flexDirection: 'column',
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e' }}>
-        {isIdle ? (
-          <TabBtn tab="setup" label="Setup" />
-        ) : (
-          <>
-            <TabBtn tab="status" label="Status" />
-            <TabBtn tab="metrics" label="Metrics" />
-            <TabBtn tab="logs" label={`Logs (${logs.length})`} />
-          </>
-        )}
-        <div style={{ flex: 1 }} />
-        {/* Action buttons */}
-        {isIdle && (
+      }
+    : {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        fontSize: '12px',
+        overflow: 'hidden',
+      };
+
+  // Idle/Stopped view — centered setup wizard
+  if (isIdle) {
+    return (
+      <div style={rootStyle}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
+          <span style={{ color: '#888', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Bot Dashboard
+            <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11 }}>
+              {status.state}
+            </span>
+          </span>
+          <div style={{ flex: 1 }} />
           <button
             onClick={() => sendCommand('start')}
             disabled={loading || !isReady}
-            title={
-              !wallet.hasWallet ? 'Import a wallet first' :
-              'Start Live Trading Bot (configure in Setup tab)'
-            }
+            title={!wallet.hasWallet ? 'Import a wallet first' : 'Start Live Trading Bot'}
             style={{
-              padding: '5px 12px', background: isReady ? '#1a3328' : '#111',
+              padding: '6px 16px', background: isReady ? '#1a3328' : '#111',
               color: isReady ? '#4caf50' : '#555',
               border: `1px solid ${isReady ? '#4caf50' : '#333'}`,
-              borderRadius: '4px', cursor: loading ? 'wait' : isReady ? 'pointer' : 'default',
-              fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px',
+              borderRadius: 4, cursor: loading ? 'wait' : isReady ? 'pointer' : 'default',
+              fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
               opacity: loading ? 0.7 : 1,
             }}
           >
@@ -1157,7 +1096,57 @@ export function LiveDashboard({
             </svg>
             Start Bot
           </button>
-        )}
+          <button
+            onClick={togglePin}
+            title={pinnedToBottom ? 'Pin to full screen' : 'Pin to bottom bar'}
+            style={{
+              padding: '4px 8px', background: 'transparent', color: '#666',
+              border: 'none', cursor: 'pointer', fontSize: 12, marginLeft: 4,
+            }}
+          >
+            {pinnedToBottom ? '⛶' : '📌'}
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '4px 10px', background: 'transparent', color: '#888',
+              border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 4,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Centered setup wizard */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+          <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
+            <SetupWizard
+              backendUrl={backendUrl}
+              initialWallet={wallet}
+              onStart={async () => { await sendCommand('start'); }}
+              onClose={onClose}
+              autoSelectProgress={autoSelectProgress}
+              autoSelectResult={autoSelectResult}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Running/Stopping/Error view — three-column layout
+  return (
+    <div style={rootStyle}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
+        <span style={{ color: '#888', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          Bot Dashboard
+          <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
+            {status.state}
+          </span>
+        </span>
+        <div style={{ flex: 1 }} />
+        {/* Action buttons */}
         {isRunning && (
           <>
             <button
@@ -1165,8 +1154,8 @@ export function LiveDashboard({
               disabled={loading}
               style={{
                 padding: '5px 12px', background: '#e94560', color: '#fff',
-                border: 'none', borderRadius: '4px', cursor: loading ? 'wait' : 'pointer',
-                fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px',
+                border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+                fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4,
               }}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
@@ -1180,8 +1169,8 @@ export function LiveDashboard({
               title="Emergency Stop"
               style={{
                 padding: '5px 8px', marginLeft: 4, background: '#ff1744', color: '#fff',
-                border: 'none', borderRadius: '4px', cursor: loading ? 'wait' : 'pointer',
-                fontSize: '11px', fontWeight: 700,
+                border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+                fontSize: 11, fontWeight: 700,
               }}
             >
               ⚠
@@ -1194,51 +1183,46 @@ export function LiveDashboard({
             disabled={loading}
             style={{
               padding: '5px 10px', background: '#2a1520', color: '#ff9800',
-              border: '1px solid #ff9800', borderRadius: '4px', cursor: loading ? 'wait' : 'pointer',
-              fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px',
+              border: '1px solid #ff9800', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+              fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
             ⟳ Reset
           </button>
         )}
         {transitioning && (
-          <span style={{ color: '#ff9800', fontSize: '11px', fontStyle: 'italic', marginRight: 8 }}>
+          <span style={{ color: '#ff9800', fontSize: 11, fontStyle: 'italic', marginRight: 8 }}>
             {status.state}...
           </span>
         )}
         <button
+          onClick={togglePin}
+          title={pinnedToBottom ? 'Pin to full screen' : 'Pin to bottom bar'}
+          style={{
+            padding: '4px 8px', background: 'transparent', color: '#666',
+            border: 'none', cursor: 'pointer', fontSize: 12, marginLeft: 4,
+          }}
+        >
+          {pinnedToBottom ? '⛶' : '📌'}
+        </button>
+        <button
           onClick={onClose}
           style={{
             padding: '4px 10px', background: 'transparent', color: '#888',
-            border: 'none', cursor: 'pointer', fontSize: '14px', marginLeft: 4,
+            border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 4,
           }}
         >
           ✕
         </button>
       </div>
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px 12px' }}>
-        {/* ---- Setup Tab (Idle/Stopped) ---- */}
-        {view === 'setup' && (
-          <SetupWizard
-            backendUrl={backendUrl}
-            initialWallet={wallet}
-            onStart={async () => {
-              await sendCommand('start');
-            }}
-            onClose={onClose}
-            autoSelectProgress={autoSelectProgress}
-            autoSelectResult={autoSelectResult}
-          />
-        )}
-
-        {/* ---- Status Tab ---- */}
-        {view === 'status' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
+      {/* Three-column body */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gap: 1, overflow: 'hidden' }}>
+        {/* Left: Status Panel */}
+        <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
+          <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <MetricValue label="State" value={status.state} color={stateColor} />
-            <MetricValue label="Strategy" value={status.strategyName} />
-            <MetricValue label="DEX" value={status.dex} />
             {wallet.publicKey && (
               <MetricValue
                 label="Wallet"
@@ -1246,93 +1230,101 @@ export function LiveDashboard({
                 color="#4caf50"
               />
             )}
+            <MetricValue label="Strategy" value={status.strategyName} />
+            <MetricValue label="DEX" value={status.dex} />
             <MetricValue label="Duration" value={fmtDur(status.uptimeMs)} />
             <MetricValue label="Balance" value={`$${status.balance.toFixed(2)}`} />
             <MetricValue label="Realized PnL" value={fmtPnl(status.realizedPnl).text} color={fmtPnl(status.realizedPnl).color} />
             <MetricValue label="Unrealized PnL" value={fmtPnl(status.unrealizedPnl).text} color={fmtPnl(status.unrealizedPnl).color} />
             <MetricValue label="Exposure" value={`${(status.exposure * 100).toFixed(1)}%`} />
 
-            {status.positions.length > 0 && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <span style={{ color: '#888' }}>Positions:</span>
-                {status.positions.map((pos, i) => (
-                  <div key={i} style={{ marginTop: 4, padding: '4px 8px', background: '#111128', borderRadius: 4 }}>
-                    <span style={{ color: '#e0e0e0', fontWeight: 600 }}>{pos.symbol}</span>
-                    <span style={{ color: pos.side === 'long' ? '#4caf50' : '#e94560', marginLeft: 8 }}>
-                      {pos.side.toUpperCase()}
-                    </span>
-                    <span style={{ color: '#888', marginLeft: 8 }}>
-                      {pos.size} @ ${pos.entryPrice.toFixed(2)}
-                    </span>
-                    <span style={{ color: fmtPnl(pos.unrealizedPnl).color, marginLeft: 8 }}>
-                      {fmtPnl(pos.unrealizedPnl).text}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {status.errors.length > 0 && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <span style={{ color: '#e94560', fontWeight: 600 }}>Errors ({status.errors.length}):</span>
+              <div style={{ marginTop: 8 }}>
+                <span style={{ color: '#e94560', fontWeight: 600, fontSize: 11 }}>Errors ({status.errors.length}):</span>
                 {status.errors.slice(-3).map((err, i) => (
-                  <div key={i} style={{ color: '#e94560', fontSize: '11px', marginTop: 2 }}>
+                  <div key={i} style={{ color: '#e94560', fontSize: 10, marginTop: 2 }}>
                     [{err.code}] {err.message}
                   </div>
                 ))}
               </div>
             )}
           </div>
-        )}
+        </div>
 
-        {/* ---- Metrics Tab ---- */}
-        {view === 'metrics' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '8px' }}>
+        {/* Center: Metrics + Positions */}
+        <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
+          <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 16 }}>
             <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : na} />
             <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : na} color="#4caf50" />
             <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : na} color="#e94560" />
-            <MetricValue
-              label="Win Rate"
-              value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : na}
+            <MetricValue label="Win Rate" value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : na} />
+            <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : na} color={status.avgWin != null && status.avgWin > 0 ? '#4caf50' : undefined} />
+            <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : na} color={status.avgLoss != null && status.avgLoss < 0 ? '#e94560' : undefined} />
+            <MetricValue label="Profit Factor" value={status.profitFactor != null ? status.profitFactor.toFixed(2) : na}
+              color={status.profitFactor != null ? status.profitFactor >= 1.5 ? '#4caf50' : status.profitFactor >= 1 ? '#ff9800' : '#e94560' : undefined}
             />
-            <MetricValue
-              label="Avg Win"
-              value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : na}
-              color={status.avgWin != null && status.avgWin > 0 ? '#4caf50' : undefined}
-            />
-            <MetricValue
-              label="Avg Loss"
-              value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : na}
-              color={status.avgLoss != null && status.avgLoss < 0 ? '#e94560' : undefined}
-            />
-            <MetricValue
-              label="Profit Factor"
-              value={status.profitFactor != null ? status.profitFactor.toFixed(2) : na}
-              color={
-                status.profitFactor != null
-                  ? status.profitFactor >= 1.5 ? '#4caf50' : status.profitFactor >= 1 ? '#ff9800' : '#e94560'
-                  : undefined
-              }
-            />
-            <MetricValue
-              label="Max Drawdown"
-              value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : na}
-              color="#e94560"
-            />
-            <MetricValue
-              label="Total Fees"
-              value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : na}
-            />
-            <MetricValue
-              label="Avg Latency"
-              value={status.avgLatency != null ? `${status.avgLatency.toFixed(0)}ms` : na}
-            />
+            <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : na} color="#e94560" />
+            <MetricValue label="Total Fees" value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : na} />
+            <MetricValue label="Avg Latency" value={status.avgLatency != null ? `${status.avgLatency.toFixed(0)}ms` : na} />
           </div>
-        )}
 
-        {/* ---- Logs Tab ---- */}
-        {view === 'logs' && (
-          <div style={{ fontFamily: 'monospace', fontSize: '11px', lineHeight: '1.6' }}>
+          {/* Positions */}
+          {status.positions.length > 0 && (
+            <>
+              <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Positions</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {status.positions.map((pos, i) => (
+                  <div key={i} style={{ padding: '6px 10px', background: '#111128', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#e0e0e0', fontWeight: 600, fontSize: 12 }}>{pos.symbol}</span>
+                    <span style={{ color: pos.side === 'long' ? '#4caf50' : '#e94560', fontSize: 11, fontWeight: 600 }}>
+                      {pos.side.toUpperCase()}
+                    </span>
+                    <span style={{ color: '#888', fontSize: 11 }}>
+                      {pos.size} @ ${pos.entryPrice.toFixed(2)}
+                    </span>
+                    <span style={{ color: fmtPnl(pos.unrealizedPnl).color, fontSize: 11, marginLeft: 'auto' }}>
+                      {fmtPnl(pos.unrealizedPnl).text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Auto-Select Results */}
+          {autoSelectResult && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Auto-Select Results</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>
+                Evaluated {autoSelectResult.evaluatedCount} pair{autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
+                {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {autoSelectResult.ranking.slice(0, 5).map((r, i) => (
+                  <div key={i} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '4px 8px', background: i === 0 ? '#1a3328' : 'transparent', borderRadius: 3,
+                  }}>
+                    <span style={{ color: i === 0 ? '#4caf50' : '#e0e0e0', fontWeight: i === 0 ? 700 : 400, fontSize: 11 }}>
+                      {i === 0 ? '★ ' : ''}{r.label}
+                    </span>
+                    <span style={{ color: '#888', fontSize: 10 }}>
+                      {r.metrics.profitFactor != null && `PF: ${r.metrics.profitFactor.toFixed(2)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Logs Panel */}
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Logs ({logs.length})
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6 }}>
             {logs.length === 0 && (
               <span style={{ color: '#888', fontStyle: 'italic' }}>No log entries yet...</span>
             )}
@@ -1355,7 +1347,13 @@ export function LiveDashboard({
             ))}
             <div ref={logEndRef} />
           </div>
-        )}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ borderTop: '1px solid #1a1a2e', padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: '#555' }}>
+        <span>Connected: <span style={{ color: '#4caf50' }}>●</span></span>
+        <span>Last update: {new Date().toLocaleTimeString()}</span>
       </div>
     </div>
   );
