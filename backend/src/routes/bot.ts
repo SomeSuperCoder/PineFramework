@@ -352,25 +352,17 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      // Check if wallet already exists — require confirmation
+      // Only one wallet allowed — reject if one already exists
       const hasWallet = await wm.hasWallet();
-      const confirmReplace = req.body.confirmReplace === true;
-
       if (hasWallet) {
-        if (!confirmReplace) {
-          res.status(409).json({
-            success: false,
-            error: 'A wallet is already imported. Set "confirmReplace: true" to replace it.',
-            needsConfirm: true,
-          });
-          return;
-        }
+        res.status(409).json({
+          success: false,
+          error: 'A wallet already exists. Remove it first before importing a new one.',
+        });
+        return;
       }
 
-      const publicKey = await wm.importWallet(
-        seedPhrase,
-        hasWallet ? async () => true : undefined,
-      );
+      const publicKey = await wm.importWallet(seedPhrase);
 
       res.json({ success: true, publicKey });
     } catch (err) {

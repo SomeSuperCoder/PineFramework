@@ -165,7 +165,6 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
 }) {
   const [seedPhrase, setSeedPhrase] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmReplace, setConfirmReplace] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
 
@@ -185,15 +184,11 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
       const res = await fetch(`${backendUrl}/api/bot/wallet/set-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seedPhrase: seedPhrase.trim(), password, confirmReplace }),
+        body: JSON.stringify({ seedPhrase: seedPhrase.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.needsConfirm) {
-          setError('Wallet already exists. Check "Replace existing wallet" to overwrite.');
-        } else {
-          setError(data.error || 'Import failed');
-        }
+        setError(data.error || 'Import failed');
       } else {
         onWalletChange({ hasWallet: true, publicKey: data.publicKey });
         setSeedPhrase('');
@@ -266,14 +261,6 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             }}
           />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label style={{ color: '#888', fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <input
-                type="checkbox"
-                checked={confirmReplace}
-                onChange={(e) => setConfirmReplace(e.target.checked)}
-              />
-              Replace existing
-            </label>
             <button
               onClick={handleImport}
               disabled={importing || !seedPhrase.trim() || !password}
