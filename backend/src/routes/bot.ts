@@ -18,13 +18,12 @@
 import { Router } from 'express';
 import type { BotEngine, BotConfig } from 'pine-framework';
 import type { WalletManager } from 'pine-framework/trading/wallet';
-import type { AutoMarketSelector } from 'pine-framework';
 
 export interface BotRouterOptions {
   getEngine: () => BotEngine | null;
   getWalletManager?: () => WalletManager | null;
   getAutoSelectDeps?: () => {
-    AutoMarketSelector: typeof AutoMarketSelector;
+    AutoMarketSelector: new (options: any) => { select: (candidates: any[], onProgress?: (progress: any) => void) => Promise<any> };
     barFetcher: unknown;
     backtestRunner: unknown;
     broadcast: (msg: unknown) => void;
@@ -42,6 +41,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     typeof param === 'function' ? param : param.getEngine;
   const getWalletManager: () => WalletManager | null =
     typeof param === 'function' ? () => null : (param.getWalletManager ?? (() => null));
+  const getAutoSelectDeps = typeof param === 'function' ? () => null : param.getAutoSelectDeps ?? (() => null);
 
   /**
    * POST /bot/start
@@ -218,7 +218,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
    * Run auto-select backtests without starting the bot.
    * Returns immediately; progress is broadcast via WebSocket bot:autoSelect channel.
    */
-  router.post('/bot/backtest', async (req, res) => {
+  router.post('/bot/backtest', async (_req, res) => {
     try {
       const engine = getEngine();
       if (!engine) {
@@ -237,7 +237,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      const deps = getAutoSelectDeps?.();
+      const deps = getAutoSelectDeps();
       if (!deps) {
         res.status(503).json({ success: false, error: 'Auto-select dependencies not available' });
         return;
@@ -247,15 +247,15 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
       res.json({ success: true, message: 'Backtest started' });
 
       const selector = new deps.AutoMarketSelector({
-        barFetcher: deps.barFetcher as any,
-        backtestRunner: deps.backtestRunner as any,
+        barFetcher: deps.barFetcher,
+        backtestRunner: deps.backtestRunner,
         script: config.strategySource,
         dex: config.dex,
         metric: config.autoSelectMetric ?? 'profitFactor',
         concurrency: 4,
       });
 
-      const result = await selector.select(deps.candidates, (progress) => {
+      const result = await selector.select(deps.candidates, (progress: any) => {
         deps.broadcast({
           channel: 'bot:autoSelect',
           type: 'progress',
@@ -280,7 +280,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Broadcast error if possible
-      const deps = getAutoSelectDeps?.();
+      const deps = getAutoSelectDeps();
       deps?.broadcast({
         channel: 'bot:autoSelect',
         type: 'error',
@@ -478,8 +478,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const publicKey = await wm.unlock(password);
       res.json({ success: true, publicKey });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    } catch {
       res.status(401).json({ success: false, error: 'Invalid password' });
     }
   });
@@ -548,8 +547,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       await wm.changePassword(currentPassword, newPassword);
       res.json({ success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    } catch {
       res.status(401).json({ success: false, error: 'Invalid current password' });
     }
   });
