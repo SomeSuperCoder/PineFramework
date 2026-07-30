@@ -213,10 +213,11 @@ describe('deriveKeypairFromSeed', () => {
     expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
 
-  it('should produce correct address for known seed phrase (BIP39+BIP44 standard)', () => {
-    // Standard BIP39 + BIP44 m/44'/501'/0'/0' derivation
+  it('should produce correct address for known seed phrase (Phantom-compatible)', () => {
+    // Standard BIP39 + ed25519-hd-key BIP44 m/44'/501'/0'/0' derivation
+    // This matches Phantom, Solflare, and other standard Solana wallets
     const kp = deriveKeypairFromSeed('describe myself immense snap scorpion basket main steel tree embody legend naive');
-    expect(kp.publicKey).toBe('2EF2FuwGfBbahawJvPKgyQ7Sc55N9BWycDwvMDrnPdvB');
+    expect(kp.publicKey).toBe('8StSXbQycF2BXmDRUNEVCBnR5q7vHT3h62mhT6QSDQmt');
   });
 });
 

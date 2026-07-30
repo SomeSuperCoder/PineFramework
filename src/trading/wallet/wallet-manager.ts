@@ -16,8 +16,7 @@ import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Keypair } from '@solana/web3.js';
-import { mnemonicToSeedSync } from '@scure/bip39';
-import { HDKey } from '@scure/bip32';
+import { derivePath } from 'ed25519-hd-key';
 import { SensitiveData } from './sensitive-data.js';
 
 // ---- Types ----
@@ -182,16 +181,18 @@ export function decryptSeedPhrase(
 
 /**
  * Derive a Solana keypair from a seed phrase.
- * Uses BIP39 mnemonic → seed, then BIP44 path m/44'/501'/0'/0' (Solana).
+ * Uses BIP39 mnemonic → seed, then ed25519-hd-key with BIP44 path m/44'/501'/0'/0'.
+ * Compatible with Phantom, Solflare, and other standard Solana wallets.
  */
 export function deriveKeypairFromSeed(seedPhrase: string): WalletKeypair {
   const normalized = seedPhrase.trim().toLowerCase();
   // BIP39: PBKDF2-HMAC-SHA512 with 2048 iterations → 64-byte seed
-  const seed = mnemonicToSeedSync(normalized);
-  // BIP44: m/44'/501'/0'/0' is the standard Solana derivation path
-  const hdKey = HDKey.fromMasterSeed(seed);
-  const derived = hdKey.derive("m/44'/501'/0'/0'");
-  const keypair = Keypair.fromSeed(derived.privateKey!);
+  const mnemonicBuffer = Buffer.from(normalized.normalize('NFKD'), 'utf8');
+  const saltBuffer = Buffer.from('mnemonic'.normalize('NFKD'), 'utf8');
+  const seed = pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, 'sha512');
+  // ed25519-hd-key: BIP44 m/44'/501'/0'/0' (Solana standard)
+  const { key } = derivePath("m/44'/501'/0'/0'", seed.toString('hex'));
+  const keypair = Keypair.fromSeed(Buffer.from(key, 'hex'));
 
   return {
     publicKey: keypair.publicKey.toBase58(),
