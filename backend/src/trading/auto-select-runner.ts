@@ -22,8 +22,14 @@ export class BybitBarFetcher implements BarFetcher {
     timeframe: string,
     startDate?: number,
     endDate?: number,
+    limit?: number,
   ): Promise<Bar[]> {
-    return fetchBars(symbol, timeframe, startDate, endDate);
+    const bars = await fetchBars(symbol, timeframe, startDate, endDate);
+    // Truncate to limit if specified
+    if (limit && bars.length > limit) {
+      return bars.slice(0, limit);
+    }
+    return bars;
   }
 }
 

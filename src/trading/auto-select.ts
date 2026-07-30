@@ -94,6 +94,7 @@ export interface BarFetcher {
     timeframe: string,
     startDate?: number,
     endDate?: number,
+    limit?: number,
   ): Promise<Bar[]>;
 }
 
@@ -214,7 +215,7 @@ export class AutoMarketSelector {
       try {
         const endDate = Date.now();
         const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
-        bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate);
+        bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate, targetCandles);
 
         console.log(`[auto-select] Fetched ${bars.length} bars for ${key}`);
         // Update with actual fetched count
