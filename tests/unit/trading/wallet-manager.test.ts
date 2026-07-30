@@ -212,6 +212,12 @@ describe('deriveKeypairFromSeed', () => {
     );
     expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
+
+  it('should produce correct address for known seed phrase (BIP39+BIP44 standard)', () => {
+    // Standard BIP39 + BIP44 m/44'/501'/0'/0' derivation
+    const kp = deriveKeypairFromSeed('describe myself immense snap scorpion basket main steel tree embody legend naive');
+    expect(kp.publicKey).toBe('2EF2FuwGfBbahawJvPKgyQ7Sc55N9BWycDwvMDrnPdvB');
+  });
 });
 
 // ---- WalletManager Tests ----

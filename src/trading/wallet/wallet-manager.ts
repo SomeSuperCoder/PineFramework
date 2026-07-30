@@ -16,6 +16,8 @@ import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { Keypair } from '@solana/web3.js';
+import { mnemonicToSeedSync } from '@scure/bip39';
+import { HDKey } from '@scure/bip32';
 import { SensitiveData } from './sensitive-data.js';
 
 // ---- Types ----
@@ -180,14 +182,16 @@ export function decryptSeedPhrase(
 
 /**
  * Derive a Solana keypair from a seed phrase.
- * Uses SHA-512 to derive a 32-byte seed, then Ed25519 via @solana/web3.js.
+ * Uses BIP39 mnemonic → seed, then BIP44 path m/44'/501'/0'/0' (Solana).
  */
 export function deriveKeypairFromSeed(seedPhrase: string): WalletKeypair {
   const normalized = seedPhrase.trim().toLowerCase();
-  // SHA-512 produces 64 bytes; Ed25519 seed requires exactly 32 bytes
-  const hash = createHash('sha512').update(normalized).digest();
-  const seed = new Uint8Array(hash.subarray(0, 32));
-  const keypair = Keypair.fromSeed(seed);
+  // BIP39: PBKDF2-HMAC-SHA512 with 2048 iterations → 64-byte seed
+  const seed = mnemonicToSeedSync(normalized);
+  // BIP44: m/44'/501'/0'/0' is the standard Solana derivation path
+  const hdKey = HDKey.fromMasterSeed(seed);
+  const derived = hdKey.derive("m/44'/501'/0'/0'");
+  const keypair = Keypair.fromSeed(derived.privateKey!);
 
   return {
     publicKey: keypair.publicKey.toBase58(),
