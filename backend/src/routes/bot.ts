@@ -416,6 +416,53 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   });
 
   /**
+   * POST /bot/wallet/preview
+   * Derive public key from seed phrase and fetch USDC balance WITHOUT importing.
+   * Lets user verify wallet before committing.
+   */
+  router.post('/bot/wallet/preview', async (req, res) => {
+    try {
+      const { seedPhrase } = req.body as Record<string, unknown>;
+      if (!seedPhrase || typeof seedPhrase !== 'string') {
+        res.status(400).json({ success: false, error: 'Missing or invalid "seedPhrase"' });
+        return;
+      }
+
+      const words = seedPhrase.trim().split(/\s+/);
+      if (words.length !== 12 && words.length !== 24) {
+        res.status(400).json({ success: false, error: 'Seed phrase must be 12 or 24 words' });
+        return;
+      }
+
+      // Derive public key from seed phrase (without importing)
+      const { deriveKeypairFromSeed } = await import('pine-framework/trading/wallet');
+      const keypair = deriveKeypairFromSeed(seedPhrase.trim());
+      const publicKey = keypair.publicKey;
+
+      // Fetch USDC balance
+      const { Connection, PublicKey } = await import('@solana/web3.js');
+      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+
+      const owner = new PublicKey(publicKey);
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, {
+        mint: USDC_MINT,
+      });
+
+      let balance = 0;
+      if (tokenAccounts.value.length > 0) {
+        const account = tokenAccounts.value[0].account.data.parsed.info.tokenAmount;
+        balance = parseFloat(account.uiAmountString) || 0;
+      }
+
+      res.json({ success: true, publicKey, balance });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ success: false, error: `Failed to preview wallet: ${message}` });
+    }
+  });
+
+  /**
    * DELETE /bot/wallet
    * Remove imported wallet.
    */

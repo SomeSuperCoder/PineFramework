@@ -266,21 +266,52 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   const [password, setPassword] = useState('');
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
-  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
-  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [previewPublicKey, setPreviewPublicKey] = useState<string | null>(null);
+  const [previewBalance, setPreviewBalance] = useState<number | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [importedBalance, setImportedBalance] = useState<number | null>(null);
+  const [importedBalanceLoading, setImportedBalanceLoading] = useState(false);
 
-  const fetchUsdcBalance = async (publicKey: string) => {
-    setBalanceLoading(true);
+  // Fetch balance for already-imported wallet on mount
+  useEffect(() => {
+    if (wallet.hasWallet && wallet.publicKey) {
+      setImportedBalanceLoading(true);
+      fetch(`${backendUrl}/api/bot/wallet/balance`)
+        .then(r => r.json())
+        .then(data => { if (data.success) setImportedBalance(data.balance); })
+        .catch(() => {})
+        .finally(() => setImportedBalanceLoading(false));
+    }
+  }, [wallet.hasWallet, wallet.publicKey, backendUrl]);
+
+  // Fetch preview (public key + balance) when seed phrase changes
+  const fetchPreview = async (phrase: string) => {
+    const words = phrase.trim().split(/\s+/);
+    if (words.length !== 12 && words.length !== 24) {
+      setPreviewPublicKey(null);
+      setPreviewBalance(null);
+      return;
+    }
+    setPreviewLoading(true);
     try {
-      const res = await fetch(`${backendUrl}/api/bot/wallet/balance`);
+      const res = await fetch(`${backendUrl}/api/bot/wallet/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seedPhrase: phrase.trim() }),
+      });
       const data = await res.json();
       if (data.success) {
-        setUsdcBalance(data.balance);
+        setPreviewPublicKey(data.publicKey);
+        setPreviewBalance(data.balance);
+      } else {
+        setPreviewPublicKey(null);
+        setPreviewBalance(null);
       }
     } catch {
-      // Silently fail — balance is informational
+      setPreviewPublicKey(null);
+      setPreviewBalance(null);
     } finally {
-      setBalanceLoading(false);
+      setPreviewLoading(false);
     }
   };
 
@@ -309,8 +340,6 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
         onWalletChange({ hasWallet: true, publicKey: data.publicKey });
         setSeedPhrase('');
         setPassword('');
-        // Fetch USDC balance after successful import
-        fetchUsdcBalance(data.publicKey);
       }
     } catch {
       setError('Network error — is the backend running?');
@@ -343,11 +372,11 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-4)}
           </span>
           <span style={{ color: '#888', fontSize: 11 }}>
-            {balanceLoading ? (
+            {importedBalanceLoading ? (
               'Loading balance...'
-            ) : usdcBalance !== null ? (
+            ) : importedBalance !== null ? (
               <span style={{ color: '#64b5f6' }}>
-                USDC: {usdcBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                USDC: {importedBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             ) : null}
           </span>
@@ -367,7 +396,12 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <textarea
             value={seedPhrase}
-            onChange={(e) => setSeedPhrase(e.target.value)}
+            onChange={(e) => {
+              setSeedPhrase(e.target.value);
+              // Debounced preview fetch
+              const val = e.target.value;
+              setTimeout(() => fetchPreview(val), 500);
+            }}
             placeholder="Paste 12 or 24 word seed phrase..."
             rows={2}
             style={{
@@ -376,6 +410,28 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
               fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
             }}
           />
+
+          {/* Balance preview — shown after valid seed phrase */}
+          {(previewLoading || previewPublicKey) && (
+            <div style={{
+              padding: '8px 10px', background: '#0d1a10', borderRadius: 4,
+              border: '1px solid #333',
+            }}>
+              {previewLoading ? (
+                <span style={{ color: '#888', fontSize: 11 }}>Checking wallet...</span>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ color: '#4caf50', fontSize: 11, fontFamily: 'monospace' }}>
+                    {previewPublicKey?.slice(0, 8)}...{previewPublicKey?.slice(-4)}
+                  </span>
+                  <span style={{ color: '#64b5f6', fontSize: 11 }}>
+                    USDC: {(previewBalance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <input
             type="password"
             value={password}
