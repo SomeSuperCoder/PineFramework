@@ -3,6 +3,129 @@ import { StrategySelector } from './StrategySelector';
 import { ProgressBar } from './ProgressBar';
 import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 
+// ---- Timezone Utilities ----
+
+interface TimezoneGroup {
+  group: string;
+  zones: string[];
+}
+
+/** All IANA timezones grouped by continent/region */
+const TIMEZONE_GROUPS: TimezoneGroup[] = [
+  {
+    group: 'UTC',
+    zones: ['UTC'],
+  },
+  {
+    group: 'America',
+    zones: [
+      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+      'America/Anchorage', 'America/Adak', 'America/Sao_Paulo', 'America/Argentina/Buenos_Aires',
+      'America/Mexico_City', 'America/Bogota', 'America/Lima', 'America/Santiago',
+      'America/Caracas', 'America/Panama', 'America/Havana', 'America/Jamaica',
+      'America/Indiana/Indianapolis', 'America/Detroit', 'America/Phoenix',
+      'America/North_Dakota/Center', 'America/Boise', 'America/Menominee',
+      'America/Kentucky/Louisville', 'America/Kentucky/Monticello', 'America/Toronto',
+      'America/Vancouver', 'America/Edmonton', 'America/Winnipeg', 'America/Halifax',
+      'America/St_Johns', 'America/Godthab', 'America/Montevideo', 'America/Asuncion',
+      'America/La_Paz', 'America/Guayaquil', 'America/Managua', 'America/Costa_Rica',
+      'America/Guatemala', 'America/Tegucigalpa', 'America/El_Salvador', 'America/Manaus',
+      'America/Belem', 'America/Fortaleza', 'America/Recife', 'America/Bahia',
+      'America/Cuiaba', 'America/Campo_Grande', 'America/Porto_Velho', 'America/Boa_Vista',
+      'America/Rio_Branco', 'America/Noronha', 'America/Miquelon', 'America/Nuuk',
+      'America/Scoresbysund', 'America/Danmarkshavn', 'America/Thule',
+    ],
+  },
+  {
+    group: 'Europe',
+    zones: [
+      'Europe/London', 'Europe/Dublin', 'Europe/Paris', 'Europe/Berlin',
+      'Europe/Madrid', 'Europe/Rome', 'Europe/Amsterdam', 'Europe/Brussels',
+      'Europe/Vienna', 'Europe/Zurich', 'Europe/Stockholm', 'Europe/Oslo',
+      'Europe/Copenhagen', 'Europe/Helsinki', 'Europe/Warsaw', 'Europe/Prague',
+      'Europe/Budapest', 'Europe/Bucharest', 'Europe/Sofia', 'Europe/Athens',
+      'Europe/Istanbul', 'Europe/Moscow', 'Europe/Kiev', 'Europe/Kyiv',
+      'Europe/Minsk', 'Europe/Vilnius', 'Europe/Riga', 'Europe/Tallinn',
+      'Europe/Lisbon', 'Europe/Monaco', 'Europe/Luxembourg', 'Europe/Zurich',
+      'Europe/Jersey', 'Europe/Guernsey', 'Europe/Isle_of_Man', 'Europe/Minsk',
+    ],
+  },
+  {
+    group: 'Asia',
+    zones: [
+      'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore',
+      'Asia/Seoul', 'Asia/Taipei', 'Asia/Kolkata', 'Asia/Calcutta',
+      'Asia/Dubai', 'Asia/Riyadh', 'Asia/Qatar', 'Asia/Bahrain',
+      'Asia/Kuwait', 'Asia/Muscat', 'Asia/Aden', 'Asia/Beirut',
+      'Asia/Damascus', 'Asia/Amman', 'Asia/Jerusalem', 'Asia/Tel_Aviv',
+      'Asia/Bangkok', 'Asia/Ho_Chi_Minh', 'Asia/Phnom_Penh', 'Asia/Vientiane',
+      'Asia/Yangon', 'Asia/Kuala_Lumpur', 'Asia/Jakarta', 'Asia/Makassar',
+      'Asia/Jayapura', 'Asia/Manila', 'Asia/Almaty', 'Asia/Bishkek',
+      'Asia/Tashkent', 'Asia/Dushanbe', 'Asia/Kabul', 'Asia/Tehran',
+      'Asia/Baku', 'Asia/Tbilisi', 'Asia/Yerevan', 'Asia/Tbilisi',
+      'Asia/Karachi', 'Asia/Dhaka', 'Asia/Colombo', 'Asia/Kathmandu',
+      'Asia/Thimphu', 'Asia/Ulaanbaatar', 'Asia/Pyongyang', 'Asia/Chongqing',
+      'Asia/Urumqi', 'Asia/Kashmir', 'Asia/Qyzylorda', 'Asia/Aqtau',
+      'Asia/Aqtobe', 'Asia/Oral', 'Asia/Ashgabat', 'Asia/Turkmenistan',
+    ],
+  },
+  {
+    group: 'Africa',
+    zones: [
+      'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg', 'Africa/Nairobi',
+      'Africa/Casablanca', 'Africa/Algiers', 'Africa/Tunis', 'Africa/Tripoli',
+      'Africa/Accra', 'Africa/Addis_Ababa', 'Africa/Dar_es_Salaam', 'Africa/Kampala',
+      'Africa/Kinshasa', 'Africa/Lubumbashi', 'Africa/Khartoum', 'Africa/Juba',
+      'Africa/Maputo', 'Africa/Harare', 'Africa/Lusaka', 'Africa/Blantyre',
+      'Africa/Windhoek', 'Africa/Gaborone', 'Africa/Maseru', 'Africa/Mbabane',
+      'Africa/Freetown', 'Africa/Abidjan', 'Africa/Dakar', 'Africa/Bamako',
+      'Africa/Niamey', 'Africa/Ndjamena', 'Africa/Bangui', 'Africa/Libreville',
+      'Africa/Malabo', 'Africa/Sao_Tome', 'Africa/Bissau', 'Africa/Conakry',
+    ],
+  },
+  {
+    group: 'Australia / Pacific',
+    zones: [
+      'Australia/Sydney', 'Australia/Melbourne', 'Australia/Brisbane', 'Australia/Perth',
+      'Australia/Adelaide', 'Australia/Darwin', 'Australia/Hobart', 'Australia/Lord_Howe',
+      'Australia/Lindeman', 'Australia/Eucla', 'Australia/Broken_Hill', 'Australia/Currie',
+      'Pacific/Auckland', 'Pacific/Chatham', 'Pacific/Fiji', 'Pacific/Guam',
+      'Pacific/Port_Moresby', 'Pacific/Noumea', 'Pacific/Tongatapu', 'Pacific/Apia',
+      'Pacific/Efate', 'Pacific/Galapagos', 'Pacific/Honolulu', 'Pacific/Midway',
+      'Pacific/Niue', 'Pacific/Pago_Pago', 'Pacific/Palau', 'Pacific/Kosrae',
+      'Pacific/Pohnpei', 'Pacific/Tarawa', 'Pacific/Majuro', 'Pacific/Kwajalein',
+      'Pacific/Enderbury', 'Pacific/Kiritimati', 'Pacific/Rarotonga', 'Pacific/Tahiti',
+      'Pacific/Marquesas', 'Pacific/Gambier', 'Pacific/Bora_Bora', 'Pacific/Tahiti',
+    ],
+  },
+];
+
+/** Detect user's timezone via Intl API (OS-level, VPN-proof) */
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/** Get a human-readable label for an IANA timezone */
+function getTimezoneLabel(iana: string): string {
+  try {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: iana,
+      timeZoneName: 'short',
+    });
+    const parts = formatter.formatToParts(now);
+    const tzPart = parts.find(p => p.type === 'timeZoneName');
+    const abbreviation = tzPart?.value ?? '';
+    return abbreviation ? `${iana} (${abbreviation})` : iana;
+  } catch {
+    return iana;
+  }
+}
+
 // ---- Types ----
 
 export type BotStateT = 'Idle' | 'Starting' | 'Running' | 'Stopping' | 'Stopped' | 'Error';
@@ -522,12 +645,22 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
-  const [timezone, setTimezone] = useState('UTC');
+  const [timezone, setTimezone] = useState(() => {
+    const stored = localStorage.getItem('botTimezone');
+    if (stored) return stored;
+    return detectTimezone();
+  });
   const [closeOnLoss, setCloseOnLoss] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
   const [manualOverride, setManualOverride] = useState(false);
   const [manualMaxDailyLoss, setManualMaxDailyLoss] = useState('1.00');
+  const [timezoneFilter, setTimezoneFilter] = useState('');
+
+  // Persist timezone to localStorage
+  useEffect(() => {
+    localStorage.setItem('botTimezone', timezone);
+  }, [timezone]);
 
   const calculatedMaxDailyLoss = calcMaxDailyLoss(usdcBalance ?? 0);
   const maxDailyLoss = manualOverride ? Number(manualMaxDailyLoss) : calculatedMaxDailyLoss;
@@ -649,17 +782,42 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
               </span>
             )}
           </div>
-          <label style={{ color: '#888', fontSize: 11 }}>
+          <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
             Timezone:{' '}
             <input
+              type="text"
+              placeholder="Filter..."
+              value={timezoneFilter}
+              onChange={(e) => setTimezoneFilter(e.target.value)}
+              style={{
+                width: 80, background: '#111128', color: '#e0e0e0',
+                border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
+                fontSize: 10, marginLeft: 4,
+              }}
+            />
+            <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
               style={{
-                width: 100, background: '#111128', color: '#e0e0e0',
+                background: '#111128', color: '#e0e0e0',
                 border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
                 fontSize: 11, marginLeft: 4,
               }}
-            />
+            >
+              {TIMEZONE_GROUPS.map((group) => {
+                const filtered = timezoneFilter
+                  ? group.zones.filter(z => z.toLowerCase().includes(timezoneFilter.toLowerCase()))
+                  : group.zones;
+                if (filtered.length === 0) return null;
+                return (
+                  <optgroup key={group.group} label={group.group}>
+                    {filtered.map((zone) => (
+                      <option key={zone} value={zone}>{getTimezoneLabel(zone)}</option>
+                    ))}
+                  </optgroup>
+                );
+              })}
+            </select>
           </label>
           <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
             <input
@@ -1161,7 +1319,7 @@ function SetupWizard({
                 </div>
                 <div>
                   <span style={{ color: '#888' }}>Timezone: </span>
-                  <span style={{ color: '#e0e0e0' }}>{configValues.timezone}</span>
+                  <span style={{ color: '#e0e0e0' }}>{getTimezoneLabel(configValues.timezone)}</span>
                 </div>
               </>
             )}
