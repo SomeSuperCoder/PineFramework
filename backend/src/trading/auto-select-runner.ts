@@ -49,6 +49,7 @@ export class LiveBacktestRunner implements BacktestRunner {
       sharpeRatio: number;
       profitFactor: number;
       totalPnl: number;
+      totalPnlPercent: number;
       winRate: number;
       totalTrades: number;
       maxDrawdown: number;
@@ -109,6 +110,7 @@ export class LiveBacktestRunner implements BacktestRunner {
           sharpeRatio: metrics.sharpeRatio,
           profitFactor: metrics.profitFactor,
           totalPnl: metrics.totalPnl,
+          totalPnlPercent: metrics.totalPnlPercent,
           winRate: metrics.winRate,
           totalTrades: metrics.totalTrades,
           maxDrawdown: metrics.maxDrawdown,

@@ -26,6 +26,7 @@ export interface CandidateEvaluation {
     sharpeRatio: number;
     profitFactor: number;
     netProfit: number;
+    totalPnlPercent: number;
     winRate: number;
     totalTrades: number;
     maxDrawdown: number;
@@ -114,6 +115,7 @@ export interface BacktestRunner {
       sharpeRatio: number;
       profitFactor: number;
       totalPnl: number;
+      totalPnlPercent: number;
       winRate: number;
       totalTrades: number;
       maxDrawdown: number;
@@ -268,7 +270,7 @@ export class AutoMarketSelector {
         statuses[key] = { phase: 'backtesting', status: 'failed', error };
         failedCount++;
       } else {
-        console.log(`[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnl.toFixed(2)}%`);
+        console.log(`[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnlPercent.toFixed(2)}%`);
         statuses[key] = { phase: 'backtesting', status: 'done' };
         const m = result.metrics;
         evaluations.push({
@@ -277,6 +279,7 @@ export class AutoMarketSelector {
             sharpeRatio: m.sharpeRatio,
             profitFactor: m.profitFactor,
             netProfit: m.totalPnl,
+            totalPnlPercent: m.totalPnlPercent,
             winRate: m.winRate,
             totalTrades: m.totalTrades,
             maxDrawdown: m.maxDrawdown,
