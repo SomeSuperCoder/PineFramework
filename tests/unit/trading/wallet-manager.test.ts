@@ -187,16 +187,30 @@ describe('deriveKeypairFromSeed', () => {
     expect(kp1.publicKey).not.toBe(kp2.publicKey);
   });
 
-  it('should return public key as a string', () => {
+  it('should return public key as valid base58 Solana address', () => {
     const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
     expect(typeof kp.publicKey).toBe('string');
-    expect(kp.publicKey.length).toBeGreaterThan(0);
+    // Base58: 1-9, A-H, J-N, P-Z, a-k, m-z (no 0, O, I, l)
+    expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
 
-  it('should return private key as Uint8Array', () => {
+  it('should return private key as Uint8Array of 64 bytes', () => {
     const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
     expect(kp.privateKey).toBeInstanceOf(Uint8Array);
-    expect(kp.privateKey.length).toBe(32);
+    // Ed25519 secretKey is 64 bytes (32 private + 32 public)
+    expect(kp.privateKey.length).toBe(64);
+  });
+
+  it('should derive from 12-word seed phrase', () => {
+    const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+    expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+  });
+
+  it('should derive from 24-word seed phrase', () => {
+    const kp = deriveKeypairFromSeed(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art'
+    );
+    expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
 });
 
@@ -267,7 +281,8 @@ describe('WalletManager', () => {
     const sd = await manager.getKeypair();
     expect(sd.isDisposed).toBe(false);
     expect(sd.value.publicKey).toBeTruthy();
-    expect(sd.value.privateKey.length).toBe(32);
+    // Ed25519 secretKey is 64 bytes (32 private + 32 public)
+    expect(sd.value.privateKey.length).toBe(64);
 
     // Wipe after test
     sd.dispose();

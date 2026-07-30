@@ -15,6 +15,7 @@ import { createHash, randomBytes, createCipheriv, createDecipheriv, pbkdf2Sync }
 import { readFile, writeFile, unlink, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { Keypair } from '@solana/web3.js';
 import { SensitiveData } from './sensitive-data.js';
 
 // ---- Types ----
@@ -179,17 +180,19 @@ export function decryptSeedPhrase(
 
 /**
  * Derive a Solana keypair from a seed phrase.
- * Uses a simple SHA-256 based derivation (for testing/development;
- * production should use a proper BIP39 + BIP44 derivation path).
+ * Uses SHA-512 to derive a 32-byte seed, then Ed25519 via @solana/web3.js.
  */
 export function deriveKeypairFromSeed(seedPhrase: string): WalletKeypair {
   const normalized = seedPhrase.trim().toLowerCase();
-  const hash = createHash('sha256').update(normalized).digest();
-  const privateKey = new Uint8Array(hash);
-  const publicKeyBytes = createHash('sha256').update(hash).digest();
-  const publicKey = Buffer.from(publicKeyBytes).toString('hex').substring(0, 44);
+  // SHA-512 produces 64 bytes; Ed25519 seed requires exactly 32 bytes
+  const hash = createHash('sha512').update(normalized).digest();
+  const seed = new Uint8Array(hash.subarray(0, 32));
+  const keypair = Keypair.fromSeed(seed);
 
-  return { publicKey, privateKey };
+  return {
+    publicKey: keypair.publicKey.toBase58(),
+    privateKey: keypair.secretKey,
+  };
 }
 
 // ---- Wallet Manager ----
