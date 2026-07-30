@@ -393,11 +393,21 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
       }
 
       // Query USDC balance from Solana mainnet
-      const { Connection, PublicKey } = await import('@solana/web3.js');
-      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-      const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+      // Gracefully handle invalid public key format (e.g., old hex format)
+      let PublicKeyClass;
+      let owner;
+      try {
+        ({ PublicKey: PublicKeyClass } = await import('@solana/web3.js'));
+        owner = new PublicKeyClass(publicKey);
+      } catch {
+        // Invalid public key format — return 0 balance
+        res.json({ success: true, balance: 0 });
+        return;
+      }
 
-      const owner = new PublicKey(publicKey);
+      const { Connection } = await import('@solana/web3.js');
+      const USDC_MINT = new PublicKeyClass('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, {
         mint: USDC_MINT,
       });
