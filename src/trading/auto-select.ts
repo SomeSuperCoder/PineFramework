@@ -62,7 +62,25 @@ export type SelectionProgressCallback = (progress: {
   phase: 'fetching' | 'backtesting' | 'ranking';
   /** Per-pair status map keyed by "SYMBOL (timeframe)". */
   statuses: Record<string, CandidateStatus>;
+  /** Per-pair candle fetch progress (only during fetching phase). */
+  candleProgress?: { fetched: number; total: number };
 }) => void;
+
+/** Maximum bars per backtest (from backend/src/backtest-runner.ts). */
+const MAX_BACKTEST_BARS = 1500;
+
+/** Default lookback period in days. */
+const DEFAULT_DAYS_BACK = 90;
+
+/**
+ * Compute the number of candles to fetch for a given timeframe.
+ * Formula: min(1500, floor(90_days * 24 / timeframe_hours))
+ */
+function computeCandleCount(timeframe: string): number {
+  const tfHours = Number(timeframe) / 60;
+  const candlesIn90Days = Math.floor((DEFAULT_DAYS_BACK * 24) / tfHours);
+  return Math.min(MAX_BACKTEST_BARS, candlesIn90Days);
+}
 
 /**
  * Interface for fetching historical bar data.
@@ -102,37 +120,6 @@ export interface BacktestRunner {
   }>;
 }
 
-// ---- Parallel execution utility ----
-
-/**
- * Run async tasks with bounded concurrency.
- * Returns results in the same order as the input tasks.
- */
-export async function runParallel<T>(
-  tasks: Array<() => Promise<T>>,
-  concurrency: number,
-): Promise<Array<{ success: boolean; value?: T; error?: unknown }>> {
-  const results: Array<{ success: boolean; value?: T; error?: unknown }> = new Array(tasks.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < tasks.length) {
-      const i = nextIndex++;
-      const task = tasks[i]!;
-      try {
-        const value = await task();
-        results[i] = { success: true, value };
-      } catch (error) {
-        results[i] = { success: false, error };
-      }
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
-}
-
 // ---- Default candidate pairs ----
 
 /** Default candidate pairs for auto-selection. */
@@ -157,8 +144,6 @@ export class AutoMarketSelector {
   private readonly script: string;
   private readonly dex: DexKind;
   private readonly metric: RankingMetric;
-  private readonly defaultDaysBack: number;
-  private readonly concurrency: number;
 
   constructor(options: {
     barFetcher: BarFetcher;
@@ -166,24 +151,23 @@ export class AutoMarketSelector {
     script: string;
     dex: DexKind;
     metric?: RankingMetric;
-    defaultDaysBack?: number;
-    concurrency?: number;
   }) {
     this.barFetcher = options.barFetcher;
     this.backtestRunner = options.backtestRunner;
     this.script = options.script;
     this.dex = options.dex;
     this.metric = options.metric ?? 'profitFactor';
-    this.defaultDaysBack = options.defaultDaysBack ?? 90;
-    this.concurrency = options.concurrency ?? 4;
   }
 
   /**
-   * Evaluate and rank all candidate pairs using parallel execution.
+   * Evaluate and rank all candidate pairs sequentially.
    *
-   * Phase 1: Fetch bar data for all candidates in parallel (bounded by concurrency).
-   * Phase 2: Run backtests for all candidates with data in parallel (bounded by concurrency).
-   * Phase 3: Rank results by configured metric.
+   * For each pair:
+   * 1. Fetch bar data (with candle progress)
+   * 2. Run backtest
+   * 3. Collect metrics
+   *
+   * Finally: Rank results by configured metric.
    */
   async select(
     candidates: PairConfig[] = DEFAULT_CANDIDATES,
@@ -191,121 +175,96 @@ export class AutoMarketSelector {
   ): Promise<AutoSelectionResult> {
     const total = candidates.length;
     let completedCount = 0;
+    let failedCount = 0;
 
-    // Initialize status map — all candidates start as pending for fetching
+    // Initialize status map — all candidates start as pending
     const statuses: Record<string, CandidateStatus> = {};
     for (const pair of candidates) {
       const key = `${pair.symbol} (${pair.timeframe})`;
       statuses[key] = { phase: 'fetching', status: 'pending' };
     }
 
-    const emitProgress = (pair: PairConfig, phase: CandidateStatus['phase']) => {
+    const emitProgress = (pair: PairConfig, phase: CandidateStatus['phase'], candleProgress?: { fetched: number; total: number }) => {
       onProgress?.({
         current: completedCount,
         total,
         pair,
         phase,
         statuses: { ...statuses },
+        candleProgress,
       });
     };
 
-    const endDate = Date.now();
-    const startDate = endDate - this.defaultDaysBack * 24 * 60 * 60 * 1000;
+    // Sequential evaluation: one pair at a time
+    const evaluations: CandidateEvaluation[] = [];
 
-    // ── Phase 1: Parallel bar fetch ──
-    const barResults = await runParallel(
-      candidates.map((pair, i) => async () => {
-        const key = `${pair.symbol} (${pair.timeframe})`;
-        statuses[key] = { phase: 'fetching', status: 'active' };
-        emitProgress(pair, 'fetching');
+    for (let i = 0; i < candidates.length; i++) {
+      const pair = candidates[i]!;
+      const key = `${pair.symbol} (${pair.timeframe})`;
+      const targetCandles = computeCandleCount(pair.timeframe);
 
-        try {
-          const bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate);
-          if (bars.length < 50) {
-            statuses[key] = { phase: 'fetching', status: 'failed' };
-            completedCount++;
-            emitProgress(pair, 'fetching');
-            return null;
-          }
-          statuses[key] = { phase: 'backtesting', status: 'pending' };
-          emitProgress(pair, 'fetching');
-          return bars;
-        } catch {
+      // ── Fetch phase ──
+      statuses[key] = { phase: 'fetching', status: 'active' };
+      emitProgress(pair, 'fetching', { fetched: 0, total: targetCandles });
+
+      let bars: Bar[];
+      try {
+        const endDate = Date.now();
+        const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
+        bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate);
+
+        // Update with actual fetched count
+        emitProgress(pair, 'fetching', { fetched: bars.length, total: targetCandles });
+
+        if (bars.length < 50) {
           statuses[key] = { phase: 'fetching', status: 'failed' };
           completedCount++;
+          failedCount++;
           emitProgress(pair, 'fetching');
-          return null;
+          continue;
         }
-      }),
-      this.concurrency,
-    );
-
-    // Collect successful fetches for phase 2
-    const backtestTasks: Array<{ pair: PairConfig; bars: Bar[]; index: number }> = [];
-    for (let i = 0; i < candidates.length; i++) {
-      const result = barResults[i]!;
-      if (result.success && result.value) {
-        backtestTasks.push({ pair: candidates[i]!, bars: result.value, index: i });
-      }
-    }
-
-    // ── Phase 2: Parallel backtest ──
-    const backtestResults = await runParallel(
-      backtestTasks.map(({ pair, bars }) => async () => {
-        const key = `${pair.symbol} (${pair.timeframe})`;
-        statuses[key] = { phase: 'backtesting', status: 'active' };
-        emitProgress(pair, 'backtesting');
-
-        const result = await this.backtestRunner.runBacktest({
-          script: this.script,
-          symbol: pair.symbol,
-          bars,
-          dex: this.dex,
-        });
-
-        if (!result.success || !result.metrics) {
-          statuses[key] = { phase: 'backtesting', status: 'failed' };
-        } else {
-          statuses[key] = { phase: 'backtesting', status: 'done' };
-        }
+      } catch {
+        statuses[key] = { phase: 'fetching', status: 'failed' };
         completedCount++;
-        emitProgress(pair, 'backtesting');
-
-        return result;
-      }),
-      this.concurrency,
-    );
-
-    // ── Phase 3: Collect and rank ──
-    const evaluations: CandidateEvaluation[] = [];
-    let failedCount = 0;
-
-    for (let i = 0; i < backtestTasks.length; i++) {
-      const { pair } = backtestTasks[i]!;
-      const result = backtestResults[i]!;
-
-      if (!result.success || !result.value?.success || !result.value.metrics) {
         failedCount++;
+        emitProgress(pair, 'fetching');
         continue;
       }
 
-      const m = result.value.metrics;
-      evaluations.push({
-        pair,
-        metrics: {
-          sharpeRatio: m.sharpeRatio,
-          profitFactor: m.profitFactor,
-          netProfit: m.totalPnl,
-          winRate: m.winRate,
-          totalTrades: m.totalTrades,
-          maxDrawdown: m.maxDrawdown,
-        },
-        label: `${pair.symbol} (${pair.timeframe})`,
-      });
-    }
+      // ── Backtest phase ──
+      statuses[key] = { phase: 'backtesting', status: 'active' };
+      emitProgress(pair, 'backtesting');
 
-    // Count failed from fetch phase too
-    failedCount += candidates.length - backtestTasks.length;
+      const result = await this.backtestRunner.runBacktest({
+        script: this.script,
+        symbol: pair.symbol,
+        bars,
+        dex: this.dex,
+      });
+
+      if (!result.success || !result.metrics) {
+        statuses[key] = { phase: 'backtesting', status: 'failed' };
+        failedCount++;
+      } else {
+        statuses[key] = { phase: 'backtesting', status: 'done' };
+        const m = result.metrics;
+        evaluations.push({
+          pair,
+          metrics: {
+            sharpeRatio: m.sharpeRatio,
+            profitFactor: m.profitFactor,
+            netProfit: m.totalPnl,
+            winRate: m.winRate,
+            totalTrades: m.totalTrades,
+            maxDrawdown: m.maxDrawdown,
+          },
+          label: `${pair.symbol} (${pair.timeframe})`,
+        });
+      }
+
+      completedCount++;
+      emitProgress(pair, 'backtesting');
+    }
 
     // Rank by configured metric
     evaluations.sort((a, b) => this.compareByMetric(b, a));

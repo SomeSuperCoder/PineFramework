@@ -168,9 +168,13 @@ function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
 function AutoSelectGrid({
   statuses,
   ranking,
+  candleProgress,
+  currentPair,
 }: {
   statuses: Record<string, CandidateStatus>;
   ranking?: Array<{ label: string; metrics: Record<string, number> }>;
+  candleProgress?: { fetched: number; total: number };
+  currentPair?: string;
 }) {
   const entries = Object.entries(statuses);
   return (
@@ -190,14 +194,34 @@ function AutoSelectGrid({
         <div style={{ color: '#666', fontWeight: 600 }}>Metric</div>
         {entries.map(([key, st]) => {
           const rankEntry = ranking?.find(r => r.label === key);
+          const isCurrentPair = currentPair === key && st.status === 'active';
+          const showCandleProgress = isCurrentPair && st.phase === 'fetching' && candleProgress;
+
           return (
             <React.Fragment key={key}>
               <div style={{ color: '#e0e0e0' }}>{key}</div>
-              <div style={{ color: '#888' }}>{st.phase}</div>
+              <div style={{ color: '#888' }}>
+                {showCandleProgress
+                  ? `${candleProgress.fetched}/${candleProgress.total}`
+                  : st.phase}
+              </div>
               <div><StatusIcon status={st.status} /></div>
               <div style={{ color: '#888' }}>
                 {rankEntry?.metrics.profitFactor != null && `PF ${rankEntry.metrics.profitFactor.toFixed(1)}`}
               </div>
+              {showCandleProgress && (
+                <div style={{ gridColumn: '1 / -1', marginTop: 2 }}>
+                  <div style={{
+                    width: '100%', height: 4, background: '#222', borderRadius: 2, overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${(candleProgress.fetched / Math.max(candleProgress.total, 1)) * 100}%`,
+                      height: '100%', background: '#2196f3', borderRadius: 2,
+                      transition: 'width 0.2s ease',
+                    }} />
+                  </div>
+                </div>
+              )}
             </React.Fragment>
           );
         })}
@@ -677,7 +701,7 @@ function SetupWizard({
   initialWallet: WalletInfo;
   onStart: () => Promise<void>;
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }> } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number } } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
@@ -807,7 +831,7 @@ function SetupWizard({
             Auto-Select Backtest
           </div>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
-            Evaluating all candidate pairs with parallel backtests...
+            Evaluating candidate pairs sequentially...
           </div>
 
           {/* Auto-Select Progress */}
@@ -823,7 +847,11 @@ function SetupWizard({
                 status="running"
               />
               <div style={{ marginTop: 8 }}>
-                <AutoSelectGrid statuses={autoSelectProgress.statuses} />
+                <AutoSelectGrid
+                  statuses={autoSelectProgress.statuses}
+                  candleProgress={autoSelectProgress.candleProgress}
+                  currentPair={`${autoSelectProgress.pair.symbol} (${autoSelectProgress.pair.timeframe})`}
+                />
               </div>
             </div>
           )}
@@ -1106,7 +1134,7 @@ export function LiveDashboard({
   status: BotStatusSnapshot;
   logs: LogEntry[];
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }> } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number } } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;

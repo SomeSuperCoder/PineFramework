@@ -252,7 +252,6 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         script: config.strategySource,
         dex: config.dex,
         metric: config.autoSelectMetric ?? 'profitFactor',
-        concurrency: 4,
       });
 
       const result = await selector.select(deps.candidates, (progress: any) => {
