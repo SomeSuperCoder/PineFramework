@@ -628,7 +628,6 @@ export interface ConfigValues {
   dex: string;
   maxDailyLoss: number;
   timezone: string;
-  closeOnLoss: boolean;
 }
 
 /** Calculate max daily loss: min($1, 10% × USDC balance) */
@@ -650,7 +649,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
     if (stored) return stored;
     return detectTimezone();
   });
-  const [closeOnLoss, setCloseOnLoss] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
   const [manualOverride, setManualOverride] = useState(false);
@@ -684,7 +682,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
         body: JSON.stringify({
           strategySource: strategySource.trim(),
           dex,
-          risk: { maxDailyLoss, dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
+          risk: { maxDailyLoss },
           autoSelect: true,
         }),
       });
@@ -707,7 +705,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
           dex,
           maxDailyLoss,
           timezone,
-          closeOnLoss,
         });
         onConfigured();
       }
@@ -818,14 +815,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
                 );
               })}
             </select>
-          </label>
-          <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input
-              type="checkbox"
-              checked={closeOnLoss}
-              onChange={(e) => setCloseOnLoss(e.target.checked)}
-            />
-            Close all on loss
           </label>
         </div>
         {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}

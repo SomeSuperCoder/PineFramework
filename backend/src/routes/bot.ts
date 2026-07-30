@@ -186,10 +186,6 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         res.status(400).json({ success: false, error: '"risk.maxDailyLoss" must be a non-negative number' });
         return;
       }
-      if (typeof riskObj.dailyLossTimezone !== 'string') {
-        res.status(400).json({ success: false, error: '"risk.dailyLossTimezone" must be a string' });
-        return;
-      }
 
       const config: BotConfig = {
         strategySource: strategySource as string,
@@ -197,8 +193,6 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         ...(Array.isArray(pairs) && pairs.length > 0 ? { pairs } : {}),
         risk: {
           maxDailyLoss: riskObj.maxDailyLoss as number,
-          dailyLossTimezone: riskObj.dailyLossTimezone as string,
-          closeOnDailyLoss: riskObj.closeOnDailyLoss === true,
         },
         walletPublicKey: typeof walletPublicKey === 'string' ? walletPublicKey : undefined,
         autoSelect: autoSelect === true,

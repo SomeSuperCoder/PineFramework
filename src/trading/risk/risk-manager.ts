@@ -2,7 +2,8 @@
  * RiskManager — combines all risk controls for the trading bot.
  *
  * Integrates:
- * - Daily stop loss
+ * - Rolling 24h loss guard (mandatory safety feature)
+ * - Daily stop loss (calendar-day tracking)
  * - Emergency stop
  * - Safe shutdown coordination
  *
@@ -11,7 +12,7 @@
 
 import { DailyStopLoss } from './daily-stop-loss.js';
 import type { DailyStopLossConfig } from './daily-stop-loss.js';
-import type { BotConfig } from '../types.js';
+import { RollingLossGuard } from './rolling-loss-guard.js';
 
 export interface RiskManagerConfig {
   dailyLoss: DailyStopLossConfig;
@@ -22,6 +23,7 @@ export interface RiskManagerConfig {
 export type RiskEventType =
   | 'daily_loss_breached'
   | 'daily_loss_reset'
+  | 'rolling_loss_breached'
   | 'emergency_stop'
   | 'safe_shutdown'
   | 'entry_blocked';
@@ -37,6 +39,7 @@ export type RiskEventHandler = (event: RiskEvent) => void;
 
 export class RiskManager {
   private dailyStopLoss: DailyStopLoss;
+  private rollingGuard: RollingLossGuard;
   private config: RiskManagerConfig;
   private listeners: RiskEventHandler[] = [];
   private _emergencyStopTriggered = false;
@@ -45,16 +48,27 @@ export class RiskManager {
   constructor(config: RiskManagerConfig) {
     this.config = config;
     this.dailyStopLoss = new DailyStopLoss(config.dailyLoss);
+    this.rollingGuard = new RollingLossGuard();
   }
 
-  /** Whether daily loss has been breached. */
+  /** Whether daily loss has been breached (calendar day). */
   get isDailyLossBreached(): boolean {
     return this.dailyStopLoss.isBreached;
   }
 
-  /** Current daily realized loss. */
+  /** Current daily realized loss (calendar day). */
   get dailyLoss(): number {
     return this.dailyStopLoss.currentLoss;
+  }
+
+  /** Current rolling 24h loss. */
+  get rollingLoss(): number {
+    return this.rollingGuard.totalLoss();
+  }
+
+  /** Rolling 24h loss breached. */
+  get isRollingLossBreached(): boolean {
+    return this.rollingGuard.isBreached(this.config.dailyLoss.maxDailyLoss);
   }
 
   /** Whether emergency stop has been triggered. */
@@ -77,34 +91,59 @@ export class RiskManager {
 
   /**
    * Record a trade's realized PnL. Returns whether entries should be blocked.
+   * Checks both calendar-day and rolling 24h loss limits.
    */
   recordTrade(pnl: number): boolean {
-    const breached = this.dailyStopLoss.recordTrade(pnl);
-    if (breached) {
+    const now = Date.now();
+
+    // Record in rolling 24h guard
+    this.rollingGuard.addTrade(pnl, now);
+
+    // Check rolling 24h breach (mandatory safety feature)
+    const rollingBreached = this.rollingGuard.isBreached(this.config.dailyLoss.maxDailyLoss, now);
+    if (rollingBreached) {
+      this.emit({
+        type: 'rolling_loss_breached',
+        timestamp: now,
+        message: `Rolling 24h loss limit of $${this.config.dailyLoss.maxDailyLoss} reached (current: $${this.rollingGuard.totalLoss().toFixed(2)})`,
+        data: {
+          loss: this.rollingGuard.totalLoss(),
+          maxLoss: this.config.dailyLoss.maxDailyLoss,
+          tradeCount: this.rollingGuard.tradeCount(),
+          totalPnl: this.rollingGuard.totalPnl(),
+        },
+      });
+    }
+
+    // Record in calendar-day stop loss
+    const dailyBreached = this.dailyStopLoss.recordTrade(pnl);
+    if (dailyBreached) {
       this.emit({
         type: 'daily_loss_breached',
-        timestamp: Date.now(),
-        message: `Daily loss limit of ${this.dailyStopLoss.maxLoss} reached (current: ${this.dailyStopLoss.currentLoss})`,
+        timestamp: now,
+        message: `Daily loss limit of $${this.dailyStopLoss.maxLoss} reached (current: $${this.dailyStopLoss.currentLoss})`,
         data: { loss: this.dailyStopLoss.currentLoss, maxLoss: this.dailyStopLoss.maxLoss },
       });
     }
 
-    if (this.dailyStopLoss.currentLoss === 0 && !breached) {
+    if (this.dailyStopLoss.currentLoss === 0 && !dailyBreached) {
       this.emit({
         type: 'daily_loss_reset',
-        timestamp: Date.now(),
+        timestamp: now,
         message: 'Daily loss counter has been reset for new trading day',
       });
     }
 
-    return breached;
+    return rollingBreached || dailyBreached;
   }
 
   /**
    * Check whether a new position entry is allowed.
    */
   canEnterPosition(): boolean {
-    const allowed = this.dailyStopLoss.canEnterPosition() && !this._emergencyStopTriggered;
+    const rollingAllowed = this.rollingGuard.canEnterPosition(this.config.dailyLoss.maxDailyLoss);
+    const dailyAllowed = this.dailyStopLoss.canEnterPosition();
+    const allowed = rollingAllowed && dailyAllowed && !this._emergencyStopTriggered;
 
     if (!allowed) {
       this.emit({
@@ -112,7 +151,8 @@ export class RiskManager {
         timestamp: Date.now(),
         message: 'Position entry blocked by risk controls',
         data: {
-          dailyLossBreached: this.dailyStopLoss.isBreached,
+          rollingLossBreached: !rollingAllowed,
+          dailyLossBreached: !dailyAllowed,
           emergencyStop: this._emergencyStopTriggered,
         },
       });
@@ -174,6 +214,11 @@ export class RiskManager {
   /** Update daily stop loss configuration. */
   updateDailyLossConfig(config: Partial<DailyStopLossConfig>): void {
     this.dailyStopLoss.updateConfig(config);
+  }
+
+  /** Clear rolling guard buffer (e.g., after bot restart). */
+  clearRollingGuard(): void {
+    this.rollingGuard.clear();
   }
 
   private emit(event: RiskEvent): void {

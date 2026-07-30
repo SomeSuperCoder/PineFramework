@@ -137,17 +137,19 @@ export class TradingTelegramBot {
     const message =
       '*🚨 Emergency Stop*\n\n'
       + `Source: \`${escapeMarkdown(source)}\`\n`
-      + 'All positions are being closed.';
+      + 'All positions are being closed.\n'
+      + 'Bot will not open new positions until restarted.';
 
     await this.broadcast(message);
   }
 
   async notifyDailyLossTriggered(loss: number, maxLoss: number): Promise<void> {
     const message =
-      '*⚠️ Daily Stop Loss Triggered*\n\n'
+      '*🚨 ROLLING 24H LOSS LIMIT BREACHED*\n\n'
       + `Loss: \`$${loss.toFixed(2)}\`\n`
-      + `Limit: \`$${maxLoss.toFixed(2)}\`\n`
-      + 'No new positions will be opened.';
+      + `Limit: \`$${maxLoss.toFixed(2)}\`\n\n`
+      + 'Emergency stop triggered. All positions closed.\n'
+      + 'Bot will not open new positions until restarted.';
 
     await this.broadcast(message);
   }

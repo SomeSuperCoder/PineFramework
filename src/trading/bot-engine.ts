@@ -11,6 +11,8 @@ import { BotState, ErrorSeverity } from './types.js';
 import type { BotConfig, BotError, StateTransition, BotStatusSnapshot, PositionSummary, PairConfig } from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
+import type { RiskManager } from './risk/risk-manager.js';
+import type { TradingTelegramBot } from './telegram-bot.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -45,6 +47,14 @@ export interface BotEngineOptions {
    * If not provided, auto-selection will throw an error when enabled.
    */
   onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
+  /**
+   * Optional risk manager for tracking losses and triggering safety stops.
+   */
+  riskManager?: RiskManager;
+  /**
+   * Optional Telegram bot for sending alerts.
+   */
+  telegramBot?: TradingTelegramBot;
 }
 
 /**
@@ -55,6 +65,8 @@ export class BotEngine {
   private readonly stateMachine: StateMachine<BotState>;
   private readonly logger: BotLogger;
   private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
+  private readonly riskManager?: RiskManager;
+  private readonly telegramBot?: TradingTelegramBot;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -66,6 +78,8 @@ export class BotEngine {
   constructor(options?: BotEngineOptions) {
     this.logger = options?.logger ?? consoleLogger;
     this.onAutoSelect = options?.onAutoSelect;
+    this.riskManager = options?.riskManager;
+    this.telegramBot = options?.telegramBot;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -73,6 +87,15 @@ export class BotEngine {
     };
 
     this.stateMachine = createBotStateMachine(onChange);
+
+    // Wire risk manager events if available
+    if (this.riskManager) {
+      this.riskManager.onEvent((event) => {
+        if (event.type === 'rolling_loss_breached') {
+          this.handleRollingLossBreached(event);
+        }
+      });
+    }
   }
 
   // ---- Public accessors ----
@@ -228,6 +251,27 @@ export class BotEngine {
       const message = err instanceof Error ? err.message : String(err);
       this.recordError('EMERGENCY_STOP_FAILED', message, ErrorSeverity.Fatal);
       await this.stateMachine.transition(BotState.Error, `Emergency stop failed: ${message}`);
+    }
+  }
+
+  /**
+   * Handle rolling 24h loss breach — trigger emergency stop and send alerts.
+   */
+  private async handleRollingLossBreached(event: { timestamp: number; message: string; data?: Record<string, unknown> }): Promise<void> {
+    this.logger.error('ROLLING 24H LOSS LIMIT BREACHED', event.data);
+
+    // Send Telegram alert
+    if (this.telegramBot) {
+      const loss = (event.data?.loss as number) ?? 0;
+      const maxLoss = (event.data?.maxLoss as number) ?? 0;
+
+      await this.telegramBot.notifyDailyLossTriggered(loss, maxLoss);
+      await this.telegramBot.notifyEmergencyStop('rolling_24h_loss');
+    }
+
+    // Trigger emergency stop if bot is running
+    if (this.state === BotState.Running) {
+      await this.emergencyStop();
     }
   }
 

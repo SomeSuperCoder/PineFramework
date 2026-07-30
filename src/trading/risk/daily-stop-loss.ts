@@ -42,8 +42,6 @@ export interface DailyStopLossConfig {
   maxDailyLoss: number;
   /** Timezone for daily reset (e.g., "America/New_York", "UTC"). */
   timezone: string;
-  /** Whether to close all positions when loss limit is hit. */
-  closeOnLoss: boolean;
 }
 
 /**

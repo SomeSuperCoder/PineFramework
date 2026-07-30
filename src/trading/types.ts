@@ -90,10 +90,6 @@ export interface PairConfig {
 export interface RiskConfig {
   /** Maximum daily realized loss in quote currency. 0 = unlimited. */
   maxDailyLoss: number;
-  /** Timezone for daily loss reset (e.g., "America/New_York", "UTC"). */
-  dailyLossTimezone: string;
-  /** Whether to close all positions when daily loss is hit. */
-  closeOnDailyLoss: boolean;
 }
 
 /**
