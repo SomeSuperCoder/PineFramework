@@ -67,6 +67,8 @@ export type SelectionProgressCallback = (progress: {
   statuses: Record<string, CandidateStatus>;
   /** Per-pair candle fetch progress (only during fetching phase). */
   candleProgress?: { fetched: number; total: number };
+  /** Partial ranking of completed evaluations so far. */
+  ranking?: Array<{ label: string; metrics: Record<string, number> }>;
 }) => void;
 
 /** Maximum bars per backtest (from backend/src/backtest-runner.ts). */
@@ -199,6 +201,7 @@ export class AutoMarketSelector {
         phase,
         statuses: { ...statuses },
         candleProgress,
+        ranking: evaluations.map(e => ({ label: e.label, metrics: e.metrics })),
       });
     };
 

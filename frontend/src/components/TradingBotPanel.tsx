@@ -731,7 +731,7 @@ function SetupWizard({
   initialWallet: WalletInfo;
   onStart: () => Promise<void>;
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number } } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number }; ranking?: Array<{ label: string; metrics: Record<string, number> }> } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
@@ -916,6 +916,7 @@ function SetupWizard({
               <div style={{ marginTop: 8 }}>
                 <AutoSelectGrid
                   statuses={autoSelectProgress.statuses}
+                  ranking={autoSelectProgress.ranking}
                   candleProgress={autoSelectProgress.candleProgress}
                   currentPair={`${autoSelectProgress.pair.symbol} (${autoSelectProgress.pair.timeframe})`}
                 />
@@ -1201,7 +1202,7 @@ export function LiveDashboard({
   status: BotStatusSnapshot;
   logs: LogEntry[];
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number } } | null;
+  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number }; ranking?: Array<{ label: string; metrics: Record<string, number> }> } | null;
   autoSelectResult?: {
     best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
     ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;

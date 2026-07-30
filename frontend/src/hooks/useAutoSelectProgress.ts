@@ -7,6 +7,7 @@ export type AutoSelectProgress = {
   phase: string;
   statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed'; error?: string }>;
   candleProgress?: { fetched: number; total: number };
+  ranking?: Array<{ label: string; metrics: Record<string, number> }>;
 } | null;
 
 export type AutoSelectResult = {
