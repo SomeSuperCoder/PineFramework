@@ -97,7 +97,7 @@ export function ProgressBar({
         )}
       </div>
       <div style={{ textAlign: 'center', marginTop: '4px', color: '#aaa', fontSize: '12px' }}>
-        {isRunning ? `Processing... ${displayProgress}%` : `${phase || 'Starting'}...`}
+        {isRunning ? `Processing... ${Math.round(displayProgress)}%` : `${phase || 'Starting'}...`}
       </div>
     </div>
   );
