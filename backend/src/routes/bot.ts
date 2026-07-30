@@ -274,8 +274,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         },
       });
 
-      // Store result in engine config for later use by start()
-      engine.configure({ ...config, pairs: [result.best.pair] });
+      // Store result in engine config for later use by start().
+      // Disable autoSelect so engine.start() won't re-run the full backtest.
+      engine.configure({ ...config, autoSelect: false, pairs: [result.best.pair] });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Broadcast error if possible

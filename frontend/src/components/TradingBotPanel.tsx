@@ -1035,6 +1035,13 @@ function SetupWizard({
     localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
   }, [selectedTimeframes]);
 
+  // Auto-advance from Backtest to Review when auto-select completes
+  useEffect(() => {
+    if (step === 'backtest' && autoSelectResult) {
+      setStep('review');
+    }
+  }, [step, autoSelectResult]);
+
   const handleStart = async () => {
     setStarting(true);
     setStartError('');
@@ -1527,8 +1534,12 @@ export function LiveDashboard({
   const sendCommand = async (command: string) => {
     setLoading(true);
     try {
-      await fetch(`${backendUrl}/api/bot/${command}`, { method: 'POST' });
-    } catch { /* ignore */ } finally {
+      const res = await fetch(`${backendUrl}/api/bot/${command}`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Bot ${command} failed (${res.status})`);
+      }
+    } finally {
       setLoading(false);
     }
   };
