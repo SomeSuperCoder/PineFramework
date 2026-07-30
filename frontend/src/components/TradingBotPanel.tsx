@@ -989,13 +989,23 @@ export function TradingBotControlButton({
 function SetupWizard({
   backendUrl,
   initialWallet,
+  persistedConfig,
   onStart,
   onClose,
   autoSelectProgress,
   autoSelectResult,
+  onConfigReset,
 }: {
   backendUrl: string;
   initialWallet: WalletInfo;
+  persistedConfig?: {
+    strategySource: string;
+    dex: string;
+    risk: { maxDailyLoss: number };
+    autoSelect?: boolean;
+    pairs?: Array<{ symbol: string; timeframe: string }>;
+    walletPublicKey?: string;
+  } | null;
   onStart: () => Promise<void>;
   onClose: () => void;
   autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number }; ranking?: Array<{ label: string; metrics: Record<string, number> }> } | null;
@@ -1005,18 +1015,48 @@ function SetupWizard({
     evaluatedCount: number;
     failedCount: number;
   } | null;
+  onConfigReset?: () => void;
 }) {
-  const [step, setStep] = useState<'wallet' | 'config' | 'backtest' | 'review'>(
-    initialWallet.hasWallet ? 'config' : 'wallet'
-  );
+  // Determine initial step: if config exists AND wallet exists, go to review
+  const getInitialStep = (): 'wallet' | 'config' | 'backtest' | 'review' => {
+    if (persistedConfig && initialWallet.hasWallet) {
+      return 'review';
+    }
+    return initialWallet.hasWallet ? 'config' : 'wallet';
+  };
+
+  const [step, setStep] = useState<'wallet' | 'config' | 'backtest' | 'review'>(getInitialStep);
   const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
-  const [configValues, setConfigValues] = useState<ConfigValues | null>(null);
+  const [configValues, setConfigValues] = useState<ConfigValues | null>(() => {
+    // Initialize configValues from persisted config if available
+    if (persistedConfig) {
+      return {
+        strategySource: persistedConfig.strategySource,
+        dex: persistedConfig.dex,
+        maxDailyLoss: persistedConfig.risk.maxDailyLoss,
+        timezone: (() => {
+          const stored = localStorage.getItem('botTimezone');
+          return stored || detectTimezone();
+        })(),
+      };
+    }
+    return null;
+  });
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
   const [selectedTimeframes, setSelectedTimeframes] = useState<string[]>(() => {
     const saved = localStorage.getItem('autoSelectTimeframes');
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
   });
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState('');
+
+  // When persisted config loads after mount (e.g. after bot stops), advance to review
+  useEffect(() => {
+    if (persistedConfig && initialWallet.hasWallet && step === 'config') {
+      setStep('review');
+    }
+  }, [persistedConfig, initialWallet.hasWallet, step]);
 
   // Balance from wallet info or fetched from backend
   const [usdcBalance, setUsdcBalance] = useState<number | null>(wallet.usdcBalance ?? null);
@@ -1051,6 +1091,41 @@ function SetupWizard({
       setStartError('Failed to start bot');
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleResetConfig = async (removeWallet: boolean) => {
+    const confirmMessage = removeWallet
+      ? 'Reset everything? This will remove your wallet and all configuration.'
+      : 'Reset configuration? Your wallet will be kept.';
+    if (!confirm(confirmMessage)) return;
+
+    setResetting(true);
+    setResetError('');
+    try {
+      const res = await fetch(`${backendUrl}/api/bot/config`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeWallet }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Reset failed');
+      }
+      // Clear local state
+      setConfigValues(null);
+      onConfigReset?.();
+      // Go to appropriate step
+      if (removeWallet) {
+        setWallet({ hasWallet: false });
+        setStep('wallet');
+      } else {
+        setStep('config');
+      }
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -1300,7 +1375,7 @@ function SetupWizard({
                 <div>
                   <span style={{ color: '#888' }}>Selected Pair: </span>
                   <span style={{ color: '#4caf50', fontWeight: 600 }}>
-                    {autoSelectResult?.best?.label ?? 'Pending...'}
+                    {autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
                   </span>
                 </div>
                 {autoSelectResult && (
@@ -1324,6 +1399,35 @@ function SetupWizard({
           {startError && (
             <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{startError}</div>
           )}
+          {resetError && (
+            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{resetError}</div>
+          )}
+
+          {/* Reset buttons */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: '1px solid #1a1a2e', paddingTop: 12 }}>
+            <button
+              onClick={() => handleResetConfig(false)}
+              disabled={resetting}
+              style={{
+                padding: '4px 10px', background: 'transparent', color: '#ff9800',
+                border: '1px solid #ff9800', borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
+                fontSize: 10,
+              }}
+            >
+              {resetting ? 'Resetting...' : 'Reset Config'}
+            </button>
+            <button
+              onClick={() => handleResetConfig(true)}
+              disabled={resetting}
+              style={{
+                padding: '4px 10px', background: 'transparent', color: '#e94560',
+                border: '1px solid #e94560', borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
+                fontSize: 10,
+              }}
+            >
+              Reset Everything
+            </button>
+          </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
             <button
@@ -1505,6 +1609,14 @@ export function LiveDashboard({
   });
   const [walletLocked, setWalletLocked] = useState(false);
   const [walletLoaded, setWalletLoaded] = useState(false);
+  const [persistedConfig, setPersistedConfig] = useState<{
+    strategySource: string;
+    dex: string;
+    risk: { maxDailyLoss: number };
+    autoSelect?: boolean;
+    pairs?: Array<{ symbol: string; timeframe: string }>;
+    walletPublicKey?: string;
+  } | null>(null);
   const [pinnedToBottom, setPinnedToBottom] = useState(() => {
     return localStorage.getItem('pine-bot-dashboard-pinned') === 'true';
   });
@@ -1512,19 +1624,32 @@ export function LiveDashboard({
 
   // Fetch wallet status on mount — don't assume anything until we know
   useEffect(() => {
-    fetch(`${backendUrl}/api/bot/wallet/status`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.success) {
-          setWallet({ hasWallet: data.hasWallet, publicKey: data.publicKey });
-          setWalletLocked(data.locked);
-        }
-      })
-      .catch((err) => {
-        console.error('[LiveDashboard] Failed to fetch wallet status:', err);
-      })
-      .finally(() => setWalletLoaded(true));
+    Promise.all([
+      fetch(`${backendUrl}/api/bot/wallet/status`).then(r => r.json()),
+      fetch(`${backendUrl}/api/bot/config`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([walletData, configData]) => {
+      if (walletData.success) {
+        setWallet({ hasWallet: walletData.hasWallet, publicKey: walletData.publicKey });
+        setWalletLocked(walletData.locked);
+      }
+      if (configData) {
+        setPersistedConfig(configData);
+      }
+    }).catch((err) => {
+      console.error('[LiveDashboard] Failed to fetch wallet/config status:', err);
+    }).finally(() => setWalletLoaded(true));
   }, [backendUrl]);
+
+  // Re-fetch persisted config when bot transitions to idle/stopped
+  // This ensures the SetupWizard always has the latest config from disk
+  useEffect(() => {
+    if (status.state === 'Idle' || status.state === 'Stopped') {
+      fetch(`${backendUrl}/api/bot/config`)
+        .then(r => r.ok ? r.json() : null)
+        .then(config => setPersistedConfig(config))
+        .catch(() => setPersistedConfig(null));
+    }
+  }, [status.state, backendUrl]);
 
   // Auto-scroll logs
   useEffect(() => {
@@ -1699,14 +1824,16 @@ export function LiveDashboard({
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
             <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
-              <SetupWizard
-                backendUrl={backendUrl}
-                initialWallet={wallet}
-                onStart={async () => { await sendCommand('start'); }}
-                onClose={onClose}
-                autoSelectProgress={autoSelectProgress}
-                autoSelectResult={autoSelectResult}
-              />
+          <SetupWizard
+            backendUrl={backendUrl}
+            initialWallet={wallet}
+            persistedConfig={persistedConfig}
+            onStart={async () => { await sendCommand('start'); }}
+            onClose={onClose}
+            autoSelectProgress={autoSelectProgress}
+            autoSelectResult={autoSelectResult}
+            onConfigReset={() => setPersistedConfig(null)}
+          />
             </div>
           </div>
         )}

@@ -17,6 +17,7 @@ import { createIndicatorsRouter } from './routes/indicators.js';
 import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
 import { createBotRouter } from './routes/bot.js';
+import { BotConfigStore } from 'pine-framework/trading/config-store';
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
@@ -204,10 +205,25 @@ if (ENABLE_TRADING_BOT) {
     process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
   );
 
+  // Config store — persist bot configuration across restarts
+  const configStore = new BotConfigStore(DATA_DIR);
+
+  // Load persisted config on startup
+  const savedConfig = configStore.load();
+  if (savedConfig) {
+    try {
+      botEngine.configure(savedConfig);
+      logger.info('Loaded persisted bot config');
+    } catch (err) {
+      logger.warn({ err }, 'Failed to load persisted bot config');
+    }
+  }
+
   // Mount bot REST API routes
   app.use('/api', createBotRouter({
     getEngine: () => botEngine,
     getWalletManager: () => walletManager,
+    getConfigStore: () => configStore,
     getAutoSelectDeps: () => ({
       AutoMarketSelector,
       barFetcher,

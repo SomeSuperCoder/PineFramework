@@ -17,6 +17,11 @@
       "types": "./dist/trading/wallet/wallet-manager.d.ts",
       "import": "./dist/trading/wallet/wallet-manager.js"
     },
+    "./trading/config-store": {
+      "source": "./src/trading/config-store.ts",
+      "types": "./dist/trading/config-store.d.ts",
+      "import": "./dist/trading/config-store.js"
+    },
     "./trading/trade-history-store": {
       "source": "./src/trading/trade-history-store.ts",
       "types": "./dist/trading/trade-history-store.d.ts",

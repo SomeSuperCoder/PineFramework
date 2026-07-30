@@ -18,10 +18,12 @@
 import { Router } from 'express';
 import type { BotEngine, BotConfig } from 'pine-framework';
 import type { WalletManager } from 'pine-framework/trading/wallet';
+import type { BotConfigStore } from 'pine-framework/trading/config-store';
 
 export interface BotRouterOptions {
   getEngine: () => BotEngine | null;
   getWalletManager?: () => WalletManager | null;
+  getConfigStore?: () => BotConfigStore | null;
   getAutoSelectDeps?: () => {
     AutoMarketSelector: new (options: any) => { select: (candidates: any[], onProgress?: (progress: any) => void) => Promise<any> };
     barFetcher: unknown;
@@ -41,6 +43,8 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     typeof param === 'function' ? param : param.getEngine;
   const getWalletManager: () => WalletManager | null =
     typeof param === 'function' ? () => null : (param.getWalletManager ?? (() => null));
+  const getConfigStore: () => BotConfigStore | null =
+    typeof param === 'function' ? () => null : (param.getConfigStore ?? (() => null));
   const getAutoSelectDeps = typeof param === 'function' ? () => null : param.getAutoSelectDeps ?? (() => null);
 
   /**
@@ -148,6 +152,80 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   });
 
   /**
+   * GET /bot/config
+   * Get persisted bot configuration.
+   */
+  router.get('/bot/config', (_req, res) => {
+    try {
+      const store = getConfigStore();
+      if (!store) {
+        res.status(404).json({ error: 'Config store not available' });
+        return;
+      }
+      const config = store.load();
+      if (!config) {
+        res.status(404).json({ error: 'No configuration' });
+        return;
+      }
+      res.json(config);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  /**
+   * DELETE /bot/config
+   * Delete persisted bot configuration.
+   * Accepts { removeWallet?: boolean } in body.
+   * Returns 409 if bot is Running.
+   */
+  router.delete('/bot/config', async (req, res) => {
+    try {
+      const engine = getEngine();
+      if (!engine) {
+        res.status(503).json({ error: 'Trading bot not initialized' });
+        return;
+      }
+
+      // Block if bot is running
+      if (engine.state === 'Running') {
+        res.status(409).json({ error: 'Stop the bot before resetting configuration' });
+        return;
+      }
+
+      const store = getConfigStore();
+      if (!store) {
+        res.status(503).json({ error: 'Config store not available' });
+        return;
+      }
+
+      const { removeWallet } = req.body as { removeWallet?: boolean };
+
+      // Delete config
+      store.delete();
+
+      // Optionally remove wallet
+      if (removeWallet) {
+        const wm = getWalletManager();
+        if (wm) {
+          await wm.removeWallet(async () => true);
+        }
+      }
+
+      // Reset engine state
+      if (engine.state === 'Stopped' || engine.state === 'Error') {
+        await engine.reset();
+      }
+
+      res.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ error: message });
+    }
+  });
+
+  /**
    * POST /bot/configure
    * Configure the bot with strategy, DEX, pairs, and risk settings.
    */
@@ -200,6 +278,13 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
       };
 
       engine.configure(config);
+
+      // Persist config to disk
+      const store = getConfigStore();
+      if (store) {
+        store.save(config);
+      }
+
       res.json({ success: true, config });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

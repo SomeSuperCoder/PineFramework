@@ -1,0 +1,88 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { BotConfigStore } from '../../../src/trading/config-store.js';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import type { BotConfig } from '../../../src/trading/types.js';
+
+describe('BotConfigStore', () => {
+  let store: BotConfigStore;
+  let testDir: string;
+
+  beforeEach(() => {
+    testDir = join(tmpdir(), `bot-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(testDir, { recursive: true });
+    store = new BotConfigStore(testDir);
+  });
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true });
+  });
+
+  const validConfig: BotConfig = {
+    strategySource: '//@version=6\nstrategy("test")',
+    dex: 'jupiter-swap',
+    risk: { maxDailyLoss: 1.0 },
+    autoSelect: true,
+  };
+
+  it('should return null when no config exists', () => {
+    expect(store.load()).toBeNull();
+  });
+
+  it('should return false for exists when no config exists', () => {
+    expect(store.exists()).toBe(false);
+  });
+
+  it('should save and load a valid config', () => {
+    store.save(validConfig);
+    const loaded = store.load();
+    expect(loaded).toEqual(validConfig);
+  });
+
+  it('should return true for exists after saving', () => {
+    store.save(validConfig);
+    expect(store.exists()).toBe(true);
+  });
+
+  it('should delete a config', () => {
+    store.save(validConfig);
+    store.delete();
+    expect(store.load()).toBeNull();
+    expect(store.exists()).toBe(false);
+  });
+
+  it('should delete non-existent config without error', () => {
+    expect(() => store.delete()).not.toThrow();
+  });
+
+  it('should return null for invalid config (missing strategySource)', () => {
+    const invalid = { dex: 'jupiter-swap', risk: { maxDailyLoss: 1 } };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(invalid), 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should return null for invalid config (missing risk)', () => {
+    const invalid = { strategySource: 'test', dex: 'jupiter-swap' };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(invalid), 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should return null for invalid config (bad dex)', () => {
+    const invalid = { strategySource: 'test', dex: 'uniswap', risk: { maxDailyLoss: 1 } };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(invalid), 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should return null for corrupted JSON', () => {
+    writeFileSync(join(testDir, 'bot-config.json'), 'not valid json{{{', 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should overwrite existing config', () => {
+    store.save(validConfig);
+    const newConfig: BotConfig = { ...validConfig, dex: 'jupiter-ultra' };
+    store.save(newConfig);
+    expect(store.load()?.dex).toBe('jupiter-ultra');
+  });
+});
