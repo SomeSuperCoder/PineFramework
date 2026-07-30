@@ -422,6 +422,12 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
       if (!res.ok) {
         setError(data.error || 'Configuration failed');
       } else {
+        // Trigger backtest after successful configure
+        const backtestRes = await fetch(`${backendUrl}/api/bot/backtest`, { method: 'POST' });
+        if (!backtestRes.ok) {
+          const backtestData = await backtestRes.json();
+          console.error('Backtest trigger failed:', backtestData.error);
+        }
         onConfigValues?.({
           strategySource: strategySource.trim(),
           dex,
@@ -687,7 +693,7 @@ function SetupWizard({
     failedCount: number;
   } | null;
 }) {
-  const [step, setStep] = useState<'wallet' | 'config' | 'review'>(
+  const [step, setStep] = useState<'wallet' | 'config' | 'backtest' | 'review'>(
     initialWallet.hasWallet ? 'config' : 'wallet'
   );
   const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
@@ -708,9 +714,10 @@ function SetupWizard({
   };
 
   const StepDot = ({ s, label }: { s: typeof step; label: string }) => {
-    const idx = ['wallet', 'config', 'review'].indexOf(s) + 1;
+    const steps = ['wallet', 'config', 'backtest', 'review'];
+    const idx = steps.indexOf(s) + 1;
     const active = step === s;
-    const done = ['wallet', 'config', 'review'].indexOf(s) < ['wallet', 'config', 'review'].indexOf(step);
+    const done = steps.indexOf(s) < steps.indexOf(step);
     return (
       <span
         onClick={done ? () => setStep(s) : undefined}
@@ -743,6 +750,8 @@ function SetupWizard({
         <StepDot s="wallet" label="Wallet" />
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
         <StepDot s="config" label="Config" />
+        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <StepDot s="backtest" label="Backtest" />
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
         <StepDot s="review" label="Review" />
         <div style={{ flex: 1 }} />
@@ -781,7 +790,7 @@ function SetupWizard({
         <div>
           <BotConfigPanel
             backendUrl={backendUrl}
-            onConfigured={() => { setStep('review'); }}
+            onConfigured={() => { setStep('backtest'); }}
             onConfigValues={(v) => setConfigValues(v)}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
@@ -799,59 +808,24 @@ function SetupWizard({
         </div>
       )}
 
-      {/* Step 3: Review & Start */}
-      {step === 'review' && (
+      {/* Step 3: Backtest */}
+      {step === 'backtest' && (
         <div>
           <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
-            Review & Start
+            Auto-Select Backtest
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
-            <div>
-              <span style={{ color: '#888' }}>Wallet: </span>
-              <span style={{ color: '#4caf50' }}>
-                {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
-              </span>
-            </div>
-            {configValues && (
-              <>
-                <div>
-                  <span style={{ color: '#888' }}>Strategy: </span>
-                  <span style={{ color: '#e0e0e0' }}>
-                    {configValues.strategySource.split('\n')[0]?.substring(0, 60) || '(pasted)'}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>DEX: </span>
-                  <span style={{ color: '#e0e0e0' }}>{configValues.dex}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>Pairs: </span>
-                  <span style={{ color: '#ff9800' }}>Auto-select (evaluating all candidates)</span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>Max Daily Loss: </span>
-                  <span style={{ color: '#e0e0e0' }}>${configValues.maxDailyLoss}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#888' }}>Timezone: </span>
-                  <span style={{ color: '#e0e0e0' }}>{configValues.timezone}</span>
-                </div>
-              </>
-            )}
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+            Evaluating all candidate pairs with parallel backtests...
           </div>
-
-          {startError && (
-            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{startError}</div>
-          )}
 
           {/* Auto-Select Progress */}
           {autoSelectProgress && (
             <div style={{
-              marginTop: 12, padding: 12, background: '#111128', borderRadius: 6,
+              padding: 12, background: '#111128', borderRadius: 6,
               border: '1px solid #ff9800',
             }}>
               <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
-                Auto-Select: Evaluating Pairs ({autoSelectProgress.current}/{autoSelectProgress.total})
+                Evaluating Pairs ({autoSelectProgress.current}/{autoSelectProgress.total})
               </div>
               <AutoSelectGrid statuses={autoSelectProgress.statuses} />
             </div>
@@ -887,6 +861,87 @@ function SetupWizard({
                 </span>
               </div>
             </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <button
+              onClick={() => setStep('config')}
+              disabled={!!autoSelectProgress}
+              style={{
+                padding: '6px 14px', background: 'transparent', color: '#888',
+                border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
+                fontSize: 11,
+              }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={() => setStep('review')}
+              disabled={!autoSelectResult}
+              style={{
+                padding: '8px 24px', background: autoSelectResult ? '#1a3328' : '#222',
+                color: autoSelectResult ? '#4caf50' : '#555', border: `1px solid ${autoSelectResult ? '#4caf50' : '#333'}`,
+                borderRadius: 4, cursor: autoSelectResult ? 'pointer' : 'default',
+                fontSize: 12, fontWeight: 700,
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Review & Start */}
+      {step === 'review' && (
+        <div>
+          <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+            Review & Start
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+            <div>
+              <span style={{ color: '#888' }}>Wallet: </span>
+              <span style={{ color: '#4caf50' }}>
+                {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
+              </span>
+            </div>
+            {configValues && (
+              <>
+                <div>
+                  <span style={{ color: '#888' }}>Strategy: </span>
+                  <span style={{ color: '#e0e0e0' }}>
+                    {configValues.strategySource.split('\n')[0]?.substring(0, 60) || '(pasted)'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>DEX: </span>
+                  <span style={{ color: '#e0e0e0' }}>{configValues.dex}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Selected Pair: </span>
+                  <span style={{ color: '#4caf50', fontWeight: 600 }}>
+                    {autoSelectResult?.best?.label ?? 'Pending...'}
+                  </span>
+                </div>
+                {autoSelectResult && (
+                  <div style={{ fontSize: 10, color: '#888', marginLeft: 60 }}>
+                    PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
+                    {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
+                  </div>
+                )}
+                <div>
+                  <span style={{ color: '#888' }}>Max Daily Loss: </span>
+                  <span style={{ color: '#e0e0e0' }}>${configValues.maxDailyLoss}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>Timezone: </span>
+                  <span style={{ color: '#e0e0e0' }}>{configValues.timezone}</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {startError && (
+            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{startError}</div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>

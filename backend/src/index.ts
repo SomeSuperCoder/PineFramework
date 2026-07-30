@@ -218,6 +218,13 @@ if (ENABLE_TRADING_BOT) {
   app.use('/api', createBotRouter({
     getEngine: () => botEngine,
     getWalletManager: () => walletManager,
+    getAutoSelectDeps: () => ({
+      AutoMarketSelector,
+      barFetcher,
+      backtestRunner,
+      broadcast: (msg: unknown) => botWS.broadcast(msg as any),
+      candidates: defaultCandidates,
+    }),
   }));
 
   // Mount bot WebSocket gateway and wire engine events to WS clients

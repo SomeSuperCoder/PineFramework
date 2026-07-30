@@ -18,10 +18,18 @@
 import { Router } from 'express';
 import type { BotEngine, BotConfig } from 'pine-framework';
 import type { WalletManager } from 'pine-framework/trading/wallet';
+import type { AutoMarketSelector } from 'pine-framework';
 
 export interface BotRouterOptions {
   getEngine: () => BotEngine | null;
   getWalletManager?: () => WalletManager | null;
+  getAutoSelectDeps?: () => {
+    AutoMarketSelector: typeof AutoMarketSelector;
+    barFetcher: unknown;
+    backtestRunner: unknown;
+    broadcast: (msg: unknown) => void;
+    candidates: Array<{ symbol: string; timeframe: string }>;
+  } | null;
 }
 
 export function createBotRouter(opts: BotRouterOptions): Router;
@@ -202,6 +210,82 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(400).json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * POST /bot/backtest
+   * Run auto-select backtests without starting the bot.
+   * Returns immediately; progress is broadcast via WebSocket bot:autoSelect channel.
+   */
+  router.post('/bot/backtest', async (req, res) => {
+    try {
+      const engine = getEngine();
+      if (!engine) {
+        res.status(503).json({ success: false, error: 'Trading bot not initialized' });
+        return;
+      }
+
+      const config = engine.config;
+      if (!config) {
+        res.status(400).json({ success: false, error: 'Bot not configured. Call /configure first.' });
+        return;
+      }
+
+      if (!config.autoSelect) {
+        res.status(400).json({ success: false, error: 'autoSelect is not enabled in current config' });
+        return;
+      }
+
+      const deps = getAutoSelectDeps?.();
+      if (!deps) {
+        res.status(503).json({ success: false, error: 'Auto-select dependencies not available' });
+        return;
+      }
+
+      // Run auto-select in background — progress broadcast via WebSocket
+      res.json({ success: true, message: 'Backtest started' });
+
+      const selector = new deps.AutoMarketSelector({
+        barFetcher: deps.barFetcher as any,
+        backtestRunner: deps.backtestRunner as any,
+        script: config.strategySource,
+        dex: config.dex,
+        metric: config.autoSelectMetric ?? 'profitFactor',
+        concurrency: 4,
+      });
+
+      const result = await selector.select(deps.candidates, (progress) => {
+        deps.broadcast({
+          channel: 'bot:autoSelect',
+          type: 'progress',
+          data: progress,
+        });
+      });
+
+      deps.broadcast({
+        channel: 'bot:autoSelect',
+        type: 'complete',
+        data: {
+          best: result.best,
+          ranking: result.ranking,
+          metric: result.metric,
+          evaluatedCount: result.evaluatedCount,
+          failedCount: result.failedCount,
+        },
+      });
+
+      // Store result in engine config for later use by start()
+      engine.configure({ ...config, pairs: [result.best.pair] });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Broadcast error if possible
+      const deps = getAutoSelectDeps?.();
+      deps?.broadcast({
+        channel: 'bot:autoSelect',
+        type: 'error',
+        data: { error: message },
+      });
     }
   });
 
