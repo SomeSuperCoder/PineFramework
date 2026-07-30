@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { StrategySelector } from './StrategySelector';
+import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 
 // ---- Types ----
 
@@ -63,20 +64,8 @@ export function useBotWebSocket(backendUrl: string) {
   const [connectionFailed, setConnectionFailed] = useState(false);
   const connectAttemptsRef = useRef(0);
 
-  // Auto-select progress state
-  const [autoSelectProgress, setAutoSelectProgress] = useState<{
-    current: number;
-    total: number;
-    pair: { symbol: string; timeframe: string };
-    phase: string;
-    statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>;
-  } | null>(null);
-  const [autoSelectResult, setAutoSelectResult] = useState<{
-    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
-    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
-    evaluatedCount: number;
-    failedCount: number;
-  } | null>(null);
+  // Auto-select progress — delegated to shared hook
+  const autoSelect = useAutoSelectProgress();
 
   const connect = useCallback(() => {
     const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws/bot';
@@ -115,14 +104,9 @@ export function useBotWebSocket(backendUrl: string) {
           });
         } else if (msg.channel === 'bot:metrics') {
           setStatus((prev) => prev ? { ...prev, ...msg.data } : null);
-        } else if (msg.channel === 'bot:autoSelect') {
-          if (msg.type === 'progress') {
-            setAutoSelectProgress(msg.data);
-            setAutoSelectResult(null);
-          } else if (msg.type === 'complete') {
-            setAutoSelectProgress(null);
-            setAutoSelectResult(msg.data);
-          }
+        } else {
+          // Delegate to auto-select hook for other channels
+          autoSelect.handleMessage(msg);
         }
       } catch { /* ignore parse errors */ }
     };
@@ -136,7 +120,7 @@ export function useBotWebSocket(backendUrl: string) {
     };
     ws.onerror = () => ws.close();
     wsRef.current = ws;
-  }, [backendUrl]);
+  }, [backendUrl, autoSelect.handleMessage]);
 
   useEffect(() => {
     connect();
@@ -149,11 +133,18 @@ export function useBotWebSocket(backendUrl: string) {
   // Reset auto-select state when status changes to non-idle (bot started)
   useEffect(() => {
     if (status?.state === 'Running' || status?.state === 'Starting') {
-      setAutoSelectProgress(null);
+      autoSelect.reset();
     }
-  }, [status?.state]);
+  }, [status?.state, autoSelect.reset]);
 
-  return { connected, status, logs, autoSelectProgress, autoSelectResult, connectionFailed };
+  return {
+    connected,
+    status,
+    logs,
+    autoSelectProgress: autoSelect.progress,
+    autoSelectResult: autoSelect.result,
+    connectionFailed,
+  };
 }
 
 // ---- Auto-Select Progress Grid ----

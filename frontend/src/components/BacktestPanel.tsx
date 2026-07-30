@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBacktest } from '../hooks/useBacktest';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
+import { ProgressBar } from './ProgressBar';
 import type { BacktestConfig, BacktestResultResponse } from '../types';
 
 const defaultConfig: BacktestConfig = {
@@ -261,26 +262,7 @@ export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: Bac
           </button>
 
           {status === 'running' && (
-            <div style={{ marginTop: '12px' }}>
-              <div style={{
-                width: '100%',
-                height: '8px',
-                background: '#0d0d18',
-                borderRadius: '4px',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  width: `${progress}%`,
-                  height: '100%',
-                  background: '#2196f3',
-                  borderRadius: '4px',
-                  transition: 'width 0.3s ease',
-                }} />
-              </div>
-              <div style={{ textAlign: 'center', marginTop: '4px', color: '#aaa', fontSize: '12px' }}>
-                Processing... {progress}%
-              </div>
-            </div>
+            <ProgressBar progress={progress} phase="Processing" variant="inline" status={status} />
           )}
 
           {status === 'failed' && error && (
