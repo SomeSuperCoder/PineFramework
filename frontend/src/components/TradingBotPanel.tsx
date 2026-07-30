@@ -871,8 +871,18 @@ function SetupWizard({
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
   });
 
-  // Use balance from wallet info (passed from WalletImportPanel preview)
-  const usdcBalance = wallet.usdcBalance ?? null;
+  // Balance from wallet info or fetched from backend
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(wallet.usdcBalance ?? null);
+
+  // Fetch balance from backend if wallet exists but balance is missing (e.g., after page reload)
+  useEffect(() => {
+    if (wallet.hasWallet && usdcBalance === null) {
+      fetch(`${backendUrl}/api/bot/wallet/balance`)
+        .then(r => r.json())
+        .then(data => { if (data.success) setUsdcBalance(data.balance); })
+        .catch(() => {});
+    }
+  }, [wallet.hasWallet, usdcBalance, backendUrl]);
 
   useEffect(() => {
     localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
