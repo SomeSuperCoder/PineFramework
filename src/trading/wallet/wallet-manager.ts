@@ -311,11 +311,13 @@ export class WalletManager {
    * Import a wallet from a seed phrase.
    *
    * @param seedPhrase - The BIP39 seed phrase (12 or 24 words)
+   * @param password - Optional password to encrypt the wallet with (falls back to configPassphrase)
    * @param confirmReplace - Optional callback that must return true to replace existing wallet
    * @returns The public key of the imported wallet
    */
   async importWallet(
     seedPhrase: string,
+    password?: string,
     confirmReplace?: () => Promise<boolean>,
   ): Promise<string> {
     // 1. Validate
@@ -342,7 +344,8 @@ export class WalletManager {
     const keypair = deriveKeypairFromSeed(seedPhrase);
 
     // 4. Encrypt and store
-    const encrypted = encryptSeedPhrase(seedPhrase, this.configPassphrase);
+    const passphrase = password || this.configPassphrase;
+    const encrypted = encryptSeedPhrase(seedPhrase, passphrase);
     await this.storage.save('default', encrypted);
     this.currentWalletKey = 'default';
     this.unlocked = true;

@@ -191,11 +191,12 @@ function AutoSelectGrid({
         <div style={{ color: '#666', fontWeight: 600 }}>Pair</div>
         <div style={{ color: '#666', fontWeight: 600 }}>Phase</div>
         <div style={{ color: '#666', fontWeight: 600 }}>Status</div>
-        <div style={{ color: '#666', fontWeight: 600 }}>Metric</div>
+        <div style={{ color: '#666', fontWeight: 600 }}>PnL</div>
         {entries.map(([key, st]) => {
           const rankEntry = ranking?.find(r => r.label === key);
           const isCurrentPair = currentPair === key && st.status === 'active';
           const showCandleProgress = isCurrentPair && st.phase === 'fetching' && candleProgress;
+          const displayPhase = st.status === 'done' ? 'done' : st.phase;
 
           return (
             <React.Fragment key={key}>
@@ -203,11 +204,11 @@ function AutoSelectGrid({
               <div style={{ color: '#888' }}>
                 {showCandleProgress
                   ? `${candleProgress.fetched}/${candleProgress.total}`
-                  : st.phase}
+                  : displayPhase}
               </div>
               <div><StatusIcon status={st.status} /></div>
-              <div style={{ color: '#888' }}>
-                {rankEntry?.metrics.profitFactor != null && `PF ${rankEntry.metrics.profitFactor.toFixed(1)}`}
+              <div style={{ color: rankEntry?.metrics.totalPnlPercent != null && rankEntry.metrics.totalPnlPercent >= 0 ? '#4caf50' : '#e94560' }}>
+                {rankEntry?.metrics.totalPnlPercent != null ? `${rankEntry.metrics.totalPnlPercent >= 0 ? '+' : ''}${rankEntry.metrics.totalPnlPercent.toFixed(2)}%` : ''}
               </div>
               {showCandleProgress && (
                 <div style={{ gridColumn: '1 / -1', marginTop: 2 }}>
@@ -872,7 +873,7 @@ function SetupWizard({
               </div>
               <AutoSelectGrid
                 statuses={Object.fromEntries(
-                  autoSelectResult.ranking.map(r => [r.label, { phase: 'backtesting', status: 'done' as const }])
+                  autoSelectResult.ranking.map(r => [r.label, { phase: 'done', status: 'done' as const }])
                 )}
                 ranking={autoSelectResult.ranking}
               />
@@ -1536,7 +1537,7 @@ export function LiveDashboard({
               </div>
               <AutoSelectGrid
                 statuses={Object.fromEntries(
-                  autoSelectResult.ranking.map(r => [r.label, { phase: 'backtesting', status: 'done' as const }])
+                  autoSelectResult.ranking.map(r => [r.label, { phase: 'done', status: 'done' as const }])
                 )}
                 ranking={autoSelectResult.ranking}
               />

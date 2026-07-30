@@ -325,6 +325,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const publicKey = await wm.importWallet(
         seedPhrase,
+        undefined,
         hasWallet ? async () => true : undefined,
       );
 
@@ -448,7 +449,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      const publicKey = await wm.importWallet(seedPhrase);
+      const publicKey = await wm.importWallet(seedPhrase, password);
 
       res.json({ success: true, publicKey });
     } catch (err) {

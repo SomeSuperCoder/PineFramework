@@ -244,7 +244,7 @@ describe('WalletManager', () => {
     await manager.importWallet(seedPhrase);
 
     const newSeed = 'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
-    const publicKey = await manager.importWallet(newSeed, async () => true);
+    const publicKey = await manager.importWallet(newSeed, undefined, async () => true);
     expect(publicKey).toBeTruthy();
     expect(await manager.hasWallet()).toBe(true);
   });
@@ -255,7 +255,7 @@ describe('WalletManager', () => {
 
     const newSeed = 'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
     await expect(
-      manager.importWallet(newSeed, async () => false),
+      manager.importWallet(newSeed, undefined, async () => false),
     ).rejects.toThrow('declined');
 
     // Original wallet should still be intact
