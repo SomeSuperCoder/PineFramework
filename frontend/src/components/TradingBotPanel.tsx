@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { StrategySelector } from './StrategySelector';
+import { ProgressBar } from './ProgressBar';
 import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 
 // ---- Types ----
@@ -815,10 +816,15 @@ function SetupWizard({
               padding: 12, background: '#111128', borderRadius: 6,
               border: '1px solid #ff9800',
             }}>
-              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
-                Evaluating Pairs ({autoSelectProgress.current}/{autoSelectProgress.total})
+              <ProgressBar
+                progress={(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}
+                phase="Evaluating"
+                variant="inline"
+                status="running"
+              />
+              <div style={{ marginTop: 8 }}>
+                <AutoSelectGrid statuses={autoSelectProgress.statuses} />
               </div>
-              <AutoSelectGrid statuses={autoSelectProgress.statuses} />
             </div>
           )}
 
