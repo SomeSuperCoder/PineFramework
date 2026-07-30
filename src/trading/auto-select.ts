@@ -229,6 +229,16 @@ export class AutoMarketSelector {
           emitProgress(pair, 'fetching');
           continue;
         }
+
+        if (bars.length > MAX_BACKTEST_BARS) {
+          const error = `Too many bars: ${bars.length} (max ${MAX_BACKTEST_BARS})`;
+          console.log(`[auto-select] Failed: ${key} — ${error}`);
+          statuses[key] = { phase: 'fetching', status: 'failed', error };
+          completedCount++;
+          failedCount++;
+          emitProgress(pair, 'fetching');
+          continue;
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.log(`[auto-select] Failed: ${key} — ${msg}`);
