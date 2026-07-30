@@ -5,7 +5,7 @@ export type AutoSelectProgress = {
   total: number;
   pair: { symbol: string; timeframe: string };
   phase: string;
-  statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>;
+  statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed'; error?: string }>;
   candleProgress?: { fetched: number; total: number };
 } | null;
 

@@ -52,6 +52,8 @@ export interface AutoSelectionResult {
 export interface CandidateStatus {
   phase: 'fetching' | 'backtesting' | 'ranking';
   status: 'pending' | 'active' | 'done' | 'failed';
+  /** Human-readable error message when status is 'failed'. */
+  error?: string;
 }
 
 /** Progress callback during auto-selection. */
@@ -204,6 +206,7 @@ export class AutoMarketSelector {
       const targetCandles = computeCandleCount(pair.timeframe);
 
       // ── Fetch phase ──
+      console.log(`[auto-select] Fetching bars for ${key}...`);
       statuses[key] = { phase: 'fetching', status: 'active' };
       emitProgress(pair, 'fetching', { fetched: 0, total: targetCandles });
 
@@ -213,18 +216,23 @@ export class AutoMarketSelector {
         const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
         bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate);
 
+        console.log(`[auto-select] Fetched ${bars.length} bars for ${key}`);
         // Update with actual fetched count
         emitProgress(pair, 'fetching', { fetched: bars.length, total: targetCandles });
 
         if (bars.length < 50) {
-          statuses[key] = { phase: 'fetching', status: 'failed' };
+          const error = `Insufficient data: ${bars.length} bars (need 50+)`;
+          console.log(`[auto-select] Failed: ${key} — ${error}`);
+          statuses[key] = { phase: 'fetching', status: 'failed', error };
           completedCount++;
           failedCount++;
           emitProgress(pair, 'fetching');
           continue;
         }
-      } catch {
-        statuses[key] = { phase: 'fetching', status: 'failed' };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`[auto-select] Failed: ${key} — ${msg}`);
+        statuses[key] = { phase: 'fetching', status: 'failed', error: `Bar fetch failed: ${msg}` };
         completedCount++;
         failedCount++;
         emitProgress(pair, 'fetching');
@@ -232,6 +240,7 @@ export class AutoMarketSelector {
       }
 
       // ── Backtest phase ──
+      console.log(`[auto-select] Running backtest for ${key}...`);
       statuses[key] = { phase: 'backtesting', status: 'active' };
       emitProgress(pair, 'backtesting');
 
@@ -243,9 +252,12 @@ export class AutoMarketSelector {
       });
 
       if (!result.success || !result.metrics) {
-        statuses[key] = { phase: 'backtesting', status: 'failed' };
+        const error = result.error ?? 'Backtest execution failed';
+        console.log(`[auto-select] Failed: ${key} — ${error}`);
+        statuses[key] = { phase: 'backtesting', status: 'failed', error };
         failedCount++;
       } else {
+        console.log(`[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnl.toFixed(2)}%`);
         statuses[key] = { phase: 'backtesting', status: 'done' };
         const m = result.metrics;
         evaluations.push({

@@ -150,7 +150,7 @@ export function useBotWebSocket(backendUrl: string) {
 
 // ---- Auto-Select Progress Grid ----
 
-type CandidateStatus = { phase: string; status: 'pending' | 'active' | 'done' | 'failed' };
+type CandidateStatus = { phase: string; status: 'pending' | 'active' | 'done' | 'failed'; error?: string };
 
 function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
   switch (status) {
@@ -206,10 +206,17 @@ function AutoSelectGrid({
                   ? `${candleProgress.fetched}/${candleProgress.total}`
                   : displayPhase}
               </div>
-              <div><StatusIcon status={st.status} /></div>
+              <div title={st.error}>
+                <StatusIcon status={st.status} />
+              </div>
               <div style={{ color: rankEntry?.metrics.totalPnlPercent != null && rankEntry.metrics.totalPnlPercent >= 0 ? '#4caf50' : '#e94560' }}>
                 {rankEntry?.metrics.totalPnlPercent != null ? `${rankEntry.metrics.totalPnlPercent >= 0 ? '+' : ''}${rankEntry.metrics.totalPnlPercent.toFixed(2)}%` : ''}
               </div>
+              {st.error && st.status === 'failed' && (
+                <div style={{ gridColumn: '1 / -1', color: '#e94560', fontSize: 9, marginTop: 1, opacity: 0.8 }}>
+                  {st.error.length > 80 ? st.error.slice(0, 80) + '...' : st.error}
+                </div>
+              )}
               {showCandleProgress && (
                 <div style={{ gridColumn: '1 / -1', marginTop: 2 }}>
                   <div style={{
