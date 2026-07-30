@@ -123,6 +123,7 @@ function deriveKey(passphrase: string, salt: Buffer): Buffer {
 export function encryptSeedPhrase(
   seedPhrase: string,
   passphrase: string,
+  publicKeyOverride?: string,
 ): EncryptedWallet {
   const salt = randomBytes(SALT_LENGTH);
   const key = deriveKey(passphrase, salt);
@@ -135,11 +136,13 @@ export function encryptSeedPhrase(
   ]);
   const authTag = cipher.getAuthTag();
 
-  // Derive a deterministic "public key" from the seed phrase hash
-  const publicKey = createHash('sha256')
-    .update(seedPhrase)
-    .digest('hex')
-    .substring(0, 32);
+  // Use override public key if provided (actual Solana base58 key),
+  // otherwise fall back to hash-based identifier for backward compatibility
+  const publicKey = publicKeyOverride
+    ?? createHash('sha256')
+      .update(seedPhrase)
+      .digest('hex')
+      .substring(0, 32);
 
   const now = Date.now();
   return {
@@ -353,7 +356,7 @@ export class WalletManager {
 
     // 4. Encrypt and store
     const passphrase = password || this.configPassphrase;
-    const encrypted = encryptSeedPhrase(seedPhrase, passphrase);
+    const encrypted = encryptSeedPhrase(seedPhrase, passphrase, keypair.publicKey);
     await this.storage.save('default', encrypted);
     this.currentWalletKey = 'default';
     this.unlocked = true;
