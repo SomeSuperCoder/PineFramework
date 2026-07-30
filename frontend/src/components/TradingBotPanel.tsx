@@ -177,6 +177,23 @@ function AutoSelectGrid({
   currentPair?: string;
 }) {
   const entries = Object.entries(statuses);
+
+  const formatTimeframe = (tf: string) => {
+    if (tf === '5') return '5m';
+    if (tf === '15') return '15m';
+    if (tf === '60') return '1h';
+    if (tf === '240') return '4h';
+    return tf;
+  };
+
+  const formatPairLabel = (label: string) => {
+    const match = label.match(/^(.+?)\s*\((.+?)\)$/);
+    if (match) {
+      return `${match[1]} · ${formatTimeframe(match[2])}`;
+    }
+    return label;
+  };
+
   return (
     <div style={{
       marginTop: 8, padding: 8, background: '#111128', borderRadius: 6,
@@ -200,7 +217,7 @@ function AutoSelectGrid({
 
           return (
             <React.Fragment key={key}>
-              <div style={{ color: '#e0e0e0' }}>{key}</div>
+              <div style={{ color: '#e0e0e0' }}>{formatPairLabel(key)}</div>
               <div style={{ color: '#888' }}>
                 {showCandleProgress
                   ? `${candleProgress.fetched}/${candleProgress.total}`
@@ -447,7 +464,11 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
         setError(data.error || 'Configuration failed');
       } else {
         // Trigger backtest after successful configure
-        const backtestRes = await fetch(`${backendUrl}/api/bot/backtest`, { method: 'POST' });
+        const backtestRes = await fetch(`${backendUrl}/api/bot/backtest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeframes: selectedTimeframes }),
+        });
         if (!backtestRes.ok) {
           const backtestData = await backtestRes.json();
           console.error('Backtest trigger failed:', backtestData.error);
@@ -724,6 +745,14 @@ function SetupWizard({
   const [configValues, setConfigValues] = useState<ConfigValues | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
+  const [selectedTimeframes, setSelectedTimeframes] = useState<string[]>(() => {
+    const saved = localStorage.getItem('autoSelectTimeframes');
+    return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
+  }, [selectedTimeframes]);
 
   const handleStart = async () => {
     setStarting(true);
@@ -841,6 +870,34 @@ function SetupWizard({
           <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
             Evaluating candidate pairs sequentially...
           </div>
+
+          {/* Timeframe Selection */}
+          {!autoSelectProgress && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>Select Timeframes:</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['5', '15', '60', '240'].map(tf => (
+                  <label key={tf} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedTimeframes.includes(tf)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedTimeframes(prev => [...prev, tf]);
+                        } else {
+                          setSelectedTimeframes(prev => prev.filter(t => t !== tf));
+                        }
+                      }}
+                      style={{ accentColor: '#64b5f6' }}
+                    />
+                    <span style={{ fontSize: 11, color: '#ccc' }}>
+                      {tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : '4h'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Auto-Select Progress */}
           {autoSelectProgress && (

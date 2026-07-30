@@ -127,19 +127,21 @@ export interface BacktestRunner {
 
 // ---- Default candidate pairs ----
 
+/** Default timeframes for auto-selection (in minutes). */
+export const DEFAULT_TIMEFRAMES = ['5', '15', '60', '240'];
+
+/** Default symbols for auto-selection. */
+export const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
+
+/** Generate default candidates from symbols × timeframes. */
+export function generateDefaultCandidates(timeframes: string[] = DEFAULT_TIMEFRAMES): PairConfig[] {
+  return DEFAULT_SYMBOLS.flatMap(symbol =>
+    timeframes.map(timeframe => ({ symbol, timeframe }))
+  );
+}
+
 /** Default candidate pairs for auto-selection. */
-export const DEFAULT_CANDIDATES: PairConfig[] = [
-  { symbol: 'BTCUSDT', timeframe: '60' },
-  { symbol: 'ETHUSDT', timeframe: '60' },
-  { symbol: 'SOLUSDT', timeframe: '60' },
-  { symbol: 'BTCUSDT', timeframe: '240' },
-  { symbol: 'ETHUSDT', timeframe: '240' },
-  { symbol: 'SOLUSDT', timeframe: '240' },
-  { symbol: 'BNBUSDT', timeframe: '60' },
-  { symbol: 'XRPUSDT', timeframe: '60' },
-  { symbol: 'DOGEUSDT', timeframe: '60' },
-  { symbol: 'ADAUSDT', timeframe: '60' },
-];
+export const DEFAULT_CANDIDATES: PairConfig[] = generateDefaultCandidates();
 
 // ---- AutoMarketSelector ----
 

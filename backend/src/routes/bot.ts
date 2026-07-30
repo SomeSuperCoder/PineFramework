@@ -218,7 +218,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
    * Run auto-select backtests without starting the bot.
    * Returns immediately; progress is broadcast via WebSocket bot:autoSelect channel.
    */
-  router.post('/bot/backtest', async (_req, res) => {
+  router.post('/bot/backtest', async (req, res) => {
     try {
       const engine = getEngine();
       if (!engine) {
@@ -243,6 +243,12 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
+      // Filter candidates by selected timeframes if provided
+      const selectedTimeframes = req.body?.timeframes as string[] | undefined;
+      const candidates = selectedTimeframes && selectedTimeframes.length > 0
+        ? deps.candidates.filter(c => selectedTimeframes.includes(c.timeframe))
+        : deps.candidates;
+
       // Run auto-select in background — progress broadcast via WebSocket
       res.json({ success: true, message: 'Backtest started' });
 
@@ -254,7 +260,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         metric: config.autoSelectMetric ?? 'profitFactor',
       });
 
-      const result = await selector.select(deps.candidates, (progress: any) => {
+      const result = await selector.select(candidates, (progress: any) => {
         deps.broadcast({
           channel: 'bot:autoSelect',
           type: 'progress',

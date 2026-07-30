@@ -158,20 +158,11 @@ app.use('/api', createExportRouter());
 
 // ── Trading Bot (feature-gated) ──
 if (ENABLE_TRADING_BOT) {
-  const { BotEngine, AutoMarketSelector } = await import('pine-framework');
+  const { BotEngine, AutoMarketSelector, generateDefaultCandidates, DEFAULT_TIMEFRAMES } = await import('pine-framework');
   const { WalletManager, EncryptedFileStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
 
-  const defaultCandidates = [
-    { symbol: 'BTCUSDT', timeframe: '60' },
-    { symbol: 'ETHUSDT', timeframe: '60' },
-    { symbol: 'SOLUSDT', timeframe: '60' },
-    { symbol: 'DOGEUSDT', timeframe: '60' },
-    { symbol: 'ADAUSDT', timeframe: '60' },
-    { symbol: 'AVAXUSDT', timeframe: '60' },
-    { symbol: 'LINKUSDT', timeframe: '60' },
-    { symbol: 'DOTUSDT', timeframe: '60' },
-  ];
+  const defaultCandidates = generateDefaultCandidates();
 
   const barFetcher = new BybitBarFetcher();
   const backtestRunner = new LiveBacktestRunner();
