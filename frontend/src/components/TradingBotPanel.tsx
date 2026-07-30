@@ -266,6 +266,23 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   const [password, setPassword] = useState('');
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+
+  const fetchUsdcBalance = async (publicKey: string) => {
+    setBalanceLoading(true);
+    try {
+      const res = await fetch(`${backendUrl}/api/bot/wallet/balance`);
+      const data = await res.json();
+      if (data.success) {
+        setUsdcBalance(data.balance);
+      }
+    } catch {
+      // Silently fail — balance is informational
+    } finally {
+      setBalanceLoading(false);
+    }
+  };
 
   const handleImport = async () => {
     const words = seedPhrase.trim().split(/\s+/);
@@ -292,6 +309,8 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
         onWalletChange({ hasWallet: true, publicKey: data.publicKey });
         setSeedPhrase('');
         setPassword('');
+        // Fetch USDC balance after successful import
+        fetchUsdcBalance(data.publicKey);
       }
     } catch {
       setError('Network error — is the backend running?');
@@ -319,9 +338,18 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
         Wallet {wallet.hasWallet ? '✓ Imported' : '— Not Imported'}
       </div>
       {wallet.hasWallet ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ color: '#4caf50', fontSize: 11, fontFamily: 'monospace' }}>
             {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-4)}
+          </span>
+          <span style={{ color: '#888', fontSize: 11 }}>
+            {balanceLoading ? (
+              'Loading balance...'
+            ) : usdcBalance !== null ? (
+              <span style={{ color: '#64b5f6' }}>
+                USDC: {usdcBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            ) : null}
           </span>
           <button
             onClick={handleRemove}

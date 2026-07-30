@@ -369,6 +369,53 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   });
 
   /**
+   * GET /bot/wallet/balance
+   * Fetch USDC balance for the imported wallet.
+   */
+  router.get('/bot/wallet/balance', async (_req, res) => {
+    try {
+      const wm = getWalletManager();
+      if (!wm) {
+        res.status(503).json({ success: false, error: 'Wallet manager not available' });
+        return;
+      }
+
+      const hasWallet = await wm.hasWallet();
+      if (!hasWallet) {
+        res.status(400).json({ success: false, error: 'No wallet imported' });
+        return;
+      }
+
+      const publicKey = await wm.getPublicKey();
+      if (!publicKey) {
+        res.status(400).json({ success: false, error: 'No public key available' });
+        return;
+      }
+
+      // Query USDC balance from Solana mainnet
+      const { Connection, PublicKey } = await import('@solana/web3.js');
+      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+
+      const owner = new PublicKey(publicKey);
+      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, {
+        mint: USDC_MINT,
+      });
+
+      let balance = 0;
+      if (tokenAccounts.value.length > 0) {
+        const account = tokenAccounts.value[0].account.data.parsed.info.tokenAmount;
+        balance = parseFloat(account.uiAmountString) || 0;
+      }
+
+      res.json({ success: true, balance });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ success: false, error: `Failed to fetch balance: ${message}` });
+    }
+  });
+
+  /**
    * DELETE /bot/wallet
    * Remove imported wallet.
    */
