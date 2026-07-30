@@ -423,10 +423,11 @@ export interface ConfigValues {
   closeOnLoss: boolean;
 }
 
-function BotConfigPanel({ backendUrl, onConfigured, onConfigValues }: {
+function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTimeframes }: {
   backendUrl: string;
   onConfigured: () => void;
   onConfigValues?: (values: ConfigValues) => void;
+  selectedTimeframes: string[];
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
@@ -845,6 +846,7 @@ function SetupWizard({
             backendUrl={backendUrl}
             onConfigured={() => { setStep('backtest'); }}
             onConfigValues={(v) => setConfigValues(v)}
+            selectedTimeframes={selectedTimeframes}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
             <button

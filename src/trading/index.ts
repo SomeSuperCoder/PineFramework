@@ -57,7 +57,7 @@ export type {
 export { TradingTelegramBot } from './telegram-bot.js';
 export type { TelegramSender, TradingNotificationOptions } from './telegram-bot.js';
 
-export { AutoMarketSelector } from './auto-select.js';
+export { AutoMarketSelector, DEFAULT_TIMEFRAMES, DEFAULT_SYMBOLS, generateDefaultCandidates } from './auto-select.js';
 export type {
   RankingMetric,
   CandidateEvaluation,
