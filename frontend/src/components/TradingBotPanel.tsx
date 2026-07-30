@@ -507,19 +507,26 @@ export interface ConfigValues {
   closeOnLoss: boolean;
 }
 
-function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTimeframes }: {
+/** Calculate max daily loss: min($1, 10% × USDC balance) */
+function calcMaxDailyLoss(usdcBalance: number): number {
+  return Math.min(1, usdcBalance * 0.10);
+}
+
+function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTimeframes, usdcBalance }: {
   backendUrl: string;
   onConfigured: () => void;
   onConfigValues?: (values: ConfigValues) => void;
   selectedTimeframes: string[];
+  usdcBalance: number | null;
 }) {
   const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
-  const [maxDailyLoss, setMaxDailyLoss] = useState('50');
   const [timezone, setTimezone] = useState('UTC');
   const [closeOnLoss, setCloseOnLoss] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
+
+  const maxDailyLoss = calcMaxDailyLoss(usdcBalance ?? 0);
 
   const compatibilityWarnings = useMemo(
     () => checkStrategyCompatibility(strategySource),
@@ -540,7 +547,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
         body: JSON.stringify({
           strategySource: strategySource.trim(),
           dex,
-          risk: { maxDailyLoss: Number(maxDailyLoss), dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
+          risk: { maxDailyLoss, dailyLossTimezone: timezone, closeOnDailyLoss: closeOnLoss },
           autoSelect: true,
         }),
       });
@@ -561,7 +568,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
         onConfigValues?.({
           strategySource: strategySource.trim(),
           dex,
-          maxDailyLoss: Number(maxDailyLoss),
+          maxDailyLoss,
           timezone,
           closeOnLoss,
         });
@@ -601,17 +608,13 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
             </select>
           </label>
           <label style={{ color: '#888', fontSize: 11 }}>
-            Max Daily Loss ($):{' '}
-            <input
-              type="number"
-              value={maxDailyLoss}
-              onChange={(e) => setMaxDailyLoss(e.target.value)}
-              style={{
-                width: 70, background: '#111128', color: '#e0e0e0',
-                border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
-                fontSize: 11, marginLeft: 4,
-              }}
-            />
+            Max Daily Loss:{' '}
+            <span style={{ color: '#64b5f6', fontWeight: 600 }}>
+              ${maxDailyLoss.toFixed(2)}
+            </span>
+            <span style={{ color: '#666', fontSize: 10, marginLeft: 4 }}>
+              (10% × ${usdcBalance?.toFixed(2) ?? '0.00'})
+            </span>
           </label>
           <label style={{ color: '#888', fontSize: 11 }}>
             Timezone:{' '}
@@ -834,10 +837,23 @@ function SetupWizard({
     const saved = localStorage.getItem('autoSelectTimeframes');
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
   });
+  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
   }, [selectedTimeframes]);
+
+  // Fetch USDC balance when wallet is imported
+  useEffect(() => {
+    if (wallet.hasWallet) {
+      fetch(`${backendUrl}/api/bot/wallet/balance`)
+        .then(r => r.json())
+        .then(data => { if (data.success) setUsdcBalance(data.balance); })
+        .catch(() => {});
+    } else {
+      setUsdcBalance(null);
+    }
+  }, [wallet.hasWallet, backendUrl]);
 
   const handleStart = async () => {
     setStarting(true);
@@ -931,6 +947,7 @@ function SetupWizard({
             onConfigured={() => { setStep('backtest'); }}
             onConfigValues={(v) => setConfigValues(v)}
             selectedTimeframes={selectedTimeframes}
+            usdcBalance={usdcBalance}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
             <button
