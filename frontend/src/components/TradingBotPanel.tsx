@@ -36,6 +36,7 @@ export interface BotStatusSnapshot {
 export interface WalletInfo {
   hasWallet: boolean;
   publicKey?: string;
+  usdcBalance?: number | null;
 }
 
 export interface PositionSummary {
@@ -337,7 +338,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
       if (!res.ok) {
         setError(data.error || 'Import failed');
       } else {
-        onWalletChange({ hasWallet: true, publicKey: data.publicKey });
+        onWalletChange({ hasWallet: true, publicKey: data.publicKey, usdcBalance: previewBalance });
         setSeedPhrase('');
         setPassword('');
       }
@@ -525,8 +526,11 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
   const [closeOnLoss, setCloseOnLoss] = useState(false);
   const [configuring, setConfiguring] = useState(false);
   const [error, setError] = useState('');
+  const [manualOverride, setManualOverride] = useState(false);
+  const [manualMaxDailyLoss, setManualMaxDailyLoss] = useState('1.00');
 
-  const maxDailyLoss = calcMaxDailyLoss(usdcBalance ?? 0);
+  const calculatedMaxDailyLoss = calcMaxDailyLoss(usdcBalance ?? 0);
+  const maxDailyLoss = manualOverride ? Number(manualMaxDailyLoss) : calculatedMaxDailyLoss;
 
   const compatibilityWarnings = useMemo(
     () => checkStrategyCompatibility(strategySource),
@@ -607,15 +611,44 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
               <option value="jupiter-ultra">Jupiter Ultra</option>
             </select>
           </label>
-          <label style={{ color: '#888', fontSize: 11 }}>
-            Max Daily Loss:{' '}
-            <span style={{ color: '#64b5f6', fontWeight: 600 }}>
-              ${maxDailyLoss.toFixed(2)}
-            </span>
-            <span style={{ color: '#666', fontSize: 10, marginLeft: 4 }}>
-              (10% × ${usdcBalance?.toFixed(2) ?? '0.00'})
-            </span>
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input
+                type="checkbox"
+                checked={manualOverride}
+                onChange={(e) => setManualOverride(e.target.checked)}
+                style={{ accentColor: '#64b5f6' }}
+              />
+              Manual Override
+            </label>
+            {manualOverride ? (
+              <label style={{ color: '#888', fontSize: 11 }}>
+                Max Daily Loss ($):{' '}
+                <input
+                  type="number"
+                  value={manualMaxDailyLoss}
+                  onChange={(e) => setManualMaxDailyLoss(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  style={{
+                    width: 70, background: '#111128', color: '#e0e0e0',
+                    border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
+                    fontSize: 11, marginLeft: 4,
+                  }}
+                />
+              </label>
+            ) : (
+              <span style={{ color: '#888', fontSize: 11 }}>
+                Max Daily Loss:{' '}
+                <span style={{ color: '#64b5f6', fontWeight: 600 }}>
+                  ${maxDailyLoss.toFixed(2)}
+                </span>
+                <span style={{ color: '#666', fontSize: 10, marginLeft: 4 }}>
+                  (10% × ${usdcBalance?.toFixed(2) ?? '0.00'})
+                </span>
+              </span>
+            )}
+          </div>
           <label style={{ color: '#888', fontSize: 11 }}>
             Timezone:{' '}
             <input
@@ -837,23 +870,13 @@ function SetupWizard({
     const saved = localStorage.getItem('autoSelectTimeframes');
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
   });
-  const [usdcBalance, setUsdcBalance] = useState<number | null>(null);
+
+  // Use balance from wallet info (passed from WalletImportPanel preview)
+  const usdcBalance = wallet.usdcBalance ?? null;
 
   useEffect(() => {
     localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
   }, [selectedTimeframes]);
-
-  // Fetch USDC balance when wallet is imported
-  useEffect(() => {
-    if (wallet.hasWallet) {
-      fetch(`${backendUrl}/api/bot/wallet/balance`)
-        .then(r => r.json())
-        .then(data => { if (data.success) setUsdcBalance(data.balance); })
-        .catch(() => {});
-    } else {
-      setUsdcBalance(null);
-    }
-  }, [wallet.hasWallet, backendUrl]);
 
   const handleStart = async () => {
     setStarting(true);
