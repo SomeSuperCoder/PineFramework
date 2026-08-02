@@ -5,6 +5,9 @@ import path from 'path';
 export default defineConfig({
   plugins: [react()],
   resolve: {
+    // Resolve pine-framework to its TS source via the `source` export condition,
+    // matching how the backend dev script runs (tsx watch --conditions=source).
+    conditions: ['source'],
     alias: {
       'pine-framework/utils/time': path.resolve(__dirname, '../src/utils/time.ts'),
     },
