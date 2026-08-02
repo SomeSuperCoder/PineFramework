@@ -1665,9 +1665,6 @@ export function LiveDashboard({
     pairs?: Array<{ symbol: string; timeframe: string }>;
     walletPublicKey?: string;
   } | null>(null);
-  const [pinnedToBottom, setPinnedToBottom] = useState(() => {
-    return localStorage.getItem('pine-bot-dashboard-pinned') === 'true';
-  });
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch wallet status on mount — don't assume anything until we know
@@ -1737,14 +1734,6 @@ export function LiveDashboard({
     setWallet({ hasWallet: true, publicKey });
   };
 
-  const togglePin = () => {
-    setPinnedToBottom((prev) => {
-      const next = !prev;
-      localStorage.setItem('pine-bot-dashboard-pinned', String(next));
-      return next;
-    });
-  };
-
   const fmtDur = (ms: number): string => {
     if (ms <= 0) return '\u2014';
     const h = Math.floor(ms / 3600000);
@@ -1772,23 +1761,13 @@ export function LiveDashboard({
 
   const isReady = wallet.hasWallet && !walletLocked;
 
-  const rootStyle: React.CSSProperties = pinnedToBottom
-    ? {
-        background: '#0d0d18',
-        borderTop: '1px solid #222',
-        borderBottom: '1px solid #222',
-        fontSize: '12px',
-        height: '320px',
-        display: 'flex',
-        flexDirection: 'column',
-      }
-    : {
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        fontSize: '12px',
-        overflow: 'hidden',
-      };
+  const rootStyle: React.CSSProperties = {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    fontSize: '12px',
+    overflow: 'hidden',
+  };
 
   // Idle/Stopped view — centered setup wizard
   if (isIdle) {
@@ -1836,38 +1815,10 @@ export function LiveDashboard({
           </span>
           <div style={{ flex: 1 }} />
           <button
-            onClick={() => sendCommand('start')}
-            disabled={loading || !isReady}
-            title={!wallet.hasWallet ? 'Import a wallet first' : walletLocked ? 'Unlock wallet first' : 'Start Live Trading Bot'}
-            style={{
-              padding: '6px 16px', background: isReady ? '#1a3328' : '#111',
-              color: isReady ? '#4caf50' : '#555',
-              border: `1px solid ${isReady ? '#4caf50' : '#333'}`,
-              borderRadius: 4, cursor: loading ? 'wait' : isReady ? 'pointer' : 'default',
-              fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-              <polygon points="2,0 9,5 2,10" />
-            </svg>
-            Start Bot
-          </button>
-          <button
-            onClick={togglePin}
-            title={pinnedToBottom ? 'Pin to full screen' : 'Pin to bottom bar'}
-            style={{
-              padding: '4px 8px', background: 'transparent', color: '#666',
-              border: 'none', cursor: 'pointer', fontSize: 12, marginLeft: 4,
-            }}
-          >
-            {pinnedToBottom ? '⛶' : '📌'}
-          </button>
-          <button
             onClick={onClose}
             style={{
               padding: '4px 10px', background: 'transparent', color: '#888',
-              border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 4,
+              border: 'none', cursor: 'pointer', fontSize: 14,
             }}
           >
             ✕
@@ -1981,16 +1932,6 @@ export function LiveDashboard({
             {status.state}...
           </span>
         )}
-        <button
-          onClick={togglePin}
-          title={pinnedToBottom ? 'Pin to full screen' : 'Pin to bottom bar'}
-          style={{
-            padding: '4px 8px', background: 'transparent', color: '#666',
-            border: 'none', cursor: 'pointer', fontSize: 12, marginLeft: 4,
-          }}
-        >
-          {pinnedToBottom ? '⛶' : '📌'}
-        </button>
         <button
           onClick={onClose}
           style={{
