@@ -995,6 +995,7 @@ function SetupWizard({
   autoSelectProgress,
   autoSelectResult,
   onConfigReset,
+  onBacktestStarted,
 }: {
   backendUrl: string;
   initialWallet: WalletInfo;
@@ -1016,6 +1017,7 @@ function SetupWizard({
     failedCount: number;
   } | null;
   onConfigReset?: () => void;
+  onBacktestStarted?: () => void;
 }) {
   // Determine initial step: if config exists AND wallet exists, go to review
   const getInitialStep = (): 'wallet' | 'config' | 'backtest' | 'review' => {
@@ -1050,6 +1052,7 @@ function SetupWizard({
   });
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState('');
+  const [backtestRunThisSession, setBacktestRunThisSession] = useState(false);
 
   // When persisted config/wallet data loads after mount (e.g. after bot stops, when
   // LiveDashboard re-fetches wallet status + config), advance to review.
@@ -1132,6 +1135,21 @@ function SetupWizard({
       setResetError(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleRerunBacktest = async () => {
+    setStep('backtest');
+    try {
+      await fetch(`${backendUrl}/api/bot/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeframes: selectedTimeframes }),
+      });
+      setBacktestRunThisSession(true);
+      onBacktestStarted?.();
+    } catch (err) {
+      console.error('Backtest trigger failed:', err);
     }
   };
 
@@ -1434,6 +1452,30 @@ function SetupWizard({
               Reset Everything
             </button>
           </div>
+
+          {/* Re-run backtest button when config has autoSelect but hasn't been run this session */}
+          {persistedConfig?.autoSelect === true && !backtestRunThisSession && !autoSelectResult && (
+            <div style={{ 
+              padding: '8px 12px', background: '#1a1a2e', borderRadius: 6, 
+              border: '1px solid #ff9800', marginTop: 12 
+            }}>
+              <div style={{ color: '#ff9800', fontSize: 11, marginBottom: 6 }}>
+                Auto-select backtest hasn't been run since page reload.
+              </div>
+              <button
+                onClick={handleRerunBacktest}
+                disabled={!!autoSelectProgress}
+                style={{
+                  padding: '6px 14px', background: '#2a2010', color: '#ff9800',
+                  border: '1px solid #ff9800', borderRadius: 4, 
+                  cursor: autoSelectProgress ? 'wait' : 'pointer',
+                  fontSize: 11, fontWeight: 600,
+                }}
+              >
+                {autoSelectProgress ? 'Running...' : 'Re-run Backtest'}
+              </button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
             <button
@@ -1847,6 +1889,15 @@ export function LiveDashboard({
             autoSelectProgress={autoSelectProgress}
             autoSelectResult={autoSelectResult}
             onConfigReset={() => setPersistedConfig(null)}
+            onBacktestStarted={() => {
+              // Re-fetch config after backtest to update persistedConfig with resolved pairs
+              fetch(`${backendUrl}/api/bot/config`)
+                .then(r => r.ok ? r.json() : null)
+                .then(configData => {
+                  if (configData) setPersistedConfig(configData);
+                })
+                .catch(() => {});
+            }}
           />
             </div>
           </div>
