@@ -43,9 +43,9 @@
 
 ## 7. Testing
 
-- [ ] 7.1 Write test for config submission advancing to choice prompt (not backtest)
-- [ ] 7.2 Write test for auto-select choice triggering backtest
-- [ ] 7.3 Write test for manual choice showing warning and pickers
-- [ ] 7.4 Write test for manual selection advancing to Review with correct pair
-- [ ] 7.5 Write test for re-run flow showing choice prompt
-- [ ] 7.6 Run existing tests to verify no regressions
+- [x] 7.1 Write test for config submission advancing to choice prompt (not backtest)
+- [x] 7.2 Write test for auto-select choice triggering backtest
+- [x] 7.3 Write test for manual choice showing warning and pickers
+- [x] 7.4 Write test for manual selection advancing to Review with correct pair
+- [x] 7.5 Write test for re-run flow showing choice prompt
+- [x] 7.6 Run existing tests to verify no regressions
