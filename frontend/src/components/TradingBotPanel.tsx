@@ -1051,12 +1051,18 @@ function SetupWizard({
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState('');
 
-  // When persisted config loads after mount (e.g. after bot stops), advance to review
+  // When persisted config/wallet data loads after mount (e.g. after bot stops, when
+  // LiveDashboard re-fetches wallet status + config), advance to review.
+  //   - 'config' → 'review': persisted config arrived after mount
+  //   - 'wallet' → 'review': wallet info arrived after mount while the local state
+  //     still shows "no wallet" (stale import-wallet step). A user deliberately
+  //     viewing an already-imported wallet is left alone.
   useEffect(() => {
-    if (persistedConfig && initialWallet.hasWallet && step === 'config') {
+    if (!persistedConfig || !initialWallet.hasWallet || step === 'review') return;
+    if (step === 'config' || (step === 'wallet' && !wallet.hasWallet)) {
       setStep('review');
     }
-  }, [persistedConfig, initialWallet.hasWallet, step]);
+  }, [persistedConfig, initialWallet.hasWallet, wallet.hasWallet, step]);
 
   // Balance from wallet info or fetched from backend
   const [usdcBalance, setUsdcBalance] = useState<number | null>(wallet.usdcBalance ?? null);
@@ -1640,14 +1646,22 @@ export function LiveDashboard({
     }).finally(() => setWalletLoaded(true));
   }, [backendUrl]);
 
-  // Re-fetch persisted config when bot transitions to idle/stopped
-  // This ensures the SetupWizard always has the latest config from disk
+  // Re-fetch wallet status + persisted config when bot transitions to idle/stopped.
+  // Ensures the SetupWizard always has fresh wallet/config data after a stop —
+  // a failed mount fetch can otherwise leave wallet.hasWallet=false, which strands
+  // the wizard on the import-wallet step instead of review.
   useEffect(() => {
     if (status.state === 'Idle' || status.state === 'Stopped') {
-      fetch(`${backendUrl}/api/bot/config`)
-        .then(r => r.ok ? r.json() : null)
-        .then(config => setPersistedConfig(config))
-        .catch(() => setPersistedConfig(null));
+      Promise.all([
+        fetch(`${backendUrl}/api/bot/wallet/status`).then(r => r.json()).catch(() => null),
+        fetch(`${backendUrl}/api/bot/config`).then(r => r.ok ? r.json() : null).catch(() => null),
+      ]).then(([walletData, configData]) => {
+        if (walletData && walletData.success) {
+          setWallet({ hasWallet: walletData.hasWallet, publicKey: walletData.publicKey });
+          setWalletLocked(walletData.locked);
+        }
+        setPersistedConfig(configData ?? null);
+      }).catch(() => setPersistedConfig(null));
     }
   }, [status.state, backendUrl]);
 
