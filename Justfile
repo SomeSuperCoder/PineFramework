@@ -1,12 +1,12 @@
 alias t := test
-alias s := start
+alias d := dev
 alias c := check
 
 test:
     pnpm run test
     pnpm --filter pine-framework-frontend run test:e2e
 
-start:
+dev:
     pnpm run dev
 
 check:

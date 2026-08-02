@@ -95,6 +95,10 @@
     "ed25519-hd-key": "^2.0.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": []
+    "onlyBuiltDependencies": [
+      "bufferutil",
+      "esbuild",
+      "utf-8-validate"
+    ]
   }
 }
