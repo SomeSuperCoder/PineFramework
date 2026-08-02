@@ -85,4 +85,20 @@ describe('BotConfigStore', () => {
     store.save(newConfig);
     expect(store.load()?.dex).toBe('jupiter-ultra');
   });
+
+  it('should persist autoSelect=false and resolved pairs after backtest', () => {
+    const postBacktestConfig: BotConfig = {
+      strategySource: '//@version=6\nstrategy("test")',
+      dex: 'jupiter-swap',
+      risk: { maxDailyLoss: 1.0 },
+      autoSelect: false,
+      pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
+    };
+    store.save(postBacktestConfig);
+    const loaded = store.load();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.autoSelect).toBe(false);
+    expect(loaded!.pairs).toHaveLength(1);
+    expect(loaded!.pairs![0]).toEqual({ symbol: 'BTCUSDT', timeframe: '60' });
+  });
 });

@@ -64,7 +64,6 @@ export interface BotEngineOptions {
 export class BotEngine {
   private readonly stateMachine: StateMachine<BotState>;
   private readonly logger: BotLogger;
-  private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
   private readonly riskManager?: RiskManager;
   private readonly telegramBot?: TradingTelegramBot;
   private _config: BotConfig | null = null;
@@ -77,7 +76,6 @@ export class BotEngine {
 
   constructor(options?: BotEngineOptions) {
     this.logger = options?.logger ?? consoleLogger;
-    this.onAutoSelect = options?.onAutoSelect;
     this.riskManager = options?.riskManager;
     this.telegramBot = options?.telegramBot;
 
@@ -164,22 +162,14 @@ export class BotEngine {
       throw new Error('Cannot start bot without configuration. Call configure() first.');
     }
 
-    // Run auto-selection if enabled
+    // Refuse to start when auto-select is still pending — running selection
+    // inline blocks the HTTP response and keeps the engine in Idle with no
+    // feedback.  The caller must run the Backtest step first (which sets
+    // autoSelect=false and persists the resolved pairs to disk).
     if (this._config.autoSelect) {
-      if (!this.onAutoSelect) {
-        throw new Error(
-          'Auto-select is enabled but no onAutoSelect callback was provided to BotEngine. ' +
-          'Provide an onAutoSelect implementation or disable autoSelect.',
-        );
-      }
-      this.logger.info('Auto-selection enabled — evaluating candidate pairs');
-      const selectedPairs = await this.onAutoSelect(this._config);
-      if (selectedPairs.length === 0) {
-        throw new Error('Auto-selection returned no pairs. Cannot start bot.');
-      }
-      this._config = { ...this._config, pairs: selectedPairs };
-      this.logger.info('Auto-selection complete', { pairs: selectedPairs.map((p) => `${p.symbol}:${p.timeframe}`) });
-      this.emit('configUpdate', this._config);
+      throw new Error(
+        'auto-select must run before starting; use the Backtest step first.',
+      );
     }
 
     await this.stateMachine.transition(BotState.Starting, 'User requested start');

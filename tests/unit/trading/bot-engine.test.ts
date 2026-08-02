@@ -163,6 +163,20 @@ describe('BotEngine', () => {
     expect(engine.startedAt).toBeNull();
   });
 
+  it('should refuse to start when autoSelect is true', async () => {
+    const configWithAutoSelect: BotConfig = {
+      ...defaultConfig,
+      pairs: undefined, // pairs not required when autoSelect is true
+      autoSelect: true,
+    };
+    engine.configure(configWithAutoSelect);
+
+    await expect(engine.start()).rejects.toThrow(
+      'auto-select must run before starting',
+    );
+    expect(engine.state).toBe(BotState.Idle);
+  });
+
   it('should reject reset from Running state', async () => {
     engine.configure(defaultConfig);
     vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
