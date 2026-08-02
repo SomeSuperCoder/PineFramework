@@ -1093,8 +1093,8 @@ function SetupWizard({
     setStartError('');
     try {
       await onStart();
-    } catch {
-      setStartError('Failed to start bot');
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : 'Failed to start bot');
     } finally {
       setStarting(false);
     }
