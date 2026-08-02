@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { StrategySelector } from './StrategySelector';
 import { ProgressBar } from './ProgressBar';
 import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
+import { MiniChart } from './MiniChart';
+import { useBotMiniChartData } from '../hooks/useMiniChartData';
 
 // ---- Timezone Utilities ----
 
@@ -1761,6 +1763,33 @@ export function LiveDashboard({
 
   const isReady = wallet.hasWallet && !walletLocked;
 
+  // Mini chart data — fetch OHLCV + execute script for the first configured pair
+  const activePair = persistedConfig?.pairs?.[0] ?? null;
+  const miniChartData = useBotMiniChartData(
+    backendUrl,
+    activePair?.symbol ?? null,
+    activePair?.timeframe ?? null,
+    persistedConfig?.strategySource ?? null,
+  );
+
+  // Debug: log mini chart data
+  const miniDataLogRef = useRef({ count: 0, lastVersion: -1 });
+  if (miniDataLogRef.current.count < 5 || miniChartData.dataVersion !== miniDataLogRef.current.lastVersion) {
+    console.log('[BotDashboard] miniChartData', {
+      symbol: activePair?.symbol,
+      timeframe: activePair?.timeframe,
+      hasStrategy: !!persistedConfig?.strategySource,
+      strategyLen: persistedConfig?.strategySource?.length,
+      displayCandles: miniChartData.displayCandles.length,
+      hasScriptResult: !!miniChartData.displayScriptResult,
+      plotsCount: miniChartData.displayScriptResult?.plots?.length ?? 0,
+      dataVersion: miniChartData.dataVersion,
+      loading: miniChartData.loading,
+    });
+    miniDataLogRef.current.count++;
+    miniDataLogRef.current.lastVersion = miniChartData.dataVersion;
+  }
+
   const rootStyle: React.CSSProperties = {
     flex: 1,
     display: 'flex',
@@ -1978,8 +2007,27 @@ export function LiveDashboard({
           </div>
         </div>
 
-        {/* Center: Metrics + Positions */}
+        {/* Center: Mini Chart + Metrics + Positions */}
         <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
+          {/* Mini Chart */}
+          {(isRunning || isError || transitioning) && activePair && (
+            <div style={{ marginBottom: 12, borderBottom: '1px solid #1a1a2e', paddingBottom: 12 }}>
+              <div style={{ color: '#888', fontWeight: 600, marginBottom: 6, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>{activePair.symbol}</span>
+                <span style={{ color: '#555', fontWeight: 400 }}>{activePair.timeframe}</span>
+                {miniChartData.loading && (
+                  <span style={{ color: '#ff9800', fontSize: 10, fontWeight: 400 }}>loading…</span>
+                )}
+              </div>
+              <MiniChart
+                data={miniChartData.displayCandles}
+                scriptResult={miniChartData.displayScriptResult}
+                dataVersion={miniChartData.dataVersion}
+                height={180}
+              />
+            </div>
+          )}
+
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 16 }}>
             <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : na} />

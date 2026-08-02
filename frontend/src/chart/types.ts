@@ -114,6 +114,12 @@ export interface ChartOptions {
   volumeHeightRatio?: number;
   priceScaleWidth?: number;
   timeScaleHeight?: number;
+  /** When false, disables mouse/touch/scroll interaction (no pan, zoom, crosshair). */
+  interactive?: boolean;
+  /** When false, skips grid line rendering. */
+  showGrid?: boolean;
+  /** When false, skips price scale and time scale axis labels. */
+  showAxisLabels?: boolean;
 }
 
 export const DEFAULT_OPTIONS: Required<ChartOptions> = {
@@ -129,6 +135,9 @@ export const DEFAULT_OPTIONS: Required<ChartOptions> = {
   volumeHeightRatio: 0.2,
   priceScaleWidth: 70,
   timeScaleHeight: 30,
+  interactive: true,
+  showGrid: true,
+  showAxisLabels: true,
 };
 
 export interface ChunkBorderData {

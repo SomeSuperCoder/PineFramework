@@ -23,6 +23,7 @@ export class InteractionHandler {
   private velocity: number = 0;
   private animFrame: number = 0;
   private chartWidth: number;
+  private enabled: boolean;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -30,13 +31,17 @@ export class InteractionHandler {
     layout: LayoutManager,
     callbacks: InteractionCallbacks,
     chartWidth: number,
+    enabled: boolean = true,
   ) {
     this.canvas = canvas;
     this.viewport = viewport;
     this.layout = layout;
     this.callbacks = callbacks;
     this.chartWidth = chartWidth;
-    this.bindEvents();
+    this.enabled = enabled;
+    if (enabled) {
+      this.bindEvents();
+    }
   }
 
   setChartWidth(width: number): void {
@@ -57,6 +62,7 @@ export class InteractionHandler {
   }
 
   destroy(): void {
+    if (!this.enabled) return;
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);

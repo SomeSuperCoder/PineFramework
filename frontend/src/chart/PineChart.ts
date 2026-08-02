@@ -82,6 +82,7 @@ export class PineChart {
   private debugMode: boolean = false;
   private chunkBorders: ChunkBorderData[] = [];
   private eventCallbacks: ChartEventCallbacks = {};
+  private _renderDebugCount = 0;
   private container: HTMLElement;
   private tableContainer: HTMLElement | null = null;
 
@@ -92,7 +93,7 @@ export class PineChart {
     this.canvas = document.createElement('canvas');
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
-    this.canvas.style.cursor = 'crosshair';
+    this.canvas.style.cursor = this.options.interactive ? 'crosshair' : 'default';
     container.appendChild(this.canvas);
 
     this.offscreen = document.createElement('canvas');
@@ -158,6 +159,7 @@ export class PineChart {
         },
       },
       this.canvas.clientWidth * (window.devicePixelRatio || 1),
+      this.options.interactive,
     );
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -238,7 +240,52 @@ export class PineChart {
     );
     this.viewportManager.updateVolumeMax(this.candles);
 
-    this.gridRenderer.render(ctx, this.viewport, this.layout, this.options.gridColor);
+    // DEBUG: log overlay plot state on first render
+    const debugOverlaySeries: string[] = [];
+    for (const [key, handle] of this.plotSeriesManager.getAllSeries()) {
+      if (handle.overlay) {
+        const nonNull = handle.data.filter(d => d.value !== null).length;
+        debugOverlaySeries.push(`${key}: dataLen=${handle.data.length} nonNull=${nonNull} overlay=${handle.overlay}`);
+      }
+    }
+    if (debugOverlaySeries.length > 0) {
+      this._renderDebugCount++;
+      if (this._renderDebugCount <= 5) {
+        const regions = this.layout.getRegions();
+        const priceRange = this.layout.getPriceRange();
+        const vr = this.viewport.getVisibleRange();
+        console.log('[PC] render debug #' + this._renderDebugCount, {
+          canvasW: this.canvas.width,
+          canvasH: this.canvas.height,
+          chartArea: regions.chartArea,
+          priceRange,
+          visibleRange: vr,
+          barSpacing: this.viewport.getBarSpacing(),
+          totalBars: this.viewport.getTotalBars(),
+          series: debugOverlaySeries,
+        });
+
+        // Log first few pixel coords for first overlay series
+        const firstSeries = [...this.plotSeriesManager.getAllSeries().values()].find(h => h.overlay);
+        if (firstSeries && firstSeries.data.length > 0) {
+          const samplePoints: Array<{barIdx: number; x: number; y: number; val: number | null}> = [];
+          for (let i = 0; i < Math.min(5, firstSeries.data.length); i++) {
+            const d = firstSeries.data[i];
+            samplePoints.push({
+              barIdx: i,
+              x: this.viewport.barIndexToPixel(i) + this.viewport.getBarSpacing() / 2,
+              y: this.layout.priceToPixel(d.value ?? 0, regions.chartArea.y, regions.chartArea.height),
+              val: d.value,
+            });
+          }
+          console.log('[PC] render overlay sample', { name: firstSeries.name, points: samplePoints });
+        }
+      }
+    }
+
+    if (this.options.showGrid) {
+      this.gridRenderer.render(ctx, this.viewport, this.layout, this.options.gridColor);
+    }
 
     const allPlots = new Map<string, PlotSeriesData[]>();
     for (const [key, handle] of this.plotSeriesManager.getAllSeries()) {
@@ -343,10 +390,14 @@ export class PineChart {
     this.renderLabels(ctx);
     this.renderBoxes(ctx);
 
-    this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
-    this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
+    if (this.options.showAxisLabels) {
+      this.axisRenderer.renderPriceScale(ctx, this.layout, this.options.textColor, this.options.borderColor);
+      this.axisRenderer.renderTimeScale(ctx, this.candles, this.viewport, this.layout, this.options.textColor, this.options.borderColor);
+    }
 
-    this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers, this.strategyMarkers);
+    if (this.options.interactive) {
+      this.crosshairRenderer.render(ctx, this.candles, allPlots, this.viewport, this.layout, this.options.textColor, this.alertTriggers, this.strategyMarkers);
+    }
 
     // Debug overlay: chunk borders (only when debug mode is active)
     this.renderChunkBorders(ctx);
