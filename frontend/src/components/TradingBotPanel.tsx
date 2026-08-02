@@ -637,11 +637,10 @@ function calcMaxDailyLoss(usdcBalance: number): number {
   return Math.min(1, usdcBalance * 0.10);
 }
 
-function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTimeframes, usdcBalance }: {
+function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance }: {
   backendUrl: string;
   onConfigured: () => void;
   onConfigValues?: (values: ConfigValues) => void;
-  selectedTimeframes: string[];
   usdcBalance: number | null;
 }) {
   const [strategySource, setStrategySource] = useState('');
@@ -692,16 +691,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, selectedTime
       if (!res.ok) {
         setError(data.error || 'Configuration failed');
       } else {
-        // Trigger backtest after successful configure
-        const backtestRes = await fetch(`${backendUrl}/api/bot/backtest`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timeframes: selectedTimeframes }),
-        });
-        if (!backtestRes.ok) {
-          const backtestData = await backtestRes.json();
-          console.error('Backtest trigger failed:', backtestData.error);
-        }
         onConfigValues?.({
           strategySource: strategySource.trim(),
           dex,
@@ -1022,14 +1011,14 @@ function SetupWizard({
   onBacktestStarted?: () => void;
 }) {
   // Determine initial step: if config exists AND wallet exists, go to review
-  const getInitialStep = (): 'wallet' | 'config' | 'backtest' | 'review' => {
+  const getInitialStep = (): 'wallet' | 'config' | 'backtest-choice' | 'backtest' | 'review' => {
     if (persistedConfig && initialWallet.hasWallet) {
       return 'review';
     }
     return initialWallet.hasWallet ? 'config' : 'wallet';
   };
 
-  const [step, setStep] = useState<'wallet' | 'config' | 'backtest' | 'review'>(getInitialStep);
+  const [step, setStep] = useState<'wallet' | 'config' | 'backtest-choice' | 'backtest' | 'review'>(getInitialStep);
   const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
   const [configValues, setConfigValues] = useState<ConfigValues | null>(() => {
     // Initialize configValues from persisted config if available
@@ -1055,6 +1044,8 @@ function SetupWizard({
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState('');
   const [backtestRunThisSession, setBacktestRunThisSession] = useState(false);
+  const [backtestMode, setBacktestMode] = useState<'auto' | 'manual'>('auto');
+  const [manualPair, setManualPair] = useState<{ symbol: string; timeframe: string } | null>(null);
 
   // When persisted config/wallet data loads after mount (e.g. after bot stops, when
   // LiveDashboard re-fetches wallet status + config), advance to review.
@@ -1141,22 +1132,11 @@ function SetupWizard({
   };
 
   const handleRerunBacktest = async () => {
-    setStep('backtest');
-    try {
-      await fetch(`${backendUrl}/api/bot/backtest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeframes: selectedTimeframes }),
-      });
-      setBacktestRunThisSession(true);
-      onBacktestStarted?.();
-    } catch (err) {
-      console.error('Backtest trigger failed:', err);
-    }
+    setStep('backtest-choice');
   };
 
   const StepDot = ({ s, label }: { s: typeof step; label: string }) => {
-    const steps = ['wallet', 'config', 'backtest', 'review'];
+    const steps = ['wallet', 'config', 'backtest-choice', 'backtest', 'review'];
     const idx = steps.indexOf(s) + 1;
     const active = step === s;
     const done = steps.indexOf(s) < steps.indexOf(step);
@@ -1185,6 +1165,24 @@ function SetupWizard({
     );
   };
 
+  const handleBacktestChoice = async (mode: 'auto' | 'manual') => {
+    setBacktestMode(mode);
+    if (mode === 'auto') {
+      try {
+        await fetch(`${backendUrl}/api/bot/backtest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeframes: selectedTimeframes }),
+        });
+        setBacktestRunThisSession(true);
+        onBacktestStarted?.();
+      } catch (err) {
+        console.error('Backtest trigger failed:', err);
+      }
+    }
+    setStep('backtest');
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Step indicator */}
@@ -1193,7 +1191,7 @@ function SetupWizard({
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
         <StepDot s="config" label="Config" />
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
-        <StepDot s="backtest" label="Backtest" />
+        <StepDot s="backtest-choice" label="Backtest" />
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
         <StepDot s="review" label="Review" />
         <div style={{ flex: 1 }} />
@@ -1232,9 +1230,8 @@ function SetupWizard({
         <div>
           <BotConfigPanel
             backendUrl={backendUrl}
-            onConfigured={() => { setStep('backtest'); }}
+            onConfigured={() => { setStep('backtest-choice'); }}
             onConfigValues={(v) => setConfigValues(v)}
-            selectedTimeframes={selectedTimeframes}
             usdcBalance={usdcBalance}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
@@ -1252,46 +1249,157 @@ function SetupWizard({
         </div>
       )}
 
-      {/* Step 3: Backtest */}
-      {step === 'backtest' && (
+      {/* Step 3: Backtest Choice */}
+      {step === 'backtest-choice' && (
         <div>
           <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
-            Auto-Select Backtest
+            Backtest Selection
           </div>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
-            Evaluating candidate pairs sequentially...
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>
+            How would you like to select your trading pair?
           </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button
+              onClick={() => handleBacktestChoice('auto')}
+              style={{
+                padding: '12px 16px', background: '#1a3a6a', color: '#64b5f6',
+                border: '1px solid #64b5f6', borderRadius: 6, cursor: 'pointer',
+                fontSize: 12, fontWeight: 600, textAlign: 'left',
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>🚀 Run Auto-Select Backtest</div>
+              <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>
+                Automatically evaluate multiple pairs and timeframes to find the best performer
+              </div>
+            </button>
+            <button
+              onClick={() => handleBacktestChoice('manual')}
+              style={{
+                padding: '12px 16px', background: '#2a2010', color: '#ff9800',
+                border: '1px solid #ff9800', borderRadius: 6, cursor: 'pointer',
+                fontSize: 12, fontWeight: 600, textAlign: 'left',
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>✋ Manually Select Pair & Timeframe</div>
+              <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>
+                Choose your own pair and timeframe — you take full responsibility for the selection
+              </div>
+            </button>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 12 }}>
+            <button
+              onClick={() => setStep('config')}
+              style={{
+                padding: '6px 14px', background: 'transparent', color: '#888',
+                border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
+                fontSize: 11,
+              }}
+            >
+              ← Back
+            </button>
+          </div>
+        </div>
+      )}
 
-          {/* Timeframe Selection */}
-          {!autoSelectProgress && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>Select Timeframes:</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['5', '15', '60', '240'].map(tf => (
-                  <label key={tf} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedTimeframes.includes(tf)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedTimeframes(prev => [...prev, tf]);
-                        } else {
-                          setSelectedTimeframes(prev => prev.filter(t => t !== tf));
-                        }
-                      }}
-                      style={{ accentColor: '#64b5f6' }}
-                    />
-                    <span style={{ fontSize: 11, color: '#ccc' }}>
-                      {tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : '4h'}
-                    </span>
-                  </label>
-                ))}
+      {/* Step 4: Backtest */}
+      {step === 'backtest' && (
+        <div>
+          {/* Manual Selection Mode */}
+          {backtestMode === 'manual' && (
+            <div style={{
+              padding: 12, background: '#2a2010', borderRadius: 6,
+              border: '1px solid #ff9800', marginBottom: 12,
+            }}>
+              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+                ⚠ Manual Selection Mode
+              </div>
+              <div style={{ fontSize: 10, color: '#e0a040', marginBottom: 8 }}>
+                Auto-select was skipped. You are fully responsible for your pair/timeframe choice.
+                The bot will only trade the pair you select — no automated evaluation was performed.
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <label style={{ color: '#888', fontSize: 11 }}>
+                  Pair:{' '}
+                  <select
+                    value={manualPair?.symbol ?? ''}
+                    onChange={(e) => setManualPair(prev => ({
+                      symbol: e.target.value,
+                      timeframe: prev?.timeframe ?? '60',
+                    }))}
+                    style={{
+                      background: '#111128', color: '#e0e0e0', border: '1px solid #333',
+                      borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
+                    }}
+                  >
+                    <option value="">Select pair...</option>
+                    <option value="BTCUSDT">BTC/USDT</option>
+                    <option value="ETHUSDT">ETH/USDT</option>
+                    <option value="SOLUSDT">SOL/USDT</option>
+                  </select>
+                </label>
+                <label style={{ color: '#888', fontSize: 11 }}>
+                  Timeframe:{' '}
+                  <select
+                    value={manualPair?.timeframe ?? '60'}
+                    onChange={(e) => setManualPair(prev => ({
+                      symbol: prev?.symbol ?? '',
+                      timeframe: e.target.value,
+                    }))}
+                    style={{
+                      background: '#111128', color: '#e0e0e0', border: '1px solid #333',
+                      borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
+                    }}
+                  >
+                    <option value="5">5m</option>
+                    <option value="15">15m</option>
+                    <option value="60">1h</option>
+                    <option value="240">4h</option>
+                  </select>
+                </label>
               </div>
             </div>
           )}
 
-          {/* Auto-Select Progress */}
-          {autoSelectProgress && (
+          {/* Auto-Select Mode */}
+          {backtestMode === 'auto' && (
+            <>
+              <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+                Auto-Select Backtest
+              </div>
+              <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                Evaluating candidate pairs sequentially...
+              </div>
+
+              {/* Timeframe Selection */}
+              {!autoSelectProgress && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>Select Timeframes:</div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {['5', '15', '60', '240'].map(tf => (
+                      <label key={tf} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedTimeframes.includes(tf)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedTimeframes(prev => [...prev, tf]);
+                            } else {
+                              setSelectedTimeframes(prev => prev.filter(t => t !== tf));
+                            }
+                          }}
+                          style={{ accentColor: '#64b5f6' }}
+                        />
+                        <span style={{ fontSize: 11, color: '#ccc' }}>
+                          {tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : '4h'}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Auto-Select Progress */}
+              {autoSelectProgress && (
             <div style={{
               padding: 12, background: '#111128', borderRadius: 6,
               border: '1px solid #ff9800',
@@ -1344,10 +1452,12 @@ function SetupWizard({
               </div>
             </div>
           )}
+            </>
+          )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
             <button
-              onClick={() => setStep('config')}
+              onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
               disabled={!!autoSelectProgress}
               style={{
                 padding: '6px 14px', background: 'transparent', color: '#888',
@@ -1357,18 +1467,33 @@ function SetupWizard({
             >
               ← Back
             </button>
-            <button
-              onClick={() => setStep('review')}
-              disabled={!autoSelectResult}
-              style={{
-                padding: '8px 24px', background: autoSelectResult ? '#1a3328' : '#222',
-                color: autoSelectResult ? '#4caf50' : '#555', border: `1px solid ${autoSelectResult ? '#4caf50' : '#333'}`,
-                borderRadius: 4, cursor: autoSelectResult ? 'pointer' : 'default',
-                fontSize: 12, fontWeight: 700,
-              }}
-            >
-              Next →
-            </button>
+            {backtestMode === 'auto' ? (
+              <button
+                onClick={() => setStep('review')}
+                disabled={!autoSelectResult}
+                style={{
+                  padding: '8px 24px', background: autoSelectResult ? '#1a3328' : '#222',
+                  color: autoSelectResult ? '#4caf50' : '#555', border: `1px solid ${autoSelectResult ? '#4caf50' : '#333'}`,
+                  borderRadius: 4, cursor: autoSelectResult ? 'pointer' : 'default',
+                  fontSize: 12, fontWeight: 700,
+                }}
+              >
+                Next →
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep('review')}
+                disabled={!manualPair?.symbol}
+                style={{
+                  padding: '8px 24px', background: manualPair?.symbol ? '#1a3328' : '#222',
+                  color: manualPair?.symbol ? '#4caf50' : '#555', border: `1px solid ${manualPair?.symbol ? '#4caf50' : '#333'}`,
+                  borderRadius: 4, cursor: manualPair?.symbol ? 'pointer' : 'default',
+                  fontSize: 12, fontWeight: 700,
+                }}
+              >
+                Next →
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1401,10 +1526,17 @@ function SetupWizard({
                 <div>
                   <span style={{ color: '#888' }}>Selected Pair: </span>
                   <span style={{ color: '#4caf50', fontWeight: 600 }}>
-                    {autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
+                    {backtestMode === 'manual' && manualPair
+                      ? `${manualPair.symbol} (${manualPair.timeframe === '5' ? '5m' : manualPair.timeframe === '15' ? '15m' : manualPair.timeframe === '60' ? '1h' : '4h'})`
+                      : autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
                   </span>
                 </div>
-                {autoSelectResult && (
+                {backtestMode === 'manual' && (
+                  <div style={{ fontSize: 10, color: '#ff9800', marginLeft: 60 }}>
+                    Manual selection — no auto-select evaluation performed
+                  </div>
+                )}
+                {autoSelectResult && backtestMode === 'auto' && (
                   <div style={{ fontSize: 10, color: '#888', marginLeft: 60 }}>
                     PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                     {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
