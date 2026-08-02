@@ -108,19 +108,19 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
           }
         }
 
-        if (!seriesNamesRef.current.has(title)) {
-          chart.addPlotSeries(
-            title,
-            {
-              color: plotColor,
-              lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-              style: (plot.type as any) || 'line',
-            },
-            result.overlay,
-            undefined,
-          );
-          console.log('[MiniChart] added plot series', { title, color: plotColor, overlay: result.overlay, dataLen: seriesData.length });
-        }
+        // Always call addPlotSeries — it's idempotent (returns existing handle if present).
+        // We cannot rely on seriesNamesRef across remounts (Strict Mode) because the ref
+        // survives unmount while the PineChart instance is recreated empty.
+        chart.addPlotSeries(
+          title,
+          {
+            color: plotColor,
+            lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
+            style: (plot.type as any) || 'line',
+          },
+          result.overlay,
+          undefined,
+        );
         chart.setPlotData(title, seriesData);
       }
 
