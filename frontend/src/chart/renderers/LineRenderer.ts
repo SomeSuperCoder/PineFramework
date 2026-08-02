@@ -10,8 +10,6 @@ export interface PlotRenderOptions {
 }
 
 export class LineRenderer {
-  private _debugCallCount = 0;
-
   render(
     ctx: CanvasRenderingContext2D,
     data: PlotSeriesData[],
@@ -30,22 +28,6 @@ export class LineRenderer {
     ctx.fillStyle = options.color;
     ctx.lineWidth = options.lineWidth;
     ctx.lineJoin = 'round';
-
-    // Debug: log first few calls
-    this._debugCallCount++;
-    if (this._debugCallCount <= 3) {
-      console.log('[LineRenderer] render called', {
-        callCount: this._debugCallCount,
-        dataLen: data.length,
-        candlesLen: candles.length,
-        style: options.style,
-        color: options.color,
-        lineWidth: options.lineWidth,
-        chartArea,
-        paneId,
-        hasPane: !!pane,
-      });
-    }
 
     switch (options.style) {
       case 'line':
@@ -109,19 +91,6 @@ export class LineRenderer {
       }
       prevX = x;
       prevY = y;
-    }
-    // Debug: log first few calls
-    if (this._debugCallCount <= 3) {
-      console.log('[LineRenderer] renderLine done', {
-        dataLen: data.length,
-        candlesLen: candles.length,
-        limit,
-        segmentsDrawn,
-        chartArea,
-        lineWidth: options.lineWidth,
-        color: options.color,
-        style: options.style,
-      });
     }
   }
 

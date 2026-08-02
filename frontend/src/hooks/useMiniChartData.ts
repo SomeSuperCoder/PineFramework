@@ -45,9 +45,7 @@ export function useBotMiniChartData(
   // Execute script against current candles
   const executeScript = useCallback(
     async (src: string, bars: CandlestickData[]) => {
-      console.log('[MiniData] executeScript called', { srcLen: src?.length, barsLen: bars?.length });
       if (!src || bars.length === 0) {
-        console.log('[MiniData] executeScript SKIPPED', { src: !!src, barsLen: bars?.length });
         return null;
       }
       try {
@@ -67,20 +65,9 @@ export function useBotMiniChartData(
           }),
         });
         if (!response.ok) {
-          console.log('[MiniData] executeScript HTTP error', response.status);
           return null;
         }
         const execResult = await response.json();
-        console.log('[MiniData] executeScript result', {
-          success: execResult.success,
-          error: execResult.error,
-          overlay: execResult.overlay,
-          outputKeys: Object.keys(execResult.outputs || {}),
-          outputCounts: Object.entries(execResult.outputs || {}).map(([k, v]) => [k, (v as any[])?.length]),
-          shapesCount: (execResult.shapes || []).length,
-          fillsCount: (execResult.fills || []).length,
-          strategyMarkersCount: (execResult.strategyMarkers || []).length,
-        });
         const result = buildScriptResult(
           true, // overlay
           execResult.outputs || {},
@@ -101,15 +88,8 @@ export function useBotMiniChartData(
           execResult.hiddenPlotKeys,
           execResult.barColors,
         );
-        console.log('[MiniData] buildScriptResult', {
-          plotsCount: result.plots.length,
-          plotTitles: result.plots.map((p) => p.title),
-          plotDataLengths: result.plots.map((p) => p.data.length),
-          nonNullPerPlot: result.plots.map((p) => p.data.filter((d) => d.value !== null).length),
-        });
         return result;
       } catch (e) {
-        console.log('[MiniData] executeScript ERROR', e);
         return null;
       }
     },
@@ -118,7 +98,6 @@ export function useBotMiniChartData(
 
   // Fetch initial OHLCV data
   useEffect(() => {
-    console.log('[MiniData] fetch effect running', { symbol, interval, strategySource: strategyRef.current?.slice(0, 30) });
     if (!symbol || !interval) return;
 
     let cancelled = false;
@@ -142,16 +121,13 @@ export function useBotMiniChartData(
           volume: b.volume,
         }));
 
-        console.log('[MiniData] OHLCV fetched', { count: barData.length, first: barData[0]?.time, last: barData[barData.length - 1]?.time });
         setCandles(barData);
         setDataVersion((v) => v + 1);
 
         // Execute script if we have one
-        console.log('[MiniData] strategyRef.current at execute time', { hasStrategy: !!strategyRef.current, len: strategyRef.current?.length });
         if (strategyRef.current) {
           const result = await executeScript(strategyRef.current, barData);
           if (!cancelled && result) {
-            console.log('[MiniData] setting scriptResult from fetch effect', { plots: result.plots.length });
             setScriptResult(result);
           }
         }
@@ -169,7 +145,6 @@ export function useBotMiniChartData(
 
   // Re-execute script when strategy source changes
   useEffect(() => {
-    console.log('[MiniData] strategy effect running', { strategySource: strategySource?.slice(0, 30), candlesLen: candles.length });
     if (!strategySource || candles.length === 0) return;
     let cancelled = false;
     executeScript(strategySource, candles).then((result) => {

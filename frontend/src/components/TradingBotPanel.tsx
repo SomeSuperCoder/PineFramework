@@ -1772,23 +1772,7 @@ export function LiveDashboard({
     persistedConfig?.strategySource ?? null,
   );
 
-  // Debug: log mini chart data
-  const miniDataLogRef = useRef({ count: 0, lastVersion: -1 });
-  if (miniDataLogRef.current.count < 5 || miniChartData.dataVersion !== miniDataLogRef.current.lastVersion) {
-    console.log('[BotDashboard] miniChartData', {
-      symbol: activePair?.symbol,
-      timeframe: activePair?.timeframe,
-      hasStrategy: !!persistedConfig?.strategySource,
-      strategyLen: persistedConfig?.strategySource?.length,
-      displayCandles: miniChartData.displayCandles.length,
-      hasScriptResult: !!miniChartData.displayScriptResult,
-      plotsCount: miniChartData.displayScriptResult?.plots?.length ?? 0,
-      dataVersion: miniChartData.dataVersion,
-      loading: miniChartData.loading,
-    });
-    miniDataLogRef.current.count++;
-    miniDataLogRef.current.lastVersion = miniChartData.dataVersion;
-  }
+  // Mini chart integration
 
   const rootStyle: React.CSSProperties = {
     flex: 1,

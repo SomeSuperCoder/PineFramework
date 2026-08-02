@@ -55,7 +55,6 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
     });
 
     chartRef.current = chart;
-    console.log('[MiniChart] chart created');
 
     return () => {
       chart.remove();
@@ -69,12 +68,6 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
     if (!chart) return;
 
     const result = scriptResult;
-    console.log('[MiniChart] effect running', {
-      candlesLen: data.length,
-      hasResult: !!result,
-      plotsCount: result?.plots?.length ?? 0,
-      plotTitles: result?.plots?.map((p) => p.title),
-    });
 
     chart.beginUpdate();
 
@@ -123,8 +116,6 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
         );
         chart.setPlotData(title, seriesData);
       }
-
-      console.log('[MiniChart] total plots added', { count: currentTitles.size, titles: [...currentTitles] });
 
       // Remove stale series
       for (const name of seriesNamesRef.current) {
