@@ -1872,6 +1872,13 @@ export function LiveDashboard({
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  // Timer for live duration updates (updates every second)
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const sendCommand = async (command: string) => {
     setLoading(true);
     try {
@@ -2190,27 +2197,48 @@ export function LiveDashboard({
           </div>
 
           {/* Positions */}
-          {status.positions.length > 0 && (
-            <>
+          <>
               <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Positions</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {status.positions.map((pos, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: '#111128', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: '#e0e0e0', fontWeight: 600, fontSize: 12 }}>{pos.symbol}</span>
-                    <span style={{ color: pos.side === 'long' ? '#4caf50' : '#e94560', fontSize: 11, fontWeight: 600 }}>
-                      {pos.side.toUpperCase()}
-                    </span>
-                    <span style={{ color: '#888', fontSize: 11 }}>
-                      {pos.size} @ ${pos.entryPrice.toFixed(2)}
-                    </span>
-                    <span style={{ color: fmtPnl(pos.unrealizedPnl).color, fontSize: 11, marginLeft: 'auto' }}>
-                      {fmtPnl(pos.unrealizedPnl).text}
-                    </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {status.positions.length === 0 && (
+                  <div style={{ padding: '8px 12px', background: '#111128', borderRadius: 4, color: '#666', fontSize: 11, fontStyle: 'italic' }}>
+                    No open positions
                   </div>
-                ))}
+                )}
+                {status.positions.map((pos, i) => {
+                  const pnlPercent = pos.entryPrice > 0 ? (pos.unrealizedPnl / (pos.entryPrice * pos.size)) * 100 : 0;
+                  const pnlColor = pos.unrealizedPnl >= 0 ? '#4caf50' : '#e94560';
+                  const duration = now - pos.openedAt;
+                  return (
+                    <div key={i} style={{ padding: '8px 12px', background: '#111128', borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ color: '#e0e0e0', fontWeight: 600, fontSize: 12 }}>{pos.symbol}</span>
+                        <span style={{ color: pos.side === 'long' ? '#4caf50' : '#e94560', fontSize: 11, fontWeight: 600 }}>
+                          {pos.side.toUpperCase()}
+                        </span>
+                        <span style={{ color: '#888', fontSize: 11 }}>
+                          {pos.size} @ ${pos.entryPrice.toFixed(2)}
+                        </span>
+                        <span style={{ color: '#888', fontSize: 11, marginLeft: 'auto' }}>
+                          ${pos.currentPrice.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
+                        <span style={{ color: pnlColor, fontWeight: 600 }}>
+                          {fmtPnl(pos.unrealizedPnl).text}
+                        </span>
+                        <span style={{ color: pnlColor, fontWeight: 600 }}>
+                          ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)
+                        </span>
+                        <span style={{ color: '#666', marginLeft: 'auto' }}>
+                          {fmtDur(duration)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
-          )}
 
           {/* Auto-Select Results */}
           {autoSelectResult && (
