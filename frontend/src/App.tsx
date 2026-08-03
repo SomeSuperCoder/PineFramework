@@ -13,6 +13,7 @@ import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
 import { useBotWebSocket, LiveDashboard } from './components/TradingBotPanel';
+import { useChaosMode } from './hooks/useChaosMode';
 import type { ScriptResult, BacktestConfig } from './types';
 import { TRADABLE_PAIRS } from 'pine-framework';
 
@@ -70,6 +71,7 @@ function App() {
   const backendUrl = `http://${window.location.hostname}:8081`;
   const { connected: botConnected, status: botStatus, logs: botLogs, autoSelectProgress, autoSelectResult, connectionFailed: botConnectionFailed } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
+  const { chaosMode, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -430,6 +432,7 @@ function App() {
               onClose={() => setBotDashboardOpen(false)}
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
+              chaosMode={chaosMode}
             />
           ) : botConnectionFailed ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
@@ -546,6 +549,30 @@ function App() {
         onReplace={handleStrategyReplace}
         onCancel={handleStrategyCancel}
       />
+
+      {/* Hidden chaos mode activation target — 5 taps in 3 seconds toggles chaos mode */}
+      <div {...tapTargetProps} />
+
+      {/* Chaos mode activation toast */}
+      {showToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 48,
+          right: 8,
+          background: chaosMode ? '#e94560' : '#1a1a2e',
+          color: '#fff',
+          padding: '8px 16px',
+          borderRadius: 6,
+          fontSize: 12,
+          fontWeight: 600,
+          zIndex: 10000,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+          cursor: 'pointer',
+          transition: 'opacity 0.3s',
+        }} onClick={dismissToast}>
+          {chaosMode ? '⚡ Chaos Mode Enabled' : 'Chaos Mode Disabled'}
+        </div>
+      )}
     </div>
   );
 }

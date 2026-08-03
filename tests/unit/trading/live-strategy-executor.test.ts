@@ -293,4 +293,114 @@ describe('LiveStrategyExecutor', () => {
       expect(Object.keys(restoredState)).toHaveLength(1);
     });
   });
+
+  describe('chaos mode', () => {
+    it('should generate random signals when chaosGenerator is provided', async () => {
+      const mockGenerator = {
+        generate: vi.fn().mockReturnValue({
+          action: 'long',
+          sizeFraction: 0.1,
+          equity: 1000,
+          timestamp: Date.now(),
+        }),
+        getSignalCount: vi.fn().mockReturnValue(1),
+      };
+
+      const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator };
+      const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
+
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await chaosExecutor.initializeStrategy(pair);
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50500,
+        volume: 100,
+      };
+
+      const signals = await chaosExecutor.processCandle(candle as any);
+
+      expect(mockGenerator.generate).toHaveBeenCalled();
+      expect(signals.length).toBeGreaterThan(0);
+      expect(signals[0].action).toBe('buy');
+    });
+
+    it('should use 10% sizing in chaos mode', async () => {
+      let capturedEquity = 0;
+      const mockGenerator = {
+        generate: vi.fn().mockImplementation((equity: number) => {
+          capturedEquity = equity;
+          return {
+            action: 'long',
+            sizeFraction: 0.1,
+            equity,
+            timestamp: Date.now(),
+          };
+        }),
+        getSignalCount: vi.fn().mockReturnValue(1),
+      };
+
+      const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator, initialCapital: BigInt(10_000_000) };
+      const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
+
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await chaosExecutor.initializeStrategy(pair);
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50000,
+        volume: 100,
+      };
+
+      const signals = await chaosExecutor.processCandle(candle as any);
+
+      // 10% of 10 USDC (10_000_000 / 1e6) = 1 USDC, at $50000 = 0.00002
+      expect(signals[0].quantity).toBeCloseTo(0.00002, 6);
+    });
+
+    it('should not run strategy when chaos mode is active', async () => {
+      const mockGenerator = {
+        generate: vi.fn().mockReturnValue({
+          action: 'exit',
+          sizeFraction: 0.1,
+          equity: 1000,
+          timestamp: Date.now(),
+        }),
+        getSignalCount: vi.fn().mockReturnValue(1),
+      };
+
+      const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator };
+      const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
+
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await chaosExecutor.initializeStrategy(pair);
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50500,
+        volume: 100,
+      };
+
+      // Process multiple candles — should always use chaos generator
+      await chaosExecutor.processCandle(candle as any);
+      await chaosExecutor.processCandle({ ...candle, timestamp: candle.timestamp + 60000 } as any);
+
+      expect(mockGenerator.generate).toHaveBeenCalledTimes(2);
+    });
+  });
 });

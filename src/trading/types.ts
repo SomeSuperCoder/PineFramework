@@ -92,6 +92,12 @@ export interface RiskConfig {
   maxDailyLoss: number;
 }
 
+/** Chaos test mode configuration. */
+export interface ChaosModeConfig {
+  /** Whether chaos mode is enabled. When true, random signals replace strategy execution. */
+  enabled: boolean;
+}
+
 /**
  * Complete bot configuration.
  */
@@ -110,6 +116,8 @@ export interface BotConfig {
   autoSelect?: boolean;
   /** Performance metric to optimize when auto-selecting. */
   autoSelectMetric?: 'sharpe' | 'profitFactor' | 'netProfit' | 'winRate';
+  /** Chaos test mode configuration. When enabled, random signals replace strategy execution. */
+  chaosMode?: ChaosModeConfig;
 }
 
 /** Snapshot of bot state for dashboard / WebSocket broadcast. */
@@ -127,6 +135,8 @@ export interface BotStatusSnapshot {
   exposure: number;
   errors: BotError[];
   lastTransition: StateTransition | null;
+  /** Whether chaos test mode is active. */
+  chaosMode: boolean;
 }
 
 /** Summary of an open position for dashboard display. */

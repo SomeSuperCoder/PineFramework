@@ -18,6 +18,9 @@ import { LiveStrategyExecutor } from './live-strategy-executor.js';
 import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
 import { LiveScheduler } from './live-scheduler.js';
 import { ClosedCandle, PairId } from './scheduler.js';
+import { ChaosSignalGenerator } from './chaos-signal-generator.js';
+import type { ExecutionResult } from './live-strategy-executor.js';
+import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -78,6 +81,14 @@ export class BotEngine {
 
   /** Current positions (in-memory; will be managed by scheduler in Phase 2). */
   private _positions: PositionSummary[] = [];
+
+  /** Chaos mode execution stats. */
+  private chaosStats = {
+    signalsGenerated: 0,
+    ordersExecuted: 0,
+    ordersFailed: 0,
+    totalExecutionTimeMs: 0,
+  };
 
   /** Live trading components (initialized in initialize()). */
   private barFeed: BybitWebSocketService | null = null;
@@ -173,6 +184,8 @@ export class BotEngine {
       throw new Error('Cannot start bot without configuration. Call configure() first.');
     }
 
+    const isChaosMode = this._config.chaosMode?.enabled === true;
+
     // Auto-select is a trigger (pick pairs if needed), not a gate.
     // Allow start when pairs exist from any source (auto-select, manual, API).
     if (this._config.autoSelect && !this._config.pairs?.length) {
@@ -182,6 +195,10 @@ export class BotEngine {
     }
     if (!this._config.pairs?.length) {
       throw new Error('No trading pairs configured. Set pairs or enable auto-select.');
+    }
+    // Require strategy source only when chaos mode is not active
+    if (!isChaosMode && !this._config.strategySource) {
+      throw new Error('Strategy source is required when chaos mode is disabled.');
     }
 
     await this.stateMachine.transition(BotState.Starting, 'User requested start');
@@ -351,6 +368,7 @@ export class BotEngine {
       exposure: 0, // Phase 2: compute
       errors: [...this._errors],
       lastTransition: this.lastTransition,
+      chaosMode: this._config?.chaosMode?.enabled === true,
     };
   }
 
@@ -372,16 +390,25 @@ export class BotEngine {
     this.dex = new JupiterSwapAdapter();
     this.logger.info('DEX adapter created', { dex: this.dex.name });
 
-    // 2. Create strategy executor
+    // 2. Create chaos signal generator if chaos mode is enabled
+    const isChaosMode = this._config.chaosMode?.enabled === true;
+    let chaosGenerator: ChaosSignalGenerator | undefined;
+    if (isChaosMode) {
+      chaosGenerator = new ChaosSignalGenerator(this.logger);
+      this.logger.info('Chaos mode active — random signal generator enabled');
+    }
+
+    // 3. Create strategy executor
     this.strategyExecutor = new LiveStrategyExecutor({
-      strategySource: this._config.strategySource,
+      strategySource: this._config.strategySource ?? '',
       dex: this.dex,
       walletManager: null as any, // TODO: wire real WalletManager when wallet is imported
       pairs: (this._config.pairs ?? []).map(p => ({ symbol: p.symbol, timeframe: p.timeframe })),
       initialCapital: 0n,
       positionSizePercent: 100,
+      chaosGenerator,
     });
-    this.logger.info('Strategy executor created');
+    this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
 
     // 3. Create bar feed (Bybit WebSocket)
     this.barFeed = new BybitWebSocketService();
@@ -414,8 +441,58 @@ export class BotEngine {
           timestamp: s.timestamp,
         }));
       },
-      submitOrders: async (_signals) => {
-        // Orders are handled by the strategy executor
+      submitOrders: async (signals: SchedulerTradeSignal[]) => {
+        if (!this.strategyExecutor) return;
+
+        this.chaosStats.signalsGenerated += signals.length;
+        const startTime = Date.now();
+
+        for (const signal of signals) {
+          try {
+            // Map Scheduler.TradeSignal → LiveStrategyExecutor.TradeSignal
+            const executorSignal = {
+              action: signal.action,
+              symbol: signal.pair.symbol,
+              quantity: signal.quantity,
+              expectedPrice: signal.price,
+              timestamp: signal.timestamp,
+            };
+
+            const result: ExecutionResult = await this.strategyExecutor.executeSignal(executorSignal);
+
+            if (result.success) {
+              this.chaosStats.ordersExecuted++;
+              const txSig = result.swapResult && 'signature' in result.swapResult
+                ? (result.swapResult as { signature: string }).signature
+                : 'unknown';
+              this.logger.info('chaos.order.success', {
+                action: signal.action,
+                symbol: signal.pair.symbol,
+                quantity: signal.quantity,
+                price: signal.price,
+                txSignature: txSig,
+              });
+            } else {
+              this.chaosStats.ordersFailed++;
+              this.logger.warn('chaos.order.failed', {
+                action: signal.action,
+                symbol: signal.pair.symbol,
+                quantity: signal.quantity,
+                price: signal.price,
+                error: result.error,
+              });
+            }
+          } catch (err) {
+            this.chaosStats.ordersFailed++;
+            this.logger.error('chaos.order.error', {
+              action: signal.action,
+              symbol: signal.pair.symbol,
+              error: String(err),
+            });
+          }
+        }
+
+        this.chaosStats.totalExecutionTimeMs += Date.now() - startTime;
       },
       strategyExecutor: this.strategyExecutor,
       dex: this.dex,

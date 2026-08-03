@@ -16,6 +16,7 @@ import { getTokenInfo, isValidPairSymbol } from './token-registry.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import type { ChaosSignalGenerator, ChaosSignal } from './chaos-signal-generator.js';
 
 // ---- Types ----
 
@@ -34,6 +35,8 @@ export interface LiveStrategyConfig {
   positionSizePercent: number;
   /** Data directory for state persistence. */
   dataDir?: string;
+  /** Chaos signal generator. When provided, chaos mode is active and strategy is bypassed. */
+  chaosGenerator?: ChaosSignalGenerator;
 }
 
 export interface StrategyState {
@@ -135,6 +138,11 @@ export class LiveStrategyExecutor {
 
     if (!state) {
       throw new Error(`Strategy not initialized for ${key}`);
+    }
+
+    // Chaos mode: delegate to random signal generator instead of strategy
+    if (this.config.chaosGenerator) {
+      return this.processCandleChaos(candle);
     }
 
     const signals: TradeSignal[] = [];
@@ -348,6 +356,67 @@ export class LiveStrategyExecutor {
   }
 
   // ---- Private Methods ----
+
+  /**
+   * Process a candle using chaos mode — generates random signals.
+   */
+  private processCandleChaos(candle: ClosedCandle): TradeSignal[] {
+    const generator = this.config.chaosGenerator!;
+    const currentPrice = candle.close;
+    const equity = Number(this.config.initialCapital) / 1e6; // Convert from lamports
+
+    const chaosSignal = generator.generate(equity, candle.timestamp);
+    const signals: TradeSignal[] = [];
+
+    // Map chaos action to trade signal
+    switch (chaosSignal.action) {
+      case 'long': {
+        // 10% of equity converted to token quantity
+        const positionSizeUsdc = equity * chaosSignal.sizeFraction;
+        const quantity = positionSizeUsdc / currentPrice;
+        signals.push({
+          action: 'buy',
+          symbol: candle.symbol,
+          quantity,
+          expectedPrice: currentPrice,
+          timestamp: candle.timestamp,
+        });
+        break;
+      }
+      case 'short': {
+        // Close existing position (spot DEX doesn't support short selling)
+        const key = this.getPairKey(candle);
+        const state = this.strategyStates.get(key);
+        if (state && state.position.direction === 'long' && state.position.quantity > 0) {
+          signals.push({
+            action: 'sell',
+            symbol: candle.symbol,
+            quantity: state.position.quantity,
+            expectedPrice: currentPrice,
+            timestamp: candle.timestamp,
+          });
+        }
+        break;
+      }
+      case 'exit': {
+        // Close existing position
+        const key = this.getPairKey(candle);
+        const state = this.strategyStates.get(key);
+        if (state && state.position.direction === 'long' && state.position.quantity > 0) {
+          signals.push({
+            action: 'sell',
+            symbol: candle.symbol,
+            quantity: state.position.quantity,
+            expectedPrice: currentPrice,
+            timestamp: candle.timestamp,
+          });
+        }
+        break;
+      }
+    }
+
+    return signals;
+  }
 
   private getPairKey(pair: PairId): string {
     return `${pair.symbol}:${pair.timeframe}`;

@@ -594,6 +594,53 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   // ── Password management endpoints ──
 
   /**
+   * POST /bot/chaos-mode
+   * Toggle chaos test mode on/off.
+   * Accepts { enabled: boolean } in body.
+   * Persists to config store.
+   */
+  router.post('/bot/chaos-mode', (req, res) => {
+    try {
+      const engine = getEngine();
+      if (!engine) {
+        res.status(503).json({ success: false, error: 'Trading bot not initialized' });
+        return;
+      }
+
+      const { enabled } = req.body as { enabled?: boolean };
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
+        return;
+      }
+
+      const currentConfig = engine.config;
+      if (!currentConfig) {
+        res.status(400).json({ success: false, error: 'Bot not configured' });
+        return;
+      }
+
+      // Update config with chaos mode setting
+      const updatedConfig = {
+        ...currentConfig,
+        chaosMode: { enabled },
+      };
+
+      engine.configure(updatedConfig);
+
+      // Persist to disk
+      const store = getConfigStore();
+      if (store) {
+        store.save(updatedConfig);
+      }
+
+      res.json({ success: true, chaosMode: { enabled } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ success: false, error: message });
+    }
+  });
+
+  /**
    * GET /bot/wallet/status
    * Get wallet lock status without exposing seed phrase.
    */

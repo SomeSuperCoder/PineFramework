@@ -5,6 +5,7 @@ import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 import { MiniChart } from './MiniChart';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
+import { ChaosModeWarning } from './ChaosModeWarning';
 
 // ---- Timezone Utilities ----
 
@@ -1800,6 +1801,7 @@ export function LiveDashboard({
   onClose,
   autoSelectProgress,
   autoSelectResult,
+  chaosMode,
 }: {
   backendUrl: string;
   status: BotStatusSnapshot;
@@ -1812,8 +1814,10 @@ export function LiveDashboard({
     evaluatedCount: number;
     failedCount: number;
   } | null;
+  chaosMode?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
+  const [chaosWarningAcknowledged, setChaosWarningAcknowledged] = useState(false);
   const [wallet, setWallet] = useState<WalletInfo>({
     hasWallet: false,
     publicKey: undefined,
@@ -1931,6 +1935,11 @@ export function LiveDashboard({
 
   const isReady = wallet.hasWallet && !walletLocked;
 
+  // Reset chaos warning acknowledgment when chaos mode is toggled
+  useEffect(() => {
+    setChaosWarningAcknowledged(false);
+  }, [chaosMode]);
+
   // Mini chart data — fetch OHLCV + execute script for the first configured pair
   const activePair = persistedConfig?.pairs?.[0] ?? null;
   const miniChartData = useBotMiniChartData(
@@ -2041,6 +2050,12 @@ export function LiveDashboard({
   // Running/Stopping/Error view — three-column layout
   return (
     <div style={rootStyle}>
+      {/* Chaos mode warning overlay */}
+      <ChaosModeWarning
+        isActive={chaosMode === true && !chaosWarningAcknowledged}
+        onAcknowledge={() => setChaosWarningAcknowledged(true)}
+      />
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
         <span style={{ color: '#888', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2048,6 +2063,14 @@ export function LiveDashboard({
           <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
             {status.state}
           </span>
+          {chaosMode && (
+            <span style={{
+              padding: '2px 8px', borderRadius: 4, fontSize: 10,
+              background: '#e94560', color: '#fff', fontWeight: 700,
+            }}>
+              ⚡ CHAOS
+            </span>
+          )}
           {wallet.hasWallet && (
             <span
               style={{
