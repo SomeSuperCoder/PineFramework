@@ -162,65 +162,73 @@ export function useBotMiniChartData(
   useEffect(() => {
     if (!symbol || !interval) return;
 
-    const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws';
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    const topic = `kline.${interval}.${symbol}`;
+    let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    ws.onopen = () => {
-      // Subscribe to kline topic
-      ws.send(JSON.stringify({ op: 'subscribe', args: [`kline.${interval}.${symbol}`] }));
-    };
+    function connect() {
+      const wsUrl = backendUrl.replace(/^http/, 'ws') + '/ws';
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'kline' && msg.data) {
-          const k = msg.data;
-          const candleTime = Math.floor(k.timestamp / 1000);
-          const newCandle: CandlestickData = {
-            time: candleTime,
-            open: k.open,
-            high: k.high,
-            low: k.low,
-            close: k.close,
-            volume: k.volume,
-          };
+      ws.onopen = () => {
+        // Subscribe using gateway format (type/topic, not op/args)
+        ws.send(JSON.stringify({ type: 'subscribe', topic }));
+      };
 
-          setCandles((prev) => {
-            const lastIdx = prev.length - 1;
-            if (lastIdx >= 0 && prev[lastIdx].time === candleTime) {
-              // Update existing candle (forming or confirmed)
-              const updated = [...prev];
-              updated[lastIdx] = newCandle;
-              return updated;
-            } else {
-              // New candle — append and trim to keep last FETCH_LIMIT
-              const updated = [...prev, newCandle];
-              if (updated.length > FETCH_LIMIT) {
-                return updated.slice(-FETCH_LIMIT);
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'kline' && msg.data) {
+            const k = msg.data;
+            const candleTime = Math.floor(k.timestamp / 1000);
+            const newCandle: CandlestickData = {
+              time: candleTime,
+              open: k.open,
+              high: k.high,
+              low: k.low,
+              close: k.close,
+              volume: k.volume,
+            };
+
+            setCandles((prev) => {
+              const lastIdx = prev.length - 1;
+              if (lastIdx >= 0 && prev[lastIdx].time === candleTime) {
+                // Update existing candle (forming or confirmed)
+                const updated = [...prev];
+                updated[lastIdx] = newCandle;
+                return updated;
+              } else {
+                // New candle — append and trim to keep last FETCH_LIMIT
+                const updated = [...prev, newCandle];
+                if (updated.length > FETCH_LIMIT) {
+                  return updated.slice(-FETCH_LIMIT);
+                }
+                return updated;
               }
-              return updated;
-            }
-          });
-          setDataVersion((v) => v + 1);
+            });
+            setDataVersion((v) => v + 1);
+          }
+        } catch {
+          /* ignore parse errors */
         }
-      } catch {
-        /* ignore parse errors */
-      }
-    };
+      };
 
-    ws.onerror = () => ws.close();
-    ws.onclose = () => {
-      // Reconnect after delay
-      setTimeout(() => {
-        if (wsRef.current === ws) {
-          wsRef.current = null;
-        }
-      }, 3000);
-    };
+      ws.onerror = () => ws.close();
+      ws.onclose = () => {
+        if (cancelled) return;
+        wsRef.current = null;
+        // Reconnect after delay
+        reconnectTimer = setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
       wsRef.current = null;
     };
   }, [symbol, interval, backendUrl]);
