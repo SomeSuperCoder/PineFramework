@@ -1,9 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    nodePolyfills({
+      include: ['buffer', 'crypto', 'stream', 'util'],
+      globals: { Buffer: true, process: true },
+    }),
+  ],
   resolve: {
     // Resolve pine-framework to its TS source via the `source` export condition,
     // matching how the backend dev script runs (tsx watch --conditions=source).
