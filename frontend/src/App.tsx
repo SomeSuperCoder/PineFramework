@@ -14,8 +14,9 @@ import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
 import { useBotWebSocket, LiveDashboard } from './components/TradingBotPanel';
 import type { ScriptResult, BacktestConfig } from './types';
+import { TRADABLE_PAIRS } from 'pine-framework';
 
-const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
+const SYMBOLS = [...TRADABLE_PAIRS];
 const INTERVALS = [
   { value: '1', label: '1m' },
   { value: '5', label: '5m' },
@@ -36,7 +37,7 @@ function App() {
   });
   const [symbol, setSymbol] = useState(() => {
     const saved = localStorage.getItem('pine-symbol');
-    return saved && SYMBOLS.includes(saved) ? saved : 'BTCUSDT';
+    return saved && (SYMBOLS as readonly string[]).includes(saved) ? saved : 'BTCUSDT';
   });
   const [dataVersion, setDataVersion] = useState(0);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);

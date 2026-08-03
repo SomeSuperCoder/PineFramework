@@ -4,6 +4,7 @@ import { ProgressBar } from './ProgressBar';
 import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 import { MiniChart } from './MiniChart';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
+import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 
 // ---- Timezone Utilities ----
 
@@ -1317,7 +1318,7 @@ function SetupWizard({
                 Auto-select was skipped. You are fully responsible for your pair/timeframe choice.
                 The bot will only trade the pair you select — no automated evaluation was performed.
               </div>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <label style={{ color: '#888', fontSize: 11 }}>
                   Pair:{' '}
                   <select
@@ -1332,9 +1333,11 @@ function SetupWizard({
                     }}
                   >
                     <option value="">Select pair...</option>
-                    <option value="BTCUSDT">BTC/USDT</option>
-                    <option value="ETHUSDT">ETH/USDT</option>
-                    <option value="SOLUSDT">SOL/USDT</option>
+                    {TRADABLE_PAIRS.map(pair => {
+                      const info = getTokenInfo(pair);
+                      const display = info ? `${info.symbol}/${info.quote}` : pair;
+                      return <option key={pair} value={pair}>{display}</option>;
+                    })}
                   </select>
                 </label>
                 <label style={{ color: '#888', fontSize: 11 }}>
@@ -1350,13 +1353,22 @@ function SetupWizard({
                       borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
                     }}
                   >
+                    <option value="1">1m</option>
                     <option value="5">5m</option>
                     <option value="15">15m</option>
+                    <option value="30">30m</option>
                     <option value="60">1h</option>
                     <option value="240">4h</option>
+                    <option value="1440">1d</option>
                   </select>
                 </label>
               </div>
+              {/* Validation: empty check */}
+              {manualPair && (!manualPair.symbol || !manualPair.timeframe) && (
+                <div style={{ color: '#e94560', fontSize: 10, marginTop: 8 }}>
+                  Both pair and timeframe are required
+                </div>
+              )}
             </div>
           )}
 

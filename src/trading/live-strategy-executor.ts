@@ -12,6 +12,7 @@ import { DexAdapter, type SwapResult } from './dex/dex-adapter.js';
 import { ClosedCandle, PairId } from './scheduler.js';
 import { WalletManager } from './wallet/wallet-manager.js';
 import { USDC_MINT } from './solana-wallet.js';
+import { getTokenInfo, isValidPairSymbol } from './token-registry.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -353,13 +354,17 @@ export class LiveStrategyExecutor {
   }
 
   private getMintForSymbol(symbol: string): string {
-    // Simplified mapping - in production, this would be a proper lookup
-    const mintMap: Record<string, string> = {
-      SOL: 'So11111111111111111111111111111111111111112',
-      BTC: '9n4nbM75f5Ui33ZbPYXn59EwSgE8CGsHtAeTH5YFeJ9E',
-      ETH: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
-    };
-    return mintMap[symbol] ?? USDC_MINT;
+    // Use centralized registry for token addresses
+    // Try as pair symbol first (e.g., "BTCUSDT"), then as base symbol (e.g., "BTC")
+    if (isValidPairSymbol(symbol)) {
+      return getTokenInfo(symbol).mint;
+    }
+    // Fallback: try to find by base symbol in the registry
+    const pairSymbol = `${symbol}USDT`;
+    if (isValidPairSymbol(pairSymbol)) {
+      return getTokenInfo(pairSymbol).mint;
+    }
+    return USDC_MINT;
   }
 
   private calculatePositionSize(price: number): number {

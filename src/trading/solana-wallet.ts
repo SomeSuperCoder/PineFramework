@@ -18,6 +18,7 @@ import {
 } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
 import { SolanaConfig, createSolanaConfig, createSolanaConnection } from './solana-config.js';
+import { TOKEN_MINTS } from './token-registry.js';
 
 // ---- Types ----
 
@@ -41,11 +42,11 @@ export interface TransactionResult {
 
 // ---- Constants ----
 
-/** SOL mint address (native token). */
-export const SOL_MINT = 'So11111111111111111111111111111111111111112';
+/** SOL mint address (native token). Re-exported from registry for backward compatibility. */
+export const SOL_MINT = TOKEN_MINTS.SOL;
 
-/** USDC mint address on Solana mainnet. */
-export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+/** USDC mint address on Solana mainnet. Re-exported from registry for backward compatibility. */
+export const USDC_MINT = TOKEN_MINTS.USDC;
 
 /** Maximum transaction confirmation timeout (ms). */
 const MAX_CONFIRM_TIMEOUT_MS = 60_000;

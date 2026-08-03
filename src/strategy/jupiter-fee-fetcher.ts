@@ -28,6 +28,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import { createJupiterApiClient, QuoteGetRequest } from '@jup-ag/api';
+import { TOKEN_MINTS, getTokenInfo, isValidPairSymbol } from '../trading/token-registry.js';
 import { parsePairSymbol } from './commission-calculator.js';
 
 // ---------------------------------------------------------------------------
@@ -61,37 +62,6 @@ function getClient() {
   }
   return _client;
 }
-
-// ---------------------------------------------------------------------------
-// Token mint addresses on Solana
-// ---------------------------------------------------------------------------
-
-/** Well-known native Solana token mints. */
-const TOKEN_MINTS: Record<string, string> = {
-  SOL: 'So11111111111111111111111111111111111111112',
-  USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-  USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-  USD: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC on Solana
-  JUP: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
-  MSOL: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',
-  RAY: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
-  ORCA: 'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
-  PYTH: 'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3',
-  MNDE: 'MNDEFzGvMt87ueuHvcsU3Jh1LMMqtMJF5Z5k6bSgxLL',
-  SRM: 'SRMuApVNdxXokk5GT7XD5cUUgXMBCoAz2LHeSAdsrsu',
-  BONK: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
-  WIF: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
-  STSOL: '7dHbWXmci3dT8UFYWqweMEc6c4uyiQvRY4HcT2z7e6c',
-  JITOSOL: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn',
-  BSOL: 'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',
-};
-
-/** Bridged/foreign token mints on Solana. */
-const BRIDGED_MINTS: Record<string, string> = {
-  BTC: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh',
-  ETH: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
-  BNB: 'bnj35V3tC6ELwYceVAKJkWkLn8mCRgxiUc2K9NJs3bN',
-};
 
 // ---------------------------------------------------------------------------
 // Known DEX fees on Solana (fallback when feeAmount is not in the response)
@@ -219,8 +189,18 @@ function symbolToMints(symbol: string): { inputMint: string; outputMint: string 
   if (!pair) return null;
 
   const { base, quote } = pair;
-  const inputMint = TOKEN_MINTS[base] ?? BRIDGED_MINTS[base];
-  const outputMint = TOKEN_MINTS[quote] ?? BRIDGED_MINTS[quote];
+  
+  // Use new registry for base token if it's a known pair
+  let inputMint: string | undefined;
+  if (isValidPairSymbol(symbol)) {
+    inputMint = getTokenInfo(symbol).mint;
+  } else {
+    // Fallback to old lookup for unknown pairs
+    inputMint = TOKEN_MINTS[base];
+  }
+  
+  // Quote token is typically USDT/USDC
+  const outputMint = TOKEN_MINTS[quote] ?? TOKEN_MINTS['USDC'];
 
   if (!inputMint || !outputMint) return null;
   return { inputMint, outputMint };

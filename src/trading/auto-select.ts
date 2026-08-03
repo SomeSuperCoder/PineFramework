@@ -12,6 +12,7 @@
 
 import type { Bar } from '../data/bar.js';
 import type { PairConfig, DexKind } from './types.js';
+import { TRADABLE_PAIRS, type TradablePair } from './token-registry.js';
 
 // ---- Types ----
 
@@ -132,12 +133,12 @@ export interface BacktestRunner {
 /** Default timeframes for auto-selection (in minutes). */
 export const DEFAULT_TIMEFRAMES = ['5', '15', '60', '240'];
 
-/** Default symbols for auto-selection. */
-export const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
+/** Default symbols for auto-selection. Derived from canonical TRADABLE_PAIRS. */
+export const DEFAULT_SYMBOLS: readonly TradablePair[] = TRADABLE_PAIRS;
 
 /** Generate default candidates from symbols × timeframes. */
 export function generateDefaultCandidates(timeframes: string[] = DEFAULT_TIMEFRAMES): PairConfig[] {
-  return DEFAULT_SYMBOLS.flatMap(symbol =>
+  return [...DEFAULT_SYMBOLS].flatMap(symbol =>
     timeframes.map(timeframe => ({ symbol, timeframe }))
   );
 }

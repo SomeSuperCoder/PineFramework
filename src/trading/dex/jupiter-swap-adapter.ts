@@ -21,9 +21,10 @@ import {
   isValidPublicKey,
 } from '../solana-wallet.js';
 import { Keypair } from '@solana/web3.js';
+import { TOKEN_MINTS } from '../token-registry.js';
 
 /** USDC mint address on Solana mainnet. */
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDC_MINT = TOKEN_MINTS.USDC;
 
 /** Default slippage tolerance (50 bps = 0.5%). */
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -228,7 +229,7 @@ export class JupiterSwapAdapter extends DexAdapter {
 
     try {
       // Check if this is native SOL
-      if (mint === 'So11111111111111111111111111111111111111112') {
+      if (mint === TOKEN_MINTS.SOL) {
         const balance = await getSolBalance(this.connection, publicKey);
         return {
           mint,

@@ -19,6 +19,18 @@ export * from './utils/time.js';
 export * from './util/candle-string-format.js';
 export * from './api.js';
 
+// Token type system (single source of truth for symbols and addresses)
+export {
+  TRADABLE_PAIRS,
+  TOKEN_REGISTRY,
+  getTokenInfo,
+  getTradablePairs,
+  isValidPairSymbol,
+  type PairSymbol,
+  type TokenInfo,
+  type TradablePair,
+} from './trading/token-registry.js';
+
 export { parse } from './language/parser/index.js';
 export { compile } from './language/compiler/index.js';
 export { ExecutionEngine } from './language/runtime/execution-engine.js';

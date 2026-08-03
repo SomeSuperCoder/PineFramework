@@ -1,0 +1,28 @@
+//@version=5
+strategy("Alternating Long Strategy", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=10)
+
+// --- Inputs ---
+capitalPercent = input.int(10, title="Capital % per Trade", minval=1, maxval=100)
+
+// --- State Tracking ---
+var bool inPosition = false
+
+// --- Strategy Logic ---
+// Alternate between opening and closing a long position on each candle
+if not inPosition
+    // Open long position with 10% of capital
+    strategy.entry("Long", strategy.long, qty=strategy.equity * capitalPercent / 100 / close)
+    inPosition := true
+    label.new(bar_index, low, "OPEN", 
+              color=color.green, textcolor=color.white, 
+              style=label.style_label_up, size=size.small)
+else
+    // Close the position
+    strategy.close("Long")
+    inPosition := false
+    label.new(bar_index, high, "CLOSE", 
+              color=color.red, textcolor=color.white, 
+              style=label.style_label_down, size=size.small)
+
+// --- Plot Current Position State ---
+plot(inPosition ? 1 : 0, title="Position State", color=inPosition ? color.green : color.red, linewidth=2, style=plot.style_histogram)

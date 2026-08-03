@@ -9,9 +9,10 @@
 
 import { DexAdapter } from './dex-adapter.js';
 import type { Quote, SwapResult, TokenBalance, TxStatus, CommissionModel, SlippageConfig } from './dex-adapter.js';
+import { TOKEN_MINTS } from '../token-registry.js';
 
 /** USDC mint address on Solana mainnet. */
-const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+const USDC_MINT = TOKEN_MINTS.USDC;
 
 /** Default slippage tolerance (30 bps = 0.3% — tighter than standard Swap). */
 const DEFAULT_SLIPPAGE_BPS = 30;
