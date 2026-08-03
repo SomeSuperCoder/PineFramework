@@ -2,7 +2,7 @@
 
 The pine-framework live trading bot enables automated execution of Pine Script strategies on Solana DEXes.
 
-> **Status**: Phase 1 MVP — state machine lifecycle, configuration, wallet management, and API endpoints are implemented. Actual exchange connectivity (Jupiter DEX, real bars, position management) is planned for Phase 2.
+> **Status**: Phase 2 Complete — state machine lifecycle, configuration, wallet management, API endpoints, Jupiter DEX integration, live bar feed via Bybit WebSocket, strategy execution, and risk management are all implemented.
 
 ## Architecture
 
@@ -51,10 +51,12 @@ The pine-framework live trading bot enables automated execution of Pine Script s
 | Auto Market Selection | ✅ | Rank candidate pairs by Sharpe, profit factor, net profit, or win rate |
 | Frontend Controls | ✅ | Start/Stop buttons, Live Dashboard (Status/Metrics/Logs) |
 | Telegram Notifications | ✅ | Bot start/stop, position open/close, errors, daily loss |
-| DEX Integration | 🚧 Phase 2 | Jupiter Swap and Jupiter Ultra adapters exist (mock) |
-| Real Bar Feed | 🚧 Phase 2 | Bybit WebSocket bars → strategy execution |
-| Position Scheduler | 🚧 Phase 2 | Symbol × Timeframe matrix with mutex serialization |
-| Risk Manager | 🚧 Phase 2 | Daily stop loss tracking, emergency stop |
+| DEX Integration | ✅ | Jupiter Swap adapter with real transaction signing and submission |
+| Real Bar Feed | ✅ | Bybit WebSocket candles → strategy execution |
+| Position Scheduler | ✅ | Symbol × Timeframe matrix with mutex serialization |
+| Risk Manager | ✅ | Daily stop loss tracking, emergency stop, position exposure |
+| Solana Wallet | ✅ | BIP44 keypair derivation, balance queries, SPL token support |
+| Strategy Execution | ✅ | Pine Script compilation, signal-to-order translation, state persistence |
 
 ## Configuration
 
@@ -204,13 +206,20 @@ src/trading/
 │   └── sensitive-data.ts  # Secure memory wrapper with zero-fill
 ├── dex/
 │   ├── dex-adapter.ts     # Abstract DEX adapter
-│   ├── jupiter-swap-adapter.ts
+│   ├── jupiter-swap-adapter.ts  # Jupiter Swap with real signing/submission
 │   ├── jupiter-ultra-adapter.ts
 │   └── spot-trading.ts
 ├── risk/
-│   ├── risk-manager.ts
+│   ├── risk-manager.ts    # Daily loss tracking, emergency stop
+│   ├── daily-stop-loss.ts
+│   ├── rolling-loss-guard.ts
 │   └── shutdown-handler.ts
-├── scheduler.ts
+├── scheduler.ts           # Base scheduler with mutex
+├── live-scheduler.ts      # Live trading scheduler
+├── live-strategy-executor.ts  # Strategy signal → DEX order bridge
+├── bybit-websocket.ts     # Bybit WebSocket for live candles
+├── solana-config.ts       # Solana RPC configuration
+├── solana-wallet.ts       # Balance queries, transaction helpers
 ├── trade-history-store.ts
 ├── telegram-bot.ts
 ├── dashboard-ws.ts

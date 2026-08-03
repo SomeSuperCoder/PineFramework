@@ -91,8 +91,10 @@
   },
   "dependencies": {
     "@jup-ag/api": "^6.0.48",
+    "@solana/spl-token": "^0.4.9",
     "@solana/web3.js": "^1.98.4",
-    "ed25519-hd-key": "^2.0.0"
+    "ed25519-hd-key": "^2.0.0",
+    "ws": "^8.18.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -10,6 +10,17 @@
 
 import { DexAdapter } from './dex-adapter.js';
 import type { Quote, SwapResult, TokenBalance, TxStatus, CommissionModel, SlippageConfig } from './dex-adapter.js';
+import {
+  createConnection,
+  getSolBalance,
+  getTokenBalance,
+  deserializeTransaction,
+  signTransaction,
+  simulateTransaction,
+  sendAndConfirmTransactionWithTimeout,
+  isValidPublicKey,
+} from '../solana-wallet.js';
+import { Keypair } from '@solana/web3.js';
 
 /** USDC mint address on Solana mainnet. */
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -60,10 +71,12 @@ export class JupiterSwapAdapter extends DexAdapter {
   };
 
   private readonly baseUrl: string;
+  private readonly connection;
 
   constructor(baseUrl = 'https://quote-api.jup.ag/v6') {
     super();
     this.baseUrl = baseUrl;
+    this.connection = createConnection();
   }
 
   async quote(
@@ -110,6 +123,9 @@ export class JupiterSwapAdapter extends DexAdapter {
   async swap(quote: Quote, privateKey: Uint8Array): Promise<SwapResult> {
     return retryWithBackoff(async () => {
       try {
+        // Create keypair from private key
+        const keypair = Keypair.fromSecretKey(privateKey);
+
         // Get swap transaction from Jupiter API
         const swapResponse = await fetch(`${this.baseUrl}/swap`, {
           method: 'POST',
@@ -123,7 +139,7 @@ export class JupiterSwapAdapter extends DexAdapter {
               priceImpactPct: quote.priceImpactPct,
               route: quote.route,
             },
-            userPublicKey: '', // Will be set by caller
+            userPublicKey: keypair.publicKey.toBase58(),
             wrapAndUnwrapSol: true,
             dynamicComputeUnitLimit: true,
             prioritizationFeeLamports: 'auto',
@@ -145,11 +161,44 @@ export class JupiterSwapAdapter extends DexAdapter {
           swapTransaction: string;
         };
 
-        // Placeholder: actual Solana transaction signing and submission will
-        // be implemented when @solana/web3.js is added as a dependency.
+        // Deserialize the transaction
+        const transaction = deserializeTransaction(swapData.swapTransaction);
+
+        // Sign the transaction
+        signTransaction(transaction, keypair);
+
+        // Simulate before submission
+        const simulation = await simulateTransaction(this.connection, transaction);
+        if (!simulation.success) {
+          return {
+            success: false,
+            inputAmount: quote.inAmount,
+            outputAmount: '0',
+            fee: '0',
+            error: simulation.error,
+          };
+        }
+
+        // Submit the transaction
+        const result = await sendAndConfirmTransactionWithTimeout(
+          this.connection,
+          transaction,
+          [keypair],
+        );
+
+        if (!result.success) {
+          return {
+            success: false,
+            inputAmount: quote.inAmount,
+            outputAmount: '0',
+            fee: '0',
+            error: result.error,
+          };
+        }
+
         return {
           success: true,
-          signature: swapData.swapTransaction.substring(0, 64),
+          signature: result.signature,
           inputAmount: quote.inAmount,
           outputAmount: quote.outAmount,
           fee: '0',
@@ -167,17 +216,64 @@ export class JupiterSwapAdapter extends DexAdapter {
     });
   }
 
-  async getBalance(mint: string, _publicKey: string): Promise<TokenBalance> {
-    // Placeholder: actual balance fetching requires RPC connection
-    return {
-      mint,
-      amount: '0',
-      decimals: mint === USDC_MINT ? 6 : 9,
-    };
+  async getBalance(mint: string, publicKey: string): Promise<TokenBalance> {
+    // Validate public key
+    if (!isValidPublicKey(publicKey)) {
+      return {
+        mint,
+        amount: '0',
+        decimals: mint === USDC_MINT ? 6 : 9,
+      };
+    }
+
+    try {
+      // Check if this is native SOL
+      if (mint === 'So11111111111111111111111111111111111111112') {
+        const balance = await getSolBalance(this.connection, publicKey);
+        return {
+          mint,
+          amount: balance.amount.toString(),
+          decimals: balance.decimals,
+        };
+      }
+
+      // SPL token balance
+      const balance = await getTokenBalance(this.connection, publicKey, mint);
+      return {
+        mint,
+        amount: balance.amount.toString(),
+        decimals: balance.decimals,
+      };
+    } catch (err) {
+      // Return zero balance on error
+      return {
+        mint,
+        amount: '0',
+        decimals: mint === USDC_MINT ? 6 : 9,
+      };
+    }
   }
 
-  async getTransactionStatus(_signature: string): Promise<TxStatus> {
-    // Placeholder: requires RPC connection
-    return 'unknown';
+  async getTransactionStatus(signature: string): Promise<TxStatus> {
+    try {
+      const status = await this.connection.getSignatureStatus(signature);
+
+      if (!status.value) {
+        return 'unknown';
+      }
+
+      if (status.value.err) {
+        return 'failed';
+      }
+
+      if (status.value.confirmationStatus === 'confirmed' ||
+          status.value.confirmationStatus === 'finalized') {
+        return 'confirmed';
+      }
+
+      return 'unknown';
+    } catch (err) {
+      return 'unknown';
+    }
   }
 }

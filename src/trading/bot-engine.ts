@@ -13,6 +13,11 @@ import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
 import type { TradingTelegramBot } from './telegram-bot.js';
+import { BybitWebSocketService } from './bybit-websocket.js';
+import { LiveStrategyExecutor } from './live-strategy-executor.js';
+import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
+import { LiveScheduler } from './live-scheduler.js';
+import { ClosedCandle, PairId } from './scheduler.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -73,6 +78,12 @@ export class BotEngine {
 
   /** Current positions (in-memory; will be managed by scheduler in Phase 2). */
   private _positions: PositionSummary[] = [];
+
+  /** Live trading components (initialized in initialize()). */
+  private barFeed: BybitWebSocketService | null = null;
+  private strategyExecutor: LiveStrategyExecutor | null = null;
+  private scheduler: LiveScheduler | null = null;
+  private dex: JupiterSwapAdapter | null = null;
 
   constructor(options?: BotEngineOptions) {
     this.logger = options?.logger ?? consoleLogger;
@@ -347,21 +358,118 @@ export class BotEngine {
   /**
    * Initialize the bot components.
    * Called during Starting → Running transition.
-   * Override in Phase 2+ for actual initialization.
+   * Wires up DEX, strategy executor, bar feed, and scheduler.
    */
   protected async initialize(): Promise<void> {
-    // Phase 2: compile strategy, connect DEX, load wallet, start scheduler
-    this.logger.info('Initialization placeholder — no real components connected');
+    if (!this._config) {
+      throw new Error('No configuration loaded');
+    }
+
+    this.logger.info('Initializing bot components');
+
+    // 1. Create DEX adapter
+    this.dex = new JupiterSwapAdapter();
+    this.logger.info('DEX adapter created', { dex: this.dex.name });
+
+    // 2. Create strategy executor
+    this.strategyExecutor = new LiveStrategyExecutor({
+      strategySource: this._config.strategySource,
+      dex: this.dex,
+      walletPublicKey: this._config.walletPublicKey,
+    });
+    this.logger.info('Strategy executor created');
+
+    // 3. Create bar feed (Bybit WebSocket)
+    this.barFeed = new BybitWebSocketService();
+
+    // 4. Wire candle callback: feed candles into scheduler
+    this.barFeed.setCandleCallback((candle: ClosedCandle) => {
+      this.handleCandle(candle);
+    });
+
+    this.barFeed.setErrorCallback((error: Error) => {
+      this.logger.error('Bar feed error', { error: error.message });
+    });
+
+    this.barFeed.setConnectionCallback((connected: boolean) => {
+      this.logger.info(`Bar feed ${connected ? 'connected' : 'disconnected'}`);
+    });
+
+    // 5. Create scheduler
+    this.scheduler = new LiveScheduler({
+      pairs: this._config.pairs ?? [],
+      processCandle: async (candle) => {
+        if (!this.strategyExecutor) return [];
+        return this.strategyExecutor.processCandle(candle);
+      },
+      submitOrders: async (signals) => {
+        // Orders are handled by the strategy executor
+      },
+      strategyExecutor: this.strategyExecutor,
+      dex: this.dex,
+      persistState: true,
+    });
+    this.logger.info('Scheduler created', { pairs: this._config.pairs?.length ?? 0 });
+
+    // 6. Connect bar feed
+    await this.barFeed.connect();
+
+    // 7. Subscribe to configured pairs
+    if (this._config.pairs) {
+      for (const pair of this._config.pairs) {
+        const pairId: PairId = { symbol: pair.symbol, timeframe: pair.timeframe };
+        this.barFeed.subscribe(pairId);
+        this.logger.info('Subscribed to pair', { symbol: pair.symbol, timeframe: pair.timeframe });
+      }
+    }
+
+    this.logger.info('Bot initialization complete');
+  }
+
+  /**
+   * Handle an incoming candle from the bar feed.
+   * Feeds the candle into the scheduler for processing.
+   */
+  private handleCandle(candle: ClosedCandle): void {
+    if (!this.scheduler || this.state !== BotState.Running) return;
+
+    // Process candle asynchronously (fire and forget — scheduler handles errors)
+    this.scheduler.liveTick([candle]).catch((err) => {
+      this.logger.error('Error processing candle', { error: String(err) });
+    });
   }
 
   /**
    * Shutdown the bot components.
    * Called during Stopping → Stopped transition.
-   * Override in Phase 2+ for actual shutdown.
+   * Disconnects bar feed, persists state, and cleans up.
    */
   protected async shutdown(): Promise<void> {
-    // Phase 2: stop scheduler, close positions, persist state
-    this.logger.info('Shutdown placeholder — no real components to shut down');
+    this.logger.info('Shutting down bot components');
+
+    // 1. Disconnect bar feed first (stop new candles)
+    if (this.barFeed) {
+      this.barFeed.disconnect();
+      this.barFeed = null;
+      this.logger.info('Bar feed disconnected');
+    }
+
+    // 2. Persist strategy state
+    if (this.strategyExecutor) {
+      try {
+        await this.strategyExecutor.saveState();
+        this.logger.info('Strategy state persisted');
+      } catch (err) {
+        this.logger.error('Failed to persist strategy state', { error: String(err) });
+      }
+    }
+
+    // 3. Clear references
+    this.scheduler = null;
+    this.strategyExecutor = null;
+    this.dex = null;
+
+    this.logger.info('Bot shutdown complete');
   }
 
   // ---- Private ----
