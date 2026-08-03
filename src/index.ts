@@ -2,10 +2,7 @@ export const VERSION = '0.1.0';
 
 export * from './language/index.js';
 export * from './data/index.js';
-// NOTE: trading module is NOT re-exported here because it depends on Node.js
-// built-ins (fs, path, crypto) that break browser bundles.
-// Backend imports trading types via 'import type' (erased at compile time)
-// or via subpath exports like 'pine-framework/trading/wallet'.
+export * from './trading/index.js';
 export * from './analysis/index.js';
 export * from './config/index.js';
 export * from './rendering/index.js';

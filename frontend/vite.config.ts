@@ -1,21 +1,15 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    nodePolyfills({
-      include: ['buffer', 'crypto', 'stream', 'util'],
-      globals: { Buffer: true, process: true },
-    }),
-  ],
+  plugins: [react()],
   resolve: {
-    // Resolve pine-framework to its TS source via the `source` export condition,
-    // matching how the backend dev script runs (tsx watch --conditions=source).
     conditions: ['source'],
     alias: {
+      // Route pine-framework to a frontend-safe entry that excludes
+      // the trading module (which depends on Node.js built-ins).
+      'pine-framework': path.resolve(__dirname, '../src/frontend-safe.ts'),
       'pine-framework/utils/time': path.resolve(__dirname, '../src/utils/time.ts'),
     },
   },
