@@ -163,16 +163,44 @@ describe('BotEngine', () => {
     expect(engine.startedAt).toBeNull();
   });
 
-  it('should refuse to start when autoSelect is true', async () => {
+  it('should refuse to start when autoSelect is true and no pairs configured', async () => {
     const configWithAutoSelect: BotConfig = {
       ...defaultConfig,
-      pairs: undefined, // pairs not required when autoSelect is true
+      pairs: undefined,
       autoSelect: true,
     };
     engine.configure(configWithAutoSelect);
 
     await expect(engine.start()).rejects.toThrow(
       'auto-select must run before starting',
+    );
+    expect(engine.state).toBe(BotState.Idle);
+  });
+
+  it('should start when autoSelect is true but pairs are configured', async () => {
+    const configWithAutoSelectAndPairs: BotConfig = {
+      ...defaultConfig,
+      pairs: [{ symbol: 'SOL/USDC', timeframe: '1m' }],
+      autoSelect: true,
+    };
+    engine.configure(configWithAutoSelectAndPairs);
+    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
+      .mockResolvedValue(undefined);
+
+    await engine.start();
+    expect(engine.state).toBe(BotState.Running);
+  });
+
+  it('should refuse to start when autoSelect is false and no pairs configured', async () => {
+    const configNoPairs: BotConfig = {
+      ...defaultConfig,
+      pairs: undefined,
+      autoSelect: false,
+    };
+    engine.configure(configNoPairs);
+
+    await expect(engine.start()).rejects.toThrow(
+      'No trading pairs configured',
     );
     expect(engine.state).toBe(BotState.Idle);
   });

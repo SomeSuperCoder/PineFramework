@@ -173,14 +173,15 @@ export class BotEngine {
       throw new Error('Cannot start bot without configuration. Call configure() first.');
     }
 
-    // Refuse to start when auto-select is still pending — running selection
-    // inline blocks the HTTP response and keeps the engine in Idle with no
-    // feedback.  The caller must run the Backtest step first (which sets
-    // autoSelect=false and persists the resolved pairs to disk).
-    if (this._config.autoSelect) {
+    // Auto-select is a trigger (pick pairs if needed), not a gate.
+    // Allow start when pairs exist from any source (auto-select, manual, API).
+    if (this._config.autoSelect && !this._config.pairs?.length) {
       throw new Error(
         'auto-select must run before starting; use the Backtest step first.',
       );
+    }
+    if (!this._config.pairs?.length) {
+      throw new Error('No trading pairs configured. Set pairs or enable auto-select.');
     }
 
     await this.stateMachine.transition(BotState.Starting, 'User requested start');
