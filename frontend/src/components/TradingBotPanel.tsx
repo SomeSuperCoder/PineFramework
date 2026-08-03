@@ -1490,9 +1490,9 @@ function SetupWizard({
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        strategySource: strategySource.trim(),
-                        dex,
-                        risk: { maxDailyLoss },
+                        strategySource: configValues?.strategySource ?? persistedConfig?.strategySource ?? '',
+                        dex: configValues?.dex ?? persistedConfig?.dex ?? 'jupiter-swap',
+                        risk: { maxDailyLoss: configValues?.maxDailyLoss ?? persistedConfig?.risk?.maxDailyLoss ?? 1 },
                         autoSelect: false,
                         pairs: [manualPair],
                       }),
