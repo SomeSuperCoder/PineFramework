@@ -1482,7 +1482,24 @@ function SetupWizard({
               </button>
             ) : (
               <button
-                onClick={() => setStep('review')}
+                onClick={async () => {
+                  if (!manualPair) return;
+                  // Persist manual pair selection to backend so engine.start() can find it
+                  try {
+                    await fetch(`${backendUrl}/api/bot/configure`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        strategySource: strategySource.trim(),
+                        dex,
+                        risk: { maxDailyLoss },
+                        autoSelect: false,
+                        pairs: [manualPair],
+                      }),
+                    });
+                  } catch { /* best-effort; backend may already have it */ }
+                  setStep('review');
+                }}
                 disabled={!manualPair?.symbol}
                 style={{
                   padding: '8px 24px', background: manualPair?.symbol ? '#1a3328' : '#222',
