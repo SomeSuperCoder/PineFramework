@@ -81,6 +81,7 @@ export function createBotWSGateway(
             exposure: 0,
             errors: [],
           },
+          chaosSignals: [],
         },
       }));
       return;
@@ -89,7 +90,10 @@ export function createBotWSGateway(
     ws.send(JSON.stringify({
       channel: 'bot:snapshot',
       type: 'snapshot',
-      data: { status: engine.getSnapshot() },
+      data: {
+        status: engine.getSnapshot(),
+        chaosSignals: engine.getChaosHistory(),
+      },
     }));
   }
 }

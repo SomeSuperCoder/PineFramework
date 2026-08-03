@@ -251,6 +251,13 @@ if (ENABLE_TRADING_BOT) {
     });
   });
 
+  botEngine.on('chaosSignal', (record) => {
+    botWS.broadcast({
+      channel: 'bot:chaosSignal',
+      data: record,
+    });
+  });
+
   logger.info('Trading bot API enabled (ENABLE_TRADING_BOT=true)');
 }
 

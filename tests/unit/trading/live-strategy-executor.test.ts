@@ -14,9 +14,46 @@ vi.mock('../../../src/trading/solana-wallet.js', () => ({
 }));
 
 vi.mock('../../../src/strategy/strategy-engine.js', () => ({
-  StrategyEngine: vi.fn().mockImplementation(() => ({
-    getNewMarkers: vi.fn().mockReturnValue([]),
-  })),
+  StrategyEngine: vi.fn().mockImplementation(() => {
+    // In-memory engine faithful enough for the chaos drive path
+    // (processCandleChaos): updateBar / getEquity / getPosition / entry / close.
+    const markers: any[] = [];
+    let pos: { direction: string; quantity: number } = { direction: 'flat', quantity: 0 };
+    return {
+      updateBar: vi.fn(),
+      getEquity: vi.fn().mockReturnValue(10_000_000_000),
+      getPosition: vi.fn().mockReturnValue(pos),
+      entry: vi.fn().mockImplementation((name: string, direction: string, quantity: number) => {
+        pos = { direction, quantity };
+        markers.push({
+          type: 'entry',
+          name,
+          direction,
+          quantity,
+          price: 50000,
+          barIndex: 0,
+          timestamp: Date.now(),
+          color: direction === 'long' ? '#00FF00' : '#FF0000',
+        });
+        return undefined;
+      }),
+      close: vi.fn().mockImplementation((name: string) => {
+        markers.push({
+          type: 'close',
+          name: `Exit ${name}`,
+          direction: pos.direction,
+          quantity: pos.quantity,
+          price: 50000,
+          barIndex: 0,
+          timestamp: Date.now(),
+          color: '#FF0000',
+        });
+        pos = { direction: 'flat', quantity: 0 };
+        return undefined;
+      }),
+      getNewMarkers: vi.fn().mockImplementation(() => markers.splice(0)),
+    };
+  }),
 }));
 
 import { LiveStrategyExecutor, LiveStrategyConfig, TradeSignal } from '../../../src/trading/live-strategy-executor.js';
@@ -364,8 +401,9 @@ describe('LiveStrategyExecutor', () => {
 
       const signals = await chaosExecutor.processCandle(candle as any);
 
-      // 10% of 10 USDC (10_000_000 / 1e6) = 1 USDC, at $50000 = 0.00002
-      expect(signals[0].quantity).toBeCloseTo(0.00002, 6);
+      // 10% of CHAOS_INITIAL_CAPITAL_LAMPORTS equity (10,000 USDC) = 1,000 USDC,
+      // at $50000 = 0.02 tokens.
+      expect(signals[0].quantity).toBeCloseTo(0.02, 6);
     });
 
     it('should not run strategy when chaos mode is active', async () => {

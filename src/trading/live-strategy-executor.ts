@@ -16,7 +16,13 @@ import { getTokenInfo, isValidPairSymbol } from './token-registry.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import type { ChaosSignalGenerator, ChaosSignal } from './chaos-signal-generator.js';
+import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
+
+// ---- Constants ----
+
+/** Chaos mode starting capital (10,000 USDC in lamports) so the simulated
+ *  strategy engine has real margin to open entries and track equity. */
+const CHAOS_INITIAL_CAPITAL_LAMPORTS = 10_000_000_000;
 
 // ---- Types ----
 
@@ -110,7 +116,9 @@ export class LiveStrategyExecutor {
 
     // Create strategy engine with default config
     const engine = new StrategyEngine({
-      initialCapital: Number(this.config.initialCapital),
+      initialCapital: this.config.chaosGenerator
+        ? CHAOS_INITIAL_CAPITAL_LAMPORTS
+        : Number(this.config.initialCapital),
     });
 
     // Initialize strategy state
@@ -358,60 +366,114 @@ export class LiveStrategyExecutor {
   // ---- Private Methods ----
 
   /**
-   * Process a candle using chaos mode — generates random signals.
+   * Process a candle using chaos mode — drives a real StrategyEngine with
+   * random long/short/exit actions so the resulting markers are produced by
+   * the strategy engine itself, indistinguishable from a real strategy.
    */
-  private processCandleChaos(candle: ClosedCandle): TradeSignal[] {
+  private async processCandleChaos(candle: ClosedCandle): Promise<TradeSignal[]> {
     const generator = this.config.chaosGenerator!;
+    const pair: PairId = { symbol: candle.symbol, timeframe: candle.timeframe };
+    const key = this.getPairKey(pair);
+
+    // Ensure a strategy state exists so chaos drives a real engine per pair.
+    let state = this.strategyStates.get(key);
+    if (!state) {
+      await this.initializeStrategy(pair);
+      state = this.strategyStates.get(key)!;
+    }
+
+    const engine = state.engine;
     const currentPrice = candle.close;
-    const equity = Number(this.config.initialCapital) / 1e6; // Convert from lamports
 
+    // Advance the engine to this bar — fills any pending orders from the
+    // previous candle so the engine's position reflects prior signals.
+    engine.updateBar(
+      candle.timestamp,
+      candle.timestamp,
+      candle.open,
+      candle.high,
+      candle.low,
+      candle.close,
+      candle.volume,
+    );
+
+    // Current equity (engine tracks realized PnL); convert lamports → USDC.
+    const equity = engine.getEquity() / 1e6;
     const chaosSignal = generator.generate(equity, candle.timestamp);
-    const signals: TradeSignal[] = [];
+    const enginePosition = engine.getPosition();
 
-    // Map chaos action to trade signal
+    // Drive the real strategy engine. Markers follow real position-state
+    // semantics: no marker is produced when the transition is impossible.
     switch (chaosSignal.action) {
       case 'long': {
-        // 10% of equity converted to token quantity
-        const positionSizeUsdc = equity * chaosSignal.sizeFraction;
-        const quantity = positionSizeUsdc / currentPrice;
-        signals.push({
-          action: 'buy',
-          symbol: candle.symbol,
-          quantity,
-          expectedPrice: currentPrice,
-          timestamp: candle.timestamp,
-        });
+        if (enginePosition.direction === 'flat') {
+          // 10% of equity converted to token quantity (spec: fixed 10% sizing)
+          const quantity = (equity * chaosSignal.sizeFraction) / currentPrice;
+          engine.entry('Long', 'long', quantity);
+        }
         break;
       }
       case 'short': {
         // Close existing position (spot DEX doesn't support short selling)
-        const key = this.getPairKey(candle);
-        const state = this.strategyStates.get(key);
-        if (state && state.position.direction === 'long' && state.position.quantity > 0) {
-          signals.push({
-            action: 'sell',
-            symbol: candle.symbol,
-            quantity: state.position.quantity,
-            expectedPrice: currentPrice,
-            timestamp: candle.timestamp,
-          });
+        if (enginePosition.direction === 'long') {
+          engine.close('Short');
         }
         break;
       }
       case 'exit': {
         // Close existing position
-        const key = this.getPairKey(candle);
-        const state = this.strategyStates.get(key);
-        if (state && state.position.direction === 'long' && state.position.quantity > 0) {
-          signals.push({
-            action: 'sell',
-            symbol: candle.symbol,
-            quantity: state.position.quantity,
-            expectedPrice: currentPrice,
-            timestamp: candle.timestamp,
-          });
+        if (enginePosition.direction === 'long') {
+          engine.close('Exit');
         }
         break;
+      }
+    }
+
+    // Map genuine engine markers to trade signals (entry → buy, close → sell),
+    // attaching the marker so it can be broadcast as the truth of this candle.
+    const markers = engine.getNewMarkers();
+    const signals: TradeSignal[] = [];
+    for (const marker of markers) {
+      if (marker.type === 'entry' && marker.direction === 'long') {
+        signals.push({
+          action: 'buy',
+          symbol: candle.symbol,
+          quantity: marker.quantity,
+          expectedPrice: currentPrice,
+          timestamp: candle.timestamp,
+          marker,
+        });
+      } else if (marker.type === 'close' || marker.type === 'exit') {
+        signals.push({
+          action: 'sell',
+          symbol: candle.symbol,
+          quantity: marker.quantity,
+          expectedPrice: currentPrice,
+          timestamp: candle.timestamp,
+          marker,
+        });
+      }
+    }
+
+    // Sync the executor's position state from the emitted markers so
+    // downstream execution stays coherent with the engine.
+    for (const marker of markers) {
+      if (marker.type === 'entry' && marker.direction === 'long') {
+        state.position = {
+          symbol: candle.symbol,
+          direction: 'long',
+          quantity: marker.quantity,
+          entryPrice: marker.price,
+          entryTime: marker.timestamp,
+        };
+      } else if (marker.type === 'close' || marker.type === 'exit') {
+        state.position = {
+          symbol: candle.symbol,
+          direction: 'flat',
+          quantity: 0,
+          entryPrice: 0,
+          entryTime: 0,
+        };
       }
     }
 

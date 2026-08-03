@@ -69,7 +69,7 @@ function App() {
   const chartRef = useRef<ChartComponentHandle>(null);
 
   const backendUrl = `http://${window.location.hostname}:8081`;
-  const { connected: botConnected, status: botStatus, logs: botLogs, autoSelectProgress, autoSelectResult, connectionFailed: botConnectionFailed } = useBotWebSocket(backendUrl);
+  const { connected: botConnected, status: botStatus, logs: botLogs, chaosSignals: botChaosSignals, autoSelectProgress, autoSelectResult, connectionFailed: botConnectionFailed } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
   const { chaosMode, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl);
 
@@ -433,6 +433,7 @@ function App() {
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
               chaosMode={chaosMode}
+              chaosSignals={botChaosSignals}
             />
           ) : botConnectionFailed ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>

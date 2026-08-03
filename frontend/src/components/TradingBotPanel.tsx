@@ -6,6 +6,7 @@ import { MiniChart } from './MiniChart';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { ChaosModeWarning } from './ChaosModeWarning';
+import type { ChaosSignalRecord } from '../types';
 
 // ---- Timezone Utilities ----
 
@@ -188,6 +189,7 @@ export function useBotWebSocket(backendUrl: string) {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<BotStatusSnapshot | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [chaosSignals, setChaosSignals] = useState<ChaosSignalRecord[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [connectionFailed, setConnectionFailed] = useState(false);
@@ -211,10 +213,13 @@ export function useBotWebSocket(backendUrl: string) {
         const msg = JSON.parse(event.data);
         if (msg.channel === 'bot:snapshot' && msg.type === 'snapshot') {
           setStatus(msg.data.status);
+          setChaosSignals(msg.data.chaosSignals || []);
         } else if (msg.channel === 'bot:state') {
           setStatus((prev) => prev ? { ...prev, state: msg.data.current } : null);
         } else if (msg.channel === 'bot:log') {
           setLogs((prev) => [...prev.slice(-999), msg.data]);
+        } else if (msg.channel === 'bot:chaosSignal') {
+          setChaosSignals((prev) => [...prev.slice(-199), msg.data]);
         } else if (msg.channel === 'bot:position') {
           setStatus((prev) => {
             if (!prev) return null;
@@ -270,6 +275,7 @@ export function useBotWebSocket(backendUrl: string) {
     connected,
     status,
     logs,
+    chaosSignals,
     autoSelectProgress: autoSelect.progress,
     autoSelectResult: autoSelect.result,
     connectionFailed,
@@ -1798,10 +1804,14 @@ function LiveBotView({
   backendUrl,
   activePair,
   strategySource,
+  chaosMode,
+  chaosSignals,
 }: {
   backendUrl: string;
   activePair: { symbol: string; timeframe: string } | null;
   strategySource: string | null;
+  chaosMode: boolean;
+  chaosSignals: ChaosSignalRecord[];
 }) {
   // Mini chart data — fetch OHLCV + execute script for the first configured pair.
   // Lives in a component that only mounts in Running/Stopping/Error states, so the
@@ -1812,6 +1822,8 @@ function LiveBotView({
     activePair?.symbol ?? null,
     activePair?.timeframe ?? null,
     strategySource ?? null,
+    chaosMode,
+    chaosSignals,
   );
 
   if (!activePair) return null;
@@ -1843,6 +1855,7 @@ export function LiveDashboard({
   autoSelectProgress,
   autoSelectResult,
   chaosMode,
+  chaosSignals,
 }: {
   backendUrl: string;
   status: BotStatusSnapshot;
@@ -1856,6 +1869,7 @@ export function LiveDashboard({
     failedCount: number;
   } | null;
   chaosMode?: boolean;
+  chaosSignals?: ChaosSignalRecord[];
 }) {
   const [loading, setLoading] = useState(false);
   const [chaosWarningAcknowledged, setChaosWarningAcknowledged] = useState(false);
@@ -2217,6 +2231,8 @@ export function LiveDashboard({
             backendUrl={backendUrl}
             activePair={persistedConfig?.pairs?.[0] ?? null}
             strategySource={persistedConfig?.strategySource ?? null}
+            chaosMode={chaosMode === true}
+            chaosSignals={chaosSignals ?? []}
           />
 
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>

@@ -169,6 +169,18 @@ export interface StrategyMarkerData {
   comment?: string;
 }
 
+/** A chaos signal broadcast by the bot backend — the genuine strategy engine
+ *  marker plus its DEX execution result. */
+export interface ChaosSignalRecord {
+  marker: StrategyMarkerData;
+  symbol: string;
+  timeframe: string;
+  success: boolean;
+  txSignature?: string;
+  error?: string;
+  timestamp: number;
+}
+
 export interface BacktestMetrics {
   totalTrades: number;
   winningTrades: number;

@@ -12,6 +12,7 @@
  */
 
 import type { PairConfig } from './types.js';
+import type { StrategyMarker } from '../strategy/strategy-engine.js';
 
 // ---- Types ----
 
@@ -54,6 +55,8 @@ export interface TradeSignal {
   price: number;
   timestamp: number;
   meta?: Record<string, unknown>;
+  /** Strategy engine marker that produced this signal (chaos mode). */
+  marker?: StrategyMarker;
 }
 
 /** Callback for processing a closed candle. */

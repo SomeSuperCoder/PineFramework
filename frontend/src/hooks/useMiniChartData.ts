@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CandlestickData } from '../chart';
-import type { ScriptResult } from '../types';
+import type { ScriptResult, ChaosSignalRecord, StrategyMarkerData } from '../types';
 import { buildScriptResult } from './chart-data-transform';
 
 const DEFAULT_DISPLAY_COUNT = 12;
 const FETCH_LIMIT = 200; // enough for lookback periods
+
+/** Color used to flag chaos markers whose DEX order failed. */
+const CHAOS_FAILED_COLOR = '#8a8a8a';
 
 interface MiniChartDataResult {
   displayCandles: CandlestickData[];
@@ -24,6 +27,8 @@ export function useBotMiniChartData(
   symbol: string | null,
   interval: string | null,
   strategySource: string | null,
+  chaosMode: boolean = false,
+  chaosSignals: ChaosSignalRecord[] = [],
   displayCount: number = DEFAULT_DISPLAY_COUNT,
 ): MiniChartDataResult {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
@@ -35,12 +40,14 @@ export function useBotMiniChartData(
   const strategyRef = useRef<string | null>(null);
   const symbolRef = useRef<string | null>(null);
   const intervalRef = useRef<string | null>(null);
+  const chaosModeRef = useRef(false);
 
   // Keep refs in sync
   candlesRef.current = candles;
   strategyRef.current = strategySource;
   symbolRef.current = symbol;
   intervalRef.current = interval;
+  chaosModeRef.current = chaosMode;
 
   // Execute script against current candles
   const executeScript = useCallback(
@@ -124,8 +131,8 @@ export function useBotMiniChartData(
         setCandles(barData);
         setDataVersion((v) => v + 1);
 
-        // Execute script if we have one
-        if (strategyRef.current) {
+        // Execute script if we have one (skipped in chaos mode)
+        if (strategyRef.current && !chaosModeRef.current) {
           const result = await executeScript(strategyRef.current, barData);
           if (!cancelled && result) {
             setScriptResult(result);
@@ -143,8 +150,9 @@ export function useBotMiniChartData(
     };
   }, [symbol, interval, backendUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-execute script when strategy source changes
+  // Re-execute script when strategy source changes (skipped in chaos mode)
   useEffect(() => {
+    if (chaosModeRef.current) return;
     if (!strategySource || candles.length === 0) return;
     let cancelled = false;
     executeScript(strategySource, candles).then((result) => {
@@ -233,8 +241,9 @@ export function useBotMiniChartData(
     };
   }, [symbol, interval, backendUrl]);
 
-  // Re-execute script when candles or strategy change (debounced)
+  // Re-execute script when candles or strategy change (debounced). Skipped in chaos mode.
   useEffect(() => {
+    if (chaosModeRef.current) return;
     if (!strategyRef.current || candles.length === 0) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
@@ -248,6 +257,52 @@ export function useBotMiniChartData(
       clearTimeout(timer);
     };
   }, [candles, dataVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Chaos mode: build a ScriptResult from broadcast chaos signals — no /api/execute.
+  // Markers are resolved against the visible candle slice (ms timestamp → candle seconds).
+  useEffect(() => {
+    if (!chaosMode) return;
+    if (candles.length === 0) return;
+
+    const sliceStart = Math.max(0, candles.length - displayCount);
+    const visible = candles.slice(sliceStart);
+    const timeToIndex = new Map<number, number>();
+    for (let i = 0; i < visible.length; i++) {
+      timeToIndex.set(visible[i].time, i);
+    }
+
+    const markers: StrategyMarkerData[] = [];
+    for (const rec of chaosSignals) {
+      if (rec.symbol !== symbol) continue;
+      const m = rec.marker;
+      const barIdx = timeToIndex.get(Math.floor(m.timestamp / 1000));
+      if (barIdx === undefined) continue;
+      markers.push({
+        type: m.type,
+        name: m.name,
+        direction: m.direction,
+        action: m.action,
+        quantity: m.quantity,
+        price: m.price,
+        barIndex: barIdx,
+        timestamp: m.timestamp,
+        color: rec.success ? m.color : CHAOS_FAILED_COLOR,
+        comment: m.comment,
+      });
+    }
+
+    setScriptResult({
+      overlay: true,
+      plots: [],
+      shapes: [],
+      lines: [],
+      boxes: [],
+      labels: [],
+      tables: [],
+      strategyMarkers: markers,
+    });
+    setDataVersion((v) => v + 1);
+  }, [chaosMode, chaosSignals, candles, symbol, displayCount]);
 
   // Slice for display
   const sliceStart = Math.max(0, candles.length - displayCount);

@@ -21,6 +21,7 @@ import { ClosedCandle, PairId } from './scheduler.js';
 import { ChaosSignalGenerator } from './chaos-signal-generator.js';
 import type { ExecutionResult } from './live-strategy-executor.js';
 import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
+import type { StrategyMarker } from '../strategy/strategy-engine.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -29,6 +30,9 @@ export interface BotLogger {
   error(event: string, meta?: Record<string, unknown>): void;
   debug(event: string, meta?: Record<string, unknown>): void;
 }
+
+/** Max number of chaos signal records retained for WS replay. */
+const CHAOS_HISTORY_LIMIT = 200;
 
 /** Default logger that writes to console. */
 const consoleLogger: BotLogger = {
@@ -45,6 +49,21 @@ export interface BotEventMap {
   configUpdate: (config: BotConfig) => void;
   /** Emitted when auto-selection completes. */
   autoSelectionComplete: (result: { best: PairConfig; ranking: Array<{ pair: PairConfig; label: string }> }) => void;
+  /** Emitted for each executed chaos signal, with the real strategy marker
+   *  and its DEX execution result. */
+  chaosSignal: (record: ChaosSignalRecord) => void;
+}
+
+/** A chaos signal record broadcast to the dashboard — the genuine strategy
+ *  engine marker plus its DEX execution result. */
+export interface ChaosSignalRecord {
+  marker: StrategyMarker;
+  symbol: string;
+  timeframe: string;
+  success: boolean;
+  txSignature?: string;
+  error?: string;
+  timestamp: number;
 }
 
 export interface BotEngineOptions {
@@ -89,6 +108,9 @@ export class BotEngine {
     ordersFailed: 0,
     totalExecutionTimeMs: 0,
   };
+
+  /** Recent chaos signal records for replay on WS connect (cap 200). */
+  private chaosHistory: ChaosSignalRecord[] = [];
 
   /** Live trading components (initialized in initialize()). */
   private barFeed: BybitWebSocketService | null = null;
@@ -357,6 +379,33 @@ export class BotEngine {
     });
   }
 
+  /** Recent chaos signal records (oldest first), for dashboard replay. */
+  getChaosHistory(): ChaosSignalRecord[] {
+    return [...this.chaosHistory];
+  }
+
+  /** Record, retain, and emit a chaos signal with its execution outcome. */
+  private emitChaosSignal(
+    signal: SchedulerTradeSignal,
+    outcome: { success: boolean; txSignature?: string; error?: string },
+  ): void {
+    if (!signal.marker) return;
+    const record: ChaosSignalRecord = {
+      marker: signal.marker,
+      symbol: signal.pair.symbol,
+      timeframe: signal.pair.timeframe,
+      success: outcome.success,
+      txSignature: outcome.txSignature,
+      error: outcome.error,
+      timestamp: signal.timestamp,
+    };
+    this.chaosHistory.push(record);
+    if (this.chaosHistory.length > CHAOS_HISTORY_LIMIT) {
+      this.chaosHistory.splice(0, this.chaosHistory.length - CHAOS_HISTORY_LIMIT);
+    }
+    this.emit('chaosSignal', record);
+  }
+
   // ---- Snapshot ----
 
   /** Build a status snapshot for dashboard / WebSocket broadcast. */
@@ -451,6 +500,7 @@ export class BotEngine {
           quantity: s.quantity,
           price: s.expectedPrice,
           timestamp: s.timestamp,
+          marker: s.marker,
         }));
       },
       submitOrders: async (signals: SchedulerTradeSignal[]) => {
@@ -484,6 +534,7 @@ export class BotEngine {
                 price: signal.price,
                 txSignature: txSig,
               });
+              this.emitChaosSignal(signal, { success: true, txSignature: txSig });
             } else {
               this.chaosStats.ordersFailed++;
               this.logger.warn('chaos.order.failed', {
@@ -493,6 +544,7 @@ export class BotEngine {
                 price: signal.price,
                 error: result.error,
               });
+              this.emitChaosSignal(signal, { success: false, error: result.error });
             }
           } catch (err) {
             this.chaosStats.ordersFailed++;
@@ -501,6 +553,7 @@ export class BotEngine {
               symbol: signal.pair.symbol,
               error: String(err),
             });
+            this.emitChaosSignal(signal, { success: false, error: String(err) });
           }
         }
 
