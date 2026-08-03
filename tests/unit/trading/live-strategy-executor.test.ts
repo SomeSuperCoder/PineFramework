@@ -15,7 +15,7 @@ vi.mock('../../../src/trading/solana-wallet.js', () => ({
 
 vi.mock('../../../src/strategy/strategy-engine.js', () => ({
   StrategyEngine: vi.fn().mockImplementation(() => ({
-    // Mock strategy engine methods
+    getNewMarkers: vi.fn().mockReturnValue([]),
   })),
 }));
 
@@ -128,6 +128,121 @@ describe('LiveStrategyExecutor', () => {
       };
 
       await expect(executor.processCandle(candle)).rejects.toThrow('Strategy not initialized');
+    });
+
+    it('should close long position when short signal received', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      // Set up a long position via state
+      const key = 'BTCUSDT:60';
+      const state = (executor as any).strategyStates.get(key);
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now() - 60000,
+      };
+
+      // Mock strategy engine to return short marker
+      state.engine.getNewMarkers = vi.fn().mockReturnValue([
+        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
+      ]);
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50500,
+        volume: 1000,
+      };
+
+      const signals = await executor.processCandle(candle);
+      expect(signals).toHaveLength(1);
+      expect(signals[0].action).toBe('close');
+      expect(signals[0].symbol).toBe('BTCUSDT');
+      expect(signals[0].quantity).toBe(0.1);
+    });
+
+    it('should ignore short signal when flat and log warning', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      // Position is flat (default)
+      const key = 'BTCUSDT:60';
+      const state = (executor as any).strategyStates.get(key);
+
+      // Mock strategy engine to return short marker
+      state.engine.getNewMarkers = vi.fn().mockReturnValue([
+        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
+      ]);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50500,
+        volume: 1000,
+      };
+
+      const signals = await executor.processCandle(candle);
+      expect(signals).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Short signal received while flat'),
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('should ignore short signal when already short and log warning', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      // Set up a short position (theoretical)
+      const key = 'BTCUSDT:60';
+      const state = (executor as any).strategyStates.get(key);
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'short',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now() - 60000,
+      };
+
+      // Mock strategy engine to return short marker
+      state.engine.getNewMarkers = vi.fn().mockReturnValue([
+        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
+      ]);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50000,
+        high: 51000,
+        low: 49000,
+        close: 50500,
+        volume: 1000,
+      };
+
+      const signals = await executor.processCandle(candle);
+      expect(signals).toHaveLength(0);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Short signal received while already short'),
+      );
+
+      warnSpy.mockRestore();
     });
   });
 

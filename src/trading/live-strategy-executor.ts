@@ -136,19 +136,41 @@ export class LiveStrategyExecutor {
       throw new Error(`Strategy not initialized for ${key}`);
     }
 
-    // Execute strategy on the candle
-    // This is a simplified version - in reality, you'd need to integrate
-    // with the Pine Script execution engine
     const signals: TradeSignal[] = [];
-
-    // For now, we'll use a simple moving average crossover strategy
-    // as a placeholder. In production, this would use the actual
-    // Pine Script strategy execution.
     const currentPrice = candle.close;
 
-    // Simple placeholder logic - replace with actual strategy execution
+    // Check for short signals from the strategy engine.
+    // On a spot DEX, short selling is impossible, so we interpret
+    // short signals as "close existing long position" (TradingView behavior).
+    const newMarkers = state.engine.getNewMarkers();
+    const hasShortSignal = newMarkers.some(m => m.direction === 'short');
+
+    if (hasShortSignal) {
+      if (state.position.direction === 'long') {
+        // Short signal while long → close the position
+        console.warn(
+          `[LiveStrategyExecutor] Short signal received while long on ${candle.symbol} — closing position (spot DEX does not support short selling)`,
+        );
+        signals.push({
+          action: 'close',
+          symbol: candle.symbol,
+          quantity: state.position.quantity,
+          expectedPrice: currentPrice,
+          timestamp: candle.timestamp,
+        });
+      } else if (state.position.direction === 'flat') {
+        console.warn(
+          `[LiveStrategyExecutor] Short signal received while flat on ${candle.symbol} — ignored (no position to close)`,
+        );
+      } else {
+        console.warn(
+          `[LiveStrategyExecutor] Short signal received while already short on ${candle.symbol} — ignored (spot DEX does not support short selling)`,
+        );
+      }
+    }
+
+    // Placeholder logic for long entries/exits (to be replaced with real strategy execution)
     if (state.position.direction === 'flat') {
-      // Check for entry signal (simplified)
       if (this.shouldEnterLong(state, currentPrice)) {
         signals.push({
           action: 'buy',
@@ -159,7 +181,6 @@ export class LiveStrategyExecutor {
         });
       }
     } else if (state.position.direction === 'long') {
-      // Check for exit signal (simplified)
       if (this.shouldExitLong(state, currentPrice)) {
         signals.push({
           action: 'sell',
