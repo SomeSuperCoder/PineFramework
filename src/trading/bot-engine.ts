@@ -375,7 +375,10 @@ export class BotEngine {
     this.strategyExecutor = new LiveStrategyExecutor({
       strategySource: this._config.strategySource,
       dex: this.dex,
-      walletPublicKey: this._config.walletPublicKey,
+      walletManager: null as any, // TODO: wire real WalletManager when wallet is imported
+      pairs: (this._config.pairs ?? []).map(p => ({ symbol: p.symbol, timeframe: p.timeframe })),
+      initialCapital: 0n,
+      positionSizePercent: 100,
     });
     this.logger.info('Strategy executor created');
 
@@ -400,9 +403,17 @@ export class BotEngine {
       pairs: this._config.pairs ?? [],
       processCandle: async (candle) => {
         if (!this.strategyExecutor) return [];
-        return this.strategyExecutor.processCandle(candle);
+        const signals = await this.strategyExecutor.processCandle(candle);
+        // Map LiveStrategyExecutor TradeSignal → Scheduler TradeSignal
+        return signals.map(s => ({
+          pair: { symbol: s.symbol, timeframe: candle.timeframe },
+          action: s.action,
+          quantity: s.quantity,
+          price: s.expectedPrice,
+          timestamp: s.timestamp,
+        }));
       },
-      submitOrders: async (signals) => {
+      submitOrders: async (_signals) => {
         // Orders are handled by the strategy executor
       },
       strategyExecutor: this.strategyExecutor,

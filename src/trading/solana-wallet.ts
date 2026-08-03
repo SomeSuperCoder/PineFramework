@@ -12,10 +12,8 @@ import {
   PublicKey,
   Keypair,
   Transaction,
-  TransactionInstruction,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
-  AccountInfo,
   ParsedAccountData,
 } from '@solana/web3.js';
 import { getAssociatedTokenAddress, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
@@ -211,7 +209,7 @@ export async function sendAndConfirmTransactionWithTimeout(
   connection: Connection,
   transaction: Transaction,
   signers: Keypair[],
-  timeoutMs: number = MAX_CONFIRM_TIMEOUT_MS,
+  _timeoutMs: number = MAX_CONFIRM_TIMEOUT_MS,
 ): Promise<TransactionResult> {
   try {
     const signature = await sendAndConfirmTransaction(

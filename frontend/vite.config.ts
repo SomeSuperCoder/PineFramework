@@ -6,12 +6,12 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     conditions: ['source'],
-    alias: {
-      // Route pine-framework to a frontend-safe entry that excludes
-      // the trading module (which depends on Node.js built-ins).
-      'pine-framework': path.resolve(__dirname, '../src/frontend-safe.ts'),
-      'pine-framework/utils/time': path.resolve(__dirname, '../src/utils/time.ts'),
-    },
+    alias: [
+      // More specific subpath aliases FIRST
+      { find: 'pine-framework/utils/time', replacement: path.resolve(__dirname, '../src/utils/time.ts') },
+      // Fallback: route main entry to frontend-safe version (no trading/Node.js)
+      { find: 'pine-framework', replacement: path.resolve(__dirname, '../src/frontend-safe.ts') },
+    ],
   },
   server: {
     port: 3000,

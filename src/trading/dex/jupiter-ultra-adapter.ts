@@ -113,7 +113,7 @@ export class JupiterUltraAdapter extends DexAdapter {
     });
   }
 
-  async swap(quote: Quote, privateKey: Uint8Array): Promise<SwapResult> {
+  async swap(quote: Quote, _privateKey: Uint8Array): Promise<SwapResult> {
     return retryWithBackoff(async () => {
       try {
         const swapResponse = await fetch(`${this.baseUrl}/swap`, {

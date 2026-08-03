@@ -10,7 +10,6 @@
  */
 
 import { DexAdapter } from './dex-adapter.js';
-import type { SwapResult } from './dex-adapter.js';
 
 /** USDC mint address on Solana mainnet. */
 export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';

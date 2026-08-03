@@ -14,10 +14,9 @@
  * @module trading
  */
 
-import { Scheduler, SchedulerOptions, SchedulerStats, Mutex, ClosedCandle, TradeSignal } from './scheduler.js';
-import { LiveStrategyExecutor, ExecutionResult } from './live-strategy-executor.js';
+import { Scheduler, SchedulerOptions, SchedulerStats, ClosedCandle } from './scheduler.js';
+import { LiveStrategyExecutor } from './live-strategy-executor.js';
 import { DexAdapter } from './dex/dex-adapter.js';
-import { PairId, pairIdToString } from './scheduler.js';
 
 // ---- Types ----
 
@@ -54,7 +53,6 @@ export interface LiveSchedulerStats extends SchedulerStats {
  */
 export class LiveScheduler extends Scheduler {
   private strategyExecutor: LiveStrategyExecutor;
-  private dex: DexAdapter;
   private persistState: boolean;
   private successfulOrders = 0;
   private failedOrders = 0;
@@ -63,7 +61,6 @@ export class LiveScheduler extends Scheduler {
   constructor(options: LiveSchedulerOptions) {
     super(options);
     this.strategyExecutor = options.strategyExecutor;
-    this.dex = options.dex;
     this.persistState = options.persistState ?? true;
   }
 

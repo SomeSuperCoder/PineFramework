@@ -73,7 +73,7 @@ export class ShutdownHandler {
   /**
    * Execute all registered shutdown hooks in order.
    */
-  async executeShutdown(reason: string): Promise<void> {
+  async executeShutdown(_reason: string): Promise<void> {
     for (let i = 0; i < this.hooks.length; i++) {
       const hook = this.hooks[i]!;
       try {

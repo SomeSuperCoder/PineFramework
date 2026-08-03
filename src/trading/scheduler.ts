@@ -11,7 +11,7 @@
  * @module trading
  */
 
-import type { BotConfig, PairConfig } from './types.js';
+import type { PairConfig } from './types.js';
 
 // ---- Types ----
 

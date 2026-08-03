@@ -8,12 +8,10 @@
  */
 
 import { StrategyEngine, type StrategyMarker } from '../strategy/strategy-engine.js';
-import { DexAdapter, type Quote, type SwapResult } from './dex/dex-adapter.js';
+import { DexAdapter, type SwapResult } from './dex/dex-adapter.js';
 import { ClosedCandle, PairId } from './scheduler.js';
-import { WalletManager, type WalletKeypair } from './wallet/wallet-manager.js';
-import { getSolBalance, getTokenBalance, USDC_MINT } from './solana-wallet.js';
-import { createSolanaConnection, getDefaultSolanaConfig } from './solana-config.js';
-import { Connection } from '@solana/web3.js';
+import { WalletManager } from './wallet/wallet-manager.js';
+import { USDC_MINT } from './solana-wallet.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -93,12 +91,10 @@ export interface ExecutionResult {
 export class LiveStrategyExecutor {
   private config: LiveStrategyConfig;
   private strategyStates = new Map<string, StrategyState>();
-  private connection: Connection;
   private stateFilePath: string;
 
   constructor(config: LiveStrategyConfig) {
     this.config = config;
-    this.connection = createSolanaConnection(getDefaultSolanaConfig());
     this.stateFilePath = path.join(config.dataDir ?? '.', 'strategy-state.json');
   }
 
@@ -111,7 +107,6 @@ export class LiveStrategyExecutor {
     // Create strategy engine with default config
     const engine = new StrategyEngine({
       initialCapital: Number(this.config.initialCapital),
-      positionSize: this.config.positionSizePercent,
     });
 
     // Initialize strategy state
@@ -209,7 +204,7 @@ export class LiveStrategyExecutor {
         const outputMint = signal.action === 'buy' ? this.getMintForSymbol(signal.symbol) : USDC_MINT;
         const amount = BigInt(Math.floor(signal.quantity * (signal.action === 'buy' ? signal.expectedPrice : 1)));
 
-        const quote = await this.config.dex.quote(inputMint, outputMint, amount);
+        const quote = await this.config.dex.quote(inputMint, outputMint, amount, 50);
 
         // Execute swap
         const swapResult = await this.config.dex.swap(quote, keypairData.value.privateKey);
@@ -363,7 +358,7 @@ export class LiveStrategyExecutor {
     return false;
   }
 
-  private updatePositionState(signal: TradeSignal, swapResult: SwapResult): void {
+  private updatePositionState(signal: TradeSignal, _swapResult: SwapResult): void {
     const key = `${signal.symbol}:${signal.timestamp}`;
     const state = this.strategyStates.get(key);
 

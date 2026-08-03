@@ -38,10 +38,8 @@ export class TradeHistoryStore {
   private readonly debugDir: string;
   private readonly maxDebugSnapshots: number;
   private trades: TradeRecord[] = [];
-  private readonly botId: string;
 
   constructor(config: HistoryConfig) {
-    this.botId = config.botId;
     this.maxDebugSnapshots = config.maxDebugSnapshots ?? 100;
 
     // Create directories
