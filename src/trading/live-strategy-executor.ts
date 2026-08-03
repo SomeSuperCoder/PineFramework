@@ -12,7 +12,7 @@ import { DexAdapter, type Quote, type SwapResult } from './dex/dex-adapter.js';
 import { ClosedCandle, PairId } from './scheduler.js';
 import { WalletManager, type WalletKeypair } from './wallet/wallet-manager.js';
 import { getSolBalance, getTokenBalance, USDC_MINT } from './solana-wallet.js';
-import { createConnection } from './solana-config.js';
+import { createSolanaConnection, getDefaultSolanaConfig } from './solana-config.js';
 import { Connection } from '@solana/web3.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -98,7 +98,7 @@ export class LiveStrategyExecutor {
 
   constructor(config: LiveStrategyConfig) {
     this.config = config;
-    this.connection = createConnection();
+    this.connection = createSolanaConnection(getDefaultSolanaConfig());
     this.stateFilePath = path.join(config.dataDir ?? '.', 'strategy-state.json');
   }
 

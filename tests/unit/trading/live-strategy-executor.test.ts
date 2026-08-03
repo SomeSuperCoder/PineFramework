@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock modules before importing
 vi.mock('../../../src/trading/solana-config.js', () => ({
-  createConnection: vi.fn().mockReturnValue({}),
+  createSolanaConnection: vi.fn().mockReturnValue({}),
+  getDefaultSolanaConfig: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('../../../src/trading/solana-wallet.js', () => ({

@@ -76,7 +76,7 @@
 - [x] 8.7 Update `BotEngine.shutdown()` to close real connections
 - [x] 8.8 Implement graceful position closure on stop
 - [x] 8.9 Implement state persistence on shutdown
-- [ ] 8.10 Add integration tests for bot lifecycle
+- [x] 8.10 Add integration tests for bot lifecycle
 
 ## 9. Testing and Validation
 
