@@ -1794,6 +1794,47 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
   );
 }
 
+function LiveBotView({
+  backendUrl,
+  activePair,
+  strategySource,
+}: {
+  backendUrl: string;
+  activePair: { symbol: string; timeframe: string } | null;
+  strategySource: string | null;
+}) {
+  // Mini chart data — fetch OHLCV + execute script for the first configured pair.
+  // Lives in a component that only mounts in Running/Stopping/Error states, so the
+  // data pipeline (OHLCV fetch, /api/execute, kline WS subscription) never runs
+  // while the bot is Idle/Stopped (SetupWizard view).
+  const miniChartData = useBotMiniChartData(
+    backendUrl,
+    activePair?.symbol ?? null,
+    activePair?.timeframe ?? null,
+    strategySource ?? null,
+  );
+
+  if (!activePair) return null;
+
+  return (
+    <div style={{ marginBottom: 12, borderBottom: '1px solid #1a1a2e', paddingBottom: 12 }}>
+      <div style={{ color: '#888', fontWeight: 600, marginBottom: 6, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>{activePair.symbol}</span>
+        <span style={{ color: '#555', fontWeight: 400 }}>{activePair.timeframe}</span>
+        {miniChartData.loading && (
+          <span style={{ color: '#ff9800', fontSize: 10, fontWeight: 400 }}>loading…</span>
+        )}
+      </div>
+      <MiniChart
+        data={miniChartData.displayCandles}
+        scriptResult={miniChartData.displayScriptResult}
+        dataVersion={miniChartData.dataVersion}
+        height={180}
+      />
+    </div>
+  );
+}
+
 export function LiveDashboard({
   backendUrl,
   status,
@@ -1933,23 +1974,10 @@ export function LiveDashboard({
     status.state === 'Error' ? '#e94560' :
     status.state === 'Idle' ? '#888' : '#ff9800';
 
-  const isReady = wallet.hasWallet && !walletLocked;
-
   // Reset chaos warning acknowledgment when chaos mode is toggled
   useEffect(() => {
     setChaosWarningAcknowledged(false);
   }, [chaosMode]);
-
-  // Mini chart data — fetch OHLCV + execute script for the first configured pair
-  const activePair = persistedConfig?.pairs?.[0] ?? null;
-  const miniChartData = useBotMiniChartData(
-    backendUrl,
-    activePair?.symbol ?? null,
-    activePair?.timeframe ?? null,
-    persistedConfig?.strategySource ?? null,
-  );
-
-  // Mini chart integration
 
   const rootStyle: React.CSSProperties = {
     flex: 1,
@@ -2184,24 +2212,12 @@ export function LiveDashboard({
 
         {/* Center: Mini Chart + Metrics + Positions */}
         <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
-          {/* Mini Chart */}
-          {(isRunning || isError || transitioning) && activePair && (
-            <div style={{ marginBottom: 12, borderBottom: '1px solid #1a1a2e', paddingBottom: 12 }}>
-              <div style={{ color: '#888', fontWeight: 600, marginBottom: 6, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>{activePair.symbol}</span>
-                <span style={{ color: '#555', fontWeight: 400 }}>{activePair.timeframe}</span>
-                {miniChartData.loading && (
-                  <span style={{ color: '#ff9800', fontSize: 10, fontWeight: 400 }}>loading…</span>
-                )}
-              </div>
-              <MiniChart
-                data={miniChartData.displayCandles}
-                scriptResult={miniChartData.displayScriptResult}
-                dataVersion={miniChartData.dataVersion}
-                height={180}
-              />
-            </div>
-          )}
+          {/* Mini Chart — only mounted in running states; never while Idle/Stopped */}
+          <LiveBotView
+            backendUrl={backendUrl}
+            activePair={persistedConfig?.pairs?.[0] ?? null}
+            strategySource={persistedConfig?.strategySource ?? null}
+          />
 
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 16 }}>

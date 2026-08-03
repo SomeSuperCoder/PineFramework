@@ -359,3 +359,68 @@ describe('10.5 — SIGTERM safe shutdown', () => {
     expect(configs[1]?.dex).toBe('jupiter-ultra');
   });
 });
+
+// ── 10.6: AbortSignal cancellation on stop ──
+
+describe('10.6 — AbortSignal cancels in-flight processing on stop', () => {
+  it('should abort in-flight liveTick when stop is called', async () => {
+    let tickAborted = false;
+
+    class TickTrackingBot extends BotEngine {
+      protected async initialize(): Promise<void> {
+        // Override to avoid real WebSocket — just track abort
+        if (!this.config) throw new Error('No config');
+        // Access private abort controller via casting
+        const ac = new AbortController();
+        (this as any)._abortController = ac;
+
+        // Simulate a slow liveTick that checks the signal
+        const fakeTick = async () => {
+          try {
+            await new Promise<void>((resolve, reject) => {
+              ac.signal.addEventListener('abort', () => {
+                tickAborted = true;
+                reject(new DOMException('Aborted', 'AbortError'));
+              }, { once: true });
+              // Never resolve — simulates in-flight processing
+            });
+          } catch {
+            // AbortError caught
+          }
+        };
+
+        // Store fakeTick for later
+        (this as any)._fakeTick = fakeTick;
+      }
+    }
+
+    const engine = new TickTrackingBot();
+    engine.configure(createMinimalConfig());
+    await engine.start();
+
+    // Start a fake in-flight tick
+    const tickPromise = (engine as any)._fakeTick();
+
+    // Stop should abort
+    await engine.stop();
+
+    expect(tickAborted).toBe(true);
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('should not process candles after stop transitions to Stopped', async () => {
+    const engine = new BotEngine();
+    engine.configure(createMinimalConfig());
+    await engine.start();
+
+    // Verify state is Running
+    expect(engine.state).toBe(BotState.Running);
+
+    // Stop the bot
+    await engine.stop();
+    expect(engine.state).toBe(BotState.Stopped);
+
+    // The abort controller should be null after shutdown
+    expect((engine as any)._abortController).toBeNull();
+  });
+});

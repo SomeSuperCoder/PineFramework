@@ -12,7 +12,33 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LiveDashboard, type BotStatusSnapshot } from '../components/TradingBotPanel';
 
+// jsdom has no canvas — the mini chart's PineChart would throw 'Canvas 2D not
+// supported'. The regression tests target the data pipeline (fetch calls), not
+// chart rendering, so stub the component.
+vi.mock('../components/MiniChart', () => ({
+  MiniChart: () => <div data-testid="mini-chart" />,
+}));
+
 const BACKEND = 'http://test:8081';
+
+let wsInstances: MockWS[] = [];
+
+// Minimal WebSocket stub — matches the pattern in useChartData.test.ts
+class MockWS {
+  url: string;
+  readyState = 0;
+  onopen: (() => void) | null = null;
+  onmessage: ((e: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  sent: string[] = [];
+
+  constructor(url: string) {
+    this.url = url;
+    wsInstances.push(this);
+  }
+  send(data: string) { this.sent.push(data); }
+  close() { this.readyState = 3; this.onclose?.(); }
+}
 
 function statusSnapshot(state: BotStatusSnapshot['state']): BotStatusSnapshot {
   return {
@@ -52,6 +78,8 @@ describe('LiveDashboard stop flow', () => {
 
   beforeEach(() => {
     Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {});
+    wsInstances = [];
+    vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket);
     fetchMock = vi.fn((url: string, init?: RequestInit) => {
       const path = new URL(url, BACKEND).pathname;
       if (path.endsWith('/api/bot/wallet/status')) {
@@ -118,5 +146,73 @@ describe('LiveDashboard stop flow', () => {
     // The idle/stopped re-fetch recovers wallet+config -> advance to review
     await screen.findByText(/Review & Start/);
     expect(screen.queryByPlaceholderText(/Paste 12 or 24 word seed phrase/)).toBeNull();
+  });
+
+  it('does NOT execute the strategy or fetch OHLCV while Idle/Stopped (saved config)', async () => {
+    // Dashboard opens directly to the Review step (saved config + wallet).
+    render(<LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Stopped')} logs={[]} onClose={onClose} />);
+
+    await screen.findByText(/Review & Start/);
+
+    // Give any stray effects a tick to fire
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The mini chart data pipeline must NOT run while Idle/Stopped
+    const urls = fetchMock.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('/api/execute'))).toBe(false);
+    expect(urls.some((u) => u.includes('/api/ohlcv'))).toBe(false);
+  });
+
+  it('starts the mini chart data pipeline (ohlcv + execute) once Running', async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const path = new URL(url, BACKEND).pathname;
+      if (path.endsWith('/api/bot/wallet/status')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(WALLET_STATUS_OK) } as Response);
+      }
+      if (path.endsWith('/api/bot/config') && (!init || init.method === 'GET' || init.method === undefined)) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(CONFIG_OK) } as Response);
+      }
+      if (path.endsWith('/api/ohlcv')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [
+          { timestamp: 1785722700000, open: 100, high: 101, low: 99, close: 100.5, volume: 10 },
+        ] }) } as Response);
+      }
+      if (path.endsWith('/api/execute')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({
+          success: true,
+          outputs: {},
+          shapes: [],
+          fills: [],
+          strategyMarkers: [],
+          bgcolor: [],
+          plotColors: {},
+          fillColorData: {},
+          lines: [],
+          labels: [],
+          alertConditions: [],
+          alertTriggers: [],
+          boxes: [],
+          tables: [],
+          hiddenPlotKeys: [],
+          barColors: [],
+        }) } as Response);
+      }
+      if (path.endsWith('/api/bot/wallet/balance')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ success: true, balance: 100 }) } as Response);
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response);
+    });
+
+    render(<LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Running')} logs={[]} onClose={onClose} />);
+
+    // The mini chart data pipeline runs once the bot is Running
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/ohlcv'))).toBe(true);
+    });
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/execute'))).toBe(true);
+    });
   });
 });

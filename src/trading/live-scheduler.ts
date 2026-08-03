@@ -71,12 +71,15 @@ export class LiveScheduler extends Scheduler {
    * mutex-serialized order submission, error isolation), then adds:
    * - Live statistics tracking
    * - State persistence
+   *
+   * @param candles - Closed candles to process
+   * @param signal - Optional AbortSignal to cancel processing
    */
-  async liveTick(candles: ClosedCandle[]): Promise<void> {
+  async liveTick(candles: ClosedCandle[], signal?: AbortSignal): Promise<void> {
     const startTime = Date.now();
 
     // Delegate to base tick for core processing
-    await super.tick(candles);
+    await super.tick(candles, signal);
 
     // Track execution time
     this.totalExecutionTimeMs += Date.now() - startTime;

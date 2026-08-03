@@ -170,9 +170,13 @@ export class Scheduler {
    * Phase 1: Process candles for each pair in deterministic order,
    * collecting signals.
    * Phase 2: Submit all collected signals via mutex (serialized).
+   *
+   * @param candles - Closed candles to process
+   * @param signal - Optional AbortSignal to cancel processing
    */
-  async tick(candles: ClosedCandle[]): Promise<void> {
+  async tick(candles: ClosedCandle[], signal?: AbortSignal): Promise<void> {
     if (this._paused) return;
+    if (signal?.aborted) return;
 
     this._running = true;
     this.tickCount++;
@@ -182,11 +186,15 @@ export class Scheduler {
 
     // Phase 1: Process candles in deterministic order (by pair config order)
     for (const pair of this.pairs) {
+      if (signal?.aborted) break;
+
       const pairCandles = candles.filter(
         (c) => c.symbol === pair.symbol && c.timeframe === pair.timeframe,
       );
 
       for (const candle of pairCandles) {
+        if (signal?.aborted) break;
+
         try {
           const signals = await this.processCandle(candle);
           allSignals.push(...signals);
@@ -196,6 +204,8 @@ export class Scheduler {
         }
       }
     }
+
+    if (signal?.aborted) return;
 
     this.totalSignalsGenerated += allSignals.length;
 

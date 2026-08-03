@@ -207,4 +207,42 @@ describe('Scheduler', () => {
     expect(scheduler.stats.totalSignalsGenerated).toBe(3);
     expect(scheduler.stats.totalOrdersSubmitted).toBe(3);
   });
+
+  describe('AbortSignal support', () => {
+    it('should process zero candles when signal is already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+
+      processCandle.mockResolvedValue([]);
+      await scheduler.tick([
+        { symbol: 'SOL/USDC', timeframe: '1m', timestamp: 1000, open: 99, high: 101, low: 98, close: 100, volume: 1000 },
+      ], controller.signal);
+
+      expect(processCandle).not.toHaveBeenCalled();
+      expect(submitOrders).not.toHaveBeenCalled();
+      expect(scheduler.stats.tickCount).toBe(0);
+    });
+
+    it('should stop after current pair when signal aborts mid-batch', async () => {
+      const controller = new AbortController();
+
+      // First pair processes normally, then abort
+      processCandle
+        .mockImplementationOnce(async () => {
+          controller.abort();
+          return [];
+        })
+        .mockResolvedValue([]);
+
+      await scheduler.tick([
+        { symbol: 'SOL/USDC', timeframe: '1m', timestamp: 1000, open: 99, high: 101, low: 98, close: 100, volume: 1000 },
+        { symbol: 'BTC/USDC', timeframe: '5m', timestamp: 5000, open: 50000, high: 51000, low: 49000, close: 50500, volume: 100 },
+        { symbol: 'SOL/USDC', timeframe: '5m', timestamp: 5000, open: 99, high: 102, low: 98, close: 101, volume: 2000 },
+      ], controller.signal);
+
+      // Only the first pair (SOL/USDC 1m) was processed before abort
+      expect(processCandle).toHaveBeenCalledTimes(1);
+      expect(submitOrders).not.toHaveBeenCalled();
+    });
+  });
 });

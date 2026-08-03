@@ -175,6 +175,39 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   });
 
   /**
+   * PATCH /bot/config/chaos-mode
+   * Toggle chaos mode without requiring a full config.
+   * Accepts { enabled: boolean } in body.
+   */
+  router.patch('/bot/config/chaos-mode', (req, res) => {
+    try {
+      const { enabled } = req.body as { enabled?: boolean };
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
+        return;
+      }
+
+      const store = getConfigStore();
+      if (store) {
+        const existing = store.load();
+        const config: BotConfig = {
+          strategySource: existing?.strategySource ?? '',
+          dex: existing?.dex ?? 'jupiter-swap',
+          ...(existing?.pairs ? { pairs: existing.pairs } : {}),
+          risk: existing?.risk ?? { maxDailyLoss: 100 },
+          chaosMode: { enabled },
+        };
+        store.save(config);
+      }
+
+      res.json({ success: true, chaosMode: { enabled } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ success: false, error: message });
+    }
+  });
+
+  /**
    * DELETE /bot/config
    * Delete persisted bot configuration.
    * Accepts { removeWallet?: boolean } in body.

@@ -31,7 +31,9 @@ export interface UseChaosModeReturn {
 export function useChaosMode(backendUrl: string): UseChaosModeReturn {
   const [chaosMode, setChaosMode] = useState(false);
   const [showToast, setToShowToast] = useState(false);
+  const [tapFlash, setTapFlash] = useState(false);
   const tapsRef = useRef<number[]>([]);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load initial state from backend
   useEffect(() => {
@@ -47,17 +49,11 @@ export function useChaosMode(backendUrl: string): UseChaosModeReturn {
 
   const persistChaosMode = useCallback(async (enabled: boolean) => {
     try {
-      // Get current config, update chaosMode, save back
-      const res = await fetch(`${backendUrl}/api/bot/config`);
-      if (res.ok) {
-        const config = await res.json();
-        const updatedConfig = { ...config, chaosMode: { enabled } };
-        await fetch(`${backendUrl}/api/bot/configure`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedConfig),
-        });
-      }
+      await fetch(`${backendUrl}/api/bot/config/chaos-mode`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
     } catch {
       // If config endpoint isn't available, chaos mode still works in-memory
     }
@@ -78,6 +74,11 @@ export function useChaosMode(backendUrl: string): UseChaosModeReturn {
 
     // Remove taps older than the window
     tapsRef.current = tapsRef.current.filter(t => now - t < TAP_WINDOW_MS);
+
+    // Flash on tap
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setTapFlash(true);
+    flashTimerRef.current = setTimeout(() => setTapFlash(false), 150);
 
     if (tapsRef.current.length >= TAP_THRESHOLD) {
       tapsRef.current = [];
@@ -107,9 +108,9 @@ export function useChaosMode(backendUrl: string): UseChaosModeReturn {
       height: 32,
       cursor: 'default',
       zIndex: 9999,
-      // Nearly invisible — very low opacity background that only shows on hover
-      background: 'transparent',
+      background: tapFlash ? 'rgba(255,255,255,0.08)' : 'transparent',
       borderRadius: 4,
+      transition: 'background 0.15s ease-out',
     } as React.CSSProperties,
   };
 

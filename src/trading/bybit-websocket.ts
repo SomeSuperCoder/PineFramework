@@ -265,6 +265,9 @@ export class BybitWebSocketService {
   }
 
   private handleKlineMessage(message: BybitKlineMessage): void {
+    // Drop messages after disconnect
+    if (this.isStopped) return;
+
     // Only process confirmed candles
     if (!message.data.confirm) {
       return;

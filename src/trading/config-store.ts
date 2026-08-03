@@ -71,7 +71,7 @@ export class BotConfigStore {
   private isValid(config: unknown): config is BotConfig {
     if (!config || typeof config !== 'object') return false;
     const c = config as Record<string, unknown>;
-    if (typeof c.strategySource !== 'string' || !c.strategySource) return false;
+    if (typeof c.strategySource !== 'string') return false;
     if (c.dex !== 'jupiter-swap' && c.dex !== 'jupiter-ultra') return false;
     if (!c.risk || typeof c.risk !== 'object') return false;
     const risk = c.risk as Record<string, unknown>;

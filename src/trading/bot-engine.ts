@@ -96,6 +96,9 @@ export class BotEngine {
   private scheduler: LiveScheduler | null = null;
   private dex: JupiterSwapAdapter | null = null;
 
+  /** AbortController for cancelling in-flight candle processing on stop. */
+  private _abortController: AbortController | null = null;
+
   constructor(options?: BotEngineOptions) {
     this.logger = options?.logger ?? consoleLogger;
     this.riskManager = options?.riskManager;
@@ -231,6 +234,9 @@ export class BotEngine {
       throw new Error(`Cannot stop bot from state: ${this.state}. Must be Running.`);
     }
 
+    // Cancel in-flight candle processing immediately
+    this._abortController?.abort();
+
     await this.stateMachine.transition(BotState.Stopping, 'User requested stop');
 
     try {
@@ -255,6 +261,9 @@ export class BotEngine {
     }
 
     this.logger.warn('Emergency stop triggered');
+
+    // Cancel in-flight candle processing immediately
+    this._abortController?.abort();
 
     // Force to Stopping if currently Running
     if (this.state === BotState.Running) {
@@ -385,6 +394,9 @@ export class BotEngine {
     }
 
     this.logger.info('Initializing bot components');
+
+    // 0. Create AbortController for cancellation
+    this._abortController = new AbortController();
 
     // 1. Create DEX adapter
     this.dex = new JupiterSwapAdapter();
@@ -523,7 +535,7 @@ export class BotEngine {
     if (!this.scheduler || this.state !== BotState.Running) return;
 
     // Process candle asynchronously (fire and forget — scheduler handles errors)
-    this.scheduler.liveTick([candle]).catch((err) => {
+    this.scheduler.liveTick([candle], this._abortController?.signal).catch((err) => {
       this.logger.error('Error processing candle', { error: String(err) });
     });
   }
@@ -557,6 +569,7 @@ export class BotEngine {
     this.scheduler = null;
     this.strategyExecutor = null;
     this.dex = null;
+    this._abortController = null;
 
     this.logger.info('Bot shutdown complete');
   }
