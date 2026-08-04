@@ -24,10 +24,6 @@ import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
 
 // ---- Constants ----
 
-/** Chaos mode starting capital (10,000 USDC in lamports) so the simulated
- *  strategy engine has real margin to open entries and track equity. */
-const CHAOS_INITIAL_CAPITAL_LAMPORTS = 10_000_000_000;
-
 /**
  * Convert a strategy marker entry (from the ExecutionEngine runtime) into a
  * StrategyMarker. The runtime's entries drop the engine-internal `orderId`;
@@ -164,9 +160,13 @@ export class LiveStrategyExecutor {
     let runtime: ExecutionEngine | null = null;
 
     if (isChaos) {
-      // Chaos mode drives a bare programmatic engine with simulated margin.
+      // Chaos mode drives a bare programmatic engine. Fetch real wallet balance
+      // so equity calculations reflect actual available funds, not a hardcoded
+      // constant that causes dust trades on small balances.
+      const realBalance = await this.fetchUsdcBalance();
+      console.log(`[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`);
       engine = new StrategyEngine({
-        initialCapital: CHAOS_INITIAL_CAPITAL_LAMPORTS,
+        initialCapital: Number(realBalance),
       });
     } else {
       runtime = this.compileStrategyRuntime();
@@ -422,6 +422,33 @@ export class LiveStrategyExecutor {
         // Get current balance
         const balance = await this.config.dex.getBalance(USDC_MINT, keypairData.value.publicKey);
         const availableBalance = BigInt(balance.amount);
+        const availableBalanceUsdc = Number(availableBalance) / 1e6;
+
+        // Calculate swap amount for buys: 10% of real balance / price
+        let swapAmountUsdc = 0;
+        if (signal.action === 'buy') {
+          swapAmountUsdc = (availableBalanceUsdc * 0.1) / signal.expectedPrice;
+        }
+
+        console.log(
+          `[LiveStrategyExecutor] executeSignal: action=${signal.action} ` +
+          `balance=${availableBalanceUsdc} USDC ` +
+          `swapAmount=${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
+          `price=${signal.expectedPrice}`,
+        );
+
+        // Skip trades below minimum size (< 1 USDC) to avoid dust orders
+        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < 1) {
+          console.warn(
+            `[LiveStrategyExecutor] Skipping trade: swap amount ${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
+            `(< ${(1 / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ 1 USDC)`,
+          );
+          return {
+            success: false,
+            signal,
+            error: `Swap amount below minimum trade size: ${swapAmountUsdc.toFixed(6)} ${signal.symbol}`,
+          };
+        }
 
         // Check if we have enough balance
         if (signal.action === 'buy') {
@@ -570,22 +597,26 @@ export class LiveStrategyExecutor {
   /**
    * Hot-swap a ChaosSignalGenerator into a running executor.
    * Replaces the chaos generator and reinitializes each pair's strategy
-   * engine to a bare StrategyEngine with chaos-mode capital, so the next
+   * engine to a bare StrategyEngine with real wallet balance, so the next
    * processCandle call immediately routes through the chaos path.
    *
    * WHY: Enables chaos mode without stopping the bar feed or scheduler.
    * The generator swap is atomic (single assignment) — no race condition
    * because JS is single-threaded.
    */
-  setChaosGenerator(generator: ChaosSignalGenerator): void {
+  async setChaosGenerator(generator: ChaosSignalGenerator): Promise<void> {
     this.config.chaosGenerator = generator;
+
+    // Fetch real balance once for all pairs — avoids N sequential RPC calls.
+    const realBalance = await this.fetchUsdcBalance();
+    console.log(`[LiveStrategyExecutor] Chaos hot-swap: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`);
 
     for (const pair of this.config.pairs) {
       const key = this.getPairKey(pair);
       const state = this.strategyStates.get(key);
       if (state) {
         state.engine = new StrategyEngine({
-          initialCapital: CHAOS_INITIAL_CAPITAL_LAMPORTS,
+          initialCapital: Number(realBalance),
         });
         state.runtime = null;
         state.warmUpComplete = true;
@@ -602,6 +633,21 @@ export class LiveStrategyExecutor {
   }
 
   // ---- Private Methods ----
+
+  /**
+   * Fetch the wallet's current USDC balance in smallest units.
+   * Shared by chaos-mode initialization and hot-swap so both paths use
+   * the real on-chain balance instead of a hardcoded constant.
+   */
+  private async fetchUsdcBalance(): Promise<bigint> {
+    const keypairData = await this.config.walletManager.getKeypair();
+    try {
+      const balance = await this.config.dex.getBalance(USDC_MINT, keypairData.value.publicKey);
+      return BigInt(balance.amount);
+    } finally {
+      keypairData.dispose();
+    }
+  }
 
   /**
    * Process a candle using chaos mode — drives a real StrategyEngine with

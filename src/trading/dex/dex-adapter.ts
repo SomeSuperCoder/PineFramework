@@ -23,12 +23,21 @@ export interface Quote {
   outAmount: string;
   /** Price impact percentage. */
   priceImpactPct: number;
-  /** Route information. */
-  route: string;
+  /**
+   * Route information (human-readable).
+   * Optional — prefer routePlan for API requests.
+   */
+  route?: string;
   /** Slippage in basis points used for this quote. */
   slippageBps: number;
   /** Fee in basis points for this route. */
   feeBps: number;
+  /**
+   * Route plan array from Jupiter API v6.
+   * Preserves the original route plan for swap requests.
+   * Optional for backward compatibility with other adapters.
+   */
+  routePlan?: any[];
 }
 
 /**

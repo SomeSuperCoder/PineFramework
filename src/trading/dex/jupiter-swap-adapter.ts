@@ -114,9 +114,9 @@ export class JupiterSwapAdapter extends DexAdapter {
         inAmount: data.inAmount,
         outAmount: data.outAmount,
         priceImpactPct: data.priceImpactPct,
-        route: data.routePlan?.map((r) => r.swapInfo.ammKey).join(' → ') ?? 'direct',
         slippageBps,
         feeBps: 0, // Jupiter API doesn't return fee in quote — computed at swap
+        routePlan: data.routePlan, // Preserve original routePlan array for swap requests
       };
     });
   }
@@ -128,6 +128,7 @@ export class JupiterSwapAdapter extends DexAdapter {
         const keypair = Keypair.fromSecretKey(privateKey);
 
         // Get swap transaction from Jupiter API
+        // Send routePlan array (not route string) for API v6 compatibility
         const swapResponse = await fetch(`${this.baseUrl}/swap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -138,7 +139,7 @@ export class JupiterSwapAdapter extends DexAdapter {
               inAmount: quote.inAmount,
               outAmount: quote.outAmount,
               priceImpactPct: quote.priceImpactPct,
-              route: quote.route,
+              routePlan: quote.routePlan, // Use routePlan array instead of route string
             },
             userPublicKey: keypair.publicKey.toBase58(),
             wrapAndUnwrapSol: true,

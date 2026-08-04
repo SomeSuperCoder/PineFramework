@@ -61,7 +61,7 @@ const ENV_NETWORK = 'SOLANA_NETWORK';
 export function createSolanaConfig(options?: SolanaConfigOptions): SolanaConfig {
   const network = options?.network
     ?? (process.env[ENV_NETWORK] as 'mainnet-beta' | 'devnet' | 'testnet')
-    ?? 'devnet'; // Default to devnet for safety
+    ?? 'mainnet-beta'; // Default to mainnet-beta for real trading
 
   const rpcUrl = options?.rpcUrl
     ?? process.env[ENV_RPC_URL]
@@ -70,6 +70,13 @@ export function createSolanaConfig(options?: SolanaConfigOptions): SolanaConfig 
   const commitment = options?.commitment
     ?? (process.env[ENV_COMMITMENT] as Commitment)
     ?? DEFAULT_COMMITMENT;
+
+  const source = options?.network
+    ? 'explicit option'
+    : process.env[ENV_NETWORK]
+      ? `env var ${ENV_NETWORK}`
+      : 'default';
+  console.log(`[SolanaConfig] Network: ${network} (source: ${source})`);
 
   return {
     rpcUrl,
@@ -91,7 +98,7 @@ export function createSolanaConnection(config: SolanaConfig): Connection {
 }
 
 /**
- * Get the default Solana configuration (devnet).
+ * Get the default Solana configuration (mainnet-beta).
  */
 export function getDefaultSolanaConfig(): SolanaConfig {
   return createSolanaConfig();
