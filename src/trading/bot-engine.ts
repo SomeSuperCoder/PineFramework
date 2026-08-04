@@ -30,6 +30,7 @@ import type { ExecutionResult } from './live-strategy-executor.js';
 import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
+import { extractScriptName } from '../utils/script-name.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -443,11 +444,12 @@ export class BotEngine {
 
   /** Build a status snapshot for dashboard / WebSocket broadcast. */
   getSnapshot(): BotStatusSnapshot {
+    const strategyName = this._config?.strategySource
+      ? (extractScriptName(this._config.strategySource)?.substring(0, 50) ?? '(not configured)')
+      : '(not configured)';
     return {
       state: this.state,
-      strategyName: this._config?.strategySource
-        ? this._config.strategySource.substring(0, 50)
-        : '(not configured)',
+      strategyName,
       dex: this._config?.dex ?? 'jupiter-swap',
       walletPublicKey: this._config?.walletPublicKey ?? null,
       startedAt: this._startedAt,

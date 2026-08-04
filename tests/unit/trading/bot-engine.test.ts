@@ -45,18 +45,18 @@ describe('BotEngine', () => {
   });
 
   it('should throw start without configuration', async () => {
-    await expect(engine.start()).rejects.toThrow(
-      'Cannot start bot without configuration',
-    );
+    await expect(engine.start()).rejects.toThrow('Cannot start bot without configuration');
   });
 
   it('should transition through lifecycle on start/stop', async () => {
     engine.configure(defaultConfig);
 
     // Mock internal initialize to avoid attempting real connections
-    const initSpy = vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
+    const initSpy = vi
+      .spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
       .mockResolvedValue(undefined);
-    const shutdownSpy = vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown')
+    const shutdownSpy = vi
+      .spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown')
       .mockResolvedValue(undefined);
 
     await engine.start();
@@ -73,24 +73,28 @@ describe('BotEngine', () => {
 
   it('should handle emergency stop from Running state', async () => {
     engine.configure(defaultConfig);
-    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockResolvedValue(undefined);
-    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown')
-      .mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown').mockResolvedValue(
+      undefined,
+    );
 
     await engine.start();
     expect(engine.state).toBe(BotState.Running);
 
-    const emergencySpy = vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown');
+    const emergencySpy = vi.spyOn(
+      engine as unknown as { shutdown: () => Promise<void> },
+      'shutdown',
+    );
     await engine.emergencyStop();
     expect(engine.state).toBe(BotState.Stopped);
     expect(emergencySpy).toHaveBeenCalled();
   });
 
   it('should reject emergency stop from Idle state', async () => {
-    await expect(engine.emergencyStop()).rejects.toThrow(
-      'Emergency stop not available from state',
-    );
+    await expect(engine.emergencyStop()).rejects.toThrow('Emergency stop not available from state');
   });
 
   it('should record errors', () => {
@@ -103,10 +107,13 @@ describe('BotEngine', () => {
 
   it('should emit stateChange events', async () => {
     engine.configure(defaultConfig);
-    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockResolvedValue(undefined);
-    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown')
-      .mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown').mockResolvedValue(
+      undefined,
+    );
 
     const stateChanges: Array<{ previous: BotState; current: BotState }> = [];
     engine.on('stateChange', (event) => {
@@ -141,19 +148,44 @@ describe('BotEngine', () => {
     const snapshot = engine.getSnapshot();
 
     expect(snapshot.state).toBe(BotState.Idle);
-    expect(snapshot.strategyName).toBeTruthy();
+    expect(snapshot.strategyName).toBe('test');
     expect(snapshot.dex).toBe('jupiter-swap');
     expect(snapshot.uptimeMs).toBe(0);
     expect(snapshot.errors).toEqual([]);
     expect(snapshot.positions).toEqual([]);
   });
 
+  it('should report (not configured) when no strategy source is set', () => {
+    engine.configure({ ...defaultConfig, strategySource: undefined });
+    const snapshot = engine.getSnapshot();
+
+    expect(snapshot.strategyName).toBe('(not configured)');
+  });
+
+  it('should report (not configured) when source has no derivable name', () => {
+    engine.configure({ ...defaultConfig, strategySource: '//@version=6\nplot(close)' });
+    const snapshot = engine.getSnapshot();
+
+    expect(snapshot.strategyName).toBe('(not configured)');
+  });
+
+  it('should truncate a derived strategy name over 50 chars', () => {
+    const longName = 'S'.repeat(60);
+    engine.configure({ ...defaultConfig, strategySource: `//@version=6\nstrategy("${longName}")` });
+    const snapshot = engine.getSnapshot();
+
+    expect(snapshot.strategyName).toBe('S'.repeat(50));
+  });
+
   it('should allow reset from Stopped state', async () => {
     engine.configure(defaultConfig);
-    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockResolvedValue(undefined);
-    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown')
-      .mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown').mockResolvedValue(
+      undefined,
+    );
 
     await engine.start();
     await engine.stop();
@@ -171,9 +203,7 @@ describe('BotEngine', () => {
     };
     engine.configure(configWithAutoSelect);
 
-    await expect(engine.start()).rejects.toThrow(
-      'auto-select must run before starting',
-    );
+    await expect(engine.start()).rejects.toThrow('auto-select must run before starting');
     expect(engine.state).toBe(BotState.Idle);
   });
 
@@ -184,8 +214,10 @@ describe('BotEngine', () => {
       autoSelect: true,
     };
     engine.configure(configWithAutoSelectAndPairs);
-    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
 
     await engine.start();
     expect(engine.state).toBe(BotState.Running);
@@ -199,20 +231,18 @@ describe('BotEngine', () => {
     };
     engine.configure(configNoPairs);
 
-    await expect(engine.start()).rejects.toThrow(
-      'No trading pairs configured',
-    );
+    await expect(engine.start()).rejects.toThrow('No trading pairs configured');
     expect(engine.state).toBe(BotState.Idle);
   });
 
   it('should reject reset from Running state', async () => {
     engine.configure(defaultConfig);
-    vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
 
     await engine.start();
-    await expect(engine.reset()).rejects.toThrow(
-      'Cannot reset bot from state',
-    );
+    await expect(engine.reset()).rejects.toThrow('Cannot reset bot from state');
   });
 });

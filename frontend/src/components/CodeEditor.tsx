@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { extractScriptName as extractName } from 'pine-framework/utils/script-name';
 
 interface ScriptEntry {
   id: string;
@@ -32,15 +33,6 @@ sma20 = ta.sma(close, 20)
 // Plot SMA
 plot(sma20, color=color.blue, linewidth=2)
 `;
-
-function extractName(source: string): string | null {
-  // Match positional string: indicator("Name")
-  const posMatch = source.match(/\b(?:strategy|indicator|study)\s*\(\s*["']([^"']+)["']/);
-  if (posMatch) return posMatch[1];
-  // Match named title argument: indicator(title="Name")
-  const namedMatch = source.match(/\b(?:strategy|indicator|study)\s*\(\s*title\s*=\s*["']([^"']+)["']/);
-  return namedMatch?.[1] ?? null;
-}
 
 function extractVersion(source: string): number | null {
   const match = source.match(/\/\/\s*@version\s*=\s*(\d+)/);

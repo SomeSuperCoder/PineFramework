@@ -5,6 +5,7 @@ import { useAutoSelectProgress } from '../hooks/useAutoSelectProgress';
 import { MiniChart } from './MiniChart';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
+import { extractScriptName } from 'pine-framework/utils/script-name';
 import { ChaosModeWarning } from './ChaosModeWarning';
 import type { ChaosSignalRecord } from '../types';
 
@@ -1555,7 +1556,7 @@ function SetupWizard({
                 <div>
                   <span style={{ color: '#888' }}>Strategy: </span>
                   <span style={{ color: '#e0e0e0' }}>
-                    {configValues.strategySource.split('\n')[0]?.substring(0, 60) || '(pasted)'}
+                    {extractScriptName(configValues.strategySource) ?? '(unnamed strategy)'}
                   </span>
                 </div>
                 <div>

@@ -9,6 +9,7 @@ export default defineConfig({
     alias: [
       // More specific subpath aliases FIRST
       { find: 'pine-framework/utils/time', replacement: path.resolve(__dirname, '../src/utils/time.ts') },
+      { find: 'pine-framework/utils/script-name', replacement: path.resolve(__dirname, '../src/utils/script-name.ts') },
       // Fallback: route main entry to frontend-safe version (no trading/Node.js)
       { find: 'pine-framework', replacement: path.resolve(__dirname, '../src/frontend-safe.ts') },
     ],

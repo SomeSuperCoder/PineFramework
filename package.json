@@ -37,6 +37,11 @@
       "types": "./dist/utils/time.d.ts",
       "import": "./dist/utils/time.js"
     },
+    "./utils/script-name": {
+      "source": "./src/utils/script-name.ts",
+      "types": "./dist/utils/script-name.d.ts",
+      "import": "./dist/utils/script-name.js"
+    },
     "./util/candle-string-format": {
       "source": "./src/util/candle-string-format.ts",
       "types": "./dist/util/candle-string-format.d.ts",

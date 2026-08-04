@@ -16,6 +16,7 @@ import { useBotWebSocket, LiveDashboard } from './components/TradingBotPanel';
 import { useChaosMode } from './hooks/useChaosMode';
 import type { ScriptResult, BacktestConfig } from './types';
 import { TRADABLE_PAIRS } from 'pine-framework';
+import { extractScriptName } from 'pine-framework/utils/script-name';
 
 const SYMBOLS = [...TRADABLE_PAIRS];
 const INTERVALS = [
@@ -173,13 +174,7 @@ function App() {
     }
   }, [scriptResult, indicatorResults]);
 
-  const extractScriptName = (src: string): string => {
-    // Prefer positional "Name", then named title="Name"
-    const pos = src.match(/\b(?:strategy|indicator|study)\s*\(\s*["']([^"']+)["']/);
-    if (pos) return pos[1];
-    const named = src.match(/\b(?:strategy|indicator|study)\s*\(\s*title\s*=\s*["']([^"']+)["']/);
-    return named?.[1] || 'Indicator';
-  };
+  const extractScriptNameFallback = (src: string): string => extractScriptName(src) ?? 'Indicator';
 
   const isStrategySource = (src: string): boolean =>
     /strategy\(\s*["']/.test(src);
@@ -202,7 +197,7 @@ function App() {
       if (existing) {
         setStrategyConflict({
           existingName: existing.name,
-          incomingName: extractScriptName(source),
+          incomingName: extractScriptNameFallback(source),
           pendingScriptId: scriptId,
           pendingSource: source,
         });
@@ -212,7 +207,7 @@ function App() {
 
     const indicator = await indicatorManager.addIndicator(
       scriptId,
-      extractScriptName(source),
+      extractScriptNameFallback(source),
       true,
       source,
     );
@@ -245,7 +240,7 @@ function App() {
 
     const indicator = await indicatorManager.addIndicator(
       pendingScriptId,
-      extractScriptName(pendingSource),
+      extractScriptNameFallback(pendingSource),
       true,
       pendingSource,
     );
