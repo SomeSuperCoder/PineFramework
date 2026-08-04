@@ -15,10 +15,15 @@ check:
     pnpm run build
 
 # Podman / Container recipes
+alias pp := podman-deploy
 alias pb := podman-build
 alias pu := podman-up
 alias pd := podman-down
 alias pl := podman-logs
+
+# One-command deploy: build if needed, start/recreate containers
+podman-deploy:
+    podman-compose up --build -d
 
 podman-build:
     podman-compose build
