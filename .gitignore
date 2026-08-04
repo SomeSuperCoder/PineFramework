@@ -19,3 +19,4 @@ test-results/
 tests/e2e/*.png
 frontend/vite.config.ts.timestamp-*
 backend/strategy-state.json
+strategy-state.json

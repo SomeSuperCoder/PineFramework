@@ -8,7 +8,14 @@
  */
 
 import { BotState, ErrorSeverity } from './types.js';
-import type { BotConfig, BotError, StateTransition, BotStatusSnapshot, PositionSummary, PairConfig } from './types.js';
+import type {
+  BotConfig,
+  BotError,
+  StateTransition,
+  BotStatusSnapshot,
+  PositionSummary,
+  PairConfig,
+} from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
@@ -22,6 +29,7 @@ import { ChaosSignalGenerator } from './chaos-signal-generator.js';
 import type { ExecutionResult } from './live-strategy-executor.js';
 import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
+import type { WalletManager } from './wallet/wallet-manager.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -34,6 +42,10 @@ export interface BotLogger {
 /** Max number of chaos signal records retained for WS replay. */
 const CHAOS_HISTORY_LIMIT = 200;
 
+/** Default live starting capital (1,000 USDC in lamports) when the config
+ *  does not specify one. */
+const DEFAULT_INITIAL_CAPITAL_LAMPORTS = 1_000_000_000;
+
 /** Default logger that writes to console. */
 const consoleLogger: BotLogger = {
   info: (event, meta) => console.log(`[BOT] ${event}`, meta ?? ''),
@@ -44,11 +56,19 @@ const consoleLogger: BotLogger = {
 
 /** Events emitted by BotEngine. */
 export interface BotEventMap {
-  stateChange: (event: { previous: BotState; current: BotState; reason: string; timestamp: number }) => void;
+  stateChange: (event: {
+    previous: BotState;
+    current: BotState;
+    reason: string;
+    timestamp: number;
+  }) => void;
   error: (error: BotError) => void;
   configUpdate: (config: BotConfig) => void;
   /** Emitted when auto-selection completes. */
-  autoSelectionComplete: (result: { best: PairConfig; ranking: Array<{ pair: PairConfig; label: string }> }) => void;
+  autoSelectionComplete: (result: {
+    best: PairConfig;
+    ranking: Array<{ pair: PairConfig; label: string }>;
+  }) => void;
   /** Emitted for each executed chaos signal, with the real strategy marker
    *  and its DEX execution result. */
   chaosSignal: (record: ChaosSignalRecord) => void;
@@ -82,6 +102,11 @@ export interface BotEngineOptions {
    * Optional Telegram bot for sending alerts.
    */
   telegramBot?: TradingTelegramBot;
+  /**
+   * Wallet manager for signing real DEX transactions. When omitted, order
+   * execution is disabled (the strategy still evaluates but no orders submit).
+   */
+  walletManager?: WalletManager;
 }
 
 /**
@@ -93,6 +118,7 @@ export class BotEngine {
   private readonly logger: BotLogger;
   private readonly riskManager?: RiskManager;
   private readonly telegramBot?: TradingTelegramBot;
+  private readonly walletManager?: WalletManager;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -125,6 +151,7 @@ export class BotEngine {
     this.logger = options?.logger ?? consoleLogger;
     this.riskManager = options?.riskManager;
     this.telegramBot = options?.telegramBot;
+    this.walletManager = options?.walletManager;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -192,7 +219,11 @@ export class BotEngine {
       throw new Error(`Cannot configure bot in state: ${this.state}. Must be Idle or Stopped.`);
     }
     this._config = config;
-    this.logger.info('Bot configured', { dex: config.dex, pairs: config.pairs?.length ?? 0, risk: config.risk });
+    this.logger.info('Bot configured', {
+      dex: config.dex,
+      pairs: config.pairs?.length ?? 0,
+      risk: config.risk,
+    });
     this.emit('configUpdate', config);
   }
 
@@ -214,9 +245,7 @@ export class BotEngine {
     // Auto-select is a trigger (pick pairs if needed), not a gate.
     // Allow start when pairs exist from any source (auto-select, manual, API).
     if (this._config.autoSelect && !this._config.pairs?.length) {
-      throw new Error(
-        'auto-select must run before starting; use the Backtest step first.',
-      );
+      throw new Error('auto-select must run before starting; use the Backtest step first.');
     }
     if (!this._config.pairs?.length) {
       throw new Error('No trading pairs configured. Set pairs or enable auto-select.');
@@ -307,7 +336,11 @@ export class BotEngine {
   /**
    * Handle rolling 24h loss breach — trigger emergency stop and send alerts.
    */
-  private async handleRollingLossBreached(event: { timestamp: number; message: string; data?: Record<string, unknown> }): Promise<void> {
+  private async handleRollingLossBreached(event: {
+    timestamp: number;
+    message: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
     this.logger.error('ROLLING 24H LOSS LIMIT BREACHED', event.data);
 
     // Send Telegram alert
@@ -427,6 +460,7 @@ export class BotEngine {
       errors: [...this._errors],
       lastTransition: this.lastTransition,
       chaosMode: this._config?.chaosMode?.enabled === true,
+      warmUpComplete: this.strategyExecutor ? this.strategyExecutor.isWarmUpComplete() : false,
     };
   }
 
@@ -463,13 +497,23 @@ export class BotEngine {
     this.strategyExecutor = new LiveStrategyExecutor({
       strategySource: this._config.strategySource ?? '',
       dex: this.dex,
-      walletManager: null as any, // TODO: wire real WalletManager when wallet is imported
-      pairs: (this._config.pairs ?? []).map(p => ({ symbol: p.symbol, timeframe: p.timeframe })),
-      initialCapital: 0n,
-      positionSizePercent: 100,
+      walletManager: this.walletManager ?? (null as unknown as WalletManager),
+      pairs: (this._config.pairs ?? []).map((p) => ({ symbol: p.symbol, timeframe: p.timeframe })),
+      initialCapital: BigInt(this._config.initialCapital ?? DEFAULT_INITIAL_CAPITAL_LAMPORTS),
+      positionSizePercent: this._config.positionSizePercent ?? 100,
       chaosGenerator,
+      seedHistory: (pair) => this.fetchSeedHistory(pair),
     });
     this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
+
+    // 3.5 Initialize a compiled strategy engine for every configured pair.
+    //     Parse/compile failures throw here so start() fails with a descriptive
+    //     error instead of silently running a strategy that cannot signal.
+    for (const pair of this._config.pairs ?? []) {
+      const pairId: PairId = { symbol: pair.symbol, timeframe: pair.timeframe };
+      await this.strategyExecutor.initializeStrategy(pairId);
+      this.logger.info('Strategy initialized', { symbol: pair.symbol, timeframe: pair.timeframe });
+    }
 
     // 3. Create bar feed (Bybit WebSocket)
     this.barFeed = new BybitWebSocketService();
@@ -494,7 +538,7 @@ export class BotEngine {
         if (!this.strategyExecutor) return [];
         const signals = await this.strategyExecutor.processCandle(candle);
         // Map LiveStrategyExecutor TradeSignal → Scheduler TradeSignal
-        return signals.map(s => ({
+        return signals.map((s) => ({
           pair: { symbol: s.symbol, timeframe: candle.timeframe },
           action: s.action,
           quantity: s.quantity,
@@ -520,13 +564,15 @@ export class BotEngine {
               timestamp: signal.timestamp,
             };
 
-            const result: ExecutionResult = await this.strategyExecutor.executeSignal(executorSignal);
+            const result: ExecutionResult =
+              await this.strategyExecutor.executeSignal(executorSignal);
 
             if (result.success) {
               this.chaosStats.ordersExecuted++;
-              const txSig = result.swapResult && 'signature' in result.swapResult
-                ? (result.swapResult as { signature: string }).signature
-                : 'unknown';
+              const txSig =
+                result.swapResult && 'signature' in result.swapResult
+                  ? (result.swapResult as { signature: string }).signature
+                  : 'unknown';
               this.logger.info('chaos.order.success', {
                 action: signal.action,
                 symbol: signal.pair.symbol,
@@ -577,7 +623,42 @@ export class BotEngine {
       }
     }
 
+    // 8. Warm start: seed each pair's strategy engine with recent history so
+    //    indicator state is populated before the first live candle. In chaos
+    //    mode the engine is not driven by Pine source, so warm-up is a no-op.
+    if (!isChaosMode && this.strategyExecutor) {
+      for (const pair of this._config.pairs ?? []) {
+        const pairId: PairId = { symbol: pair.symbol, timeframe: pair.timeframe };
+        try {
+          const history = await this.fetchSeedHistory(pairId);
+          await this.strategyExecutor.warmUp(pairId, history);
+          this.logger.info('Strategy engine warmed up', {
+            symbol: pair.symbol,
+            timeframe: pair.timeframe,
+            bars: history.length,
+          });
+        } catch (err) {
+          // A warm-up fetch failure should not block start; degrade to an
+          // empty warm-up (engine starts fresh) and continue.
+          this.logger.warn('Warm-up failed — starting engine unseeded', {
+            symbol: pair.symbol,
+            timeframe: pair.timeframe,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          await this.strategyExecutor.warmUp(pairId, []);
+        }
+      }
+    }
+
     this.logger.info('Bot initialization complete');
+  }
+
+  /** Fetch historical candles for a pair from the bar feed (warm start seed). */
+  private async fetchSeedHistory(pair: PairId): Promise<ClosedCandle[]> {
+    if (!this.barFeed) {
+      throw new Error('Bar feed not initialized');
+    }
+    return this.barFeed.fetchHistoricalCandles(pair);
   }
 
   /**

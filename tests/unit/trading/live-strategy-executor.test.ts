@@ -56,7 +56,11 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
   }),
 }));
 
-import { LiveStrategyExecutor, LiveStrategyConfig, TradeSignal } from '../../../src/trading/live-strategy-executor.js';
+import {
+  LiveStrategyExecutor,
+  LiveStrategyConfig,
+  TradeSignal,
+} from '../../../src/trading/live-strategy-executor.js';
 import { PairId } from '../../../src/trading/scheduler.js';
 
 describe('LiveStrategyExecutor', () => {
@@ -182,10 +186,27 @@ describe('LiveStrategyExecutor', () => {
         entryTime: Date.now() - 60000,
       };
 
-      // Mock strategy engine to return short marker
-      state.engine.getNewMarkers = vi.fn().mockReturnValue([
-        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
-      ]);
+      // Drive the live path through the runtime's executeBar returning a short marker
+      state.runtime = {
+        executeBar: vi.fn().mockReturnValue({
+          success: true,
+          strategyMarkers: [
+            {
+              direction: 'short',
+              action: 'sell',
+              type: 'entry',
+              name: 'Short',
+              quantity: 0.1,
+              price: 50000,
+              barIndex: 100,
+              timestamp: Date.now(),
+              color: '#FF0000',
+            },
+          ],
+        }),
+      } as any;
+      state.warmUpComplete = true;
+      state.lastBarTimestamp = 0;
 
       const candle = {
         symbol: 'BTCUSDT',
@@ -213,10 +234,27 @@ describe('LiveStrategyExecutor', () => {
       const key = 'BTCUSDT:60';
       const state = (executor as any).strategyStates.get(key);
 
-      // Mock strategy engine to return short marker
-      state.engine.getNewMarkers = vi.fn().mockReturnValue([
-        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
-      ]);
+      // Drive the live path through the runtime's executeBar returning a short marker
+      state.runtime = {
+        executeBar: vi.fn().mockReturnValue({
+          success: true,
+          strategyMarkers: [
+            {
+              direction: 'short',
+              action: 'sell',
+              type: 'entry',
+              name: 'Short',
+              quantity: 0.1,
+              price: 50000,
+              barIndex: 100,
+              timestamp: Date.now(),
+              color: '#FF0000',
+            },
+          ],
+        }),
+      } as any;
+      state.warmUpComplete = true;
+      state.lastBarTimestamp = 0;
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -255,10 +293,27 @@ describe('LiveStrategyExecutor', () => {
         entryTime: Date.now() - 60000,
       };
 
-      // Mock strategy engine to return short marker
-      state.engine.getNewMarkers = vi.fn().mockReturnValue([
-        { direction: 'short', action: 'sell', type: 'entry', name: 'Short', quantity: 0.1, price: 50000, barIndex: 100, timestamp: Date.now(), color: '#FF0000' },
-      ]);
+      // Drive the live path through the runtime's executeBar returning a short marker
+      state.runtime = {
+        executeBar: vi.fn().mockReturnValue({
+          success: true,
+          strategyMarkers: [
+            {
+              direction: 'short',
+              action: 'sell',
+              type: 'entry',
+              name: 'Short',
+              quantity: 0.1,
+              price: 50000,
+              barIndex: 100,
+              timestamp: Date.now(),
+              color: '#FF0000',
+            },
+          ],
+        }),
+      } as any;
+      state.warmUpComplete = true;
+      state.lastBarTimestamp = 0;
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -382,7 +437,11 @@ describe('LiveStrategyExecutor', () => {
         getSignalCount: vi.fn().mockReturnValue(1),
       };
 
-      const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator, initialCapital: BigInt(10_000_000) };
+      const chaosConfig = {
+        ...mockConfig,
+        chaosGenerator: mockGenerator,
+        initialCapital: BigInt(10_000_000),
+      };
       const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
 
       const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };

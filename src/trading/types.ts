@@ -118,6 +118,10 @@ export interface BotConfig {
   autoSelectMetric?: 'sharpe' | 'profitFactor' | 'netProfit' | 'winRate';
   /** Chaos test mode configuration. When enabled, random signals replace strategy execution. */
   chaosMode?: ChaosModeConfig;
+  /** Starting capital in lamports (1 USDC = 1e6 lamports). Defaults to 1000 USDC. */
+  initialCapital?: number;
+  /** Position size as a percentage of the configured capital (0-100). */
+  positionSizePercent?: number;
 }
 
 /** Snapshot of bot state for dashboard / WebSocket broadcast. */
@@ -137,6 +141,8 @@ export interface BotStatusSnapshot {
   lastTransition: StateTransition | null;
   /** Whether chaos test mode is active. */
   chaosMode: boolean;
+  /** Whether all initialized strategies have completed warm-up (live path). */
+  warmUpComplete: boolean;
 }
 
 /** Summary of an open position for dashboard display. */

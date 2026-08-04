@@ -89,6 +89,28 @@ export function createPineScriptEngine(): PineScriptEngine {
   };
 }
 
+/**
+ * Build a single-bar execution context from a candle-shaped bar. Used by the
+ * live trading path to feed one closed candle at a time into a long-lived
+ * `ExecutionEngine` (incremental evaluation), reusing the same series layout
+ * as `barsToContexts` so live markers match batch markers exactly.
+ */
+export function createExecutionContextFromBar(
+  bar: Pick<Bar, 'timestamp' | 'open' | 'high' | 'low' | 'close' | 'volume'>,
+  barIndex: number,
+): ExecutionContext {
+  return {
+    barIndex,
+    barCount: barIndex + 1,
+    timestamp: bar.timestamp,
+    open: createSeries('open', [bar.open]),
+    high: createSeries('high', [bar.high]),
+    low: createSeries('low', [bar.low]),
+    close: createSeries('close', [bar.close]),
+    volume: createSeries('volume', [bar.volume]),
+  };
+}
+
 export function barsToContexts(bars: Bar[]): ExecutionContext[] {
   return bars.map((bar, index) => ({
     barIndex: index,
