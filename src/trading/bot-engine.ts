@@ -539,6 +539,7 @@ export class BotEngine {
       pairs: (this._config.pairs ?? []).map((p) => ({ symbol: p.symbol, timeframe: p.timeframe })),
       initialCapital: BigInt(this._config.initialCapital ?? DEFAULT_INITIAL_CAPITAL_LAMPORTS),
       positionSizePercent: this._config.positionSizePercent ?? 100,
+      maxDailyLoss: this._config.risk?.maxDailyLoss ?? 100,
       chaosGenerator,
       seedHistory: (pair) => this.fetchSeedHistory(pair),
     });

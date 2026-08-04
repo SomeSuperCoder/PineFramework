@@ -63,6 +63,8 @@ export interface LiveStrategyConfig {
   initialCapital: bigint;
   /** Position size as percentage of available balance (0-100). */
   positionSizePercent: number;
+  /** Maximum daily realized loss in USDC. Trades below 1% of this are skipped as dust. */
+  maxDailyLoss: number;
   /** Data directory for state persistence. */
   dataDir?: string;
   /** Chaos signal generator. When provided, chaos mode is active and strategy is bypassed. */
@@ -424,24 +426,28 @@ export class LiveStrategyExecutor {
         const availableBalance = BigInt(balance.amount);
         const availableBalanceUsdc = Number(availableBalance) / 1e6;
 
-        // Calculate swap amount for buys: 10% of real balance / price
+        // Calculate swap amount: positionSizePercent of real balance / price
+        const positionFraction = this.config.positionSizePercent / 100;
         let swapAmountUsdc = 0;
         if (signal.action === 'buy') {
-          swapAmountUsdc = (availableBalanceUsdc * 0.1) / signal.expectedPrice;
+          swapAmountUsdc = (availableBalanceUsdc * positionFraction) / signal.expectedPrice;
         }
+
+        // Dust guard: skip trades below 1% of maxDailyLoss (SSOT from config)
+        const minTradeUsdc = this.config.maxDailyLoss * 0.01;
 
         console.log(
           `[LiveStrategyExecutor] executeSignal: action=${signal.action} ` +
           `balance=${availableBalanceUsdc} USDC ` +
           `swapAmount=${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
-          `price=${signal.expectedPrice}`,
+          `price=${signal.expectedPrice} ` +
+          `minTrade=${minTradeUsdc.toFixed(2)} USDC`,
         );
 
-        // Skip trades below minimum size (< 0.10 USDC) to avoid dust orders
-        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < 0.1) {
+        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < minTradeUsdc) {
           console.warn(
             `[LiveStrategyExecutor] Skipping trade: swap amount ${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
-            `(< ${(0.1 / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ 0.10 USDC)`,
+            `(< ${(minTradeUsdc / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ ${minTradeUsdc.toFixed(2)} USDC)`,
           );
           return {
             success: false,
