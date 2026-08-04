@@ -646,24 +646,20 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      const currentConfig = engine.config;
-      if (!currentConfig) {
+      if (!engine.config) {
         res.status(400).json({ success: false, error: 'Bot not configured' });
         return;
       }
 
-      // Update config with chaos mode setting
-      const updatedConfig = {
-        ...currentConfig,
-        chaosMode: { enabled },
-      };
-
-      engine.configure(updatedConfig);
+      // Use hot-swap — works for both Running and non-Running states.
+      // The old code called engine.configure() which throws when Running.
+      engine.toggleChaosMode(enabled);
 
       // Persist to disk
       const store = getConfigStore();
       if (store) {
-        store.save(updatedConfig);
+        const currentConfig = engine.config;
+        store.save(currentConfig);
       }
 
       res.json({ success: true, chaosMode: { enabled } });

@@ -565,6 +565,42 @@ export class LiveStrategyExecutor {
     }
   }
 
+  // ---- Chaos hot-swap ----
+
+  /**
+   * Hot-swap a ChaosSignalGenerator into a running executor.
+   * Replaces the chaos generator and reinitializes each pair's strategy
+   * engine to a bare StrategyEngine with chaos-mode capital, so the next
+   * processCandle call immediately routes through the chaos path.
+   *
+   * WHY: Enables chaos mode without stopping the bar feed or scheduler.
+   * The generator swap is atomic (single assignment) — no race condition
+   * because JS is single-threaded.
+   */
+  setChaosGenerator(generator: ChaosSignalGenerator): void {
+    this.config.chaosGenerator = generator;
+
+    for (const pair of this.config.pairs) {
+      const key = this.getPairKey(pair);
+      const state = this.strategyStates.get(key);
+      if (state) {
+        state.engine = new StrategyEngine({
+          initialCapital: CHAOS_INITIAL_CAPITAL_LAMPORTS,
+        });
+        state.runtime = null;
+        state.warmUpComplete = true;
+      }
+    }
+  }
+
+  /**
+   * Remove the chaos generator, falling back to the normal strategy path
+   * on the next processCandle call.
+   */
+  clearChaosGenerator(): void {
+    this.config.chaosGenerator = undefined;
+  }
+
   // ---- Private Methods ----
 
   /**

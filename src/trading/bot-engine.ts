@@ -466,6 +466,42 @@ export class BotEngine {
     };
   }
 
+  // ---- Chaos hot-swap ----
+
+  /**
+   * Toggle chaos mode while the bot is Running (hot-swap) or while
+   * Idle/Stopped (config-only update).
+   *
+   * When Running and enabling: creates a ChaosSignalGenerator and passes
+   * it to the strategy executor, which reinitializes each pair's engine.
+   * When Running and disabling: clears the chaos generator so the executor
+   * resumes its normal strategy path.
+   *
+   * WHY: The previous POST /bot/chaos-mode endpoint called configure(),
+   * which throws when the engine is Running. This method bypasses the
+   * state machine restriction.
+   */
+  toggleChaosMode(enabled: boolean): void {
+    if (!this._config) {
+      throw new Error('Cannot toggle chaos mode without configuration');
+    }
+
+    this._config.chaosMode = { enabled };
+
+    if (this.state === BotState.Running && this.strategyExecutor) {
+      if (enabled) {
+        const generator = new ChaosSignalGenerator(this.logger);
+        this.strategyExecutor.setChaosGenerator(generator);
+        this.logger.info('Chaos mode enabled (hot-swap)', { pairs: this._config.pairs?.length });
+      } else {
+        this.strategyExecutor.clearChaosGenerator();
+        this.logger.info('Chaos mode disabled (hot-swap)');
+      }
+    }
+
+    this.emit('configUpdate', this._config);
+  }
+
   // ---- Internal lifecycle hooks (overridden by subclasses or extended in later phases) ----
 
   /**
