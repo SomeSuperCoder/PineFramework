@@ -1505,7 +1505,7 @@ function SetupWizard({
                   if (!manualPair) return;
                   // Persist manual pair selection to backend so engine.start() can find it
                   try {
-                    await fetch(`${backendUrl}/api/bot/configure`, {
+                    const res = await fetch(`${backendUrl}/api/bot/configure`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -1516,6 +1516,9 @@ function SetupWizard({
                         pairs: [manualPair],
                       }),
                     });
+                    // Refresh persisted config so the resolved manual pair reaches
+                    // LiveDashboard before the bot starts (mini chart activePair).
+                    if (res.ok) onBacktestStarted?.();
                   } catch { /* best-effort; backend may already have it */ }
                   setStep('review');
                 }}
@@ -1907,15 +1910,25 @@ export function LiveDashboard({
     }).finally(() => setWalletLoaded(true));
   }, [backendUrl]);
 
-  // Re-fetch wallet status + persisted config when bot transitions to idle/stopped.
-  // Ensures the SetupWizard always has fresh wallet/config data after a stop —
-  // a failed mount fetch can otherwise leave wallet.hasWallet=false, which strands
-  // the wizard on the import-wallet step instead of review.
+  // Re-fetch wallet status + persisted config when the bot transitions to idle/stopped,
+  // and refresh persisted config when it starts running. Keeping persistedConfig.pairs
+  // in sync with the backend (the SSOT for the active pair) ensures the mini chart's
+  // activePair resolves on the first start — not only after a stop/start or reload.
   useEffect(() => {
-    if (status.state === 'Idle' || status.state === 'Stopped') {
+    const isIdle = status.state === 'Idle' || status.state === 'Stopped';
+    const isRunning = status.state === 'Starting' || status.state === 'Running';
+    if (!isIdle && !isRunning) return;
+
+    const refreshConfig = fetch(`${backendUrl}/api/bot/config`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+
+    if (isIdle) {
+      // Idle/Stopped: also re-fetch wallet status so a failed mount fetch doesn't
+      // strand the wizard on the import-wallet step instead of review.
       Promise.all([
         fetch(`${backendUrl}/api/bot/wallet/status`).then(r => r.json()).catch(() => null),
-        fetch(`${backendUrl}/api/bot/config`).then(r => r.ok ? r.json() : null).catch(() => null),
+        refreshConfig,
       ]).then(([walletData, configData]) => {
         if (walletData && walletData.success) {
           setWallet({ hasWallet: walletData.hasWallet, publicKey: walletData.publicKey });
@@ -1923,6 +1936,13 @@ export function LiveDashboard({
         }
         setPersistedConfig(configData ?? null);
       }).catch(() => setPersistedConfig(null));
+    } else {
+      // Starting/Running: refresh only the config — the mini chart's activePair
+      // depends on it. Do not touch wallet/lock state (already current), and keep
+      // the last known config on a transient fetch failure so the chart isn't hidden.
+      refreshConfig.then((configData) => {
+        if (configData) setPersistedConfig(configData);
+      });
     }
   }, [status.state, backendUrl]);
 

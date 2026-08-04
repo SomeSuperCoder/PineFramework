@@ -72,6 +72,46 @@ const CONFIG_OK = {
   pairs: [{ symbol: 'SOLUSDT', timeframe: '15' }],
 };
 
+function jsonRes(data: unknown, ok = true): Promise<Response> {
+  return Promise.resolve({ ok, json: () => Promise.resolve(data) } as Response);
+}
+
+const CANDLE = { timestamp: 1785722700000, open: 100, high: 101, low: 99, close: 100.5, volume: 10 };
+
+const EXECUTE_RESULT = {
+  success: true,
+  outputs: {},
+  shapes: [],
+  fills: [],
+  strategyMarkers: [],
+  bgcolor: [],
+  plotColors: {},
+  fillColorData: {},
+  lines: [],
+  labels: [],
+  alertConditions: [],
+  alertTriggers: [],
+  boxes: [],
+  tables: [],
+  hiddenPlotKeys: [],
+  barColors: [],
+};
+
+// Config before manual selection: autoSelect unresolved, no pairs resolved.
+const CONFIG_UNRESOLVED = {
+  strategySource: '//@version=5\nstrategy("x")',
+  dex: 'jupiter-swap',
+  risk: { maxDailyLoss: 50 },
+  autoSelect: true,
+};
+
+// Config after manual selection persists the chosen pair and disables autoSelect.
+const CONFIG_RESOLVED = {
+  ...CONFIG_UNRESOLVED,
+  autoSelect: false,
+  pairs: [{ symbol: 'SOLUSDT', timeframe: '60' }],
+};
+
 describe('LiveDashboard stop flow', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let onClose: ReturnType<typeof vi.fn>;
@@ -206,6 +246,93 @@ describe('LiveDashboard stop flow', () => {
     render(<LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Running')} logs={[]} onClose={onClose} />);
 
     // The mini chart data pipeline runs once the bot is Running
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/ohlcv'))).toBe(true);
+    });
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/execute'))).toBe(true);
+    });
+  });
+
+  it('shows the mini chart on first start after manual pair selection', async () => {
+    let resolved = false;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const path = new URL(url, BACKEND).pathname;
+      if (path.endsWith('/api/bot/wallet/status')) return jsonRes(WALLET_STATUS_OK);
+      if (path.endsWith('/api/bot/wallet/balance')) return jsonRes({ success: true, balance: 100 });
+      if (path.endsWith('/api/bot/config')) {
+        if (!init || init.method === 'GET' || init.method === undefined) {
+          // Unresolved until the manual pair has been persisted via /configure.
+          return jsonRes(resolved ? CONFIG_RESOLVED : CONFIG_UNRESOLVED);
+        }
+        return jsonRes({ success: true });
+      }
+      if (path.endsWith('/api/bot/configure') && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body || '{}'));
+        if (Array.isArray(body.pairs) && body.pairs.length > 0) resolved = true;
+        return jsonRes({ success: true, config: body });
+      }
+      if (path.endsWith('/api/bot/start') && init?.method === 'POST') {
+        return jsonRes({ success: true, state: 'Starting' });
+      }
+      if (path.endsWith('/api/ohlcv')) return jsonRes({ data: [CANDLE] });
+      if (path.endsWith('/api/execute')) return jsonRes(EXECUTE_RESULT);
+      return jsonRes({ success: true });
+    });
+
+    const { rerender } = render(
+      <LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Stopped')} logs={[]} onClose={onClose} />,
+    );
+
+    // Saved wallet + unresolved autoSelect config -> wizard lands on Review
+    await screen.findByText(/Review & Start/);
+
+    // Enter manual pair selection via Re-run Backtest
+    await userEvent.click(await screen.findByText('Re-run Backtest'));
+    await userEvent.click(screen.getByRole('button', { name: /Manually Select Pair/ }));
+
+    // Pick a pair (timeframe defaults to 60) and proceed to Review
+    const [pairSelect] = screen.getAllByRole('combobox');
+    await userEvent.selectOptions(pairSelect, 'SOLUSDT');
+    await userEvent.click(screen.getByRole('button', { name: /^Next/ }));
+
+    await screen.findByText(/Review & Start/);
+    await userEvent.click(screen.getByRole('button', { name: /Start Bot/ }));
+    expect(fetchMock).toHaveBeenCalledWith(`${BACKEND}/api/bot/start`, { method: 'POST' });
+
+    // Bot Running -> the mini chart data pipeline must start on the manual pair
+    rerender(<LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Running')} logs={[]} onClose={onClose} />);
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/ohlcv'))).toBe(true);
+    });
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map(([u]) => String(u));
+      expect(urls.some((u) => u.includes('/api/execute'))).toBe(true);
+    });
+  });
+
+  it('refreshes config on Running so the mini chart mounts when the mount fetch was stale', async () => {
+    let configCalls = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const path = new URL(url, BACKEND).pathname;
+      if (path.endsWith('/api/bot/wallet/status')) return jsonRes(WALLET_STATUS_OK);
+      if (path.endsWith('/api/bot/wallet/balance')) return jsonRes({ success: true, balance: 100 });
+      if (path.endsWith('/api/bot/config') && (!init || init.method === 'GET' || init.method === undefined)) {
+        configCalls++;
+        // Mount fetch returns stale config (no pairs); the Running-transition
+        // refresh returns the resolved config with pairs.
+        return jsonRes(configCalls === 1 ? null : CONFIG_OK);
+      }
+      if (path.endsWith('/api/ohlcv')) return jsonRes({ data: [CANDLE] });
+      if (path.endsWith('/api/execute')) return jsonRes(EXECUTE_RESULT);
+      return jsonRes({});
+    });
+
+    render(<LiveDashboard backendUrl={BACKEND} status={statusSnapshot('Running')} logs={[]} onClose={onClose} />);
+
     await waitFor(() => {
       const urls = fetchMock.mock.calls.map(([u]) => String(u));
       expect(urls.some((u) => u.includes('/api/ohlcv'))).toBe(true);
