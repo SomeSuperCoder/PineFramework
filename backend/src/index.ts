@@ -242,6 +242,14 @@ if (ENABLE_TRADING_BOT) {
       channel: 'bot:state',
       data: { current: event.current, previous: event.previous, reason: event.reason, timestamp: event.timestamp },
     });
+    // Re-broadcast full snapshot when bot starts so connected clients receive startedAt
+    if (event.current === 'Running') {
+      botWS.broadcast({
+        channel: 'bot:snapshot',
+        type: 'snapshot',
+        data: { status: botEngine.getSnapshot() },
+      });
+    }
   });
 
   botEngine.on('error', (error) => {

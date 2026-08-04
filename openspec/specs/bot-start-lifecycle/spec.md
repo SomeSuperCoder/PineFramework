@@ -1,3 +1,5 @@
+# bot-start-lifecycle Specification
+
 ## Purpose
 
 Defines the preconditions and error behavior for starting the trading bot, ensuring `engine.start()` never silently blocks on long-running operations like auto-selection.
@@ -60,15 +62,10 @@ When `engine.start()` fails due to a precondition violation, the `POST /api/bot/
 
 When `POST /api/bot/start` fails and returns an error message, the frontend Review step SHALL display the backend's specific error message to the user, not a generic string. The message SHALL be shown in the existing error display area below the Start button.
 
-#### Scenario: Specific error shown on start failure
+#### Scenario: Start error message shown on Review step
 
 - **WHEN** the user clicks "Start Bot" on the Review step and the backend returns HTTP 400 with `{ "error": "<message>" }`
-- **THEN** the error display area SHALL show the value of `<message>` from the response, not a hardcoded generic string
-
-#### Scenario: Start button re-enabled after error
-
-- **WHEN** the start fails and the error message is displayed
-- **THEN** the Start button SHALL be re-enabled (not stuck in "Starting..." state)
+- **THEN** the Review step SHALL display the backend's `<message>` in the error display area below the Start button
 
 ### Requirement: Start initialization connects real components
 
@@ -141,3 +138,55 @@ When emergency stop is triggered, the system SHALL immediately close all open po
 
 - **WHEN** emergency stop is triggered
 - **THEN** the system SHALL cancel all pending limit orders on the DEX
+
+### Requirement: Chaos mode startup integration
+
+When chaos mode is enabled, the system SHALL start the bot without requiring a compiled Pine Script strategy. The chaos mode signal generator SHALL be used instead of the strategy executor for candle processing.
+
+#### Scenario: Bot starts with chaos mode enabled and no strategy
+
+- **WHEN** `engine.start()` is called with `config.chaosMode.enabled: true` and no strategy source is configured
+- **THEN** the system SHALL proceed with normal state transitions (`Idle` → `Starting` → `Running`) and use the chaos signal generator for candle processing
+
+#### Scenario: Bot starts with chaos mode enabled and strategy configured
+
+- **WHEN** `engine.start()` is called with `config.chaosMode.enabled: true` and a strategy source is also configured
+- **THEN** the system SHALL start normally but ignore the configured strategy, using chaos signal generation instead
+
+#### Scenario: Chaos mode does not affect backtest
+
+- **WHEN** the bot runs a backtest with `config.chaosMode.enabled: true`
+- **THEN** the backtest SHALL execute the configured strategy normally (chaos mode applies only to live trading)
+
+### Requirement: Review step shows derived strategy name
+
+The bot setup Review step SHALL display the derived strategy name in its `Strategy:` row. The displayed name SHALL be the name derived from the strategy declaration in the configured `strategySource`, not the raw source text. When no name can be derived, the row SHALL display a neutral fallback label.
+
+#### Scenario: Review step shows name from strategy declaration
+
+- **WHEN** the Review step is shown and `strategySource` contains `strategy("MA Crossover", overlay=true)`
+- **THEN** the `Strategy:` row SHALL display `MA Crossover`
+
+#### Scenario: Review step falls back when no name derivable
+
+- **WHEN** the Review step is shown and `strategySource` contains no derivable name (for example a pasted script with no declaration)
+- **THEN** the `Strategy:` row SHALL display a neutral fallback (e.g. `(unnamed strategy)`) and SHALL NOT display the first line of source code
+
+### Requirement: Running dashboard shows derived strategy name
+
+The bot status snapshot SHALL expose the derived strategy name in `strategyName`, and the running dashboard left panel SHALL display it in its `Strategy` metric. The value SHALL be the name derived from the configured `strategySource` declaration, not a truncated substring of the source. When the bot has no configured source, the snapshot SHALL report `(not configured)`.
+
+#### Scenario: Dashboard Strategy metric shows derived name
+
+- **WHEN** the bot is running with a strategy source containing `strategy("SMA Crossover")`
+- **THEN** the snapshot's `strategyName` is `SMA Crossover` and the dashboard `Strategy` metric displays it
+
+#### Scenario: Dashboard reports not configured
+
+- **WHEN** the bot has no configured strategy source
+- **THEN** the snapshot's `strategyName` is `(not configured)`
+
+#### Scenario: Dashboard name truncated to a sane length
+
+- **WHEN** the derived name is longer than 50 characters
+- **THEN** the snapshot SHALL truncate the displayed name to at most 50 characters to keep the left panel compact

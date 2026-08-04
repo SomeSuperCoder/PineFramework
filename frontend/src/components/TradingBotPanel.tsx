@@ -2226,7 +2226,7 @@ export function LiveDashboard({
             )}
             <MetricValue label="Strategy" value={status.strategyName} />
             <MetricValue label="DEX" value={status.dex} />
-            <MetricValue label="Duration" value={fmtDur(status.uptimeMs)} />
+            <MetricValue label="Duration" value={status.startedAt != null ? fmtDur(now - status.startedAt) : na} />
             <MetricValue label="Balance" value={`$${status.balance.toFixed(2)}`} />
             <MetricValue label="Realized PnL" value={fmtPnl(status.realizedPnl).text} color={fmtPnl(status.realizedPnl).color} />
             <MetricValue label="Unrealized PnL" value={fmtPnl(status.unrealizedPnl).text} color={fmtPnl(status.unrealizedPnl).color} />
