@@ -49,8 +49,8 @@ export function useChaosMode(backendUrl: string): UseChaosModeReturn {
 
   const persistChaosMode = useCallback(async (enabled: boolean) => {
     try {
-      await fetch(`${backendUrl}/api/bot/config/chaos-mode`, {
-        method: 'PATCH',
+      await fetch(`${backendUrl}/api/bot/chaos-mode`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       });
