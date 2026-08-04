@@ -15,6 +15,14 @@ The mini chart SHALL display the last 10–15 candles from the bot's active trad
 - **WHEN** the user hovers, scrolls, or drags on the mini chart
 - **THEN** no pan, zoom, or crosshair response occurs
 
+#### Scenario: Mini chart appears on first start after manual pair selection
+- **WHEN** the user completes the SetupWizard Config step, runs a backtest using manual pair selection, confirms the pair on the Review step, and starts the bot for the first time
+- **THEN** the bot transitions to Running and the mini chart renders for the manually selected pair/interval without requiring a stop/start cycle or page reload
+
+#### Scenario: Mini chart appears after reload with persisted manual pair
+- **WHEN** the bot is configured with a manually selected pair and the user reloads the page
+- **THEN** the persisted config loads with the manual pair resolved and the mini chart renders for that pair once the bot is Running
+
 ### Requirement: Mini chart renders indicator plot data
 The mini chart SHALL overlay the active strategy's indicator plot data (lines, areas, shapes, fills, hlines) on the candlesticks, using the same visual styling as the full chart. The chart SHALL use the same renderers as the full chart to produce identical visual output for the displayed candles.
 
@@ -46,7 +54,7 @@ The mini chart SHALL update when new candle data arrives via the existing WebSoc
 - **THEN** the rightmost candle in the mini chart updates its OHLCV values in real time
 
 ### Requirement: Mini chart integrates into LiveDashboard layout
-The mini chart SHALL appear in the LiveDashboard's center column when the bot is in Running, Stopping, or Error state. The mini chart SHALL occupy a compact region above the metrics grid, with a fixed or aspect-ratio-constrained height. The mini chart SHALL NOT appear in the Idle/Stopped state (SetupWizard view).
+The mini chart SHALL appear in the LiveDashboard's center column when the bot is in Running, Stopping, or Error state. The mini chart SHALL occupy a compact region above the metrics grid, with a fixed or aspect-ratio-constrained height. The mini chart SHALL NOT appear in the Idle/Stopped state (SetupWizard view). The mini chart data pipeline (historical data fetch, script execution, and kline WebSocket subscription) SHALL only run while the mini chart is rendered — it SHALL NOT execute in the Idle/Stopped state, so opening the Bot Dashboard to the Review step without starting the bot SHALL NOT trigger strategy execution or kline streaming.
 
 #### Scenario: Running state layout
 - **WHEN** the bot is in Running state
@@ -55,6 +63,16 @@ The mini chart SHALL appear in the LiveDashboard's center column when the bot is
 #### Scenario: Idle state has no mini chart
 - **WHEN** the bot is in Idle or Stopped state
 - **THEN** the LiveDashboard shows the SetupWizard with no mini chart visible
+
+#### Scenario: No strategy execution in Idle state
+- **WHEN** the user opens the Bot Dashboard to the Review step with a saved config and wallet, without starting the bot
+- **THEN** the backend does NOT execute the saved strategy
+- **AND** the backend does NOT emit `[StrategyEngine]` logs from the saved strategy
+- **AND** the frontend does not subscribe to kline topics for the saved pair
+
+#### Scenario: Data pipeline starts only with the mini chart
+- **WHEN** the bot transitions from Idle to Running
+- **THEN** the mini chart data pipeline begins fetching OHLCV data, executing the strategy, and subscribing to kline updates for the active pair
 
 ### Requirement: Mini chart uses shared rendering code
 The mini chart SHALL reuse the existing PineChart renderers (CandlestickRenderer, LineRenderer, AreaRenderer, MarkerRenderer, HLineRenderer) without duplication. The mini chart component SHALL instantiate PineChart with configuration options that disable interactive features (grid, axis labels, crosshair, time scale, price scale) rather than implementing separate rendering logic.
