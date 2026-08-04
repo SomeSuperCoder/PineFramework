@@ -1,0 +1,49 @@
+# Stage 1: Build
+FROM node:20-slim AS builder
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy workspace manifests
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
+COPY backend/package.json backend/
+COPY frontend/package.json frontend/ 2>/dev/null || true
+
+# Install all dependencies with pnpm store cache
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# Copy source files
+COPY src/ src/
+COPY tsconfig.json tsconfig.build.json ./
+COPY backend/ backend/
+
+# Build: library first, then backend
+RUN pnpm --filter pine-framework run build:lib && \
+    pnpm --filter pine-framework-backend run build
+
+# Stage 2: Production runtime
+FROM node:20-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy built library and its manifest
+COPY --from=builder /app/dist ./dist/
+COPY --from=builder /app/package.json ./
+
+# Copy built backend and its manifest
+COPY --from=builder /app/backend/dist ./backend/dist/
+COPY --from=builder /app/backend/package.json ./backend/
+
+# Copy production node_modules
+COPY --from=builder /app/node_modules ./node_modules/
+
+# Fix workspace resolution: replace workspace:* with file reference
+RUN sed -i 's/"pine-framework": "workspace:\*"/"pine-framework": "file:..\/"/' backend/package.json
+
+ENTRYPOINT ["tini", "--"]
+CMD ["node", "backend/dist/index.js"]
