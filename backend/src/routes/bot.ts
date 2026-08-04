@@ -270,10 +270,11 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      const { strategySource, dex, pairs, risk, autoSelect, autoSelectMetric, walletPublicKey } = req.body as Record<string, unknown>;
+      const { strategySource, dex, pairs, risk, autoSelect, autoSelectMetric, walletPublicKey, chaosMode } = req.body as Record<string, unknown>;
 
-      // Validate required fields
-      if (!strategySource || typeof strategySource !== 'string') {
+      // Validate required fields — strategySource is only required when chaos mode is disabled
+      const isChaosMode = (chaosMode as Record<string, unknown> | undefined)?.enabled === true;
+      if (!isChaosMode && (!strategySource || typeof strategySource !== 'string')) {
         res.status(400).json({ success: false, error: 'Missing or invalid "strategySource" (string required)' });
         return;
       }

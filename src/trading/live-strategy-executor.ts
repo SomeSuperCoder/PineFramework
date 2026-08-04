@@ -437,11 +437,11 @@ export class LiveStrategyExecutor {
           `price=${signal.expectedPrice}`,
         );
 
-        // Skip trades below minimum size (< 1 USDC) to avoid dust orders
-        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < 1) {
+        // Skip trades below minimum size (< 0.10 USDC) to avoid dust orders
+        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < 0.1) {
           console.warn(
             `[LiveStrategyExecutor] Skipping trade: swap amount ${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
-            `(< ${(1 / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ 1 USDC)`,
+            `(< ${(0.1 / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ 0.10 USDC)`,
           );
           return {
             success: false,
@@ -467,9 +467,10 @@ export class LiveStrategyExecutor {
           signal.action === 'buy' ? USDC_MINT : this.getMintForSymbol(signal.symbol);
         const outputMint =
           signal.action === 'buy' ? this.getMintForSymbol(signal.symbol) : USDC_MINT;
-        const amount = BigInt(
-          Math.floor(signal.quantity * (signal.action === 'buy' ? signal.expectedPrice : 1)),
-        );
+        // USDC has 6 decimals, so multiply by 1_000_000 for smallest units (lamports)
+        const amount = signal.action === 'buy'
+          ? BigInt(Math.floor(swapAmountUsdc * 1_000_000))
+          : BigInt(Math.floor(signal.quantity));
 
         const quote = await this.config.dex.quote(inputMint, outputMint, amount, 50);
 

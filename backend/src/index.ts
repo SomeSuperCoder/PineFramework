@@ -168,7 +168,14 @@ if (ENABLE_TRADING_BOT) {
   const barFetcher = new BybitBarFetcher();
   const backtestRunner = new LiveBacktestRunner();
 
+  // Wallet manager — always use encrypted file storage for persistence
+  const walletManager = new WalletManager(
+    new EncryptedFileStorage(DATA_DIR),
+    process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
+  );
+
   const botEngine = new BotEngine({
+    walletManager,
     onAutoSelect: async (config) => {
       const selector = new AutoMarketSelector({
         barFetcher,
@@ -198,12 +205,6 @@ if (ENABLE_TRADING_BOT) {
       return [result.best.pair];
     },
   });
-
-  // Wallet manager — always use encrypted file storage for persistence
-  const walletManager = new WalletManager(
-    new EncryptedFileStorage(DATA_DIR),
-    process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
-  );
 
   // Config store — persist bot configuration across restarts
   const configStore = new BotConfigStore(DATA_DIR);
