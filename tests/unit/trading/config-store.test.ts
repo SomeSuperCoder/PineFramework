@@ -10,7 +10,10 @@ describe('BotConfigStore', () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `bot-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    testDir = join(
+      tmpdir(),
+      `bot-config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(testDir, { recursive: true });
     store = new BotConfigStore(testDir);
   });
@@ -22,7 +25,7 @@ describe('BotConfigStore', () => {
   const validConfig: BotConfig = {
     strategySource: '//@version=6\nstrategy("test")',
     dex: 'jupiter-swap',
-    risk: { maxDailyLoss: 1.0 },
+    risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: 0 },
     autoSelect: true,
   };
 
@@ -79,6 +82,61 @@ describe('BotConfigStore', () => {
     expect(store.load()).toBeNull();
   });
 
+  it('should reject negative maxDailyWalletLossUsdc', () => {
+    const invalid = {
+      strategySource: 'test',
+      dex: 'jupiter-swap',
+      risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: -1 },
+    };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(invalid), 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should reject fractional maxDailyWalletLossUsdc (R2)', () => {
+    const invalid = {
+      strategySource: 'test',
+      dex: 'jupiter-swap',
+      risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: 50.5 },
+    };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(invalid), 'utf-8');
+    expect(store.load()).toBeNull();
+  });
+
+  it('should accept missing maxDailyWalletLossUsdc (treated as unlimited)', () => {
+    const config = { strategySource: 'test', dex: 'jupiter-swap', risk: { maxDailyLoss: 1.0 } };
+    writeFileSync(join(testDir, 'bot-config.json'), JSON.stringify(config), 'utf-8');
+    expect(store.load()).not.toBeNull();
+    expect(store.load()!.risk.maxDailyWalletLossUsdc).toBeUndefined();
+  });
+
+  it('should accept explicit undefined maxDailyWalletLossUsdc (treated as unlimited)', () => {
+    const config: BotConfig = {
+      strategySource: 'test',
+      dex: 'jupiter-swap',
+      risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: undefined },
+    };
+    store.save(config);
+    const loaded = store.load();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.risk.maxDailyWalletLossUsdc).toBeUndefined();
+  });
+
+  it('should accept a valid positive maxDailyWalletLossUsdc', () => {
+    const config = { ...validConfig, risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: 50 } };
+    store.save(config);
+    const loaded = store.load();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.risk.maxDailyWalletLossUsdc).toBe(50);
+  });
+
+  it('should accept zero maxDailyWalletLossUsdc (unlimited)', () => {
+    const config = { ...validConfig, risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: 0 } };
+    store.save(config);
+    const loaded = store.load();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.risk.maxDailyWalletLossUsdc).toBe(0);
+  });
+
   it('should overwrite existing config', () => {
     store.save(validConfig);
     const newConfig: BotConfig = { ...validConfig, dex: 'jupiter-ultra' };
@@ -90,7 +148,7 @@ describe('BotConfigStore', () => {
     const postBacktestConfig: BotConfig = {
       strategySource: '//@version=6\nstrategy("test")',
       dex: 'jupiter-swap',
-      risk: { maxDailyLoss: 1.0 },
+      risk: { maxDailyLoss: 1.0, maxDailyWalletLossUsdc: 0 },
       autoSelect: false,
       pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
     };

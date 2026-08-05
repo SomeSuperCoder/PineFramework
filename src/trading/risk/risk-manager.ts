@@ -13,11 +13,23 @@
 import { DailyStopLoss } from './daily-stop-loss.js';
 import type { DailyStopLossConfig } from './daily-stop-loss.js';
 import { RollingLossGuard } from './rolling-loss-guard.js';
+import { WalletBalanceGuard } from './wallet-balance-guard.js';
+
+export type { WalletBalanceGuardConfig } from './wallet-balance-guard.js';
+import type { WalletBalanceGuardConfig } from './wallet-balance-guard.js';
 
 export interface RiskManagerConfig {
   dailyLoss: DailyStopLossConfig;
   /** Whether emergency stop should close all positions immediately. */
   emergencyClosePositions: boolean;
+  /**
+   * Optional balance-based wallet loss guard config. When absent, the guard is
+   * disabled and RiskManager degrades gracefully (recordBalance is a no-op).
+   * If `timezone` is omitted it defaults to `dailyLoss.timezone`.
+   * NOTE (R7, accepted limitation): the live path does not hot-apply runtime
+   * config changes — a restart is required for a new limit to take effect.
+   */
+  walletBalance?: WalletBalanceGuardConfig;
 }
 
 export type RiskEventType =
@@ -26,7 +38,8 @@ export type RiskEventType =
   | 'rolling_loss_breached'
   | 'emergency_stop'
   | 'safe_shutdown'
-  | 'entry_blocked';
+  | 'entry_blocked'
+  | 'wallet_balance_breached';
 
 export interface RiskEvent {
   type: RiskEventType;
@@ -40,15 +53,30 @@ export type RiskEventHandler = (event: RiskEvent) => void;
 export class RiskManager {
   private dailyStopLoss: DailyStopLoss;
   private rollingGuard: RollingLossGuard;
+  private walletBalanceGuard: WalletBalanceGuard | null = null;
   private config: RiskManagerConfig;
   private listeners: RiskEventHandler[] = [];
   private _emergencyStopTriggered = false;
   private _shutdownInProgress = false;
+  /**
+   * Whether the wallet-balance guard was breached on the previous snapshot
+   * (R6). The breach event is edge-triggered: emitted only on the false→true
+   * transition so concurrent per-trade + per-candle snapshots cannot
+   * double-notify or race two emergencyStop() calls.
+   */
+  private wasWalletBalanceBreached = false;
 
   constructor(config: RiskManagerConfig) {
     this.config = config;
     this.dailyStopLoss = new DailyStopLoss(config.dailyLoss);
     this.rollingGuard = new RollingLossGuard();
+    // Degrade gracefully: without walletBalance config the guard stays disabled.
+    if (config.walletBalance) {
+      this.walletBalanceGuard = new WalletBalanceGuard({
+        maxDailyWalletLossUsdc: config.walletBalance.maxDailyWalletLossUsdc,
+        timezone: config.walletBalance.timezone ?? config.dailyLoss.timezone,
+      });
+    }
   }
 
   /** Whether daily loss has been breached (calendar day). */
@@ -69,6 +97,16 @@ export class RiskManager {
   /** Rolling 24h loss breached. */
   get isRollingLossBreached(): boolean {
     return this.rollingGuard.isBreached(this.config.dailyLoss.maxDailyLoss);
+  }
+
+  /** Whether the wallet balance loss guard has been breached (false when disabled). */
+  get isWalletBalanceBreached(): boolean {
+    return this.walletBalanceGuard ? this.walletBalanceGuard.isBreached : false;
+  }
+
+  /** Whether the wallet-balance guard is enabled (config provided). */
+  get isWalletBalanceEnabled(): boolean {
+    return this.walletBalanceGuard !== null;
   }
 
   /** Whether emergency stop has been triggered. */
@@ -143,7 +181,11 @@ export class RiskManager {
   canEnterPosition(): boolean {
     const rollingAllowed = this.rollingGuard.canEnterPosition(this.config.dailyLoss.maxDailyLoss);
     const dailyAllowed = this.dailyStopLoss.canEnterPosition();
-    const allowed = rollingAllowed && dailyAllowed && !this._emergencyStopTriggered;
+    const walletAllowed = this.walletBalanceGuard
+      ? this.walletBalanceGuard.canEnterPosition()
+      : true;
+    const allowed =
+      rollingAllowed && dailyAllowed && walletAllowed && !this._emergencyStopTriggered;
 
     if (!allowed) {
       this.emit({
@@ -153,12 +195,50 @@ export class RiskManager {
         data: {
           rollingLossBreached: !rollingAllowed,
           dailyLossBreached: !dailyAllowed,
+          walletBalanceBreached: !walletAllowed,
           emergencyStop: this._emergencyStopTriggered,
         },
       });
     }
 
     return allowed;
+  }
+
+  /**
+   * Feed a wallet USDC balance snapshot (micro-USDC) to the balance guard.
+   * Emits `wallet_balance_breached` with loss context on the false→true
+   * breach transition (R6, edge-triggered). When the wallet guard is
+   * disabled, this is a no-op returning false.
+   * Fetch failures are the caller's responsibility (fail-safe: never feed a
+   * zero/unusable value here; log + skip instead).
+   */
+  recordBalance(balance: bigint, now?: number): boolean {
+    if (!this.walletBalanceGuard) {
+      return false;
+    }
+
+    const breached = this.walletBalanceGuard.updateBalance(balance, now);
+    if (breached && !this.wasWalletBalanceBreached) {
+      const maxLossUsdc = this.walletBalanceGuard.maxDailyWalletLossUsdc;
+      this.emit({
+        type: 'wallet_balance_breached',
+        timestamp: now ?? Date.now(),
+        message: `Wallet balance loss limit of $${maxLossUsdc} reached (loss: $${this.walletBalanceGuard.lossUsdc})`,
+        data: {
+          lossUsdc: this.walletBalanceGuard.lossUsdc,
+          maxLossUsdc,
+          referenceUsdc: Number(this.walletBalanceGuard.referenceMicro / 1_000_000n),
+          currentUsdc: Number(this.walletBalanceGuard.currentMicro / 1_000_000n),
+        },
+      });
+    }
+    // Edge-triggered (R6): remember the current level so the next snapshot
+    // while still breached does not re-emit. The armed breach persists across
+    // fetch failures because we never feed on failure (caller-side skip), so
+    // wasWalletBalanceBreached stays true until a snapshot clears it.
+    this.wasWalletBalanceBreached = breached;
+
+    return breached;
   }
 
   /**

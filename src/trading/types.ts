@@ -90,6 +90,13 @@ export interface PairConfig {
 export interface RiskConfig {
   /** Maximum daily realized loss in quote currency. 0 = unlimited. */
   maxDailyLoss: number;
+  /**
+   * Maximum daily wallet-balance loss in whole USDC. 0 or omitted = unlimited.
+   * Internally converted to micro-USDC (× 1_000_000n) for comparison
+   * against wallet balance snapshots. Optional — omitted/undefined is treated
+   * as 0 for backward compatibility with configs written before this field.
+   */
+  maxDailyWalletLossUsdc?: number;
 }
 
 /** Chaos test mode configuration. */

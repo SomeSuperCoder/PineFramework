@@ -166,6 +166,10 @@ export class BotEngine {
       this.riskManager.onEvent((event) => {
         if (event.type === 'rolling_loss_breached') {
           this.handleRollingLossBreached(event);
+        } else if (event.type === 'daily_loss_breached') {
+          this.handleDailyLossBreached(event);
+        } else if (event.type === 'wallet_balance_breached') {
+          this.handleWalletBalanceBreached(event);
         }
       });
     }
@@ -336,6 +340,12 @@ export class BotEngine {
 
   /**
    * Handle rolling 24h loss breach — trigger emergency stop and send alerts.
+   *
+   * Safety ordering (R1): the stop runs FIRST — a slow/throwing Telegram
+   * notification (retry can wait up to 10s) must never gate or delay the
+   * halt. Notification failures are logged, never thrown, and the handler
+   * never produces an unhandled rejection (it is invoked fire-and-forget by
+   * the risk-event listener).
    */
   private async handleRollingLossBreached(event: {
     timestamp: number;
@@ -344,18 +354,105 @@ export class BotEngine {
   }): Promise<void> {
     this.logger.error('ROLLING 24H LOSS LIMIT BREACHED', event.data);
 
-    // Send Telegram alert
-    if (this.telegramBot) {
-      const loss = (event.data?.loss as number) ?? 0;
-      const maxLoss = (event.data?.maxLoss as number) ?? 0;
-
-      await this.telegramBot.notifyDailyLossTriggered(loss, maxLoss);
-      await this.telegramBot.notifyEmergencyStop('rolling_24h_loss');
+    // Trigger emergency stop if bot is running (keep existing behavior).
+    if (this.state === BotState.Running) {
+      try {
+        await this.emergencyStop();
+      } catch (err) {
+        // A concurrent stop (e.g. daily-loss handler on the same trade) may
+        // already have moved the state machine — the bot is stopping anyway.
+        this.logger.warn('Emergency stop already in progress after rolling loss breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
-    // Trigger emergency stop if bot is running
+    // Send Telegram alert after the stop; never throws, never rejects.
+    if (this.telegramBot) {
+      try {
+        const loss = (event.data?.loss as number) ?? 0;
+        const maxLoss = (event.data?.maxLoss as number) ?? 0;
+
+        await this.telegramBot.notifyDailyLossTriggered(loss, maxLoss);
+        await this.telegramBot.notifyEmergencyStop('rolling_24h_loss');
+      } catch (err) {
+        this.logger.warn('Telegram notification failed after rolling loss breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  /**
+   * Handle daily (calendar-day) PnL loss breach — trigger emergency stop and
+   * send alerts, mirroring the rolling 24h handling (R1 stop-first ordering).
+   */
+  private async handleDailyLossBreached(event: {
+    timestamp: number;
+    message: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    this.logger.error('DAILY LOSS LIMIT BREACHED', event.data);
+
+    // Trigger emergency stop if bot is running (keep existing behavior).
     if (this.state === BotState.Running) {
-      await this.emergencyStop();
+      try {
+        await this.emergencyStop();
+      } catch (err) {
+        this.logger.warn('Emergency stop already in progress after daily loss breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Send Telegram alert after the stop; never throws, never rejects.
+    if (this.telegramBot) {
+      try {
+        const loss = (event.data?.loss as number) ?? 0;
+        const maxLoss = (event.data?.maxLoss as number) ?? 0;
+
+        await this.telegramBot.notifyDailyLossTriggered(loss, maxLoss);
+        await this.telegramBot.notifyEmergencyStop('daily_loss');
+      } catch (err) {
+        this.logger.warn('Telegram notification failed after daily loss breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  /**
+   * Handle wallet-balance loss breach — trigger emergency stop and send
+   * alerts, mirroring the rolling 24h handling (R1 stop-first ordering).
+   */
+  private async handleWalletBalanceBreached(event: {
+    timestamp: number;
+    message: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    this.logger.error('WALLET BALANCE LOSS LIMIT BREACHED', event.data);
+
+    // Trigger emergency stop if bot is running (keep existing behavior).
+    if (this.state === BotState.Running) {
+      try {
+        await this.emergencyStop();
+      } catch (err) {
+        this.logger.warn('Emergency stop already in progress after wallet balance breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // Send Telegram alert after the stop; never throws, never rejects.
+    if (this.telegramBot) {
+      try {
+        // Distinct source label for the balance guard.
+        await this.telegramBot.notifyEmergencyStop('wallet_balance');
+      } catch (err) {
+        this.logger.warn('Telegram notification failed after wallet balance breach', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
@@ -540,6 +637,9 @@ export class BotEngine {
       initialCapital: BigInt(this._config.initialCapital ?? DEFAULT_INITIAL_CAPITAL_LAMPORTS),
       positionSizePercent: this._config.positionSizePercent ?? 100,
       maxDailyLoss: this._config.risk?.maxDailyLoss ?? 100,
+      // D6: the executor feeds realized PnL + balance snapshots to the risk
+      // manager when one is configured; absent risk config degrades gracefully.
+      riskManager: this.riskManager,
       chaosGenerator,
       seedHistory: (pair) => this.fetchSeedHistory(pair),
     });
@@ -584,6 +684,10 @@ export class BotEngine {
           price: s.expectedPrice,
           timestamp: s.timestamp,
           marker: s.marker,
+          // B1: keep the entry-price snapshot through the round-trip — it is
+          // the only remaining link to the closed position (timeframe is
+          // dropped here and the executor's state is already flattened).
+          positionEntryPrice: s.positionEntryPrice,
         }));
       },
       submitOrders: async (signals: SchedulerTradeSignal[]) => {
@@ -601,6 +705,9 @@ export class BotEngine {
               quantity: signal.quantity,
               expectedPrice: signal.price,
               timestamp: signal.timestamp,
+              // B1: restore the entry-price snapshot so the executor can feed
+              // realized PnL even though the position state is already flat.
+              positionEntryPrice: signal.positionEntryPrice,
             };
 
             const result: ExecutionResult =
@@ -708,9 +815,26 @@ export class BotEngine {
     if (!this.scheduler || this.state !== BotState.Running) return;
 
     // Process candle asynchronously (fire and forget — scheduler handles errors)
-    this.scheduler.liveTick([candle], this._abortController?.signal).catch((err) => {
-      this.logger.error('Error processing candle', { error: String(err) });
-    });
+    this.scheduler
+      .liveTick([candle], this._abortController?.signal)
+      .then(() => this.captureBalanceSnapshot())
+      .catch((err) => {
+        this.logger.error('Error processing candle', { error: String(err) });
+      });
+  }
+
+  /**
+   * Feed one wallet-balance snapshot to the risk manager after a candle closes
+   * (D6). The fetch runs inside the executor, which owns the DEX/wallet; any
+   * failure is logged and skipped there and must never block candle
+   * processing. No-op when no risk manager is configured.
+   */
+  private async captureBalanceSnapshot(): Promise<void> {
+    try {
+      await this.strategyExecutor?.captureBalanceSnapshot();
+    } catch (err) {
+      this.logger.warn('Balance snapshot capture failed', { error: String(err) });
+    }
   }
 
   /**

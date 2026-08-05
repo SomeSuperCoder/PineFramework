@@ -114,6 +114,7 @@ describe('LiveStrategyExecutor', () => {
       pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
       initialCapital: BigInt(1000000000), // 1000 USDC
       positionSizePercent: 10,
+      maxDailyLoss: 100,
     };
 
     executor = new LiveStrategyExecutor(mockConfig);
@@ -396,7 +397,7 @@ describe('LiveStrategyExecutor', () => {
           timestamp: Date.now(),
         }),
         getSignalCount: vi.fn().mockReturnValue(1),
-      };
+      } as any;
 
       const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator };
       const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
@@ -423,10 +424,8 @@ describe('LiveStrategyExecutor', () => {
     });
 
     it('should use 10% sizing in chaos mode', async () => {
-      let capturedEquity = 0;
       const mockGenerator = {
         generate: vi.fn().mockImplementation((equity: number) => {
-          capturedEquity = equity;
           return {
             action: 'long',
             sizeFraction: 0.1,
@@ -435,7 +434,7 @@ describe('LiveStrategyExecutor', () => {
           };
         }),
         getSignalCount: vi.fn().mockReturnValue(1),
-      };
+      } as any;
 
       const chaosConfig = {
         ...mockConfig,
@@ -474,7 +473,7 @@ describe('LiveStrategyExecutor', () => {
           timestamp: Date.now(),
         }),
         getSignalCount: vi.fn().mockReturnValue(1),
-      };
+      } as any;
 
       const chaosConfig = { ...mockConfig, chaosGenerator: mockGenerator };
       const chaosExecutor = new LiveStrategyExecutor(chaosConfig);
@@ -498,6 +497,224 @@ describe('LiveStrategyExecutor', () => {
       await chaosExecutor.processCandle({ ...candle, timestamp: candle.timestamp + 60000 } as any);
 
       expect(mockGenerator.generate).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('risk manager integration', () => {
+    function createRiskManagerMock() {
+      return {
+        recordTrade: vi.fn().mockReturnValue(false),
+        recordBalance: vi.fn().mockReturnValue(false),
+        onEvent: vi.fn(),
+        isWalletBalanceEnabled: true,
+      } as any;
+    }
+
+    async function seedLongPosition(exec: LiveStrategyExecutor): Promise<void> {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await exec.initializeStrategy(pair);
+      const state = (exec as any).strategyStates.get('BTCUSDT:60');
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now() - 60000,
+      };
+    }
+
+    function sellSignal(price: number): TradeSignal {
+      return {
+        action: 'sell',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: price,
+        timestamp: Date.now(),
+        timeframe: '60',
+      };
+    }
+
+    it('should feed realized PnL to recordTrade after a completed sell', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      await seedLongPosition(exec);
+
+      const result = await exec.executeSignal(sellSignal(51000));
+
+      expect(result.success).toBe(true);
+      // realized PnL = (51000 − 50000) × 0.1 = 100
+      expect(riskManager.recordTrade).toHaveBeenCalledTimes(1);
+      expect(riskManager.recordTrade).toHaveBeenCalledWith(100);
+    });
+
+    it('should record realized PnL through the full processCandle -> executeSignal path (B1 regression)', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await exec.initializeStrategy(pair);
+
+      // Seed a long position and drive the runtime to emit a close marker on
+      // the next candle — the production entry path (not executeSignal with
+      // pre-seeded state, which never reproduces the flattening bug).
+      const state = (exec as any).strategyStates.get('BTCUSDT:60');
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now() - 60000,
+      };
+      state.runtime = {
+        executeBar: vi.fn().mockReturnValue({
+          success: true,
+          strategyMarkers: [
+            {
+              type: 'close',
+              direction: 'long',
+              action: 'sell',
+              name: 'Exit',
+              quantity: 0.1,
+              price: 51000,
+              barIndex: 100,
+              timestamp: Date.now(),
+              color: '#FF0000',
+            },
+          ],
+        }),
+      } as any;
+      state.warmUpComplete = true;
+      state.lastBarTimestamp = 0;
+
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: Date.now(),
+        open: 50500,
+        high: 51500,
+        low: 49500,
+        close: 51000,
+        volume: 1000,
+      };
+
+      const signals = await exec.processCandle(candle);
+      expect(signals).toHaveLength(1);
+      expect(signals[0]!.action).toBe('sell');
+      // reconcilePosition() flattens state.position right after signal
+      // generation — the entry price MUST ride on the signal itself (B1) or
+      // the realized PnL feed is skipped on every close in production.
+      expect((signals[0] as any).positionEntryPrice).toBe(50000);
+
+      const result = await exec.executeSignal(signals[0]!);
+      expect(result.success).toBe(true);
+      // realized PnL = (51000 − 50000) × 0.1 = 100
+      expect(riskManager.recordTrade).toHaveBeenCalledTimes(1);
+      expect(riskManager.recordTrade).toHaveBeenCalledWith(100);
+    });
+
+    it('should feed a balance snapshot to recordBalance after a completed trade', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      await seedLongPosition(exec);
+
+      const result = await exec.executeSignal(sellSignal(51000));
+
+      expect(result.success).toBe(true);
+      // dex.getBalance mock returns '10000000' micro-USDC (10 USDC)
+      expect(riskManager.recordBalance).toHaveBeenCalledTimes(1);
+      expect(riskManager.recordBalance).toHaveBeenCalledWith(10000000n);
+    });
+
+    it('should feed a balance snapshot once per candle via captureBalanceSnapshot', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+
+      await exec.captureBalanceSnapshot();
+
+      expect(riskManager.recordBalance).toHaveBeenCalledTimes(1);
+      expect(riskManager.recordBalance).toHaveBeenCalledWith(10000000n);
+    });
+
+    it('should skip the balance fetch entirely when the wallet guard is disabled (R4)', async () => {
+      const riskManager = createRiskManagerMock();
+      riskManager.isWalletBalanceEnabled = false;
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+
+      const fetchSpy = vi.spyOn(
+        exec as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+        'fetchUsdcBalance',
+      );
+      await exec.captureBalanceSnapshot();
+
+      // No RPC fetch, no guard evaluation — a disabled guard must never incur
+      // a per-candle fetch (jupiter-ultra zero-returning adapters warn on it).
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(riskManager.recordBalance).not.toHaveBeenCalled();
+    });
+
+    it('should never feed a zero/unusable balance to the guard', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      (mockConfig.dex as any).getBalance.mockResolvedValue({
+        mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+        amount: '0',
+        decimals: 6,
+      });
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await exec.captureBalanceSnapshot();
+
+      expect(riskManager.recordBalance).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Balance snapshot is zero/unusable'),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should log and skip (not block) when the balance snapshot fetch fails', async () => {
+      const riskManager = createRiskManagerMock();
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      await seedLongPosition(exec);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(
+        exec as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+        'fetchUsdcBalance',
+      ).mockRejectedValue(new Error('RPC down'));
+
+      const result = await exec.executeSignal(sellSignal(51000));
+
+      // The trade itself must still succeed and the PnL still be recorded
+      expect(result.success).toBe(true);
+      expect(riskManager.recordTrade).toHaveBeenCalledWith(100);
+      expect(riskManager.recordBalance).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Balance snapshot fetch failed'),
+        expect.anything(),
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('should not demote trade success when the risk balance call throws', async () => {
+      const riskManager = createRiskManagerMock();
+      riskManager.recordBalance.mockImplementation(() => {
+        throw new Error('guard exploded');
+      });
+      const exec = new LiveStrategyExecutor({ ...mockConfig, riskManager });
+      await seedLongPosition(exec);
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const result = await exec.executeSignal(sellSignal(51000));
+
+      expect(result.success).toBe(true);
+      expect(riskManager.recordTrade).toHaveBeenCalledWith(100);
+      expect(riskManager.recordBalance).toHaveBeenCalledWith(10000000n);
+      warnSpy.mockRestore();
+    });
+
+    it('should be a no-op for balance snapshots when no risk manager is configured', async () => {
+      const exec = new LiveStrategyExecutor(mockConfig);
+
+      await expect(exec.captureBalanceSnapshot()).resolves.toBeUndefined();
     });
   });
 });

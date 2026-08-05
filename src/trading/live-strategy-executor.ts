@@ -21,6 +21,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
+import type { RiskManager } from './risk/risk-manager.js';
 
 // ---- Constants ----
 
@@ -71,6 +72,12 @@ export interface LiveStrategyConfig {
   chaosGenerator?: ChaosSignalGenerator;
   /** Optional provider of historical bars used to seed each pair's strategy engine (warm start). */
   seedHistory?: (pair: PairId) => Promise<ClosedCandle[]>;
+  /**
+   * Optional risk manager. When present, realized PnL from completed closing
+   * trades and wallet-balance snapshots are fed to its guards. Optional so the
+   * executor degrades gracefully (no risk tracking) when absent.
+   */
+  riskManager?: RiskManager;
 }
 
 export interface StrategyState {
@@ -112,6 +119,15 @@ export interface TradeSignal {
   marker?: StrategyMarker;
   /** Pair timeframe — used to update the correct per-pair position state. */
   timeframe?: string;
+  /**
+   * Entry price of the position this signal closes, captured at generation
+   * time (B1). The scheduler round-trip drops `timeframe`, and
+   * reconcilePosition() flattens the executor's position state before the
+   * signal executes, so the entry price must ride on the signal itself or the
+   * realized-PnL feed is skipped on every close. Absent (undefined) when the
+   * closing position is unknown — the PnL feed then fails safe (skips).
+   */
+  positionEntryPrice?: number;
 }
 
 export interface ExecutionResult {
@@ -355,6 +371,12 @@ export class LiveStrategyExecutor {
             timestamp: candle.timestamp,
             marker,
             timeframe: candle.timeframe,
+            // B1: attach the entry price of the position being closed now —
+            // reconcilePosition() flattens it right after generation.
+            positionEntryPrice:
+              state.position.direction === 'long' && state.position.entryPrice > 0
+                ? state.position.entryPrice
+                : undefined,
           });
         } else if (state.position.direction === 'flat') {
           console.warn(
@@ -374,6 +396,11 @@ export class LiveStrategyExecutor {
           timestamp: candle.timestamp,
           marker,
           timeframe: candle.timeframe,
+          // B1: same snapshot-at-generation capture as the short-close above.
+          positionEntryPrice:
+            state.position.direction === 'long' && state.position.entryPrice > 0
+              ? state.position.entryPrice
+              : undefined,
         });
       }
     }
@@ -491,6 +518,11 @@ export class LiveStrategyExecutor {
             error: swapResult.error,
           };
         }
+
+        // Feed the risk manager: realized PnL (for closing trades) plus a fresh
+        // wallet-balance snapshot. Both are fail-safe — a fetch failure never
+        // blocks the completed trade and never feeds an unusable value (D5/D6).
+        await this.recordClosedTradeRisk(signal);
 
         // Update position state
         this.updatePositionState(signal, swapResult);
@@ -639,6 +671,44 @@ export class LiveStrategyExecutor {
     this.config.chaosGenerator = undefined;
   }
 
+  /**
+   * Capture the wallet's USDC balance and feed it to the risk manager's
+   * wallet-balance guard. No-op when no risk manager is configured.
+   *
+   * Called by BotEngine once per closed candle (D6) and after each completed
+   * trade (via recordClosedTradeRisk).
+   *
+   * Fail-safe (D5): any fetch failure — or a zero/unusable balance returned by
+   * a stub adapter — is logged and skipped. A failed or zero value MUST never
+   * reach recordBalance: treating an RPC error as "wallet emptied" would
+   * false-trigger an emergency stop (jupiter-ultra always returns zero).
+   */
+  async captureBalanceSnapshot(): Promise<void> {
+    const riskManager = this.config.riskManager;
+    if (!riskManager) return;
+    // R4: skip the RPC entirely when the wallet-balance guard is disabled —
+    // a fetch here would otherwise run once per candle for zero benefit (and
+    // warn on zero-returning adapters like jupiter-ultra). The after-trade
+    // PnL recording (recordTrade) is unaffected and still runs regardless.
+    if (!riskManager.isWalletBalanceEnabled) return;
+
+    try {
+      const balance = await this.fetchUsdcBalance();
+      if (balance <= 0n) {
+        console.warn(
+          '[LiveStrategyExecutor] Balance snapshot is zero/unusable — skipping guard evaluation',
+        );
+        return;
+      }
+      riskManager.recordBalance(balance);
+    } catch (err) {
+      console.warn(
+        '[LiveStrategyExecutor] Balance snapshot fetch failed — skipping guard evaluation',
+        { error: err instanceof Error ? err.message : String(err) },
+      );
+    }
+  }
+
   // ---- Private Methods ----
 
   /**
@@ -745,6 +815,14 @@ export class LiveStrategyExecutor {
           expectedPrice: currentPrice,
           timestamp: candle.timestamp,
           marker,
+          // B1: the executor's position state is still the pre-close state
+          // here (the marker sync below runs after signal generation) — attach
+          // the entry price of the tracked long being closed, or leave absent
+          // so the PnL feed fails safe (skips) when unknown.
+          positionEntryPrice:
+            state.position.direction === 'long' && state.position.entryPrice > 0
+              ? state.position.entryPrice
+              : undefined,
         });
       }
     }
@@ -823,5 +901,69 @@ export class LiveStrategyExecutor {
         entryTime: 0,
       };
     }
+  }
+
+  /**
+   * Feed the risk manager after a completed trade (D6): record realized PnL
+   * for closing trades and capture a wallet-balance snapshot. Fully fail-safe —
+   * never throws and never blocks the caller (the trade is already done).
+   *
+   * PnL is only recorded when the closing trade's position (entry price /
+   * quantity) is known; otherwise it is skipped rather than guessed.
+   */
+  private async recordClosedTradeRisk(signal: TradeSignal): Promise<void> {
+    const riskManager = this.config.riskManager;
+    if (!riskManager) return;
+
+    if (signal.action === 'sell' || signal.action === 'close') {
+      let realizedPnl: number | undefined;
+
+      // B1: prefer the entry price snapshot attached at generation time —
+      // it is exact for the state the signal was produced from. The state
+      // scan below is only a fallback for signals that never carried one
+      // (e.g. chaos path), and still fails safe (skip) when unknown.
+      if (
+        signal.positionEntryPrice !== undefined &&
+        signal.positionEntryPrice > 0 &&
+        signal.quantity > 0
+      ) {
+        // Spot DEX closes are long exits: realized PnL = (exit − entry) × qty.
+        realizedPnl = (signal.expectedPrice - signal.positionEntryPrice) * signal.quantity;
+      } else {
+        const state = this.getStateForSignal(signal);
+        if (
+          state?.position.direction === 'long' &&
+          state.position.entryPrice > 0 &&
+          state.position.quantity > 0
+        ) {
+          realizedPnl =
+            (signal.expectedPrice - state.position.entryPrice) * state.position.quantity;
+        }
+      }
+
+      if (realizedPnl !== undefined) {
+        riskManager.recordTrade(realizedPnl);
+      }
+    }
+
+    await this.captureBalanceSnapshot();
+  }
+
+  /**
+   * Resolve the strategy state a trade signal belongs to. Prefers the exact
+   * `symbol:timeframe` key when the signal carries a timeframe; otherwise
+   * falls back to any non-flat state tracking this symbol (the scheduler's
+   * signal mapping drops `timeframe`, so entry/close signals often lack it).
+   */
+  private getStateForSignal(signal: TradeSignal): StrategyState | undefined {
+    if (signal.timeframe) {
+      return this.strategyStates.get(`${signal.symbol}:${signal.timeframe}`);
+    }
+    for (const state of this.strategyStates.values()) {
+      if (state.position.symbol === signal.symbol && state.position.direction !== 'flat') {
+        return state;
+      }
+    }
+    return undefined;
   }
 }

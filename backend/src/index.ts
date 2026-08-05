@@ -18,6 +18,7 @@ import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
 import { createBotRouter } from './routes/bot.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
+import type { BotConfig, RiskManager, RiskManagerConfig } from 'pine-framework';
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
@@ -159,7 +160,8 @@ app.use('/api', createExportRouter());
 
 // ── Trading Bot (feature-gated) ──
 if (ENABLE_TRADING_BOT) {
-  const { BotEngine, AutoMarketSelector, generateDefaultCandidates } = await import('pine-framework');
+  const { BotEngine, RiskManager, AutoMarketSelector, generateDefaultCandidates } =
+    await import('pine-framework');
   const { WalletManager, EncryptedFileStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
 
@@ -174,8 +176,50 @@ if (ENABLE_TRADING_BOT) {
     process.env.WALLET_PASSPHRASE || 'pine-default-passphrase',
   );
 
+  // Config store — persist bot configuration across restarts
+  const configStore = new BotConfigStore(DATA_DIR);
+
+  // Load persisted config BEFORE constructing the engine so the risk manager
+  // can be built from the saved risk settings (D6).
+  const savedConfig = configStore.load();
+
+  /**
+   * Build the risk manager from persisted bot config risk settings (D6).
+   *
+   * Returns undefined when no risk config is present so the bot starts with
+   * risk guards disabled rather than crashing.
+   *
+   * Timezone: RiskConfig stores no timezone today, so the trading-day reset
+   * defaults to UTC; the wallet-balance guard inherits it per RiskManager
+   * semantics (falls back to dailyLoss.timezone).
+   *
+   * Wallet-balance guard: enabled only when maxDailyWalletLossUsdc is present
+   * and > 0. A missing/0/negative value means "unlimited" (RiskConfig
+   * contract); constructing the guard anyway would drive per-candle RPC
+   * fetches for zero benefit, so it is omitted entirely.
+   */
+  function buildRiskManager(config: BotConfig | null): RiskManager | undefined {
+    if (!config?.risk) return undefined;
+
+    const riskConfig: RiskManagerConfig = {
+      dailyLoss: {
+        maxDailyLoss: config.risk.maxDailyLoss,
+        timezone: 'UTC',
+      },
+      emergencyClosePositions: false, // Phase 2: position-close actions are stubs
+    };
+    if (config.risk.maxDailyWalletLossUsdc !== undefined && config.risk.maxDailyWalletLossUsdc > 0) {
+      riskConfig.walletBalance = {
+        maxDailyWalletLossUsdc: config.risk.maxDailyWalletLossUsdc,
+        timezone: riskConfig.dailyLoss.timezone,
+      };
+    }
+    return new RiskManager(riskConfig);
+  }
+
   const botEngine = new BotEngine({
     walletManager,
+    riskManager: buildRiskManager(savedConfig),
     onAutoSelect: async (config) => {
       const selector = new AutoMarketSelector({
         barFetcher,
@@ -206,11 +250,6 @@ if (ENABLE_TRADING_BOT) {
     },
   });
 
-  // Config store — persist bot configuration across restarts
-  const configStore = new BotConfigStore(DATA_DIR);
-
-  // Load persisted config on startup
-  const savedConfig = configStore.load();
   if (savedConfig) {
     try {
       botEngine.configure(savedConfig);

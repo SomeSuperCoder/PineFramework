@@ -57,6 +57,12 @@ export interface TradeSignal {
   meta?: Record<string, unknown>;
   /** Strategy engine marker that produced this signal (chaos mode). */
   marker?: StrategyMarker;
+  /**
+   * Entry price of the position this signal closes, preserved through the
+   * scheduler round-trip (B1). Set by the strategy executor at generation
+   * time; absent when unknown (PnL feed then fails safe and skips).
+   */
+  positionEntryPrice?: number;
 }
 
 /** Callback for processing a closed candle. */

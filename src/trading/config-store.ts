@@ -76,6 +76,19 @@ export class BotConfigStore {
     if (!c.risk || typeof c.risk !== 'object') return false;
     const risk = c.risk as Record<string, unknown>;
     if (typeof risk.maxDailyLoss !== 'number' || risk.maxDailyLoss < 0) return false;
+    // Optional field for backward compatibility: missing/undefined is VALID and
+    // treated as 0 (unlimited). Only when present must it be a number >= 0.
+    // R2: it must also be a whole integer — a fractional value (e.g. 50.5)
+    // passes the >= 0 check but throws RangeError inside WalletBalanceGuard's
+    // BigInt conversion, silently disabling the guard. Reject it here instead.
+    if (typeof risk.maxDailyWalletLossUsdc !== 'undefined') {
+      if (
+        typeof risk.maxDailyWalletLossUsdc !== 'number' ||
+        risk.maxDailyWalletLossUsdc < 0 ||
+        !Number.isInteger(risk.maxDailyWalletLossUsdc)
+      )
+        return false;
+    }
     return true;
   }
 }
