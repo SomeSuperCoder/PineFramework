@@ -16,9 +16,13 @@ import {
   LAMPORTS_PER_SOL,
   ParsedAccountData,
 } from '@solana/web3.js';
-import { getAssociatedTokenAddress, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
+import {
+  getAssociatedTokenAddress,
+  getAccount,
+  TokenAccountNotFoundError,
+} from '@solana/spl-token';
 import { SolanaConfig, createSolanaConfig, createSolanaConnection } from './solana-config.js';
-import { TOKEN_MINTS } from './token-registry.js';
+import { TOKEN_MINTS, USDC_MINT } from './token-registry.js';
 
 // ---- Types ----
 
@@ -46,7 +50,7 @@ export interface TransactionResult {
 export const SOL_MINT = TOKEN_MINTS.SOL;
 
 /** USDC mint address on Solana mainnet. Re-exported from registry for backward compatibility. */
-export const USDC_MINT = TOKEN_MINTS.USDC;
+export { USDC_MINT };
 
 /** Maximum transaction confirmation timeout (ms). */
 const MAX_CONFIRM_TIMEOUT_MS = 60_000;
@@ -168,10 +172,7 @@ export function deserializeTransaction(base64Tx: string): Transaction {
 /**
  * Sign a transaction with a keypair.
  */
-export function signTransaction(
-  transaction: Transaction,
-  keypair: Keypair,
-): Transaction {
+export function signTransaction(transaction: Transaction, keypair: Keypair): Transaction {
   transaction.partialSign(keypair);
   return transaction;
 }
@@ -213,15 +214,10 @@ export async function sendAndConfirmTransactionWithTimeout(
   _timeoutMs: number = MAX_CONFIRM_TIMEOUT_MS,
 ): Promise<TransactionResult> {
   try {
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      signers,
-      {
-        commitment: 'confirmed',
-        preflightCommitment: 'confirmed',
-      },
-    );
+    const signature = await sendAndConfirmTransaction(connection, transaction, signers, {
+      commitment: 'confirmed',
+      preflightCommitment: 'confirmed',
+    });
 
     return {
       success: true,
@@ -256,13 +252,15 @@ export async function waitForConfirmation(
       };
     }
 
-    if (status.value?.confirmationStatus === 'confirmed' ||
-        status.value?.confirmationStatus === 'finalized') {
+    if (
+      status.value?.confirmationStatus === 'confirmed' ||
+      status.value?.confirmationStatus === 'finalized'
+    ) {
       return { confirmed: true };
     }
 
     // Wait before polling again
-    await new Promise(resolve => setTimeout(resolve, CONFIRM_POLL_INTERVAL_MS));
+    await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_INTERVAL_MS));
   }
 
   return {

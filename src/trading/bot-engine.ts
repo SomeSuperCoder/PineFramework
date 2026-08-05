@@ -120,6 +120,7 @@ export class BotEngine {
   private readonly riskManager?: RiskManager;
   private readonly telegramBot?: TradingTelegramBot;
   private readonly walletManager?: WalletManager;
+  private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -153,6 +154,7 @@ export class BotEngine {
     this.riskManager = options?.riskManager;
     this.telegramBot = options?.telegramBot;
     this.walletManager = options?.walletManager;
+    this.onAutoSelect = options?.onAutoSelect;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -250,7 +252,19 @@ export class BotEngine {
     // Auto-select is a trigger (pick pairs if needed), not a gate.
     // Allow start when pairs exist from any source (auto-select, manual, API).
     if (this._config.autoSelect && !this._config.pairs?.length) {
-      throw new Error('auto-select must run before starting; use the Backtest step first.');
+      if (this.onAutoSelect) {
+        // Resolve pairs via the callback before proceeding with the state
+        // transition. If the callback yields no pairs, fall through to the
+        // same documented error as a missing callback.
+        const selected = await this.onAutoSelect(this._config);
+        if (selected?.length) {
+          this._config.pairs = selected;
+        } else {
+          throw new Error('auto-selection returned no pairs');
+        }
+      } else {
+        throw new Error('auto-selection returned no pairs');
+      }
     }
     if (!this._config.pairs?.length) {
       throw new Error('No trading pairs configured. Set pairs or enable auto-select.');

@@ -9,7 +9,14 @@
  */
 
 import { DexAdapter } from './dex-adapter.js';
-import type { Quote, SwapResult, TokenBalance, TxStatus, CommissionModel, SlippageConfig } from './dex-adapter.js';
+import type {
+  Quote,
+  SwapResult,
+  TokenBalance,
+  TxStatus,
+  CommissionModel,
+  SlippageConfig,
+} from './dex-adapter.js';
 import {
   createConnection,
   getSolBalance,
@@ -21,10 +28,7 @@ import {
   isValidPublicKey,
 } from '../solana-wallet.js';
 import { Keypair } from '@solana/web3.js';
-import { TOKEN_MINTS } from '../token-registry.js';
-
-/** USDC mint address on Solana mainnet. */
-const USDC_MINT = TOKEN_MINTS.USDC;
+import { TOKEN_MINTS, USDC_MINT } from '../token-registry.js';
 
 /** Default slippage tolerance (50 bps = 0.5%). */
 const DEFAULT_SLIPPAGE_BPS = 50;
@@ -182,11 +186,9 @@ export class JupiterSwapAdapter extends DexAdapter {
         }
 
         // Submit the transaction
-        const result = await sendAndConfirmTransactionWithTimeout(
-          this.connection,
-          transaction,
-          [keypair],
-        );
+        const result = await sendAndConfirmTransactionWithTimeout(this.connection, transaction, [
+          keypair,
+        ]);
 
         if (!result.success) {
           return {
@@ -268,8 +270,10 @@ export class JupiterSwapAdapter extends DexAdapter {
         return 'failed';
       }
 
-      if (status.value.confirmationStatus === 'confirmed' ||
-          status.value.confirmationStatus === 'finalized') {
+      if (
+        status.value.confirmationStatus === 'confirmed' ||
+        status.value.confirmationStatus === 'finalized'
+      ) {
         return 'confirmed';
       }
 

@@ -143,7 +143,7 @@ export function getTokenInfo(pairSymbol: string): TokenInfo {
   if (!info) {
     throw new Error(
       `Unknown pair symbol: "${pairSymbol}". ` +
-      `Available pairs: ${Object.keys(TOKEN_REGISTRY).join(', ')}`
+        `Available pairs: ${Object.keys(TOKEN_REGISTRY).join(', ')}`,
     );
   }
   return info;
@@ -171,13 +171,31 @@ export function isValidPairSymbol(value: string): value is TradablePair {
 // ---------------------------------------------------------------------------
 
 /**
+ * Canonical USDC mint address on Solana mainnet.
+ *
+ * USDC is NOT a tradable pair in TOKEN_REGISTRY (it is the quote/stablecoin
+ * the bot swaps against), but it MUST resolve at runtime for every module that
+ * imports `USDC_MINT` (solana-wallet, DEX adapters, spot-trading, executor,
+ * jupiter-fee-fetcher). Declared once here — single source of truth; consumers
+ * import this constant instead of duplicating the address literal.
+ */
+export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+/**
  * Token mint addresses by base symbol (backward-compatible).
  * Use getTokenInfo() for new code.
  */
-export const TOKEN_MINTS: Record<string, string> = Object.values(TOKEN_REGISTRY).reduce(
-  (acc, info) => ({ ...acc, [info.symbol]: info.mint }),
-  {} as Record<string, string>
-);
+export const TOKEN_MINTS: Record<string, string> = {
+  ...Object.values(TOKEN_REGISTRY).reduce(
+    (acc, info) => ({ ...acc, [info.symbol]: info.mint }),
+    {} as Record<string, string>,
+  ),
+  // USDC: previously TOKEN_MINTS.USDC was undefined at runtime, so every
+  // balance query passed `undefined` as the mint and returned 0 — the bot
+  // could never see its funds. Keep the key populated from the canonical
+  // constant above (SSOT).
+  USDC: USDC_MINT,
+};
 
 /**
  * All token mints as a flat record (backward-compatible).
@@ -185,8 +203,5 @@ export const TOKEN_MINTS: Record<string, string> = Object.values(TOKEN_REGISTRY)
  */
 export const ALL_TOKEN_MINTS: Record<string, string> = Object.keys(TOKEN_REGISTRY).reduce(
   (acc, pairSymbol) => ({ ...acc, [pairSymbol]: TOKEN_REGISTRY[pairSymbol as TradablePair].mint }),
-  {} as Record<string, string>
+  {} as Record<string, string>,
 );
-
-// Alias for USDC (commonly used)
-export const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';

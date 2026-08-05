@@ -48,7 +48,7 @@ export class StateMachine<TState extends string> {
   private readonly transitions: Record<TState, Set<TState>>;
   private readonly guards: TransitionGuard<TState>[];
   private readonly onChange: StateChangeHandler<TState> | undefined;
-  private readonly history: StateTransition[] = [];
+  private readonly history: StateTransition<TState>[] = [];
   private readonly maxHistory: number;
 
   constructor(config: StateMachineConfig<TState>, maxHistory = 1000) {
@@ -65,12 +65,12 @@ export class StateMachine<TState extends string> {
   }
 
   /** Returns a read-only view of the transition history. */
-  get transitionHistory(): readonly StateTransition[] {
+  get transitionHistory(): readonly StateTransition<TState>[] {
     return this.history;
   }
 
   /** Returns the most recent transition, or null if none. */
-  get lastTransition(): StateTransition | null {
+  get lastTransition(): StateTransition<TState> | null {
     return this.history.length > 0 ? this.history[this.history.length - 1]! : null;
   }
 
@@ -101,7 +101,7 @@ export class StateMachine<TState extends string> {
 
     // 3. Execute transition
     this._state = to;
-    const transition: StateTransition = { from, to, reason, timestamp: Date.now() };
+    const transition: StateTransition<TState> = { from, to, reason, timestamp: Date.now() };
     this.history.push(transition);
 
     // Trim history if needed
@@ -140,7 +140,7 @@ export class StateMachine<TState extends string> {
     }
 
     this._state = to;
-    const transition: StateTransition = { from, to, reason, timestamp: Date.now() };
+    const transition: StateTransition<TState> = { from, to, reason, timestamp: Date.now() };
     this.history.push(transition);
     this.onChange?.(from, to, reason);
 
@@ -160,8 +160,12 @@ export class StateMachine<TState extends string> {
 
   /** Reset the machine to a given state (bypasses guards, but validates transition exists). */
   reset(newState: TState, reason: string): void {
+    // Record the PREVIOUS state as `from` (capture before overwriting
+    // _state) — the old code read this._state after assignment, so the
+    // history entry claimed from === to.
+    const from = this._state;
     this._state = newState;
-    this.history.push({ from: this._state, to: newState, reason, timestamp: Date.now() });
+    this.history.push({ from, to: newState, reason, timestamp: Date.now() });
   }
 }
 

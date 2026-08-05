@@ -138,11 +138,8 @@ export function encryptSeedPhrase(
 
   // Use override public key if provided (actual Solana base58 key),
   // otherwise fall back to hash-based identifier for backward compatibility
-  const publicKey = publicKeyOverride
-    ?? createHash('sha256')
-      .update(seedPhrase)
-      .digest('hex')
-      .substring(0, 32);
+  const publicKey =
+    publicKeyOverride ?? createHash('sha256').update(seedPhrase).digest('hex').substring(0, 32);
 
   const now = Date.now();
   return {
@@ -160,10 +157,7 @@ export function encryptSeedPhrase(
 /**
  * Decrypt an encrypted wallet to recover the seed phrase.
  */
-export function decryptSeedPhrase(
-  encrypted: EncryptedWallet,
-  passphrase: string,
-): string {
+export function decryptSeedPhrase(encrypted: EncryptedWallet, passphrase: string): string {
   const key = deriveKey(passphrase, Buffer.from(encrypted.salt, 'hex'));
   const iv = Buffer.from(encrypted.iv, 'hex');
   const authTag = Buffer.from(encrypted.authTag, 'hex');
@@ -172,10 +166,7 @@ export function decryptSeedPhrase(
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(authTag);
 
-  const plaintext = Buffer.concat([
-    decipher.update(ciphertext),
-    decipher.final(),
-  ]);
+  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 
   return plaintext.toString('utf-8');
 }
@@ -195,7 +186,10 @@ export function deriveKeypairFromSeed(seedPhrase: string): WalletKeypair {
   const seed = pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, 'sha512');
   // ed25519-hd-key: BIP44 m/44'/501'/0'/0' (Solana standard)
   const { key } = derivePath("m/44'/501'/0'/0'", seed.toString('hex'));
-  const keypair = Keypair.fromSeed(Buffer.from(key, 'hex'));
+  // `key` is already a Uint8Array of the 32-byte seed — a plain copy (no hex
+  // decode; the old `Buffer.from(key, 'hex')` was a TS-invalid overload that
+  // would misread the bytes on some engines).
+  const keypair = Keypair.fromSeed(Buffer.from(key));
 
   return {
     publicKey: keypair.publicKey.toBase58(),
@@ -455,8 +449,11 @@ export class WalletManager {
     // Decrypt with current password
     const seedPhrase = decryptSeedPhrase(encrypted, currentPassword);
 
-    // Re-encrypt with new password
-    const newEncrypted = encryptSeedPhrase(seedPhrase, newPassword);
+    // Re-encrypt with new password, passing the EXISTING public key so the
+    // stored identity survives re-encryption. Without the override,
+    // encryptSeedPhrase falls back to a sha256-derived hash — silently
+    // destroying the real public key and breaking getPublicKey()/getKeypair().
+    const newEncrypted = encryptSeedPhrase(seedPhrase, newPassword, encrypted.publicKey);
     // Preserve original createdAt
     newEncrypted.createdAt = encrypted.createdAt;
     newEncrypted.updatedAt = Date.now();

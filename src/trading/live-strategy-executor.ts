@@ -182,7 +182,9 @@ export class LiveStrategyExecutor {
       // so equity calculations reflect actual available funds, not a hardcoded
       // constant that causes dust trades on small balances.
       const realBalance = await this.fetchUsdcBalance();
-      console.log(`[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`);
+      console.log(
+        `[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`,
+      );
       engine = new StrategyEngine({
         initialCapital: Number(realBalance),
       });
@@ -444,6 +446,23 @@ export class LiveStrategyExecutor {
    */
   async executeSignal(signal: TradeSignal): Promise<ExecutionResult> {
     try {
+      // Risk gate (R-gate): enforce before ANY buy proceeds — before balance
+      // fetch or quote construction. Every signal (chaos + strategy) flows
+      // through here via submitOrders, so gating at this single choke point
+      // makes the risk manager effective: daily-loss / rolling / wallet-balance
+      // guards and the emergency-stop flag actually block new entries.
+      if (
+        signal.action === 'buy' &&
+        this.config.riskManager &&
+        !this.config.riskManager.canEnterPosition()
+      ) {
+        return {
+          success: false,
+          signal,
+          error: 'Entry blocked by risk controls',
+        };
+      }
+
       // Get wallet keypair
       const keypairData = await this.config.walletManager.getKeypair();
 
@@ -453,57 +472,68 @@ export class LiveStrategyExecutor {
         const availableBalance = BigInt(balance.amount);
         const availableBalanceUsdc = Number(availableBalance) / 1e6;
 
-        // Calculate swap amount: positionSizePercent of real balance / price
+        // Buy input = positionSizePercent of the available balance in WHOLE
+        // USDC. Deliberately NO price division — the DEX contract takes the
+        // input amount in the input token's smallest units (micro-USDC), and
+        // the old `(balance * fraction) / price` mis-sized buys by ~1/price,
+        // producing dust trades on the live path.
         const positionFraction = this.config.positionSizePercent / 100;
-        let swapAmountUsdc = 0;
-        if (signal.action === 'buy') {
-          swapAmountUsdc = (availableBalanceUsdc * positionFraction) / signal.expectedPrice;
-        }
+        const usdcAmount = signal.action === 'buy' ? availableBalanceUsdc * positionFraction : 0;
 
-        // Dust guard: skip trades below 1% of maxDailyLoss (SSOT from config)
+        // Dust guard: skip trades below 1% of maxDailyLoss (SSOT from config).
+        // Compares whole-USDC usdcAmount against the whole-USDC threshold —
+        // consistent units (the old guard multiplied by expectedPrice and
+        // compared token-quantity × price against a USDC threshold).
         const minTradeUsdc = this.config.maxDailyLoss * 0.01;
 
         console.log(
           `[LiveStrategyExecutor] executeSignal: action=${signal.action} ` +
-          `balance=${availableBalanceUsdc} USDC ` +
-          `swapAmount=${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
-          `price=${signal.expectedPrice} ` +
-          `minTrade=${minTradeUsdc.toFixed(2)} USDC`,
+            `balance=${availableBalanceUsdc} USDC ` +
+            `usdcAmount=${usdcAmount.toFixed(6)} USDC ` +
+            `price=${signal.expectedPrice} ` +
+            `minTrade=${minTradeUsdc.toFixed(2)} USDC`,
         );
 
-        if (signal.action === 'buy' && swapAmountUsdc * signal.expectedPrice < minTradeUsdc) {
+        if (signal.action === 'buy' && usdcAmount < minTradeUsdc) {
           console.warn(
-            `[LiveStrategyExecutor] Skipping trade: swap amount ${swapAmountUsdc.toFixed(6)} ${signal.symbol} ` +
-            `(< ${(minTradeUsdc / signal.expectedPrice).toFixed(6)} ${signal.symbol} ≈ ${minTradeUsdc.toFixed(2)} USDC)`,
+            `[LiveStrategyExecutor] Skipping trade: swap amount ${usdcAmount.toFixed(6)} USDC ` +
+              `(< ${minTradeUsdc.toFixed(2)} USDC minimum)`,
           );
           return {
             success: false,
             signal,
-            error: `Swap amount below minimum trade size: ${swapAmountUsdc.toFixed(6)} ${signal.symbol}`,
+            error: `Swap amount below minimum trade size: ${usdcAmount.toFixed(6)} USDC`,
           };
         }
 
-        // Check if we have enough balance
-        if (signal.action === 'buy') {
-          const requiredBalance = BigInt(Math.floor(signal.quantity * signal.expectedPrice));
-          if (availableBalance < requiredBalance) {
-            return {
-              success: false,
-              signal,
-              error: `Insufficient USDC balance: have ${availableBalance}, need ${requiredBalance}`,
-            };
-          }
+        // Resolve the traded token's mint/decimals once (used for the buy
+        // output mint and the sell input amount).
+        const tokenInfo = this.getTokenInfoForSymbol(signal.symbol);
+
+        // Buy: input amount in micro-USDC (USDC has 6 decimals → × 1_000_000).
+        // Sell: input amount in the token's smallest units (10^decimals) so a
+        // fractional quantity (e.g. 0.02 ETH) sends real lamports instead of
+        // flooring to zero.
+        const amount =
+          signal.action === 'buy'
+            ? BigInt(Math.floor(usdcAmount * 1_000_000))
+            : BigInt(Math.floor(signal.quantity * 10 ** tokenInfo.decimals));
+
+        // Insufficient-balance guard: compare micro-to-micro (consistent
+        // units). The buy amount derives from the same balance fetch, so this
+        // only trips when positionSizePercent > 100 or the balance moves
+        // between fetch and quote — kept as a cheap safety net.
+        if (signal.action === 'buy' && availableBalance < amount) {
+          return {
+            success: false,
+            signal,
+            error: `Insufficient USDC balance: have ${availableBalance}, need ${amount}`,
+          };
         }
 
         // Get quote from DEX
-        const inputMint =
-          signal.action === 'buy' ? USDC_MINT : this.getMintForSymbol(signal.symbol);
-        const outputMint =
-          signal.action === 'buy' ? this.getMintForSymbol(signal.symbol) : USDC_MINT;
-        // USDC has 6 decimals, so multiply by 1_000_000 for smallest units (lamports)
-        const amount = signal.action === 'buy'
-          ? BigInt(Math.floor(swapAmountUsdc * 1_000_000))
-          : BigInt(Math.floor(signal.quantity));
+        const inputMint = signal.action === 'buy' ? USDC_MINT : tokenInfo.mint;
+        const outputMint = signal.action === 'buy' ? tokenInfo.mint : USDC_MINT;
 
         const quote = await this.config.dex.quote(inputMint, outputMint, amount, 50);
 
@@ -648,7 +678,9 @@ export class LiveStrategyExecutor {
 
     // Fetch real balance once for all pairs — avoids N sequential RPC calls.
     const realBalance = await this.fetchUsdcBalance();
-    console.log(`[LiveStrategyExecutor] Chaos hot-swap: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`);
+    console.log(
+      `[LiveStrategyExecutor] Chaos hot-swap: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`,
+    );
 
     for (const pair of this.config.pairs) {
       const key = this.getPairKey(pair);
@@ -856,18 +888,28 @@ export class LiveStrategyExecutor {
     return `${pair.symbol}:${pair.timeframe}`;
   }
 
-  private getMintForSymbol(symbol: string): string {
+  /**
+   * Resolve mint + decimals for a signal symbol.
+   *
+   * Fallback chain: try as a full pair symbol (e.g. "BTCUSDT"), then as a base
+   * symbol (e.g. "BTC" → "BTCUSDT"), then fall back to USDC (6 decimals) for
+   * unknown symbols. Sell sizing uses the real token decimals so fractional
+   * quantities convert to correct on-chain units instead of flooring to zero.
+   */
+  private getTokenInfoForSymbol(symbol: string): { mint: string; decimals: number } {
     // Use centralized registry for token addresses
     // Try as pair symbol first (e.g., "BTCUSDT"), then as base symbol (e.g., "BTC")
     if (isValidPairSymbol(symbol)) {
-      return getTokenInfo(symbol).mint;
+      const info = getTokenInfo(symbol);
+      return { mint: info.mint, decimals: info.decimals };
     }
     // Fallback: try to find by base symbol in the registry
     const pairSymbol = `${symbol}USDT`;
     if (isValidPairSymbol(pairSymbol)) {
-      return getTokenInfo(pairSymbol).mint;
+      const info = getTokenInfo(pairSymbol);
+      return { mint: info.mint, decimals: info.decimals };
     }
-    return USDC_MINT;
+    return { mint: USDC_MINT, decimals: 6 };
   }
 
   private updatePositionState(signal: TradeSignal, _swapResult: SwapResult): void {

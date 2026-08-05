@@ -10,10 +10,11 @@
  */
 
 import { DexAdapter } from './dex-adapter.js';
-import { TOKEN_MINTS } from '../token-registry.js';
+import { USDC_MINT } from '../token-registry.js';
 
-/** USDC mint address on Solana mainnet. Re-exported from registry for backward compatibility. */
-export const USDC_MINT = TOKEN_MINTS.USDC;
+// Re-export the canonical registry constant so downstream imports of
+// spot-trading's USDC_MINT (dex/index.ts) resolve at runtime.
+export { USDC_MINT };
 
 /** Minimum USDC balance required for trading (in smallest units). */
 const MIN_USDC_BALANCE = BigInt(1_000_000); // 1 USDC (6 decimals)

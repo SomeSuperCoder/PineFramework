@@ -35,10 +35,12 @@ export const BOT_STATE_TRANSITIONS: Record<BotState, Set<BotState>> = {
   [BotState.Error]: new Set([BotState.Stopped]),
 };
 
-/** A recorded state transition with metadata. */
-export interface StateTransition {
-  from: BotState;
-  to: BotState;
+/** A recorded state transition with metadata.
+ *  Generic over the state type; defaults to BotState for backward
+ *  compatibility (BotStatusSnapshot.lastTransition). */
+export interface StateTransition<TState extends string = BotState> {
+  from: TState;
+  to: TState;
   reason: string;
   timestamp: number;
 }
