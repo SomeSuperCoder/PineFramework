@@ -51,6 +51,7 @@ import { BotState } from '../../../src/trading/types.js';
 import type { BotConfig } from '../../../src/trading/types.js';
 import { ChaosSignalGenerator } from '../../../src/trading/chaos-signal-generator.js';
 import { LiveStrategyExecutor } from '../../../src/trading/live-strategy-executor.js';
+import type { ClosedCandle } from '../../../src/trading/scheduler.js';
 
 const chaosConfig: BotConfig = {
   strategySource: '', // No strategy needed in chaos mode
@@ -83,13 +84,21 @@ describe('Chaos Mode Integration', () => {
   it('should report chaosMode in status snapshot', () => {
     engine.configure(chaosConfig);
     const snapshot = engine.getSnapshot();
-    expect(snapshot.chaosMode).toBe(true);
+    // chaosMode is now an object (D1/D4): enabled flag + execution mode
+    // ('live' until the engine is started and seeds with a real balance).
+    expect(snapshot.chaosMode).toMatchObject({
+      enabled: true,
+      executionMode: 'live',
+    });
   });
 
-  it('should report chaosMode as false when disabled', () => {
+  it('should report chaosMode as disabled in status snapshot', () => {
     engine.configure(normalConfig);
     const snapshot = engine.getSnapshot();
-    expect(snapshot.chaosMode).toBe(false);
+    expect(snapshot.chaosMode).toMatchObject({
+      enabled: false,
+      executionMode: 'live',
+    });
   });
 
   it('should start without strategy source when chaos mode is on', async () => {
@@ -160,6 +169,7 @@ describe('ChaosSignalGenerator Integration with LiveStrategyExecutor', () => {
       pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
       initialCapital: BigInt(10_000_000), // 10 USDC
       positionSizePercent: 100,
+      maxDailyLoss: 100,
       chaosGenerator: generator,
     });
 
@@ -196,5 +206,109 @@ describe('ChaosSignalGenerator Integration with LiveStrategyExecutor', () => {
         expect(['buy', 'sell']).toContain(signals[0].action);
       }
     }
+  });
+
+  it('clearChaosGenerator restores the non-chaos runtime and resumes real strategy execution (D5)', async () => {
+    // Strategy that emits a long entry whenever close > sma(close, 3) — a real
+    // runtime signal a chaos generator would never produce.
+    const crossSource =
+      '//@version=5\n' +
+      'strategy("Cross", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100)\n' +
+      'if (close > ta.sma(close, 3))\n' +
+      '    strategy.entry("Long", strategy.long)\n';
+
+    // Deterministic stub (never 'short'/'exit' on a flat position, which the
+    // random real generator could legitimately no-op into a 0-signal candle).
+    const generator = {
+      generate: vi.fn(() => ({ action: 'long', sizeFraction: 0.1, equity: 10, timestamp: 0 })),
+      getSignalCount: vi.fn(() => 0),
+    } as any;
+
+    const executor = new LiveStrategyExecutor({
+      strategySource: crossSource,
+      dex: {
+        name: 'mock',
+        commissionModel: { name: 'mock', feeBps: 0, variable: false, description: 'Mock' },
+        slippageConfig: { bps: 50, configurable: true },
+        quote: vi.fn(),
+        swap: vi.fn(),
+        getBalance: vi.fn().mockResolvedValue({ amount: '10000000' }),
+        getTransactionStatus: vi.fn(),
+      } as any,
+      walletManager: {
+        getKeypair: vi.fn().mockResolvedValue({
+          value: { publicKey: 'mock', privateKey: new Uint8Array(64) },
+          dispose: vi.fn(),
+        }),
+      } as any,
+      pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
+      initialCapital: BigInt(10_000_000),
+      positionSizePercent: 100,
+      maxDailyLoss: 100,
+      chaosGenerator: generator,
+    });
+
+    const pair = { symbol: 'BTCUSDT', timeframe: '60' };
+    await executor.initializeStrategy(pair);
+
+    // Chaos path drives a bare engine (real balance 10 USDC → live mode).
+    const chaosCandle = {
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 1_000_000,
+      open: 50000,
+      high: 51000,
+      low: 49000,
+      close: 50000,
+      volume: 100,
+    };
+    const chaosSignals = await executor.processCandle(chaosCandle as any);
+    expect(chaosSignals.length).toBeGreaterThan(0);
+    expect(executor.getChaosExecutionMode()).toEqual({ mode: 'live' });
+    const chaosGenerateCallsAtDisable = generator.generate.mock.calls.length;
+
+    // Disable chaos: the generator is removed AND the runtime is rebuilt
+    // through the non-chaos initialization path (spec: hot-swap disable).
+    await executor.clearChaosGenerator();
+
+    expect(executor.getChaosExecutionMode()).toEqual({ mode: 'live' });
+    const state = (executor as any).strategyStates.get('BTCUSDT:60');
+    expect(state.runtime).not.toBeNull(); // real compiled runtime, not a bare engine
+
+    // Seed a downtrend so close stays below sma(close,3) (no warm-up entries),
+    // then a live candle jumping above it must produce a genuine strategy buy
+    // signal — NOT [] and NOT the chaos generator.
+    const seed: ClosedCandle[] = [];
+    let price = 110;
+    for (let i = 0; i < 10; i++) {
+      seed.push({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: 2_000_000 + i * 60000,
+        open: price,
+        high: price + 2,
+        low: price - 3,
+        close: price - 1,
+        volume: 1000,
+      });
+      price = price - 1;
+    }
+    await executor.warmUp(pair, seed);
+
+    const last = seed[seed.length - 1]!;
+    const live: ClosedCandle = {
+      ...last,
+      timestamp: last.timestamp + 60000,
+      open: last.close,
+      close: last.close + 12,
+      high: last.close + 13,
+      low: last.close + 8,
+    };
+
+    const realSignals = await executor.processCandle(live);
+    expect(realSignals.length).toBeGreaterThan(0);
+    expect(realSignals.some((s) => s.action === 'buy')).toBe(true);
+    // No further chaos signal records are emitted after the toggle-off.
+    expect(generator.generate.mock.calls.length).toBe(chaosGenerateCallsAtDisable);
   });
 });

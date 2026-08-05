@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBotWebSocket } from '../components/TradingBotPanel';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
-import type { ChaosSignalRecord } from '../types';
+import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord } from '../types';
 
 // ─── WebSocket stub ───────────────────────────────────────────────
 let wsInstances: MockWS[] = [];
@@ -141,6 +141,102 @@ describe('useBotWebSocket chaosSignals (spec 5.6)', () => {
 
     expect(result.current.chaosSignals).toHaveLength(2);
     expect(result.current.chaosSignals.map((c) => c.marker.name)).toEqual(['Long', 'Exit Short']);
+  });
+});
+
+describe('useBotWebSocket chaos heartbeat + candle-error observability (fix-chaos-mode-silent-vanish)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  const heartbeat: ChaosHeartbeatRecord = {
+    pair: 'BTCUSDT:60',
+    timeframe: '60',
+    candleTimestamp: BASE_MS,
+    outcome: 'signal',
+    action: 'long',
+  };
+
+  const candleError: CandleErrorRecord = {
+    type: 'candle-error',
+    pair: 'BTCUSDT:60',
+    timeframe: '60',
+    candleTimestamp: BASE_MS,
+    message: 'rpc boom',
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    wsInstances = [];
+    fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('seeds chaosHeartbeat, totalCandleErrors, and engineChaosMode from the bot:snapshot payload', () => {
+    const { result } = renderHook(() => useBotWebSocket('http://test:8081'));
+
+    const ws = wsInstances[0]!;
+    act(() => ws.simulateOpen());
+    act(() => ws.simulateMessage({
+      channel: 'bot:snapshot',
+      type: 'snapshot',
+      data: {
+        status: SNAPSHOT_STATUS,
+        chaosSignals: [],
+        chaosHeartbeat: heartbeat,
+        totalCandleErrors: 3,
+        chaosMode: { enabled: true, executionMode: 'simulated', reason: 'wallet-empty' },
+      },
+    }));
+
+    expect(result.current.chaosHeartbeat).toEqual(heartbeat);
+    expect(result.current.totalCandleErrors).toBe(3);
+    expect(result.current.engineChaosMode).toEqual({
+      enabled: true,
+      executionMode: 'simulated',
+      reason: 'wallet-empty',
+    });
+  });
+
+  it('updates heartbeat state on bot:chaosHeartbeat and increments the error count on bot:candleError', () => {
+    const { result } = renderHook(() => useBotWebSocket('http://test:8081'));
+
+    const ws = wsInstances[0]!;
+    act(() => ws.simulateOpen());
+    act(() => ws.simulateMessage({
+      channel: 'bot:snapshot',
+      type: 'snapshot',
+      data: {
+        status: SNAPSHOT_STATUS,
+        chaosSignals: [],
+        chaosHeartbeat: null,
+        totalCandleErrors: 2,
+        chaosMode: { enabled: true, executionMode: 'live' },
+      },
+    }));
+
+    expect(result.current.chaosHeartbeat).toBeNull();
+    expect(result.current.totalCandleErrors).toBe(2);
+
+    // A no-op heartbeat (explicit reason) — the "never silently idle" contract.
+    act(() => ws.simulateMessage({
+      channel: 'bot:chaosHeartbeat',
+      data: { ...heartbeat, outcome: 'noop', action: undefined, reason: 'long while already long' },
+    }));
+    expect(result.current.chaosHeartbeat).toMatchObject({
+      outcome: 'noop',
+      reason: 'long while already long',
+    });
+
+    // A candle-error event is rendered as the last error AND bumps the counter.
+    act(() => ws.simulateMessage({ channel: 'bot:candleError', data: candleError }));
+    expect(result.current.lastCandleError).toEqual(candleError);
+    expect(result.current.totalCandleErrors).toBe(3);
   });
 });
 

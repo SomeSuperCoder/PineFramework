@@ -215,10 +215,10 @@ describe('DashboardWsService', () => {
     const send = vi.fn();
     ws.registerClient({ id: 'client-1', send, close: vi.fn() });
 
-    const snapshot = {
+    const snapshot: BotStatusSnapshot = {
       state: BotState.Running,
       strategyName: 'test',
-      dex: 'jupiter-swap' as const,
+      dex: 'jupiter-swap',
       walletPublicKey: 'abc',
       startedAt: Date.now(),
       uptimeMs: 1000,
@@ -229,6 +229,12 @@ describe('DashboardWsService', () => {
       exposure: 0,
       errors: [],
       lastTransition: null,
+      // D1/D3/D4: snapshot contract gained chaos mode object, candle-error
+      // counter, and the chaos heartbeat.
+      chaosMode: { enabled: false, executionMode: 'live' },
+      totalCandleErrors: 0,
+      chaosHeartbeat: null,
+      warmUpComplete: false,
     };
 
     ws.sendSnapshot('client-1', snapshot, {

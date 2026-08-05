@@ -438,3 +438,108 @@ describe('Scheduler', () => {
     });
   });
 });
+
+describe('Scheduler per-candle error surfacing (D3)', () => {
+  const solPair = { symbol: 'SOL/USDC', timeframe: '1m' };
+  const btcPair = { symbol: 'BTC/USDC', timeframe: '5m' };
+
+  function makeCandle(symbol: string, timeframe: string, timestamp: number): ClosedCandle {
+    return { symbol, timeframe, timestamp, open: 100, high: 101, low: 99, close: 100, volume: 1000 };
+  }
+
+  it('emits onCandleError with full context, counts it, and continues with the next pair', async () => {
+    const onCandleError = vi.fn();
+    const processCandle = vi
+      .fn()
+      // First pair throws — the per-candle catch must not kill the tick.
+      .mockImplementationOnce(async () => {
+        throw new Error('rpc boom');
+      })
+      // Second pair succeeds — its signals must still be collected/submitted.
+      .mockImplementationOnce(async (candle: ClosedCandle) => [
+        {
+          pair: { symbol: candle.symbol, timeframe: candle.timeframe },
+          action: 'buy' as const,
+          quantity: 0.1,
+          price: 100,
+          timestamp: candle.timestamp,
+        },
+      ]);
+    const submitOrders = vi.fn().mockResolvedValue(undefined);
+
+    const scheduler = new Scheduler({
+      pairs: [solPair, btcPair],
+      processCandle: processCandle as (candle: ClosedCandle) => Promise<TradeSignal[]>,
+      submitOrders,
+      onCandleError,
+    });
+
+    await scheduler.tick([
+      makeCandle('SOL/USDC', '1m', 1_000_000),
+      makeCandle('BTC/USDC', '5m', 1_000_000),
+    ]);
+
+    expect(processCandle).toHaveBeenCalledTimes(2);
+    expect(onCandleError).toHaveBeenCalledTimes(1);
+    expect(onCandleError).toHaveBeenCalledWith({
+      type: 'candle-error',
+      pair: 'SOL/USDC:1m',
+      timeframe: '1m',
+      candleTimestamp: 1_000_000,
+      message: 'rpc boom',
+    });
+    expect(scheduler.stats.totalCandleErrors).toBe(1);
+    // The surviving pair's signals still flow to submitOrders.
+    expect(submitOrders).toHaveBeenCalledTimes(1);
+    expect(scheduler.stats.totalSignalsGenerated).toBe(1);
+  });
+
+  it('counts every failing candle and keeps processing subsequent pairs', async () => {
+    const onCandleError = vi.fn();
+    const processCandle = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        throw new Error('first failure');
+      })
+      .mockImplementationOnce(async () => {
+        throw new Error('second failure');
+      })
+      .mockImplementationOnce(async () => []); // third pair succeeds cleanly
+    const submitOrders = vi.fn().mockResolvedValue(undefined);
+
+    const scheduler = new Scheduler({
+      pairs: [solPair, btcPair, { symbol: 'ETH/USDC', timeframe: '15m' }],
+      processCandle: processCandle as (candle: ClosedCandle) => Promise<TradeSignal[]>,
+      submitOrders,
+      onCandleError,
+    });
+
+    await scheduler.tick([
+      makeCandle('SOL/USDC', '1m', 1_000_000),
+      makeCandle('BTC/USDC', '5m', 1_000_000),
+      makeCandle('ETH/USDC', '15m', 1_000_000),
+    ]);
+
+    expect(processCandle).toHaveBeenCalledTimes(3);
+    expect(onCandleError).toHaveBeenCalledTimes(2);
+    expect(scheduler.stats.totalCandleErrors).toBe(2);
+    expect(onCandleError.mock.calls[0]![0].message).toBe('first failure');
+    expect(onCandleError.mock.calls[1]![0].message).toBe('second failure');
+  });
+
+  it('does not emit onCandleError or count errors when every candle succeeds', async () => {
+    const onCandleError = vi.fn();
+    const processCandle = vi.fn().mockResolvedValue([]);
+    const scheduler = new Scheduler({
+      pairs: [solPair],
+      processCandle: processCandle as (candle: ClosedCandle) => Promise<TradeSignal[]>,
+      submitOrders: vi.fn().mockResolvedValue(undefined),
+      onCandleError,
+    });
+
+    await scheduler.tick([makeCandle('SOL/USDC', '1m', 1_000_000)]);
+
+    expect(onCandleError).not.toHaveBeenCalled();
+    expect(scheduler.stats.totalCandleErrors).toBe(0);
+  });
+});
