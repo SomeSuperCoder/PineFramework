@@ -702,6 +702,9 @@ export class BotEngine {
           // the only remaining link to the closed position (timeframe is
           // dropped here and the executor's state is already flattened).
           positionEntryPrice: s.positionEntryPrice,
+          // Keep the chaos sizing fraction so on-chain buys stay at 10% even
+          // when positionSizePercent is unset (default 100).
+          sizeFraction: s.sizeFraction,
         }));
       },
       submitOrders: async (signals: SchedulerTradeSignal[]) => {
@@ -722,6 +725,10 @@ export class BotEngine {
               // B1: restore the entry-price snapshot so the executor can feed
               // realized PnL even though the position state is already flat.
               positionEntryPrice: signal.positionEntryPrice,
+              // Restore the chaos sizing fraction (fixed 0.1) so executeSignal
+              // sizes the buy at 10% instead of positionSizePercent (default
+              // 100 when the config omits it) — QA blocker fix.
+              sizeFraction: signal.sizeFraction,
             };
 
             const result: ExecutionResult =

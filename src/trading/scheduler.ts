@@ -63,6 +63,13 @@ export interface TradeSignal {
    * time; absent when unknown (PnL feed then fails safe and skips).
    */
   positionEntryPrice?: number;
+  /**
+   * Fraction of available balance to spend on a buy, preserved through the
+   * scheduler round-trip for chaos-originated signals (fixed 0.1 = 10% of
+   * equity). Strategy signals omit it — the executor then falls back to the
+   * configured positionSizePercent.
+   */
+  sizeFraction?: number;
 }
 
 /** Callback for processing a closed candle. */

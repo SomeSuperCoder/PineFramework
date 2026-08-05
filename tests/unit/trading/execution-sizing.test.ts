@@ -172,6 +172,28 @@ describe('LiveStrategyExecutor — execution sizing (trading-execution-correctne
     expect(amount).not.toBe(0n); // fractional quantity must not floor to zero
     expect(config.dex.swap).toHaveBeenCalledTimes(1);
   });
+
+  it('chaos buy uses the signal sizeFraction (10%) even when positionSizePercent defaults to 100', async () => {
+    // Chaos-originated signals carry sizeFraction: 0.1. The buy input must
+    // derive from THAT fraction, not positionSizePercent — bot-engine.ts
+    // defaults an unset config value to 100, which would spend the whole
+    // wallet instead of 10% (QA blocker on fix-trading-bot-machinery).
+    const config = createConfig({ positionSizePercent: 100 }); // simulates config unset → default 100
+    (config.dex as any).getBalance.mockResolvedValue({
+      mint: USDC_MINT,
+      amount: '1000000000', // 1,000 USDC in lamports
+      decimals: 6,
+    });
+    const executor = new LiveStrategyExecutor(config);
+
+    const result = await executor.executeSignal({ ...buySignal(3000), sizeFraction: 0.1 });
+
+    expect(result.success).toBe(true);
+    // 10% of $1,000 = $100 = 100_000_000 micro-USDC — NOT the full $1,000.
+    expect(quotedAmount(config.dex)).toBe(100_000_000n);
+    expect(quotedAmount(config.dex)).not.toBe(1_000_000_000n);
+    expect(config.dex.swap).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('LiveStrategyExecutor — risk gate (wallet-balance-safety-guard)', () => {

@@ -120,6 +120,15 @@ export interface TradeSignal {
   /** Pair timeframe — used to update the correct per-pair position state. */
   timeframe?: string;
   /**
+   * Fraction of available USDC balance to spend on a buy. Chaos-originated
+   * signals carry the chaos generator's fixed 0.1 (10% of equity) so on-chain
+   * chaos buys stay at 10%; strategy signals omit it and fall back to the
+   * configured positionSizePercent. Without this, chaos buys would use
+   * positionSizePercent — bot-engine.ts defaults an unset config value to 100,
+   * spending the whole wallet instead of 10% (QA blocker).
+   */
+  sizeFraction?: number;
+  /**
    * Entry price of the position this signal closes, captured at generation
    * time (B1). The scheduler round-trip drops `timeframe`, and
    * reconcilePosition() flattens the executor's position state before the
@@ -472,12 +481,18 @@ export class LiveStrategyExecutor {
         const availableBalance = BigInt(balance.amount);
         const availableBalanceUsdc = Number(availableBalance) / 1e6;
 
-        // Buy input = positionSizePercent of the available balance in WHOLE
-        // USDC. Deliberately NO price division — the DEX contract takes the
-        // input amount in the input token's smallest units (micro-USDC), and
-        // the old `(balance * fraction) / price` mis-sized buys by ~1/price,
-        // producing dust trades on the live path.
-        const positionFraction = this.config.positionSizePercent / 100;
+        // Buy input = position fraction of the available balance in WHOLE USDC.
+        // Deliberately NO price division — the DEX contract takes the input
+        // amount in the input token's smallest units (micro-USDC), and the old
+        // `(balance * fraction) / price` mis-sized buys by ~1/price, producing
+        // dust trades on the live path.
+        // The fraction is signal-first: chaos-originated signals carry their
+        // own sizeFraction (fixed 0.1 = 10% of equity per spec), so chaos buys
+        // stay at 10% even when positionSizePercent is unset — bot-engine.ts
+        // defaults it to 100, which would otherwise spend the whole wallet (QA
+        // blocker). Strategy signals omit sizeFraction and fall back to the
+        // configured positionSizePercent.
+        const positionFraction = signal.sizeFraction ?? this.config.positionSizePercent / 100;
         const usdcAmount = signal.action === 'buy' ? availableBalanceUsdc * positionFraction : 0;
 
         // Dust guard: skip trades below 1% of maxDailyLoss (SSOT from config).
@@ -838,6 +853,12 @@ export class LiveStrategyExecutor {
           expectedPrice: currentPrice,
           timestamp: candle.timestamp,
           marker,
+          // Carry the chaos sizing fraction through to executeSignal so the
+          // on-chain buy matches the engine's simulated quantity (which is
+          // sized from chaosSignal.sizeFraction — see entry above). Without
+          // this, the executor sizes the buy from positionSizePercent (default
+          // 100) and spends the whole wallet (QA blocker).
+          sizeFraction: chaosSignal.sizeFraction,
         });
       } else if (marker.type === 'close' || marker.type === 'exit') {
         signals.push({
