@@ -53,7 +53,7 @@ import { ChaosSignalGenerator } from '../../../src/trading/chaos-signal-generato
 import { LiveStrategyExecutor } from '../../../src/trading/live-strategy-executor.js';
 
 const chaosConfig: BotConfig = {
-  strategySource: '',  // No strategy needed in chaos mode
+  strategySource: '', // No strategy needed in chaos mode
   dex: 'jupiter-swap',
   pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
   risk: { maxDailyLoss: 100 },
@@ -96,7 +96,8 @@ describe('Chaos Mode Integration', () => {
     engine.configure(chaosConfig);
 
     // Mock initialize to avoid real connections
-    const initSpy = vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
+    const initSpy = vi
+      .spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
       .mockResolvedValue(undefined);
 
     await engine.start();
@@ -115,8 +116,9 @@ describe('Chaos Mode Integration', () => {
     engine.configure(chaosConfig);
 
     let capturedConfig: any = null;
-    const initSpy = vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockImplementation(async function(this: any) {
+    const initSpy = vi
+      .spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
+      .mockImplementation(async function (this: any) {
         // Capture what initialize does with the executor config
         capturedConfig = this._config;
       });
@@ -150,7 +152,10 @@ describe('ChaosSignalGenerator Integration with LiveStrategyExecutor', () => {
         getTransactionStatus: vi.fn(),
       } as any,
       walletManager: {
-        getKeypair: vi.fn().mockResolvedValue({ value: { publicKey: 'mock', privateKey: new Uint8Array(64) }, dispose: vi.fn() }),
+        getKeypair: vi.fn().mockResolvedValue({
+          value: { publicKey: 'mock', privateKey: new Uint8Array(64) },
+          dispose: vi.fn(),
+        }),
       } as any,
       pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
       initialCapital: BigInt(10_000_000), // 10 USDC
@@ -173,8 +178,14 @@ describe('ChaosSignalGenerator Integration with LiveStrategyExecutor', () => {
 
     // Process multiple candles
     const signals1 = await executor.processCandle(candle as any);
-    const signals2 = await executor.processCandle({ ...candle, timestamp: candle.timestamp + 60000 } as any);
-    const signals3 = await executor.processCandle({ ...candle, timestamp: candle.timestamp + 120000 } as any);
+    const signals2 = await executor.processCandle({
+      ...candle,
+      timestamp: candle.timestamp + 60000,
+    } as any);
+    const signals3 = await executor.processCandle({
+      ...candle,
+      timestamp: candle.timestamp + 120000,
+    } as any);
 
     // All signals should come from chaos generator
     expect(generator.getSignalCount()).toBe(3);

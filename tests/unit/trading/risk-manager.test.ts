@@ -342,9 +342,15 @@ describe('ShutdownHandler', () => {
 
   it('should execute registered hooks in order', async () => {
     const order: number[] = [];
-    handler.addHook(async () => { order.push(1); });
-    handler.addHook(async () => { order.push(2); });
-    handler.addHook(async () => { order.push(3); });
+    handler.addHook(async () => {
+      order.push(1);
+    });
+    handler.addHook(async () => {
+      order.push(2);
+    });
+    handler.addHook(async () => {
+      order.push(3);
+    });
 
     await handler.executeShutdown('test');
     expect(order).toEqual([1, 2, 3]);
@@ -352,8 +358,12 @@ describe('ShutdownHandler', () => {
 
   it('should continue on hook failure', async () => {
     const order: number[] = [];
-    handler.addHook(async () => { throw new Error('Hook failed'); });
-    handler.addHook(async () => { order.push(2); });
+    handler.addHook(async () => {
+      throw new Error('Hook failed');
+    });
+    handler.addHook(async () => {
+      order.push(2);
+    });
 
     await handler.executeShutdown('test');
     expect(order).toEqual([2]); // Second hook ran despite first failing

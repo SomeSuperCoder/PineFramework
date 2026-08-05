@@ -107,12 +107,7 @@ export interface BarFetcher {
  * Implemented by the backend using the strategy execution engine.
  */
 export interface BacktestRunner {
-  runBacktest(options: {
-    script: string;
-    symbol: string;
-    bars: Bar[];
-    dex: DexKind;
-  }): Promise<{
+  runBacktest(options: { script: string; symbol: string; bars: Bar[]; dex: DexKind }): Promise<{
     success: boolean;
     metrics: {
       sharpeRatio: number;
@@ -138,8 +133,8 @@ export const DEFAULT_SYMBOLS: readonly TradablePair[] = TRADABLE_PAIRS;
 
 /** Generate default candidates from symbols × timeframes. */
 export function generateDefaultCandidates(timeframes: string[] = DEFAULT_TIMEFRAMES): PairConfig[] {
-  return [...DEFAULT_SYMBOLS].flatMap(symbol =>
-    timeframes.map(timeframe => ({ symbol, timeframe }))
+  return [...DEFAULT_SYMBOLS].flatMap((symbol) =>
+    timeframes.map((timeframe) => ({ symbol, timeframe })),
   );
 }
 
@@ -194,7 +189,11 @@ export class AutoMarketSelector {
       statuses[key] = { phase: 'fetching', status: 'pending' };
     }
 
-    const emitProgress = (pair: PairConfig, phase: CandidateStatus['phase'], candleProgress?: { fetched: number; total: number }) => {
+    const emitProgress = (
+      pair: PairConfig,
+      phase: CandidateStatus['phase'],
+      candleProgress?: { fetched: number; total: number },
+    ) => {
       onProgress?.({
         current: completedCount,
         total,
@@ -202,7 +201,7 @@ export class AutoMarketSelector {
         phase,
         statuses: { ...statuses },
         candleProgress,
-        ranking: evaluations.map(e => ({ label: e.label, metrics: e.metrics })),
+        ranking: evaluations.map((e) => ({ label: e.label, metrics: e.metrics })),
       });
     };
 
@@ -223,7 +222,13 @@ export class AutoMarketSelector {
       try {
         const endDate = Date.now();
         const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
-        bars = await this.barFetcher.fetchBars(pair.symbol, pair.timeframe, startDate, endDate, targetCandles);
+        bars = await this.barFetcher.fetchBars(
+          pair.symbol,
+          pair.timeframe,
+          startDate,
+          endDate,
+          targetCandles,
+        );
 
         console.log(`[auto-select] Fetched ${bars.length} bars for ${key}`);
         // Update with actual fetched count
@@ -276,7 +281,9 @@ export class AutoMarketSelector {
         statuses[key] = { phase: 'backtesting', status: 'failed', error };
         failedCount++;
       } else {
-        console.log(`[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnlPercent.toFixed(2)}%`);
+        console.log(
+          `[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnlPercent.toFixed(2)}%`,
+        );
         statuses[key] = { phase: 'backtesting', status: 'done' };
         const m = result.metrics;
         evaluations.push({
@@ -305,7 +312,7 @@ export class AutoMarketSelector {
     if (!best) {
       throw new Error(
         'Auto-selection failed: no candidate pairs could be evaluated. ' +
-        'Check that the strategy compiles and historical data is available.',
+          'Check that the strategy compiles and historical data is available.',
       );
     }
 

@@ -206,7 +206,7 @@ export class BybitWebSocketService {
     const url = `${this.config.restUrl}/v5/market/kline?category=linear&symbol=${pair.symbol}&interval=${pair.timeframe}&limit=${this.config.historicalCandleLimit}`;
 
     const response = await fetch(url);
-    const json = await response.json() as {
+    const json = (await response.json()) as {
       retCode: number;
       retMsg: string;
       result: { list: string[][] };

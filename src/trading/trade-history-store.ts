@@ -10,7 +10,14 @@
  * @module trading
  */
 
-import { mkdirSync, writeFileSync, appendFileSync, readFileSync, existsSync } from 'node:fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  appendFileSync,
+  readFileSync,
+  existsSync,
+  unlinkSync,
+} from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { TradeRecord } from './types.js';
 
@@ -120,12 +127,14 @@ export class TradeHistoryStore {
       winRate: totalTrades > 0 ? winningTrades.length / totalTrades : 0,
       totalPnl,
       totalFees,
-      averageWin: winningTrades.length > 0
-        ? winningTrades.reduce((s, t) => s + t.realizedPnl, 0) / winningTrades.length
-        : 0,
-      averageLoss: losingTrades.length > 0
-        ? losingTrades.reduce((s, t) => s + t.realizedPnl, 0) / losingTrades.length
-        : 0,
+      averageWin:
+        winningTrades.length > 0
+          ? winningTrades.reduce((s, t) => s + t.realizedPnl, 0) / winningTrades.length
+          : 0,
+      averageLoss:
+        losingTrades.length > 0
+          ? losingTrades.reduce((s, t) => s + t.realizedPnl, 0) / losingTrades.length
+          : 0,
     };
   }
 
@@ -163,8 +172,7 @@ export class TradeHistoryStore {
       while (files.length > this.maxDebugSnapshots) {
         const oldest = files.shift()!;
         try {
-          const fs = require('node:fs');
-          fs.unlinkSync(join(this.debugDir, oldest));
+          unlinkSync(join(this.debugDir, oldest));
         } catch {
           // Best effort
         }

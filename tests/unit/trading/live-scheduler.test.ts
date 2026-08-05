@@ -6,7 +6,13 @@ vi.mock('../../../src/trading/live-strategy-executor.js', () => ({
     processCandle: vi.fn().mockResolvedValue([]),
     executeSignal: vi.fn().mockResolvedValue({
       success: true,
-      signal: { action: 'buy', symbol: 'BTCUSDT', quantity: 0.1, expectedPrice: 50000, timestamp: Date.now() },
+      signal: {
+        action: 'buy',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: 50000,
+        timestamp: Date.now(),
+      },
       swapResult: { success: true, signature: 'mock-signature' },
     }),
     saveState: vi.fn().mockResolvedValue(undefined),

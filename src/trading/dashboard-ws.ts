@@ -91,11 +91,7 @@ export class DashboardWsService {
   /**
    * Broadcast a state change to all connected clients.
    */
-  broadcastStateChange(
-    previous: BotState,
-    current: BotState,
-    reason: string,
-  ): void {
+  broadcastStateChange(previous: BotState, current: BotState, reason: string): void {
     this.broadcast({
       channel: 'bot:state',
       type: 'delta',
@@ -119,10 +115,7 @@ export class DashboardWsService {
   /**
    * Broadcast a position update (open, close, or update).
    */
-  broadcastPositionUpdate(
-    type: 'opened' | 'closed' | 'updated',
-    position: PositionSummary,
-  ): void {
+  broadcastPositionUpdate(type: 'opened' | 'closed' | 'updated', position: PositionSummary): void {
     this.broadcast({
       channel: 'bot:position',
       type: 'delta',

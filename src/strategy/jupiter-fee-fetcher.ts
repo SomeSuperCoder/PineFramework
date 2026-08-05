@@ -189,7 +189,7 @@ function symbolToMints(symbol: string): { inputMint: string; outputMint: string 
   if (!pair) return null;
 
   const { base, quote } = pair;
-  
+
   // Use new registry for base token if it's a known pair
   let inputMint: string | undefined;
   if (isValidPairSymbol(symbol)) {
@@ -198,7 +198,7 @@ function symbolToMints(symbol: string): { inputMint: string; outputMint: string 
     // Fallback to old lookup for unknown pairs
     inputMint = TOKEN_MINTS[base];
   }
-  
+
   // Quote token is typically USDT/USDC
   const outputMint = TOKEN_MINTS[quote] ?? TOKEN_MINTS['USDC'];
 

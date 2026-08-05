@@ -90,12 +90,12 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('can simulate alternating long strategy with mock exchange', () => {
     const bars = createTestBars(10);
     const exchange = new MockExchange(10000);
-    
+
     let inPosition = false;
-    
+
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
-      
+
       if (!inPosition) {
         // Open long position with 10% of equity
         const quantity = exchange.calculatePositionSize(10, bar.close);
@@ -105,11 +105,19 @@ describe('Alternating Long Strategy – mock trading test', () => {
       } else {
         // Close position
         const trade = exchange.closePosition(bar.close, bar.timestamp, i);
-        exchange.placeOrder('BTC', 'long', 'close', trade?.quantity ?? 0, bar.close, bar.timestamp, i);
+        exchange.placeOrder(
+          'BTC',
+          'long',
+          'close',
+          trade?.quantity ?? 0,
+          bar.close,
+          bar.timestamp,
+          i,
+        );
         inPosition = false;
       }
     }
-    
+
     // Should have completed some trades
     const report = exchange.generateReport();
     expect(report.totalOrders).toBeGreaterThan(0);
@@ -119,13 +127,13 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('alternates between open and close positions correctly', () => {
     const bars = createTestBars(10);
     const exchange = new MockExchange(10000);
-    
+
     const positionStates: boolean[] = [];
     let inPosition = false;
-    
+
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
-      
+
       if (!inPosition) {
         // Open long position with 10% of equity
         const quantity = exchange.calculatePositionSize(10, bar.close);
@@ -135,13 +143,21 @@ describe('Alternating Long Strategy – mock trading test', () => {
       } else {
         // Close position
         const trade = exchange.closePosition(bar.close, bar.timestamp, i);
-        exchange.placeOrder('BTC', 'long', 'close', trade?.quantity ?? 0, bar.close, bar.timestamp, i);
+        exchange.placeOrder(
+          'BTC',
+          'long',
+          'close',
+          trade?.quantity ?? 0,
+          bar.close,
+          bar.timestamp,
+          i,
+        );
         inPosition = false;
       }
-      
+
       positionStates.push(inPosition);
     }
-    
+
     // Verify alternating pattern: should alternate between true/false
     for (let i = 1; i < positionStates.length; i++) {
       expect(positionStates[i]).toBe(!positionStates[i - 1]);
@@ -151,15 +167,15 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('uses 10% of equity for position sizing', () => {
     const bars = createTestBars(5);
     const exchange = new MockExchange(10000);
-    
+
     const initialEquity = exchange.getEquity();
-    const expectedPositionSize = (initialEquity * 0.10) / bars[0].close;
-    
+    const expectedPositionSize = (initialEquity * 0.1) / bars[0].close;
+
     // Open first position
     const quantity = exchange.calculatePositionSize(10, bars[0].close);
     exchange.placeOrder('BTC', 'long', 'entry', quantity, bars[0].close, bars[0].timestamp, 0);
     exchange.openPosition('BTC', 'long', quantity, bars[0].close, bars[0].timestamp, 0);
-    
+
     // Verify position size is 10% of equity
     expect(quantity).toBeCloseTo(expectedPositionSize, 2);
   });
@@ -167,16 +183,16 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('tracks position state correctly', () => {
     const bars = createTestBars(6);
     const exchange = new MockExchange(10000);
-    
+
     // Initially not in position
     expect(exchange.isInPosition()).toBe(false);
     expect(exchange.getPosition()).toBeNull();
-    
+
     // Open position
     exchange.openPosition('BTC', 'long', 10, 100, bars[0].timestamp, 0);
     expect(exchange.isInPosition()).toBe(true);
     expect(exchange.getPosition()).not.toBeNull();
-    
+
     // Close position
     const trade = exchange.closePosition(101, bars[1].timestamp, 1);
     expect(exchange.isInPosition()).toBe(false);
@@ -186,7 +202,7 @@ describe('Alternating Long Strategy – mock trading test', () => {
 
   it('generates test report with required fields', () => {
     const report = exchange.generateReport();
-    
+
     expect(report).toHaveProperty('totalOrders');
     expect(report).toHaveProperty('totalTrades');
     expect(report).toHaveProperty('winningTrades');
@@ -202,7 +218,7 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('tracks equity changes correctly', () => {
     const initialEquity = exchange.getInitialEquity();
     expect(initialEquity).toBe(10000);
-    
+
     const currentEquity = exchange.getEquity();
     expect(currentEquity).toBeGreaterThan(0);
   });
@@ -210,13 +226,13 @@ describe('Alternating Long Strategy – mock trading test', () => {
   it('calculates P&L correctly for long positions', () => {
     const exchange = new MockExchange(10000);
     const bars = createTestBars(2);
-    
+
     // Open long position at price 100
     exchange.openPosition('BTC', 'long', 10, 100, bars[0].timestamp, 0);
-    
+
     // Close at price 101 (profit)
     const trade = exchange.closePosition(101, bars[1].timestamp, 1);
-    
+
     expect(trade).not.toBeNull();
     expect(trade!.pnl).toBeCloseTo(10, 2); // (101-100) * 10 = 10
   });
@@ -233,17 +249,17 @@ describe('Alternating Long Strategy – mock trading test', () => {
     // NOTE: The Pine Script execution engine does not fully support strategy() declaration
     // The strategy namespace is not initialized, so strategy.entry(), strategy.close(), etc.
     // are not available in the test environment. This is a known limitation.
-    // 
+    //
     // For full strategy testing, consider:
     // 1. Using the backtesting engine if available
     // 2. Testing with real market data in a sandbox environment
     // 3. Using TradingView's built-in strategy tester
-    
+
     console.log('--- Strategy Execution Limitation ---');
     console.log('The Pine Script execution engine does not fully support strategy() declaration.');
     console.log('Strategy tests focus on mock exchange simulation and logic validation.');
     console.log('For full strategy testing, use the backtesting engine or TradingView.');
-    
+
     // This test always passes - it's for documentation
     expect(true).toBe(true);
   });
@@ -255,9 +271,11 @@ describe('Alternating Long Strategy – mock trading test', () => {
     console.log(`Bars executed: ${allResults.length}`);
     console.log(`Strategy markers: ${markers.length}`);
     console.log(`Labels: ${labels.length}`);
-    
+
     console.log('\n--- Mock Exchange Simulation ---');
     console.log('Tests focus on mock exchange simulation and strategy logic validation.');
-    console.log('Strategy execution in Pine Script engine is limited (strategy namespace not initialized).');
+    console.log(
+      'Strategy execution in Pine Script engine is limited (strategy namespace not initialized).',
+    );
   });
 });

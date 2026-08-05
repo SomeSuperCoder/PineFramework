@@ -33,7 +33,7 @@ export class RollingLossGuard {
    */
   prune(now: number = Date.now()): void {
     const cutoff = now - this.windowMs;
-    this.trades = this.trades.filter(t => t.timestamp > cutoff);
+    this.trades = this.trades.filter((t) => t.timestamp > cutoff);
   }
 
   /**

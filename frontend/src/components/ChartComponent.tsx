@@ -32,7 +32,7 @@ export interface ChartComponentHandle {
   clearTeleportLine: () => void;
 }
 
-export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false, debugMode = false, chunkBorders = [] }, ref) {
+export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false, debugMode = false, chunkBorders = [] }: ChartComponentProps, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<PineChart | null>(null);
   const seriesNamesRef = useRef<Set<string>>(new Set());
@@ -128,6 +128,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         const orphanedValueCounts: Record<string, number> = {};
         for (const plot of res.plots) {
           const key = plot.title;
+          if (!key) continue;
           const colors = res.plotColors?.[key];
           if (!colors) continue;
           const hasNonNullColor = colors.some((c) => c !== null);
@@ -147,6 +148,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         if (chunkBorders.length > 0) {
           for (const plot of res.plots) {
             const key = plot.title;
+            if (!key) continue;
             const colors = res.plotColors?.[key];
             if (!colors) continue;
             const hasNonNullColor = colors.some((c) => c !== null);

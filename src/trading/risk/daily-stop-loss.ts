@@ -17,21 +17,21 @@
 function normalizeTimezone(tz: string): string {
   // Handle common abbreviations and variations
   const tzMap: Record<string, string> = {
-    'UTC': 'UTC',
-    'EST': 'America/New_York',
-    'EDT': 'America/New_York',
-    'CST': 'America/Chicago',
-    'CDT': 'America/Chicago',
-    'MST': 'America/Denver',
-    'MDT': 'America/Denver',
-    'PST': 'America/Los_Angeles',
-    'PDT': 'America/Los_Angeles',
-    'GMT': 'Europe/London',
-    'CET': 'Europe/Berlin',
-    'CEST': 'Europe/Berlin',
-    'JST': 'Asia/Tokyo',
-    'AEST': 'Australia/Sydney',
-    'AEDT': 'Australia/Sydney',
+    UTC: 'UTC',
+    EST: 'America/New_York',
+    EDT: 'America/New_York',
+    CST: 'America/Chicago',
+    CDT: 'America/Chicago',
+    MST: 'America/Denver',
+    MDT: 'America/Denver',
+    PST: 'America/Los_Angeles',
+    PDT: 'America/Los_Angeles',
+    GMT: 'Europe/London',
+    CET: 'Europe/Berlin',
+    CEST: 'Europe/Berlin',
+    JST: 'Asia/Tokyo',
+    AEST: 'Australia/Sydney',
+    AEDT: 'Australia/Sydney',
   };
 
   return tzMap[tz.toUpperCase()] ?? tz;

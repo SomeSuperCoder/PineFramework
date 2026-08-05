@@ -151,17 +151,20 @@ describe('StateMachine', () => {
   });
 
   it('should trim history when exceeding maxHistory', async () => {
-    const sm = new StateMachine({
-      initialState: BotState.Idle,
-      transitions: {
-        [BotState.Idle]: new Set([BotState.Starting, BotState.Error]),
-        [BotState.Starting]: new Set([BotState.Idle, BotState.Running, BotState.Error]),
-        [BotState.Running]: new Set([BotState.Stopping, BotState.Error]),
-        [BotState.Stopping]: new Set([BotState.Stopped, BotState.Error]),
-        [BotState.Stopped]: new Set([BotState.Idle, BotState.Starting, BotState.Error]),
-        [BotState.Error]: new Set([BotState.Stopped]),
+    const sm = new StateMachine(
+      {
+        initialState: BotState.Idle,
+        transitions: {
+          [BotState.Idle]: new Set([BotState.Starting, BotState.Error]),
+          [BotState.Starting]: new Set([BotState.Idle, BotState.Running, BotState.Error]),
+          [BotState.Running]: new Set([BotState.Stopping, BotState.Error]),
+          [BotState.Stopping]: new Set([BotState.Stopped, BotState.Error]),
+          [BotState.Stopped]: new Set([BotState.Idle, BotState.Starting, BotState.Error]),
+          [BotState.Error]: new Set([BotState.Stopped]),
+        },
       },
-    }, 3);
+      3,
+    );
 
     await sm.transition(BotState.Starting, '1');
     await sm.transition(BotState.Idle, '2');

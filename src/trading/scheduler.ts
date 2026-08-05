@@ -216,7 +216,10 @@ export class Scheduler {
           allSignals.push(...signals);
         } catch (err) {
           // Log error but continue processing other pairs
-          console.error(`[Scheduler] Error processing candle for ${pair.symbol}:${pair.timeframe}`, err);
+          console.error(
+            `[Scheduler] Error processing candle for ${pair.symbol}:${pair.timeframe}`,
+            err,
+          );
         }
       }
     }

@@ -248,7 +248,7 @@ export class JupiterSwapAdapter extends DexAdapter {
         amount: balance.amount.toString(),
         decimals: balance.decimals,
       };
-    } catch (err) {
+    } catch {
       // Return zero balance on error
       return {
         mint,
@@ -278,7 +278,7 @@ export class JupiterSwapAdapter extends DexAdapter {
       }
 
       return 'unknown';
-    } catch (err) {
+    } catch {
       return 'unknown';
     }
   }

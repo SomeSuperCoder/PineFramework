@@ -88,14 +88,16 @@ describe('SensitiveData', () => {
 
 describe('validateSeedPhrase', () => {
   it('should accept a valid 12-word phrase', () => {
-    const result = validateSeedPhrase('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+    const result = validateSeedPhrase(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    );
     expect(result.valid).toBe(true);
     expect(result.wordCount).toBe(12);
   });
 
   it('should accept a valid 24-word phrase', () => {
     const result = validateSeedPhrase(
-      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art'
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art',
     );
     expect(result.valid).toBe(true);
     expect(result.wordCount).toBe(24);
@@ -119,13 +121,17 @@ describe('validateSeedPhrase', () => {
   });
 
   it('should detect invalid word characters', () => {
-    const result = validateSeedPhrase('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon $ymbol');
+    const result = validateSeedPhrase(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon $ymbol',
+    );
     expect(result.valid).toBe(false);
     expect(result.error).toContain('Invalid word');
   });
 
   it('should normalize case', () => {
-    const result = validateSeedPhrase('ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABOUT');
+    const result = validateSeedPhrase(
+      'ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABANDON ABOUT',
+    );
     expect(result.valid).toBe(true);
     expect(result.wordCount).toBe(12);
   });
@@ -135,7 +141,8 @@ describe('validateSeedPhrase', () => {
 
 describe('encryptSeedPhrase / decryptSeedPhrase', () => {
   const passphrase = 'test-passphrase-123';
-  const seedPhrase = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  const seedPhrase =
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 
   it('should encrypt and decrypt correctly', () => {
     const encrypted = encryptSeedPhrase(seedPhrase, passphrase);
@@ -174,7 +181,8 @@ describe('encryptSeedPhrase / decryptSeedPhrase', () => {
 
 describe('deriveKeypairFromSeed', () => {
   it('should produce deterministic keypair from same seed', () => {
-    const seed = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    const seed =
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
     const kp1 = deriveKeypairFromSeed(seed);
     const kp2 = deriveKeypairFromSeed(seed);
     expect(kp1.publicKey).toBe(kp2.publicKey);
@@ -182,33 +190,43 @@ describe('deriveKeypairFromSeed', () => {
   });
 
   it('should produce different keypairs from different seeds', () => {
-    const kp1 = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
-    const kp2 = deriveKeypairFromSeed('void become employ bridge adapt allow transfer hint mistake entry famous guitar');
+    const kp1 = deriveKeypairFromSeed(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    );
+    const kp2 = deriveKeypairFromSeed(
+      'void become employ bridge adapt allow transfer hint mistake entry famous guitar',
+    );
     expect(kp1.publicKey).not.toBe(kp2.publicKey);
   });
 
   it('should return public key as valid base58 Solana address', () => {
-    const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+    const kp = deriveKeypairFromSeed(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    );
     expect(typeof kp.publicKey).toBe('string');
     // Base58: 1-9, A-H, J-N, P-Z, a-k, m-z (no 0, O, I, l)
     expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
 
   it('should return private key as Uint8Array of 64 bytes', () => {
-    const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+    const kp = deriveKeypairFromSeed(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    );
     expect(kp.privateKey).toBeInstanceOf(Uint8Array);
     // Ed25519 secretKey is 64 bytes (32 private + 32 public)
     expect(kp.privateKey.length).toBe(64);
   });
 
   it('should derive from 12-word seed phrase', () => {
-    const kp = deriveKeypairFromSeed('abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about');
+    const kp = deriveKeypairFromSeed(
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about',
+    );
     expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
 
   it('should derive from 24-word seed phrase', () => {
     const kp = deriveKeypairFromSeed(
-      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art'
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art',
     );
     expect(kp.publicKey).toMatch(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
   });
@@ -216,7 +234,9 @@ describe('deriveKeypairFromSeed', () => {
   it('should produce correct address for known seed phrase (Phantom-compatible)', () => {
     // Standard BIP39 + ed25519-hd-key BIP44 m/44'/501'/0'/0' derivation
     // This matches Phantom, Solflare, and other standard Solana wallets
-    const kp = deriveKeypairFromSeed('describe myself immense snap scorpion basket main steel tree embody legend naive');
+    const kp = deriveKeypairFromSeed(
+      'describe myself immense snap scorpion basket main steel tree embody legend naive',
+    );
     expect(kp.publicKey).toBe('8StSXbQycF2BXmDRUNEVCBnR5q7vHT3h62mhT6QSDQmt');
   });
 });
@@ -225,7 +245,8 @@ describe('deriveKeypairFromSeed', () => {
 
 describe('WalletManager', () => {
   const passphrase = 'wallet-test-passphrase';
-  const seedPhrase = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  const seedPhrase =
+    'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
   let storage: InMemoryWalletStorage;
   let manager: WalletManager;
 
@@ -257,14 +278,17 @@ describe('WalletManager', () => {
 
     // Without confirmReplace callback, should throw
     await expect(
-      manager.importWallet('void become employ bridge adapt allow transfer hint mistake entry famous guitar'),
+      manager.importWallet(
+        'void become employ bridge adapt allow transfer hint mistake entry famous guitar',
+      ),
     ).rejects.toThrow('confirmReplace');
   });
 
   it('should replace wallet when confirmed', async () => {
     await manager.importWallet(seedPhrase);
 
-    const newSeed = 'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
+    const newSeed =
+      'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
     const publicKey = await manager.importWallet(newSeed, undefined, async () => true);
     expect(publicKey).toBeTruthy();
     expect(await manager.hasWallet()).toBe(true);
@@ -274,10 +298,11 @@ describe('WalletManager', () => {
     await manager.importWallet(seedPhrase);
     const originalKey = await manager.getPublicKey();
 
-    const newSeed = 'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
-    await expect(
-      manager.importWallet(newSeed, undefined, async () => false),
-    ).rejects.toThrow('declined');
+    const newSeed =
+      'void become employ bridge adapt allow transfer hint mistake entry famous guitar';
+    await expect(manager.importWallet(newSeed, undefined, async () => false)).rejects.toThrow(
+      'declined',
+    );
 
     // Original wallet should still be intact
     expect(await manager.getPublicKey()).toBe(originalKey);
@@ -358,9 +383,7 @@ describe('WalletManager', () => {
 
   it('should fail to change password with wrong current password', async () => {
     await manager.importWallet(seedPhrase);
-    await expect(
-      manager.changePassword('wrong-password', 'new-password-123'),
-    ).rejects.toThrow();
+    await expect(manager.changePassword('wrong-password', 'new-password-123')).rejects.toThrow();
   });
 
   it('should forget password and delete wallet', async () => {

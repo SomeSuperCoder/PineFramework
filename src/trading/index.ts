@@ -47,17 +47,17 @@ export type {
 export type { HistoryConfig, DebugSnapshot, TradeStats } from './trade-history-store.js';
 
 export { DashboardWsService } from './dashboard-ws.js';
-export type {
-  WsClient,
-  DashboardMessage,
-  LogEntry,
-  MetricsSnapshot,
-} from './dashboard-ws.js';
+export type { WsClient, DashboardMessage, LogEntry, MetricsSnapshot } from './dashboard-ws.js';
 
 export { TradingTelegramBot } from './telegram-bot.js';
 export type { TelegramSender, TradingNotificationOptions } from './telegram-bot.js';
 
-export { AutoMarketSelector, DEFAULT_TIMEFRAMES, DEFAULT_SYMBOLS, generateDefaultCandidates } from './auto-select.js';
+export {
+  AutoMarketSelector,
+  DEFAULT_TIMEFRAMES,
+  DEFAULT_SYMBOLS,
+  generateDefaultCandidates,
+} from './auto-select.js';
 export type {
   RankingMetric,
   CandidateEvaluation,

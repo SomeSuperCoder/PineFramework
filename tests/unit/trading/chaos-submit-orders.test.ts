@@ -73,8 +73,9 @@ describe('Chaos submitOrders wiring', () => {
     // Mock initialize to capture the submitOrders callback
     let capturedSubmitOrders: ((signals: SchedulerTradeSignal[]) => Promise<void>) | null = null;
 
-    const initSpy = vi.spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
-      .mockImplementation(async function(this: any) {
+    const initSpy = vi
+      .spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')
+      .mockImplementation(async function (this: any) {
         // Simulate the scheduler creation with a captured submitOrders callback
         // We need to test the submitOrders logic directly
         // Since initialize is mocked, we'll test the logic in isolation
@@ -84,7 +85,13 @@ describe('Chaos submitOrders wiring', () => {
     // and calling the callback directly
     const mockExecuteSignal = vi.fn().mockResolvedValue({
       success: true,
-      signal: { action: 'buy', symbol: 'BTCUSDT', quantity: 0.1, expectedPrice: 50000, timestamp: Date.now() },
+      signal: {
+        action: 'buy',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: 50000,
+        timestamp: Date.now(),
+      },
       swapResult: { success: true, signature: 'mock-tx-sig' },
     });
 
@@ -155,7 +162,13 @@ describe('Chaos submitOrders wiring', () => {
   it('should map scheduler signal fields to executor signal fields correctly', async () => {
     const mockExecuteSignal = vi.fn().mockResolvedValue({
       success: true,
-      signal: { action: 'buy', symbol: 'BTCUSDT', quantity: 0.1, expectedPrice: 50000, timestamp: Date.now() },
+      signal: {
+        action: 'buy',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: 50000,
+        timestamp: Date.now(),
+      },
     });
 
     const submitOrders = async (signals: SchedulerTradeSignal[]) => {
@@ -191,11 +204,18 @@ describe('Chaos submitOrders wiring', () => {
   });
 
   it('should not crash when executeSignal throws an error', async () => {
-    const mockExecuteSignal = vi.fn()
+    const mockExecuteSignal = vi
+      .fn()
       .mockRejectedValueOnce(new Error('DEX connection failed'))
       .mockResolvedValueOnce({
         success: true,
-        signal: { action: 'sell', symbol: 'BTCUSDT', quantity: 0.1, expectedPrice: 50000, timestamp: Date.now() },
+        signal: {
+          action: 'sell',
+          symbol: 'BTCUSDT',
+          quantity: 0.1,
+          expectedPrice: 50000,
+          timestamp: Date.now(),
+        },
       });
 
     const submitOrders = async (signals: SchedulerTradeSignal[]) => {

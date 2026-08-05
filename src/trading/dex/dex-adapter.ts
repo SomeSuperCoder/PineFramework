@@ -37,7 +37,7 @@ export interface Quote {
    * Preserves the original route plan for swap requests.
    * Optional for backward compatibility with other adapters.
    */
-  routePlan?: any[];
+  routePlan?: unknown[];
 }
 
 /**

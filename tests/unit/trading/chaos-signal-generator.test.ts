@@ -42,11 +42,14 @@ describe('ChaosSignalGenerator', () => {
 
   it('should log each signal', () => {
     generator.generate(10_000_000, Date.now());
-    expect(logger.info).toHaveBeenCalledWith('chaos.signal', expect.objectContaining({
-      action: expect.any(String),
-      equity: expect.any(Number),
-      sizeFraction: 0.1,
-    }));
+    expect(logger.info).toHaveBeenCalledWith(
+      'chaos.signal',
+      expect.objectContaining({
+        action: expect.any(String),
+        equity: expect.any(Number),
+        sizeFraction: 0.1,
+      }),
+    );
   });
 
   it('should track signal count', () => {

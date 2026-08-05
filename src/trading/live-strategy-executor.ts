@@ -621,7 +621,7 @@ export class LiveStrategyExecutor {
     const stateData = this.getState();
 
     // Convert Map to serializable object
-    const serializableState: Record<string, any> = {};
+    const serializableState: Record<string, Pick<StrategyState, 'position' | 'variables'>> = {};
     for (const [key, value] of Object.entries(stateData)) {
       serializableState[key] = {
         position: value.position,
@@ -651,7 +651,7 @@ export class LiveStrategyExecutor {
       }
 
       const data = await readFile(this.stateFilePath, 'utf-8');
-      const stateData = JSON.parse(data) as Record<string, any>;
+      const stateData = JSON.parse(data) as Record<string, StrategyState>;
 
       // Restore state
       this.setState(stateData);

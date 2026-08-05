@@ -106,14 +106,10 @@ function toScriptResult(
     labels: [],
     tables: [],
     plotColors: result.plotColors
-      ? Object.fromEntries(
-          Array.from(result.plotColors.entries()).map(([k, v]) => [k, v]),
-        )
+      ? Object.fromEntries(Array.from(result.plotColors.entries()).map(([k, v]) => [k, v]))
       : undefined,
     fillColorData: result.fillColorData
-      ? Object.fromEntries(
-          Array.from(result.fillColorData.entries()).map(([k, v]) => [k, v]),
-        )
+      ? Object.fromEntries(Array.from(result.fillColorData.entries()).map(([k, v]) => [k, v]))
       : undefined,
   };
 }
@@ -164,9 +160,7 @@ plot(volatility)
 
     // Step 3: Merge via prependIndicatorResult (same flow as frontend)
     const addedCount = newBars.length;
-    const overlapTimestamps = new Set(
-      contextBars.map((b) => Math.floor(b.timestamp / 1000)),
-    );
+    const overlapTimestamps = new Set(contextBars.map((b) => Math.floor(b.timestamp / 1000)));
     const merged = prependIndicatorResult(
       prevResult,
       newResult,
@@ -241,11 +235,11 @@ plot(volatility)
 
     // Step 2: Prepend 100 older bars (0-99) with context from 200-399
     // This simulates the FIRST scroll-back
-    const chunk = allBars.slice(0, 100);     // bars 0-99
-    const context = allBars.slice(200, 400);  // bars 200-399 (200 bars available)
+    const chunk = allBars.slice(0, 100); // bars 0-99
+    const context = allBars.slice(200, 400); // bars 200-399 (200 bars available)
     const ctxSize = Math.max(lookback, chunk.length);
     const actualCtx = context.slice(0, ctxSize); // first ctxSize (e.g., 100) bars of context
-    const execBars = [...chunk, ...actualCtx];    // 100 + 100 = 200 bars
+    const execBars = [...chunk, ...actualCtx]; // 100 + 100 = 200 bars
 
     const { engine: eng2, result: res2 } = executeScript(script, execBars);
     const newResult = toScriptResult(eng2, res2, execBars);

@@ -118,11 +118,7 @@ export class MockExchange {
   /**
    * Close the current position
    */
-  closePosition(
-    exitPrice: number,
-    timestamp: number,
-    barIndex: number,
-  ): TradeResult | null {
+  closePosition(exitPrice: number, timestamp: number, barIndex: number): TradeResult | null {
     if (!this.currentPosition) {
       return null;
     }

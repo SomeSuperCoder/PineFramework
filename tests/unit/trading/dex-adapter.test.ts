@@ -9,7 +9,12 @@ import {
 } from '../../../src/trading/dex/dex-registry.js';
 import { DexAdapter } from '../../../src/trading/dex/dex-adapter.js';
 import { openLongPosition, closeLongPosition } from '../../../src/trading/dex/spot-trading.js';
-import type { Quote, SwapResult, TokenBalance, TxStatus } from '../../../src/trading/dex/dex-adapter.js';
+import type {
+  Quote,
+  SwapResult,
+  TokenBalance,
+  TxStatus,
+} from '../../../src/trading/dex/dex-adapter.js';
 
 // ---- DexAdapter Contract Tests ----
 
@@ -131,8 +136,14 @@ describe('DEX Registry', () => {
       commissionModel: { name: 'mock', feeBps: 10, variable: false, description: 'mock' },
       slippageConfig: { bps: 100, configurable: false },
       quote: async () => ({
-        inputMint: '', outputMint: '', inAmount: '0', outAmount: '0',
-        priceImpactPct: 0, route: '', slippageBps: 100, feeBps: 10,
+        inputMint: '',
+        outputMint: '',
+        inAmount: '0',
+        outAmount: '0',
+        priceImpactPct: 0,
+        route: '',
+        slippageBps: 100,
+        feeBps: 10,
       }),
       swap: async () => ({ success: true, inputAmount: '0', outputAmount: '0', fee: '0' }),
       getBalance: async () => ({ mint: '', amount: '0', decimals: 6 }),
@@ -171,16 +182,27 @@ describe('Spot Trading', () => {
   });
 
   it('openLongPosition should succeed with sufficient balance', async () => {
-    vi.mocked(mockDex.getBalance).mockResolvedValue({ mint: 'USDC', amount: '10000000', decimals: 6 });
+    vi.mocked(mockDex.getBalance).mockResolvedValue({
+      mint: 'USDC',
+      amount: '10000000',
+      decimals: 6,
+    });
     vi.mocked(mockDex.quote).mockResolvedValue({
-      inputMint: 'USDC_MINT', outputMint: 'ASSET_MINT',
-      inAmount: '1000000', outAmount: '500000',
-      priceImpactPct: 0.05, route: 'direct',
-      slippageBps: 50, feeBps: 0,
+      inputMint: 'USDC_MINT',
+      outputMint: 'ASSET_MINT',
+      inAmount: '1000000',
+      outAmount: '500000',
+      priceImpactPct: 0.05,
+      route: 'direct',
+      slippageBps: 50,
+      feeBps: 0,
     });
     vi.mocked(mockDex.swap).mockResolvedValue({
-      success: true, signature: 'tx123',
-      inputAmount: '1000000', outputAmount: '500000', fee: '0',
+      success: true,
+      signature: 'tx123',
+      inputAmount: '1000000',
+      outputAmount: '500000',
+      fee: '0',
     });
 
     const result = await openLongPosition(mockDex, {
@@ -214,7 +236,11 @@ describe('Spot Trading', () => {
   });
 
   it('openLongPosition should fail with below minimum balance', async () => {
-    vi.mocked(mockDex.getBalance).mockResolvedValue({ mint: 'USDC', amount: '500000', decimals: 6 });
+    vi.mocked(mockDex.getBalance).mockResolvedValue({
+      mint: 'USDC',
+      amount: '500000',
+      decimals: 6,
+    });
 
     const result = await openLongPosition(mockDex, {
       assetMint: 'ASSET_MINT',
@@ -229,16 +255,27 @@ describe('Spot Trading', () => {
   });
 
   it('closeLongPosition should succeed with sufficient balance', async () => {
-    vi.mocked(mockDex.getBalance).mockResolvedValue({ mint: 'ASSET_MINT', amount: '500000', decimals: 9 });
+    vi.mocked(mockDex.getBalance).mockResolvedValue({
+      mint: 'ASSET_MINT',
+      amount: '500000',
+      decimals: 9,
+    });
     vi.mocked(mockDex.quote).mockResolvedValue({
-      inputMint: 'ASSET_MINT', outputMint: 'USDC_MINT',
-      inAmount: '500000', outAmount: '1000000',
-      priceImpactPct: 0.05, route: 'direct',
-      slippageBps: 50, feeBps: 0,
+      inputMint: 'ASSET_MINT',
+      outputMint: 'USDC_MINT',
+      inAmount: '500000',
+      outAmount: '1000000',
+      priceImpactPct: 0.05,
+      route: 'direct',
+      slippageBps: 50,
+      feeBps: 0,
     });
     vi.mocked(mockDex.swap).mockResolvedValue({
-      success: true, signature: 'tx456',
-      inputAmount: '500000', outputAmount: '1000000', fee: '0',
+      success: true,
+      signature: 'tx456',
+      inputAmount: '500000',
+      outputAmount: '1000000',
+      fee: '0',
     });
 
     const result = await closeLongPosition(mockDex, {
@@ -254,7 +291,11 @@ describe('Spot Trading', () => {
   });
 
   it('closeLongPosition should fail with insufficient asset balance', async () => {
-    vi.mocked(mockDex.getBalance).mockResolvedValue({ mint: 'ASSET_MINT', amount: '100', decimals: 9 });
+    vi.mocked(mockDex.getBalance).mockResolvedValue({
+      mint: 'ASSET_MINT',
+      amount: '100',
+      decimals: 9,
+    });
 
     const result = await closeLongPosition(mockDex, {
       assetMint: 'ASSET_MINT',
