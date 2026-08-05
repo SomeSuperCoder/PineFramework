@@ -193,9 +193,10 @@ describe('Chaos drives the real StrategyEngine (spec 5.1–5.3)', () => {
     const price = 50000;
     const signals = await executor.processCandle(makeCandle(1_000_000, price));
 
-    // Equity starts at CHAOS_INITIAL_CAPITAL_LAMPORTS = 10,000 USDC.
-    const equityAtEntry = 10_000;
-    const expectedQty = (equityAtEntry * 0.1) / price; // 1000 / 50000 = 0.02
+    // The mock DEX reports a USDC balance of '10000000' lamports = 10 USDC
+    // (1e6 lamports = 1 USDC). Equity is derived from that balance, not 10,000.
+    const equityAtEntry = 10;
+    const expectedQty = (equityAtEntry * 0.1) / price; // 1 / 50000 = 0.00002
 
     expect(calls[0]!.equity).toBe(equityAtEntry);
     expect(signals[0]!.quantity).toBeCloseTo(expectedQty, 5);

@@ -30,10 +30,18 @@ describe('TradeHistoryStore', () => {
 
   it('should record and retrieve trades', () => {
     const trade: TradeRecord = {
-      id: 'trade-1', botId: 'test-bot', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 110,
-      size: 10, fees: 0.1, realizedPnl: 99.9,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 'trade-1',
+      botId: 'test-bot',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 10,
+      fees: 0.1,
+      realizedPnl: 99.9,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     };
 
     store.recordTrade(trade);
@@ -45,16 +53,32 @@ describe('TradeHistoryStore', () => {
 
   it('should filter trades by symbol', () => {
     store.recordTrade({
-      id: '1', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 110,
-      size: 10, fees: 0, realizedPnl: 10,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: '1',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 10,
+      fees: 0,
+      realizedPnl: 10,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
     store.recordTrade({
-      id: '2', botId: 'test', symbol: 'BTC/USDC',
-      side: 'buy', entryPrice: 50000, exitPrice: 51000,
-      size: 1, fees: 0, realizedPnl: 1000,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: '2',
+      botId: 'test',
+      symbol: 'BTC/USDC',
+      side: 'buy',
+      entryPrice: 50000,
+      exitPrice: 51000,
+      size: 1,
+      fees: 0,
+      realizedPnl: 1000,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
 
     const solTrades = store.getTrades({ symbol: 'SOL/USDC' });
@@ -67,10 +91,18 @@ describe('TradeHistoryStore', () => {
   it('should limit results', () => {
     for (let i = 0; i < 10; i++) {
       store.recordTrade({
-        id: `t${i}`, botId: 'test', symbol: 'SOL/USDC',
-        side: 'buy', entryPrice: 100, exitPrice: 110,
-        size: 1, fees: 0, realizedPnl: 10,
-        dex: 'jupiter-swap', openedAt: 1000 + i, closedAt: 2000 + i,
+        id: `t${i}`,
+        botId: 'test',
+        symbol: 'SOL/USDC',
+        side: 'buy',
+        entryPrice: 100,
+        exitPrice: 110,
+        size: 1,
+        fees: 0,
+        realizedPnl: 10,
+        dex: 'jupiter-swap',
+        openedAt: 1000 + i,
+        closedAt: 2000 + i,
       });
     }
 
@@ -80,16 +112,32 @@ describe('TradeHistoryStore', () => {
 
   it('should compute stats', () => {
     store.recordTrade({
-      id: 'w1', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 110,
-      size: 1, fees: 1, realizedPnl: 9,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 'w1',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 1,
+      fees: 1,
+      realizedPnl: 9,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
     store.recordTrade({
-      id: 'l1', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 90,
-      size: 1, fees: 1, realizedPnl: -11,
-      dex: 'jupiter-swap', openedAt: 3000, closedAt: 4000,
+      id: 'l1',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 90,
+      size: 1,
+      fees: 1,
+      realizedPnl: -11,
+      dex: 'jupiter-swap',
+      openedAt: 3000,
+      closedAt: 4000,
     });
 
     const stats = store.getStats();
@@ -103,10 +151,18 @@ describe('TradeHistoryStore', () => {
 
   it('should persist trades to disk', () => {
     store.recordTrade({
-      id: 'persist-1', botId: 'test-bot', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 110,
-      size: 1, fees: 0, realizedPnl: 10,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 'persist-1',
+      botId: 'test-bot',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 1,
+      fees: 0,
+      realizedPnl: 10,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
 
     // Create a new store instance pointing to the same dir
@@ -176,10 +232,18 @@ describe('DashboardWsService', () => {
     };
 
     ws.sendSnapshot('client-1', snapshot, {
-      totalTrades: 5, winningTrades: 3, losingTrades: 2, winRate: 0.6,
-      profitFactor: 1.5, totalPnl: 100, totalFees: 5,
-      averageWin: 50, averageLoss: -25, maxDrawdown: 10,
-      swapCount: 5, executionLatencyMs: 100,
+      totalTrades: 5,
+      winningTrades: 3,
+      losingTrades: 2,
+      winRate: 0.6,
+      profitFactor: 1.5,
+      totalPnl: 100,
+      totalFees: 5,
+      averageWin: 50,
+      averageLoss: -25,
+      maxDrawdown: 10,
+      swapCount: 5,
+      executionLatencyMs: 100,
     });
 
     expect(send).toHaveBeenCalledTimes(1);
@@ -222,9 +286,13 @@ describe('DashboardWsService', () => {
     ws.registerClient({ id: 'c1', send, close: vi.fn() });
 
     ws.broadcastPositionUpdate('opened', {
-      symbol: 'SOL/USDC', side: 'long', size: 10,
-      entryPrice: 100, currentPrice: 105,
-      unrealizedPnl: 50, openedAt: Date.now(),
+      symbol: 'SOL/USDC',
+      side: 'long',
+      size: 10,
+      entryPrice: 100,
+      currentPrice: 105,
+      unrealizedPnl: 50,
+      openedAt: Date.now(),
     });
 
     const msg = JSON.parse(send.mock.calls[0]![0]);
@@ -260,10 +328,18 @@ describe('DashboardWsService', () => {
     ws.registerClient({ id: 'c1', send, close: vi.fn() });
 
     const trade: TradeRecord = {
-      id: 't1', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 110,
-      size: 1, fees: 0, realizedPnl: 10,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 't1',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 1,
+      fees: 0,
+      realizedPnl: 10,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     };
     ws.broadcastTrade(trade);
 
@@ -289,7 +365,8 @@ describe('TradingTelegramBot', () => {
 
   it('should notify bot started', async () => {
     await bot.notifyBotStarted({
-      strategySource: 'test', dex: 'jupiter-swap',
+      strategySource: 'test',
+      dex: 'jupiter-swap',
       pairs: [{ symbol: 'SOL/USDC', timeframe: '1m' }],
       risk: { maxDailyLoss: 100, dailyLossTimezone: 'UTC', closeOnLoss: false },
     });
@@ -299,18 +376,23 @@ describe('TradingTelegramBot', () => {
 
   it('should notify bot stopped', async () => {
     await bot.notifyBotStopped(3600000, 5, 50.5);
-    expect(sender.sendMessage).toHaveBeenCalledWith(
-      123,
-      expect.stringContaining('Bot Stopped'),
-    );
+    expect(sender.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('Bot Stopped'));
   });
 
   it('should notify position opened', async () => {
     await bot.notifyPositionOpened({
-      id: 't1', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 0,
-      size: 10, fees: 0.1, realizedPnl: 0,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 0,
+      id: 't1',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 0,
+      size: 10,
+      fees: 0.1,
+      realizedPnl: 0,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 0,
     });
 
     expect(sender.sendMessage).toHaveBeenCalledWith(
@@ -321,10 +403,18 @@ describe('TradingTelegramBot', () => {
 
   it('should notify position closed with PnL', async () => {
     await bot.notifyPositionClosed({
-      id: 't2', botId: 'test', symbol: 'SOL/USDC',
-      side: 'sell', entryPrice: 100, exitPrice: 110,
-      size: 10, fees: 1, realizedPnl: 99,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 't2',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'sell',
+      entryPrice: 100,
+      exitPrice: 110,
+      size: 10,
+      fees: 1,
+      realizedPnl: 99,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
 
     expect(sender.sendMessage).toHaveBeenCalledWith(
@@ -335,42 +425,41 @@ describe('TradingTelegramBot', () => {
 
   it('should notify emergency stop', async () => {
     await bot.notifyEmergencyStop('frontend');
-    expect(sender.sendMessage).toHaveBeenCalledWith(
-      123,
-      expect.stringContaining('Emergency Stop'),
-    );
+    expect(sender.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('Emergency Stop'));
   });
 
   it('should notify daily loss triggered', async () => {
     await bot.notifyDailyLossTriggered(100, 100);
     expect(sender.sendMessage).toHaveBeenCalledWith(
       123,
-      expect.stringContaining('Daily Stop Loss'),
+      expect.stringContaining('ROLLING 24H LOSS LIMIT BREACHED'),
     );
   });
 
   it('should notify error', async () => {
     await bot.notifyError('ERR_001', 'Something went wrong');
-    expect(sender.sendMessage).toHaveBeenCalledWith(
-      123,
-      expect.stringContaining('Error'),
-    );
+    expect(sender.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('Error'));
   });
 
   it('should notify warning', async () => {
     await bot.notifyWarning('Low balance');
-    expect(sender.sendMessage).toHaveBeenCalledWith(
-      123,
-      expect.stringContaining('Warning'),
-    );
+    expect(sender.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('Warning'));
   });
 
   it('should format negative PnL correctly', async () => {
     await bot.notifyPositionClosed({
-      id: 't3', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 90,
-      size: 1, fees: 0.5, realizedPnl: -10.5,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 2000,
+      id: 't3',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 90,
+      size: 1,
+      fees: 0.5,
+      realizedPnl: -10.5,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 2000,
     });
 
     const message = sender.sendMessage.mock.calls[0]![1] as string;
@@ -379,13 +468,24 @@ describe('TradingTelegramBot', () => {
   });
 
   it('should include transaction link when configured', async () => {
-    const linkBot = new TradingTelegramBot(sender, { includeTxLinks: true, explorerUrlTemplate: 'https://solscan.io/tx/{signature}' });
+    const linkBot = new TradingTelegramBot(sender, {
+      includeTxLinks: true,
+      explorerUrlTemplate: 'https://solscan.io/tx/{signature}',
+    });
 
     await linkBot.notifyPositionOpened({
-      id: 't4', botId: 'test', symbol: 'SOL/USDC',
-      side: 'buy', entryPrice: 100, exitPrice: 0,
-      size: 1, fees: 0, realizedPnl: 0,
-      dex: 'jupiter-swap', openedAt: 1000, closedAt: 0,
+      id: 't4',
+      botId: 'test',
+      symbol: 'SOL/USDC',
+      side: 'buy',
+      entryPrice: 100,
+      exitPrice: 0,
+      size: 1,
+      fees: 0,
+      realizedPnl: 0,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 0,
       transactionSignature: 'abc123',
     });
 

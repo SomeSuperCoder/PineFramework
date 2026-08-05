@@ -50,11 +50,13 @@ describe('JupiterSwapAdapter', () => {
       expect(quote.inAmount).toBe('1000000');
       expect(quote.outAmount).toBe('5000000');
       expect(quote.priceImpactPct).toBe(0.1);
-      expect(quote.route).toBe('amm1');
+      // Adapter returns the routePlan (API v6) and never sets `route`.
+      expect(quote.routePlan[0].swapInfo.ammKey).toBe('amm1');
     });
 
     it('should retry on failure', async () => {
-      const mockFetch = vi.fn()
+      const mockFetch = vi
+        .fn()
         .mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' })
         .mockResolvedValueOnce({
           ok: true,

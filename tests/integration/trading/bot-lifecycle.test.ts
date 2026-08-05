@@ -25,7 +25,8 @@ import type { BotConfig, PairConfig, BarFetcher, BacktestRunner } from 'pine-fra
 
 function createMinimalConfig(overrides?: Partial<BotConfig>): BotConfig {
   return {
-    strategySource: '//@version=5\nstrategy("test")\nif close > open\n  strategy.entry("long", strategy.long)',
+    strategySource:
+      '//@version=5\nstrategy("test")\nif close > open\n  strategy.entry("long", strategy.long)',
     dex: 'jupiter-swap',
     pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
     risk: { maxDailyLoss: 100, dailyLossTimezone: 'UTC', closeOnDailyLoss: false },
@@ -161,8 +162,16 @@ describe('10.3 — Daily stop loss', () => {
     });
 
     // Record errors — in Phase 2, daily loss tracking will block entries
-    engine.recordError('DAILY_LOSS_BREACHED', 'Daily loss limit of 50 exceeded', ErrorSeverity.Error);
-    engine.recordError('DAILY_LOSS_BREACHED', 'Daily loss limit of 50 exceeded', ErrorSeverity.Error);
+    engine.recordError(
+      'DAILY_LOSS_BREACHED',
+      'Daily loss limit of 50 exceeded',
+      ErrorSeverity.Error,
+    );
+    engine.recordError(
+      'DAILY_LOSS_BREACHED',
+      'Daily loss limit of 50 exceeded',
+      ErrorSeverity.Error,
+    );
 
     const lossErrors = engine.errors.filter((e) => e.code === 'DAILY_LOSS_BREACHED');
     expect(lossErrors.length).toBe(2);
@@ -187,9 +196,7 @@ describe('10.3 — Daily stop loss', () => {
 
 describe('10.4 — Auto-selection', () => {
   it('should run auto-selection via onAutoSelect callback and select best pair', async () => {
-    const mockSelector = vi.fn().mockResolvedValue([
-      { symbol: 'BTCUSDT', timeframe: '60' },
-    ]);
+    const mockSelector = vi.fn().mockResolvedValue([{ symbol: 'BTCUSDT', timeframe: '60' }]);
 
     const engine = new BotEngine({
       onAutoSelect: mockSelector,
@@ -208,16 +215,21 @@ describe('10.4 — Auto-selection', () => {
     // Pairs should have been updated
     expect(engine.config?.pairs.length).toBe(1);
     expect(engine.config?.pairs[0]?.symbol).toBe('BTCUSDT');
+    // Auto-selection resolves pairs before the normal state transition
+    expect(engine.state).toBe(BotState.Running);
   });
 
-  it('should throw if autoSelect is enabled but no onAutoSelect provided', async () => {
+  it('should throw if autoSelect is enabled, pairs empty, and no onAutoSelect provided', async () => {
     const engine = new BotEngine(); // No onAutoSelect
     engine.configure({
       ...createMinimalConfig(),
+      pairs: [], // empty pairs → auto-selection is required, but no callback
       autoSelect: true,
     });
 
-    await expect(engine.start()).rejects.toThrow('Auto-select is enabled but no onAutoSelect callback');
+    await expect(engine.start()).rejects.toThrow(/auto-selection returned no pairs/i);
+    // Per spec (bot-start-lifecycle): a rejected auto-select leaves state Idle
+    expect(engine.state).toBe(BotState.Idle);
   });
 
   it('should throw if auto-selection returns no pairs', async () => {
@@ -231,7 +243,26 @@ describe('10.4 — Auto-selection', () => {
       autoSelect: true,
     });
 
-    await expect(engine.start()).rejects.toThrow('Auto-selection returned no pairs');
+    await expect(engine.start()).rejects.toThrow(/auto-selection returned no pairs/i);
+    expect(engine.state).toBe(BotState.Idle);
+  });
+
+  it('should skip auto-selection when pairs are already configured', async () => {
+    const mockSelector = vi.fn().mockResolvedValue([{ symbol: 'ETHUSDT', timeframe: '60' }]);
+
+    const engine = new BotEngine({ onAutoSelect: mockSelector });
+    engine.configure({
+      ...createMinimalConfig(), // pairs: BTCUSDT already set
+      autoSelect: true,
+      autoSelectMetric: 'profitFactor',
+    });
+
+    await engine.start();
+
+    // autoSelect true + non-empty pairs → callback must NOT be invoked
+    expect(mockSelector).not.toHaveBeenCalled();
+    expect(engine.state).toBe(BotState.Running);
+    expect(engine.config?.pairs[0]?.symbol).toBe('BTCUSDT');
   });
 
   it('should use AutoMarketSelector with mock BarFetcher and BacktestRunner', async () => {
@@ -259,6 +290,7 @@ describe('10.4 — Auto-selection', () => {
           losingTrades: 2,
           winRate: 0.6,
           totalPnl: 150,
+          totalPnlPercent: 15,
           totalFees: 10,
           profitFactor: 1.8,
           maxDrawdown: 0.05,
@@ -378,10 +410,14 @@ describe('10.6 — AbortSignal cancels in-flight processing on stop', () => {
         const fakeTick = async () => {
           try {
             await new Promise<void>((resolve, reject) => {
-              ac.signal.addEventListener('abort', () => {
-                tickAborted = true;
-                reject(new DOMException('Aborted', 'AbortError'));
-              }, { once: true });
+              ac.signal.addEventListener(
+                'abort',
+                () => {
+                  tickAborted = true;
+                  reject(new DOMException('Aborted', 'AbortError'));
+                },
+                { once: true },
+              );
               // Never resolve — simulates in-flight processing
             });
           } catch {

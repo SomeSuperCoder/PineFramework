@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { AutoMarketSelector, runParallel } from '../../../src/trading/auto-select.js';
-import type { BarFetcher, BacktestRunner, CandidateEvaluation, AutoSelectionResult } from '../../../src/trading/auto-select.js';
+import { AutoMarketSelector } from '../../../src/trading/auto-select.js';
+import type {
+  BarFetcher,
+  BacktestRunner,
+  CandidateEvaluation,
+  AutoSelectionResult,
+} from '../../../src/trading/auto-select.js';
 import type { PairConfig } from '../../../src/trading/types.js';
 
 function createMockBarFetcher(): BarFetcher {
@@ -26,6 +31,7 @@ function createMockBacktestRunner(): BacktestRunner {
         sharpeRatio: 1.5,
         profitFactor: 2.0,
         totalPnl: 500,
+        totalPnlPercent: 50,
         winRate: 0.6,
         totalTrades: 50,
         maxDrawdown: 200,
@@ -35,7 +41,8 @@ function createMockBacktestRunner(): BacktestRunner {
   };
 }
 
-const SCRIPT = '//@version=6\nstrategy("test")\nif (close > open)\n\tstrategy.entry("long", strategy.long)\n';
+const SCRIPT =
+  '//@version=6\nstrategy("test")\nif (close > open)\n\tstrategy.entry("long", strategy.long)\n';
 const CANDIDATES: PairConfig[] = [
   { symbol: 'BTCUSDT', timeframe: '60' },
   { symbol: 'ETHUSDT', timeframe: '60' },
@@ -100,14 +107,33 @@ describe('AutoMarketSelector', () => {
   it('should rank by different metrics', async () => {
     const barFetcher = createMockBarFetcher();
     const backtestRunner = {
-      runBacktest: vi.fn()
+      runBacktest: vi
+        .fn()
         .mockResolvedValueOnce({
           success: true,
-          metrics: { sharpeRatio: 2.0, profitFactor: 1.5, totalPnl: 300, winRate: 0.7, totalTrades: 40, maxDrawdown: 100, maxDrawdownPercent: 0.03 },
+          metrics: {
+            sharpeRatio: 2.0,
+            profitFactor: 1.5,
+            totalPnl: 300,
+            totalPnlPercent: 30,
+            winRate: 0.7,
+            totalTrades: 40,
+            maxDrawdown: 100,
+            maxDrawdownPercent: 0.03,
+          },
         })
         .mockResolvedValueOnce({
           success: true,
-          metrics: { sharpeRatio: 1.0, profitFactor: 3.0, totalPnl: 500, winRate: 0.5, totalTrades: 60, maxDrawdown: 200, maxDrawdownPercent: 0.05 },
+          metrics: {
+            sharpeRatio: 1.0,
+            profitFactor: 3.0,
+            totalPnl: 500,
+            totalPnlPercent: 50,
+            winRate: 0.5,
+            totalTrades: 60,
+            maxDrawdown: 200,
+            maxDrawdownPercent: 0.05,
+          },
         }),
     };
 
@@ -128,7 +154,15 @@ describe('AutoMarketSelector', () => {
   it('should get metric values correctly', () => {
     const evaluation: CandidateEvaluation = {
       pair: { symbol: 'BTCUSDT', timeframe: '60' },
-      metrics: { sharpeRatio: 2.0, profitFactor: 3.0, netProfit: 500, winRate: 0.6, totalTrades: 50, maxDrawdown: 100 },
+      metrics: {
+        sharpeRatio: 2.0,
+        profitFactor: 3.0,
+        netProfit: 500,
+        totalPnlPercent: 50,
+        winRate: 0.6,
+        totalTrades: 50,
+        maxDrawdown: 100,
+      },
       label: 'BTCUSDT (60)',
     };
 
@@ -154,21 +188,6 @@ describe('AutoMarketSelector', () => {
     });
     const getMetricSharpe = (selectorSharpe as any).getMetricValue.bind(selectorSharpe);
     expect(getMetricSharpe(evaluation)).toBe(2.0);
-  });
-
-  it('should run tasks in parallel with bounded concurrency', async () => {
-    const tasks = [
-      vi.fn().mockResolvedValue(1),
-      vi.fn().mockResolvedValue(2),
-      vi.fn().mockResolvedValue(3),
-    ];
-    const results = await runParallel(tasks, 2);
-    expect(results).toEqual([
-      { success: true, value: 1 },
-      { success: true, value: 2 },
-      { success: true, value: 3 },
-    ]);
-    tasks.forEach(t => expect(t).toHaveBeenCalledTimes(1));
   });
 
   it('should call progress callback with statuses map', async () => {

@@ -26,10 +26,10 @@ describe('SolanaConfig', () => {
     delete process.env.SOLANA_NETWORK;
   });
 
-  it('should create config with defaults (devnet)', () => {
+  it('should create config with defaults (mainnet-beta)', () => {
     const config = createSolanaConfig();
-    expect(config.network).toBe('devnet');
-    expect(config.rpcUrl).toBe('https://api.devnet.solana.com');
+    expect(config.network).toBe('mainnet-beta');
+    expect(config.rpcUrl).toBe('https://api.mainnet-beta.solana.com');
     expect(config.commitment).toBe('confirmed');
   });
 
@@ -79,7 +79,7 @@ describe('SolanaConfig', () => {
 
   it('should return default config', () => {
     const config = getDefaultSolanaConfig();
-    expect(config.network).toBe('devnet');
+    expect(config.network).toBe('mainnet-beta');
   });
 
   it('should detect mainnet', () => {

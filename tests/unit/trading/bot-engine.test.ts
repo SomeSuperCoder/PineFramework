@@ -223,7 +223,7 @@ describe('BotEngine', () => {
     expect(engine.startedAt).toBeNull();
   });
 
-  it('should refuse to start when autoSelect is true and no pairs configured', async () => {
+  it('should refuse to start when autoSelect is true, no pairs configured, and no callback', async () => {
     const configWithAutoSelect: BotConfig = {
       ...defaultConfig,
       pairs: undefined,
@@ -231,7 +231,8 @@ describe('BotEngine', () => {
     };
     engine.configure(configWithAutoSelect);
 
-    await expect(engine.start()).rejects.toThrow('auto-select must run before starting');
+    // Per bot-start-lifecycle: no callback → auto-selection returned no pairs
+    await expect(engine.start()).rejects.toThrow(/auto-selection returned no pairs/i);
     expect(engine.state).toBe(BotState.Idle);
   });
 
