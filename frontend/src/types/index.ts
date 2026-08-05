@@ -167,6 +167,46 @@ export interface StrategyMarkerData {
   timestamp: number;
   color: string;
   comment?: string;
+  /** Heartbeat outcome for `type: 'heartbeat'` markers — the mini-chart renders
+   *  noop/error heartbeats as small distinct glyphs so a silent no-op or error
+   *  is visible instead of indistinguishable from no data. */
+  outcome?: 'noop' | 'error';
+}
+
+/** Per-pair feed subscription attempt reported by the bot bar-feed. Reflects
+ *  subscribe-request delivery on an open socket — NOT broker acks (the Bybit
+ *  service does not surface subscription confirmations). */
+export interface FeedSubscriptionAttempt {
+  pair: string;
+  timeframe: string;
+  ok: boolean;
+  error?: string;
+}
+
+/** Feed connectivity state broadcast on `bot:feedStatus` and carried by
+ *  `bot:snapshot` under `status.feedState`. The truthful connectivity signal is
+ *  `connected`; `silentSince` marks a Running bot that has not confirmed a
+ *  candle within the configured silence threshold. */
+export interface FeedStatus {
+  connected: boolean;
+  subscriptions: FeedSubscriptionAttempt[];
+  lastCandleAt?: number;
+  candleCount: number;
+  silentSince?: number;
+}
+
+/** A truthful open position derived read-only from the executor state. Arrives
+ *  in `bot:snapshot` under `status.positions` and via `bot:position` events
+ *  (`direction: 'flat'` = closed). */
+export interface PositionInfo {
+  pair: string;
+  symbol: string;
+  timeframe: string;
+  direction: 'long' | 'flat';
+  quantity: number;
+  entryPrice: number;
+  entryTime: number;
+  unrealizedPnl?: number;
 }
 
 /** A chaos signal broadcast by the bot backend — the genuine strategy engine

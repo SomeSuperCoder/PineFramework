@@ -717,4 +717,148 @@ describe('LiveStrategyExecutor', () => {
       await expect(exec.captureBalanceSnapshot()).resolves.toBeUndefined();
     });
   });
+
+  describe('getPositions() confirmed-fill truth (task 1.4)', () => {
+    // The swap mock in beforeEach succeeds; failed-swap tests override it.
+    function failNextSwap(error = 'dex down'): void {
+      (mockConfig.dex as any).swap.mockResolvedValue({ success: false, error });
+    }
+
+    function buySignal(price = 50000): TradeSignal {
+      return {
+        action: 'buy',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: price,
+        timestamp: Date.now(),
+        timeframe: '60',
+      };
+    }
+
+    function sellSignal(price = 51000): TradeSignal {
+      return {
+        action: 'sell',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: price,
+        timestamp: Date.now(),
+        timeframe: '60',
+      };
+    }
+
+    it('omits a staged buy whose swap FAILED — no phantom position', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      // Optimistically the state holds the staged long (set by the engine
+      // before the DEX call); the swap fails — the position MUST NOT survive.
+      const state = (executor as any).strategyStates.get('BTCUSDT:60');
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now(),
+      };
+      failNextSwap();
+
+      const result = await executor.executeSignal(buySignal());
+
+      expect(result.success).toBe(false);
+      // No phantom: the failed order is invisible to the dashboard.
+      expect(executor.getPositions()).toEqual([]);
+      // The optimistic stage is reverted to flat, not left as a false long.
+      expect(executor.getPosition(pair)?.direction).toBe('flat');
+    });
+
+    it('reports a long position after a CONFIRMED buy fill', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      const result = await executor.executeSignal(buySignal(50000));
+
+      expect(result.success).toBe(true);
+      const positions = executor.getPositions();
+      expect(positions).toHaveLength(1);
+      expect(positions[0]).toMatchObject({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+      });
+    });
+
+    it('reports flat (omitted) after a CONFIRMED sell/close', async () => {
+      await executor.initializeStrategy({ symbol: 'BTCUSDT', timeframe: '60' });
+
+      // Open first — confirmed fill.
+      await executor.executeSignal(buySignal(50000));
+      expect(executor.getPositions()).toHaveLength(1);
+
+      // Close — confirmed fill → the DEX is flat → position disappears.
+      const result = await executor.executeSignal(sellSignal(51000));
+      expect(result.success).toBe(true);
+      expect(executor.getPositions()).toEqual([]);
+    });
+
+    it('reverts to the last confirmed fill when a close FAILS — no false flat', async () => {
+      await executor.initializeStrategy({ symbol: 'BTCUSDT', timeframe: '60' });
+
+      // Open first — confirmed fill.
+      await executor.executeSignal(buySignal(50000));
+      expect(executor.getPositions()).toHaveLength(1);
+
+      // Close fails: the DEX still holds the position, so the panel must keep
+      // showing the confirmed long instead of a false flat.
+      failNextSwap();
+      const result = await executor.executeSignal(sellSignal(51000));
+
+      expect(result.success).toBe(false);
+      const positions = executor.getPositions();
+      expect(positions).toHaveLength(1);
+      expect(positions[0]).toMatchObject({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+      });
+    });
+
+    it('does NOT revert a prior confirmation when a swap THROWS (unknown outcome — no reconcile)', async () => {
+      await executor.initializeStrategy({ symbol: 'BTCUSDT', timeframe: '60' });
+
+      // Open first — confirmed fill.
+      await executor.executeSignal(buySignal(50000));
+      expect(executor.getPositions()).toHaveLength(1);
+
+      // A throwing swap means the on-chain outcome is UNKNOWN (the tx may have
+      // broadcast). Unlike a known failure (swapResult.success === false), the
+      // exception path must NOT reconcile: no flat revert, no lost confirmation.
+      (mockConfig.dex as any).swap.mockRejectedValue(new Error('jupiter rpc timeout'));
+
+      const result = await executor.executeSignal(sellSignal(51000));
+
+      // Reported as a failure with the error surfaced — but position state is
+      // left untouched for external reconciliation.
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/jupiter rpc timeout/);
+
+      // The prior confirmed long is still visible — no false flat, no deletion.
+      const positions = executor.getPositions();
+      expect(positions).toHaveLength(1);
+      expect(positions[0]).toMatchObject({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+      });
+
+      // The staged position is also untouched (still long), not reverted to flat.
+      const state = (executor as any).strategyStates.get('BTCUSDT:60');
+      expect(state.position.direction).toBe('long');
+    });
+  });
 });

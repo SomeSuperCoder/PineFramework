@@ -76,6 +76,8 @@ function App() {
     logs: botLogs,
     chaosSignals: botChaosSignals,
     chaosHeartbeat: botChaosHeartbeat,
+    chaosHeartbeatHistory: botChaosHeartbeatHistory,
+    feedStatus: botFeedStatus,
     totalCandleErrors: botTotalCandleErrors,
     lastCandleError: botLastCandleError,
     engineChaosMode,
@@ -445,6 +447,8 @@ function App() {
               totalCandleErrors={botTotalCandleErrors}
               lastCandleError={botLastCandleError}
               chaosSignals={botChaosSignals}
+              chaosHeartbeats={botChaosHeartbeatHistory}
+              feedStatus={botFeedStatus}
             />
           ) : botConnectionFailed ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>

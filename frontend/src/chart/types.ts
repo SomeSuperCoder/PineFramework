@@ -38,6 +38,9 @@ export interface StrategyMarkerData {
   color: string;
   comment?: string;
   barIndex?: number;
+  /** Heartbeat outcome for `type: 'heartbeat'` markers — renders noop/error as
+   *  small distinct glyphs (see MarkerRenderer). */
+  outcome?: 'noop' | 'error';
 }
 
 export interface FillData {

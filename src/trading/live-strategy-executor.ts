@@ -22,11 +22,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
 import type { RiskManager } from './risk/risk-manager.js';
-import type {
-  ChaosExecutionMode,
-  ChaosFailureReason,
-  ChaosHeartbeat,
-} from './types.js';
+import type { ChaosExecutionMode, ChaosFailureReason, ChaosHeartbeat } from './types.js';
 
 // ---- Constants ----
 
@@ -174,6 +170,28 @@ export interface ExecutionResult {
   error?: string;
 }
 
+/** Read-only view of one pair's open position for dashboard display (D3).
+ *  Derived from the executor's per-pair `state.position` — never mutated by
+ *  consumers and never mutated here. */
+export interface PositionInfo {
+  /** Pair symbol (e.g. "ETHUSDT"). */
+  symbol: string;
+  /** Pair timeframe (e.g. "1"). */
+  timeframe: string;
+  /** Position direction — the spot DEX only opens longs; 'flat' pairs are
+   *  omitted from getPositions() so an empty result means genuinely flat. */
+  direction: 'long' | 'short' | 'flat';
+  /** Position size in base-token units. */
+  quantity: number;
+  /** Entry price of the open position. */
+  entryPrice: number;
+  /** Candle timestamp (ms) when the position was opened. */
+  entryTime: number;
+  /** Unrealized P&L in USDC when a live mark price is known. The executor
+   *  does not track a current price, so this stays undefined (D3). */
+  unrealizedPnl?: number;
+}
+
 // ---- LiveStrategyExecutor ----
 
 /**
@@ -198,6 +216,23 @@ export class LiveStrategyExecutor {
   private chaosExecutionMode: { mode: ChaosExecutionMode; reason?: ChaosFailureReason } = {
     mode: 'live',
   };
+  /**
+   * Per-pair last CONFIRMED fill, keyed by pair key (getPairKey). This is the
+   * single sanctioned mutation behind truthful positions (task 1.4): the
+   * executor stages `state.position` optimistically from engine markers BEFORE
+   * the DEX swap, so without confirmation tracking a failed swap would leave a
+   * phantom open position reported by getPositions(). A pair key is present
+   * only after a swap result confirmed the DEX-side state:
+   * - buy  + success → store the opened position (DEX holds it)
+   * - sell + success → delete (DEX is flat)
+   * - buy  + failure → delete (DEX never opened it → no phantom)
+   * - sell + failure → keep (DEX still holds it → state.position is reverted
+   *   to this confirmed truth on the next updatePositionState reconciliation)
+   * The map is intentionally runtime-only: a position restored from disk on
+   * loadState() is unproven this run and is NOT reported until a live swap
+   * confirms it (spec: positions reflect only CONFIRMED fills).
+   */
+  private confirmedPositions = new Map<string, PositionInfo>();
 
   constructor(config: LiveStrategyConfig) {
     this.config = config;
@@ -525,11 +560,11 @@ export class LiveStrategyExecutor {
         this.config.riskManager &&
         !this.config.riskManager.canEnterPosition()
       ) {
-        return {
+        return this.reconcilePositionState(signal, {
           success: false,
           signal,
           error: 'Entry blocked by risk controls',
-        };
+        });
       }
 
       // Get wallet keypair
@@ -574,11 +609,11 @@ export class LiveStrategyExecutor {
             `[LiveStrategyExecutor] Skipping trade: swap amount ${usdcAmount.toFixed(6)} USDC ` +
               `(< ${minTradeUsdc.toFixed(2)} USDC minimum)`,
           );
-          return {
+          return this.reconcilePositionState(signal, {
             success: false,
             signal,
             error: `Swap amount below minimum trade size: ${usdcAmount.toFixed(6)} USDC`,
-          };
+          });
         }
 
         // Resolve the traded token's mint/decimals once (used for the buy
@@ -599,11 +634,11 @@ export class LiveStrategyExecutor {
         // only trips when positionSizePercent > 100 or the balance moves
         // between fetch and quote — kept as a cheap safety net.
         if (signal.action === 'buy' && availableBalance < amount) {
-          return {
+          return this.reconcilePositionState(signal, {
             success: false,
             signal,
             error: `Insufficient USDC balance: have ${availableBalance}, need ${amount}`,
-          };
+          });
         }
 
         // Get quote from DEX
@@ -616,12 +651,12 @@ export class LiveStrategyExecutor {
         const swapResult = await this.config.dex.swap(quote, keypairData.value.privateKey);
 
         if (!swapResult.success) {
-          return {
+          return this.reconcilePositionState(signal, {
             success: false,
             signal,
             swapResult,
             error: swapResult.error,
-          };
+          });
         }
 
         // Feed the risk manager: realized PnL (for closing trades) plus a fresh
@@ -629,26 +664,52 @@ export class LiveStrategyExecutor {
         // blocks the completed trade and never feeds an unusable value (D5/D6).
         await this.recordClosedTradeRisk(signal);
 
-        // Update position state
-        this.updatePositionState(signal, swapResult);
-
-        return {
+        return this.reconcilePositionState(signal, {
           success: true,
           signal,
           swapResult,
-        };
+        });
       } finally {
         // Always dispose of the keypair after use
         keypairData.dispose();
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return {
-        success: false,
-        signal,
-        error: message,
-      };
+      // UNKNOWN order outcome (Code-Review SHOULD-FIX #3): an exception here —
+      // most commonly dex.swap() throwing after the transaction was submitted
+      // (Jupiter RPC timeout, ack lost post-broadcast) — means the DEX may have
+      // actually executed. Asserting flat (the known-failure revert) would hide
+      // a real on-chain long behind a flat panel and let the next buy stack.
+      // So this path deliberately BYPASSES reconcilePositionState: it leaves the
+      // staged position untouched, never deletes a prior confirmation, and
+      // reports loudly so an operator/external reconciliation can resolve the
+      // on-chain truth. Only a definite result (success === true, or a known
+      // failure with swapResult.success === false) reconciles position state.
+      console.error(
+        `[LiveStrategyExecutor] UNKNOWN ORDER OUTCOME — ` +
+          `pair=${signal.symbol}:${signal.timeframe ?? '?'} action=${signal.action} ` +
+          `quantity=${signal.quantity} expectedPrice=${signal.expectedPrice} ` +
+          `timestamp=${signal.timestamp} — swap may have executed on-chain; ` +
+          `error=${message}`,
+      );
+      return { success: false, signal, error: message };
     }
+  }
+
+  /**
+   * Single exit funnel for KNOWN order outcomes (task 1.4): reconciles the
+   * optimistically staged `state.position` with the ACTUAL order result so a
+   * failed DEX order can never leave a phantom open position. Every KNOWN
+   * return of executeSignal routes through here — swapResult is undefined for
+   * orders that were blocked before a swap was attempted (risk gate, dust
+   * guard, balance). The exception path deliberately bypasses this funnel:
+   * an exception means the outcome is UNKNOWN (the swap may have executed
+   * on-chain), so flattening would hide a real position — it only logs and
+   * returns (see executeSignal catch).
+   */
+  private reconcilePositionState(signal: TradeSignal, result: ExecutionResult): ExecutionResult {
+    this.updatePositionState(signal, result.swapResult);
+    return result;
   }
 
   /**
@@ -672,6 +733,44 @@ export class LiveStrategyExecutor {
     const key = this.getPairKey(pair);
     const state = this.strategyStates.get(key);
     return state?.position ?? null;
+  }
+
+  /**
+   * Truthful open positions derived read-only from each pair's strategy state
+   * (D3, task 1.4). Non-flat positions only, AND only for pairs whose open
+   * position was confirmed by a successful DEX swap (confirmedPositions) —
+   * an optimistic stage from processCandleChaos/processCandle that was never
+   * confirmed (failed or blocked order) is omitted so no phantom position
+   * reaches the dashboard. An empty array means no confirmed open position,
+   * never a placeholder. Does not mutate execution state.
+   */
+  getPositions(): PositionInfo[] {
+    const positions: PositionInfo[] = [];
+    for (const [key, state] of this.strategyStates) {
+      if (state.position.direction === 'flat') continue;
+      // Confirmed-fill gate (task 1.4): only a successful swap marks the pair
+      // confirmed; staged-but-unconfirmed positions are invisible here.
+      if (!this.confirmedPositions.has(key)) continue;
+      // Key format is `${symbol}:${timeframe}` (getPairKey) — split once.
+      const separator = key.lastIndexOf(':');
+      positions.push({
+        symbol: key.slice(0, separator),
+        timeframe: key.slice(separator + 1),
+        direction: state.position.direction,
+        quantity: state.position.quantity,
+        entryPrice: state.position.entryPrice,
+        entryTime: state.position.entryTime,
+      });
+    }
+    return positions;
+  }
+
+  /**
+   * The pairs (symbol + timeframe) this executor was initialized with (D4) —
+   * engine truth for the dashboard, preferred over disk config `pairs[0]`.
+   */
+  getRunningPairs(): PairId[] {
+    return this.config.pairs.map((pair) => ({ symbol: pair.symbol, timeframe: pair.timeframe }));
   }
 
   /**
@@ -807,6 +906,11 @@ export class LiveStrategyExecutor {
       }
       // Chaos no longer backs the engine — no equity floor is in effect.
       this.chaosExecutionMode = { mode: 'live' };
+      // Confirmed-fill truth dies with the chaos simulation: the rebuild above
+      // replaces every pair's state with fresh flat positions, so any
+      // chaos-confirmed fills would otherwise be reverted into (stale) long
+      // positions on the next failed order (task 1.4 coherence).
+      this.confirmedPositions.clear();
     } catch (err) {
       this.config.chaosGenerator = previousGenerator;
       throw err;
@@ -1125,7 +1229,20 @@ export class LiveStrategyExecutor {
     return { mint: USDC_MINT, decimals: 6 };
   }
 
-  private updatePositionState(signal: TradeSignal, _swapResult: SwapResult): void {
+  /**
+   * Reconcile the executor's position state with the actual DEX order outcome
+   * (task 1.4). Called from reconcilePositionState on EVERY executeSignal exit —
+   * success applies + confirms, failure reverts the optimistic stage so
+   * getPositions() never reports a phantom position.
+   *
+   * `swapResult` is undefined when the order was blocked before a swap attempt
+   * (risk gate / dust guard / insufficient balance) — treated as a failure. An
+   * exception (unknown outcome) never reaches this method; the catch path
+   * bypasses reconciliation so a possibly-executed swap is never flattened.
+   * Confirmed-fill truth lives in confirmedPositions (the map), which is the
+   * gate getPositions() enforces.
+   */
+  private updatePositionState(signal: TradeSignal, swapResult?: SwapResult): void {
     if (!signal.timeframe) {
       console.warn('[LiveStrategyExecutor] Cannot update position state: signal missing timeframe');
       return;
@@ -1139,22 +1256,66 @@ export class LiveStrategyExecutor {
       return;
     }
 
+    const confirmed = swapResult?.success === true;
+
     if (signal.action === 'buy') {
-      state.position = {
-        symbol: signal.symbol,
-        direction: 'long',
-        quantity: signal.quantity,
-        entryPrice: signal.expectedPrice,
-        entryTime: signal.timestamp,
-      };
+      if (confirmed) {
+        // Swap confirmed: the DEX holds the position — apply the staged long
+        // and record it as the last confirmed fill so getPositions() reports it.
+        state.position = {
+          symbol: signal.symbol,
+          direction: 'long',
+          quantity: signal.quantity,
+          entryPrice: signal.expectedPrice,
+          entryTime: signal.timestamp,
+        };
+        this.confirmedPositions.set(key, { ...state.position, timeframe: signal.timeframe });
+      } else {
+        // Buy failed or was blocked before the swap: the optimistic staged long
+        // must not survive as a phantom open position.
+        state.position = {
+          symbol: signal.symbol,
+          direction: 'flat',
+          quantity: 0,
+          entryPrice: 0,
+          entryTime: 0,
+        };
+        this.confirmedPositions.delete(key);
+      }
     } else if (signal.action === 'sell' || signal.action === 'close') {
-      state.position = {
-        symbol: signal.symbol,
-        direction: 'flat',
-        quantity: 0,
-        entryPrice: 0,
-        entryTime: 0,
-      };
+      if (confirmed) {
+        // Sell confirmed: the DEX is flat — drop the position and its
+        // confirmation.
+        state.position = {
+          symbol: signal.symbol,
+          direction: 'flat',
+          quantity: 0,
+          entryPrice: 0,
+          entryTime: 0,
+        };
+        this.confirmedPositions.delete(key);
+      } else {
+        // Close failed: the DEX still holds the position the engine staged as
+        // flat. Revert to the last confirmed fill so the panel keeps showing
+        // the real open position instead of a false flat. No confirmed fill
+        // this run (e.g. restored from disk) → flat is the only honest state.
+        const confirmedPosition = this.confirmedPositions.get(key);
+        state.position = confirmedPosition
+          ? {
+              symbol: confirmedPosition.symbol,
+              direction: 'long',
+              quantity: confirmedPosition.quantity,
+              entryPrice: confirmedPosition.entryPrice,
+              entryTime: confirmedPosition.entryTime,
+            }
+          : {
+              symbol: signal.symbol,
+              direction: 'flat',
+              quantity: 0,
+              entryPrice: 0,
+              entryTime: 0,
+            };
+      }
     }
   }
 

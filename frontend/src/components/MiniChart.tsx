@@ -185,6 +185,7 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
           color: m.color,
           comment: m.comment,
           barIndex: m.barIndex,
+          outcome: m.outcome,
         });
       }
       chart.setStrategyMarkers(allStrategyMarkers);

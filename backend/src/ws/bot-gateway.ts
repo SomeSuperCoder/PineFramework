@@ -4,16 +4,18 @@
  * Connected by useBotWebSocket hook at ws://host/ws/bot.
  *
  * Message channels:
- *   bot:snapshot  — Full status snapshot (sent on connect)
- *   bot:state     — State transition event
- *   bot:log       — New log entry
- *   bot:position  — Position opened/closed/updated
- *   bot:metrics   — Periodic metrics update (via status emit)
+ *   bot:snapshot   — Full status snapshot (sent on connect)
+ *   bot:state      — State transition event
+ *   bot:log        — New log entry
+ *   bot:position   — Position opened/closed/updated
+ *   bot:metrics    — Periodic metrics update (via status emit)
+ *   bot:feedStatus — Live bar-feed telemetry (connected/silent/silentSince)
  */
 
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { BotEngine } from 'pine-framework';
+import { buildSnapshotPayload } from './snapshot-payload.js';
 
 export interface BotWSBroadcaster {
   /**
@@ -64,50 +66,16 @@ export function createBotWSGateway(
   }
 
   function sendSnapshot(ws: WebSocket, engine: BotEngine | null): void {
-    if (!engine) {
-      ws.send(
-        JSON.stringify({
-          channel: 'bot:snapshot',
-          type: 'snapshot',
-          data: {
-            status: {
-              state: 'Idle',
-              strategyName: '(not configured)',
-              dex: 'jupiter-swap',
-              walletPublicKey: null,
-              startedAt: null,
-              uptimeMs: 0,
-              balance: 0,
-              realizedPnl: 0,
-              unrealizedPnl: 0,
-              positions: [],
-              exposure: 0,
-              errors: [],
-            },
-            chaosSignals: [],
-            // Hoisted for the frontend hook (useBotWebSocket reads these from
-            // msg.data, not msg.data.status).
-            chaosHeartbeat: null,
-            totalCandleErrors: 0,
-            chaosMode: { enabled: false, executionMode: 'live' },
-          },
-        }),
-      );
-      return;
-    }
-
-    const snapshot = engine.getSnapshot();
+    // SSOT (design D2): the null-engine fallback and the live-engine path both
+    // go through the shared builder, so every broadcast site produces an
+    // identical payload shape (chaosSignals + truthful status.positions always
+    // present). A null engine yields the empty defaults — same shape, no
+    // engine data.
     ws.send(
       JSON.stringify({
         channel: 'bot:snapshot',
         type: 'snapshot',
-        data: {
-          status: snapshot,
-          chaosSignals: engine.getChaosHistory(),
-          chaosHeartbeat: snapshot.chaosHeartbeat,
-          totalCandleErrors: snapshot.totalCandleErrors,
-          chaosMode: snapshot.chaosMode,
-        },
+        data: buildSnapshotPayload(engine?.getSnapshot() ?? null, engine),
       }),
     );
   }

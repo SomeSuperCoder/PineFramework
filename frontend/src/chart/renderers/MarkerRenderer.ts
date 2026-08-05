@@ -72,6 +72,18 @@ export class MarkerRenderer {
       if (barIdx < 0 || barIdx >= candles.length) continue;
 
       const x = viewport.barIndexToPixel(barIdx) + barSpacing / 2;
+
+      // Heartbeat outcome glyphs (chaos mode): small distinct shapes so a
+      // silent no-op or error is visible on the chart. Signal heartbeats never
+      // reach this path — the order marker already covers that bar.
+      if (marker.type === 'heartbeat') {
+        const y = layout.priceToPixel(candles[barIdx].high, chartArea.y, chartArea.height) - margin;
+        const isError = marker.outcome === 'error';
+        const color = marker.color || (isError ? '#e94560' : '#ff9800');
+        this.drawShape(ctx, x, y, isError ? 'xcross' : 'square', color, barSpacing, 0.55);
+        continue;
+      }
+
       const isLong = marker.direction === 'long';
       const isEntry = marker.type === 'entry' || marker.type === 'order';
 
@@ -166,8 +178,9 @@ export class MarkerRenderer {
     shape: string,
     color: string,
     barSpacing: number,
+    sizeScale = 1,
   ): void {
-    const size = Math.max(5, barSpacing * 0.6);
+    const size = Math.max(5, barSpacing * 0.6) * sizeScale;
     ctx.fillStyle = color;
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;

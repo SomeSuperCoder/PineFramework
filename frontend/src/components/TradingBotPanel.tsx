@@ -7,7 +7,14 @@ import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { ChaosModeWarning } from './ChaosModeWarning';
-import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot } from '../types';
+import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot, FeedStatus, PositionInfo } from '../types';
+
+// Stable empty array references for optional chaos props. A fresh `[]` literal
+// (default parameter or `?? []`) would create a new array every render and,
+// being part of the chaos effect's dependency array, retrigger the effect
+// infinitely.
+const EMPTY_CHAOS_SIGNALS: ChaosSignalRecord[] = [];
+const EMPTY_CHAOS_HEARTBEATS: ChaosHeartbeatRecord[] = [];
 
 // ---- Timezone Utilities ----
 
@@ -146,7 +153,8 @@ export interface BotStatusSnapshot {
   balance: number;
   realizedPnl: number;
   unrealizedPnl: number;
-  positions: PositionSummary[];
+  /** Truthful open positions from executor state (see PositionInfo). */
+  positions: PositionInfo[];
   exposure: number;
   errors: Array<{ code: string; message: string; severity: string }>;
   lastTransition?: { from: BotStateT; to: BotStateT; reason: string; timestamp: number } | null;
@@ -160,22 +168,17 @@ export interface BotStatusSnapshot {
   profitFactor?: number;
   maxDrawdown?: number;
   avgLatency?: number;
+  /** Running pairs from engine truth — preferred over disk config for the
+   *  mini-chart's active pair. */
+  pairs?: Array<{ symbol: string; timeframe: string }>;
+  /** Current feed connectivity carried by the connect/state-change snapshot. */
+  feedState?: FeedStatus;
 }
 
 export interface WalletInfo {
   hasWallet: boolean;
   publicKey?: string;
   usdcBalance?: number | null;
-}
-
-export interface PositionSummary {
-  symbol: string;
-  side: 'long' | 'short';
-  size: number;
-  entryPrice: number;
-  currentPrice: number;
-  unrealizedPnl: number;
-  openedAt: number;
 }
 
 export interface LogEntry {
@@ -186,12 +189,53 @@ export interface LogEntry {
 
 // ---- WebSocket hook ----
 
+/** Coerce a `bot:position` payload into PositionInfo. Supports the current
+ *  flat shape (`{pair, symbol, timeframe, direction, quantity, entryPrice,
+ *  entryTime, unrealizedPnl?}`) and the legacy nested shape
+ *  (`{type, position: {symbol, side, size, entryPrice, openedAt, ...}}`). */
+function toPositionInfo(raw: unknown): PositionInfo | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const isFlatShape =
+    typeof r.symbol === 'string' && (r.direction === 'long' || r.direction === 'flat');
+  if (isFlatShape) {
+    return {
+      pair: typeof r.pair === 'string' && r.pair ? r.pair : `${r.symbol}:${r.timeframe ?? ''}`,
+      symbol: r.symbol as string,
+      timeframe: typeof r.timeframe === 'string' ? r.timeframe : '',
+      direction: r.direction as 'long' | 'flat',
+      quantity: typeof r.quantity === 'number' ? r.quantity : 0,
+      entryPrice: typeof r.entryPrice === 'number' ? r.entryPrice : 0,
+      entryTime: typeof r.entryTime === 'number' ? r.entryTime : Date.now(),
+      unrealizedPnl: typeof r.unrealizedPnl === 'number' ? r.unrealizedPnl : undefined,
+    };
+  }
+  // Legacy nested shape fallback. Legacy shorts are not representable in the
+  // new PositionInfo contract (direction is 'long' | 'flat'), so they are
+  // ignored here — the next snapshot reconciles positions from engine truth.
+  const inner = (r.position ?? r) as Record<string, unknown> | undefined;
+  if (!inner || typeof inner !== 'object' || typeof inner.symbol !== 'string') return null;
+  if (inner.side === 'short') return null;
+  return {
+    pair: `${inner.symbol}:${typeof inner.timeframe === 'string' ? inner.timeframe : ''}`,
+    symbol: inner.symbol as string,
+    timeframe: typeof inner.timeframe === 'string' ? inner.timeframe : '',
+    direction: 'long' as const,
+    quantity: typeof inner.size === 'number' ? inner.size : typeof inner.quantity === 'number' ? inner.quantity : 0,
+    entryPrice: typeof inner.entryPrice === 'number' ? inner.entryPrice : 0,
+    entryTime: typeof inner.openedAt === 'number' ? inner.openedAt : typeof inner.entryTime === 'number' ? inner.entryTime : Date.now(),
+    unrealizedPnl: typeof inner.unrealizedPnl === 'number' ? inner.unrealizedPnl : undefined,
+  };
+}
+
 export function useBotWebSocket(backendUrl: string) {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<BotStatusSnapshot | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [chaosSignals, setChaosSignals] = useState<ChaosSignalRecord[]>([]);
   const [chaosHeartbeat, setChaosHeartbeat] = useState<ChaosHeartbeatRecord | null>(null);
+  const [chaosHeartbeatHistory, setChaosHeartbeatHistory] = useState<ChaosHeartbeatRecord[]>([]);
+  const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
   const [totalCandleErrors, setTotalCandleErrors] = useState(0);
   const [lastCandleError, setLastCandleError] = useState<CandleErrorRecord | null>(null);
   const [engineChaosMode, setEngineChaosMode] = useState<ChaosModeSnapshot | null>(null);
@@ -220,6 +264,12 @@ export function useBotWebSocket(backendUrl: string) {
           setStatus(msg.data.status);
           setChaosSignals(msg.data.chaosSignals || []);
           setChaosHeartbeat(msg.data.chaosHeartbeat ?? null);
+          // Seed heartbeat history with the snapshot's latest record (snapshot
+          // replace semantics — the backend always sends full state).
+          setChaosHeartbeatHistory(msg.data.chaosHeartbeat ? [msg.data.chaosHeartbeat] : []);
+          // Feed state rides on the snapshot (so a fresh page load on a silent
+          // feed is not blind) and on `bot:feedStatus` events (live updates).
+          setFeedStatus(msg.data.status?.feedState ?? msg.data.feedState ?? null);
           if (typeof msg.data.totalCandleErrors === 'number') {
             setTotalCandleErrors(msg.data.totalCandleErrors);
           }
@@ -233,23 +283,33 @@ export function useBotWebSocket(backendUrl: string) {
         } else if (msg.channel === 'bot:position') {
           setStatus((prev) => {
             if (!prev) return null;
-            const pos = msg.data.position;
-            if (msg.data.type === 'opened') {
-              return { ...prev, positions: [...prev.positions, pos] };
-            } else if (msg.data.type === 'closed') {
+            const data = msg.data as Record<string, unknown> | null | undefined;
+            if (!data) return prev;
+            const eventType = data.type;
+            const pos = toPositionInfo(data);
+            if (!pos) return prev;
+            if (eventType === 'closed' || pos.direction === 'flat') {
               return { ...prev, positions: prev.positions.filter((p) => p.symbol !== pos.symbol) };
-            } else if (msg.data.type === 'updated') {
+            }
+            if (prev.positions.some((p) => p.symbol === pos.symbol)) {
               return {
                 ...prev,
                 positions: prev.positions.map((p) => p.symbol === pos.symbol ? pos : p),
               };
             }
-            return prev;
+            return { ...prev, positions: [...prev.positions, pos] };
           });
         } else if (msg.channel === 'bot:metrics') {
           setStatus((prev) => prev ? { ...prev, ...msg.data } : null);
+        } else if (msg.channel === 'bot:feedStatus') {
+          setFeedStatus(msg.data ?? null);
         } else if (msg.channel === 'bot:chaosHeartbeat') {
           setChaosHeartbeat(msg.data ?? null);
+          // Bounded history ring (same bound as chaosSignals) so the mini-chart
+          // can render noop/error outcomes as glyphs on the chart.
+          if (msg.data) {
+            setChaosHeartbeatHistory((prev) => [...prev.slice(-199), msg.data]);
+          }
         } else if (msg.channel === 'bot:candleError') {
           const rec = msg.data as CandleErrorRecord | undefined;
           if (rec && typeof rec.message === 'string') {
@@ -297,6 +357,8 @@ export function useBotWebSocket(backendUrl: string) {
     logs,
     chaosSignals,
     chaosHeartbeat,
+    chaosHeartbeatHistory,
+    feedStatus,
     totalCandleErrors,
     lastCandleError,
     engineChaosMode,
@@ -1833,12 +1895,14 @@ function LiveBotView({
   strategySource,
   chaosMode,
   chaosSignals,
+  chaosHeartbeats,
 }: {
   backendUrl: string;
   activePair: { symbol: string; timeframe: string } | null;
   strategySource: string | null;
   chaosMode: boolean;
   chaosSignals: ChaosSignalRecord[];
+  chaosHeartbeats: ChaosHeartbeatRecord[];
 }) {
   // Mini chart data — fetch OHLCV + execute script for the first configured pair.
   // Lives in a component that only mounts in Running/Stopping/Error states, so the
@@ -1851,6 +1915,7 @@ function LiveBotView({
     strategySource ?? null,
     chaosMode,
     chaosSignals,
+    chaosHeartbeats,
   );
 
   if (!activePair) return null;
@@ -1896,6 +1961,27 @@ function chaosHeartbeatColor(h: ChaosHeartbeatRecord | null | undefined): string
   return '#e94560';
 }
 
+/** Human-readable feed status for the dashboard: connected / disconnected /
+ *  connected-but-silent, with last-candle + candle-count detail in the title. */
+function formatFeedStatus(feed: FeedStatus | null | undefined): { text: string; color?: string; title?: string } {
+  if (!feed) return { text: '\u2014' };
+  const parts: string[] = [];
+  if (feed.lastCandleAt != null) {
+    parts.push(`last candle ${new Date(feed.lastCandleAt).toLocaleTimeString()}`);
+  }
+  parts.push(`${feed.candleCount} candles`);
+  if (feed.silentSince != null) {
+    parts.push(`silent since ${new Date(feed.silentSince).toLocaleTimeString()}`);
+  }
+  if (!feed.connected) {
+    return { text: 'Disconnected', color: '#e94560', title: parts.join(' · ') };
+  }
+  if (feed.silentSince != null) {
+    return { text: 'Connected · silent', color: '#ff9800', title: parts.join(' · ') };
+  }
+  return { text: 'Connected', color: '#4caf50', title: parts.join(' · ') };
+}
+
 export function LiveDashboard({
   backendUrl,
   status,
@@ -1909,6 +1995,8 @@ export function LiveDashboard({
   totalCandleErrors = 0,
   lastCandleError = null,
   chaosSignals,
+  chaosHeartbeats = EMPTY_CHAOS_HEARTBEATS,
+  feedStatus = null,
 }: {
   backendUrl: string;
   status: BotStatusSnapshot;
@@ -1927,6 +2015,8 @@ export function LiveDashboard({
   totalCandleErrors?: number;
   lastCandleError?: CandleErrorRecord | null;
   chaosSignals?: ChaosSignalRecord[];
+  chaosHeartbeats?: ChaosHeartbeatRecord[];
+  feedStatus?: FeedStatus | null;
 }) {
   const [loading, setLoading] = useState(false);
   const [chaosWarningAcknowledged, setChaosWarningAcknowledged] = useState(false);
@@ -2051,6 +2141,10 @@ export function LiveDashboard({
   });
 
   const na = '\u2014';
+
+  // Feed connectivity for the left Status panel — live `bot:feedStatus` state
+  // wins over the snapshot-carried `status.feedState`.
+  const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
 
   const isIdle = status.state === 'Idle' || status.state === 'Stopped';
   const isRunning = status.state === 'Running';
@@ -2311,6 +2405,12 @@ export function LiveDashboard({
                 ? `${lastCandleError.pair} ${lastCandleError.timeframe}: ${lastCandleError.message}`
                 : undefined}
             />
+            <MetricValue
+              label="Feed"
+              value={feedDisplay.text}
+              color={feedDisplay.color}
+              title={feedDisplay.title}
+            />
 
             {status.errors.length > 0 && (
               <div style={{ marginTop: 8 }}>
@@ -2330,10 +2430,11 @@ export function LiveDashboard({
           {/* Mini Chart — only mounted in running states; never while Idle/Stopped */}
           <LiveBotView
             backendUrl={backendUrl}
-            activePair={persistedConfig?.pairs?.[0] ?? null}
+            activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
             strategySource={persistedConfig?.strategySource ?? null}
             chaosMode={chaosMode === true}
-            chaosSignals={chaosSignals ?? []}
+            chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
+            chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
           />
 
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
@@ -2362,26 +2463,33 @@ export function LiveDashboard({
                   </div>
                 )}
                 {status.positions.map((pos, i) => {
-                  const pnlPercent = pos.entryPrice > 0 ? (pos.unrealizedPnl / (pos.entryPrice * pos.size)) * 100 : 0;
-                  const pnlColor = pos.unrealizedPnl >= 0 ? '#4caf50' : '#e94560';
-                  const duration = now - pos.openedAt;
+                  const pnl = pos.unrealizedPnl ?? 0;
+                  const pnlPercent = pos.entryPrice > 0 && pos.quantity > 0
+                    ? (pnl / (pos.entryPrice * pos.quantity)) * 100
+                    : 0;
+                  const pnlColor = pnl >= 0 ? '#4caf50' : '#e94560';
+                  const duration = now - pos.entryTime;
+                  const isLong = pos.direction !== 'flat';
                   return (
                     <div key={i} style={{ padding: '8px 12px', background: '#111128', borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ color: '#e0e0e0', fontWeight: 600, fontSize: 12 }}>{pos.symbol}</span>
-                        <span style={{ color: pos.side === 'long' ? '#4caf50' : '#e94560', fontSize: 11, fontWeight: 600 }}>
-                          {pos.side.toUpperCase()}
+                        {pos.timeframe && (
+                          <span style={{ color: '#555', fontSize: 10 }}>{pos.timeframe}</span>
+                        )}
+                        <span style={{ color: isLong ? '#4caf50' : '#888', fontSize: 11, fontWeight: 600 }}>
+                          {isLong ? 'LONG' : 'FLAT'}
                         </span>
                         <span style={{ color: '#888', fontSize: 11 }}>
-                          {pos.size} @ ${pos.entryPrice.toFixed(2)}
+                          {pos.quantity} @ ${pos.entryPrice.toFixed(2)}
                         </span>
                         <span style={{ color: '#888', fontSize: 11, marginLeft: 'auto' }}>
-                          ${pos.currentPrice.toFixed(2)}
+                          {pos.unrealizedPnl != null ? `$${pos.unrealizedPnl.toFixed(2)}` : '\u2014'}
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
                         <span style={{ color: pnlColor, fontWeight: 600 }}>
-                          {fmtPnl(pos.unrealizedPnl).text}
+                          {fmtPnl(pnl).text}
                         </span>
                         <span style={{ color: pnlColor, fontWeight: 600 }}>
                           ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)

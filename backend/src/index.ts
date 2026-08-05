@@ -20,6 +20,7 @@ import { createBotRouter } from './routes/bot.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
 import type { BotConfig, RiskManager, RiskManagerConfig } from 'pine-framework';
 import { createBotWSGateway } from './ws/bot-gateway.js';
+import { buildSnapshotPayload } from './ws/snapshot-payload.js';
 import { createWSGateway } from './ws/gateway.js';
 import { TelegramConfigStore } from './store/TelegramConfigStore.js';
 import { ScriptFileManager } from './store/ScriptFileManager.js';
@@ -313,18 +314,13 @@ if (ENABLE_TRADING_BOT) {
     });
     // Re-broadcast full snapshot when bot starts so connected clients receive startedAt
     if (event.current === 'Running') {
-      const snapshot = botEngine.getSnapshot();
+      // SSOT (design D2): same shared builder as the gateway connect handler —
+      // this site previously omitted `chaosSignals`, wiping collected markers
+      // on every Running transition (the verified live-invisibility bug).
       botWS.broadcast({
         channel: 'bot:snapshot',
         type: 'snapshot',
-        data: {
-          status: snapshot,
-          // Hoisted for the frontend hook (useBotWebSocket reads these from
-          // msg.data, not msg.data.status) — same convention as chaosSignal.
-          chaosHeartbeat: snapshot.chaosHeartbeat,
-          totalCandleErrors: snapshot.totalCandleErrors,
-          chaosMode: snapshot.chaosMode,
-        },
+        data: buildSnapshotPayload(botEngine.getSnapshot(), botEngine),
       });
     }
   });
@@ -362,6 +358,25 @@ if (ENABLE_TRADING_BOT) {
     botWS.broadcast({
       channel: 'bot:candleError',
       data: info,
+    });
+  });
+
+  // D1: live feed telemetry — a dead or silent Bybit feed becomes visible on
+  // the dashboard instead of looking like a healthy idle bot. Mirrors the
+  // bot:chaosHeartbeat convention: payload under msg.data, additive contract.
+  botEngine.on('feedStatus', (status) => {
+    botWS.broadcast({
+      channel: 'bot:feedStatus',
+      data: status,
+    });
+  });
+
+  // D3: per-position open/close at confirmed order results — the positions
+  // panel updates in real time from engine truth (no phantom positions).
+  botEngine.on('position', (positionInfo) => {
+    botWS.broadcast({
+      channel: 'bot:position',
+      data: positionInfo,
     });
   });
 

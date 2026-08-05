@@ -28,11 +28,12 @@ import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
 import { LiveScheduler } from './live-scheduler.js';
 import { ClosedCandle, PairId } from './scheduler.js';
 import { ChaosSignalGenerator } from './chaos-signal-generator.js';
-import type { ExecutionResult } from './live-strategy-executor.js';
+import type { ExecutionResult, PositionInfo } from './live-strategy-executor.js';
 import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
 import { extractScriptName } from '../utils/script-name.js';
+import { writeFile } from 'node:fs/promises';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -44,6 +45,20 @@ export interface BotLogger {
 
 /** Max number of chaos signal records retained for WS replay. */
 const CHAOS_HISTORY_LIMIT = 200;
+
+/** Bar-feed silence threshold (D1): a Running bot with no confirmed candle for
+ *  this long is flagged "feed silent" instead of appearing healthy. */
+const FEED_SILENCE_THRESHOLD_MS = 90_000;
+
+/** Run-state file for the latest feed telemetry (D1), written beside the
+ *  executor's strategy-state.json (both default to the process cwd) so a
+ *  silent run is diagnosable offline. */
+const FEED_STATE_FILE = 'feed-state.json';
+
+/** Minimum interval between feed-state.json writes for candle-count-only
+ *  updates (task 1.3): connection/subscription/error changes persist
+ *  immediately, but a candle tick must not write to disk every candle. */
+const FEED_STATE_PERSIST_THROTTLE_MS = 60_000;
 
 /** Default live starting capital (1,000 USDC in lamports) when the config
  *  does not specify one. */
@@ -81,6 +96,11 @@ export interface BotEventMap {
   /** Emitted when a candle fails to process — surfaced by the scheduler's
    *  per-candle catch instead of silently swallowed (D3). */
   candleError: (info: CandleErrorInfo) => void;
+  /** Bar-feed telemetry (D1): connection state, per-pair subscription results,
+   *  and candle progress — broadcast so a dead/silent feed is visible. */
+  feedStatus: (status: FeedStatus) => void;
+  /** Per-position open/close (D3), emitted at order-result points. */
+  position: (event: PositionEvent) => void;
 }
 
 /** A chaos signal record broadcast to the dashboard — the genuine strategy
@@ -93,6 +113,57 @@ export interface ChaosSignalRecord {
   txSignature?: string;
   error?: string;
   timestamp: number;
+}
+
+/** Per-pair bar-feed subscription result (D1). */
+export interface FeedSubscriptionResult {
+  /** Pair symbol (e.g. "ETHUSDT"). */
+  pair: string;
+  /** Pair timeframe (e.g. "1"). */
+  timeframe: string;
+  /** True while the subscription is live (sent on an open socket). */
+  ok: boolean;
+  /** Last feed error affecting this subscription, when any. */
+  error?: string;
+}
+
+/** Live bar-feed telemetry broadcast on `bot:feedStatus` (D1) — makes a dead
+ *  or silent Bybit feed visible instead of an apparently-healthy idle bot. */
+export interface FeedStatus {
+  /** Whether the Bybit WebSocket socket is connected. */
+  connected: boolean;
+  /** Per-pair subscription results for the configured pairs. */
+  subscriptions: FeedSubscriptionResult[];
+  /** Timestamp (ms) of the last confirmed candle received, or null. */
+  lastCandleAt: number | null;
+  /** Confirmed candles received since this run started. */
+  candleCount: number;
+  /** When the feed crossed the silence threshold (ms) — present only while
+   *  Running with no confirmed candle for FEED_SILENCE_THRESHOLD_MS. */
+  silentSince?: number;
+}
+
+/** Per-position open/close event broadcast on `bot:position` (D3), emitted at
+ *  order-result points without altering execution. */
+export interface PositionEvent {
+  /** Pair key ("SYMBOL:TIMEFRAME"). */
+  pair: string;
+  /** Pair symbol (e.g. "ETHUSDT"). */
+  symbol: string;
+  /** Pair timeframe (e.g. "1"). */
+  timeframe: string;
+  /** Resulting direction: 'long' after a filled buy, 'flat' after a filled
+   *  sell/close. */
+  direction: 'long' | 'flat';
+  /** Position size in base-token units (0 when flat). */
+  quantity: number;
+  /** Entry price (0 when flat). */
+  entryPrice: number;
+  /** Candle timestamp (ms) the position opened (0 when flat). */
+  entryTime: number;
+  /** Unrealized P&L in USDC when a live mark price is known — not tracked by
+   *  the engine, so left undefined (D3). */
+  unrealizedPnl?: number;
 }
 
 export interface BotEngineOptions {
@@ -157,6 +228,27 @@ export class BotEngine {
 
   /** Outcome of the most recently processed chaos candle (D3), for snapshot. */
   private lastChaosHeartbeat: ChaosHeartbeat | null = null;
+
+  /** Live bar-feed telemetry (D1) — updated by the feed lifecycle callbacks
+   *  and the candle path, broadcast on `bot:feedStatus` and persisted to
+   *  feed-state.json. */
+  private feedState: FeedStatus = {
+    connected: false,
+    subscriptions: [],
+    lastCandleAt: null,
+    candleCount: 0,
+  };
+
+  /** Timestamp (ms) when the bar-feed socket last connected — the silence
+   *  reference for a connected feed that has never delivered a confirmed
+   *  candle (QA S3). buildFeedStatus cannot key off lastCandleAt (null on a
+   *  zero-candle feed would never flip silent), so a connected-but-silent feed
+   *  is measured from this instead. Null until the first connection. */
+  private feedStartedAt: number | null = null;
+
+  /** Timestamp of the last feed-state.json write, for the candle-count
+   *  persistence throttle (task 1.3). */
+  private lastFeedStatePersistAt = 0;
 
   /** Live trading components (initialized in initialize()). */
   private barFeed: BybitWebSocketService | null = null;
@@ -547,6 +639,25 @@ export class BotEngine {
     return [...this.chaosHistory];
   }
 
+  /** Truthful open positions derived read-only from the executor's per-pair
+   *  state (D3) — empty only when every pair is genuinely flat. No executor
+   *  (Idle/Stopped) → no positions. Snapshot builders MUST use this accessor,
+   *  not the legacy `getSnapshot().positions` stub. */
+  getPositions(): PositionInfo[] {
+    return this.strategyExecutor?.getPositions() ?? [];
+  }
+
+  /** The running pairs (symbol + timeframe) from the executor (D4) — engine
+   *  truth for the dashboard, preferred over disk config `pairs[0]`. */
+  getRunningPairs(): PairId[] {
+    return this.strategyExecutor?.getRunningPairs() ?? [];
+  }
+
+  /** Latest bar-feed telemetry (D1), for snapshot builders / diagnostics. */
+  getFeedStatus(): FeedStatus {
+    return this.buildFeedStatus();
+  }
+
   /** Record, retain, and emit a chaos signal with its execution outcome. */
   private emitChaosSignal(
     signal: SchedulerTradeSignal,
@@ -715,6 +826,14 @@ export class BotEngine {
     // 3. Create bar feed (Bybit WebSocket)
     this.barFeed = new BybitWebSocketService();
 
+    // Feed telemetry (D1): fresh counters per run so lastCandleAt/candleCount
+    // describe THIS run, not a previous one. The throttle timestamp also
+    // resets so the first candle of a new run persists immediately instead of
+    // being suppressed by a write from the previous run.
+    this.feedState = { connected: false, subscriptions: [], lastCandleAt: null, candleCount: 0 };
+    this.feedStartedAt = null;
+    this.lastFeedStatePersistAt = 0;
+
     // 4. Wire candle callback: feed candles into scheduler
     this.barFeed.setCandleCallback((candle: ClosedCandle) => {
       this.handleCandle(candle);
@@ -722,10 +841,33 @@ export class BotEngine {
 
     this.barFeed.setErrorCallback((error: Error) => {
       this.logger.error('Bar feed error', { error: error.message });
+      // A socket error means the feed is not delivering — mark every
+      // subscription failed so the dashboard shows the failure (D1).
+      for (const sub of this.feedState.subscriptions) {
+        sub.ok = false;
+        sub.error = error.message;
+      }
+      // Structural change (subscriptions flipped to failed) → persist now,
+      // bypassing the candle-count throttle (task 1.3).
+      this.notifyFeedStatus(true);
     });
 
     this.barFeed.setConnectionCallback((connected: boolean) => {
       this.logger.info(`Bar feed ${connected ? 'connected' : 'disconnected'}`);
+      this.feedState.connected = connected;
+      if (connected) {
+        // On (re)connect the feed service re-sends every stored subscription
+        // (resubscribeAll) — record the configured pairs as live (D1).
+        this.feedStartedAt = Date.now();
+        this.feedState.subscriptions = (this._config?.pairs ?? []).map((p) => ({
+          pair: p.symbol,
+          timeframe: p.timeframe,
+          ok: true,
+        }));
+      }
+      // Structural change (connection state flipped) → persist now, bypassing
+      // the candle-count throttle (task 1.3).
+      this.notifyFeedStatus(true);
     });
 
     // 5. Create scheduler
@@ -792,6 +934,10 @@ export class BotEngine {
                 txSignature: txSig,
               });
               this.emitChaosSignal(signal, { success: true, txSignature: txSig });
+              // D3: observe-and-emit the resulting position at the order-result
+              // point — buy filled → long, sell/close filled → flat. Telemetry
+              // only; execution state stays owned by the executor.
+              this.emitPositionEvent(signal);
             } else {
               this.chaosStats.ordersFailed++;
               this.logger.warn('chaos.order.failed', {
@@ -836,6 +982,9 @@ export class BotEngine {
       for (const pair of this._config.pairs) {
         const pairId: PairId = { symbol: pair.symbol, timeframe: pair.timeframe };
         this.barFeed.subscribe(pairId);
+        // Track the subscription result (D1): live immediately when the socket
+        // is already open; otherwise the connection callback marks it on open.
+        this.upsertSubscription(pairId, this.feedState.connected);
         this.logger.info('Subscribed to pair', { symbol: pair.symbol, timeframe: pair.timeframe });
       }
     }
@@ -878,11 +1027,110 @@ export class BotEngine {
     return this.barFeed.fetchHistoricalCandles(pair);
   }
 
+  // ---- Feed telemetry (D1) ----
+
+  /** Upsert a per-pair subscription result without clobbering siblings. */
+  private upsertSubscription(pair: PairId, ok: boolean): void {
+    const existing = this.feedState.subscriptions.find(
+      (sub) => sub.pair === pair.symbol && sub.timeframe === pair.timeframe,
+    );
+    if (existing) {
+      existing.ok = ok;
+      return;
+    }
+    this.feedState.subscriptions.push({ pair: pair.symbol, timeframe: pair.timeframe, ok });
+  }
+
+  /** Latest feed status with the silence marker computed lazily (D1): once a
+   *  Running bot has gone FEED_SILENCE_THRESHOLD_MS without a confirmed
+   *  candle, silentSince marks when the feed crossed the threshold. Returns a
+   *  copy so consumers cannot mutate the engine's live telemetry. */
+  private buildFeedStatus(): FeedStatus {
+    const { connected, subscriptions, lastCandleAt, candleCount } = this.feedState;
+    // Silence reference: the last confirmed candle when one exists, otherwise
+    // the last feed connection time (QA S3). A connected feed that delivers
+    // zero confirmed candles keeps lastCandleAt null — keying silence off it
+    // alone would show "Connected" forever. Falling back to feedStartedAt makes
+    // that zero-candle feed flip silent after FEED_SILENCE_THRESHOLD_MS.
+    const referenceAt = connected ? (lastCandleAt ?? this.feedStartedAt ?? 0) : 0;
+    let silentSince: number | undefined;
+    if (
+      connected &&
+      this.state === BotState.Running &&
+      referenceAt > 0 &&
+      Date.now() - referenceAt >= FEED_SILENCE_THRESHOLD_MS
+    ) {
+      silentSince = referenceAt + FEED_SILENCE_THRESHOLD_MS;
+    }
+    return {
+      connected,
+      subscriptions: subscriptions.map((sub) => ({ ...sub })),
+      lastCandleAt,
+      candleCount,
+      ...(silentSince !== undefined ? { silentSince } : {}),
+    };
+  }
+
+  /** Broadcast the latest feed status on `bot:feedStatus` and persist it (D1).
+   *  forcePersist bypasses the candle-count throttle — callers pass true on
+   *  connection/subscription/error changes, false (default) on candle ticks. */
+  private notifyFeedStatus(forcePersist = false): void {
+    const status = this.buildFeedStatus();
+    this.emit('feedStatus', status);
+    this.persistFeedStateThrottled(status, forcePersist);
+  }
+
+  /** Persist the latest feed status to feed-state.json, throttling
+   *  candle-count-only updates to at most one write per
+   *  FEED_STATE_PERSIST_THROTTLE_MS (task 1.3). Structural changes
+   *  (connection/subscription/error) always write immediately. */
+  private persistFeedStateThrottled(status: FeedStatus, forcePersist: boolean): void {
+    const now = Date.now();
+    if (!forcePersist && now - this.lastFeedStatePersistAt < FEED_STATE_PERSIST_THROTTLE_MS) {
+      return;
+    }
+    this.lastFeedStatePersistAt = now;
+    this.persistFeedState(status);
+  }
+
+  /** Persist the latest feed status to feed-state.json (mirrors the
+   *  executor's strategy-state.json pattern) so a silent run is diagnosable
+   *  offline. Fire-and-forget: a write failure must never block the feed. */
+  private persistFeedState(status: FeedStatus): void {
+    void writeFile(FEED_STATE_FILE, JSON.stringify(status, null, 2)).catch((err) => {
+      this.logger.warn('Failed to persist feed state', { error: String(err) });
+    });
+  }
+
+  /** Emit a per-position open/close event (D3) from an order-result signal.
+   *  Telemetry only — the executor owns execution state. */
+  private emitPositionEvent(signal: SchedulerTradeSignal): void {
+    const { symbol, timeframe } = signal.pair;
+    const isOpen = signal.action === 'buy';
+    this.emit('position', {
+      pair: `${symbol}:${timeframe}`,
+      symbol,
+      timeframe,
+      direction: isOpen ? 'long' : 'flat',
+      quantity: isOpen ? signal.quantity : 0,
+      entryPrice: isOpen ? signal.price : 0,
+      entryTime: isOpen ? signal.timestamp : 0,
+    });
+  }
+
   /**
    * Handle an incoming candle from the bar feed.
    * Feeds the candle into the scheduler for processing.
    */
   private handleCandle(candle: ClosedCandle): void {
+    // Feed telemetry (D1): every confirmed candle advances the count and the
+    // last-candle timestamp, refreshing the silence marker. Recorded before
+    // the state gate so a candle that arrives outside Running is still
+    // diagnosable.
+    this.feedState.lastCandleAt = candle.timestamp;
+    this.feedState.candleCount++;
+    this.notifyFeedStatus();
+
     if (!this.scheduler || this.state !== BotState.Running) return;
 
     // Process candle asynchronously (fire and forget — scheduler handles errors)
@@ -932,6 +1180,11 @@ export class BotEngine {
         this.logger.error('Failed to persist strategy state', { error: String(err) });
       }
     }
+
+    // 2.5 Persist the final feed telemetry so the last run state is
+    //     diagnosable offline (D1, task 1.3) — a stop is a connection/state
+    //     change, not a candle tick, so it bypasses the throttle.
+    this.persistFeedStateThrottled(this.buildFeedStatus(), true);
 
     // 3. Clear references
     this.scheduler = null;

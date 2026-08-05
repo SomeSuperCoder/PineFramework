@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CandlestickData } from '../chart';
-import type { ScriptResult, ChaosSignalRecord, StrategyMarkerData } from '../types';
+import type { ScriptResult, ChaosSignalRecord, ChaosHeartbeatRecord, StrategyMarkerData } from '../types';
 import { buildScriptResult } from './chart-data-transform';
 
 const DEFAULT_DISPLAY_COUNT = 12;
@@ -8,6 +8,20 @@ const FETCH_LIMIT = 200; // enough for lookback periods
 
 /** Color used to flag chaos markers whose DEX order failed. */
 const CHAOS_FAILED_COLOR = '#8a8a8a';
+
+/**
+ * Stable empty heartbeats reference for the default parameter. A fresh `[]`
+ * literal here would create a new array every render and, being part of the
+ * chaos effect's dependency array, retrigger the effect infinitely.
+ */
+const EMPTY_HEARTBEATS: ChaosHeartbeatRecord[] = [];
+
+/**
+ * Stable empty signals reference for the default parameter. A fresh `[]`
+ * literal here would create a new array every render and, being part of the
+ * chaos effect's dependency array, retrigger the effect infinitely.
+ */
+const EMPTY_SIGNALS: ChaosSignalRecord[] = [];
 
 interface MiniChartDataResult {
   displayCandles: CandlestickData[];
@@ -28,7 +42,8 @@ export function useBotMiniChartData(
   interval: string | null,
   strategySource: string | null,
   chaosMode: boolean = false,
-  chaosSignals: ChaosSignalRecord[] = [],
+  chaosSignals: ChaosSignalRecord[] = EMPTY_SIGNALS,
+  chaosHeartbeats: ChaosHeartbeatRecord[] = EMPTY_HEARTBEATS,
   displayCount: number = DEFAULT_DISPLAY_COUNT,
 ): MiniChartDataResult {
   const [candles, setCandles] = useState<CandlestickData[]>([]);
@@ -259,24 +274,28 @@ export function useBotMiniChartData(
   }, [candles, dataVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chaos mode: build a ScriptResult from broadcast chaos signals — no /api/execute.
-  // Markers are resolved against the visible candle slice (ms timestamp → candle seconds).
+  // Markers are resolved against the FULL loaded candle array (barIndex = index
+  // into `candles`), then reindexed into the display slice when the display
+  // ScriptResult is built below. This is what makes full-window resolution
+  // visible: without the reindex, the renderer drops every marker beyond the
+  // last `displayCount` bars.
   useEffect(() => {
     if (!chaosMode) return;
     if (candles.length === 0) return;
 
-    const sliceStart = Math.max(0, candles.length - displayCount);
-    const visible = candles.slice(sliceStart);
     const timeToIndex = new Map<number, number>();
-    for (let i = 0; i < visible.length; i++) {
-      timeToIndex.set(visible[i].time, i);
+    for (let i = 0; i < candles.length; i++) {
+      timeToIndex.set(candles[i].time, i);
     }
 
     const markers: StrategyMarkerData[] = [];
     for (const rec of chaosSignals) {
-      if (rec.symbol !== symbol) continue;
+      // Match the pair/timeframe actually being traded — markers from another
+      // pair must not land on this chart.
+      if (rec.symbol !== symbol || rec.timeframe !== interval) continue;
       const m = rec.marker;
-      const barIdx = timeToIndex.get(Math.floor(m.timestamp / 1000));
-      if (barIdx === undefined) continue;
+      const fullIdx = timeToIndex.get(Math.floor(m.timestamp / 1000));
+      if (fullIdx === undefined) continue;
       markers.push({
         type: m.type,
         name: m.name,
@@ -284,10 +303,30 @@ export function useBotMiniChartData(
         action: m.action,
         quantity: m.quantity,
         price: m.price,
-        barIndex: barIdx,
+        barIndex: fullIdx,
         timestamp: m.timestamp,
         color: rec.success ? m.color : CHAOS_FAILED_COLOR,
         comment: m.comment,
+      });
+    }
+
+    // Heartbeat outcomes render as distinct small glyphs so a silent no-op or
+    // error is visible rather than indistinguishable from no data. Signal
+    // heartbeats are skipped — the order marker above already covers that bar
+    // and a second arrow would double-render.
+    for (const hb of chaosHeartbeats) {
+      if (hb.outcome === 'signal') continue;
+      const fullIdx = timeToIndex.get(Math.floor(hb.candleTimestamp / 1000));
+      if (fullIdx === undefined) continue;
+      markers.push({
+        type: 'heartbeat',
+        name: hb.outcome === 'error' ? 'Chaos Error' : 'No-op',
+        direction: 'flat',
+        barIndex: fullIdx,
+        timestamp: hb.candleTimestamp,
+        color: hb.outcome === 'error' ? '#e94560' : '#ff9800',
+        comment: hb.reason,
+        outcome: hb.outcome,
       });
     }
 
@@ -302,7 +341,7 @@ export function useBotMiniChartData(
       strategyMarkers: markers,
     });
     setDataVersion((v) => v + 1);
-  }, [chaosMode, chaosSignals, candles, symbol, displayCount]);
+  }, [chaosMode, chaosSignals, chaosHeartbeats, candles, symbol, interval]);
 
   // Slice for display
   const sliceStart = Math.max(0, candles.length - displayCount);
@@ -323,6 +362,13 @@ export function useBotMiniChartData(
         visibleTimes.has(Math.floor(bc.time / 1000)),
       ),
       labels: (scriptResult.labels || []).filter((l) => visibleTimes.has(l.time)),
+      // Markers carry a full-array barIndex; reindex into the display slice and
+      // drop markers whose bar is outside the visible window.
+      strategyMarkers: (scriptResult.strategyMarkers || []).flatMap((m) =>
+        m.barIndex < sliceStart
+          ? []
+          : [{ ...m, barIndex: m.barIndex - sliceStart }],
+      ),
     };
   }
 
