@@ -7,7 +7,7 @@ import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { ChaosModeWarning } from './ChaosModeWarning';
-import type { ChaosSignalRecord } from '../types';
+import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot } from '../types';
 
 // ---- Timezone Utilities ----
 
@@ -191,6 +191,10 @@ export function useBotWebSocket(backendUrl: string) {
   const [status, setStatus] = useState<BotStatusSnapshot | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [chaosSignals, setChaosSignals] = useState<ChaosSignalRecord[]>([]);
+  const [chaosHeartbeat, setChaosHeartbeat] = useState<ChaosHeartbeatRecord | null>(null);
+  const [totalCandleErrors, setTotalCandleErrors] = useState(0);
+  const [lastCandleError, setLastCandleError] = useState<CandleErrorRecord | null>(null);
+  const [engineChaosMode, setEngineChaosMode] = useState<ChaosModeSnapshot | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [connectionFailed, setConnectionFailed] = useState(false);
@@ -215,6 +219,11 @@ export function useBotWebSocket(backendUrl: string) {
         if (msg.channel === 'bot:snapshot' && msg.type === 'snapshot') {
           setStatus(msg.data.status);
           setChaosSignals(msg.data.chaosSignals || []);
+          setChaosHeartbeat(msg.data.chaosHeartbeat ?? null);
+          if (typeof msg.data.totalCandleErrors === 'number') {
+            setTotalCandleErrors(msg.data.totalCandleErrors);
+          }
+          setEngineChaosMode(msg.data.chaosMode ?? null);
         } else if (msg.channel === 'bot:state') {
           setStatus((prev) => prev ? { ...prev, state: msg.data.current } : null);
         } else if (msg.channel === 'bot:log') {
@@ -239,6 +248,16 @@ export function useBotWebSocket(backendUrl: string) {
           });
         } else if (msg.channel === 'bot:metrics') {
           setStatus((prev) => prev ? { ...prev, ...msg.data } : null);
+        } else if (msg.channel === 'bot:chaosHeartbeat') {
+          setChaosHeartbeat(msg.data ?? null);
+        } else if (msg.channel === 'bot:candleError') {
+          const rec = msg.data as CandleErrorRecord | undefined;
+          if (rec && typeof rec.message === 'string') {
+            setLastCandleError(rec);
+            // Snapshot carries the authoritative counter; events keep it live
+            // between snapshots.
+            setTotalCandleErrors((prev) => prev + 1);
+          }
         } else {
           // Delegate to auto-select hook for other channels
           autoSelect.handleMessage(msg);
@@ -277,6 +296,10 @@ export function useBotWebSocket(backendUrl: string) {
     status,
     logs,
     chaosSignals,
+    chaosHeartbeat,
+    totalCandleErrors,
+    lastCandleError,
+    engineChaosMode,
     autoSelectProgress: autoSelect.progress,
     autoSelectResult: autoSelect.result,
     connectionFailed,
@@ -1693,9 +1716,9 @@ function SetupWizard({
 
 // ---- Live Dashboard (Status / Metrics / Logs) ----
 
-function MetricValue({ label, value, color }: { label: string; value: string; color?: string }) {
+function MetricValue({ label, value, color, title }: { label: string; value: string; color?: string; title?: string }) {
   return (
-    <div>
+    <div title={title}>
       <span style={{ color: '#888' }}>{label}: </span>
       <span style={{ color: color ?? '#e0e0e0', fontWeight: 600 }}>{value}</span>
     </div>
@@ -1851,6 +1874,28 @@ function LiveBotView({
   );
 }
 
+// ---- Chaos observability helpers ----
+
+/** Short human-readable label for the last chaos candle outcome. */
+function formatChaosHeartbeat(h: ChaosHeartbeatRecord | null | undefined): string {
+  if (!h) return '\u2014';
+  switch (h.outcome) {
+    case 'signal':
+      return `signal${h.action ? ` (${h.action})` : ''}`;
+    case 'noop':
+      return `no-op${h.reason ? ` (${h.reason})` : ''}`;
+    case 'error':
+      return `error${h.reason ? `: ${h.reason.length > 48 ? `${h.reason.slice(0, 48)}…` : h.reason}` : ''}`;
+  }
+}
+
+function chaosHeartbeatColor(h: ChaosHeartbeatRecord | null | undefined): string | undefined {
+  if (!h) return undefined;
+  if (h.outcome === 'signal') return '#4caf50';
+  if (h.outcome === 'noop') return '#ff9800';
+  return '#e94560';
+}
+
 export function LiveDashboard({
   backendUrl,
   status,
@@ -1859,6 +1904,10 @@ export function LiveDashboard({
   autoSelectProgress,
   autoSelectResult,
   chaosMode,
+  engineChaosMode = null,
+  chaosHeartbeat = null,
+  totalCandleErrors = 0,
+  lastCandleError = null,
   chaosSignals,
 }: {
   backendUrl: string;
@@ -1873,6 +1922,10 @@ export function LiveDashboard({
     failedCount: number;
   } | null;
   chaosMode?: boolean;
+  engineChaosMode?: ChaosModeSnapshot | null;
+  chaosHeartbeat?: ChaosHeartbeatRecord | null;
+  totalCandleErrors?: number;
+  lastCandleError?: CandleErrorRecord | null;
   chaosSignals?: ChaosSignalRecord[];
 }) {
   const [loading, setLoading] = useState(false);
@@ -2009,6 +2062,12 @@ export function LiveDashboard({
     status.state === 'Error' ? '#e94560' :
     status.state === 'Idle' ? '#888' : '#ff9800';
 
+  const engineChaosModeTitle = engineChaosMode?.executionMode
+    ? engineChaosMode.executionMode === 'simulated'
+      ? `Simulated execution${engineChaosMode.reason ? ` — ${engineChaosMode.reason}` : ''}`
+      : 'Live execution'
+    : 'Chaos mode active';
+
   // Reset chaos warning acknowledgment when chaos mode is toggled
   useEffect(() => {
     setChaosWarningAcknowledged(false);
@@ -2127,11 +2186,16 @@ export function LiveDashboard({
             {status.state}
           </span>
           {chaosMode && (
-            <span style={{
-              padding: '2px 8px', borderRadius: 4, fontSize: 10,
-              background: '#e94560', color: '#fff', fontWeight: 700,
-            }}>
-              ⚡ CHAOS
+            <span
+              style={{
+                padding: '2px 8px', borderRadius: 4, fontSize: 10,
+                background: '#e94560', color: '#fff', fontWeight: 700, cursor: 'help',
+              }}
+              title={engineChaosModeTitle}
+            >
+              ⚡ CHAOS{engineChaosMode?.executionMode
+                ? ` · ${engineChaosMode.executionMode === 'simulated' ? 'SIM' : 'LIVE'}`
+                : ''}
             </span>
           )}
           {wallet.hasWallet && (
@@ -2231,6 +2295,22 @@ export function LiveDashboard({
             <MetricValue label="Realized PnL" value={fmtPnl(status.realizedPnl).text} color={fmtPnl(status.realizedPnl).color} />
             <MetricValue label="Unrealized PnL" value={fmtPnl(status.unrealizedPnl).text} color={fmtPnl(status.unrealizedPnl).color} />
             <MetricValue label="Exposure" value={`${(status.exposure * 100).toFixed(1)}%`} />
+
+            {chaosMode && (
+              <MetricValue
+                label="Chaos Last Candle"
+                value={formatChaosHeartbeat(chaosHeartbeat)}
+                color={chaosHeartbeatColor(chaosHeartbeat)}
+              />
+            )}
+            <MetricValue
+              label="Candle Errors"
+              value={String(totalCandleErrors)}
+              color={totalCandleErrors > 0 ? '#e94560' : undefined}
+              title={lastCandleError
+                ? `${lastCandleError.pair} ${lastCandleError.timeframe}: ${lastCandleError.message}`
+                : undefined}
+            />
 
             {status.errors.length > 0 && (
               <div style={{ marginTop: 8 }}>

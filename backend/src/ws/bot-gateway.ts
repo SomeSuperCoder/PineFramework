@@ -44,7 +44,9 @@ export function createBotWSGateway(
     // Send full snapshot immediately on connect
     sendSnapshot(ws, getEngine());
 
-    ws.on('close', () => { /* no-op */ });
+    ws.on('close', () => {
+      /* no-op */
+    });
     ws.on('error', () => ws.close());
   });
 
@@ -63,37 +65,50 @@ export function createBotWSGateway(
 
   function sendSnapshot(ws: WebSocket, engine: BotEngine | null): void {
     if (!engine) {
-      ws.send(JSON.stringify({
-        channel: 'bot:snapshot',
-        type: 'snapshot',
-        data: {
-          status: {
-            state: 'Idle',
-            strategyName: '(not configured)',
-            dex: 'jupiter-swap',
-            walletPublicKey: null,
-            startedAt: null,
-            uptimeMs: 0,
-            balance: 0,
-            realizedPnl: 0,
-            unrealizedPnl: 0,
-            positions: [],
-            exposure: 0,
-            errors: [],
+      ws.send(
+        JSON.stringify({
+          channel: 'bot:snapshot',
+          type: 'snapshot',
+          data: {
+            status: {
+              state: 'Idle',
+              strategyName: '(not configured)',
+              dex: 'jupiter-swap',
+              walletPublicKey: null,
+              startedAt: null,
+              uptimeMs: 0,
+              balance: 0,
+              realizedPnl: 0,
+              unrealizedPnl: 0,
+              positions: [],
+              exposure: 0,
+              errors: [],
+            },
+            chaosSignals: [],
+            // Hoisted for the frontend hook (useBotWebSocket reads these from
+            // msg.data, not msg.data.status).
+            chaosHeartbeat: null,
+            totalCandleErrors: 0,
+            chaosMode: { enabled: false, executionMode: 'live' },
           },
-          chaosSignals: [],
-        },
-      }));
+        }),
+      );
       return;
     }
 
-    ws.send(JSON.stringify({
-      channel: 'bot:snapshot',
-      type: 'snapshot',
-      data: {
-        status: engine.getSnapshot(),
-        chaosSignals: engine.getChaosHistory(),
-      },
-    }));
+    const snapshot = engine.getSnapshot();
+    ws.send(
+      JSON.stringify({
+        channel: 'bot:snapshot',
+        type: 'snapshot',
+        data: {
+          status: snapshot,
+          chaosSignals: engine.getChaosHistory(),
+          chaosHeartbeat: snapshot.chaosHeartbeat,
+          totalCandleErrors: snapshot.totalCandleErrors,
+          chaosMode: snapshot.chaosMode,
+        },
+      }),
+    );
   }
 }

@@ -108,6 +108,53 @@ export interface ChaosModeConfig {
 }
 
 /**
+ * Chaos execution mode: 'live' when real wallet funds back the chaos engine,
+ * 'simulated' when the documented equity floor is in use (D1/D2).
+ */
+export type ChaosExecutionMode = 'live' | 'simulated';
+
+/** Why the simulated equity floor replaced the real wallet balance (D2). */
+export type ChaosFailureReason = 'wallet-empty' | 'rpc-unreachable';
+
+/**
+ * Per-candle chaos outcome — the "never silently vanishes" heartbeat (D3).
+ * Every processed chaos candle records exactly one of these: a signal, an
+ * explicit no-op reason, or an error. Broadcast on `bot:chaosHeartbeat` and
+ * included in `bot:snapshot`.
+ */
+export interface ChaosHeartbeat {
+  /** Pair key ("SYMBOL:TIMEFRAME"). */
+  pair: string;
+  /** Pair timeframe. */
+  timeframe: string;
+  /** Timestamp of the closed candle that produced this outcome. */
+  candleTimestamp: number;
+  /** Outcome: a generated signal, an explicit no-op reason, or an error. */
+  outcome: 'signal' | 'noop' | 'error';
+  /** Generator action for a `signal` outcome. */
+  action?: 'long' | 'short' | 'exit';
+  /** Explicit no-op reason or error message (for `noop`/`error` outcomes). */
+  reason?: string;
+}
+
+/**
+ * A candle-processing failure surfaced by the scheduler's per-candle catch —
+ * broadcast over WS on `bot:candleError` instead of silently swallowed (D3).
+ * The `type` discriminator matches the frontend's CandleErrorRecord contract.
+ */
+export interface CandleErrorInfo {
+  type: 'candle-error';
+  /** Pair key ("SYMBOL:TIMEFRAME"). */
+  pair: string;
+  /** Pair timeframe. */
+  timeframe: string;
+  /** Timestamp of the candle that failed to process. */
+  candleTimestamp: number;
+  /** Error message. */
+  message: string;
+}
+
+/**
  * Complete bot configuration.
  */
 export interface BotConfig {
@@ -148,8 +195,22 @@ export interface BotStatusSnapshot {
   exposure: number;
   errors: BotError[];
   lastTransition: StateTransition | null;
-  /** Whether chaos test mode is active. */
-  chaosMode: boolean;
+  /**
+   * Chaos mode state: whether active and, when active, the chaos execution
+   * mode ('live' vs 'simulated' + reason) — engine truth, not disk (D4).
+   */
+  chaosMode: {
+    enabled: boolean;
+    executionMode: ChaosExecutionMode;
+    /** Why execution is simulated, when it is (D2). */
+    reason?: ChaosFailureReason;
+  };
+  /** Running count of candle-processing errors surfaced by the scheduler's
+   *  per-candle catch (D3). */
+  totalCandleErrors: number;
+  /** Outcome of the most recently processed chaos candle, or null before the
+   *  first chaos candle (D3). */
+  chaosHeartbeat: ChaosHeartbeat | null;
   /** Whether all initialized strategies have completed warm-up (live path). */
   warmUpComplete: boolean;
 }

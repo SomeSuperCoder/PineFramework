@@ -181,6 +181,39 @@ export interface ChaosSignalRecord {
   timestamp: number;
 }
 
+/** Chaos mode state reported by the engine in `bot:snapshot` — engine truth,
+ *  not persisted disk config. The frontend indicator reads this, not disk. */
+export interface ChaosModeSnapshot {
+  enabled: boolean;
+  executionMode: 'live' | 'simulated';
+  /** Why execution is simulated, when it is. */
+  reason?: 'wallet-empty' | 'rpc-unreachable';
+}
+
+/** Per-candle chaos outcome broadcast on `bot:chaosHeartbeat` and included in
+ *  `bot:snapshot` (`null` when chaos mode is inactive). A running chaos mode
+ *  always produces one of these per processed candle — never silently idle. */
+export interface ChaosHeartbeatRecord {
+  pair: string;
+  timeframe: string;
+  candleTimestamp: number;
+  outcome: 'signal' | 'noop' | 'error';
+  /** Action taken for a `signal` outcome (e.g. long/short/exit). */
+  action?: string;
+  /** Explicit no-op reason (e.g. "already long") or the error message. */
+  reason?: string;
+}
+
+/** A candle processing error broadcast on `bot:candleError` — surfaced instead
+ *  of silently swallowing per-candle exceptions. */
+export interface CandleErrorRecord {
+  type: 'candle-error';
+  pair: string;
+  timeframe: string;
+  candleTimestamp: number;
+  message: string;
+}
+
 export interface BacktestMetrics {
   totalTrades: number;
   winningTrades: number;

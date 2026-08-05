@@ -51,7 +51,12 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
     const duration = Date.now() - start;
-    const attrs = { method: req.method, url: req.originalUrl || req.url, status: res.statusCode, duration };
+    const attrs = {
+      method: req.method,
+      url: req.originalUrl || req.url,
+      status: res.statusCode,
+      duration,
+    };
     const msg = `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`;
     if (res.statusCode >= 400) {
       logger.warn(attrs, msg);
@@ -107,7 +112,10 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
         resolve();
       });
       req.on('error', reject);
-      req.on('timeout', () => { req.destroy(); reject(new Error('Connection timed out')); });
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Connection timed out'));
+      });
     });
     console.log(`[Proxy-Test] Proxy works!`);
     res.json({ ok: true, proxy: `${proxy.host}:${proxy.port}` });
@@ -140,18 +148,25 @@ async function restartTelegramService(): Promise<void> {
   await telegramService.start();
 }
 
-app.use('/api', createSettingsRouter({
-  getBotToken: () => telegramConfig.getBotToken(),
-  setBotToken: (token: string) => telegramConfig.setBotToken(token),
-  getAlertPreference: (chatId: number, alertId: string) => telegramConfig.getAlertPreference(chatId, alertId),
-  setAlertPreference: (chatId: number, alertId: string, enabled: boolean) => telegramConfig.setAlertPreference(chatId, alertId, enabled),
-  getSubscribers: () => telegramConfig.getSubscribers(),
-  getProxy: () => telegramConfig.getProxy(),
-  setProxy: (proxy) => {
-    telegramConfig.setProxy(proxy);
-    restartTelegramService().catch((err) => console.error('[Telegram] Error restarting after proxy update:', err));
-  },
-}));
+app.use(
+  '/api',
+  createSettingsRouter({
+    getBotToken: () => telegramConfig.getBotToken(),
+    setBotToken: (token: string) => telegramConfig.setBotToken(token),
+    getAlertPreference: (chatId: number, alertId: string) =>
+      telegramConfig.getAlertPreference(chatId, alertId),
+    setAlertPreference: (chatId: number, alertId: string, enabled: boolean) =>
+      telegramConfig.setAlertPreference(chatId, alertId, enabled),
+    getSubscribers: () => telegramConfig.getSubscribers(),
+    getProxy: () => telegramConfig.getProxy(),
+    setProxy: (proxy) => {
+      telegramConfig.setProxy(proxy);
+      restartTelegramService().catch((err) =>
+        console.error('[Telegram] Error restarting after proxy update:', err),
+      );
+    },
+  }),
+);
 
 app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
@@ -208,7 +223,10 @@ if (ENABLE_TRADING_BOT) {
       },
       emergencyClosePositions: false, // Phase 2: position-close actions are stubs
     };
-    if (config.risk.maxDailyWalletLossUsdc !== undefined && config.risk.maxDailyWalletLossUsdc > 0) {
+    if (
+      config.risk.maxDailyWalletLossUsdc !== undefined &&
+      config.risk.maxDailyWalletLossUsdc > 0
+    ) {
       riskConfig.walletBalance = {
         maxDailyWalletLossUsdc: config.risk.maxDailyWalletLossUsdc,
         timezone: riskConfig.dailyLoss.timezone,
@@ -220,6 +238,9 @@ if (ENABLE_TRADING_BOT) {
   const botEngine = new BotEngine({
     walletManager,
     riskManager: buildRiskManager(savedConfig),
+    // D4: persist any runtime config change (e.g. toggleChaosMode) to disk so
+    // the mode survives a restart. Engine config is truth; disk follows it.
+    onConfigPersist: (config) => configStore.save(config),
     onAutoSelect: async (config) => {
       const selector = new AutoMarketSelector({
         barFetcher,
@@ -260,18 +281,21 @@ if (ENABLE_TRADING_BOT) {
   }
 
   // Mount bot REST API routes
-  app.use('/api', createBotRouter({
-    getEngine: () => botEngine,
-    getWalletManager: () => walletManager,
-    getConfigStore: () => configStore,
-    getAutoSelectDeps: () => ({
-      AutoMarketSelector,
-      barFetcher,
-      backtestRunner,
-      broadcast: (msg: unknown) => botWS.broadcast(msg as any),
-      candidates: defaultCandidates,
+  app.use(
+    '/api',
+    createBotRouter({
+      getEngine: () => botEngine,
+      getWalletManager: () => walletManager,
+      getConfigStore: () => configStore,
+      getAutoSelectDeps: () => ({
+        AutoMarketSelector,
+        barFetcher,
+        backtestRunner,
+        broadcast: (msg: unknown) => botWS.broadcast(msg as any),
+        candidates: defaultCandidates,
+      }),
     }),
-  }));
+  );
 
   // Mount bot WebSocket gateway and wire engine events to WS clients
   const botWS = createBotWSGateway(server, () => botEngine);
@@ -280,14 +304,27 @@ if (ENABLE_TRADING_BOT) {
   botEngine.on('stateChange', (event) => {
     botWS.broadcast({
       channel: 'bot:state',
-      data: { current: event.current, previous: event.previous, reason: event.reason, timestamp: event.timestamp },
+      data: {
+        current: event.current,
+        previous: event.previous,
+        reason: event.reason,
+        timestamp: event.timestamp,
+      },
     });
     // Re-broadcast full snapshot when bot starts so connected clients receive startedAt
     if (event.current === 'Running') {
+      const snapshot = botEngine.getSnapshot();
       botWS.broadcast({
         channel: 'bot:snapshot',
         type: 'snapshot',
-        data: { status: botEngine.getSnapshot() },
+        data: {
+          status: snapshot,
+          // Hoisted for the frontend hook (useBotWebSocket reads these from
+          // msg.data, not msg.data.status) — same convention as chaosSignal.
+          chaosHeartbeat: snapshot.chaosHeartbeat,
+          totalCandleErrors: snapshot.totalCandleErrors,
+          chaosMode: snapshot.chaosMode,
+        },
       });
     }
   });
@@ -295,7 +332,11 @@ if (ENABLE_TRADING_BOT) {
   botEngine.on('error', (error) => {
     botWS.broadcast({
       channel: 'bot:log',
-      data: { timestamp: error.timestamp, level: 'error', message: `[${error.code}] ${error.message}` },
+      data: {
+        timestamp: error.timestamp,
+        level: 'error',
+        message: `[${error.code}] ${error.message}`,
+      },
     });
   });
 
@@ -303,6 +344,24 @@ if (ENABLE_TRADING_BOT) {
     botWS.broadcast({
       channel: 'bot:chaosSignal',
       data: record,
+    });
+  });
+
+  // D3: per-candle chaos outcomes broadcast live — the frontend renders the
+  // last heartbeat directly from msg.data, matching the chaosSignal channel
+  // payload convention.
+  botEngine.on('chaosHeartbeat', (heartbeat) => {
+    botWS.broadcast({
+      channel: 'bot:chaosHeartbeat',
+      data: heartbeat,
+    });
+  });
+
+  // D3: per-candle processing failures surfaced instead of silently swallowed.
+  botEngine.on('candleError', (info) => {
+    botWS.broadcast({
+      channel: 'bot:candleError',
+      data: info,
     });
   });
 

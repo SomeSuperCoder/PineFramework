@@ -12,6 +12,7 @@
  */
 
 import type { PairConfig } from './types.js';
+import type { CandleErrorInfo } from './types.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
 
 // ---- Types ----
@@ -128,6 +129,12 @@ export interface SchedulerOptions {
   submitOrders: OrderSubmitter;
   /** Whether the scheduler is paused. */
   paused?: boolean;
+  /**
+   * Optional observer for per-candle processing failures (D3). The per-candle
+   * catch stays — a tick must not die — but the failure is surfaced here (and
+   * counted in stats) instead of silently swallowed.
+   */
+  onCandleError?: (info: CandleErrorInfo) => void;
 }
 
 /**
@@ -143,18 +150,21 @@ export class Scheduler {
   private readonly pairs: PairConfig[];
   private readonly processCandle: CandleProcessor;
   private readonly submitOrders: OrderSubmitter;
+  private readonly onCandleError?: (info: CandleErrorInfo) => void;
   private readonly mutex: Mutex;
   private _paused: boolean;
   private _running = false;
   private tickCount = 0;
   private totalSignalsGenerated = 0;
   private totalOrdersSubmitted = 0;
+  private totalCandleErrors = 0;
   private lastTickTime = 0;
 
   constructor(options: SchedulerOptions) {
     this.pairs = [...options.pairs];
     this.processCandle = options.processCandle;
     this.submitOrders = options.submitOrders;
+    this.onCandleError = options.onCandleError;
     this.mutex = new Mutex();
     this._paused = options.paused ?? false;
   }
@@ -175,6 +185,7 @@ export class Scheduler {
       tickCount: this.tickCount,
       totalSignalsGenerated: this.totalSignalsGenerated,
       totalOrdersSubmitted: this.totalOrdersSubmitted,
+      totalCandleErrors: this.totalCandleErrors,
       lastTickTime: this.lastTickTime,
       pairCount: this.pairs.length,
     };
@@ -215,11 +226,23 @@ export class Scheduler {
           const signals = await this.processCandle(candle);
           allSignals.push(...signals);
         } catch (err) {
-          // Log error but continue processing other pairs
+          // Keep the catch — a tick must not die on one bad candle — but
+          // surface the failure instead of silently swallowing it (D3):
+          // count it and emit the candle-error event so the operator can see
+          // the bot is struggling rather than guessing from silence.
+          const message = err instanceof Error ? err.message : String(err);
+          this.totalCandleErrors++;
           console.error(
-            `[Scheduler] Error processing candle for ${pair.symbol}:${pair.timeframe}`,
+            `[Scheduler] Error processing candle for ${pair.symbol}:${pair.timeframe} @ ${candle.timestamp}`,
             err,
           );
+          this.onCandleError?.({
+            type: 'candle-error',
+            pair: pairIdToString({ symbol: pair.symbol, timeframe: pair.timeframe }),
+            timeframe: pair.timeframe,
+            candleTimestamp: candle.timestamp,
+            message,
+          });
         }
       }
     }
@@ -261,6 +284,7 @@ export class Scheduler {
     this.tickCount = 0;
     this.totalSignalsGenerated = 0;
     this.totalOrdersSubmitted = 0;
+    this.totalCandleErrors = 0;
     this.lastTickTime = 0;
   }
 }
@@ -269,6 +293,8 @@ export interface SchedulerStats {
   tickCount: number;
   totalSignalsGenerated: number;
   totalOrdersSubmitted: number;
+  /** Running count of per-candle processing errors (D3). */
+  totalCandleErrors: number;
   lastTickTime: number;
   pairCount: number;
 }

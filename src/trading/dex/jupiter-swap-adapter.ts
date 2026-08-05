@@ -230,32 +230,29 @@ export class JupiterSwapAdapter extends DexAdapter {
       };
     }
 
-    try {
-      // Check if this is native SOL
-      if (mint === TOKEN_MINTS.SOL) {
-        const balance = await getSolBalance(this.connection, publicKey);
-        return {
-          mint,
-          amount: balance.amount.toString(),
-          decimals: balance.decimals,
-        };
-      }
-
-      // SPL token balance
-      const balance = await getTokenBalance(this.connection, publicKey, mint);
+    // No catch-and-return-zero here (D2): a transport/RPC failure MUST throw so
+    // callers can distinguish a "verified empty wallet" from a "provider down".
+    // getTokenBalance already returns a genuine 0 for a missing token account
+    // (TokenAccountNotFoundError) and rethrows everything else; getSolBalance
+    // never swallows. Previously every error was folded into '0', silently
+    // conflating "no funds" with "RPC unreachable" and starving downstream
+    // decisions (chaos equity floor, execution-mode flagging) of the truth.
+    if (mint === TOKEN_MINTS.SOL) {
+      const balance = await getSolBalance(this.connection, publicKey);
       return {
         mint,
         amount: balance.amount.toString(),
         decimals: balance.decimals,
       };
-    } catch {
-      // Return zero balance on error
-      return {
-        mint,
-        amount: '0',
-        decimals: mint === USDC_MINT ? 6 : 9,
-      };
     }
+
+    // SPL token balance
+    const balance = await getTokenBalance(this.connection, publicKey, mint);
+    return {
+      mint,
+      amount: balance.amount.toString(),
+      decimals: balance.decimals,
+    };
   }
 
   async getTransactionStatus(signature: string): Promise<TxStatus> {

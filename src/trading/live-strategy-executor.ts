@@ -22,8 +22,25 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
 import type { RiskManager } from './risk/risk-manager.js';
+import type {
+  ChaosExecutionMode,
+  ChaosFailureReason,
+  ChaosHeartbeat,
+} from './types.js';
 
 // ---- Constants ----
+
+/**
+ * Simulated equity floor for chaos mode when the real wallet balance is zero
+ * or unreachable (D1). 10,000 USDC in smallest units (lamports) — matching
+ * fetchUsdcBalance()/engine initialCapital units (1 USDC = 1e6 lamports) and
+ * reintroducing the pre-balance-fetch documented floor. The floor keeps the
+ * strategy machinery producing markers; DEX execution is NOT live-tested and
+ * that caveat is reported loudly with the failure mode.
+ */
+const CHAOS_FALLBACK_EQUITY = 10_000_000_000;
+/** CHAOS_FALLBACK_EQUITY in whole USDC, for log messages. */
+const CHAOS_FALLBACK_EQUITY_USDC = CHAOS_FALLBACK_EQUITY / 1e6;
 
 /**
  * Convert a strategy marker entry (from the ExecutionEngine runtime) into a
@@ -78,6 +95,13 @@ export interface LiveStrategyConfig {
    * executor degrades gracefully (no risk tracking) when absent.
    */
   riskManager?: RiskManager;
+  /**
+   * Optional observer for per-candle chaos outcomes — the chaos heartbeat (D3).
+   * Called once per processed candle in chaos mode with a signal / explicit
+   * no-op reason / error outcome, so a running chaos mode is never silently
+   * idle. Wired by BotEngine to its emitter for WS broadcast.
+   */
+  chaosHeartbeat?: (heartbeat: ChaosHeartbeat) => void;
 }
 
 export interface StrategyState {
@@ -166,10 +190,27 @@ export class LiveStrategyExecutor {
   private config: LiveStrategyConfig;
   private strategyStates = new Map<string, StrategyState>();
   private stateFilePath: string;
+  /**
+   * Chaos execution mode: 'live' when the chaos engine is seeded with real
+   * wallet funds, 'simulated' with the failure reason when the equity floor is
+   * in use (D1/D2). Defaults to 'live' (no floor) when chaos is not active.
+   */
+  private chaosExecutionMode: { mode: ChaosExecutionMode; reason?: ChaosFailureReason } = {
+    mode: 'live',
+  };
 
   constructor(config: LiveStrategyConfig) {
     this.config = config;
     this.stateFilePath = path.join(config.dataDir ?? '.', 'strategy-state.json');
+  }
+
+  /**
+   * Current chaos execution mode, for the bot snapshot (D1/D2): 'live' when
+   * real wallet funds back the engine, 'simulated' with the failure reason
+   * (`wallet-empty` | `rpc-unreachable`) when the equity floor is in use.
+   */
+  getChaosExecutionMode(): { mode: ChaosExecutionMode; reason?: ChaosFailureReason } {
+    return this.chaosExecutionMode;
   }
 
   /**
@@ -183,27 +224,37 @@ export class LiveStrategyExecutor {
 
     const isChaos = this.config.chaosGenerator != null;
 
-    let engine: StrategyEngine | null = null;
-    let runtime: ExecutionEngine | null = null;
-
+    let state: StrategyState;
     if (isChaos) {
-      // Chaos mode drives a bare programmatic engine. Fetch real wallet balance
-      // so equity calculations reflect actual available funds, not a hardcoded
-      // constant that causes dust trades on small balances.
-      const realBalance = await this.fetchUsdcBalance();
-      console.log(
-        `[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`,
+      // Chaos mode drives a bare programmatic engine. Seed it with the real
+      // wallet balance so equity reflects actual funds — or, when the balance
+      // is zero/unreachable, with the documented simulated equity floor so the
+      // engine machinery still produces markers instead of silent zero-qty
+      // entries (D1/D2). The failure mode is logged loudly.
+      const { seedEquity, mode } = await this.resolveChaosSeed();
+      this.chaosExecutionMode = mode;
+      state = this.createStrategyState(
+        pair,
+        null,
+        new StrategyEngine({ initialCapital: seedEquity }),
       );
-      engine = new StrategyEngine({
-        initialCapital: Number(realBalance),
-      });
     } else {
-      runtime = this.compileStrategyRuntime();
-      engine = runtime.getStrategyEngine();
+      state = this.initializeStrategyNonChaos(pair);
     }
 
-    // Initialize strategy state
-    const state: StrategyState = {
+    this.strategyStates.set(key, state);
+  }
+
+  /**
+   * Build a fresh StrategyState for a pair. Shared by initializeStrategy and
+   * the chaos hot-swap rebuilds so every path constructs identical state.
+   */
+  private createStrategyState(
+    pair: PairId,
+    runtime: ExecutionEngine | null,
+    engine: StrategyEngine | null,
+  ): StrategyState {
+    return {
       runtime,
       engine,
       position: {
@@ -218,8 +269,17 @@ export class LiveStrategyExecutor {
       barIndex: 0,
       lastBarTimestamp: 0,
     };
+  }
 
-    this.strategyStates.set(key, state);
+  /**
+   * Initialize a pair through the non-chaos path: compile the Pine runtime and
+   * drive the engine from it. Shared by initializeStrategy and
+   * clearChaosGenerator so disabling chaos rebuilds exactly what a cold start
+   * would build (D5). Parse/compile failures throw.
+   */
+  private initializeStrategyNonChaos(pair: PairId): StrategyState {
+    const runtime = this.compileStrategyRuntime();
+    return this.createStrategyState(pair, runtime, runtime.getStrategyEngine());
   }
 
   /** Parse and compile the configured Pine strategy source into a live runtime. */
@@ -681,8 +741,9 @@ export class LiveStrategyExecutor {
   /**
    * Hot-swap a ChaosSignalGenerator into a running executor.
    * Replaces the chaos generator and reinitializes each pair's strategy
-   * engine to a bare StrategyEngine with real wallet balance, so the next
-   * processCandle call immediately routes through the chaos path.
+   * engine to a bare StrategyEngine seeded with the real wallet balance — or
+   * the simulated equity floor when the balance is zero/unreachable (D1/D2) —
+   * so the next processCandle call immediately routes through the chaos path.
    *
    * WHY: Enables chaos mode without stopping the bar feed or scheduler.
    * The generator swap is atomic (single assignment) — no race condition
@@ -691,18 +752,17 @@ export class LiveStrategyExecutor {
   async setChaosGenerator(generator: ChaosSignalGenerator): Promise<void> {
     this.config.chaosGenerator = generator;
 
-    // Fetch real balance once for all pairs — avoids N sequential RPC calls.
-    const realBalance = await this.fetchUsdcBalance();
-    console.log(
-      `[LiveStrategyExecutor] Chaos hot-swap: real USDC balance = ${realBalance} (${Number(realBalance) / 1e6} USDC)`,
-    );
+    // Resolve the seed equity once for all pairs (avoids N sequential RPC
+    // calls) — real balance or the floor with a loud failure mode.
+    const { seedEquity, mode } = await this.resolveChaosSeed();
+    this.chaosExecutionMode = mode;
 
     for (const pair of this.config.pairs) {
       const key = this.getPairKey(pair);
       const state = this.strategyStates.get(key);
       if (state) {
         state.engine = new StrategyEngine({
-          initialCapital: Number(realBalance),
+          initialCapital: seedEquity,
         });
         state.runtime = null;
         state.warmUpComplete = true;
@@ -711,11 +771,46 @@ export class LiveStrategyExecutor {
   }
 
   /**
-   * Remove the chaos generator, falling back to the normal strategy path
-   * on the next processCandle call.
+   * Remove the chaos generator and rebuild each pair's strategy state through
+   * the non-chaos initialization path (compile runtime + engine), so disabling
+   * chaos resumes real strategy execution instead of silently producing no
+   * signals (D5).
+   *
+   * Atomic: if any pair fails to compile, the chaos generator is restored and
+   * the error propagates — the bot keeps running chaos rather than dying or
+   * silently stopping all trading.
    */
-  clearChaosGenerator(): void {
+  async clearChaosGenerator(): Promise<void> {
+    const previousGenerator = this.config.chaosGenerator;
     this.config.chaosGenerator = undefined;
+
+    try {
+      // A chaos-only config may carry no strategy source (configure allows
+      // omitting it in chaos mode). The non-chaos rebuild below cannot compile
+      // a runtime in that case — degrade each pair to an indicator-only state
+      // instead of throwing. Throwing would roll the toggle back and trap the
+      // bot in chaos mode permanently (the silent-vanish trap D5 removes); a
+      // null runtime is already an explicit no-op in processCandle.
+      const source = this.config.strategySource;
+      const hasStrategySource = !!source && source.trim() !== '';
+      for (const pair of this.config.pairs) {
+        const key = this.getPairKey(pair);
+        if (!this.strategyStates.has(key)) continue;
+        // Non-chaos branch of initializeStrategy: fresh state — chaos
+        // simulation positions must not leak into the real strategy.
+        this.strategyStates.set(
+          key,
+          hasStrategySource
+            ? this.initializeStrategyNonChaos(pair)
+            : this.createStrategyState(pair, null, null),
+        );
+      }
+      // Chaos no longer backs the engine — no equity floor is in effect.
+      this.chaosExecutionMode = { mode: 'live' };
+    } catch (err) {
+      this.config.chaosGenerator = previousGenerator;
+      throw err;
+    }
   }
 
   /**
@@ -774,135 +869,232 @@ export class LiveStrategyExecutor {
   }
 
   /**
+   * Resolve the chaos engine's seed equity and execution mode (D1/D2).
+   *
+   * A genuine empty wallet (verified 0 balance) and an unreachable RPC both
+   * fall back to CHAOS_FALLBACK_EQUITY so the strategy machinery keeps
+   * producing markers, but they are logged with distinct failure modes
+   * (`wallet-empty` vs `rpc-unreachable`) and the loud caveat that the
+   * execution layer is NOT live-tested. Returns 'live' when real funds back
+   * the engine.
+   */
+  private async resolveChaosSeed(): Promise<{
+    seedEquity: number;
+    mode: { mode: ChaosExecutionMode; reason?: ChaosFailureReason };
+  }> {
+    let realBalance: bigint;
+    try {
+      realBalance = await this.fetchUsdcBalance();
+    } catch (err) {
+      // D2: the adapter now throws on transport errors instead of returning
+      // '0', so "RPC down" is distinguishable from "wallet empty".
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[LiveStrategyExecutor] Chaos mode: USDC balance unreachable (RPC/transport error) — ` +
+          `seeding simulated equity floor ${CHAOS_FALLBACK_EQUITY_USDC} USDC; ` +
+          `execution layer NOT live-tested (failure mode: rpc-unreachable)`,
+        { error: message },
+      );
+      return {
+        seedEquity: CHAOS_FALLBACK_EQUITY,
+        mode: { mode: 'simulated', reason: 'rpc-unreachable' },
+      };
+    }
+
+    if (realBalance <= 0n) {
+      console.warn(
+        `[LiveStrategyExecutor] Chaos mode: real USDC balance is zero — seeding simulated ` +
+          `equity floor ${CHAOS_FALLBACK_EQUITY_USDC} USDC; execution layer NOT live-tested ` +
+          `(failure mode: wallet-empty)`,
+      );
+      return {
+        seedEquity: CHAOS_FALLBACK_EQUITY,
+        mode: { mode: 'simulated', reason: 'wallet-empty' },
+      };
+    }
+
+    console.log(
+      `[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} ` +
+        `(${Number(realBalance) / 1e6} USDC) — live execution`,
+    );
+    return { seedEquity: Number(realBalance), mode: { mode: 'live' } };
+  }
+
+  /**
    * Process a candle using chaos mode — drives a real StrategyEngine with
    * random long/short/exit actions so the resulting markers are produced by
    * the strategy engine itself, indistinguishable from a real strategy.
+   *
+   * Emits a per-candle heartbeat (D3): every processed candle reports an
+   * observable outcome — a signal, an explicit no-op reason, or an error — so
+   * a running chaos mode is never silently idle.
    */
   private async processCandleChaos(candle: ClosedCandle): Promise<TradeSignal[]> {
-    const generator = this.config.chaosGenerator!;
-    const pair: PairId = { symbol: candle.symbol, timeframe: candle.timeframe };
-    const key = this.getPairKey(pair);
+    const emitHeartbeat = (hb: {
+      outcome: ChaosHeartbeat['outcome'];
+      action?: ChaosHeartbeat['action'];
+      reason?: string;
+    }): void => {
+      this.config.chaosHeartbeat?.({
+        pair: `${candle.symbol}:${candle.timeframe}`,
+        timeframe: candle.timeframe,
+        candleTimestamp: candle.timestamp,
+        ...hb,
+      });
+    };
 
-    // Ensure a strategy state exists so chaos drives a real engine per pair.
-    let state = this.strategyStates.get(key);
-    if (!state) {
-      await this.initializeStrategy(pair);
-      state = this.strategyStates.get(key)!;
-    }
+    try {
+      const generator = this.config.chaosGenerator!;
+      const pair: PairId = { symbol: candle.symbol, timeframe: candle.timeframe };
+      const key = this.getPairKey(pair);
 
-    const engine = state.engine;
-    if (!engine) {
-      throw new Error(`[LiveStrategyExecutor] Chaos mode requires a strategy engine for ${key}`);
-    }
-    const currentPrice = candle.close;
+      // Ensure a strategy state exists so chaos drives a real engine per pair.
+      let state = this.strategyStates.get(key);
+      if (!state) {
+        await this.initializeStrategy(pair);
+        state = this.strategyStates.get(key)!;
+      }
 
-    // Advance the engine to this bar — fills any pending orders from the
-    // previous candle so the engine's position reflects prior signals.
-    engine.updateBar(
-      candle.timestamp,
-      candle.timestamp,
-      candle.open,
-      candle.high,
-      candle.low,
-      candle.close,
-      candle.volume,
-    );
+      const engine = state.engine;
+      if (!engine) {
+        throw new Error(`[LiveStrategyExecutor] Chaos mode requires a strategy engine for ${key}`);
+      }
+      const currentPrice = candle.close;
 
-    // Current equity (engine tracks realized PnL); convert lamports → USDC.
-    const equity = engine.getEquity() / 1e6;
-    const chaosSignal = generator.generate(equity, candle.timestamp);
-    const enginePosition = engine.getPosition();
+      // Advance the engine to this bar — fills any pending orders from the
+      // previous candle so the engine's position reflects prior signals.
+      engine.updateBar(
+        candle.timestamp,
+        candle.timestamp,
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close,
+        candle.volume,
+      );
 
-    // Drive the real strategy engine. Markers follow real position-state
-    // semantics: no marker is produced when the transition is impossible.
-    switch (chaosSignal.action) {
-      case 'long': {
-        if (enginePosition.direction === 'flat') {
-          // 10% of equity converted to token quantity (spec: fixed 10% sizing)
-          const quantity = (equity * chaosSignal.sizeFraction) / currentPrice;
-          engine.entry('Long', 'long', quantity);
+      // Current equity (engine tracks realized PnL); convert lamports → USDC.
+      const equity = engine.getEquity() / 1e6;
+      const chaosSignal = generator.generate(equity, candle.timestamp);
+      const enginePosition = engine.getPosition();
+
+      // Drive the real strategy engine. Markers follow real position-state
+      // semantics: no marker is produced when the transition is impossible —
+      // that is an explicit no-op outcome, not an error (D3).
+      let noopReason: string | undefined;
+      switch (chaosSignal.action) {
+        case 'long': {
+          if (enginePosition.direction === 'flat') {
+            // 10% of equity converted to token quantity (spec: fixed 10% sizing)
+            const quantity = (equity * chaosSignal.sizeFraction) / currentPrice;
+            if (quantity <= 0) {
+              // D1: never drive engine.entry with qty <= 0 — it produces no
+              // marker and silently starves signals (e.g. zero equity or a
+              // non-positive candle price). Skip with an explicit reason.
+              noopReason = `zero/negative entry quantity (equity=${equity.toFixed(2)}, price=${currentPrice})`;
+            } else {
+              engine.entry('Long', 'long', quantity);
+            }
+          } else {
+            noopReason = `long while already ${enginePosition.direction} (impossible transition)`;
+          }
+          break;
         }
-        break;
-      }
-      case 'short': {
-        // Close existing position (spot DEX doesn't support short selling)
-        if (enginePosition.direction === 'long') {
-          engine.close('Short');
+        case 'short': {
+          // Close existing position (spot DEX doesn't support short selling)
+          if (enginePosition.direction === 'long') {
+            engine.close('Short');
+          } else {
+            noopReason = `short while ${enginePosition.direction} (impossible transition)`;
+          }
+          break;
         }
-        break;
-      }
-      case 'exit': {
-        // Close existing position
-        if (enginePosition.direction === 'long') {
-          engine.close('Exit');
+        case 'exit': {
+          // Close existing position
+          if (enginePosition.direction === 'long') {
+            engine.close('Exit');
+          } else {
+            noopReason = `exit while ${enginePosition.direction} (impossible transition)`;
+          }
+          break;
         }
-        break;
       }
-    }
 
-    // Map genuine engine markers to trade signals (entry → buy, close → sell),
-    // attaching the marker so it can be broadcast as the truth of this candle.
-    const markers = engine.getNewMarkers();
-    const signals: TradeSignal[] = [];
-    for (const marker of markers) {
-      if (marker.type === 'entry' && marker.direction === 'long') {
-        signals.push({
-          action: 'buy',
-          symbol: candle.symbol,
-          quantity: marker.quantity,
-          expectedPrice: currentPrice,
-          timestamp: candle.timestamp,
-          marker,
-          // Carry the chaos sizing fraction through to executeSignal so the
-          // on-chain buy matches the engine's simulated quantity (which is
-          // sized from chaosSignal.sizeFraction — see entry above). Without
-          // this, the executor sizes the buy from positionSizePercent (default
-          // 100) and spends the whole wallet (QA blocker).
-          sizeFraction: chaosSignal.sizeFraction,
-        });
-      } else if (marker.type === 'close' || marker.type === 'exit') {
-        signals.push({
-          action: 'sell',
-          symbol: candle.symbol,
-          quantity: marker.quantity,
-          expectedPrice: currentPrice,
-          timestamp: candle.timestamp,
-          marker,
-          // B1: the executor's position state is still the pre-close state
-          // here (the marker sync below runs after signal generation) — attach
-          // the entry price of the tracked long being closed, or leave absent
-          // so the PnL feed fails safe (skips) when unknown.
-          positionEntryPrice:
-            state.position.direction === 'long' && state.position.entryPrice > 0
-              ? state.position.entryPrice
-              : undefined,
-        });
+      // Map genuine engine markers to trade signals (entry → buy, close → sell),
+      // attaching the marker so it can be broadcast as the truth of this candle.
+      const markers = engine.getNewMarkers();
+      const signals: TradeSignal[] = [];
+      for (const marker of markers) {
+        if (marker.type === 'entry' && marker.direction === 'long') {
+          signals.push({
+            action: 'buy',
+            symbol: candle.symbol,
+            quantity: marker.quantity,
+            expectedPrice: currentPrice,
+            timestamp: candle.timestamp,
+            marker,
+            // Carry the chaos sizing fraction through to executeSignal so the
+            // on-chain buy matches the engine's simulated quantity (which is
+            // sized from chaosSignal.sizeFraction — see entry above). Without
+            // this, the executor sizes the buy from positionSizePercent (default
+            // 100) and spends the whole wallet (QA blocker).
+            sizeFraction: chaosSignal.sizeFraction,
+          });
+        } else if (marker.type === 'close' || marker.type === 'exit') {
+          signals.push({
+            action: 'sell',
+            symbol: candle.symbol,
+            quantity: marker.quantity,
+            expectedPrice: currentPrice,
+            timestamp: candle.timestamp,
+            marker,
+            // B1: the executor's position state is still the pre-close state
+            // here (the marker sync below runs after signal generation) — attach
+            // the entry price of the tracked long being closed, or leave absent
+            // so the PnL feed fails safe (skips) when unknown.
+            positionEntryPrice:
+              state.position.direction === 'long' && state.position.entryPrice > 0
+                ? state.position.entryPrice
+                : undefined,
+          });
+        }
       }
-    }
 
-    // Sync the executor's position state from the emitted markers so
-    // downstream execution stays coherent with the engine.
-    for (const marker of markers) {
-      if (marker.type === 'entry' && marker.direction === 'long') {
-        state.position = {
-          symbol: candle.symbol,
-          direction: 'long',
-          quantity: marker.quantity,
-          entryPrice: marker.price,
-          entryTime: marker.timestamp,
-        };
-      } else if (marker.type === 'close' || marker.type === 'exit') {
-        state.position = {
-          symbol: candle.symbol,
-          direction: 'flat',
-          quantity: 0,
-          entryPrice: 0,
-          entryTime: 0,
-        };
+      // Sync the executor's position state from the emitted markers so
+      // downstream execution stays coherent with the engine.
+      for (const marker of markers) {
+        if (marker.type === 'entry' && marker.direction === 'long') {
+          state.position = {
+            symbol: candle.symbol,
+            direction: 'long',
+            quantity: marker.quantity,
+            entryPrice: marker.price,
+            entryTime: marker.timestamp,
+          };
+        } else if (marker.type === 'close' || marker.type === 'exit') {
+          state.position = {
+            symbol: candle.symbol,
+            direction: 'flat',
+            quantity: 0,
+            entryPrice: 0,
+            entryTime: 0,
+          };
+        }
       }
-    }
 
-    return signals;
+      // Per-candle heartbeat (D3): signal or explicit no-op — never silent.
+      if (signals.length > 0) {
+        emitHeartbeat({ outcome: 'signal', action: chaosSignal.action });
+      } else {
+        emitHeartbeat({ outcome: 'noop', reason: noopReason ?? 'no marker produced' });
+      }
+
+      return signals;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      emitHeartbeat({ outcome: 'error', reason: message });
+      throw err;
+    }
   }
 
   private getPairKey(pair: PairId): string {

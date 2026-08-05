@@ -15,7 +15,9 @@ import type {
   BotStatusSnapshot,
   PositionSummary,
   PairConfig,
+  ChaosHeartbeat,
 } from './types.js';
+import type { CandleErrorInfo } from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
@@ -73,6 +75,12 @@ export interface BotEventMap {
   /** Emitted for each executed chaos signal, with the real strategy marker
    *  and its DEX execution result. */
   chaosSignal: (record: ChaosSignalRecord) => void;
+  /** Emitted per processed chaos candle with its observable outcome (signal /
+   *  explicit no-op reason / error) — the chaos heartbeat (D3). */
+  chaosHeartbeat: (heartbeat: ChaosHeartbeat) => void;
+  /** Emitted when a candle fails to process — surfaced by the scheduler's
+   *  per-candle catch instead of silently swallowed (D3). */
+  candleError: (info: CandleErrorInfo) => void;
 }
 
 /** A chaos signal record broadcast to the dashboard — the genuine strategy
@@ -108,6 +116,12 @@ export interface BotEngineOptions {
    * execution is disabled (the strategy still evaluates but no orders submit).
    */
   walletManager?: WalletManager;
+  /**
+   * Optional persistence hook invoked whenever the engine's config changes at
+   * runtime (e.g. toggleChaosMode), so the change survives a restart (D4).
+   * Dependency-inverted: the engine never knows the concrete config store.
+   */
+  onConfigPersist?: (config: BotConfig) => void;
 }
 
 /**
@@ -121,6 +135,7 @@ export class BotEngine {
   private readonly telegramBot?: TradingTelegramBot;
   private readonly walletManager?: WalletManager;
   private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
+  private readonly onConfigPersist?: (config: BotConfig) => void;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -139,6 +154,9 @@ export class BotEngine {
 
   /** Recent chaos signal records for replay on WS connect (cap 200). */
   private chaosHistory: ChaosSignalRecord[] = [];
+
+  /** Outcome of the most recently processed chaos candle (D3), for snapshot. */
+  private lastChaosHeartbeat: ChaosHeartbeat | null = null;
 
   /** Live trading components (initialized in initialize()). */
   private barFeed: BybitWebSocketService | null = null;
@@ -558,6 +576,11 @@ export class BotEngine {
     const strategyName = this._config?.strategySource
       ? (extractScriptName(this._config.strategySource)?.substring(0, 50) ?? '(not configured)')
       : '(not configured)';
+    // Chaos execution mode is engine truth (D1/D2): the executor reports
+    // 'live' when real wallet funds back the engine and 'simulated' with the
+    // failure reason when the equity floor is in use. Absent an executor the
+    // mode defaults to 'live' — nothing is being executed either way.
+    const chaosMode = this.strategyExecutor?.getChaosExecutionMode();
     return {
       state: this.state,
       strategyName,
@@ -572,7 +595,13 @@ export class BotEngine {
       exposure: 0, // Phase 2: compute
       errors: [...this._errors],
       lastTransition: this.lastTransition,
-      chaosMode: this._config?.chaosMode?.enabled === true,
+      chaosMode: {
+        enabled: this._config?.chaosMode?.enabled === true,
+        executionMode: chaosMode?.mode ?? 'live',
+        ...(chaosMode?.reason ? { reason: chaosMode.reason } : {}),
+      },
+      totalCandleErrors: this.scheduler?.stats.totalCandleErrors ?? 0,
+      chaosHeartbeat: this.lastChaosHeartbeat,
       warmUpComplete: this.strategyExecutor ? this.strategyExecutor.isWarmUpComplete() : false,
     };
   }
@@ -588,11 +617,14 @@ export class BotEngine {
    * When Running and disabling: clears the chaos generator so the executor
    * resumes its normal strategy path.
    *
+   * Persists the toggle through onConfigPersist (D4) so the mode survives a
+   * restart — the engine config is the truth and disk follows it.
+   *
    * WHY: The previous POST /bot/chaos-mode endpoint called configure(),
    * which throws when the engine is Running. This method bypasses the
    * state machine restriction.
    */
-  toggleChaosMode(enabled: boolean): void {
+  async toggleChaosMode(enabled: boolean): Promise<void> {
     if (!this._config) {
       throw new Error('Cannot toggle chaos mode without configuration');
     }
@@ -602,14 +634,19 @@ export class BotEngine {
     if (this.state === BotState.Running && this.strategyExecutor) {
       if (enabled) {
         const generator = new ChaosSignalGenerator(this.logger);
-        this.strategyExecutor.setChaosGenerator(generator);
+        await this.strategyExecutor.setChaosGenerator(generator);
         this.logger.info('Chaos mode enabled (hot-swap)', { pairs: this._config.pairs?.length });
       } else {
-        this.strategyExecutor.clearChaosGenerator();
+        // Async: clearChaosGenerator rebuilds each pair's runtime through the
+        // non-chaos path so disabling chaos resumes real strategy execution.
+        await this.strategyExecutor.clearChaosGenerator();
         this.logger.info('Chaos mode disabled (hot-swap)');
       }
     }
 
+    // D4: persist so the toggle survives a restart. Dependency-inverted — the
+    // engine never knows the concrete config store.
+    this.onConfigPersist?.(this._config);
     this.emit('configUpdate', this._config);
   }
 
@@ -656,6 +693,13 @@ export class BotEngine {
       riskManager: this.riskManager,
       chaosGenerator,
       seedHistory: (pair) => this.fetchSeedHistory(pair),
+      // D3: per-candle chaos outcomes (signal / explicit no-op / error) flow
+      // to the engine emitter for WS broadcast — a running chaos mode is
+      // never silently idle.
+      chaosHeartbeat: (hb) => {
+        this.lastChaosHeartbeat = hb;
+        this.emit('chaosHeartbeat', hb);
+      },
     });
     this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
 
@@ -775,6 +819,12 @@ export class BotEngine {
       strategyExecutor: this.strategyExecutor,
       dex: this.dex,
       persistState: true,
+      // D3: the scheduler's per-candle catch stays (a tick must not die) but
+      // the failure is surfaced on the engine emitter for WS broadcast
+      // instead of being silently swallowed.
+      onCandleError: (info) => {
+        this.emit('candleError', info);
+      },
     });
     this.logger.info('Scheduler created', { pairs: this._config.pairs?.length ?? 0 });
 

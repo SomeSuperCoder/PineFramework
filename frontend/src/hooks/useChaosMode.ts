@@ -4,16 +4,23 @@
  * Activation: 5 taps within 3 seconds on the hidden tap target.
  * Persists state to backend via config API.
  *
+ * Source of truth: while connected, the engine's `bot:snapshot` (`chaosMode`)
+ * is authoritative. The persisted disk config is only a fallback before the
+ * first snapshot arrives. A toggle applies an optimistic value immediately and
+ * is corrected by the next snapshot, so a failed toggle never leaves the UI
+ * showing a state the engine did not reach.
+ *
  * @module frontend
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import type { ChaosModeSnapshot } from '../types';
 
 const TAP_THRESHOLD = 5;
 const TAP_WINDOW_MS = 3000;
 
 export interface UseChaosModeReturn {
-  /** Whether chaos mode is currently enabled. */
+  /** Whether chaos mode is currently enabled (engine truth, else optimistic, else disk). */
   chaosMode: boolean;
   /** Toggle chaos mode (for programmatic use). */
   toggleChaosMode: () => void;
@@ -28,24 +35,42 @@ export interface UseChaosModeReturn {
   dismissToast: () => void;
 }
 
-export function useChaosMode(backendUrl: string): UseChaosModeReturn {
-  const [chaosMode, setChaosMode] = useState(false);
+export function useChaosMode(
+  backendUrl: string,
+  engineChaosMode?: ChaosModeSnapshot | null,
+): UseChaosModeReturn {
+  const [diskConfigEnabled, setDiskConfigEnabled] = useState(false);
   const [showToast, setToShowToast] = useState(false);
   const [tapFlash, setTapFlash] = useState(false);
+  // Optimistic value applied on toggle; cleared by the next engine snapshot so
+  // the UI settles on the engine truth (correcting a failed toggle).
+  const [pendingToggle, setPendingToggle] = useState<boolean | null>(null);
   const tapsRef = useRef<number[]>([]);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load initial state from backend
+  // Load initial state from backend (disk config) — fallback until the engine
+  // snapshot arrives; the snapshot is the SSOT while connected.
   useEffect(() => {
     fetch(`${backendUrl}/api/bot/config`)
       .then(res => res.ok ? res.json() : null)
       .then(config => {
         if (config?.chaosMode?.enabled) {
-          setChaosMode(true);
+          setDiskConfigEnabled(true);
         }
       })
       .catch(() => { /* ignore — default is false */ });
   }, [backendUrl]);
+
+  // Reconcile: once the engine reports its actual mode, drop the optimistic
+  // value so the indicator reflects engine truth, not the toggle's guess.
+  useEffect(() => {
+    if (engineChaosMode != null) {
+      setPendingToggle(null);
+    }
+  }, [engineChaosMode]);
+
+  // Engine truth wins when known; otherwise the in-flight toggle; otherwise disk.
+  const chaosMode = pendingToggle ?? engineChaosMode?.enabled ?? diskConfigEnabled;
 
   const persistChaosMode = useCallback(async (enabled: boolean) => {
     try {
@@ -60,13 +85,11 @@ export function useChaosMode(backendUrl: string): UseChaosModeReturn {
   }, [backendUrl]);
 
   const toggleChaosMode = useCallback(() => {
-    setChaosMode(prev => {
-      const next = !prev;
-      persistChaosMode(next);
-      setToShowToast(true);
-      return next;
-    });
-  }, [persistChaosMode]);
+    const next = !chaosMode;
+    setPendingToggle(next);
+    setToShowToast(true);
+    persistChaosMode(next);
+  }, [chaosMode, persistChaosMode]);
 
   const handleTap = useCallback(() => {
     const now = Date.now();

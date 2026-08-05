@@ -25,7 +25,9 @@ export interface BotRouterOptions {
   getWalletManager?: () => WalletManager | null;
   getConfigStore?: () => BotConfigStore | null;
   getAutoSelectDeps?: () => {
-    AutoMarketSelector: new (options: any) => { select: (candidates: any[], onProgress?: (progress: any) => void) => Promise<any> };
+    AutoMarketSelector: new (options: any) => {
+      select: (candidates: any[], onProgress?: (progress: any) => void) => Promise<any>;
+    };
     barFetcher: unknown;
     backtestRunner: unknown;
     broadcast: (msg: unknown) => void;
@@ -39,13 +41,13 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
   const router = Router();
 
   // Normalize parameter
-  const getEngine: () => BotEngine | null =
-    typeof param === 'function' ? param : param.getEngine;
+  const getEngine: () => BotEngine | null = typeof param === 'function' ? param : param.getEngine;
   const getWalletManager: () => WalletManager | null =
     typeof param === 'function' ? () => null : (param.getWalletManager ?? (() => null));
   const getConfigStore: () => BotConfigStore | null =
     typeof param === 'function' ? () => null : (param.getConfigStore ?? (() => null));
-  const getAutoSelectDeps = typeof param === 'function' ? () => null : param.getAutoSelectDeps ?? (() => null);
+  const getAutoSelectDeps =
+    typeof param === 'function' ? () => null : (param.getAutoSelectDeps ?? (() => null));
 
   /**
    * POST /bot/start
@@ -183,20 +185,26 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
     try {
       const { enabled } = req.body as { enabled?: boolean };
       if (typeof enabled !== 'boolean') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
         return;
       }
 
       const store = getConfigStore();
       if (store) {
         const existing = store.load();
-        const config: BotConfig = {
-          strategySource: existing?.strategySource ?? '',
-          dex: existing?.dex ?? 'jupiter-swap',
-          ...(existing?.pairs ? { pairs: existing.pairs } : {}),
-          risk: existing?.risk ?? { maxDailyLoss: 100 },
-          chaosMode: { enabled },
-        };
+        // D4: merge into the persisted config so fields beyond the toggle
+        // (initialCapital, positionSizePercent, walletPublicKey, ...) are not
+        // silently dropped by a rebuild.
+        const config: BotConfig = existing
+          ? { ...existing, chaosMode: { enabled } }
+          : {
+              strategySource: '',
+              dex: 'jupiter-swap',
+              risk: { maxDailyLoss: 100 },
+              chaosMode: { enabled },
+            };
         store.save(config);
       }
 
@@ -270,45 +278,93 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
-      const { strategySource, dex, pairs, risk, autoSelect, autoSelectMetric, walletPublicKey, chaosMode } = req.body as Record<string, unknown>;
+      const {
+        strategySource,
+        dex,
+        pairs,
+        risk,
+        autoSelect,
+        autoSelectMetric,
+        walletPublicKey,
+        chaosMode,
+      } = req.body as Record<string, unknown>;
 
       // Validate required fields — strategySource is only required when chaos mode is disabled
       const isChaosMode = (chaosMode as Record<string, unknown> | undefined)?.enabled === true;
       if (!isChaosMode && (!strategySource || typeof strategySource !== 'string')) {
-        res.status(400).json({ success: false, error: 'Missing or invalid "strategySource" (string required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "strategySource" (string required)' });
         return;
       }
       if (dex !== 'jupiter-swap' && dex !== 'jupiter-ultra') {
-        res.status(400).json({ success: false, error: 'Invalid "dex". Must be "jupiter-swap" or "jupiter-ultra"' });
+        res.status(400).json({
+          success: false,
+          error: 'Invalid "dex". Must be "jupiter-swap" or "jupiter-ultra"',
+        });
         return;
       }
       if (autoSelect) {
         // autoSelect determines pairs — nothing to validate here
       } else if (!Array.isArray(pairs) || pairs.length === 0) {
-        res.status(400).json({ success: false, error: 'Missing or invalid "pairs" (non-empty array required when autoSelect is false)' });
+        res.status(400).json({
+          success: false,
+          error: 'Missing or invalid "pairs" (non-empty array required when autoSelect is false)',
+        });
         return;
       }
       if (!risk || typeof risk !== 'object') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "risk" (object required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "risk" (object required)' });
         return;
       }
 
       const riskObj = risk as Record<string, unknown>;
       if (typeof riskObj.maxDailyLoss !== 'number' || riskObj.maxDailyLoss < 0) {
-        res.status(400).json({ success: false, error: '"risk.maxDailyLoss" must be a non-negative number' });
+        res
+          .status(400)
+          .json({ success: false, error: '"risk.maxDailyLoss" must be a non-negative number' });
         return;
       }
 
+      // D4: MERGE validated fields into the current engine config instead of
+      // rebuilding from scratch, so fields the payload does not mention
+      // (chaosMode, initialCapital, positionSizePercent, ...) survive a
+      // re-configure. Engine config is the SSOT.
+      //
+      // Only fields the payload EXPLICITLY provides are applied — an omitted
+      // field keeps the base value. strategySource and chaosMode are optional
+      // in chaos mode, so unconditional assignment would silently drop the
+      // base value (wiping a configured strategy, or dropping an explicit
+      // `chaosMode: { enabled: false }` toggle) — the exact silent-drop bug
+      // class this change kills.
+      const base = engine.config;
+      const hasChaosMode =
+        chaosMode !== undefined && chaosMode !== null && typeof chaosMode === 'object';
       const config: BotConfig = {
-        strategySource: strategySource as string,
+        ...(base ?? {
+          strategySource: '',
+          dex: 'jupiter-swap',
+          pairs: [],
+          risk: { maxDailyLoss: 0 },
+        }),
+        ...(typeof strategySource === 'string' ? { strategySource } : {}),
         dex: dex as BotConfig['dex'],
         ...(Array.isArray(pairs) && pairs.length > 0 ? { pairs } : {}),
         risk: {
+          ...base?.risk,
           maxDailyLoss: riskObj.maxDailyLoss as number,
         },
-        walletPublicKey: typeof walletPublicKey === 'string' ? walletPublicKey : undefined,
-        autoSelect: autoSelect === true,
-        autoSelectMetric: typeof autoSelectMetric === 'string' ? autoSelectMetric as BotConfig['autoSelectMetric'] : undefined,
+        ...(typeof walletPublicKey === 'string' ? { walletPublicKey } : {}),
+        ...(typeof autoSelect === 'boolean' ? { autoSelect } : {}),
+        ...(typeof autoSelectMetric === 'string'
+          ? { autoSelectMetric: autoSelectMetric as BotConfig['autoSelectMetric'] }
+          : {}),
+        // D4: chaosMode persists unless the payload explicitly changes it.
+        // A payload chaosMode object — including { enabled: false } — is
+        // applied; an absent one leaves the base value untouched.
+        ...(hasChaosMode ? { chaosMode: { enabled: isChaosMode } } : {}),
       };
 
       engine.configure(config);
@@ -341,12 +397,16 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const config = engine.config;
       if (!config) {
-        res.status(400).json({ success: false, error: 'Bot not configured. Call /configure first.' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Bot not configured. Call /configure first.' });
         return;
       }
 
       if (!config.autoSelect) {
-        res.status(400).json({ success: false, error: 'autoSelect is not enabled in current config' });
+        res
+          .status(400)
+          .json({ success: false, error: 'autoSelect is not enabled in current config' });
         return;
       }
 
@@ -358,9 +418,10 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       // Filter candidates by selected timeframes if provided
       const selectedTimeframes = req.body?.timeframes as string[] | undefined;
-      const candidates = selectedTimeframes && selectedTimeframes.length > 0
-        ? deps.candidates.filter(c => selectedTimeframes.includes(c.timeframe))
-        : deps.candidates;
+      const candidates =
+        selectedTimeframes && selectedTimeframes.length > 0
+          ? deps.candidates.filter((c) => selectedTimeframes.includes(c.timeframe))
+          : deps.candidates;
 
       // Run auto-select in background — progress broadcast via WebSocket
       res.json({ success: true, message: 'Backtest started' });
@@ -433,7 +494,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const { seedPhrase } = req.body as Record<string, unknown>;
       if (!seedPhrase || typeof seedPhrase !== 'string') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "seedPhrase" (string required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "seedPhrase" (string required)' });
         return;
       }
 
@@ -633,7 +696,7 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
    * Accepts { enabled: boolean } in body.
    * Persists to config store.
    */
-  router.post('/bot/chaos-mode', (req, res) => {
+  router.post('/bot/chaos-mode', async (req, res) => {
     try {
       const engine = getEngine();
       if (!engine) {
@@ -643,7 +706,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const { enabled } = req.body as { enabled?: boolean };
       if (typeof enabled !== 'boolean') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "enabled" (boolean required)' });
         return;
       }
 
@@ -654,9 +719,11 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       // Use hot-swap — works for both Running and non-Running states.
       // The old code called engine.configure() which throws when Running.
-      engine.toggleChaosMode(enabled);
+      await engine.toggleChaosMode(enabled);
 
-      // Persist to disk
+      // Persist to disk — belt-and-suspenders: toggleChaosMode already
+      // persists via onConfigPersist, but standalone engines (tests) may not
+      // wire it, so save here too.
       const store = getConfigStore();
       if (store) {
         const currentConfig = engine.config;
@@ -707,7 +774,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const { seedPhrase, password } = req.body as Record<string, unknown>;
       if (!seedPhrase || typeof seedPhrase !== 'string') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "seedPhrase" (string required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "seedPhrase" (string required)' });
         return;
       }
       if (!password || typeof password !== 'string' || password.length < 8) {
@@ -748,7 +817,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       const { password } = req.body as Record<string, unknown>;
       if (!password || typeof password !== 'string') {
-        res.status(400).json({ success: false, error: 'Missing or invalid "password" (string required)' });
+        res
+          .status(400)
+          .json({ success: false, error: 'Missing or invalid "password" (string required)' });
         return;
       }
 
@@ -817,7 +888,9 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
       if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
-        res.status(400).json({ success: false, error: 'New password must be at least 8 characters' });
+        res
+          .status(400)
+          .json({ success: false, error: 'New password must be at least 8 characters' });
         return;
       }
 

@@ -70,9 +70,21 @@ function App() {
   const chartRef = useRef<ChartComponentHandle>(null);
 
   const backendUrl = `http://${window.location.hostname}:8081`;
-  const { connected: botConnected, status: botStatus, logs: botLogs, chaosSignals: botChaosSignals, autoSelectProgress, autoSelectResult, connectionFailed: botConnectionFailed } = useBotWebSocket(backendUrl);
+  const {
+    connected: botConnected,
+    status: botStatus,
+    logs: botLogs,
+    chaosSignals: botChaosSignals,
+    chaosHeartbeat: botChaosHeartbeat,
+    totalCandleErrors: botTotalCandleErrors,
+    lastCandleError: botLastCandleError,
+    engineChaosMode,
+    autoSelectProgress,
+    autoSelectResult,
+    connectionFailed: botConnectionFailed,
+  } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
-  const { chaosMode, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl);
+  const { chaosMode, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -428,6 +440,10 @@ function App() {
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
               chaosMode={chaosMode}
+              engineChaosMode={engineChaosMode}
+              chaosHeartbeat={botChaosHeartbeat}
+              totalCandleErrors={botTotalCandleErrors}
+              lastCandleError={botLastCandleError}
               chaosSignals={botChaosSignals}
             />
           ) : botConnectionFailed ? (
