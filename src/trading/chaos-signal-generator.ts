@@ -7,7 +7,7 @@
  * @module trading
  */
 
-import type { BotLogger } from './bot-engine.js';
+import type { PineLogger } from '../utils/logger/types.js';
 
 /** The three possible chaos signals. */
 export type ChaosAction = 'long' | 'short' | 'exit';
@@ -33,10 +33,10 @@ export interface ChaosSignal {
  * - Structured logging of all generated signals
  */
 export class ChaosSignalGenerator {
-  private readonly logger: BotLogger;
+  private readonly logger: PineLogger;
   private signalCount = 0;
 
-  constructor(logger: BotLogger) {
+  constructor(logger: PineLogger) {
     this.logger = logger;
   }
 

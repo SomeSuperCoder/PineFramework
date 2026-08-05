@@ -34,6 +34,7 @@ import type { StrategyMarker } from '../strategy/strategy-engine.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
 import { extractScriptName } from '../utils/script-name.js';
 import { writeFile } from 'node:fs/promises';
+import type { PineLogger } from '../utils/logger/types.js';
 
 /** Logger interface for bot engine events. */
 export interface BotLogger {
@@ -65,7 +66,7 @@ const FEED_STATE_PERSIST_THROTTLE_MS = 60_000;
 const DEFAULT_INITIAL_CAPITAL_LAMPORTS = 1_000_000_000;
 
 /** Default logger that writes to console. */
-const consoleLogger: BotLogger = {
+const consoleLogger: PineLogger = {
   info: (event, meta) => console.log(`[BOT] ${event}`, meta ?? ''),
   warn: (event, meta) => console.warn(`[BOT] ⚠ ${event}`, meta ?? ''),
   error: (event, meta) => console.error(`[BOT] ✗ ${event}`, meta ?? ''),
@@ -167,7 +168,7 @@ export interface PositionEvent {
 }
 
 export interface BotEngineOptions {
-  logger?: BotLogger;
+  logger?: PineLogger;
   /**
    * Optional callback invoked when auto-selection is enabled.
    * Receives the current config and returns a list of selected pairs.
@@ -201,7 +202,7 @@ export interface BotEngineOptions {
  */
 export class BotEngine {
   private readonly stateMachine: StateMachine<BotState>;
-  private readonly logger: BotLogger;
+  private readonly logger: PineLogger;
   private readonly riskManager?: RiskManager;
   private readonly telegramBot?: TradingTelegramBot;
   private readonly walletManager?: WalletManager;

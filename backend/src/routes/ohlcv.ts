@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { Bar } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
+import { createBackendLogger } from '../utils/logger.js';
+
+const logger = createBackendLogger('backend', 'api');
 
 const BYBIT_REST_BASE = process.env.BYBIT_REST_URL || 'https://api.bybit.com';
 
@@ -83,11 +86,7 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
 
       // Diagnostic: log REST response boundaries
       if (bars.length > 0) {
-        console.log(`[DIAG] Bybit REST response for ${symbol} ${interval}:`, {
-          count: bars.length,
-          first: bars[0],
-          last: bars[bars.length - 1]
-        });
+        logger.info('Bybit REST response diagnostic', { symbol, interval, count: bars.length, first: bars[0], last: bars[bars.length - 1] });
       }
 
       // L1 (in-memory) cache: only store non-paginated "most recent" responses.
@@ -99,12 +98,12 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
       // L2 (disk) cache: always persist — accumulates the full history
       if (diskCache) {
         diskCache.set(symbol, interval, bars).catch((err) =>
-          console.error('[OHLCV] Disk cache write error:', err),
+          logger.error('Disk cache write error', { err })
         );
       }
       res.json({ symbol, interval, data: bars, hasMore: bars.length === limit });
     } catch (err) {
-      console.error('[OHLCV] Error:', err);
+      logger.error('OHLCV error', { err });
       res.status(500).json({ error: 'Failed to fetch OHLCV data' });
     }
   });

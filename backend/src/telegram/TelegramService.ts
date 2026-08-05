@@ -1,6 +1,9 @@
 import { Telegraf, type Context } from 'telegraf';
 import { SocksProxyAgent } from 'socks-proxy-agent';
 import type { TelegramConfigStore, ProxyConfig } from '../store/TelegramConfigStore.js';
+import { createBackendLogger } from '../utils/logger.js';
+
+const logger = createBackendLogger('backend', 'telegram');
 
 interface TelegramServiceOptions {
   configStore: TelegramConfigStore;
@@ -40,7 +43,7 @@ export class TelegramService {
 
     const token = this.configStore.getBotToken();
     if (!token) {
-      console.log('[Telegram] No bot token configured, skipping start');
+      logger.info('[Telegram] No bot token configured, skipping start');
       return;
     }
 
@@ -50,24 +53,24 @@ export class TelegramService {
       try {
         agent = createSocksAgent(proxy);
         const authInfo = proxy.username ? ' (with auth)' : '';
-        console.log(`[Telegram] SOCKS5 proxy agent created for ${proxy.host}:${proxy.port}${authInfo}`);
-        console.log(`[Telegram] Bot will route all Telegram API calls through proxy`);
+        logger.info(`[Telegram] SOCKS5 proxy agent created for ${proxy.host}:${proxy.port}${authInfo}`);
+        logger.info(`[Telegram] Bot will route all Telegram API calls through proxy`);
       } catch (err) {
-        console.error('[Telegram] Failed to create SOCKS5 proxy agent:', err);
+        logger.error('[Telegram] Failed to create SOCKS5 proxy agent:', { err });
       }
     } else {
-      console.log('[Telegram] No proxy configured, connecting directly');
+      logger.info('[Telegram] No proxy configured, connecting directly');
     }
 
     this.bot = new Telegraf(token, agent ? { telegram: { agent } } : undefined);
     this.isRunning = true;
 
     this.bot.use(async (ctx: Context, next: () => Promise<void>) => {
-      console.log(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);
+      logger.info(`[Telegram] Message from ${ctx.from?.username || ctx.from?.id}: "${ctx.message && 'text' in ctx.message ? ctx.message.text : 'non-text'}"`);
       try {
         await next();
       } catch (err) {
-        console.error('[Telegram] Middleware error:', err);
+        logger.error('[Telegram] Middleware error:', { err });
       }
     });
 
@@ -133,9 +136,9 @@ export class TelegramService {
 
     try {
       await this.bot.launch();
-      console.log('[Telegram] Bot started');
+      logger.info('[Telegram] Bot started');
     } catch (err) {
-      console.error('[Telegram] Failed to start bot:', err);
+      logger.error('[Telegram] Failed to start bot:', { err });
       this.bot = null;
       this.isRunning = false;
     }
@@ -146,54 +149,54 @@ export class TelegramService {
     this.isRunning = false;
     try {
       await this.bot.stop();
-      console.log('[Telegram] Bot stopped');
+      logger.info('[Telegram] Bot stopped');
     } catch (err) {
-      console.error('[Telegram] Error stopping bot:', err);
+      logger.error('[Telegram] Error stopping bot:', { err });
     }
     this.bot = null;
   }
 
   async sendMessage(chatId: number, message: string): Promise<boolean> {
     if (!this.bot) {
-      console.log(`[Telegram] sendMessage: bot not created, skipping send to ${chatId}`);
+      logger.info(`[Telegram] sendMessage: bot not created, skipping send to ${chatId}`);
       return false;
     }
-    console.log(`[Telegram] sendMessage: attempting to send to chatId=${chatId} with MarkdownV2`);
+    logger.info(`[Telegram] sendMessage: attempting to send to chatId=${chatId} with MarkdownV2`);
     try {
       await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
-      console.log(`[Telegram] sendMessage: SUCCESS (MarkdownV2) to chatId=${chatId}`);
+      logger.info(`[Telegram] sendMessage: SUCCESS (MarkdownV2) to chatId=${chatId}`);
       return true;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[Telegram] sendMessage: FAILED (MarkdownV2) to chatId=${chatId}: ${msg.slice(0, 200)}`);
+      logger.info(`[Telegram] sendMessage: FAILED (MarkdownV2) to chatId=${chatId}: ${msg.slice(0, 200)}`);
       if (msg.includes('429')) {
         const retryAfter = msg.match(/retry after (\d+)/)?.[1];
         const wait = retryAfter ? parseInt(retryAfter, 10) * 1000 : 10000;
-        console.log(`[Telegram] Rate limited, waiting ${wait}ms`);
+        logger.info('Rate limited, waiting', { wait });
         await new Promise((resolve) => setTimeout(resolve, wait));
         try {
           await this.bot.telegram.sendMessage(chatId, message, { parse_mode: 'MarkdownV2' });
-          console.log(`[Telegram] sendMessage: SUCCESS (retry) to chatId=${chatId}`);
+          logger.info(`[Telegram] sendMessage: SUCCESS (retry) to chatId=${chatId}`);
           return true;
         } catch (retryErr) {
           const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-          console.error(`[Telegram] sendMessage: retry also failed for chatId=${chatId}: ${retryMsg.slice(0, 200)}`);
+          logger.error(`[Telegram] sendMessage: retry also failed for chatId=${chatId}: ${retryMsg.slice(0, 200)}`);
           return false;
         }
       }
       if (msg.includes('parse') || msg.includes('entities') || msg.includes('can\'t')) {
-        console.warn(`[Telegram] MarkdownV2 parse error, falling back to plain text for chatId=${chatId}: ${msg.slice(0, 200)}`);
+        logger.warn('MarkdownV2 parse error, falling back to plain text', { chatId, msg: msg.slice(0, 200) });
         try {
           await this.bot.telegram.sendMessage(chatId, message);
-          console.log(`[Telegram] sendMessage: SUCCESS (plain text fallback) to chatId=${chatId}`);
+          logger.info(`[Telegram] sendMessage: SUCCESS (plain text fallback) to chatId=${chatId}`);
           return true;
         } catch (fallbackErr) {
           const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-          console.error(`[Telegram] Plain text fallback also failed for chatId=${chatId}: ${fbMsg.slice(0, 200)}`);
+          logger.error(`[Telegram] Plain text fallback also failed for chatId=${chatId}: ${fbMsg.slice(0, 200)}`);
           return false;
         }
       }
-      console.error(`[Telegram] sendMessage error for chatId=${chatId}: ${msg.slice(0, 200)}`);
+      logger.error(`[Telegram] sendMessage error for chatId=${chatId}: ${msg.slice(0, 200)}`);
       return false;
     }
   }
@@ -204,7 +207,7 @@ export class TelegramService {
       await this.bot.telegram.sendPhoto(chatId, { source: buffer }, caption ? { caption } : undefined);
       return true;
     } catch (err: unknown) {
-      console.error('[Telegram] sendPhoto error:', err instanceof Error ? err.message : String(err));
+      logger.error('[Telegram] sendPhoto error:', { err: err instanceof Error ? err.message : String(err) });
       return false;
     }
   }
@@ -216,7 +219,7 @@ export class TelegramService {
     timeframe?: string,
   ): Promise<void> {
     const subscribers = this.configStore.getSubscribers();
-    console.log(`[Telegram] sendAlertToSubscribers: alertId="${alertId}", ${subscribers.length} subscribers, symbol="${symbol}", timeframe="${timeframe}"`);
+    logger.info('sendAlertToSubscribers', { alertId, subscriberCount: subscribers.length, symbol, timeframe });
 
     const escapedMessage = message
       .replace(/_/g, '\\_')
@@ -247,13 +250,13 @@ export class TelegramService {
     for (const sub of subscribers) {
       if (alertId) {
         const enabled = this.configStore.getAlertPreference(sub.chatId, alertId);
-        console.log(`[Telegram] sendAlertToSubscribers: subscriber chatId=${sub.chatId}, alertId="${alertId}", enabled=${enabled}`);
+        logger.info('sendAlertToSubscribers subscriber', { chatId: sub.chatId, alertId, enabled });
         if (!enabled) {
-          console.log(`[Telegram] sendAlertToSubscribers: SKIPPING subscriber ${sub.chatId} (alert disabled)`);
+          logger.info(`[Telegram] sendAlertToSubscribers: SKIPPING subscriber ${sub.chatId} (alert disabled)`);
           continue;
         }
       }
-      console.log(`[Telegram] sendAlertToSubscribers: sending to chatId=${sub.chatId}`);
+      logger.info(`[Telegram] sendAlertToSubscribers: sending to chatId=${sub.chatId}`);
       await this.sendMessage(sub.chatId, fullMessage);
     }
   }

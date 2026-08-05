@@ -7,6 +7,9 @@ import type { TelegramService } from '../telegram/TelegramService.js';
 import { validateBybitUrl } from '../utils/security.js';
 import { setBroadcastIndicatorRemoved } from './broadcast.js';
 import { formatCandleString } from 'pine-framework';
+import { createBackendLogger } from '../utils/logger.js';
+
+const logger = createBackendLogger('backend', 'ws');
 
 interface ClientSubscription {
   ws: WebSocket;
@@ -22,6 +25,16 @@ const BYBIT_WS_URL = (() => {
 
 /** Track the most recent confirmed bar per topic for price-reasonability checks. */
 const lastConfirmedBarByTopic = new Map<string, Bar>();
+
+/** Cached frontend loggers by subcategory — one logger per subcategory writes to its own file. */
+const frontendLoggers = new Map<string, ReturnType<typeof createBackendLogger>>();
+
+function getOrCreateFrontendLogger(subcategory: string) {
+  if (!frontendLoggers.has(subcategory)) {
+    frontendLoggers.set(subcategory, createBackendLogger('frontend', subcategory));
+  }
+  return frontendLoggers.get(subcategory)!;
+}
 
 /**
  * Reject a bar if its prices are clearly unreasonable.
@@ -80,7 +93,7 @@ export function createWSGateway(
     bybitWs = new WebSocket(BYBIT_WS_URL);
 
     bybitWs.on('open', () => {
-      console.log('[WS] Connected to Bybit WebSocket');
+      logger.info('Connected to Bybit WebSocket');
       resubscribeAll();
     });
 
@@ -136,7 +149,7 @@ export function createWSGateway(
             const prevBar = lastConfirmedBarByTopic.get(topicKey);
             const rejectReason = rejectIfUnreasonable(bar, prevBar);
             if (rejectReason) {
-              console.warn(`[WS] Rejected kline tick for ${symbol} ${interval}: ${rejectReason}`, { open, high, low, close, volume, timestamp });
+              logger.warn('Rejected kline tick', { symbol, interval, reason: rejectReason, open, high, low, close, volume, timestamp });
               return;
             }
             if (confirmed) {
@@ -150,7 +163,7 @@ export function createWSGateway(
             const prevBar = lastConfirmedBarByTopic.get(topicKey);
             if (prevBar && prevBar.timestamp !== bar.timestamp) {
               const delta = ((bar.close - prevBar.close) / prevBar.close * 100).toFixed(2);
-              console.debug(`[WS] ${symbol} ${interval} kline close Δ ${delta}% — prev: ${prevBar.close}, current: ${bar.close}`);
+              logger.debug('kline close', { symbol, interval, delta, prevClose: prevBar.close, currentClose: bar.close });
             }
           }
 
@@ -174,7 +187,7 @@ export function createWSGateway(
           const rawBybit = { start: d.start, dtimestamp: d.timestamp, interval: d.interval,
             rawOpen: d.open, rawHigh: d.high, rawLow: d.low, rawClose: d.close,
             confirm: d.confirm };
-          console.log(`[DIAG] Bybit WS raw → broadcast`, { topic: msg.topic, rawBybit, parsed: bar, confirmed });
+          logger.info('Bybit WS raw → broadcast', { topic: msg.topic, rawBybit, parsed: bar, confirmed });
 
           broadcast(msg.topic, {
             type: 'kline',
@@ -189,13 +202,13 @@ export function createWSGateway(
     });
 
     bybitWs.on('close', () => {
-      console.log('[WS] Bybit WebSocket disconnected, reconnecting in 3s...');
+      logger.info('Bybit WebSocket disconnected, reconnecting in 3s...');
       bybitWs = null;
       setTimeout(connectToBybit, 3000);
     });
 
     bybitWs.on('error', (err) => {
-      console.error('[WS] Bybit WebSocket error:', err.message);
+      logger.error('Bybit WebSocket error', { message: err.message });
     });
   }
 
@@ -236,7 +249,7 @@ export function createWSGateway(
   function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) {
-      console.log(`[WS] reexecuteForTopic: no subscribers for topic "${topic}"`);
+      logger.info('reexecuteForTopic: no subscribers', { topic });
       return;
     }
 
@@ -283,9 +296,7 @@ export function createWSGateway(
             // returns the diff and clears them so they are sent only once.
             const triggers = session.getPendingNewAlertTriggers();
             if (triggers.length === 0) {
-              console.log(
-                `[WS] reexecuteForTopic: no new alert triggers for indicator ${indicatorId}`,
-              );
+              logger.info('reexecuteForTopic: no new alert triggers', { indicatorId });
             }
             for (const trigger of triggers) {
               const condition = outputs.alertConditions?.find((c) => c.id === trigger.alertId);
@@ -295,12 +306,10 @@ export function createWSGateway(
               const title = condition?.title || trigger.alertId;
               const dedupKey = `${trigger.alertId}:${trigger.timestamp}:${topic}`;
               if (isDuplicateAlert(topic, dedupKey)) {
-                console.log(`[WS] reexecuteForTopic: duplicate alert suppressed (${dedupKey})`);
+                logger.info('reexecuteForTopic: duplicate alert suppressed', { dedupKey });
                 continue;
               }
-              console.log(
-                `[WS] reexecuteForTopic: sending Telegram alert: alertId=${trigger.alertId}, title="${title}", symbol=${symbol}, interval=${interval}`,
-              );
+              logger.info('reexecuteForTopic: sending Telegram alert', { alertId: trigger.alertId, title, symbol, interval });
               const formattedMessage = formatCandleString(message, {
                 ticker: symbol || undefined,
                 interval: interval || undefined,
@@ -313,13 +322,11 @@ export function createWSGateway(
               );
             }
           } else if (!tgActive) {
-            console.log(
-              `[WS] reexecuteForTopic: Telegram service is NOT active, skipping alert send`,
-            );
+          logger.info('reexecuteForTopic: Telegram service is NOT active, skipping alert send');
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Script re-execution failed';
-          console.error(`[WS] Script re-execution error for indicator ${indicatorId}:`, message);
+          logger.error('Script re-execution error', { indicatorId, message });
           ws.send(
             JSON.stringify({
               type: 'error',
@@ -365,7 +372,7 @@ export function createWSGateway(
   }
 
   wss.on('connection', (ws: WebSocket) => {
-    console.log('[WS] Client connected');
+    logger.info('Client connected');
     const sub: ClientSubscription = { ws, topics: new Set(), sessions: new Map() };
     clients.set(ws, sub);
 
@@ -429,7 +436,7 @@ export function createWSGateway(
           } catch (err) {
             const message =
               err instanceof Error ? err.message : 'Script compilation or execution failed';
-            console.error('[WS] Script execution error:', message);
+              logger.error('Script execution error', { message });
             ws.send(
               JSON.stringify({ type: 'error', indicatorId: sessionIndicatorId, data: { message } }),
             );
@@ -440,6 +447,24 @@ export function createWSGateway(
             sub.sessions.delete(indicatorId);
             ws.send(JSON.stringify({ type: 'indicator_stopped', indicatorId }));
           }
+        } else if (msg.channel === 'frontend:log' && msg.data) {
+          // Frontend logger forwards browser log entries to the backend.
+          // Write them to logs/frontend/{subcategory}.log in the same
+          // NDJSON format as backend logs so AI agents can query them
+          // via GET /api/logs.
+          const data = msg.data as {
+            level: string;
+            message: string;
+            category: string;
+            subcategory: string;
+            timestamp?: number;
+            meta?: Record<string, unknown>;
+          };
+          const frontendLogger = getOrCreateFrontendLogger(data.subcategory);
+          frontendLogger[data.level as keyof typeof frontendLogger]?.(
+            data.message,
+            data.meta,
+          );
         }
       } catch {
         ws.send(JSON.stringify({ type: 'error', data: { message: 'Invalid message format' } }));
@@ -447,7 +472,7 @@ export function createWSGateway(
     });
 
     ws.on('close', () => {
-      console.log('[WS] Client disconnected');
+      logger.info('Client disconnected');
       for (const topic of sub.topics) {
         topicCallbacks.get(topic)?.delete(ws);
       }

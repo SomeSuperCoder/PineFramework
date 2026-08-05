@@ -3,6 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readdir, readFile } from 'node:fs/promises';
 import { OHLCVCache } from './cache/ohlcv-cache.js';
 import { DiskOHLCVCache } from './cache/DiskOHLCVCache.js';
 import { createOHLCVRouter } from './routes/ohlcv.js';
@@ -29,6 +30,7 @@ import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
 import { TelegramService } from './telegram/TelegramService.js';
 import { migrateLegacyScripts } from './migration.js';
 import { logger } from './utils/logger.js';
+import { createBotLogger } from './utils/bot-logger.js';
 
 // ── Feature flags ──
 const ENABLE_TRADING_BOT = process.env.ENABLE_TRADING_BOT !== 'false';
@@ -104,7 +106,7 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
       proxyUrl += `@`;
     }
     proxyUrl += `${proxy.host}:${proxy.port}`;
-    console.log(`[Proxy-Test] Testing SOCKS5 proxy: ${proxyUrl}`);
+    logger.info(`[Proxy-Test] Testing SOCKS5 proxy: ${proxyUrl}`);
     const agent = new SocksProxyAgent(proxyUrl);
     const https = await import('node:https');
     await new Promise<void>((resolve, reject) => {
@@ -118,29 +120,29 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
         reject(new Error('Connection timed out'));
       });
     });
-    console.log(`[Proxy-Test] Proxy works!`);
+    logger.info(`[Proxy-Test] Proxy works!`);
     res.json({ ok: true, proxy: `${proxy.host}:${proxy.port}` });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[Proxy-Test] Proxy test failed:`, msg);
+    logger.error(`[Proxy-Test] Proxy test failed:`, msg);
     res.json({ ok: false, error: msg, proxy: `${proxy.host}:${proxy.port}` });
   }
 });
 
 app.post('/api/telegram/test', async (_req, res) => {
   const subs = telegramConfig.getSubscribers();
-  console.log(`[Telegram-Test] Sending test message, ${subs.length} subscribers found`);
+  logger.info(`[Telegram-Test] Sending test message, ${subs.length} subscribers found`);
   if (subs.length === 0) {
     res.status(400).json({ error: 'No subscribers' });
     return;
   }
-  console.log(`[Telegram-Test] Target chatId: ${subs[0].chatId}, username: ${subs[0].username}`);
+  logger.info(`[Telegram-Test] Target chatId: ${subs[0].chatId}, username: ${subs[0].username}`);
   // Must be valid MarkdownV2: escape all special chars except paired * for bold
   const base = '*Test Message*\n\nYour Telegram bot is working correctly';
   const escaped = base.replace(/!/g, '\\!').replace(/\./g, '\\.');
-  console.log(`[Telegram-Test] Calling sendMessage with chatId=${subs[0].chatId}`);
+  logger.info(`[Telegram-Test] Calling sendMessage with chatId=${subs[0].chatId}`);
   const ok = await telegramService.sendMessage(subs[0].chatId, escaped);
-  console.log(`[Telegram-Test] sendMessage returned: ${ok}`);
+  logger.info(`[Telegram-Test] sendMessage returned: ${ok}`);
   res.json({ success: ok });
 });
 
@@ -163,7 +165,7 @@ app.use(
     setProxy: (proxy) => {
       telegramConfig.setProxy(proxy);
       restartTelegramService().catch((err) =>
-        console.error('[Telegram] Error restarting after proxy update:', err),
+        logger.error('[Telegram] Error restarting after proxy update:', err),
       );
     },
   }),
@@ -173,6 +175,87 @@ app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 app.use('/api', createExportRouter());
+
+// ── Log Query Endpoint ──
+// AI agents and the frontend can query structured log files
+// stored under logs/{category}/{subcategory}.log (NDJSON format).
+// Query params: category, subcategory, level, limit (default 100, max 1000).
+//
+// Level filter: log files store level as a string name (e.g. "info"),
+// so the string query param matches directly — no numeric conversion needed.
+
+app.get('/api/logs', async (req, res) => {
+  const { category, subcategory, level, limit } = req.query as Record<
+    string,
+    string | undefined
+  >;
+
+  const maxLimit = 1000;
+  const parsedLimit = limit ? Math.min(parseInt(limit, 10) || 100, maxLimit) : 100;
+
+  // Validate category to prevent path traversal
+  const safeCategory = category || 'backend';
+  if (!/^[a-z][a-z0-9-]*$/.test(safeCategory)) {
+    res.status(400).json({ error: 'Invalid category format' });
+    return;
+  }
+
+  const logsDir = path.join(__dirname, '..', '..', '..', 'logs');
+  const categoryDir = path.join(logsDir, safeCategory);
+
+  let files: string[] = [];
+  try {
+    const entries = await readdir(categoryDir);
+    files = entries
+      .filter((f) => f.endsWith('.log'))
+      .map((f) => path.join(categoryDir, f));
+  } catch {
+    // Directory does not exist yet — return empty array
+    res.json([]);
+    return;
+  }
+
+  // If subcategory is specified, filter to just that file
+  if (subcategory) {
+    const safeSubcategory = subcategory.replace(/[^a-z0-9-]/g, '');
+    files = files.filter((f) => f.endsWith(`/${safeSubcategory}.log`));
+  }
+
+  const entries: Array<{
+    timestamp: string;
+    level: string;
+    category: string;
+    subcategory: string;
+    message: string;
+    meta?: Record<string, unknown>;
+  }> = [];
+
+  for (const file of files) {
+    try {
+      const content = await readFile(file, 'utf-8');
+      const lines = content.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line);
+          if (level && entry.level !== level) continue;
+          entries.push(entry);
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    } catch {
+      // Skip unreadable files
+    }
+  }
+
+  // Return most recent entries first
+  entries.sort(
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+
+  res.json(entries.slice(0, parsedLimit));
+});
 
 // ── Trading Bot (feature-gated) ──
 if (ENABLE_TRADING_BOT) {
@@ -236,7 +319,21 @@ if (ENABLE_TRADING_BOT) {
     return new RiskManager(riskConfig);
   }
 
+  // Mount bot WebSocket gateway first (lazy engine reference)
+  const botWS = createBotWSGateway(server, () => botEngine);
+
+  // Bot logger: writes to logs/bot/{subcategory}.log and broadcasts
+  // every log level to the `bot:log` WebSocket channel so the
+  // TradingBotPanel receives real-time log events.
+  const botLogger = createBotLogger('execution', (entry) => {
+    botWS.broadcast({
+      channel: 'bot:log',
+      data: entry,
+    });
+  });
+
   const botEngine = new BotEngine({
+    logger: botLogger,
     walletManager,
     riskManager: buildRiskManager(savedConfig),
     // D4: persist any runtime config change (e.g. toggleChaosMode) to disk so
@@ -298,9 +395,6 @@ if (ENABLE_TRADING_BOT) {
     }),
   );
 
-  // Mount bot WebSocket gateway and wire engine events to WS clients
-  const botWS = createBotWSGateway(server, () => botEngine);
-
   // Wire engine events → WebSocket broadcast
   botEngine.on('stateChange', (event) => {
     botWS.broadcast({
@@ -323,17 +417,6 @@ if (ENABLE_TRADING_BOT) {
         data: buildSnapshotPayload(botEngine.getSnapshot(), botEngine),
       });
     }
-  });
-
-  botEngine.on('error', (error) => {
-    botWS.broadcast({
-      channel: 'bot:log',
-      data: {
-        timestamp: error.timestamp,
-        level: 'error',
-        message: `[${error.code}] ${error.message}`,
-      },
-    });
   });
 
   botEngine.on('chaosSignal', (record) => {
@@ -386,28 +469,28 @@ if (ENABLE_TRADING_BOT) {
 createWSGateway(server, cache, telegramService);
 
 server.listen(PORT, async () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
-  console.log(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
-  console.log(`Data directory: ${DATA_DIR}`);
-  console.log(`Scripts directory: ${SCRIPTS_DIR}`);
+  logger.info(`Backend server running on http://localhost:${PORT}`);
+  logger.info(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
+  logger.info(`Data directory: ${DATA_DIR}`);
+  logger.info(`Scripts directory: ${SCRIPTS_DIR}`);
   await telegramService.start();
 
   // Migrate legacy scripts from scripts.json to file-based storage
   const migration = migrateLegacyScripts(DATA_DIR, SCRIPTS_DIR, manifestStore);
   if (migration.migrated > 0) {
-    console.log(`[Migration] Migrated ${migration.migrated} legacy scripts to file-based storage`);
+    logger.info(`[Migration] Migrated ${migration.migrated} legacy scripts to file-based storage`);
   }
 });
 
 async function shutdown(signal: string): Promise<void> {
-  console.log(`\n[Server] Received ${signal}, shutting down gracefully...`);
+  logger.info(`\n[Server] Received ${signal}, shutting down gracefully...`);
   await telegramService.stop();
   server.close(() => {
-    console.log('[Server] Closed');
+    logger.info('[Server] Closed');
     process.exit(0);
   });
   setTimeout(() => {
-    console.error('[Server] Forced shutdown');
+    logger.error('[Server] Forced shutdown');
     process.exit(1);
   }, 10000);
 }
