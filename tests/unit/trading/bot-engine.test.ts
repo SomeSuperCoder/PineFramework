@@ -3,6 +3,8 @@ import { BotEngine } from '../../../src/trading/bot-engine.js';
 import { BotState, ErrorSeverity } from '../../../src/trading/types.js';
 import type { BotConfig } from '../../../src/trading/types.js';
 import { RiskManager } from '../../../src/trading/risk/risk-manager.js';
+import { CloseManager } from '../../../src/trading/close-manager.js';
+import type { CloseSummary } from '../../../src/trading/close-manager.js';
 
 // Mock modules before importing LiveStrategyExecutor — same surface as
 // live-strategy-executor.test.ts (these modules carry import-time side
@@ -30,12 +32,19 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
   })),
 }));
 
-// The engine persists feed-state.json via node:fs/promises — mock it so the
-// feed-liveness telemetry tests never write real files to the repo root.
+// The engine persists feed-state.json + close-attempt.json via node:fs/promises —
+// mock it so the feed-liveness telemetry AND the F3 tombstone tests never write
+// real files to the repo root. readFile defaults to ENOENT (no tombstones) with
+// the F3 tests overriding it via vi.mocked(readFile).
 vi.mock('node:fs/promises', () => {
   const writeFile = vi.fn(async () => {});
-  return { writeFile };
+  const readFile = vi.fn(async () => {
+    throw new Error('ENOENT: no such file or directory');
+  });
+  return { writeFile, readFile };
 });
+
+import { readFile } from 'node:fs/promises';
 
 import { LiveStrategyExecutor } from '../../../src/trading/live-strategy-executor.js';
 import { LiveScheduler } from '../../../src/trading/live-scheduler.js';
@@ -696,5 +705,275 @@ describe('BotEngine feed telemetry (liveness suite)', () => {
     expect(engine.config?.chaosMode).toEqual({ enabled: true });
     expect(onConfigPersist).toHaveBeenCalledTimes(1);
     expect(onConfigPersist.mock.calls[0]![0]).toMatchObject({ chaosMode: { enabled: true } });
+  });
+});
+
+// ---- Auto-close-on-stop: stop paths invoke the close manager ----
+//
+// Spec: "Every stop path closes all open positions" — user stop → graceful,
+// emergency stop → emergency. The injected closeManager ALWAYS wins over the
+// internally-constructed one (bot-engine.ts:899-901 "injection wins"); these
+// tests wire the injected manager through the same private seam initialize()
+// uses, then drive the real stop paths.
+
+describe('BotEngine stop paths call the close manager (auto-close-on-stop)', () => {
+  function createMockCloseManager() {
+    const closeAllPositions = vi.fn().mockResolvedValue({
+      closeRunId: 'test-run',
+      total: 0,
+      closed: 0,
+      failed: 0,
+      timedOut: 0,
+      durationMs: 0,
+      failedSymbols: [],
+    } satisfies CloseSummary);
+    const manager = { closeAllPositions } as unknown as CloseManager;
+    return { manager, closeAllPositions };
+  }
+
+  async function startRunning(engine: BotEngine, closeManager: CloseManager): Promise<void> {
+    engine.configure(defaultConfig);
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { shutdown: () => Promise<void> },
+      'shutdown',
+    ).mockResolvedValue(undefined);
+    await engine.start();
+    // initialize() is mocked in these tests, so wire the injected manager
+    // through the private seam initialize()'s injection branch uses
+    // (bot-engine.ts:899-901: this.closeManager = this.injectedCloseManager).
+    (engine as unknown as { closeManager: CloseManager | null }).closeManager = closeManager;
+  }
+
+  it('stop() closes all positions with the graceful mode and reaches Stopped', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    expect(engine.state).toBe(BotState.Running);
+
+    await engine.stop();
+
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(closeAllPositions).toHaveBeenCalledWith('user_stop', 'graceful');
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('emergencyStop() closes all positions with the emergency mode and reaches Stopped', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    expect(engine.state).toBe(BotState.Running);
+
+    await engine.emergencyStop();
+
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(closeAllPositions).toHaveBeenCalledWith('emergency_stop', 'emergency');
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('graceful stop still reaches Stopped when the mocked closeAllPositions REJECTS (deadline guarantee, no re-throw)', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    closeAllPositions.mockRejectedValue(new Error('close run blew up'));
+
+    // The engine logs and continues the stop — a close failure must never
+    // strand the engine in Stopping (spec: a stop ALWAYS completes).
+    await expect(engine.stop()).resolves.toBeUndefined();
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('emergency stop still reaches Stopped when the mocked closeAllPositions REJECTS', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    closeAllPositions.mockRejectedValue(new Error('close run blew up'));
+
+    await expect(engine.emergencyStop()).resolves.toBeUndefined();
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('rejects a double-press of emergency stop after completion and does NOT start a second close run', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+
+    await engine.emergencyStop();
+    expect(engine.state).toBe(BotState.Stopped);
+
+    // Second press from Stopped is rejected (the bot route maps this to an
+    // HTTP 400-level error) and no second close run is started.
+    await expect(engine.emergencyStop()).rejects.toThrow('Emergency stop not available from state');
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+  });
+
+  it('F1: two CONCURRENT emergency stops from Error run exactly ONE close — the second is tolerated, never spawned', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    expect(engine.state).toBe(BotState.Running);
+
+    // Move to Error — the EXACT case F1 was built for: from Error there is no
+    // state-machine transition to serialize callers, so two concurrent
+    // emergency stops would BOTH reach closeOpenPositions without the guard.
+    engine.recordError('FATAL', 'fatal blowup', ErrorSeverity.Fatal);
+    expect(engine.state).toBe(BotState.Error);
+
+    // Fire both without awaiting: tryBeginCloseRun() is synchronous and runs
+    // BEFORE any await, so the second caller MUST observe the first's
+    // in-progress flag and bail (log-and-return, no new worker).
+    const first = engine.emergencyStop();
+    const second = engine.emergencyStop();
+    await Promise.all([first, second]);
+
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(closeAllPositions).toHaveBeenCalledWith('emergency_stop', 'emergency');
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+
+  it('F1: a thrown transition mid-stop does NOT permanently lock the close-run guard — a later stop still closes', async () => {
+    const { manager, closeAllPositions } = createMockCloseManager();
+    const engine = new BotEngine({ closeManager: manager });
+    await startRunning(engine, manager);
+    expect(engine.state).toBe(BotState.Running);
+
+    // Make the first stop's Stopping transition throw — the close path never
+    // runs, but the finally MUST release closeRunInProgress.
+    const stateMachine = (
+      engine as unknown as {
+        stateMachine: { transition: (...args: unknown[]) => Promise<boolean> };
+      }
+    ).stateMachine;
+    const transitionSpy = vi.spyOn(stateMachine, 'transition');
+    transitionSpy.mockImplementationOnce(async () => {
+      throw new Error('transition boom');
+    });
+
+    await engine.stop();
+    expect(engine.state).toBe(BotState.Error);
+    expect(closeAllPositions).not.toHaveBeenCalled(); // the close path never ran
+
+    // Guard released → a subsequent stop (emergency from Error) acquires the
+    // run again and closes positions.
+    await engine.emergencyStop();
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(engine.state).toBe(BotState.Stopped);
+  });
+});
+
+// ---- Hardening F3: persisted close-attempt tombstones ----
+//
+// prepareCloseAttempt (wired as CloseManager.preflightClose) persists a
+// SYMBOL:TIMEFRAME marker BEFORE every swap, refuses a position a DIFFERENT
+// close run left non-confirmed (fail-closed, no re-sell), allows same-run
+// retries, is cleared on a confirmed close (handlePositionClosed), and is
+// loaded tamper-protected at initialize().
+
+describe('BotEngine close-attempt tombstones (F3 security)', () => {
+  type CloseAttemptEngine = {
+    prepareCloseAttempt: (symbol: string, timeframe: string, closeRunId: string) => Promise<string | undefined>;
+    handlePositionClosed: (symbol: string, timeframe: string, txSignature: string) => void;
+    loadCloseAttemptsFromDisk: () => Promise<void>;
+  };
+
+  function makeEngine(): CloseAttemptEngine {
+    // Cast through `unknown`: prepareCloseAttempt is PRIVATE on BotEngine, so a
+    // direct `BotEngine & CloseAttemptEngine` intersection collapses to `never`.
+    return new BotEngine() as unknown as CloseAttemptEngine;
+  }
+
+  it('records a tombstone BEFORE the swap, allows same-run retries, and refuses a DIFFERENT close run (no re-sell)', async () => {
+    const engine = makeEngine();
+
+    // First attempt of run-1: marked and allowed.
+    expect(await engine.prepareCloseAttempt('BTC', '1', 'run-1')).toBeUndefined();
+    // Same-run retry (the close-level retry policy only retries provably-no-send
+    // failures): still allowed.
+    expect(await engine.prepareCloseAttempt('BTC', '1', 'run-1')).toBeUndefined();
+    // A DIFFERENT close run → fail-closed refusal: the prior close never
+    // confirmed (it may have landed but been misreported) — re-selling would
+    // double-sell.
+    const reason = await engine.prepareCloseAttempt('BTC', '1', 'run-2');
+    expect(reason).toContain('refusing to re-sell');
+    expect(reason).toContain('run-1');
+  });
+
+  it('clears the tombstone on a CONFIRMED on-chain close (handlePositionClosed)', async () => {
+    const engine = makeEngine();
+
+    await engine.prepareCloseAttempt('BTC', '1', 'run-1');
+    // Confirmed signature → the tombstone is removed so a legitimately
+    // re-opened position can close again under a fresh run.
+    engine.handlePositionClosed('BTC', '1', 'sig-ok');
+
+    expect(await engine.prepareCloseAttempt('BTC', '1', 'run-2')).toBeUndefined();
+  });
+
+  it('loads a valid persisted foreign-runId tombstone at initialize() and refuses the cross-run re-sell', async () => {
+    vi.mocked(readFile).mockResolvedValue(
+      JSON.stringify({ 'BTC:1': { closeRunId: 'run-old', attemptedAt: 1_700_000_000_000 } }),
+    );
+    const engine = makeEngine();
+
+    await engine.loadCloseAttemptsFromDisk();
+
+    // A fresh close run finds run-old's unconfirmed attempt → fail-closed.
+    const reason = await engine.prepareCloseAttempt('BTC', '1', 'run-new');
+    expect(reason).toContain('refusing to re-sell');
+    expect(reason).toContain('run-old');
+  });
+
+  it('does not crash on a tampered/malformed close-attempts file — degrades to an empty guard (never invents tombstones)', async () => {
+    // Malformed JSON.
+    vi.mocked(readFile).mockResolvedValue('{not valid json');
+    const engine = makeEngine();
+    await expect(engine.loadCloseAttemptsFromDisk()).resolves.toBeUndefined();
+    // Nothing poisoned: a fresh close proceeds.
+    expect(await engine.prepareCloseAttempt('BTC', '1', 'run-1')).toBeUndefined();
+
+    // Valid JSON but wrong shape (hostile/tampered) — entries are dropped.
+    vi.mocked(readFile).mockResolvedValue(
+      JSON.stringify({ 'BTC:1': { closeRunId: 42, attemptedAt: 'not-a-number' } }),
+    );
+    await engine.loadCloseAttemptsFromDisk();
+    expect(await engine.prepareCloseAttempt('BTC', '1', 'run-2')).toBeUndefined();
+  });
+});
+
+// ---- Reviewer MAJOR R1: bounded drain deadline ----
+//
+// An in-flight tick whose swap is wedged must not stall the stop before closes
+// begin. The drain races pendingTicks against a short cap and PROCEEDS.
+
+describe('BotEngine drain deadline (reviewer MAJOR R1)', () => {
+  it('bounds the in-flight drain — a hung tick cannot stall the stop path', async () => {
+    vi.useFakeTimers();
+    try {
+      const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+      const engine = new BotEngine({ logger: logger as never });
+
+      // A tick whose swap hangs forever — the drain must NOT await it indefinitely.
+      const hung = new Promise<void>(() => {});
+      (engine as unknown as { pendingTicks: Set<Promise<void>> }).pendingTicks.add(hung);
+
+      const drain = (
+        engine as unknown as { drainInFlightProcessing: (ms: number) => Promise<void> }
+      ).drainInFlightProcessing(100);
+
+      await vi.advanceTimersByTimeAsync(101);
+      await drain; // resolves — never hangs, even though the tick is unsettled
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Drain deadline fired — proceeding to closes with in-flight ticks still unsettled',
+        expect.objectContaining({ count: 1, deadlineMs: 100 }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

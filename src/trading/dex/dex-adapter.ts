@@ -57,7 +57,14 @@ export interface Quote {
 export interface SwapResult {
   /** Whether the swap succeeded. */
   success: boolean;
-  /** Transaction signature. */
+  /**
+   * Transaction signature, when one was obtained.
+   *
+   * Always present on success. May also be present on failure when the
+   * swap's transaction was accepted by the RPC but confirmation failed or
+   * timed out — callers can verify on-chain status rather than assume no
+   * swap occurred (no-double-sell close retry rule).
+   */
   signature?: string;
   /** Input amount that was swapped. */
   inputAmount: string;

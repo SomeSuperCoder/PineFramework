@@ -215,4 +215,22 @@ describe('VersionedTransaction (v0) regression — live Jupiter /swap/v1 envelop
     expect(sendTransaction).toHaveBeenCalledTimes(1);
     expect(confirmTransaction).toHaveBeenCalledTimes(1);
   });
+
+  it('sendAndConfirmTransactionWithTimeout carries the send signature when confirmation throws/times out (signature-carrying failure path)', async () => {
+    const sendTransaction = vi.fn().mockResolvedValue('mock-v0-signature');
+    const confirmTransaction = vi.fn().mockRejectedValue(new Error('Transaction confirmation timeout'));
+    const connection = { sendTransaction, confirmTransaction } as unknown as Connection;
+    const tx = deserializeTransaction(V0_SWAP_TRANSACTION_B64);
+
+    const result = await sendAndConfirmTransactionWithTimeout(connection, tx);
+
+    // The RPC accepted the transaction (send landed) before confirm raced — the
+    // failure MUST keep the signature so the close retry rule can verify on-chain
+    // instead of assuming nothing was sold (no-double-sell).
+    expect(result.success).toBe(false);
+    expect(result.signature).toBe('mock-v0-signature');
+    expect(result.error).toBe('Transaction confirmation timeout');
+    expect(sendTransaction).toHaveBeenCalledTimes(1);
+    expect(confirmTransaction).toHaveBeenCalledTimes(1);
+  });
 });

@@ -19,7 +19,7 @@ import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
 import { createBotRouter } from './routes/bot.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
-import type { BotConfig, RiskManager, RiskManagerConfig } from 'pine-framework';
+import type { BotConfig, BotEngine, RiskManager, RiskManagerConfig } from 'pine-framework';
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { buildSnapshotPayload } from './ws/snapshot-payload.js';
 import { createWSGateway } from './ws/gateway.js';
@@ -258,6 +258,12 @@ app.get('/api/logs', async (req, res) => {
 });
 
 // ── Trading Bot (feature-gated) ──
+// Hoisted engine reference so the process-signal shutdown path can trigger the
+// engine's graceful stop (auto-close-on-stop, design decision 8). The engine
+// is constructed inside the feature-gated block below and only exists when
+// ENABLE_TRADING_BOT is true.
+let botEngine: BotEngine | null = null;
+
 if (ENABLE_TRADING_BOT) {
   const { BotEngine, RiskManager, AutoMarketSelector, generateDefaultCandidates } =
     await import('pine-framework');
@@ -332,7 +338,7 @@ if (ENABLE_TRADING_BOT) {
     });
   });
 
-  const botEngine = new BotEngine({
+  botEngine = new BotEngine({
     logger: botLogger,
     walletManager,
     riskManager: buildRiskManager(savedConfig),
@@ -368,6 +374,11 @@ if (ENABLE_TRADING_BOT) {
       return [result.best.pair];
     },
   });
+
+  // Non-null alias for the wiring closures below: TS does not preserve `let`
+  // narrowing inside closures, but at this point in the block the engine is
+  // always assigned (constructed above, before any wiring or request runs).
+  const engine = botEngine;
 
   if (savedConfig) {
     try {
@@ -414,7 +425,7 @@ if (ENABLE_TRADING_BOT) {
       botWS.broadcast({
         channel: 'bot:snapshot',
         type: 'snapshot',
-        data: buildSnapshotPayload(botEngine.getSnapshot(), botEngine),
+        data: buildSnapshotPayload(engine.getSnapshot(), engine),
       });
     }
   });
@@ -482,17 +493,71 @@ server.listen(PORT, async () => {
   }
 });
 
+/**
+ * Testable exit seam (design decision 8, auto-close-on-stop). Gracefully stops
+ * the trading engine when it is Running, and NEVER throws.
+ *
+ * Extracted out of shutdown() so the signal→engine.stop() coercion can be
+ * unit-tested with a mock engine WITHOUT importing this entrypoint (importing
+ * it boots the server and registers real SIGINT/SIGTERM handlers). Passing a
+ * mock engine is safe: we only read `.state` and call `.stop()` inside a
+ * try/catch. This is the exported seam — tests import THIS, not index.ts.
+ *
+ * A stop/close failure must never block process exit; shutdown()'s 10s
+ * forced-exit fallback remains the backstop.
+ */
+export async function stopEngineOnShutdown(engine: BotEngine | null): Promise<void> {
+  if (!engine) return;
+
+  try {
+    if (engine.state === 'Running') {
+      await engine.stop();
+    } else {
+      logger.info('[Server] Engine not running — skipping graceful stop', {
+        state: engine.state,
+      });
+    }
+  } catch (err) {
+    logger.error('[Server] Engine stop failed during shutdown', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 async function shutdown(signal: string): Promise<void> {
   logger.info(`\n[Server] Received ${signal}, shutting down gracefully...`);
-  await telegramService.stop();
+
+  // Reviewer MAJOR R2: arm the forced-exit backstop BEFORE awaiting the engine
+  // stop. The engine's graceful close can legitimately take up to its close
+  // deadline (60s graceful / 30s emergency), and a hung engine stop (e.g. a
+  // wedged drain) must never stall process exit indefinitely. This timer
+  // guarantees the process exits within 10s of the signal, bounded end-to-end.
+  // The contest is intentional: a graceful stop that fits within the budget
+  // clears the timer and exits cleanly; one that exceeds it is force-exited so
+  // the process can never be stranded in SIGTERM.
+  const forcedExitTimer = setTimeout(() => {
+    logger.error('[Server] Forced shutdown after graceful-stop backstop');
+    process.exit(1);
+  }, 10000);
+
+  try {
+    // Auto-close-on-stop (design decision 8): the engine's graceful stop
+    // sequence (including close-all, via stopEngineOnShutdown) runs BEFORE the
+    // telegram service stops and the server closes, so open positions close on
+    // process exit and close failure warnings still reach the operator.
+    await stopEngineOnShutdown(botEngine);
+
+    await telegramService.stop();
+  } finally {
+    // Graceful path completed within the backstop budget — the forced-exit
+    // timer must not now fire and turn a clean exit into a failed one.
+    clearTimeout(forcedExitTimer);
+  }
+
   server.close(() => {
     logger.info('[Server] Closed');
     process.exit(0);
   });
-  setTimeout(() => {
-    logger.error('[Server] Forced shutdown');
-    process.exit(1);
-  }, 10000);
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));

@@ -654,5 +654,39 @@ describe('JupiterSwapAdapter', () => {
       expect(mockSimulateTransaction).not.toHaveBeenCalled();
       expect(mockSendAndConfirm).not.toHaveBeenCalled();
     });
+
+    it('swap() threads a failure signature when the send landed but confirmation failed (no-double-sell enabler)', async () => {
+      mockSimulateTransaction.mockResolvedValue({ success: true });
+      mockSendAndConfirm.mockResolvedValue({
+        success: false,
+        signature: 'mock-v0-signature',
+        error: 'Transaction confirmation timeout',
+      });
+
+      const signer = Keypair.fromSecretKey(Buffer.from(V0_SIGNER_SECRET_B64, 'base64'));
+
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(quoteResponse()) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue({ swapTransaction: V0_SWAP_TRANSACTION_B64 }),
+        });
+      global.fetch = mockFetch;
+
+      const quote = await adapter.quote(USDC_MINT, V0_OUTPUT_MINT, BigInt(452571));
+      const result = await adapter.swap(quote, signer.secretKey);
+
+      // The send landed (signature exists) but confirm raced — the failure MUST
+      // keep the signature so CloseManager can verify on-chain instead of
+      // assuming nothing was sold (no-double-sell close retry rule).
+      expect(result.success).toBe(false);
+      expect(result.signature).toBe('mock-v0-signature');
+      expect(result.error).toBe('Transaction confirmation timeout');
+      expect(result.inputAmount).toBe('452571');
+      expect(result.outputAmount).toBe('0');
+      expect(mockSimulateTransaction).toHaveBeenCalledTimes(1);
+      expect(mockSendAndConfirm).toHaveBeenCalledTimes(1);
+    });
   });
 });

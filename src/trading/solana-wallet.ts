@@ -37,7 +37,14 @@ export interface SolanaBalance {
 export interface TransactionResult {
   /** Whether the transaction succeeded. */
   success: boolean;
-  /** Transaction signature. */
+  /**
+   * Transaction signature, when one was obtained.
+   *
+   * Always present on success. May also be present on failure when the
+   * transaction was accepted by the RPC but confirmation failed or timed
+   * out — callers can check on-chain status instead of assuming no trade
+   * occurred (no-double-sell close retry rule).
+   */
   signature?: string;
   /** Error message if failed. */
   error?: string;
@@ -237,8 +244,14 @@ export async function sendAndConfirmTransactionWithTimeout(
   connection: Connection,
   transaction: VersionedTransaction,
 ): Promise<TransactionResult> {
+  // Capture the signature BEFORE confirmation so it survives a confirm
+  // throw/timeout. A failure result WITH a signature means the RPC accepted
+  // the transaction ("send landed, confirm raced") — the no-double-sell close
+  // retry rule must be able to detect that instead of re-selling.
+  let signature: string | undefined;
+
   try {
-    const signature = await connection.sendTransaction(transaction, {
+    signature = await connection.sendTransaction(transaction, {
       preflightCommitment: 'confirmed',
     });
 
@@ -246,6 +259,7 @@ export async function sendAndConfirmTransactionWithTimeout(
     if (confirmation.value.err) {
       return {
         success: false,
+        signature,
         error: `Transaction failed: ${JSON.stringify(confirmation.value.err)}`,
       };
     }
@@ -258,6 +272,9 @@ export async function sendAndConfirmTransactionWithTimeout(
     const message = err instanceof Error ? err.message : String(err);
     return {
       success: false,
+      // Present iff sendTransaction succeeded before the throw (e.g. confirm
+      // timed out). Absent = the send itself failed — no tx was accepted.
+      ...(signature ? { signature } : {}),
       error: message,
     };
   }

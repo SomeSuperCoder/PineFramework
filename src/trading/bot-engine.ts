@@ -30,6 +30,8 @@ import {
   nextBoundaryAfter,
 } from './bybit-websocket.js';
 import { LiveStrategyExecutor } from './live-strategy-executor.js';
+import { CloseManager } from './close-manager.js';
+import type { CloseEvent, CloseMode } from './close-manager.js';
 import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
 import { LiveScheduler } from './live-scheduler.js';
 import { ClosedCandle, PairId } from './scheduler.js';
@@ -39,7 +41,7 @@ import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
 import { extractScriptName } from '../utils/script-name.js';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import type { PineLogger } from '../utils/logger/types.js';
 
 /** Logger interface for bot engine events. */
@@ -78,6 +80,23 @@ const FEED_STATE_PERSIST_THROTTLE_MS = 60_000;
  *  notifyFeedStatus(true); only tick-cadence broadcasts are throttled. Disk
  *  persistence keeps its own FEED_STATE_PERSIST_THROTTLE_MS gate — unchanged. */
 const FEED_STATUS_BROADCAST_THROTTLE_MS = 1_000;
+
+/** Bounded drain budget for in-flight candle processing on stop (reviewer
+ *  MAJOR R1). A tick whose swap is in flight can hang forever on a wedged HTTP
+ *  endpoint (the Jupiter fetch has no timeout), which would otherwise block the
+ *  stop indefinitely before the close snapshot. The drain races the in-flight
+ *  ticks against this short cap and PROCEEDS to closes regardless — the
+ *  bounded-stop guarantee covers the whole stop sequence, not just
+ *  closeAllPositions. */
+const DRAIN_DEADLINE_MS = 3_000;
+
+/** Persisted close-attempt tombstones (security F3), written beside the
+ *  executor's strategy-state.json and feed-state.json (engine-cwd). Maps
+ *  `SYMBOL:TIMEFRAME` → { closeRunId, attemptedAt }. Prevents a cross-run /
+ *  post-restart double-sell: a failed/timed-out close never removes the
+ *  position (correct chain-truth), so without a tombstone a restart's next
+ *  stop would re-sell a position the previous close may have actually closed. */
+const CLOSE_ATTEMPTS_FILE = 'close-attempts.json';
 
 /** Default live starting capital (1,000 USDC in lamports) when the config
  *  does not specify one. */
@@ -223,6 +242,13 @@ export interface BotEngineOptions {
    * Dependency-inverted: the engine never knows the concrete config store.
    */
   onConfigPersist?: (config: BotConfig) => void;
+  /**
+   * Optional CloseManager for closing open positions on stop
+   * (auto-close-on-stop). Injected for tests; when omitted and a wallet is
+   * available, the engine constructs one internally in initialize() bound to
+   * its own DEX adapter.
+   */
+  closeManager?: CloseManager;
 }
 
 /**
@@ -235,6 +261,10 @@ export class BotEngine {
   private readonly riskManager?: RiskManager;
   private readonly telegramBot?: TradingTelegramBot;
   private readonly walletManager?: WalletManager;
+  /** Injected close manager (tests) — reused across restarts. */
+  private readonly injectedCloseManager?: CloseManager;
+  /** Active close manager — rebuilt each initialize() when internally created. */
+  private closeManager: CloseManager | null = null;
   private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
   private readonly onConfigPersist?: (config: BotConfig) => void;
   private _config: BotConfig | null = null;
@@ -299,11 +329,32 @@ export class BotEngine {
   /** AbortController for cancelling in-flight candle processing on stop. */
   private _abortController: AbortController | null = null;
 
+  /** In-flight scheduler ticks, tracked for the stop-path drain
+   *  (auto-close-on-stop, design decision 4). */
+  private readonly pendingTicks = new Set<Promise<void>>();
+
+  /** Single-flight guard for the stop/close sequence (security F1): set
+   *  synchronously when a stop run begins and cleared in its finally. Two
+   *  concurrent emergency stops from the Error state (where no state-machine
+   *  transition exists to serialize them) must NEVER both reach
+   *  closeOpenPositions — that would run two swaps for one position. One
+   *  close run per engine lifetime. */
+  private closeRunInProgress = false;
+
+  /** Persisted per-position close-attempt tombstones (security F3), keyed by
+   *  `SYMBOL:TIMEFRAME`. A close run marks a position before attempting its
+   *  swap; a confirmed close removes the mark. Any later close run that finds
+   *  a mark from a DIFFERENT closeRunId refuses to re-sell — the prior close
+   *  may have landed on-chain but been misreported (failed/timed_out), and a
+   *  post-restart re-sell would double-sell. */
+  private closeAttempts: Record<string, { closeRunId: string; attemptedAt: number }> = {};
+
   constructor(options?: BotEngineOptions) {
     this.logger = options?.logger ?? consoleLogger;
     this.riskManager = options?.riskManager;
     this.telegramBot = options?.telegramBot;
     this.walletManager = options?.walletManager;
+    this.injectedCloseManager = options?.closeManager;
     this.onAutoSelect = options?.onAutoSelect;
     this.onConfigPersist = options?.onConfigPersist;
 
@@ -455,12 +506,31 @@ export class BotEngine {
       throw new Error(`Cannot stop bot from state: ${this.state}. Must be Running.`);
     }
 
+    // F1 single-flight: one close run per engine lifetime. A concurrent stop
+    // (e.g. a risk handler racing a user stop) must not start a second
+    // drain+close worker — tolerate it gracefully instead.
+    if (!this.tryBeginCloseRun()) {
+      this.logger.warn('Stop already in progress — ignoring concurrent stop request');
+      return;
+    }
+
     // Cancel in-flight candle processing immediately
     this._abortController?.abort();
 
-    await this.stateMachine.transition(BotState.Stopping, 'User requested stop');
-
     try {
+      await this.stateMachine.transition(BotState.Stopping, 'User requested stop');
+
+      // Auto-close-on-stop (design decision 4): drain in-flight entry
+      // processing so a submit already under the scheduler mutex settles to a
+      // definite outcome before the close snapshot (spec: "the in-flight entry
+      // is allowed to settle first, and no new entries begin after the stop
+      // starts"), then close all open positions with the graceful budget
+      // (60s deadline, 3 retries). Closes run BEFORE shutdown() nulls the
+      // executor so onPositionClosed can flatten live state. The drain is
+      // deadline-bounded (reviewer MAJOR R1) so a wedged swap cannot stall the
+      // stop before closes even begin.
+      await this.drainInFlightProcessing(DRAIN_DEADLINE_MS);
+      await this.closeOpenPositions('user_stop', 'graceful');
       // Phase 2: finish bar processing, close positions, persist state
       await this.shutdown();
       await this.stateMachine.transition(BotState.Stopped, 'Shutdown complete');
@@ -469,6 +539,10 @@ export class BotEngine {
       const message = err instanceof Error ? err.message : String(err);
       this.recordError('STOP_FAILED', message, ErrorSeverity.Error);
       await this.stateMachine.transition(BotState.Error, `Stop failed: ${message}`);
+    } finally {
+      // F1: the close-run guard always releases — even when a transition or
+      // drain throws, the next stop must be able to acquire the run again.
+      this.closeRunInProgress = false;
     }
   }
 
@@ -481,18 +555,35 @@ export class BotEngine {
       throw new Error(`Emergency stop not available from state: ${this.state}`);
     }
 
+    // F1 single-flight (security): acquire the close run SYNCHRONOUSLY, before
+    // any await and regardless of state. From Error there is no state-machine
+    // transition to serialize callers, so two rapid POST /api/bot/emergency-stop
+    // would otherwise BOTH reach closeOpenPositions and run two concurrent
+    // swaps for one position. The second caller is tolerated gracefully (no
+    // new worker, no new close run).
+    if (!this.tryBeginCloseRun()) {
+      this.logger.warn('Emergency stop already in progress — ignoring concurrent stop request');
+      return;
+    }
+
     this.logger.warn('Emergency stop triggered');
 
     // Cancel in-flight candle processing immediately
     this._abortController?.abort();
 
-    // Force to Stopping if currently Running
-    if (this.state === BotState.Running) {
-      await this.stateMachine.transition(BotState.Stopping, 'Emergency stop');
-    }
-
     try {
+      // Force to Stopping if currently Running
+      if (this.state === BotState.Running) {
+        await this.stateMachine.transition(BotState.Stopping, 'Emergency stop');
+      }
+
       this.logger.info('Emergency stop: cancelling pending orders, closing positions');
+      // Auto-close-on-stop (design decision 4): best-effort emergency budget
+      // (30s deadline, 1 retry) — the state ALWAYS reaches Stopped even if
+      // closes fail. The drain is deadline-bounded (reviewer MAJOR R1) so a
+      // wedged in-flight swap cannot delay the emergency close.
+      await this.drainInFlightProcessing(DRAIN_DEADLINE_MS);
+      await this.closeOpenPositions('emergency_stop', 'emergency');
       // Phase 2: cancel orders, close positions, persist state
       await this.shutdown();
       await this.stateMachine.transition(BotState.Stopped, 'Emergency stop complete');
@@ -500,6 +591,9 @@ export class BotEngine {
       const message = err instanceof Error ? err.message : String(err);
       this.recordError('EMERGENCY_STOP_FAILED', message, ErrorSeverity.Fatal);
       await this.stateMachine.transition(BotState.Error, `Emergency stop failed: ${message}`);
+    } finally {
+      // F1: the close-run guard always releases on the way out.
+      this.closeRunInProgress = false;
     }
   }
 
@@ -819,6 +913,12 @@ export class BotEngine {
     // 0. Create AbortController for cancellation
     this._abortController = new AbortController();
 
+    // 0.5 F3: reload the persisted close-attempt tombstones (security F3) so a
+    //     post-restart stop refuses to re-sell a position a prior run left
+    //     non-confirmed. A fresh in-memory map would lose the cross-run
+    //     protection that prevents the double-sell-after-restart.
+    await this.loadCloseAttemptsFromDisk();
+
     // 1. Create DEX adapter
     this.dex = new JupiterSwapAdapter();
     this.logger.info('DEX adapter created', { dex: this.dex.name });
@@ -854,6 +954,43 @@ export class BotEngine {
       },
     });
     this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
+
+    // 3.6 Close manager (auto-close-on-stop, Wave 3). An injected manager
+    //     (tests) ALWAYS wins — the caller owns its dependencies. Otherwise
+    //     construct in-engine when a wallet exists — the backend has no
+    //     package export for CloseManager, so there is no DI site outside the
+    //     engine (design decision 1, "inside BotEngine if fields are
+    //     available"). A wallet-less engine gets no internal manager (nothing
+    //     can sign) and stop paths skip closes.
+    const dex = this.dex;
+    const walletManager = this.walletManager;
+    if (this.injectedCloseManager) {
+      this.closeManager = this.injectedCloseManager;
+      this.logger.info('Close manager ready', { source: 'injected' });
+    } else if (dex && walletManager) {
+      this.closeManager = new CloseManager({
+        dex,
+        getKeypair: () => walletManager.getKeypair(),
+        getPositions: () => this.getPositions(),
+        onPositionClosed: (symbol, timeframe, txSignature) =>
+          this.handlePositionClosed(symbol, timeframe, txSignature),
+        onPositionCloseFailed: (symbol, timeframe, error) =>
+          this.handlePositionCloseFailed(symbol, timeframe, error),
+        // F3 (security): engine-owned cross-run double-sell guard — persist the
+        // close attempt BEFORE the swap and refuse a position that a previous
+        // run left non-confirmed.
+        preflightClose: (position, closeRunId) =>
+          this.prepareCloseAttempt(position.symbol, position.timeframe, closeRunId),
+        onEvent: (event) => this.handleCloseEvent(event),
+        logger: this.logger,
+      });
+      this.logger.info('Close manager ready', { dex: dex.name, source: 'internal' });
+    } else {
+      this.closeManager = null;
+      this.logger.warn(
+        'Close manager not created — wallet or DEX unavailable; stops will skip closes',
+      );
+    }
 
     // 3.5 Initialize a compiled strategy engine for every configured pair.
     //     Parse/compile failures throw here so start() fails with a descriptive
@@ -1287,12 +1424,19 @@ export class BotEngine {
 
     if (!this.scheduler || this.state !== BotState.Running) return;
 
-    // Process candle asynchronously (fire and forget — scheduler handles errors)
-    this.scheduler
-      .liveTick([candle], this._abortController?.signal)
+    // Process candle asynchronously (fire and forget — scheduler handles
+    // errors). Tracked in pendingTicks so the stop-path drain
+    // (auto-close-on-stop, decision 4) can await an in-flight entry before
+    // snapshotting positions; removed once the tick settles.
+    const tickPromise = this.scheduler.liveTick([candle], this._abortController?.signal);
+    this.pendingTicks.add(tickPromise);
+    tickPromise
       .then(() => this.captureBalanceSnapshot())
       .catch((err) => {
         this.logger.error('Error processing candle', { error: String(err) });
+      })
+      .finally(() => {
+        this.pendingTicks.delete(tickPromise);
       });
   }
 
@@ -1307,6 +1451,341 @@ export class BotEngine {
       await this.strategyExecutor?.captureBalanceSnapshot();
     } catch (err) {
       this.logger.warn('Balance snapshot capture failed', { error: String(err) });
+    }
+  }
+
+  // ---- Close integration (auto-close-on-stop) ----
+
+  /**
+   * Run the close-all sequence for a stop path (design decision 2/4).
+   *
+   * The CloseManager's global deadline (30s emergency / 60s graceful)
+   * guarantees closeAllPositions resolves, so the state machine ALWAYS
+   * proceeds to shutdown → Stopped. The catch is defensive (the module never
+   * rejects by design) and MUST NOT re-throw: a close failure must never
+   * strand the engine in Stopping — log loudly and continue the stop.
+   */
+  private async closeOpenPositions(reason: string, mode: CloseMode): Promise<void> {
+    const closeManager = this.closeManager;
+    if (!closeManager) {
+      this.logger.info('Close manager not available — skipping position closes', { reason, mode });
+      return;
+    }
+    try {
+      await closeManager.closeAllPositions(reason, mode);
+    } catch (err) {
+      this.logger.error('Close run failed unexpectedly — continuing stop', {
+        reason,
+        mode,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Drain in-flight candle processing before the close snapshot (design
+   * decision 4; spec: "the in-flight entry is allowed to settle first").
+   *
+   * The scheduler serializes order submission behind a PRIVATE mutex
+   * (scheduler.ts `private readonly mutex`) with no public drain handle, so
+   * the mutex is not cleanly reachable from the engine. The abort signal
+   * (fired before the Stopping transition) already stops NEW submits —
+   * tick() checks signal.aborted before Phase 2. What remains is an
+   * already-running submit whose swap is in flight: awaiting the tracked
+   * in-flight ticks lets that swap settle to a definite outcome so the entry
+   * either confirms (→ appears in getPositions() → the close run closes it)
+   * or fails (→ never reported) BEFORE the snapshot.
+   */
+  private async drainInFlightProcessing(deadlineMs: number): Promise<void> {
+    const pending = [...this.pendingTicks];
+    if (pending.length === 0) return;
+    this.logger.info('Draining in-flight candle processing before closing positions', {
+      count: pending.length,
+      deadlineMs,
+    });
+
+    // Reviewer MAJOR R1: bound the drain. A tick whose swap is mid-flight can
+    // hang forever (a wedged Jupiter endpoint has no timeout on its fetch), so
+    // awaiting indefinite allSettled would strand the stop before closes even
+    // begin. Race the in-flight ticks against the drain budget and PROCEED to
+    // closes regardless — the drain is a best-effort settle, never a gate.
+    let drainTimer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<'deadline'>((resolve) => {
+      drainTimer = setTimeout(() => resolve('deadline'), deadlineMs);
+    });
+
+    const winner = await Promise.race([
+      Promise.allSettled(pending).then(() => 'drained' as const),
+      deadline,
+    ]);
+    if (drainTimer) clearTimeout(drainTimer);
+
+    if (winner === 'deadline') {
+      this.logger.warn(
+        'Drain deadline fired — proceeding to closes with in-flight ticks still unsettled',
+        {
+          count: this.pendingTicks.size,
+          deadlineMs,
+        },
+      );
+    }
+  }
+
+  /**
+   * F1 single-flight guard: atomically acquire the right to run the stop/close
+   * sequence. Returns false when a close run is already in progress — the
+   * caller must NOT start a second drain/close/shutdown worker (that could run
+   * two concurrent swaps for one position). Synchronous and state-free: used by
+   * both stop() and emergencyStop() so exactly one close runs per engine.
+   */
+  private tryBeginCloseRun(): boolean {
+    if (this.closeRunInProgress) return false;
+    this.closeRunInProgress = true;
+    return true;
+  }
+
+  /**
+   * F3 (security) close-attempt preflight, wired as CloseManager.preflightClose.
+   *
+   * Called before EVERY swap attempt for a position. Two responsibilities:
+   * 1. PERSIST the close-attempt marker (closeRunId) to disk BEFORE the swap,
+   *    so a crash/restart mid-close still leaves a tombstone.
+   * 2. REFUSE (return a reason) when a tombstone exists from a DIFFERENT
+   *    closeRunId — that prior close never confirmed (failed/timed_out) and
+   *    may have landed on-chain but been misreported; re-selling it after a
+   *    restart is the cross-run double-sell F3 prevents.
+   *
+   * Same-run retries are allowed (matching closeRunId): the existing
+   * close-level retry policy already only retries provably-no-send failures.
+   *
+   * Fail-closed by design: if we cannot tell whether a prior attempt landed,
+   * we refuse to sell. The operator reconciles the position on-chain; a
+   * stranded-but-not-double-sold position is the safe failure mode for real
+   * money.
+   */
+  private async prepareCloseAttempt(
+    symbol: string,
+    timeframe: string,
+    closeRunId: string,
+  ): Promise<string | undefined> {
+    const key = `${symbol}:${timeframe}`;
+    const prior = this.closeAttempts[key];
+
+    if (prior && prior.closeRunId !== closeRunId) {
+      const reason =
+        `Position ${key} has an unconfirmed close attempt from run ${prior.closeRunId} ` +
+        `(attempted at ${new Date(prior.attemptedAt).toISOString()}) — refusing to re-sell ` +
+        `to prevent a double-sell; reconcile the position on-chain before the next close`;
+      this.logger.warn('[Close] cross-run double-sell guard refused re-sell', {
+        symbol,
+        timeframe,
+        priorCloseRunId: prior.closeRunId,
+        currentCloseRunId: closeRunId,
+      });
+      return reason;
+    }
+
+    // Mark BEFORE the swap. Persist is fire-and-forget but the in-memory map
+    // (engine-lifetime) is the live guard; disk is the restart-survival layer.
+    this.closeAttempts[key] = { closeRunId, attemptedAt: Date.now() };
+    this.persistCloseAttempts();
+    return undefined;
+  }
+
+  /** Persist the close-attempt tombstones (F3). Fire-and-forget: a write
+   *  failure must never block a close — the in-memory map still guards the
+   *  current engine lifetime, and a lost write only weakens (never breaks) the
+   *  restart-survival guarantee. */
+  private persistCloseAttempts(): void {
+    void writeFile(CLOSE_ATTEMPTS_FILE, JSON.stringify(this.closeAttempts, null, 2)).catch(
+      (err) => {
+        this.logger.warn('Failed to persist close-attempt tombstones', { error: String(err) });
+      },
+    );
+  }
+
+  /** Load the persisted close-attempt tombstones (F3) at initialize(). A
+   *  missing/corrupt file degrades to an empty map — the current run still
+   *  guards itself in-memory; only cross-restart protection is lost, and that
+   *  is fail-safe (an empty map never invents tombstones, it just cannot
+   *  refuse). */
+  private async loadCloseAttemptsFromDisk(): Promise<void> {
+    try {
+      const raw = await readFile(CLOSE_ATTEMPTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw) as Record<string, { closeRunId: string; attemptedAt: number }>;
+      // Validate shape — a corrupt/hostile file must not poison the guard.
+      const valid: Record<string, { closeRunId: string; attemptedAt: number }> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (
+          typeof key === 'string' &&
+          value &&
+          typeof value.closeRunId === 'string' &&
+          typeof value.attemptedAt === 'number'
+        ) {
+          valid[key] = value;
+        }
+      }
+      this.closeAttempts = valid;
+      const count = Object.keys(valid).length;
+      if (count > 0) {
+        this.logger.info('Loaded persisted close-attempt tombstones', { count });
+      }
+    } catch (err) {
+      this.closeAttempts = {};
+      this.logger.debug('No persisted close-attempt tombstones to load', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * CloseManager seam — a confirmed on-chain close (design decision 5: only a
+   * confirmed signature reaches here). Reconciles the executor's per-pair
+   * position to flat using the SAME semantics as the executor's sell-success
+   * branch (updatePositionState: state.position → flat object), emits a flat
+   * `position` event (D3), and persists so a restart does not resurrect the
+   * position.
+   *
+   * The executor owns confirmedPositions privately and it is not reachable
+   * here; flattening state.position is sufficient because getPositions()
+   * skips flat positions BEFORE the confirmed-fill gate, and the map is inert
+   * once the engine stops.
+   */
+  private handlePositionClosed(symbol: string, timeframe: string, txSignature: string): void {
+    const executor = this.strategyExecutor;
+    if (executor) {
+      const states = executor.getState();
+      const state = states[`${symbol}:${timeframe}`];
+      if (state) {
+        state.position = {
+          symbol,
+          direction: 'flat',
+          quantity: 0,
+          entryPrice: 0,
+          entryTime: 0,
+        };
+        executor.setState(states);
+      } else {
+        // A snapshot pair whose state vanished — the signature stays as the
+        // operator trail (design decision 6 risk note), never invented state.
+        this.logger.warn('position_closed has no executor state to flatten', {
+          symbol,
+          timeframe,
+          txSignature,
+        });
+      }
+    } else {
+      this.logger.warn('position_closed after executor teardown — state not flattened', {
+        symbol,
+        timeframe,
+        txSignature,
+      });
+    }
+
+    // D3: broadcast the flat position so the dashboard positions panel updates.
+    this.emit('position', {
+      pair: `${symbol}:${timeframe}`,
+      symbol,
+      timeframe,
+      direction: 'flat',
+      quantity: 0,
+      entryPrice: 0,
+      entryTime: 0,
+    });
+
+    // F3 (security): a confirmed on-chain close clears the close-attempt
+    // tombstone, so a position that is legitimately re-opened and later closed
+    // again is not blocked by its own prior history. Persisted so a restart
+    // sees the cleared state too.
+    delete this.closeAttempts[`${symbol}:${timeframe}`];
+    this.persistCloseAttempts();
+
+    // Persist the flattened state — critical for a close that confirms after
+    // the deadline: shutdown's saveState ran with the position still open, so
+    // this write is what keeps a restart from resurrecting it. Logged loudly,
+    // never rolled back (decision 5: signature is truth).
+    if (executor) {
+      void executor.saveState().catch((err) => {
+        this.logger.error('Failed to persist state after position_closed', {
+          symbol,
+          timeframe,
+          txSignature,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+  }
+
+  /**
+   * CloseManager seam — a close failed or timed out without a confirmed
+   * signature (design decision 7). The position stays on-chain and in
+   * getPositions(); the operator is warned via the existing Telegram channel
+   * (guarded, never thrown — mirrors the loss-breach pattern) and the failure
+   * is recorded so GET /api/bot/status surfaces it.
+   */
+  private handlePositionCloseFailed(symbol: string, timeframe: string, error: string): void {
+    const message = `Failed to close position ${symbol}:${timeframe}: ${error}`;
+    this.logger.warn('[Close] position close failed', { symbol, timeframe, error });
+
+    // Fire-and-forget (the seam is synchronous): notifyWarning is async and a
+    // rejection must never propagate into the close run.
+    if (this.telegramBot) {
+      void this.telegramBot.notifyWarning(message).catch((err) => {
+        this.logger.warn('Telegram notification failed after close failure', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+
+    this.recordError('CLOSE_FAILED', message, ErrorSeverity.Warning);
+  }
+
+  /**
+   * CloseManager observability seam — maps every structured CloseEvent to the
+   * engine's log stream, each tagged with closeRunId (design decision 7).
+   * V1 delivers via logs; a future WS channel would hook here.
+   */
+  private handleCloseEvent(event: CloseEvent): void {
+    switch (event.type) {
+      case 'stop_started':
+        this.logger.info('[Close] stop_started', {
+          closeRunId: event.closeRunId,
+          reason: event.reason,
+          mode: event.mode,
+          total: event.total,
+        });
+        break;
+      case 'close_started':
+        this.logger.info('[Close] close_started', {
+          closeRunId: event.closeRunId,
+          symbol: event.symbol,
+          timeframe: event.timeframe,
+          attempt: event.attempt,
+        });
+        break;
+      case 'position_closed':
+        this.logger.info('[Close] position_closed', {
+          closeRunId: event.closeRunId,
+          symbol: event.symbol,
+          timeframe: event.timeframe,
+          txSignature: event.txSignature,
+        });
+        break;
+      case 'close_failed':
+        this.logger.warn('[Close] close_failed', {
+          closeRunId: event.closeRunId,
+          symbol: event.symbol,
+          timeframe: event.timeframe,
+          error: event.error,
+          reason: event.reason,
+        });
+        break;
+      case 'stop_completed':
+        this.logger.info('[Close] stop_completed', {
+          closeRunId: event.closeRunId,
+          summary: event.summary,
+        });
+        break;
     }
   }
 
@@ -1344,6 +1823,9 @@ export class BotEngine {
     this.scheduler = null;
     this.strategyExecutor = null;
     this.dex = null;
+    // Close manager is rebuilt (or re-injected) on the next initialize() —
+    // its dex reference must not outlive this run.
+    this.closeManager = null;
     this._abortController = null;
 
     this.logger.info('Bot shutdown complete');

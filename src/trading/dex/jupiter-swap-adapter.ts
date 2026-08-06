@@ -219,6 +219,10 @@ export class JupiterSwapAdapter extends DexAdapter {
         if (!result.success) {
           return {
             success: false,
+            // The send may have landed before confirm failed/timed out — keep
+            // the signature so the caller can verify on-chain instead of
+            // assuming nothing was sold (no-double-sell close retry rule).
+            ...(result.signature ? { signature: result.signature } : {}),
             inputAmount: quote.inAmount,
             outputAmount: '0',
             fee: '0',
@@ -235,6 +239,10 @@ export class JupiterSwapAdapter extends DexAdapter {
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        // No signature to carry here: sendAndConfirmTransactionWithTimeout
+        // never throws — it returns a failed result, which is threaded above.
+        // A throw at this point means fetch/deserialize/sign/simulate failed
+        // before any signature existed, so there is nothing to drop.
         return {
           success: false,
           inputAmount: quote.inAmount,
