@@ -115,6 +115,8 @@ export class JupiterSwapAdapter extends DexAdapter {
         outAmount: string;
         priceImpactPct: string | number;
         routePlan: Array<{ swapInfo: { ammKey: string } }>;
+        otherAmountThreshold?: string;
+        swapMode?: string;
       };
 
       return {
@@ -126,6 +128,11 @@ export class JupiterSwapAdapter extends DexAdapter {
         slippageBps,
         feeBps: 0, // Jupiter API doesn't return fee in quote — computed at swap
         routePlan: data.routePlan, // Preserve original routePlan array for swap requests
+        // Raw passthrough: /swap expects the exact quoteResponse returned by
+        // /quote. Bug Hunter proved live that the verbatim body → HTTP 200.
+        rawQuoteResponse: data,
+        otherAmountThreshold: data.otherAmountThreshold,
+        swapMode: data.swapMode,
       };
     });
   }
@@ -137,7 +144,10 @@ export class JupiterSwapAdapter extends DexAdapter {
         const keypair = Keypair.fromSecretKey(privateKey);
 
         // Get swap transaction from Jupiter API
-        // Send routePlan array (not route string) per the swap/v1 contract
+        // /swap expects the exact quoteResponse returned by /quote (Jupiter's
+        // designed flow). Prefer the verbatim raw response — quote() always sets
+        // it; fall back to a complete 9-field v1-valid shape (proven live: both
+        // shapes return HTTP 200, the old 6-field reconstruction returned 422).
         const swapHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
         if (process.env.JUPITER_API_KEY) {
           swapHeaders['x-api-key'] = process.env.JUPITER_API_KEY;
@@ -147,13 +157,16 @@ export class JupiterSwapAdapter extends DexAdapter {
           method: 'POST',
           headers: swapHeaders,
           body: JSON.stringify({
-            quoteResponse: {
+            quoteResponse: (quote.rawQuoteResponse as Record<string, unknown>) ?? {
               inputMint: quote.inputMint,
               outputMint: quote.outputMint,
               inAmount: quote.inAmount,
               outAmount: quote.outAmount,
+              otherAmountThreshold: quote.otherAmountThreshold ?? '0',
+              swapMode: quote.swapMode ?? 'ExactIn',
+              slippageBps: quote.slippageBps,
               priceImpactPct: quote.priceImpactPct,
-              routePlan: quote.routePlan, // Use routePlan array instead of route string
+              routePlan: quote.routePlan,
             },
             userPublicKey: keypair.publicKey.toBase58(),
             wrapAndUnwrapSol: true,

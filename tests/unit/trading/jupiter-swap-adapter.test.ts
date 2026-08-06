@@ -263,6 +263,169 @@ describe('JupiterSwapAdapter', () => {
     });
   });
 
+  describe('regression — /swap quoteResponse passthrough (v1 422 missing otherAmountThreshold)', () => {
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+
+    // Real Jupiter v1 /quote response shape (verbatim from a live probe):
+    // inputMint, inAmount, outputMint, outAmount, otherAmountThreshold,
+    // swapMode: "ExactIn", slippageBps, platformFee, priceImpactPct (STRING),
+    // routePlan[{swapInfo{...}, percent, bps}], contextSlot, timeTaken,
+    // swapUsdValue, instructionVersion, ...
+    // simulateAtBestOffer is deliberately NOT part of the typed Quote — it
+    // proves the adapter forwards the response VERBATIM instead of
+    // reconstructing from a known field list (which is what caused the 422).
+    const fullV1QuoteResponse = (overrides: Record<string, unknown> = {}) => ({
+      inputMint: USDC_MINT,
+      inAmount: '1000000',
+      outputMint: SOL_MINT,
+      outAmount: '5000000',
+      otherAmountThreshold: '4950000',
+      swapMode: 'ExactIn',
+      slippageBps: 50,
+      platformFee: { amount: '0', feeBps: 0 },
+      priceImpactPct: '0.0010622',
+      routePlan: [
+        {
+          swapInfo: {
+            ammKey: 'amm1',
+            label: 'Orca',
+            inputMint: USDC_MINT,
+            outputMint: SOL_MINT,
+            inAmount: '1000000',
+            outAmount: '5000000',
+            updateContextSlot: 12345,
+          },
+          percent: 100,
+          bps: 10000,
+        },
+      ],
+      contextSlot: 123456,
+      timeTaken: 0.05,
+      swapUsdValue: '10.5',
+      instructionVersion: 1,
+      simulateAtBestOffer: false,
+      ...overrides,
+    });
+
+    const okQuoteFetch = (body: unknown) =>
+      vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(body) });
+
+    // ok:false stops swap() before the real transaction pipeline
+    // (deserialize/simulate/send) — only the request contract is asserted.
+    const failingSwapFetch = () =>
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('mocked failure'),
+      });
+
+    it('quote() stores the FULL raw API response as rawQuoteResponse', async () => {
+      const raw = fullV1QuoteResponse();
+      global.fetch = okQuoteFetch(raw);
+
+      const quote = await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      // Every field the API returned is preserved — not a 6-field slice.
+      expect(quote.rawQuoteResponse).toEqual(raw);
+      expect(quote.otherAmountThreshold).toBe('4950000');
+      expect(quote.swapMode).toBe('ExactIn');
+    });
+
+    it('swap() sends the rawQuoteResponse VERBATIM as quoteResponse — fields the old 6-field body dropped are present', async () => {
+      const raw = fullV1QuoteResponse();
+      // Call 0 = quote GET (ok), call 1 = swap POST (ok:false stops the tx pipeline).
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: vi.fn().mockResolvedValue(raw) })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          text: vi.fn().mockResolvedValue('mocked failure'),
+        });
+      global.fetch = mockFetch;
+      const keypair = Keypair.generate();
+
+      const quote = await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+      await adapter.swap(quote, keypair.secretKey);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      const [url, init] = mockFetch.mock.calls[1];
+      expect(String(url)).toBe('https://api.jup.ag/swap/v1/swap');
+      const body = JSON.parse(init?.body as string);
+
+      // Verbatim: the /swap body is deep-equal to the raw /quote response.
+      expect(body.quoteResponse).toEqual(raw);
+      // Guards the bug — the old 6-field reconstruction dropped all of these:
+      expect(body.quoteResponse.otherAmountThreshold).toBe('4950000');
+      expect(body.quoteResponse.swapMode).toBe('ExactIn');
+      expect(body.quoteResponse.contextSlot).toBe(123456);
+      expect(body.quoteResponse.simulateAtBestOffer).toBe(false);
+    });
+
+    it('swap() falls back to a COMPLETE 9-field quoteResponse when rawQuoteResponse is absent (old 6-field body 422s)', async () => {
+      const mockFetch = failingSwapFetch();
+      global.fetch = mockFetch;
+      const keypair = Keypair.generate();
+
+      // A Quote constructed outside the adapter has no rawQuoteResponse.
+      const manualQuote: Quote = {
+        inputMint: USDC_MINT,
+        outputMint: SOL_MINT,
+        inAmount: '1000000',
+        outAmount: '5000000',
+        priceImpactPct: 0.0010622,
+        slippageBps: 50,
+        feeBps: 0,
+        routePlan: [{ swapInfo: { ammKey: 'amm1' } }],
+      };
+
+      await adapter.swap(manualQuote, keypair.secretKey);
+
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(String(url)).toBe('https://api.jup.ag/swap/v1/swap');
+      const body = JSON.parse(init?.body as string);
+
+      // All 9 v1-required fields are present in the fallback. The old
+      // 6-field body (no otherAmountThreshold, no swapMode) → HTTP 422.
+      expect(body.quoteResponse.inputMint).toBe(USDC_MINT);
+      expect(body.quoteResponse.outputMint).toBe(SOL_MINT);
+      expect(body.quoteResponse.inAmount).toBe('1000000');
+      expect(body.quoteResponse.outAmount).toBe('5000000');
+      expect(body.quoteResponse.otherAmountThreshold).toBe('0'); // default
+      expect(body.quoteResponse.swapMode).toBe('ExactIn'); // default
+      expect(body.quoteResponse.slippageBps).toBe(50);
+      expect(body.quoteResponse.priceImpactPct).toBe(0.0010622);
+      expect(body.quoteResponse.routePlan).toEqual([{ swapInfo: { ammKey: 'amm1' } }]);
+    });
+
+    it('swap() fallback honors explicit otherAmountThreshold/swapMode on the Quote instead of the defaults', async () => {
+      const mockFetch = failingSwapFetch();
+      global.fetch = mockFetch;
+      const keypair = Keypair.generate();
+
+      const manualQuote: Quote = {
+        inputMint: USDC_MINT,
+        outputMint: SOL_MINT,
+        inAmount: '1000000',
+        outAmount: '5000000',
+        priceImpactPct: 0.1,
+        slippageBps: 50,
+        feeBps: 0,
+        routePlan: [],
+        otherAmountThreshold: '4800000',
+        swapMode: 'ExactOut',
+      };
+
+      await adapter.swap(manualQuote, keypair.secretKey);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1]?.body as string);
+      expect(body.quoteResponse.otherAmountThreshold).toBe('4800000');
+      expect(body.quoteResponse.swapMode).toBe('ExactOut');
+    });
+  });
+
   describe('getTransactionStatus', () => {
     it('should return unknown on error', async () => {
       // The adapter's getTransactionStatus should handle errors gracefully

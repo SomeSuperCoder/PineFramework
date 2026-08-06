@@ -38,6 +38,17 @@ export interface Quote {
    * Optional for backward compatibility with other adapters.
    */
   routePlan?: unknown[];
+  /**
+   * Raw /quote API response, passed verbatim to /swap.
+   * Jupiter's designed flow — the /swap endpoint expects the exact
+   * quoteResponse object returned by /quote. Optional for backward
+   * compatibility with Quotes constructed outside this adapter.
+   */
+  rawQuoteResponse?: unknown;
+  /** Minimum output after slippage, returned by Jupiter v1 /quote. */
+  otherAmountThreshold?: string;
+  /** Swap mode (ExactIn/ExactOut), returned by Jupiter v1 /quote. */
+  swapMode?: string;
 }
 
 /**
