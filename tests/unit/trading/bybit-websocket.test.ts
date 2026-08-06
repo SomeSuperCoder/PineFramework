@@ -68,24 +68,32 @@ function makeLogger(): PineLogger {
   } as unknown as PineLogger;
 }
 
+// Builds the REAL Bybit v5 kline WS payload shape: `data` is an ARRAY of
+// kline objects (one per subscription event). The 4-day chaos-mode bug was
+// shipped because this fixture built `data` as a single OBJECT — the handler
+// normalized Array.isArray → undefined.confirm, the confirmed-only gate never
+// opened, and onCandle never fired. Overrides merge into the first array
+// element so callers keep the per-field ergonomics they always had.
 function klineMessage(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     topic: 'kline.60.BTCUSDT',
     type: 'kline',
     ts: Date.now(),
-    data: {
-      start: 1_700_000_000_000,
-      end: 1_700_000_001_000,
-      interval: '60',
-      open: '100',
-      high: '110',
-      low: '90',
-      close: '105',
-      volume: '1000',
-      confirm: false,
-      timestamp: 1_700_000_000_500,
-      ...overrides,
-    },
+    data: [
+      {
+        start: 1_700_000_000_000,
+        end: 1_700_000_001_000,
+        interval: '60',
+        open: '100',
+        high: '110',
+        low: '90',
+        close: '105',
+        volume: '1000',
+        confirm: false,
+        timestamp: 1_700_000_000_500,
+        ...overrides,
+      },
+    ],
   };
 }
 
@@ -191,27 +199,8 @@ describe('BybitWebSocketService', () => {
       // Simulate disconnect
       service.disconnect();
 
-      // Access private handleKlineMessage via handleMessage with a valid kline message
-      const klineMessage = JSON.stringify({
-        topic: 'kline.60.BTCUSDT',
-        type: 'kline',
-        ts: Date.now(),
-        data: {
-          start: Date.now(),
-          end: Date.now() + 60000,
-          interval: '60',
-          open: '100',
-          high: '110',
-          low: '90',
-          close: '105',
-          volume: '1000',
-          confirm: true,
-          timestamp: Date.now(),
-        },
-      });
-
-      // handleMessage is private, trigger it via the ws.on('message') path
-      // We can't directly call it, but we can verify the guard by checking isStopped
+      // handleMessage is private — the guard is verified directly: after
+      // disconnect isStopped is set and no candle may reach the callback.
       expect((service as any).isStopped).toBe(true);
       expect(candleCallback).not.toHaveBeenCalled();
     });
@@ -337,6 +326,130 @@ describe('feed liveness — kline tick logging + telemetry (confirmed AND unconf
 
     expect(onCandle).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1); // parse error surfaced, not swallowed
+  });
+});
+
+describe('data-shape regression — Bybit v5 ARRAY payload (4-day chaos-mode bug)', () => {
+  let service: BybitWebSocketService;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    wsInstances.length = 0;
+    service = new BybitWebSocketService();
+    await service.connect();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  // REGRESSION: this test FAILS on the old buggy handler, where
+  // `message.data.confirm` was read on the ARRAY (→ undefined → the
+  // confirmed-only gate always returned → onCandle NEVER fired).
+  it('fires onCandle with the parsed ClosedCandle for data:[{confirm:true}] (real Bybit v5 shape)', () => {
+    const onTick = vi.fn();
+    const onCandle = vi.fn();
+    service.setTickCallback(onTick);
+    service.setCandleCallback(onCandle);
+
+    // The REAL Bybit v5 kline WS payload: `data` is an ARRAY of one kline.
+    wsInstances[0]!.simulateMessage({
+      topic: 'kline.1.ETHUSDT',
+      type: 'snapshot',
+      ts: 1_786_005_123_123,
+      data: [
+        {
+          start: 1_786_005_120_000,
+          end: 1_786_005_180_000,
+          interval: '1',
+          open: '1912.39',
+          high: '1912.39',
+          low: '1912.28',
+          close: '1912.29',
+          volume: '9.16',
+          confirm: true,
+          timestamp: 1_786_005_128_123,
+        },
+      ],
+    });
+
+    expect(onCandle).toHaveBeenCalledTimes(1);
+    expect(onCandle.mock.calls[0]![0]).toEqual({
+      symbol: 'ETHUSDT',
+      timeframe: '1',
+      timestamp: 1_786_005_120_000, // candle timestamp = kline `start`
+      open: 1912.39,
+      high: 1912.39,
+      low: 1912.28,
+      close: 1912.29,
+      volume: 9.16,
+    });
+
+    // Liveness preserved: a confirmed candle is still a tick.
+    expect(onTick).toHaveBeenCalledTimes(1);
+    expect(onTick.mock.calls[0]![0]).toMatchObject({
+      symbol: 'ETHUSDT',
+      timeframe: '1',
+      confirm: true,
+      close: 1912.29,
+    });
+  });
+
+  it('does NOT fire onCandle for data:[{confirm:false}] but still fires onTick (liveness before the gate)', () => {
+    const onTick = vi.fn();
+    const onCandle = vi.fn();
+    service.setTickCallback(onTick);
+    service.setCandleCallback(onCandle);
+
+    wsInstances[0]!.simulateMessage(klineMessage({ confirm: false, close: '104' }));
+
+    expect(onCandle).not.toHaveBeenCalled();
+    expect(onTick).toHaveBeenCalledTimes(1);
+    expect(onTick.mock.calls[0]![0]).toMatchObject({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      confirm: false,
+      close: 104,
+    });
+  });
+
+  it('still handles a legacy single-object `data` (backward-compat normalization)', () => {
+    const onCandle = vi.fn();
+    service.setCandleCallback(onCandle);
+
+    // Pre-array shape: `data` as ONE kline object. The Array.isArray
+    // normalization must fall back to using it directly, so old fixtures /
+    // non-conforming payloads keep working.
+    wsInstances[0]!.simulateMessage({
+      topic: 'kline.60.BTCUSDT',
+      type: 'kline',
+      ts: Date.now(),
+      data: {
+        start: 1_700_000_000_000,
+        end: 1_700_000_001_000,
+        interval: '60',
+        open: '100',
+        high: '110',
+        low: '90',
+        close: '105',
+        volume: '1000',
+        confirm: true,
+        timestamp: 1_700_000_000_500,
+      },
+    });
+
+    expect(onCandle).toHaveBeenCalledTimes(1);
+    expect(onCandle.mock.calls[0]![0]).toMatchObject({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 1_700_000_000_000,
+      open: 100,
+      high: 110,
+      low: 90,
+      close: 105,
+      volume: 1000,
+    });
   });
 });
 

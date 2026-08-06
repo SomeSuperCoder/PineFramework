@@ -35,6 +35,10 @@ export interface BybitKlineMessage {
   topic: string;
   type: string;
   ts: number;
+  // Bybit v5 WS delivers `data` as an ARRAY of kline objects (one per
+  // subscription event), e.g. [{start, end, interval, open, high, low, close,
+  // volume, confirm, timestamp}]. The handler normalizes to data[0] — mirroring
+  // gateway.ts — before reading any field.
   data: {
     start: number;
     end: number;
@@ -46,7 +50,7 @@ export interface BybitKlineMessage {
     volume: string;
     confirm: boolean;
     timestamp: number;
-  };
+  }[];
 }
 
 export type CandleCallback = (candle: ClosedCandle) => void;
@@ -408,7 +412,12 @@ export class BybitWebSocketService {
 
     const timeframe = parts[1];
     const symbol = parts[2];
-    const confirm = message.data.confirm;
+
+    // Bybit v5 sends `data` as an ARRAY of kline objects — normalize to the
+    // first element before reading any field (same shape handling as the
+    // gateway socket, backend/src/ws/gateway.ts).
+    const d = Array.isArray(message.data) ? message.data[0] : message.data;
+    const confirm = d.confirm;
 
     // Tick debug logging (liveness suite): every kline message, confirmed or
     // not — a live feed with no confirm yet must still be observable. Uses
@@ -417,8 +426,8 @@ export class BybitWebSocketService {
     this.logger.debug('Bybit kline tick', {
       symbol,
       timeframe,
-      ts: message.data.timestamp,
-      close: message.data.close,
+      ts: d.timestamp,
+      close: d.close,
       confirm,
     });
 
@@ -431,7 +440,7 @@ export class BybitWebSocketService {
       symbol,
       timeframe,
       timestamp: Date.now(),
-      close: parseFloat(message.data.close),
+      close: parseFloat(d.close),
       confirm,
     });
 
@@ -445,12 +454,12 @@ export class BybitWebSocketService {
     const candle: ClosedCandle = {
       symbol,
       timeframe,
-      timestamp: message.data.start,
-      open: parseFloat(message.data.open),
-      high: parseFloat(message.data.high),
-      low: parseFloat(message.data.low),
-      close: parseFloat(message.data.close),
-      volume: parseFloat(message.data.volume),
+      timestamp: d.start,
+      open: parseFloat(d.open),
+      high: parseFloat(d.high),
+      low: parseFloat(d.low),
+      close: parseFloat(d.close),
+      volume: parseFloat(d.volume),
     };
 
     this.onCandle?.(candle);
