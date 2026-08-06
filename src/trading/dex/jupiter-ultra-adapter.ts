@@ -16,6 +16,7 @@ import type {
   CommissionModel,
   SlippageConfig,
 } from './dex-adapter.js';
+import { Keypair } from '@solana/web3.js';
 import { USDC_MINT } from '../token-registry.js';
 
 /** Default slippage tolerance (30 bps = 0.3% — tighter than standard Swap). */
@@ -96,44 +97,68 @@ export class JupiterUltraAdapter extends DexAdapter {
         throw new Error(`Jupiter Ultra quote API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = (await response.json()) as {
-        inputMint: string;
-        outputMint: string;
-        inAmount: string;
-        outAmount: string;
-        priceImpactPct: number;
-        route: string;
+      // Ultra returns the full quote/fee-computation object that /swap expects
+      // verbatim. Read the known leading fields with narrow widening, and keep the
+      // whole response as rawQuoteResponse so swap() is not left reconstructing a
+      // lossy 6-field copy (that reconstruction produced 422 field-drift errors).
+      const data = (await response.json()) as unknown;
+
+      const d = data as {
+        inputMint?: string;
+        outputMint?: string;
+        inAmount?: string;
+        outAmount?: string;
+        priceImpactPct?: string | number;
+        otherAmountThreshold?: string;
+        swapMode?: string;
+        route?: string;
       };
 
       return {
-        inputMint: data.inputMint,
-        outputMint: data.outputMint,
-        inAmount: data.inAmount,
-        outAmount: data.outAmount,
-        priceImpactPct: data.priceImpactPct,
-        route: data.route ?? 'ultra-optimized',
+        inputMint: d.inputMint ?? inputMint,
+        outputMint: d.outputMint ?? outputMint,
+        inAmount: d.inAmount ?? '0',
+        outAmount: d.outAmount ?? '0',
+        priceImpactPct: Number(d.priceImpactPct ?? 0), // API may return string or number; Number() handles both
+        route: d.route ?? 'ultra-optimized',
         slippageBps,
         feeBps: this.commissionModel.feeBps,
+        // Raw passthrough: /swap expects the exact quoteResponse from /quote.
+        // Prefer this over any local reconstruction (the verbatim body → HTTP 200).
+        rawQuoteResponse: data,
+        otherAmountThreshold: d.otherAmountThreshold,
+        swapMode: d.swapMode,
       };
     });
   }
 
-  async swap(quote: Quote, _privateKey: Uint8Array): Promise<SwapResult> {
+  async swap(quote: Quote, privateKey: Uint8Array): Promise<SwapResult> {
     return retryWithBackoff(async () => {
       try {
+        // The wallet that must receive the swap — derived from the supplied keypair.
+        // Never hardcode an empty userPublicKey: Ultra rejects swaps with no owner.
+        const keypair = Keypair.fromSecretKey(privateKey);
+
+        // /swap expects the exact quoteResponse returned by /quote (Jupiter's
+        // designed flow). Prefer the verbatim raw response — quote() always sets
+        // it; fall back to a complete 9-field v1-valid shape (proven live: both
+        // shapes return HTTP 200, the old 6-field reconstruction returned 422).
         const swapResponse = await fetch(`${this.baseUrl}/swap`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            quoteResponse: {
+            quoteResponse: (quote.rawQuoteResponse as Record<string, unknown>) ?? {
               inputMint: quote.inputMint,
               outputMint: quote.outputMint,
               inAmount: quote.inAmount,
               outAmount: quote.outAmount,
+              otherAmountThreshold: quote.otherAmountThreshold ?? '0',
+              swapMode: quote.swapMode ?? 'ExactIn',
+              slippageBps: quote.slippageBps,
               priceImpactPct: quote.priceImpactPct,
-              route: quote.route,
+              routePlan: quote.routePlan,
             },
-            userPublicKey: '',
+            userPublicKey: keypair.publicKey.toBase58(),
             wrapAndUnwrapSol: true,
             dynamicComputeUnitLimit: true,
             prioritizationFeeLamports: 'auto',
