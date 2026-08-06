@@ -1108,6 +1108,14 @@ export class BotEngine {
               quantity: signal.quantity,
               expectedPrice: signal.price,
               timestamp: signal.timestamp,
+              // Restore the pair timeframe through the round-trip — the
+              // executor's confirmed-fill recorder keys positions by
+              // `symbol:timeframe`. Dropping it here made updatePositionState
+              // bail on confirmed chaos fills, so getPositions() returned []
+              // and a graceful close-on-stop sold 0 positions, stranding the
+              // real on-chain position (incident 2026-08-06). Mirrors the
+              // Scheduler mapping above, which already restores it.
+              timeframe: signal.pair.timeframe,
               // B1: restore the entry-price snapshot so the executor can feed
               // realized PnL even though the position state is already flat.
               positionEntryPrice: signal.positionEntryPrice,

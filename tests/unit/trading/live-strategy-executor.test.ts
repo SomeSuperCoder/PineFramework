@@ -22,7 +22,7 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
     return {
       updateBar: vi.fn(),
       getEquity: vi.fn().mockReturnValue(10_000_000_000),
-      getPosition: vi.fn().mockReturnValue(pos),
+      getPosition: vi.fn().mockImplementation(() => pos),
       entry: vi.fn().mockImplementation((name: string, direction: string, quantity: number) => {
         pos = { direction, quantity };
         markers.push({
@@ -859,6 +859,76 @@ describe('LiveStrategyExecutor', () => {
       // The staged position is also untouched (still long), not reverted to flat.
       const state = (executor as any).strategyStates.get('BTCUSDT:60');
       expect(state.position.direction).toBe('long');
+    });
+  });
+
+  describe('timeframe-gate regression (incident 2026-08-06 chaos money bug)', () => {
+    // Existing test helpers everywhere hardcode timeframe:'60', which is exactly
+    // why the incident passed CI: the `!signal.timeframe` bail was never hit.
+    // These tests drive the missing-timeframe shape the bug actually delivered.
+
+    it('tracks a CONFIRMED buy whose signal lacks `timeframe` via the symbol fallback (never silently dropped)', async () => {
+      const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+      await executor.initializeStrategy(pair);
+
+      // Chaos drive stages the long optimistically; the signal arrives without
+      // timeframe; the swap confirms. getStateKeyForSignal must resolve via the
+      // non-flat symbol fallback and record the confirmed fill.
+      const state = (executor as any).strategyStates.get('BTCUSDT:60');
+      state.position = {
+        symbol: 'BTCUSDT',
+        direction: 'long',
+        quantity: 0.1,
+        entryPrice: 50000,
+        entryTime: Date.now(),
+      };
+
+      const noTimeframeBuy: TradeSignal = {
+        action: 'buy',
+        symbol: 'BTCUSDT',
+        quantity: 0.1,
+        expectedPrice: 50000,
+        timestamp: Date.now(),
+        // `timeframe` deliberately ABSENT — the incident delivery shape.
+      };
+
+      const result = await executor.executeSignal(noTimeframeBuy);
+      expect(result.success).toBe(true);
+
+      // Pre-fix this was the failing assertion: `expected [] to have a length
+      // of 1` — the confirmed chaos fill vanished from getPositions().
+      const positions = executor.getPositions();
+      expect(positions).toHaveLength(1);
+      expect(positions[0]).toMatchObject({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        direction: 'long',
+      });
+    });
+
+    it('emits a LOUD failure (never a silent drop) when a confirmed buy matches no strategy state', async () => {
+      // No initializeStrategy → no state can resolve this confirmed fill.
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const result = await executor.executeSignal({
+          action: 'buy',
+          symbol: 'ALGORAND',
+          quantity: 0.1,
+          expectedPrice: 50000,
+          timestamp: Date.now(),
+        });
+        expect(result.success).toBe(true);
+
+        // The old code silently `return`ed here — the loud path is the guard.
+        expect(errorSpy).toHaveBeenCalled();
+        const loud = errorSpy.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(loud).toContain('Cannot track confirmed fill');
+        expect(loud).toContain('ALGORAND');
+        expect(loud).toContain('no strategy state');
+        expect(executor.getPositions()).toEqual([]);
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
   });
 });

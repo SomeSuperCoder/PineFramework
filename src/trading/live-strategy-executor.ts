@@ -1137,6 +1137,14 @@ export class LiveStrategyExecutor {
             expectedPrice: currentPrice,
             timestamp: candle.timestamp,
             marker,
+            // Carry the pair timeframe so the confirmed-fill recorder can track
+            // this chaos buy under the canonical `symbol:timeframe` key — the
+            // same key getPositions() (and thus close-on-stop) reads against.
+            // Dropping it here made updatePositionState bail out before the
+            // confirmedPositions.set, so confirmed chaos buys never entered
+            // getPositions() and a graceful close sold 0 positions, stranding
+            // the real on-chain position (incident 2026-08-06).
+            timeframe: candle.timeframe,
             // Carry the chaos sizing fraction through to executeSignal so the
             // on-chain buy matches the engine's simulated quantity (which is
             // sized from chaosSignal.sizeFraction — see entry above). Without
@@ -1243,13 +1251,27 @@ export class LiveStrategyExecutor {
    * gate getPositions() enforces.
    */
   private updatePositionState(signal: TradeSignal, swapResult?: SwapResult): void {
-    if (!signal.timeframe) {
-      console.warn('[LiveStrategyExecutor] Cannot update position state: signal missing timeframe');
+    // States are keyed by `symbol:timeframe` (see getPairKey).
+    // Confirmed-fill guarantee: a confirmed swap must ALWAYS land in
+    // confirmedPositions (and so be visible to getPositions(), which the
+    // close-on-stop path snapshots to sell every on-chain position). Resolve the
+    // canonical key with a symbol fallback (mirroring getStateForSignal) so a
+    // later redesign that drops `timeframe` can never silently strand a tracked
+    // position; we bail only when no strategy state matches at all — and then
+    // loudly with the symbol, never as a silent no-op (a silent bail here caused
+    // confirmed chaos fills to vanish from getPositions(), incident 2026-08-06).
+    const key = this.getStateKeyForSignal(signal);
+
+    if (!key) {
+      console.error(
+        `[LiveStrategyExecutor] Cannot track confirmed fill: no strategy state for ` +
+          `${signal.symbol}${signal.timeframe ? `:${signal.timeframe}` : ' (no timeframe)'} ` +
+          `(action=${signal.action}, confirmed=${swapResult?.success === true}) — a real on-chain ` +
+          `position stays invisible to getPositions()/close-on-stop`,
+      );
       return;
     }
 
-    // States are keyed by `symbol:timeframe` (see getPairKey).
-    const key = `${signal.symbol}:${signal.timeframe}`;
     const state = this.strategyStates.get(key);
 
     if (!state) {
@@ -1269,7 +1291,13 @@ export class LiveStrategyExecutor {
           entryPrice: signal.expectedPrice,
           entryTime: signal.timestamp,
         };
-        this.confirmedPositions.set(key, { ...state.position, timeframe: signal.timeframe });
+        this.confirmedPositions.set(key, {
+          ...state.position,
+          // Timeframe comes from the resolved canonical key (never undefined —
+          // the symbol fallback in getStateKeyForSignal may have supplied it),
+          // parsed the same way getPositions() reads it back.
+          timeframe: key.slice(key.lastIndexOf(':') + 1),
+        });
       } else {
         // Buy failed or was blocked before the swap: the optimistic staged long
         // must not survive as a phantom open position.
@@ -1371,6 +1399,32 @@ export class LiveStrategyExecutor {
    * falls back to any non-flat state tracking this symbol (the scheduler's
    * signal mapping drops `timeframe`, so entry/close signals often lack it).
    */
+  /**
+   * Resolve the canonical `${symbol}:${timeframe}` strategy-state key a trade
+   * signal should update. Prefers the exact key when the signal carries a
+   * `timeframe`; otherwise falls back to any non-flat state tracking this
+   * symbol (the scheduler's signal mapping can drop `timeframe` on some hops).
+   * Returns undefined only when no strategy state matches — the confirmed-fill
+   * guard in updatePositionState then bails loudly rather than silently
+   * dropping a confirmed swap.
+   */
+  private getStateKeyForSignal(signal: TradeSignal): string | undefined {
+    if (signal.timeframe) {
+      const exact = `${signal.symbol}:${signal.timeframe}`;
+      if (this.strategyStates.has(exact)) {
+        return exact;
+      }
+      // Timeframe present but no state under it — fall through to the symbol
+      // fallback so a tracked state under any key isn't skipped.
+    }
+    for (const [key, state] of this.strategyStates) {
+      if (state.position.symbol === signal.symbol && state.position.direction !== 'flat') {
+        return key;
+      }
+    }
+    return undefined;
+  }
+
   private getStateForSignal(signal: TradeSignal): StrategyState | undefined {
     if (signal.timeframe) {
       return this.strategyStates.get(`${signal.symbol}:${signal.timeframe}`);
