@@ -2173,6 +2173,20 @@ export function LiveDashboard({
     color: pnl >= 0 ? '#4caf50' : '#e94560' as string,
   });
 
+  // Strip the quote currency to show the base (target) token: "BTCUSDT" -> "BTC".
+  const fmtBaseSymbol = (sym: string): string =>
+    sym.replace(/(USDT|USDC|BUSD|FDUSD|TUSD|USD)$/, '') || sym;
+
+  const fmtSize = (q: number): string =>
+    !isFinite(q) || q <= 0
+      ? '\u2014'
+      : Number(q.toPrecision(4)).toLocaleString('en-US', { maximumFractionDigits: 6 });
+
+  const fmtUsd = (n: number): string =>
+    !isFinite(n) || n <= 0
+      ? '\u2014'
+      : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   const na = '\u2014';
 
   // Feed connectivity for the left Status panel — live `bot:feedStatus` state
@@ -2514,9 +2528,25 @@ export function LiveDashboard({
                         <span style={{ color: isLong ? '#4caf50' : '#888', fontSize: 11, fontWeight: 600 }}>
                           {isLong ? 'LONG' : 'FLAT'}
                         </span>
-                        <span style={{ color: '#888', fontSize: 11 }}>
-                          {pos.quantity} @ ${pos.entryPrice.toFixed(2)}
-                        </span>
+                        {pos.direction === 'flat' ||
+                        !isFinite(pos.quantity) ||
+                        pos.quantity <= 0 ||
+                        !isFinite(pos.entryPrice) ? (
+                          <span style={{ color: '#666', fontSize: 11 }}>{'\u2014'}</span>
+                        ) : (
+                          <>
+                            <span style={{ color: '#d0d0d0', fontWeight: 600, fontSize: 12 }}>
+                              {fmtSize(pos.quantity)} {fmtBaseSymbol(pos.symbol)}
+                            </span>
+                            {/* Notional = entry size in USD (qty × entry price, not live mark). */}
+                            <span style={{ color: '#aaa', fontSize: 11 }}>
+                              {'\u2248'} {fmtUsd(pos.quantity * pos.entryPrice)}
+                            </span>
+                            <span style={{ color: '#888', fontSize: 11 }}>
+                              @ ${pos.entryPrice.toFixed(2)}
+                            </span>
+                          </>
+                        )}
                         <span style={{ color: '#888', fontSize: 11, marginLeft: 'auto' }}>
                           {pos.unrealizedPnl != null ? `$${pos.unrealizedPnl.toFixed(2)}` : '\u2014'}
                         </span>
