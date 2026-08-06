@@ -241,4 +241,12 @@ export interface TradeRecord {
   transactionSignature?: string;
   openedAt: number;
   closedAt: number;
+  /** Strategy script name (from extractScriptName, truncated 50). */
+  strategy?: string;
+  /** Pair timeframe, e.g. "1", "30", "240". */
+  timeframe?: string;
+  /** Execution mode: live bot or chaos test mode. */
+  mode?: 'live' | 'chaos';
+  /** Whether the on-chain swap outcome was confirmed. */
+  status?: 'confirmed' | 'unknown';
 }

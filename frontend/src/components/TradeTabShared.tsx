@@ -1,0 +1,144 @@
+import type { CSSProperties } from 'react';
+import type { TradeHistoryMode, TradeHistoryStatus } from '../types/trade';
+
+/** Shared filter-control styles — house palette (#111128 field, #333 border). */
+export const filterControlStyle: CSSProperties = {
+  background: '#111128',
+  color: '#e0e0e0',
+  border: '1px solid #333',
+  borderRadius: 3,
+  padding: '4px 8px',
+  fontSize: 11,
+  boxSizing: 'border-box',
+};
+
+export const pageButtonStyle: CSSProperties = {
+  padding: '4px 10px',
+  background: '#111128',
+  color: '#64b5f6',
+  border: '1px solid #333',
+  borderRadius: 4,
+  fontSize: 11,
+};
+
+/** Live-vs-chaos segmented toggle (design D6). Defaults handled by the parent;
+ *  labels are explicit: All | Live | Chaos, each with a clear tooltip. */
+export function ModeToggle({
+  value,
+  onChange,
+}: {
+  value: TradeHistoryMode;
+  onChange: (v: TradeHistoryMode) => void;
+}) {
+  const options: Array<{
+    value: TradeHistoryMode;
+    label: string;
+    activeColor: string;
+    title: string;
+  }> = [
+    { value: 'all', label: 'All', activeColor: '#64b5f6', title: 'Live + chaos trades' },
+    {
+      value: 'live',
+      label: 'Live',
+      activeColor: '#4caf50',
+      title: 'Live (real execution) trades only',
+    },
+    { value: 'chaos', label: 'Chaos', activeColor: '#ff9800', title: 'Chaos-mode trades only' },
+  ];
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        borderRadius: 4,
+        border: '1px solid #333',
+        overflow: 'hidden',
+      }}
+    >
+      {options.map((o, i) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            title={o.title}
+            style={{
+              padding: '4px 12px',
+              background: active ? '#111128' : 'transparent',
+              color: active ? o.activeColor : '#888',
+              border: 'none',
+              borderRight: i < options.length - 1 ? '1px solid #333' : 'none',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: active ? 600 : 400,
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Status filter — unknown-outcome closes are excluded by default (confirmed). */
+export function StatusSelect({
+  value,
+  onChange,
+}: {
+  value: TradeHistoryStatus;
+  onChange: (v: TradeHistoryStatus) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as TradeHistoryStatus)}
+      title="Status filter — unknown-outcome closes are excluded by default"
+      style={filterControlStyle}
+    >
+      <option value="confirmed">Confirmed</option>
+      <option value="all">All statuses</option>
+      <option value="unknown">Unknown only</option>
+    </select>
+  );
+}
+
+/** Error state with the API failure message (spec: error state + message). */
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div
+      style={{
+        padding: '14px 16px',
+        background: '#2a1520',
+        border: '1px solid #e94560',
+        borderRadius: 6,
+        color: '#e94560',
+        fontSize: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+      }}
+    >
+      <span>⚠ {message}</span>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          style={{
+            padding: '4px 10px',
+            background: 'transparent',
+            color: '#e94560',
+            border: '1px solid #e94560',
+            borderRadius: 4,
+            cursor: 'pointer',
+            fontSize: 11,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}

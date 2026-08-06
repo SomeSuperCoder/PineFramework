@@ -12,6 +12,7 @@ import { ExecutionEngine } from '../language/runtime/execution-engine.js';
 import { parse } from '../language/parser/index.js';
 import { compile } from '../language/compiler/index.js';
 import { createExecutionContextFromBar } from '../api.js';
+import { extractScriptName } from '../utils/script-name.js';
 import { DexAdapter, type SwapResult } from './dex/dex-adapter.js';
 import { ClosedCandle, PairId } from './scheduler.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
@@ -22,7 +23,14 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { ChaosSignalGenerator } from './chaos-signal-generator.js';
 import type { RiskManager } from './risk/risk-manager.js';
-import type { ChaosExecutionMode, ChaosFailureReason, ChaosHeartbeat } from './types.js';
+import type { TradeHistoryStore } from './trade-history-store.js';
+import type {
+  ChaosExecutionMode,
+  ChaosFailureReason,
+  ChaosHeartbeat,
+  DexKind,
+  TradeRecord,
+} from './types.js';
 
 // ---- Constants ----
 
@@ -98,6 +106,27 @@ export interface LiveStrategyConfig {
    * idle. Wired by BotEngine to its emitter for WS broadcast.
    */
   chaosHeartbeat?: (heartbeat: ChaosHeartbeat) => void;
+  /**
+   * Bot instance identifier stamped on every TradeRecord (D2/D3). Should
+   * match the botId the TradeHistoryStore was constructed with. Optional —
+   * defaults to 'default-bot' so records are still attributable without
+   * wiring.
+   */
+  botId?: string;
+  /**
+   * Optional persistent trade-history store (D2/D3). When present, every
+   * closed trade — confirmed closes and unknown-outcome closes alike — is
+   * appended via recordTrade. Optional so execution without history stays
+   * byte-identical to pre-history behavior (fail-safe).
+   */
+  tradeHistoryStore?: TradeHistoryStore;
+  /**
+   * Optional observer called with each persisted TradeRecord (D2/D3) — the
+   * wire for broadcasting closed trades (e.g. over WS) without the executor
+   * knowing the transport. Invoked AFTER the store write; a throw is caught
+   * and logged, never propagated to trading.
+   */
+  onTradeClosed?: (trade: TradeRecord) => void;
 }
 
 export interface StrategyState {
@@ -233,6 +262,14 @@ export class LiveStrategyExecutor {
    * confirms it (spec: positions reflect only CONFIRMED fills).
    */
   private confirmedPositions = new Map<string, PositionInfo>();
+
+  /**
+   * Monotonic per-executor counter for TradeRecord ids (D2/D3). Combined with
+   * closedAt (epoch ms) and botId it makes every record id unique within a
+   * bot run. Resets on restart — paired with a fresh closedAt it cannot
+   * collide in practice, and the store never requires id uniqueness.
+   */
+  private tradeRecordSeq = 0;
 
   constructor(config: LiveStrategyConfig) {
     this.config = config;
@@ -662,7 +699,8 @@ export class LiveStrategyExecutor {
         // Feed the risk manager: realized PnL (for closing trades) plus a fresh
         // wallet-balance snapshot. Both are fail-safe — a fetch failure never
         // blocks the completed trade and never feeds an unusable value (D5/D6).
-        await this.recordClosedTradeRisk(signal);
+        // Also persists the confirmed close to trade history (D2/D3).
+        await this.recordClosedTradeRisk(signal, swapResult);
 
         return this.reconcilePositionState(signal, {
           success: true,
@@ -692,6 +730,16 @@ export class LiveStrategyExecutor {
           `timestamp=${signal.timestamp} — swap may have executed on-chain; ` +
           `error=${message}`,
       );
+      // D2/D3: the swap may have landed on-chain, so a close here is recorded
+      // with status 'unknown' — a possibly-executed close must never vanish
+      // from trade history. Fail-safe: a store failure is caught and logged
+      // inside; the unknown-outcome behavior below is unchanged.
+      if (signal.action === 'sell' || signal.action === 'close') {
+        this.persistClosedTradeRecord(signal, {
+          status: 'unknown',
+          realizedPnl: this.resolveClosedTradeRealizedPnl(signal),
+        });
+      }
       return { success: false, signal, error: message };
     }
   }
@@ -1349,48 +1397,192 @@ export class LiveStrategyExecutor {
 
   /**
    * Feed the risk manager after a completed trade (D6): record realized PnL
-   * for closing trades and capture a wallet-balance snapshot. Fully fail-safe —
-   * never throws and never blocks the caller (the trade is already done).
+   * for closing trades, capture a wallet-balance snapshot, and persist the
+   * confirmed close to trade history (D2/D3). Fully fail-safe — never throws
+   * and never blocks the caller (the trade is already done).
    *
    * PnL is only recorded when the closing trade's position (entry price /
    * quantity) is known; otherwise it is skipped rather than guessed.
    */
-  private async recordClosedTradeRisk(signal: TradeSignal): Promise<void> {
+  private async recordClosedTradeRisk(signal: TradeSignal, swapResult?: SwapResult): Promise<void> {
     const riskManager = this.config.riskManager;
-    if (!riskManager) return;
 
     if (signal.action === 'sell' || signal.action === 'close') {
-      let realizedPnl: number | undefined;
+      const realizedPnl = this.resolveClosedTradeRealizedPnl(signal);
 
-      // B1: prefer the entry price snapshot attached at generation time —
-      // it is exact for the state the signal was produced from. The state
-      // scan below is only a fallback for signals that never carried one
-      // (e.g. chaos path), and still fails safe (skip) when unknown.
-      if (
-        signal.positionEntryPrice !== undefined &&
-        signal.positionEntryPrice > 0 &&
-        signal.quantity > 0
-      ) {
-        // Spot DEX closes are long exits: realized PnL = (exit − entry) × qty.
-        realizedPnl = (signal.expectedPrice - signal.positionEntryPrice) * signal.quantity;
-      } else {
-        const state = this.getStateForSignal(signal);
-        if (
-          state?.position.direction === 'long' &&
-          state.position.entryPrice > 0 &&
-          state.position.quantity > 0
-        ) {
-          realizedPnl =
-            (signal.expectedPrice - state.position.entryPrice) * state.position.quantity;
+      // Fail-safe (D6, Code-Review FIX 2): the risk feed must never propagate
+      // to the caller. A throw here would land in the outer close catch and
+      // misclassify a confirmed close as 'unknown' even though the swap
+      // already succeeded on-chain.
+      try {
+        if (realizedPnl !== undefined) {
+          riskManager?.recordTrade(realizedPnl);
         }
+      } catch (err) {
+        console.error('[LiveStrategyExecutor] Risk feed failed after completed trade', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
 
-      if (realizedPnl !== undefined) {
-        riskManager.recordTrade(realizedPnl);
-      }
+      // D2/D3: persist the confirmed close (skipped when the entry is unknown —
+      // the same fail-safe as the risk feed, so no fake flat trade pollutes
+      // history stats). Fail-safe: a store failure never blocks the caller.
+      this.persistClosedTradeRecord(signal, {
+        status: 'confirmed',
+        realizedPnl,
+        swapResult,
+      });
     }
 
-    await this.captureBalanceSnapshot();
+    // Fail-safe (D5, Code-Review FIX 2): same rationale as the risk feed — a
+    // snapshot failure must never propagate and misclassify the close.
+    try {
+      await this.captureBalanceSnapshot();
+    } catch (err) {
+      console.error('[LiveStrategyExecutor] Balance snapshot failed after completed trade', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Resolve the realized PnL of a closing trade — (exit − entry) × quantity —
+   * with the B1 entry-price snapshot attached at signal generation time, and
+   * the executor's per-pair state as fallback (verbatim from the original
+   * risk-feed computation; do NOT alter). Returns undefined when the closed
+   * position's entry is unknown — callers fail safe (skip / zero).
+   */
+  private resolveClosedTradeRealizedPnl(signal: TradeSignal): number | undefined {
+    // B1: prefer the entry price snapshot attached at generation time — it is
+    // exact for the state the signal was produced from. The state scan below
+    // is only a fallback for signals that never carried one (e.g. chaos
+    // path), and still fails safe (skip) when unknown.
+    if (
+      signal.positionEntryPrice !== undefined &&
+      signal.positionEntryPrice > 0 &&
+      signal.quantity > 0
+    ) {
+      // Spot DEX closes are long exits: realized PnL = (exit − entry) × qty.
+      return (signal.expectedPrice - signal.positionEntryPrice) * signal.quantity;
+    }
+    const state = this.getStateForSignal(signal);
+    if (
+      state?.position.direction === 'long' &&
+      state.position.entryPrice > 0 &&
+      state.position.quantity > 0
+    ) {
+      return (signal.expectedPrice - state.position.entryPrice) * state.position.quantity;
+    }
+    return undefined;
+  }
+
+  /**
+   * Build and persist a TradeRecord for a closed position (D2/D3), then notify
+   * the onTradeClosed observer. Fail-safe by design: a store write failure or
+   * observer throw is logged via console.error at most and NEVER propagates —
+   * trading must continue even when trade history is broken.
+   *
+   * No-op when neither a store nor an observer is configured, so execution
+   * without history stays byte-identical to pre-history behavior.
+   *
+   * Record id scheme: `${botId}-${closedAt}-${seq}` — closedAt is epoch ms and
+   * seq is a monotonic per-executor counter (tradeRecordSeq), so ids are
+   * unique within a bot run and attributable to the bot instance.
+   *
+   * Confirmed closes with an unknown entry (no B1 snapshot, no tracked state)
+   * are skipped — recording entryPrice 0 / PnL 0 would pollute stats with a
+   * fake flat trade. Unknown-outcome closes are ALWAYS recorded (best-known
+   * data; PnL 0 when the entry is unknown) so a possibly-landed swap is never
+   * lost from history.
+   */
+  private persistClosedTradeRecord(
+    signal: TradeSignal,
+    opts: {
+      status: 'confirmed' | 'unknown';
+      realizedPnl?: number;
+      swapResult?: SwapResult;
+    },
+  ): void {
+    const store = this.config.tradeHistoryStore;
+    if (!store && !this.config.onTradeClosed) return;
+
+    // Fail-safe: skip a confirmed close whose position entry is unknown —
+    // mirrors the risk feed (never guess a PnL).
+    if (opts.status === 'confirmed' && opts.realizedPnl === undefined) return;
+
+    // Chaos is detected by the same flag the executor's dispatch uses
+    // (processCandle → processCandleChaos): when a chaos generator is set,
+    // every signal is chaos-originated (D2/D3).
+    const mode: 'live' | 'chaos' = this.config.chaosGenerator ? 'chaos' : 'live';
+    const strategy =
+      mode === 'chaos'
+        ? 'Chaos Mode'
+        : (extractScriptName(this.config.strategySource)?.substring(0, 50) ?? undefined);
+
+    // Entry / openedAt resolve with the same B1 preference as the PnL: the
+    // generation-time snapshot first, tracked state second. Display metadata
+    // only — never feeds the PnL math.
+    const state = this.getStateForSignal(signal);
+    let entryPrice = 0;
+    if (signal.positionEntryPrice !== undefined && signal.positionEntryPrice > 0) {
+      entryPrice = signal.positionEntryPrice;
+    } else if (state?.position.direction === 'long' && state.position.entryPrice > 0) {
+      entryPrice = state.position.entryPrice;
+    }
+    const openedAt =
+      state?.position.entryTime && state.position.entryTime > 0
+        ? state.position.entryTime
+        : signal.timestamp;
+    // closedAt is the wall-clock close time at the order-result point —
+    // truthful to when the engine actually closed, not the candle timestamp.
+    const closedAt = Date.now();
+    const botId = this.config.botId ?? 'default-bot';
+
+    const trade: TradeRecord = {
+      id: `${botId}-${closedAt}-${this.tradeRecordSeq++}`,
+      botId,
+      symbol: signal.symbol,
+      // Spot DEX closes are long exits — the closed position's open direction.
+      side: 'buy',
+      entryPrice,
+      exitPrice: signal.expectedPrice,
+      size: signal.quantity,
+      // No reliable fee source: the swap result's fee value is not
+      // consistently populated, so fees stay 0 rather than inventing one.
+      fees: 0,
+      realizedPnl: opts.realizedPnl ?? 0,
+      // DexAdapter.name is the same vocabulary as DexKind ('jupiter-swap' /
+      // 'jupiter-ultra') — narrow it for the record's typed field.
+      dex: this.config.dex.name as DexKind,
+      ...(opts.swapResult?.signature ? { transactionSignature: opts.swapResult.signature } : {}),
+      openedAt,
+      closedAt,
+      strategy,
+      ...(signal.timeframe ? { timeframe: signal.timeframe } : {}),
+      mode,
+      status: opts.status,
+    };
+
+    // Append-first contract (Code-Review FIX 3): recordTrade writes to disk
+    // first and only enters memory on success, returning false on failure —
+    // it no longer throws. When there is no store the trade is trivially
+    // "persisted" so a history-less build keeps broadcasting as before.
+    const persisted = store ? store.recordTrade(trade) : true;
+
+    try {
+      // Broadcast only records that actually made it to disk — a record that
+      // failed to append is not in memory, so broadcasting it would create a
+      // phantom trade that vanishes on restart.
+      if (persisted) {
+        this.config.onTradeClosed?.(trade);
+      }
+    } catch (err) {
+      // Fail-safe: an observer throw (e.g. a WS broadcast) must never break
+      // trading either.
+      console.error('[LiveStrategyExecutor] onTradeClosed hook failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   /**

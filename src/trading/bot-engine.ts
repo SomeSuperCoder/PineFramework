@@ -16,6 +16,7 @@ import type {
   PositionSummary,
   PairConfig,
   ChaosHeartbeat,
+  TradeRecord,
 } from './types.js';
 import type { CandleErrorInfo } from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
@@ -40,6 +41,7 @@ import type { ExecutionResult, PositionInfo } from './live-strategy-executor.js'
 import type { TradeSignal as SchedulerTradeSignal } from './scheduler.js';
 import type { StrategyMarker } from '../strategy/strategy-engine.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
+import type { TradeHistoryStore } from './trade-history-store.js';
 import { extractScriptName } from '../utils/script-name.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import type { PineLogger } from '../utils/logger/types.js';
@@ -249,6 +251,24 @@ export interface BotEngineOptions {
    * its own DEX adapter.
    */
   closeManager?: CloseManager;
+  /**
+   * Optional persistent trade-history store (D2/D3), threaded to the strategy
+   * executor. When present, every closed trade is persisted to it. When
+   * absent, no trade records are written and execution is byte-identical to
+   * pre-history behavior (fail-safe).
+   */
+  tradeHistoryStore?: TradeHistoryStore;
+  /**
+   * Optional observer invoked with every persisted TradeRecord (D2/D3),
+   * threaded to the strategy executor — the wire for broadcasting closed
+   * trades without the engine knowing the transport.
+   */
+  onTradeClosed?: (trade: TradeRecord) => void;
+  /**
+   * Bot instance identifier stamped on every TradeRecord (D2/D3). Should
+   * match the botId the tradeHistoryStore was constructed with.
+   */
+  botId?: string;
 }
 
 /**
@@ -267,6 +287,12 @@ export class BotEngine {
   private closeManager: CloseManager | null = null;
   private readonly onAutoSelect?: (config: BotConfig) => Promise<PairConfig[]>;
   private readonly onConfigPersist?: (config: BotConfig) => void;
+  /** Optional trade-history store (D2/D3), threaded to the executor. */
+  private readonly tradeHistoryStore?: TradeHistoryStore;
+  /** Optional closed-trade observer (D2/D3), threaded to the executor. */
+  private readonly onTradeClosed?: (trade: TradeRecord) => void;
+  /** Bot instance identifier stamped on every TradeRecord (D2/D3). */
+  private readonly botId?: string;
   private _config: BotConfig | null = null;
   private _errors: BotError[] = [];
   private _startedAt: number | null = null;
@@ -357,6 +383,9 @@ export class BotEngine {
     this.injectedCloseManager = options?.closeManager;
     this.onAutoSelect = options?.onAutoSelect;
     this.onConfigPersist = options?.onConfigPersist;
+    this.tradeHistoryStore = options?.tradeHistoryStore;
+    this.onTradeClosed = options?.onTradeClosed;
+    this.botId = options?.botId;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -952,6 +981,12 @@ export class BotEngine {
         this.lastChaosHeartbeat = hb;
         this.emit('chaosHeartbeat', hb);
       },
+      // D2/D3: thread the optional trade-history store + closed-trade observer
+      // so the executor can persist every close (confirmed + unknown-outcome).
+      // All optional — absent history degrades to pre-history execution.
+      botId: this.botId,
+      tradeHistoryStore: this.tradeHistoryStore,
+      onTradeClosed: this.onTradeClosed,
     });
     this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
 

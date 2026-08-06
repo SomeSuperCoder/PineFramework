@@ -18,7 +18,9 @@ import { createIndicatorsRouter } from './routes/indicators.js';
 import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
 import { createBotRouter } from './routes/bot.js';
+import { createTradeHistoryRouter } from './routes/trade-history.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
+import { TradeHistoryStore } from 'pine-framework/trading/trade-history-store';
 import type { BotConfig, BotEngine, RiskManager, RiskManagerConfig } from 'pine-framework';
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { buildSnapshotPayload } from './ws/snapshot-payload.js';
@@ -81,6 +83,16 @@ const telegramService = new TelegramService({ configStore: telegramConfig });
 const indicatorsStore = new RunningIndicatorsStore(INDICATORS_JSON_PATH);
 const manifestStore = new ScriptsManifestStore(SCRIPTS_MANIFEST_PATH);
 const scriptFileManager = new ScriptFileManager(SCRIPTS_DIR, manifestStore);
+
+// D4 (trade-history dashboard): the store is constructed OUTSIDE the
+// ENABLE_TRADING_BOT gate so history/stats stay readable when the bot flag is
+// off — it is file-pointed at module init and reads even when no engine is
+// constructed. JSONL files land at {DATA_DIR}/trade-history/{botId}/trades.jsonl.
+const TRADE_HISTORY_BOT_ID = 'default-bot'; // must match BotEngine's effective botId
+const tradeHistoryStore = new TradeHistoryStore({
+  baseDir: path.join(DATA_DIR, 'trade-history'),
+  botId: TRADE_HISTORY_BOT_ID,
+});
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -175,6 +187,11 @@ app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
 app.use('/api', createIndicatorsRouter(indicatorsStore));
 app.use('/api', createExportRouter());
+
+// D4: trade history/stats are readable regardless of the bot flag — the store
+// above is file-pointed at module init, so this router works even when
+// ENABLE_TRADING_BOT=false and no engine is ever constructed.
+app.use('/api', createTradeHistoryRouter({ getStore: () => tradeHistoryStore }));
 
 // ── Log Query Endpoint ──
 // AI agents and the frontend can query structured log files
@@ -342,6 +359,26 @@ if (ENABLE_TRADING_BOT) {
     logger: botLogger,
     walletManager,
     riskManager: buildRiskManager(savedConfig),
+    // D2/D3 (trade-history dashboard): persist every closed trade and stream it
+    // live to the dashboard. botId is explicit so stamped records always match
+    // the store's directory — same SSOT value as the store constructed above.
+    tradeHistoryStore,
+    botId: TRADE_HISTORY_BOT_ID,
+    onTradeClosed: (trade) => {
+      // Best-effort: a WS broadcast failure (no clients, socket hiccup) must
+      // never break trading. The executor also guards this observer, but keep
+      // the transport failure local to the wire as well.
+      try {
+        botWS.broadcast({
+          channel: 'bot:trade',
+          data: { trade },
+        });
+      } catch (err) {
+        logger.error('[Bot] Failed to broadcast closed trade', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
     // D4: persist any runtime config change (e.g. toggleChaosMode) to disk so
     // the mode survives a restart. Engine config is truth; disk follows it.
     onConfigPersist: (config) => configStore.save(config),

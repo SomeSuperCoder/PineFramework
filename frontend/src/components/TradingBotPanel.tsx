@@ -7,6 +7,10 @@ import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { ChaosModeWarning } from './ChaosModeWarning';
+import { TradeHistoryTab } from './TradeHistoryTab';
+import { StatisticsTab } from './StatisticsTab';
+import { DASH, fmtBaseSymbol, fmtDur, fmtPnl, fmtSize, fmtUsd } from '../utils/format';
+import type { TradeRecord } from '../types/trade';
 import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot, FeedStatus, PositionInfo } from '../types';
 
 // Stable empty array references for optional chaos props. A fresh `[]` literal
@@ -15,6 +19,7 @@ import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosM
 // infinitely.
 const EMPTY_CHAOS_SIGNALS: ChaosSignalRecord[] = [];
 const EMPTY_CHAOS_HEARTBEATS: ChaosHeartbeatRecord[] = [];
+const EMPTY_TRADES: TradeRecord[] = [];
 
 // ---- Timezone Utilities ----
 
@@ -228,6 +233,36 @@ function toPositionInfo(raw: unknown): PositionInfo | null {
   };
 }
 
+/** Coerce a `bot:trade` WS payload into a TradeRecord; null when malformed.
+ *  Accepts `{ trade }` (backend convention) or the record directly, and never
+ *  throws on unexpected shapes (spec: never crash on unexpected API payloads). */
+function toTradeRecord(raw: unknown): TradeRecord | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== 'string' || typeof r.symbol !== 'string') return null;
+  return {
+    id: r.id,
+    botId: typeof r.botId === 'string' ? r.botId : '',
+    symbol: r.symbol,
+    side: r.side === 'sell' ? 'sell' : 'buy',
+    entryPrice: typeof r.entryPrice === 'number' ? r.entryPrice : 0,
+    exitPrice: typeof r.exitPrice === 'number' ? r.exitPrice : 0,
+    size: typeof r.size === 'number' ? r.size : 0,
+    fees: typeof r.fees === 'number' ? r.fees : 0,
+    realizedPnl: typeof r.realizedPnl === 'number' ? r.realizedPnl : 0,
+    dex: typeof r.dex === 'string' ? r.dex : '',
+    transactionSignature:
+      typeof r.transactionSignature === 'string' ? r.transactionSignature : undefined,
+    openedAt: typeof r.openedAt === 'number' ? r.openedAt : Date.now(),
+    closedAt: typeof r.closedAt === 'number' ? r.closedAt : Date.now(),
+    strategy: typeof r.strategy === 'string' ? r.strategy : undefined,
+    timeframe: typeof r.timeframe === 'string' ? r.timeframe : undefined,
+    mode: r.mode === 'chaos' ? 'chaos' : r.mode === 'live' ? 'live' : undefined,
+    status:
+      r.status === 'unknown' ? 'unknown' : r.status === 'confirmed' ? 'confirmed' : undefined,
+  };
+}
+
 export function useBotWebSocket(backendUrl: string) {
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<BotStatusSnapshot | null>(null);
@@ -243,6 +278,12 @@ export function useBotWebSocket(backendUrl: string) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const [connectionFailed, setConnectionFailed] = useState(false);
   const connectAttemptsRef = useRef(0);
+  // Live trades from `bot:trade` events (bounded ring, newest last) — the
+  // Trade History / Statistics tabs merge these in (design D6, task 4.5).
+  const [liveTrades, setLiveTrades] = useState<TradeRecord[]>([]);
+  // Increments on every successful websocket open — consumers refetch REST
+  // data on reconnect so state is never stale (spec: reconnect refreshes data).
+  const [connectionEpoch, setConnectionEpoch] = useState(0);
 
   // Auto-select progress — delegated to shared hook
   const autoSelect = useAutoSelectProgress();
@@ -256,6 +297,7 @@ export function useBotWebSocket(backendUrl: string) {
       setConnected(true);
       setConnectionFailed(false);
       connectAttemptsRef.current = 0;
+      setConnectionEpoch((e) => e + 1);
     };
     ws.onmessage = (event) => {
       try {
@@ -318,6 +360,15 @@ export function useBotWebSocket(backendUrl: string) {
             // between snapshots.
             setTotalCandleErrors((prev) => prev + 1);
           }
+        } else if (msg.channel === 'bot:trade' || msg.type === 'bot:trade') {
+          // Live closed-trade event (backend: { channel: 'bot:trade', data: { trade } }).
+          // Defensive: also accept { type: 'bot:trade' } or a bare record.
+          const trade = toTradeRecord(msg.data?.trade ?? msg.data);
+          if (trade) {
+            setLiveTrades((prev) =>
+              prev.some((t) => t.id === trade.id) ? prev : [...prev.slice(-199), trade],
+            );
+          }
         } else {
           // Delegate to auto-select hook for other channels
           autoSelect.handleMessage(msg);
@@ -365,6 +416,8 @@ export function useBotWebSocket(backendUrl: string) {
     autoSelectProgress: autoSelect.progress,
     autoSelectResult: autoSelect.result,
     connectionFailed,
+    liveTrades,
+    connectionEpoch,
   };
 }
 
@@ -2012,6 +2065,50 @@ function formatFeedStatus(feed: FeedStatus | null | undefined): { text: string; 
   return { text: 'Connected', color: '#4caf50', title: parts.join(' · ') };
 }
 
+// ---- Dashboard tabs (design D6 — Overview | Trade History | Statistics) ----
+
+type DashboardTabId = 'overview' | 'history' | 'stats';
+
+function DashboardTabs({
+  active,
+  onChange,
+}: {
+  active: DashboardTabId;
+  onChange: (tab: DashboardTabId) => void;
+}) {
+  const tabs: Array<{ id: DashboardTabId; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'history', label: 'Trade History' },
+    { id: 'stats', label: 'Statistics' },
+  ];
+  return (
+    <div style={{ display: 'flex', padding: '0 16px', borderBottom: '1px solid #1a1a2e', background: '#0d0d18' }}>
+      {tabs.map((t) => {
+        const isActive = active === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            style={{
+              padding: '9px 16px 7px',
+              background: 'transparent',
+              color: isActive ? '#64b5f6' : '#888',
+              border: 'none',
+              borderBottom: `2px solid ${isActive ? '#64b5f6' : 'transparent'}`,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: isActive ? 600 : 400,
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function LiveDashboard({
   backendUrl,
   status,
@@ -2028,6 +2125,8 @@ export function LiveDashboard({
   chaosSignals,
   chaosHeartbeats = EMPTY_CHAOS_HEARTBEATS,
   feedStatus = null,
+  liveTrades = EMPTY_TRADES,
+  connectionEpoch = 0,
 }: {
   backendUrl: string;
   status: BotStatusSnapshot;
@@ -2050,9 +2149,14 @@ export function LiveDashboard({
   chaosSignals?: ChaosSignalRecord[];
   chaosHeartbeats?: ChaosHeartbeatRecord[];
   feedStatus?: FeedStatus | null;
+  /** Live closed trades from `bot:trade` WS events (bounded ring). */
+  liveTrades?: TradeRecord[];
+  /** Increments on every WS reconnect — history/stats refetch when it changes. */
+  connectionEpoch?: number;
 }) {
   const [loading, setLoading] = useState(false);
   const [chaosWarningAcknowledged, setChaosWarningAcknowledged] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashboardTabId>('overview');
   const [wallet, setWallet] = useState<WalletInfo>({
     hasWallet: false,
     publicKey: undefined,
@@ -2160,35 +2264,6 @@ export function LiveDashboard({
     setWallet({ hasWallet: true, publicKey });
   };
 
-  const fmtDur = (ms: number): string => {
-    if (ms <= 0) return '\u2014';
-    const h = Math.floor(ms / 3600000);
-    const m = Math.floor((ms % 3600000) / 60000);
-    const s = Math.floor((ms % 60000) / 1000);
-    return `${h}h ${m}m ${s}s`;
-  };
-
-  const fmtPnl = (pnl: number) => ({
-    text: pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`,
-    color: pnl >= 0 ? '#4caf50' : '#e94560' as string,
-  });
-
-  // Strip the quote currency to show the base (target) token: "BTCUSDT" -> "BTC".
-  const fmtBaseSymbol = (sym: string): string =>
-    sym.replace(/(USDT|USDC|BUSD|FDUSD|TUSD|USD)$/, '') || sym;
-
-  const fmtSize = (q: number): string =>
-    !isFinite(q) || q <= 0
-      ? '\u2014'
-      : Number(q.toPrecision(4)).toLocaleString('en-US', { maximumFractionDigits: 6 });
-
-  const fmtUsd = (n: number): string =>
-    !isFinite(n) || n <= 0
-      ? '\u2014'
-      : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-  const na = '\u2014';
-
   // Feed connectivity for the left Status panel — live `bot:feedStatus` state
   // wins over the snapshot-carried `status.feedState`.
   const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
@@ -2278,33 +2353,60 @@ export function LiveDashboard({
           </button>
         </div>
 
-        {/* Show unlock screen if wallet exists and is locked, otherwise show setup wizard */}
-        {wallet.hasWallet && walletLocked ? (
-          <UnlockScreen backendUrl={backendUrl} onUnlock={handleUnlock} />
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
-            <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
-          <SetupWizard
-            backendUrl={backendUrl}
-            initialWallet={wallet}
-            persistedConfig={persistedConfig}
-            onStart={async () => { await sendCommand('start'); }}
-            onClose={onClose}
-            chaosError={chaosError}
-            autoSelectProgress={autoSelectProgress}
-            autoSelectResult={autoSelectResult}
-            onConfigReset={() => setPersistedConfig(null)}
-            onBacktestStarted={() => {
-              // Re-fetch config after backtest to update persistedConfig with resolved pairs
-              fetch(`${backendUrl}/api/bot/config`)
-                .then(r => r.ok ? r.json() : null)
-                .then(configData => {
-                  if (configData) setPersistedConfig(configData);
-                })
-                .catch(() => {});
-            }}
-          />
-            </div>
+        {/* Tabs — history/stats stay browsable while the bot is stopped */}
+        <DashboardTabs active={activeTab} onChange={setActiveTab} />
+
+        {activeTab === 'overview' && (
+          <>
+            {/* Show unlock screen if wallet exists and is locked, otherwise show setup wizard */}
+            {wallet.hasWallet && walletLocked ? (
+              <UnlockScreen backendUrl={backendUrl} onUnlock={handleUnlock} />
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
+                <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
+              <SetupWizard
+                backendUrl={backendUrl}
+                initialWallet={wallet}
+                persistedConfig={persistedConfig}
+                onStart={async () => { await sendCommand('start'); }}
+                onClose={onClose}
+                chaosError={chaosError}
+                autoSelectProgress={autoSelectProgress}
+                autoSelectResult={autoSelectResult}
+                onConfigReset={() => setPersistedConfig(null)}
+                onBacktestStarted={() => {
+                  // Re-fetch config after backtest to update persistedConfig with resolved pairs
+                  fetch(`${backendUrl}/api/bot/config`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(configData => {
+                      if (configData) setPersistedConfig(configData);
+                    })
+                    .catch(() => {});
+                }}
+              />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === 'history' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+            <TradeHistoryTab
+              backendUrl={backendUrl}
+              liveTrades={liveTrades}
+              reconnectEpoch={connectionEpoch}
+            />
+          </div>
+        )}
+
+        {activeTab === 'stats' && (
+          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+            <StatisticsTab
+              backendUrl={backendUrl}
+              liveTrades={liveTrades}
+              reconnectEpoch={connectionEpoch}
+            />
           </div>
         )}
       </div>
@@ -2416,8 +2518,12 @@ export function LiveDashboard({
         </button>
       </div>
 
-      {/* Three-column body */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gap: 1, overflow: 'hidden' }}>
+      {/* Tabs — Overview keeps the 3-column grid byte-identical */}
+      <DashboardTabs active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'overview' && (
+        // Three-column body (byte-identical to the pre-tabs layout)
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gap: 1, overflow: 'hidden' }}>
         {/* Left: Status Panel */}
         <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
@@ -2432,7 +2538,7 @@ export function LiveDashboard({
             )}
             <MetricValue label="Strategy" value={status.strategyName} />
             <MetricValue label="DEX" value={status.dex} />
-            <MetricValue label="Duration" value={status.startedAt != null ? fmtDur(now - status.startedAt) : na} />
+            <MetricValue label="Duration" value={status.startedAt != null ? fmtDur(now - status.startedAt) : DASH} />
             <MetricValue label="Balance" value={`$${status.balance.toFixed(2)}`} />
             <MetricValue label="Realized PnL" value={fmtPnl(status.realizedPnl).text} color={fmtPnl(status.realizedPnl).color} />
             <MetricValue label="Unrealized PnL" value={fmtPnl(status.unrealizedPnl).text} color={fmtPnl(status.unrealizedPnl).color} />
@@ -2487,18 +2593,18 @@ export function LiveDashboard({
 
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 16 }}>
-            <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : na} />
-            <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : na} color="#4caf50" />
-            <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : na} color="#e94560" />
-            <MetricValue label="Win Rate" value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : na} />
-            <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : na} color={status.avgWin != null && status.avgWin > 0 ? '#4caf50' : undefined} />
-            <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : na} color={status.avgLoss != null && status.avgLoss < 0 ? '#e94560' : undefined} />
-            <MetricValue label="Profit Factor" value={status.profitFactor != null ? status.profitFactor.toFixed(2) : na}
+            <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : DASH} />
+            <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : DASH} color="#4caf50" />
+            <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : DASH} color="#e94560" />
+            <MetricValue label="Win Rate" value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : DASH} />
+            <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : DASH} color={status.avgWin != null && status.avgWin > 0 ? '#4caf50' : undefined} />
+            <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : DASH} color={status.avgLoss != null && status.avgLoss < 0 ? '#e94560' : undefined} />
+            <MetricValue label="Profit Factor" value={status.profitFactor != null ? status.profitFactor.toFixed(2) : DASH}
               color={status.profitFactor != null ? status.profitFactor >= 1.5 ? '#4caf50' : status.profitFactor >= 1 ? '#ff9800' : '#e94560' : undefined}
             />
-            <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : na} color="#e94560" />
-            <MetricValue label="Total Fees" value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : na} />
-            <MetricValue label="Avg Latency" value={status.avgLatency != null ? `${status.avgLatency.toFixed(0)}ms` : na} />
+            <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : DASH} color="#e94560" />
+            <MetricValue label="Total Fees" value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : DASH} />
+            <MetricValue label="Avg Latency" value={status.avgLatency != null ? `${status.avgLatency.toFixed(0)}ms` : DASH} />
           </div>
 
           {/* Positions */}
@@ -2624,6 +2730,27 @@ export function LiveDashboard({
           </div>
         </div>
       </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          <TradeHistoryTab
+            backendUrl={backendUrl}
+            liveTrades={liveTrades}
+            reconnectEpoch={connectionEpoch}
+          />
+        </div>
+      )}
+
+      {activeTab === 'stats' && (
+        <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          <StatisticsTab
+            backendUrl={backendUrl}
+            liveTrades={liveTrades}
+            reconnectEpoch={connectionEpoch}
+          />
+        </div>
+      )}
 
       {/* Footer */}
       <div style={{ borderTop: '1px solid #1a1a2e', padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: '#555' }}>

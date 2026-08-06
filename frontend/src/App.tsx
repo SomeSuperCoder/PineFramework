@@ -84,6 +84,8 @@ function App() {
     autoSelectProgress,
     autoSelectResult,
     connectionFailed: botConnectionFailed,
+    liveTrades: botLiveTrades,
+    connectionEpoch: botConnectionEpoch,
   } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
   const { chaosMode, chaosError, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
@@ -450,6 +452,8 @@ function App() {
               chaosSignals={botChaosSignals}
               chaosHeartbeats={botChaosHeartbeatHistory}
               feedStatus={botFeedStatus}
+              liveTrades={botLiveTrades}
+              connectionEpoch={botConnectionEpoch}
             />
           ) : botConnectionFailed ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
