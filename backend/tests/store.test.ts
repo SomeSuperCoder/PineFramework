@@ -98,7 +98,10 @@ describe('TelegramConfigStore', () => {
   it('returns default values for empty store', () => {
     const store = new TelegramConfigStore(filePath);
     expect(store.getBotToken()).toBe('');
-    expect(store.getSubscribers()).toEqual([]);
+    expect(store.getChats()).toEqual([]);
+    expect(store.getControllers()).toEqual([]);
+    expect(store.getRequests()).toEqual([]);
+    expect(store.getAdmin()).toBeUndefined();
   });
 
   it('sets and gets bot token', () => {
@@ -107,27 +110,9 @@ describe('TelegramConfigStore', () => {
     expect(store.getBotToken()).toBe('test-token-123');
   });
 
-  it('adds and removes subscribers', () => {
-    const store = new TelegramConfigStore(filePath);
-    store.addSubscriber(12345, 'testuser');
-    expect(store.getSubscribers()).toHaveLength(1);
-    expect(store.getSubscribers()[0]!.chatId).toBe(12345);
-    expect(store.getSubscribers()[0]!.username).toBe('testuser');
-
-    store.addSubscriber(12345, 'testuser');
-    expect(store.getSubscribers()).toHaveLength(1);
-
-    const removed = store.removeSubscriber(12345);
-    expect(removed).toBe(true);
-    expect(store.getSubscribers()).toHaveLength(0);
-
-    const notFound = store.removeSubscriber(99999);
-    expect(notFound).toBe(false);
-  });
-
   it('gets and sets alert preferences', () => {
     const store = new TelegramConfigStore(filePath);
-    store.addSubscriber(12345, 'testuser');
+    store.addChat(12345, 'private');
 
     expect(store.getAlertPreference(12345, 'alert_1')).toBe(true);
 
@@ -138,7 +123,7 @@ describe('TelegramConfigStore', () => {
     expect(store.getAlertPreference(12345, 'alert_1')).toBe(true);
   });
 
-  it('returns true for unknown subscriber alerts', () => {
+  it('returns true for unknown chat alerts', () => {
     const store = new TelegramConfigStore(filePath);
     expect(store.getAlertPreference(99999, 'alert_1')).toBe(true);
   });
@@ -146,7 +131,11 @@ describe('TelegramConfigStore', () => {
   it('reloads from disk on each read', () => {
     const store = new TelegramConfigStore(filePath);
     store.setBotToken('initial-token');
-    fs.writeFileSync(filePath, JSON.stringify({ botToken: 'edited-token', subscribers: [], settings: {} }), 'utf-8');
+    fs.writeFileSync(
+      filePath,
+      JSON.stringify({ botToken: 'edited-token', controllers: [], requests: [], chats: [], settings: {} }),
+      'utf-8',
+    );
     expect(store.getBotToken()).toBe('edited-token');
   });
 
@@ -154,6 +143,6 @@ describe('TelegramConfigStore', () => {
     fs.writeFileSync(filePath, '{corrupted', 'utf-8');
     const store = new TelegramConfigStore(filePath);
     expect(store.getBotToken()).toBe('');
-    expect(store.getSubscribers()).toEqual([]);
+    expect(store.getChats()).toEqual([]);
   });
 });

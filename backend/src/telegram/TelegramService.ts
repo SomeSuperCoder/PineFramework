@@ -1,14 +1,26 @@
 import { Telegraf, type Context } from 'telegraf';
 import { SocksProxyAgent } from 'socks-proxy-agent';
-import type { TelegramConfigStore, ProxyConfig } from '../store/TelegramConfigStore.js';
+import { type FeatureCommandContext } from './TelegramBotFeature.js';
+import {
+  type TelegramConfigStore,
+  type ProxyConfig,
+} from '../store/TelegramConfigStore.js';
+import { escapeMarkdown } from 'pine-framework/trading/telegram-bot';
+import { t } from './i18n.js';
 import { createBackendLogger } from '../utils/logger.js';
 
 const logger = createBackendLogger('backend', 'telegram');
 
+/**
+ * Feature-registered command handler. Telegraf's `Context` structurally
+ * satisfies `FeatureCommandContext` at runtime (from/chat/message/reply), so a
+ * raw telegraf `Context` can be handed to a feature handler — the seam is
+ * only widened for type-safety, never narrowed.
+ */
+export type BotCommandHandler = (ctx: FeatureCommandContext) => Promise<void> | void;
+
 interface TelegramServiceOptions {
   configStore: TelegramConfigStore;
-  onSubscribe?: (chatId: number, username: string) => void;
-  onUnsubscribe?: (chatId: number) => void;
 }
 
 function createSocksAgent(proxy: ProxyConfig): SocksProxyAgent {
@@ -28,14 +40,52 @@ function createSocksAgent(proxy: ProxyConfig): SocksProxyAgent {
 export class TelegramService {
   private bot: Telegraf | null = null;
   private configStore: TelegramConfigStore;
-  private onSubscribe?: (chatId: number, username: string) => void;
-  private onUnsubscribe?: (chatId: number) => void;
   private isRunning = false;
+  /** Feature-registered command handlers, attached once the bot is launched. */
+  private readonly registeredCommands = new Map<string, BotCommandHandler>();
+  /** Feature-registered text handlers, attached once the bot is launched. */
+  private readonly textHandlers: BotCommandHandler[] = [];
 
   constructor(options: TelegramServiceOptions) {
     this.configStore = options.configStore;
-    this.onSubscribe = options.onSubscribe;
-    this.onUnsubscribe = options.onUnsubscribe;
+  }
+
+  /**
+   * Register a bot command handler. Safe to call before `start()` (the handler
+   * is deferred and attached after `bot.launch()`); if the bot is already
+   * running it is attached immediately. Registering a name twice overrides the
+   * previous handler.
+   */
+  registerBotCommand(command: string, handler: BotCommandHandler): void {
+    if (this.registeredCommands.has(command) && this.bot) {
+      logger.info(`[Telegram] Re-registering command "${command}"; overriding existing handler`);
+    }
+    this.registeredCommands.set(command, handler);
+    if (this.bot) {
+      this.attachCommand(command, handler);
+    }
+  }
+
+  /** Attach a feature handler to the live telegraf transport. */
+  private attachCommand(command: string, handler: BotCommandHandler): void {
+    this.bot?.command(command, handler as (ctx: Context) => Promise<void> | void);
+  }
+
+  /** Attach a feature text handler to the live telegraf transport. */
+  private attachTextHandler(handler: BotCommandHandler): void {
+    this.bot?.on('text', handler as (ctx: Context) => Promise<void> | void);
+  }
+
+  /**
+   * Register a catch-all text handler. Safe to call before `start()` (deferred
+   * and attached after launch); if already running, attached immediately. Used
+   * by the feature for sessionful flows such as /stop confirmation (M1).
+   */
+  registerBotText(handler: BotCommandHandler): void {
+    this.textHandlers.push(handler);
+    if (this.bot) {
+      this.attachTextHandler(handler);
+    }
   }
 
   async start(): Promise<void> {
@@ -75,67 +125,29 @@ export class TelegramService {
     });
 
     this.bot.command('start', async (ctx: Context) => {
-      await ctx.reply(
-        '*Welcome to Pine Framework Bot!* 🚀\n\n'
-        + 'I send you real-time alerts from your Pine Script indicators straight to this chat.\n\n'
-        + '*Getting Started:*\n'
-        + '1. Paste your bot token in the Telegram Config panel on the Pine Framework web app\n'
-        + '2. Run `/subscribe` to register this chat for notifications\n'
-        + '3. Write Pine Script indicators with `alertcondition()` — I\'ll notify you when they fire\n\n'
-        + '*Commands:*\n'
-        + '/subscribe — Receive alert notifications here\n'
-        + '/unsubscribe — Stop receiving alert notifications\n'
-        + '/help — Show this message again',
-      );
+      const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
+      const chatId = ctx.chat?.id;
+      if (chatId) {
+        this.configStore.addChat(chatId, ctx.chat.type === 'group' ? 'group' : 'private');
+      }
+      await ctx.reply(t(lang, 'startWelcome'), { parse_mode: 'MarkdownV2' });
     });
 
     this.bot.command('help', async (ctx: Context) => {
-      await ctx.reply(
-        '*Pine Framework Bot — Help*\n\n'
-        + 'I forward `alertcondition()` triggers from your Pine Script indicators to Telegram.\n\n'
-        + '*Commands:*\n'
-        + '/start — Welcome message and setup instructions\n'
-        + '/subscribe — Subscribe to alert notifications\n'
-        + '/unsubscribe — Unsubscribe from alert notifications\n\n'
-        + '*Setup:*\n'
-        + 'Enter your bot token in the Pine Framework web app under Telegram Config, '
-        + 'then run /subscribe to register this chat.',
-      );
-    });
-
-    this.bot.command('subscribe', async (ctx: Context) => {
-      const chatId = ctx.chat?.id;
-      const username = ctx.from?.username || `user_${ctx.from?.id}`;
-      if (!chatId) {
-        await ctx.reply('Error: Could not identify chat.');
-        return;
-      }
-      this.configStore.addSubscriber(chatId, username);
-      if (this.onSubscribe) {
-        this.onSubscribe(chatId, username);
-      }
-      await ctx.reply('You have been subscribed to alert notifications!');
-    });
-
-    this.bot.command('unsubscribe', async (ctx: Context) => {
-      const chatId = ctx.chat?.id;
-      if (!chatId) {
-        await ctx.reply('Error: Could not identify chat.');
-        return;
-      }
-      const removed = this.configStore.removeSubscriber(chatId);
-      if (this.onUnsubscribe) {
-        this.onUnsubscribe(chatId);
-      }
-      if (removed) {
-        await ctx.reply('You have been unsubscribed from alert notifications.');
-      } else {
-        await ctx.reply('You were not subscribed.');
-      }
+      const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
+      await ctx.reply(t(lang, 'helpCommands'), { parse_mode: 'MarkdownV2' });
     });
 
     try {
       await this.bot.launch();
+      // Attach any feature-registered command handlers that were deferred until
+      // the transport was actually running.
+      for (const [command, handler] of this.registeredCommands) {
+        this.attachCommand(command, handler);
+      }
+      for (const handler of this.textHandlers) {
+        this.attachTextHandler(handler);
+      }
       logger.info('[Telegram] Bot started');
     } catch (err) {
       logger.error('[Telegram] Failed to start bot:', { err });
@@ -218,8 +230,8 @@ export class TelegramService {
     symbol?: string,
     timeframe?: string,
   ): Promise<void> {
-    const subscribers = this.configStore.getSubscribers();
-    logger.info('sendAlertToSubscribers', { alertId, subscriberCount: subscribers.length, symbol, timeframe });
+    const chats = this.configStore.getChats();
+    logger.info('sendAlertToSubscribers', { alertId, subscriberCount: chats.length, symbol, timeframe });
 
     const escapedMessage = message
       .replace(/_/g, '\\_')
@@ -242,22 +254,45 @@ export class TelegramService {
       .replace(/!/g, '\\!');
 
     const header = symbol || timeframe
-      ? `*Alert*${symbol ? ` \\- ${symbol}` : ''}${timeframe ? ` \\- ${timeframe}` : ''}`
+      ? `*Alert*${symbol ? ` \\- ${escapeMarkdown(symbol)}` : ''}${timeframe ? ` \\- ${escapeMarkdown(timeframe)}` : ''}`
       : '*Alert*';
 
     const fullMessage = `${header}\n\n${escapedMessage}`;
 
-    for (const sub of subscribers) {
+    for (const chat of chats) {
+      // B1 — delivery is subscription-gated, mirroring the feature's routing:
+      //   private: the chat's own member must be subscribed to 'trading'
+      //   group:   linked AND at least one member subscribed to 'trading'
+      // A chat is delivered at most once even when several members match.
+      let memberOk: boolean;
+      if (chat.type === 'private') {
+        memberOk = this.configStore.isMemberSubscribed(chat.chatId, chat.chatId, 'trading');
+      } else {
+        if (!this.configStore.isLinked(chat.chatId)) {
+          logger.info(`[Telegram] sendAlertToSubscribers: SKIPPING group chat ${chat.chatId} (not linked)`);
+          continue;
+        }
+        memberOk = Object.keys(chat.memberSubscriptions).some(
+          (key) => chat.memberSubscriptions[key]?.includes('trading') ?? false,
+        );
+      }
+      if (!memberOk) {
+        logger.info(`[Telegram] sendAlertToSubscribers: SKIPPING chat ${chat.chatId} (no 'trading' subscription)`);
+        continue;
+      }
       if (alertId) {
-        const enabled = this.configStore.getAlertPreference(sub.chatId, alertId);
-        logger.info('sendAlertToSubscribers subscriber', { chatId: sub.chatId, alertId, enabled });
+        // Legacy per-alert prefs key the chat's own member by chatId (stays
+        // chat-scoped for groups too — one pref per chat, matching the old
+        // private-chat semantics).
+        const enabled = this.configStore.getAlertPreference(chat.chatId, alertId);
+        logger.info('sendAlertToSubscribers subscriber', { chatId: chat.chatId, alertId, enabled });
         if (!enabled) {
-          logger.info(`[Telegram] sendAlertToSubscribers: SKIPPING subscriber ${sub.chatId} (alert disabled)`);
+          logger.info(`[Telegram] sendAlertToSubscribers: SKIPPING chat ${chat.chatId} (alert disabled)`);
           continue;
         }
       }
-      logger.info(`[Telegram] sendAlertToSubscribers: sending to chatId=${sub.chatId}`);
-      await this.sendMessage(sub.chatId, fullMessage);
+      logger.info(`[Telegram] sendAlertToSubscribers: sending to chatId=${chat.chatId}`);
+      await this.sendMessage(chat.chatId, fullMessage);
     }
   }
 

@@ -19,17 +19,25 @@ import { createBuiltInScriptsRouter } from './routes/builtInScripts.js';
 import { createExportRouter } from './routes/export.js';
 import { createBotRouter } from './routes/bot.js';
 import { createTradeHistoryRouter } from './routes/trade-history.js';
+import { StatsService } from './services/StatsService.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
 import { TradeHistoryStore } from 'pine-framework/trading/trade-history-store';
 import type { BotConfig, BotEngine, RiskManager, RiskManagerConfig } from 'pine-framework';
+import {
+  TradingTelegramBot,
+  type TradingNotificationKind,
+  type TradingNotificationRouter,
+} from 'pine-framework/trading/telegram-bot';
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { buildSnapshotPayload } from './ws/snapshot-payload.js';
 import { createWSGateway } from './ws/gateway.js';
-import { TelegramConfigStore } from './store/TelegramConfigStore.js';
+import { TelegramConfigStore, type NotificationType } from './store/TelegramConfigStore.js';
 import { ScriptFileManager } from './store/ScriptFileManager.js';
 import { RunningIndicatorsStore } from './store/RunningIndicatorsStore.js';
 import { ScriptsManifestStore } from './store/ScriptsManifestStore.js';
 import { TelegramService } from './telegram/TelegramService.js';
+import { TelegramBotFeature } from './telegram/TelegramBotFeature.js';
+import { renderNotification } from './telegram/notification-renderer.js';
 import { migrateLegacyScripts } from './migration.js';
 import { logger } from './utils/logger.js';
 import { createBotLogger } from './utils/bot-logger.js';
@@ -94,6 +102,25 @@ const tradeHistoryStore = new TradeHistoryStore({
   botId: TRADE_HISTORY_BOT_ID,
 });
 
+// D4: ONE shared StatsService wraps the trade-history store so the REST routes
+// and the Telegram /report command read the same in-process aggregation.
+const statsService = new StatsService(tradeHistoryStore);
+
+// ── Live-trading notification seam ───────────────────────────────────────────
+// The Telegram feature is transport-agnostic and built BEFORE any engine
+// exists. `liveEngine` is module-scope so the feature's lazy getEngine()
+// resolves the real engine only once the ENABLE_TRADING_BOT block publishes it
+// (and is cleared again on shutdown). `onMessage` routes the rendered
+// notification into the existing Telegram transport.
+let liveEngine: BotEngine | null = null;
+const telegramFeature = new TelegramBotFeature({
+  store: telegramConfig,
+  stats: statsService,
+  getEngine: () => liveEngine,
+  onMessage: (chatId, msg) => telegramService.sendMessage(chatId, msg),
+});
+telegramFeature.install(telegramService);
+
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
@@ -118,7 +145,8 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
       proxyUrl += `@`;
     }
     proxyUrl += `${proxy.host}:${proxy.port}`;
-    logger.info(`[Proxy-Test] Testing SOCKS5 proxy: ${proxyUrl}`);
+    // H3: never log the full URL (it embeds the proxy password). host:port only.
+    logger.info(`[Proxy-Test] Testing SOCKS5 proxy: ${proxy.host}:${proxy.port}`);
     const agent = new SocksProxyAgent(proxyUrl);
     const https = await import('node:https');
     await new Promise<void>((resolve, reject) => {
@@ -142,18 +170,25 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
 });
 
 app.post('/api/telegram/test', async (_req, res) => {
-  const subs = telegramConfig.getSubscribers();
-  logger.info(`[Telegram-Test] Sending test message, ${subs.length} subscribers found`);
-  if (subs.length === 0) {
-    res.status(400).json({ error: 'No subscribers' });
+  const chats = telegramConfig.getChats();
+  const adminId = telegramConfig.getAdmin()?.userId;
+  // Canary target: the admin's own private chat when it is known, else the
+  // first private chat, else any linked chat. Mirrors the new chat model —
+  // the old subscriber list no longer exists.
+  const target =
+    (adminId !== undefined ? telegramConfig.getChat(adminId) : undefined) ??
+    chats.find((c) => c.type === 'private') ??
+    chats.find((c) => c.linked);
+  if (!target) {
+    res.status(400).json({ error: 'No subscribed chat configured' });
     return;
   }
-  logger.info(`[Telegram-Test] Target chatId: ${subs[0].chatId}, username: ${subs[0].username}`);
+  logger.info(`[Telegram-Test] Sending test message to chatId=${target.chatId}`);
   // Must be valid MarkdownV2: escape all special chars except paired * for bold
   const base = '*Test Message*\n\nYour Telegram bot is working correctly';
   const escaped = base.replace(/!/g, '\\!').replace(/\./g, '\\.');
-  logger.info(`[Telegram-Test] Calling sendMessage with chatId=${subs[0].chatId}`);
-  const ok = await telegramService.sendMessage(subs[0].chatId, escaped);
+  logger.info(`[Telegram-Test] Calling sendMessage with chatId=${target.chatId}`);
+  const ok = await telegramService.sendMessage(target.chatId, escaped);
   logger.info(`[Telegram-Test] sendMessage returned: ${ok}`);
   res.json({ success: ok });
 });
@@ -172,7 +207,30 @@ app.use(
       telegramConfig.getAlertPreference(chatId, alertId),
     setAlertPreference: (chatId: number, alertId: string, enabled: boolean) =>
       telegramConfig.setAlertPreference(chatId, alertId, enabled),
-    getSubscribers: () => telegramConfig.getSubscribers(),
+    getAdmin: () => telegramConfig.getAdmin(),
+    setAdmin: (userId: number, username: string) =>
+      telegramConfig.setAdmin(userId, username),
+    getControllers: () => telegramConfig.getControllers(),
+    addController: (userId: number, username: string, grantedBy: number) =>
+      telegramConfig.addController(userId, username, grantedBy),
+    removeController: (userId: number) => telegramConfig.removeController(userId),
+    getRequests: () => telegramConfig.getRequests(),
+    removeRequest: (userId: number) => telegramConfig.removeRequest(userId),
+    getChats: () => telegramConfig.getChats(),
+    setChatLanguage: (chatId: number, language) =>
+      telegramConfig.setChatLanguage(chatId, language),
+    // The store exposes union/removal primitives; a "set to exactly these
+    // types" PUT is a diff: remove what dropped out, add what appeared.
+    setMemberSubscriptions: (chatId: number, memberId: number, types) => {
+      const current = telegramConfig.getMemberSubscription(chatId, memberId);
+      const toAdd = types.filter((t) => !current.includes(t));
+      const toRemove = current.filter((t) => !types.includes(t));
+      if (toAdd.length > 0) telegramConfig.memberSubscribe(chatId, memberId, toAdd);
+      if (toRemove.length > 0) telegramConfig.memberUnsubscribe(chatId, memberId, toRemove);
+    },
+    linkChat: (chatId: number, byUserId: number) =>
+      telegramConfig.linkChat(chatId, byUserId),
+    unlinkChat: (chatId: number) => telegramConfig.unlinkChat(chatId),
     getProxy: () => telegramConfig.getProxy(),
     setProxy: (proxy) => {
       telegramConfig.setProxy(proxy);
@@ -190,8 +248,13 @@ app.use('/api', createExportRouter());
 
 // D4: trade history/stats are readable regardless of the bot flag — the store
 // above is file-pointed at module init, so this router works even when
-// ENABLE_TRADING_BOT=false and no engine is ever constructed.
-app.use('/api', createTradeHistoryRouter({ getStore: () => tradeHistoryStore }));
+// ENABLE_TRADING_BOT=false and no engine is ever constructed. One shared
+// StatsService wraps the store so the REST routes and the upcoming Telegram
+// /report command consume the same in-process aggregation.
+app.use(
+  '/api',
+  createTradeHistoryRouter({ statsService }),
+);
 
 // ── Log Query Endpoint ──
 // AI agents and the frontend can query structured log files
@@ -355,10 +418,52 @@ if (ENABLE_TRADING_BOT) {
     });
   });
 
+  // ── Live-trading notification routing ─────────────────────────────────────
+  // Maps the core Telegram notification kinds onto the backend's subscription
+  // categories (the two "catch-all" buckets — 'trading' and 'error' — absorb
+  // emergency/state-change and warning respectively), then routes each rendered
+  // per-language notification through the feature's subscription-aware deliver.
+  // The legacy sender passed to TradingTelegramBot is INERT: with `routing`
+  // set, every notify* short-circuits to deliver() and the broadcast never runs,
+  // so no double-send and no stale legacy recipients.
+  const kindToType = (kind: TradingNotificationKind): NotificationType => {
+    switch (kind) {
+      case 'bot_started':
+      case 'bot_stopped':
+      case 'emergency_stop':
+      case 'state_change':
+        // bot_lifecycle = start/stop/emergency/state changes (spec).
+        return 'bot_lifecycle';
+      case 'position_open':
+        return 'position_open';
+      case 'position_close':
+        return 'position_close';
+      case 'daily_loss':
+        return 'daily';
+      case 'error':
+      case 'warning':
+        return 'error';
+    }
+  };
+  const routing: TradingNotificationRouter = {
+    deliver: async (kind, data, opts) => {
+      await telegramFeature.deliver(
+        kindToType(kind),
+        (lang) => renderNotification(kind, lang, data),
+        opts,
+      );
+    },
+  };
+  const telegramBot = new TradingTelegramBot(
+    { sendMessage: async () => true, getSubscribers: () => [] },
+    { includeTxLinks: true, routing },
+  );
+
   botEngine = new BotEngine({
     logger: botLogger,
     walletManager,
     riskManager: buildRiskManager(savedConfig),
+    telegramBot,
     // D2/D3 (trade-history dashboard): persist every closed trade and stream it
     // live to the dashboard. botId is explicit so stamped records always match
     // the store's directory — same SSOT value as the store constructed above.
@@ -416,6 +521,9 @@ if (ENABLE_TRADING_BOT) {
   // narrowing inside closures, but at this point in the block the engine is
   // always assigned (constructed above, before any wiring or request runs).
   const engine = botEngine;
+
+  // Publish to the Telegram feature's lazy getEngine now that the engine exists.
+  liveEngine = botEngine;
 
   if (savedConfig) {
     try {
@@ -516,7 +624,10 @@ if (ENABLE_TRADING_BOT) {
 
 createWSGateway(server, cache, telegramService);
 
-server.listen(PORT, async () => {
+// H2: bind to localhost only so the unauthenticated control-plane is not
+// reachable from other network interfaces (the frontend proxies through Vite
+// on localhost, so this is transparent to it).
+server.listen(PORT, '127.0.0.1', async () => {
   logger.info(`Backend server running on http://localhost:${PORT}`);
   logger.info(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
   logger.info(`Data directory: ${DATA_DIR}`);
@@ -583,6 +694,10 @@ async function shutdown(signal: string): Promise<void> {
     // telegram service stops and the server closes, so open positions close on
     // process exit and close failure warnings still reach the operator.
     await stopEngineOnShutdown(botEngine);
+
+    // The engine is gone — the Telegram feature's getEngine must no longer
+    // report a live engine to /stats, /stop or /emergency.
+    liveEngine = null;
 
     await telegramService.stop();
   } finally {

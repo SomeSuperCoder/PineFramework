@@ -13,10 +13,16 @@
  * `{ success: false, error }` on failure. No auth (matches the rest of the
  * server). This file exports ONLY `createTradeHistoryRouter`; mounting happens
  * in backend/src/index.ts (separate wave).
+ *
+ * Aggregation goes through the shared StatsService (see services/StatsService.ts)
+ * so the REST surface and the Telegram /report command read the same numbers
+ * in-process — no backend→backend HTTP. `getStore` remains accepted for
+ * backward compatibility; new call sites inject `statsService`.
  */
 
 import { Router } from 'express';
-import type { TradeHistoryStore, TradeFilters } from 'pine-framework/trading/trade-history-store';
+import type { TradeHistoryStore, TradeFilters, TradeStats } from 'pine-framework/trading/trade-history-store';
+import { StatsService } from '../services/StatsService.js';
 import { logger } from '../utils/logger.js';
 
 const MODE_VALUES = ['live', 'chaos', 'all'] as const;
@@ -31,9 +37,28 @@ const HISTORY_DEFAULT_LIMIT = 50;
 const HISTORY_MAX_LIMIT = 200;
 
 export function createTradeHistoryRouter(opts: {
-  getStore: () => TradeHistoryStore | null;
+  getStore?: () => TradeHistoryStore | null;
+  statsService?: StatsService;
 }): Router {
   const router = Router();
+
+  /**
+   * Resolve the StatsService for a request, or null when the history backend
+   * is unavailable (→ 503).
+   *
+   * Two construction modes:
+   * - statsService (primary): index.ts injects one shared instance so the REST
+   *   routes and the upcoming Telegram /report command read the same numbers
+   *   through the same object — no backend→backend HTTP.
+   * - getStore (legacy, kept for backward compatibility and the existing route
+   *   tests): a per-request StatsService is synthesized over the store; a null
+   *   store resolves to null, reproducing the previous 503 behavior exactly.
+   */
+  const getStatsService = (): StatsService | null => {
+    if (opts.statsService) return opts.statsService;
+    const store = opts.getStore ? opts.getStore() : null;
+    return store ? new StatsService(store) : null;
+  };
 
   /**
    * GET /bot/history
@@ -41,8 +66,8 @@ export function createTradeHistoryRouter(opts: {
    */
   router.get('/bot/history', (req, res) => {
     try {
-      const store = opts.getStore();
-      if (!store) {
+      const statsService = getStatsService();
+      if (!statsService) {
         res.status(503).json({ success: false, error: 'Trade history not available' });
         return;
       }
@@ -86,7 +111,7 @@ export function createTradeHistoryRouter(opts: {
         cursor = parsedCursor;
       }
 
-      const page = store.getTradesPage({
+      const page = statsService.getTradesPage({
         ...parsed.filters,
         ...(cursor ? { cursor } : {}),
         limit,
@@ -114,8 +139,8 @@ export function createTradeHistoryRouter(opts: {
    */
   router.get('/bot/stats', (req, res) => {
     try {
-      const store = opts.getStore();
-      if (!store) {
+      const statsService = getStatsService();
+      if (!statsService) {
         res.status(503).json({ success: false, error: 'Trade history not available' });
         return;
       }
@@ -138,17 +163,19 @@ export function createTradeHistoryRouter(opts: {
       // The store now computes the global summary over the SAME filter set as
       // the grouped path (getStats accepts TradeFilters), so the summary and
       // groups always describe the same trade subset.
-      const summary = store.getStats({
+      const summary = statsService.getStats({
         ...parsed.filters,
         includeUnknown: parsed.includeUnknown,
       });
       const groups =
         rawGroupBy === 'global'
           ? null
-          : store.getGroupedStats(rawGroupBy, {
-              ...parsed.filters,
-              includeUnknown: parsed.includeUnknown,
-            });
+          : toGroupEntries(
+              statsService.getGroupedStats(rawGroupBy, {
+                ...parsed.filters,
+                includeUnknown: parsed.includeUnknown,
+              }),
+            );
 
       res.json({ success: true, summary, groups });
     } catch (err) {
@@ -162,6 +189,20 @@ export function createTradeHistoryRouter(opts: {
   });
 
   return router;
+}
+
+/**
+ * StatsService exposes grouped stats as Record<string, TradeStats> (design.md
+ * §3 — the Telegram /report shape). The REST wire contract, pinned by
+ * trade-history-route.test.ts, is the store's original Array<{ key, stats }>.
+ * Convert back so the HTTP envelope stays byte-identical; Object.entries keeps
+ * the store's group order (the Record preserves insertion order).
+ */
+function toGroupEntries(
+  groups: Record<string, TradeStats> | null,
+): Array<{ key: string; stats: TradeStats }> | null {
+  if (groups === null) return null;
+  return Object.entries(groups).map(([key, stats]) => ({ key, stats }));
 }
 
 // ── Filter parsing ──

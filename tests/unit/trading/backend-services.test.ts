@@ -498,4 +498,36 @@ describe('TradingTelegramBot', () => {
     const message = sender.sendMessage.mock.calls[0]![1] as string;
     expect(message).toContain('solscan.io');
   });
+
+  // ---- Routing seam (telegram-bot-enhancements) ----
+
+  it('with routing set, notifyPositionOpened routes via deliver and never broadcasts', async () => {
+    const deliver = vi.fn().mockResolvedValue(undefined);
+    const routedBot = new TradingTelegramBot(sender, {
+      includeTxLinks: true,
+      routing: { deliver },
+    });
+
+    const trade = {
+      id: 't-routed',
+      botId: 'b',
+      symbol: 'SOL/USDC',
+      side: 'buy' as const,
+      entryPrice: 100,
+      exitPrice: 0,
+      size: 1,
+      fees: 0,
+      realizedPnl: 0,
+      dex: 'jupiter-swap',
+      openedAt: 1000,
+      closedAt: 0,
+    };
+
+    await routedBot.notifyPositionOpened(trade);
+
+    // Routed: the payload + kind go to deliver, and the legacy broadcast is
+    // NOT reached.
+    expect(deliver).toHaveBeenCalledWith('position_open', { kind: 'position_open', trade }, undefined);
+    expect(sender.sendMessage).not.toHaveBeenCalled();
+  });
 });

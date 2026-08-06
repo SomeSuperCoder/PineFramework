@@ -58,12 +58,12 @@ describe('TelegramService', () => {
   });
 
   it('handles sendAlertToSubscribers with subscribers but no bot', async () => {
-    configStore.addSubscriber(12345, 'testuser');
+    configStore.addChat(12345, 'private');
     await expect(service.sendAlertToSubscribers('test message', 'alert_1')).resolves.not.toThrow();
   });
 
   it('sendAlertToSubscribers respects per-alert preferences', async () => {
-    configStore.addSubscriber(12345, 'testuser');
+    configStore.addChat(12345, 'private');
     configStore.setAlertPreference(12345, 'alert_disabled', false);
     await expect(
       service.sendAlertToSubscribers('test', 'alert_disabled'),
@@ -175,7 +175,9 @@ describe('TelegramConfigStore SOCKS5 proxy', () => {
   it('returns proxy from loaded data', () => {
     const data = {
       botToken: 'test',
-      subscribers: [],
+      controllers: [],
+      requests: [],
+      chats: [],
       settings: { proxy: { host: 'proxy.test', port: 9999, username: 'u', password: 'p' } },
     };
     fs.writeFileSync(filePath, JSON.stringify(data), 'utf-8');
@@ -242,13 +244,117 @@ describe('MarkdownV2 escaping in TelegramService', () => {
       return true;
     };
 
-    configStore.addSubscriber(12345, 'testuser');
+    configStore.addChat(12345, 'private');
     await service.sendAlertToSubscribers('Price [BTC] *high* _low_', 'alert_1', 'BTCUSDT', '1m');
 
     expect(lastMessage).toContain('\\*high\\*');
     expect(lastMessage).toContain('\\_low\\_');
     expect(lastMessage).toContain('BTCUSDT');
     expect(lastMessage).toContain('1m');
+
+    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  });
+});
+
+describe('B1 — sendAlertToSubscribers subscription gating', () => {
+  let filePath: string;
+  let configStore: TelegramConfigStore;
+  let service: TelegramService;
+  /** [chatId, message] captured by the mocked sendMessage. */
+  let sent: Array<[number, string]>;
+
+  beforeEach(() => {
+    filePath = tmpFile();
+    configStore = new TelegramConfigStore(filePath);
+    service = new TelegramService({ configStore });
+    sent = [];
+    // Override the transport so no real network call happens.
+    (service as { sendMessage: (chatId: number, m: string) => Promise<boolean> }).sendMessage = async (chatId, m) => {
+      sent.push([chatId, m]);
+      return true;
+    };
+  });
+
+  afterEach(() => {
+    try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  });
+
+  it('B1: delivers to a private chat whose own member is subscribed to trading', async () => {
+    configStore.addChat(12345, 'private'); // private defaults to ALL → subscribed
+    await service.sendAlertToSubscribers('msg', 'a1');
+    expect(sent.map(([id]) => id)).toEqual([12345]);
+  });
+
+  it('B1: SKIPS a private chat whose member is NOT subscribed to trading', async () => {
+    configStore.addChat(12345, 'private');
+    // Force an EXPLICIT subscription list that does not include 'trading', so
+    // the private chat no longer gets the ALL default for that member.
+    configStore.memberSubscribe(12345, 12345, ['error']);
+    await service.sendAlertToSubscribers('msg', 'a1');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('B1: SKIPS an unlinked group even when a member is subscribed', async () => {
+    configStore.addChat(7000, 'group');
+    configStore.memberSubscribe(7000, 1, ['trading']);
+    // Not linked → group skipped.
+    await service.sendAlertToSubscribers('msg', 'a1');
+    expect(sent).toHaveLength(0);
+  });
+
+  it('B1: delivers to a linked group that has at least one trading member', async () => {
+    configStore.addChat(7000, 'group');
+    configStore.memberSubscribe(7000, 1, ['trading']);
+    configStore.linkChat(7000, 1);
+    await service.sendAlertToSubscribers('msg', 'a1');
+    expect(sent.map(([id]) => id)).toEqual([7000]);
+  });
+
+  it('B1: delivers a group chat only ONCE even with many trading members', async () => {
+    configStore.addChat(7000, 'group');
+    configStore.memberSubscribe(7000, 1, ['trading']);
+    configStore.memberSubscribe(7000, 2, ['trading']);
+    configStore.memberSubscribe(7000, 3, ['trading']);
+    configStore.linkChat(7000, 1);
+    await service.sendAlertToSubscribers('msg', 'a1');
+    // Dedupe: one message to the group, never one per member.
+    const ids = sent.map(([id]) => id);
+    expect(ids).toEqual([7000]);
+    expect(ids.filter((id) => id === 7000)).toHaveLength(1);
+  });
+
+  it('B1: respects the per-alert preference (disabled alert not delivered)', async () => {
+    configStore.addChat(12345, 'private');
+    configStore.setAlertPreference(12345, 'disabled', false);
+    await service.sendAlertToSubscribers('msg', 'disabled');
+    expect(sent).toHaveLength(0);
+  });
+});
+
+describe('M4 — alert header escapes symbol and timeframe', () => {
+  it('escapes markdown metacharacters in the alert header symbol/timeframe', async () => {
+    const filePath = tmpFile();
+    const configStore = new TelegramConfigStore(filePath);
+    const service = new TelegramService({ configStore });
+
+    let lastMessage = '';
+    (service as { sendMessage: (chatId: number, m: string) => Promise<boolean> }).sendMessage = async (_id, m) => {
+      lastMessage = m;
+      return true;
+    };
+
+    configStore.addChat(12345, 'private');
+    const nasty = 'BTC]USDT*';
+    const body = 'body*';
+    await service.sendAlertToSubscribers(body, 'a1', nasty, '1]m*');
+
+    // The escaping routes the RAW symbol through escapeMarkdown, so the header
+    // must NOT contain the raw `]` or `*`, and must carry the escaped forms.
+    expect(lastMessage).not.toContain(nasty);
+    const escapedSymbol = nasty.replace(/\]/g, '\\]').replace(/\*/g, '\\*');
+    expect(lastMessage).toContain(escapedSymbol);
+    // The message body is independently escaped too (`body*` → `body\*`).
+    expect(lastMessage).toContain('body\\*');
 
     try { fs.unlinkSync(filePath); } catch { /* ignore */ }
   });

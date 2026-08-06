@@ -125,14 +125,70 @@ export interface ScriptResult {
   }>;
 }
 
-export interface TelegramSubscriber {
+/** The closed set of notification categories a Telegram member can subscribe to. */
+export const NOTIFICATION_TYPES = [
+  'trading',
+  'position_open',
+  'position_close',
+  'report',
+  'daily',
+  'error',
+  'bot_lifecycle',
+] as const;
+export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+
+/** Locale the bot should use when talking to a chat. */
+export type ChatLanguage = 'en' | 'es' | 'ru';
+
+/** Telegram chat scope: a private 1:1 or a group. */
+export type ChatType = 'private' | 'group';
+
+/**
+ * The configured admin (panel shape). The GET /settings/telegram route strips
+ * the store's `configuredAt`; the panel treats it as `null` when no admin is set.
+ */
+export interface TelegramAdmin {
+  userId: number;
+  username: string;
+}
+
+export interface TelegramController {
+  userId: number;
+  username: string;
+}
+
+export interface TelegramControlRequest {
+  userId: number;
+  username: string;
+  firstName: string;
+  requestedAt: number;
+}
+
+/**
+ * A member of a Telegram chat is uniquely identified by its numeric Telegram
+ * userId. Within `memberSubscriptions` it is stored as the numeric-string key.
+ */
+export interface TelegramChatMemberId {
+  userId: number;
+}
+
+export interface TelegramChat {
   chatId: number;
-  hasAlertPreferences: boolean;
+  type: 'private' | 'group';
+  title?: string;
+  /** Whether this chat is linked to the bot. Private chats are always linked. */
+  linked: boolean;
+  language: 'en' | 'es' | 'ru';
+  /** memberId (numeric string) -> notification types that member opted into. */
+  memberSubscriptions: Record<string, NotificationType[]>;
 }
 
 export interface TelegramConfig {
   botToken: string;
-  subscribers: TelegramSubscriber[];
+  admin: TelegramAdmin | null;
+  controllers: TelegramController[];
+  requests: TelegramControlRequest[];
+  chats: TelegramChat[];
 }
 
 export interface ProxyConfig {
