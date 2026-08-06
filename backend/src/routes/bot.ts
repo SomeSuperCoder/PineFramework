@@ -178,7 +178,21 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
   /**
    * PATCH /bot/config/chaos-mode
-   * Toggle chaos mode without requiring a full config.
+   * Stage the chaos-mode flag in the PERSISTED config only — it does NOT
+   * touch the running engine.
+   *
+   * Intentional (D7): this is a pre-boot staging endpoint. The live engine's
+   * chaos mode is mutated exclusively through POST /bot/chaos-mode
+   * (hot-swap); this PATCH only writes bot-config.json so the value is picked
+   * up on the next engine boot/configure (backend/src/index.ts loads the
+   * saved config when constructing the engine). Deliberately bypassing the
+   * engine is what keeps a live session stable — a PATCH must not hot-swap
+   * chaos mode while the bot is Running.
+   *
+   * Persistence invariant: a failed write surfaces as HTTP 500 and leaves the
+   * engine untouched (it never was). The disk === engine equality invariant
+   * applies to engine-mutating endpoints (/bot/configure, /bot/chaos-mode);
+   * this endpoint is engine-agnostic by design.
    * Accepts { enabled: boolean } in body.
    */
   router.patch('/bot/config/chaos-mode', (req, res) => {
@@ -367,13 +381,34 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         ...(hasChaosMode ? { chaosMode: { enabled: isChaosMode } } : {}),
       };
 
-      engine.configure(config);
+      // Persistence ordering (D7): PERSIST BEFORE APPLY.
+      // Write the new config to disk FIRST, then apply it to the engine. If
+      // the disk write throws, the engine is never touched and the request
+      // returns an error with NEITHER side changed. The previous order
+      // (apply-then-persist) left a window where a failed save left the
+      // engine running a config the disk did not have (observed divergence:
+      // engine ran BTCUSDT:60 while bot-config.json said ETHUSDT:1).
+      //
+      // The only way engine.configure() rejects a config is its state guard
+      // (Idle/Stopped only), so we mirror that guard here BEFORE persisting —
+      // a config the engine would refuse must never reach disk (that would
+      // invert the divergence: disk new, engine old).
+      if (engine.state !== 'Idle' && engine.state !== 'Stopped') {
+        res.status(400).json({
+          success: false,
+          error: `Cannot configure bot in state: ${engine.state}. Must be Idle or Stopped.`,
+        });
+        return;
+      }
 
-      // Persist config to disk
+      // Persist config to disk FIRST
       const store = getConfigStore();
       if (store) {
         store.save(config);
       }
+
+      // Apply to the engine SECOND — only reached once disk holds the config
+      engine.configure(config);
 
       res.json({ success: true, config });
     } catch (err) {
@@ -717,17 +752,31 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
+      // Persistence ordering (D7): PERSIST BEFORE APPLY, mirroring
+      // /bot/configure. Build the exact config the engine will hold after the
+      // toggle and write it to disk FIRST — a failed write throws before the
+      // engine is touched (neither side changed). toggleChaosMode then mutates
+      // the engine config in place and persists the same value through
+      // onConfigPersist, so any later save failure can only leave
+      // disk === engine (both hold the toggled value) — never the reverse.
+      const currentConfig = engine.config; // non-null (guard above)
+      const nextConfig: BotConfig = { ...currentConfig, chaosMode: { enabled } };
+      const store = getConfigStore();
+      if (store) {
+        store.save(nextConfig);
+      }
+
       // Use hot-swap — works for both Running and non-Running states.
       // The old code called engine.configure() which throws when Running.
       await engine.toggleChaosMode(enabled);
 
-      // Persist to disk — belt-and-suspenders: toggleChaosMode already
-      // persists via onConfigPersist, but standalone engines (tests) may not
-      // wire it, so save here too.
-      const store = getConfigStore();
+      // Belt-and-suspenders: toggleChaosMode already persists via
+      // onConfigPersist, but standalone engines (tests) may not wire it, so
+      // save the final engine config here too (idempotent with the
+      // persist-first write above). engine.config is non-null here —
+      // toggleChaosMode throws when no config is loaded.
       if (store) {
-        const currentConfig = engine.config;
-        store.save(currentConfig);
+        store.save(engine.config as BotConfig);
       }
 
       res.json({ success: true, chaosMode: { enabled } });

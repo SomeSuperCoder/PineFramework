@@ -47,7 +47,7 @@ const app = express();
 const server = createServer(app);
 const PORT = parseInt(process.env.PORT || '8081', 10);
 
-logger.info({ port: PORT }, 'Backend server starting');
+logger.info('Backend server starting', { port: PORT });
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -62,9 +62,9 @@ app.use((req, res, next) => {
     };
     const msg = `${req.method} ${req.originalUrl || req.url} ${res.statusCode} ${duration}ms`;
     if (res.statusCode >= 400) {
-      logger.warn(attrs, msg);
+      logger.warn(msg, attrs);
     } else {
-      logger.info(attrs, msg);
+      logger.info(msg, attrs);
     }
   });
   next();
@@ -124,7 +124,7 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
     res.json({ ok: true, proxy: `${proxy.host}:${proxy.port}` });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error(`[Proxy-Test] Proxy test failed:`, msg);
+    logger.error(`[Proxy-Test] Proxy test failed: ${msg}`);
     res.json({ ok: false, error: msg, proxy: `${proxy.host}:${proxy.port}` });
   }
 });
@@ -374,7 +374,7 @@ if (ENABLE_TRADING_BOT) {
       botEngine.configure(savedConfig);
       logger.info('Loaded persisted bot config');
     } catch (err) {
-      logger.warn({ err }, 'Failed to load persisted bot config');
+      logger.warn('Failed to load persisted bot config', { err });
     }
   }
 

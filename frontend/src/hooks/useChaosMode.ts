@@ -7,8 +7,11 @@
  * Source of truth: while connected, the engine's `bot:snapshot` (`chaosMode`)
  * is authoritative. The persisted disk config is only a fallback before the
  * first snapshot arrives. A toggle applies an optimistic value immediately and
- * is corrected by the next snapshot, so a failed toggle never leaves the UI
- * showing a state the engine did not reach.
+ * is corrected by the next snapshot. If the backend rejects the toggle (network
+ * error, or HTTP 400 when the engine has no config), the optimistic value is
+ * reverted immediately and `chaosError` is set so callers can warn the
+ * operator — the badge must never keep showing a state the engine did not
+ * reach.
  *
  * @module frontend
  */
@@ -22,6 +25,8 @@ const TAP_WINDOW_MS = 3000;
 export interface UseChaosModeReturn {
   /** Whether chaos mode is currently enabled (engine truth, else optimistic, else disk). */
   chaosMode: boolean;
+  /** Message from the last failed toggle (null when the last toggle succeeded). */
+  chaosError: string | null;
   /** Toggle chaos mode (for programmatic use). */
   toggleChaosMode: () => void;
   /** Props to spread on the hidden tap target element. */
@@ -45,8 +50,16 @@ export function useChaosMode(
   // Optimistic value applied on toggle; cleared by the next engine snapshot so
   // the UI settles on the engine truth (correcting a failed toggle).
   const [pendingToggle, setPendingToggle] = useState<boolean | null>(null);
+  // Set when the backend rejects a toggle; cleared on the next toggle attempt
+  // or when a toggle succeeds. Lets the panel block Start on an inconsistent
+  // chaos state instead of proceeding on a lie.
+  const [chaosError, setChaosError] = useState<string | null>(null);
   const tapsRef = useRef<number[]>([]);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonically increasing id for toggle requests. A response whose id is no
+  // longer the latest attempt is stale (an earlier toggle raced a newer one)
+  // and must not overwrite current state.
+  const toggleRequestIdRef = useRef(0);
 
   // Load initial state from backend (disk config) — fallback until the engine
   // snapshot arrives; the snapshot is the SSOT while connected.
@@ -73,19 +86,42 @@ export function useChaosMode(
   const chaosMode = pendingToggle ?? engineChaosMode?.enabled ?? diskConfigEnabled;
 
   const persistChaosMode = useCallback(async (enabled: boolean) => {
+    // Claim this attempt's id synchronously (before the first await), so the
+    // order of ids matches the order of toggle attempts. Any response that is
+    // no longer the latest attempt is stale and is ignored below.
+    const requestId = ++toggleRequestIdRef.current;
     try {
-      await fetch(`${backendUrl}/api/bot/chaos-mode`, {
+      const res = await fetch(`${backendUrl}/api/bot/chaos-mode`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
       });
-    } catch {
-      // If config endpoint isn't available, chaos mode still works in-memory
+      if (!res.ok) {
+        // The engine did NOT apply the toggle (e.g. HTTP 400 when it has no
+        // config). Throw so the catch below reverts the optimistic value — the
+        // badge must reflect engine truth, not the toggle's guess.
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Failed to update chaos mode (HTTP ${res.status})`);
+      }
+      // Only the latest toggle attempt may clear the error — a stale success
+      // must not wipe an error raised by a newer toggle that failed.
+      if (requestId === toggleRequestIdRef.current) {
+        setChaosError(null);
+      }
+    } catch (err) {
+      // Only the latest toggle attempt may revert the optimistic value or set
+      // the error — a stale failure (a slow earlier toggle resolving after a
+      // newer one succeeded) must not block Start on a lie.
+      if (requestId === toggleRequestIdRef.current) {
+        setPendingToggle(null);
+        setChaosError(err instanceof Error ? err.message : 'Failed to update chaos mode');
+      }
     }
   }, [backendUrl]);
 
   const toggleChaosMode = useCallback(() => {
     const next = !chaosMode;
+    setChaosError(null);
     setPendingToggle(next);
     setToShowToast(true);
     persistChaosMode(next);
@@ -137,5 +173,5 @@ export function useChaosMode(
     } as React.CSSProperties,
   };
 
-  return { chaosMode, toggleChaosMode, tapTargetProps, showToast, dismissToast };
+  return { chaosMode, chaosError, toggleChaosMode, tapTargetProps, showToast, dismissToast };
 }

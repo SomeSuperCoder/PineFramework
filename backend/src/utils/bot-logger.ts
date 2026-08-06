@@ -1,5 +1,5 @@
 import { createBackendLogger } from './logger.js';
-import type { LogLevel } from '../../../src/utils/logger/types.js';
+import type { LogLevel } from 'pine-framework/utils/logger/types';
 
 /**
  * Bot logger specialization — pre-binds category "bot" and a trading

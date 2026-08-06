@@ -387,6 +387,7 @@ export function createWSGateway(
       try {
         const msg = JSON.parse(data.toString()) as {
           type: string;
+          channel?: string;
           topic?: string;
           indicatorId?: string;
           data?: {

@@ -65,7 +65,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       }
     }
     if (removed > 0) {
-      logger.info({ removed, remaining: jobs.size }, 'Swept old backtest jobs');
+      logger.info('Swept old backtest jobs', { removed, remaining: jobs.size });
     }
     return removed;
   }
@@ -79,7 +79,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
     try {
       job.status = 'running';
       setPhase(job.jobId, 'Fetching market data');
-      logger.info({ jobId: job.jobId, symbol: job.symbol, scriptLen: (job.config.script as string)?.length || 0 }, 'Starting backtest');
+      logger.info('Starting backtest', { jobId: job.jobId, symbol: job.symbol, scriptLen: (job.config.script as string)?.length || 0 });
       const bars = await fetchBars(job.symbol, job.timeframe,
         job.startDate ? new Date(job.startDate).getTime() : undefined,
         job.endDate ? new Date(job.endDate).getTime() : undefined,
@@ -122,9 +122,9 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
           const { dexFeeBps } = await fetchDexFeeBps(job.symbol);
           const existingSettings = (configOverride.commissionMethodSettings as Record<string, unknown>) ?? {};
           configOverride.commissionMethodSettings = { ...existingSettings, dexFeeBps };
-          logger.info({ jobId: job.jobId, symbol: job.symbol, dexFeeBps }, 'DEX fee fetched');
+          logger.info('DEX fee fetched', { jobId: job.jobId, symbol: job.symbol, dexFeeBps });
         } catch (err) {
-          logger.error({ jobId: job.jobId, symbol: job.symbol, err }, 'Failed to fetch DEX fee');
+          logger.error('Failed to fetch DEX fee', { jobId: job.jobId, symbol: job.symbol, err });
           throw err;
         }
       }
@@ -142,7 +142,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       }
 
       const execEngine = pipelineResult.engine!;
-      logger.info({ jobId: job.jobId, success: true, markers: pipelineResult.execResult?.strategyMarkers?.length || 0 }, 'Backtest execution complete');
+      logger.info('Backtest execution complete', { jobId: job.jobId, success: true, markers: pipelineResult.execResult?.strategyMarkers?.length || 0 });
 
       updateProgress(job.jobId, 80);
       setPhase(job.jobId, 'Computing metrics');
@@ -159,7 +159,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
 
       const sanitize = (v: number) => Number.isFinite(v) ? v : (v === Infinity ? null : 0);
 
-      logger.info({ jobId: job.jobId, totalTrades: metrics.totalTrades, totalPnl: metrics.totalPnl, winRate: metrics.winRate, profitFactor: metrics.profitFactor }, 'Backtest metrics computed');
+      logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: metrics.totalTrades, totalPnl: metrics.totalPnl, winRate: metrics.winRate, profitFactor: metrics.profitFactor });
 
       job.result = {
         metrics: {
@@ -225,7 +225,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       // Sanitize error messages to prevent leaking internal URLs, hostnames,
       // or environment configuration in API responses.
       const rawMessage = err instanceof Error ? err.message : String(err);
-      logger.error({ jobId: job.jobId, error: rawMessage }, 'Backtest failed');
+      logger.error('Backtest failed', { jobId: job.jobId, error: rawMessage });
       // Strip anything that looks like a URL or hostname from the user-facing error
       job.error = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
         .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');

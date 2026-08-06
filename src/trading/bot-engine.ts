@@ -22,7 +22,13 @@ import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
 import type { TradingTelegramBot } from './telegram-bot.js';
-import { BybitWebSocketService } from './bybit-websocket.js';
+import {
+  BybitWebSocketService,
+  BybitTick,
+  timeframeToMinutes,
+  LONG_TIMEFRAME_WARN_MINUTES,
+  nextBoundaryAfter,
+} from './bybit-websocket.js';
 import { LiveStrategyExecutor } from './live-strategy-executor.js';
 import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
 import { LiveScheduler } from './live-scheduler.js';
@@ -47,8 +53,12 @@ export interface BotLogger {
 /** Max number of chaos signal records retained for WS replay. */
 const CHAOS_HISTORY_LIMIT = 200;
 
-/** Bar-feed silence threshold (D1): a Running bot with no confirmed candle for
- *  this long is flagged "feed silent" instead of appearing healthy. */
+/** Bar-feed silence threshold (D1): a Running bot with NO feed tick at all
+ *  (any kline message — confirmed or not) for this long is flagged "feed
+ *  silent" instead of appearing healthy. The silence reference prefers
+ *  lastTickAt (any tick) over lastCandleAt (confirmed only), so a
+ *  long-timeframe feed that IS delivering unconfirmed ticks must NOT look
+ *  dead — only a truly mute socket (no ticks at all) flips silent. */
 const FEED_SILENCE_THRESHOLD_MS = 90_000;
 
 /** Run-state file for the latest feed telemetry (D1), written beside the
@@ -60,6 +70,14 @@ const FEED_STATE_FILE = 'feed-state.json';
  *  updates (task 1.3): connection/subscription/error changes persist
  *  immediately, but a candle tick must not write to disk every candle. */
 const FEED_STATE_PERSIST_THROTTLE_MS = 60_000;
+
+/** Minimum interval between bot:feedStatus WS broadcasts for tick-level
+ *  updates (review #2): kline ticks arrive ~1/sec/pair, and fanning every one
+ *  out to every dashboard client is chatty. Structural changes
+ *  (connect/disconnect/subscription/error) always broadcast immediately via
+ *  notifyFeedStatus(true); only tick-cadence broadcasts are throttled. Disk
+ *  persistence keeps its own FEED_STATE_PERSIST_THROTTLE_MS gate — unchanged. */
+const FEED_STATUS_BROADCAST_THROTTLE_MS = 1_000;
 
 /** Default live starting capital (1,000 USDC in lamports) when the config
  *  does not specify one. */
@@ -139,6 +157,17 @@ export interface FeedStatus {
   lastCandleAt: number | null;
   /** Confirmed candles received since this run started. */
   candleCount: number;
+  /** Timestamp (ms) of the last kline message received — confirmed or not —
+   *  proving feed liveness before the first confirmed candle (liveness
+   *  suite). Null until the first message. */
+  lastTickAt: number | null;
+  /** Kline messages (ticks) received since this run started — confirmed or
+   *  not. Distinguishes "feed alive, waiting for confirm" from "feed dead". */
+  tickCount: number;
+  /** ETA (ms) of the next confirmed candle — set while a configured timeframe
+   *  is long (> 10 min) so an operator sees when the engine will next tick
+   *  (liveness suite). */
+  nextCandleEta?: number;
   /** When the feed crossed the silence threshold (ms) — present only while
    *  Running with no confirmed candle for FEED_SILENCE_THRESHOLD_MS. */
   silentSince?: number;
@@ -238,7 +267,13 @@ export class BotEngine {
     subscriptions: [],
     lastCandleAt: null,
     candleCount: 0,
+    lastTickAt: null,
+    tickCount: 0,
   };
+
+  /** One-time chaos-mode recommendation guard (liveness suite): the 1m-timeframe
+   *  suggestion is logged once per run, not on every connect/subscribe. */
+  private longTimeframeWarned = false;
 
   /** Timestamp (ms) when the bar-feed socket last connected — the silence
    *  reference for a connected feed that has never delivered a confirmed
@@ -250,6 +285,10 @@ export class BotEngine {
   /** Timestamp of the last feed-state.json write, for the candle-count
    *  persistence throttle (task 1.3). */
   private lastFeedStatePersistAt = 0;
+
+  /** Timestamp of the last bot:feedStatus WS broadcast, for the tick-level
+   *  broadcast throttle (review #2). Structural changes always emit. */
+  private lastFeedStatusBroadcastAt = 0;
 
   /** Live trading components (initialized in initialize()). */
   private barFeed: BybitWebSocketService | null = null;
@@ -266,6 +305,7 @@ export class BotEngine {
     this.telegramBot = options?.telegramBot;
     this.walletManager = options?.walletManager;
     this.onAutoSelect = options?.onAutoSelect;
+    this.onConfigPersist = options?.onConfigPersist;
 
     const onChange: StateChangeHandler<BotState> = (from, to, reason) => {
       this.logStateTransition(from, to, reason);
@@ -825,19 +865,37 @@ export class BotEngine {
     }
 
     // 3. Create bar feed (Bybit WebSocket)
-    this.barFeed = new BybitWebSocketService();
+    // Pass the engine's logger so the feed's lifecycle/tick observability
+    // (liveness suite) lands in the same structured log stream.
+    this.barFeed = new BybitWebSocketService({ logger: this.logger });
 
     // Feed telemetry (D1): fresh counters per run so lastCandleAt/candleCount
     // describe THIS run, not a previous one. The throttle timestamp also
     // resets so the first candle of a new run persists immediately instead of
     // being suppressed by a write from the previous run.
-    this.feedState = { connected: false, subscriptions: [], lastCandleAt: null, candleCount: 0 };
+    this.feedState = {
+      connected: false,
+      subscriptions: [],
+      lastCandleAt: null,
+      candleCount: 0,
+      lastTickAt: null,
+      tickCount: 0,
+    };
     this.feedStartedAt = null;
     this.lastFeedStatePersistAt = 0;
+    this.lastFeedStatusBroadcastAt = 0;
+    this.longTimeframeWarned = false;
 
     // 4. Wire candle callback: feed candles into scheduler
     this.barFeed.setCandleCallback((candle: ClosedCandle) => {
       this.handleCandle(candle);
+    });
+
+    // Feed-liveness telemetry (liveness suite): advance tick counters on every
+    // kline message (confirmed or not) so the feed proves itself alive before
+    // the first confirmed candle. Telemetry only — never feeds the engine.
+    this.barFeed.setTickCallback((tick: BybitTick) => {
+      this.handleFeedTick(tick);
     });
 
     this.barFeed.setErrorCallback((error: Error) => {
@@ -865,6 +923,10 @@ export class BotEngine {
           timeframe: p.timeframe,
           ok: true,
         }));
+        // Reconnect re-establishes subscriptions — recompute the long-timeframe
+        // next-confirm ETA so telemetry reflects the (re)connected feed
+        // (liveness suite).
+        this.updateNextCandleEta();
       }
       // Structural change (connection state flipped) → persist now, bypassing
       // the candle-count throttle (task 1.3).
@@ -988,6 +1050,10 @@ export class BotEngine {
         this.upsertSubscription(pairId, this.feedState.connected);
         this.logger.info('Subscribed to pair', { symbol: pair.symbol, timeframe: pair.timeframe });
       }
+      // Long-timeframe warning (liveness suite): surface the next-confirm ETA
+      // in the feed telemetry when a configured timeframe is long (> 10 min),
+      // so a chaos/strategy run on e.g. BTCUSDT:60 is never mistaken for dead.
+      this.updateNextCandleEta();
     }
 
     // 8. Warm start: seed each pair's strategy engine with recent history so
@@ -1042,18 +1108,80 @@ export class BotEngine {
     this.feedState.subscriptions.push({ pair: pair.symbol, timeframe: pair.timeframe, ok });
   }
 
+  /** Long-timeframe warning (liveness suite): when a configured timeframe's
+   *  next confirmed candle is > LONG_TIMEFRAME_WARN_MINUTES out, surface the
+   *  ETA in the feed telemetry (nextCandleEta) and log it loudly — a
+   *  chaos/strategy run on e.g. BTCUSDT:60 waits an hour between engine ticks
+   *  and must never be mistaken for a dead feed. Also logs a one-time
+   *  recommendation to use 1m timeframes for chaos-mode testing. */
+  private updateNextCandleEta(): void {
+    const pairs = this._config?.pairs ?? [];
+    const long = pairs
+      .map((p) => ({
+        symbol: p.symbol,
+        timeframe: p.timeframe,
+        minutes: timeframeToMinutes(p.timeframe),
+      }))
+      .filter((t) => t.minutes > LONG_TIMEFRAME_WARN_MINUTES);
+    if (long.length === 0) {
+      this.feedState.nextCandleEta = undefined;
+      return;
+    }
+    // ETA = the next candle-boundary of the longest configured timeframe.
+    // Shared SSOT helper (nextBoundaryAfter) also fixes the boundary case:
+    // Math.ceil would return ETA == now when `now` lands exactly on a
+    // boundary; the helper returns one full duration later (review #3).
+    const durationMs = Math.max(...long.map((t) => t.minutes)) * 60_000;
+    const now = Date.now();
+    const nextBoundary = nextBoundaryAfter(now, durationMs);
+    this.feedState.nextCandleEta = nextBoundary;
+    // Warn only while ZERO confirmed candles exist (review #4): after the bot
+    // has confirmed candles for hours, a reconnect must not re-spam this warn
+    // — the ETA is still recorded in telemetry either way.
+    if (this.feedState.candleCount === 0) {
+      const top = long[0];
+      this.logger.warn('Long timeframe — no confirmed candle yet', {
+        symbol: top.symbol,
+        timeframe: top.timeframe,
+        minutes: top.minutes,
+        nextConfirmEta: new Date(nextBoundary).toISOString(),
+        eta: new Date(nextBoundary).toLocaleTimeString(),
+        at: new Date().toISOString(),
+      });
+    }
+    // One-time recommendation (liveness suite): chaos runs on 1m timeframes get
+    // a confirmed candle every minute, so the chaos cadence is never starved
+    // by the candle interval itself.
+    if (this._config?.chaosMode?.enabled === true && !this.longTimeframeWarned) {
+      this.longTimeframeWarned = true;
+      this.logger.warn(
+        'Chaos-mode testing recommendation: use 1m timeframes so a confirmed candle arrives every minute',
+        { at: new Date().toISOString() },
+      );
+    }
+  }
+
   /** Latest feed status with the silence marker computed lazily (D1): once a
    *  Running bot has gone FEED_SILENCE_THRESHOLD_MS without a confirmed
    *  candle, silentSince marks when the feed crossed the threshold. Returns a
    *  copy so consumers cannot mutate the engine's live telemetry. */
   private buildFeedStatus(): FeedStatus {
-    const { connected, subscriptions, lastCandleAt, candleCount } = this.feedState;
-    // Silence reference: the last confirmed candle when one exists, otherwise
-    // the last feed connection time (QA S3). A connected feed that delivers
-    // zero confirmed candles keeps lastCandleAt null — keying silence off it
-    // alone would show "Connected" forever. Falling back to feedStartedAt makes
-    // that zero-candle feed flip silent after FEED_SILENCE_THRESHOLD_MS.
-    const referenceAt = connected ? (lastCandleAt ?? this.feedStartedAt ?? 0) : 0;
+    const {
+      connected,
+      subscriptions,
+      lastCandleAt,
+      candleCount,
+      lastTickAt,
+      tickCount,
+      nextCandleEta,
+    } = this.feedState;
+    // Silence reference: the most recent proof the feed delivered something —
+    // lastTickAt (any kline message) beats lastCandleAt (confirmed only),
+    // which beats the last connection time (QA S3). A long-timeframe feed that
+    // IS delivering unconfirmed ticks must NOT look dead; a truly dead socket
+    // (no ticks at all) freezes the reference and flips silent after
+    // FEED_SILENCE_THRESHOLD_MS.
+    const referenceAt = connected ? (lastTickAt ?? lastCandleAt ?? this.feedStartedAt ?? 0) : 0;
     let silentSince: number | undefined;
     if (
       connected &&
@@ -1068,16 +1196,30 @@ export class BotEngine {
       subscriptions: subscriptions.map((sub) => ({ ...sub })),
       lastCandleAt,
       candleCount,
+      lastTickAt,
+      tickCount,
+      ...(nextCandleEta !== undefined ? { nextCandleEta } : {}),
       ...(silentSince !== undefined ? { silentSince } : {}),
     };
   }
 
   /** Broadcast the latest feed status on `bot:feedStatus` and persist it (D1).
-   *  forcePersist bypasses the candle-count throttle — callers pass true on
-   *  connection/subscription/error changes, false (default) on candle ticks. */
+   *  forcePersist bypasses BOTH throttles — callers pass true on structural
+   *  changes (connection/subscription/error → instant broadcast + immediate
+   *  write), false (default) on candle/tick updates (broadcast at most once
+   *  per FEED_STATUS_BROADCAST_THROTTLE_MS, disk write at most once per
+   *  FEED_STATE_PERSIST_THROTTLE_MS — review #2). */
   private notifyFeedStatus(forcePersist = false): void {
     const status = this.buildFeedStatus();
-    this.emit('feedStatus', status);
+    const now = Date.now();
+    // WS broadcast throttle (review #2): a kline tick arrives ~1/sec/pair and
+    // must not fan out to every dashboard client at that rate. Structural
+    // changes always emit immediately; tick-level updates emit at most once
+    // per second. Persistence is unchanged (separate 60s gate below).
+    if (forcePersist || now - this.lastFeedStatusBroadcastAt >= FEED_STATUS_BROADCAST_THROTTLE_MS) {
+      this.lastFeedStatusBroadcastAt = now;
+      this.emit('feedStatus', status);
+    }
     this.persistFeedStateThrottled(status, forcePersist);
   }
 
@@ -1117,6 +1259,17 @@ export class BotEngine {
       entryPrice: isOpen ? signal.price : 0,
       entryTime: isOpen ? signal.timestamp : 0,
     });
+  }
+
+  /** Feed-liveness telemetry (liveness suite): every kline message — confirmed
+   *  or not — advances the tick counters and refreshes the silence reference,
+   *  so a connected feed that has not yet delivered a confirmed candle still
+   *  proves itself alive. Telemetry only: the strategy engine is deliberately
+   *  NOT fed here — confirmed-only execution semantics live in handleCandle. */
+  private handleFeedTick(tick: BybitTick): void {
+    this.feedState.lastTickAt = tick.timestamp;
+    this.feedState.tickCount++;
+    this.notifyFeedStatus();
   }
 
   /**

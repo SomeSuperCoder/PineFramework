@@ -86,7 +86,7 @@ function App() {
     connectionFailed: botConnectionFailed,
   } = useBotWebSocket(backendUrl);
   const [botDashboardOpen, setBotDashboardOpen] = useState(false);
-  const { chaosMode, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
+  const { chaosMode, chaosError, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -442,6 +442,7 @@ function App() {
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
               chaosMode={chaosMode}
+              chaosError={chaosError}
               engineChaosMode={engineChaosMode}
               chaosHeartbeat={botChaosHeartbeat}
               totalCandleErrors={botTotalCandleErrors}

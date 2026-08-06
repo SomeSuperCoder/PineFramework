@@ -56,6 +56,7 @@ const { jupiterMock, bybitMock } = vi.hoisted(() => {
       disconnect: vi.fn(),
       subscribe: vi.fn(),
       setCandleCallback: vi.fn(),
+      setTickCallback: vi.fn(),
       setErrorCallback: vi.fn(),
       setConnectionCallback: vi.fn(),
       fetchHistoricalCandles: vi.fn().mockResolvedValue([]),
@@ -77,6 +78,25 @@ vi.mock('../../../src/trading/solana-wallet.js', () => ({
 
 vi.mock('../../../src/trading/bybit-websocket.js', () => ({
   BybitWebSocketService: vi.fn().mockImplementation(() => bybitMock),
+  // bot-engine imports timeframeToMinutes from this module; without a
+  // faithful export the initialize() → updateNextCandleEta path throws.
+  timeframeToMinutes: (timeframe: string) => {
+    const numeric = Number(timeframe);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    const unit = timeframe.toUpperCase();
+    if (unit === 'D') return 1440;
+    if (unit === 'W') return 10080;
+    if (unit === 'M') return 43_200;
+    return 0;
+  },
+  // Same import block in bot-engine.ts pulls this constant for ETA warnings.
+  LONG_TIMEFRAME_WARN_MINUTES: 10,
+  // bot-engine also imports the shared next-boundary ETA helper (review #3);
+  // faithful inline copy so initialize() → updateNextCandleEta works.
+  nextBoundaryAfter: (now: number, durationMs: number) => {
+    const boundary = Math.ceil(now / durationMs) * durationMs;
+    return boundary > now ? boundary : boundary + durationMs;
+  },
 }));
 
 vi.mock('../../../src/trading/dex/jupiter-swap-adapter.js', () => ({

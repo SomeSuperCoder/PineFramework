@@ -129,13 +129,13 @@ export class DiskOHLCVCache {
     fs.mkdirSync(this.cacheDir, { recursive: true });
 
     logger.info(
+      'DiskOHLCVCache initialized',
       {
         cacheDir: this.cacheDir,
         maxDiskUsageMB: Math.round(this.maxDiskUsageBytes / (1024 * 1024)),
         historicalThresholdSec: Math.round(this.historicalThresholdMs / 1000),
         recentTtlSec: Math.round(this.recentTtlMs / 1000),
       },
-      'DiskOHLCVCache initialized',
     );
   }
 

@@ -65,7 +65,7 @@ export class ChaosSignalGenerator {
       action: signal.action,
       equity: signal.equity,
       sizeFraction: signal.sizeFraction,
-      timestamp: signal.timestamp,
+      ts: signal.timestamp,
     });
 
     return signal;

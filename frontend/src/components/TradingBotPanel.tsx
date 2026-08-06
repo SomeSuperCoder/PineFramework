@@ -1081,6 +1081,7 @@ function SetupWizard({
   autoSelectResult,
   onConfigReset,
   onBacktestStarted,
+  chaosError = null,
 }: {
   backendUrl: string;
   initialWallet: WalletInfo;
@@ -1103,6 +1104,8 @@ function SetupWizard({
   } | null;
   onConfigReset?: () => void;
   onBacktestStarted?: () => void;
+  /** Non-null when the last chaos toggle failed — Start is blocked and the error is shown. */
+  chaosError?: string | null;
 }) {
   // Determine initial step: if config exists AND wallet exists, go to review
   const getInitialStep = (): 'wallet' | 'config' | 'backtest-choice' | 'backtest' | 'review' => {
@@ -1131,6 +1134,7 @@ function SetupWizard({
   });
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
+  const [configureError, setConfigureError] = useState('');
   const [selectedTimeframes, setSelectedTimeframes] = useState<string[]>(() => {
     const saved = localStorage.getItem('autoSelectTimeframes');
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
@@ -1179,6 +1183,11 @@ function SetupWizard({
   }, [step, autoSelectResult]);
 
   const handleStart = async () => {
+    if (chaosError) {
+      // The engine's chaos state is unknown/inconsistent — never start on a lie.
+      setStartError('Start blocked: chaos mode could not be updated. Resolve the chaos mode error before starting.');
+      return;
+    }
     setStarting(true);
     setStartError('');
     try {
@@ -1560,6 +1569,11 @@ function SetupWizard({
             </>
           )}
 
+          {configureError && (
+            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>
+              ⚠ {configureError}
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
             <button
               onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
@@ -1589,7 +1603,10 @@ function SetupWizard({
               <button
                 onClick={async () => {
                   if (!manualPair) return;
-                  // Persist manual pair selection to backend so engine.start() can find it
+                  setConfigureError('');
+                  // Persist manual pair selection to backend so engine.start() can find it.
+                  // A failed configure must NOT advance to review/Start — the engine would
+                  // start with stale config while the UI claims the new pair is saved.
                   try {
                     const res = await fetch(`${backendUrl}/api/bot/configure`, {
                       method: 'POST',
@@ -1602,11 +1619,18 @@ function SetupWizard({
                         pairs: [manualPair],
                       }),
                     });
+                    if (!res.ok) {
+                      const data = await res.json().catch(() => ({}));
+                      setConfigureError(data.error || `Failed to save configuration (HTTP ${res.status})`);
+                      return;
+                    }
                     // Refresh persisted config so the resolved manual pair reaches
                     // LiveDashboard before the bot starts (mini chart activePair).
-                    if (res.ok) onBacktestStarted?.();
-                  } catch { /* best-effort; backend may already have it */ }
-                  setStep('review');
+                    onBacktestStarted?.();
+                    setStep('review');
+                  } catch {
+                    setConfigureError('Failed to save configuration — check backend connection');
+                  }
                 }}
                 disabled={!manualPair?.symbol}
                 style={{
@@ -1685,6 +1709,11 @@ function SetupWizard({
           {resetError && (
             <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{resetError}</div>
           )}
+          {chaosError && (
+            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>
+              ⚠ Chaos mode toggle failed: {chaosError}. Start is blocked until chaos mode matches the engine.
+            </div>
+          )}
 
           {/* Reset buttons */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: '1px solid #1a1a2e', paddingTop: 12 }}>
@@ -1750,14 +1779,15 @@ function SetupWizard({
             </button>
             <button
               onClick={handleStart}
-              disabled={starting || !!autoSelectProgress}
+              disabled={starting || !!autoSelectProgress || !!chaosError}
+              title={chaosError ? 'Cannot start — chaos mode is in a failed state' : undefined}
               style={{
                 padding: '8px 24px', background: starting ? '#1a3328' : '#1a3328',
                 color: '#4caf50', border: '1px solid #4caf50', borderRadius: 4,
-                cursor: (starting || !!autoSelectProgress) ? 'wait' : 'pointer',
+                cursor: (starting || !!autoSelectProgress) ? 'wait' : chaosError ? 'not-allowed' : 'pointer',
                 fontSize: 12, fontWeight: 700,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                opacity: (starting || !!autoSelectProgress) ? 0.7 : 1,
+                opacity: (starting || !!autoSelectProgress || !!chaosError) ? 0.7 : 1,
               }}
             >
               {starting ? 'Starting...' : (
@@ -1991,6 +2021,7 @@ export function LiveDashboard({
   autoSelectResult,
   chaosMode,
   engineChaosMode = null,
+  chaosError = null,
   chaosHeartbeat = null,
   totalCandleErrors = 0,
   lastCandleError = null,
@@ -2011,6 +2042,8 @@ export function LiveDashboard({
   } | null;
   chaosMode?: boolean;
   engineChaosMode?: ChaosModeSnapshot | null;
+  /** Non-null when the last chaos toggle failed — the operator must be warned and Start blocked. */
+  chaosError?: string | null;
   chaosHeartbeat?: ChaosHeartbeatRecord | null;
   totalCandleErrors?: number;
   lastCandleError?: CandleErrorRecord | null;
@@ -2243,6 +2276,7 @@ export function LiveDashboard({
             persistedConfig={persistedConfig}
             onStart={async () => { await sendCommand('start'); }}
             onClose={onClose}
+            chaosError={chaosError}
             autoSelectProgress={autoSelectProgress}
             autoSelectResult={autoSelectResult}
             onConfigReset={() => setPersistedConfig(null)}

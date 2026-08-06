@@ -30,6 +30,13 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
   })),
 }));
 
+// The engine persists feed-state.json via node:fs/promises — mock it so the
+// feed-liveness telemetry tests never write real files to the repo root.
+vi.mock('node:fs/promises', () => {
+  const writeFile = vi.fn(async () => {});
+  return { writeFile };
+});
+
 import { LiveStrategyExecutor } from '../../../src/trading/live-strategy-executor.js';
 import { LiveScheduler } from '../../../src/trading/live-scheduler.js';
 import type { PairId } from '../../../src/trading/scheduler.js';
@@ -531,5 +538,163 @@ describe('BotEngine realized PnL round-trip (B1)', () => {
     // position state was flattened by reconcilePosition() during processCandle.
     expect(riskManager.recordTrade).toHaveBeenCalledTimes(1);
     expect(riskManager.recordTrade).toHaveBeenCalledWith(100);
+  });
+});
+
+// ---- Feed-liveness telemetry (liveness suite) ----
+
+describe('BotEngine feed telemetry (liveness suite)', () => {
+  function makeEngineWithLogger() {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+    const engine = new BotEngine({ logger: logger as never });
+    return { engine, logger };
+  }
+
+  async function startRunning(engine: BotEngine): Promise<void> {
+    engine.configure({ ...defaultConfig, pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }] });
+    vi.spyOn(
+      engine as unknown as { initialize: () => Promise<void> },
+      'initialize',
+    ).mockResolvedValue(undefined);
+    vi.spyOn(
+      engine as unknown as { shutdown: () => Promise<void> },
+      'shutdown',
+    ).mockResolvedValue(undefined);
+    await engine.start();
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('advances tickCount/lastTickAt on EVERY kline tick and candleCount/lastCandleAt on confirmed candles', () => {
+    const { engine } = makeEngineWithLogger();
+    engine.configure({ ...defaultConfig, pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }] });
+
+    const e = engine as unknown as {
+      handleFeedTick: (t: {
+        symbol: string;
+        timeframe: string;
+        timestamp: number;
+        close: number;
+        confirm: boolean;
+      }) => void;
+      handleCandle: (c: {
+        symbol: string;
+        timeframe: string;
+        timestamp: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+      }) => void;
+    };
+
+    // Two kline messages — one unconfirmed, one confirmed. BOTH advance the
+    // tick telemetry (feed proves alive before the first confirmed candle).
+    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1000, close: 100, confirm: false });
+    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 2000, close: 101, confirm: true });
+    // The confirmed candle advances the candle path (execution gate untouched).
+    e.handleCandle({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 2000,
+      open: 100,
+      high: 102,
+      low: 99,
+      close: 101,
+      volume: 10,
+    });
+
+    const status = engine.getFeedStatus();
+    expect(status.tickCount).toBe(2);
+    expect(status.lastTickAt).toBe(2000);
+    expect(status.candleCount).toBe(1);
+    expect(status.lastCandleAt).toBe(2000);
+  });
+
+  it('flags a connected Running feed silent after FEED_SILENCE_THRESHOLD_MS with no tick — a fresh tick resets the reference', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+    const { engine } = makeEngineWithLogger();
+    await startRunning(engine);
+    expect(engine.state).toBe(BotState.Running);
+
+    const e = engine as unknown as {
+      feedState: { connected: boolean };
+      handleFeedTick: (t: {
+        symbol: string;
+        timeframe: string;
+        timestamp: number;
+        close: number;
+        confirm: boolean;
+      }) => void;
+    };
+    e.feedState.connected = true;
+    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1_700_000_000_000, close: 100, confirm: false });
+
+    // 60s later: NOT silent — the last kline tick is only 60s old.
+    vi.advanceTimersByTime(60_000);
+    expect(engine.getFeedStatus().silentSince).toBeUndefined();
+
+    // 31s more (91s since the last tick): silence threshold (90s) crossed.
+    vi.advanceTimersByTime(31_000);
+    expect(engine.getFeedStatus().silentSince).toBe(1_700_000_000_000 + 90_000);
+
+    // A fresh tick refreshes the silence reference → no longer silent.
+    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1_700_000_000_000 + 91_000, close: 100, confirm: false });
+    expect(engine.getFeedStatus().silentSince).toBeUndefined();
+  });
+
+  it('is silent from the connection time when a connected Running feed never delivers a single tick', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+    const { engine } = makeEngineWithLogger();
+    await startRunning(engine);
+
+    const e = engine as unknown as { feedState: { connected: boolean }; feedStartedAt: number };
+    e.feedState.connected = true;
+    e.feedStartedAt = 1_700_000_000_000;
+
+    vi.advanceTimersByTime(90_000);
+    expect(engine.getFeedStatus().silentSince).toBe(1_700_000_000_000 + 90_000);
+  });
+
+  it('surfaces nextCandleEta for a long timeframe pair and clears it for a short one', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+    const { engine, logger } = makeEngineWithLogger();
+    engine.configure({ ...defaultConfig, pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }] });
+
+    const e = engine as unknown as { updateNextCandleEta: () => void };
+    e.updateNextCandleEta();
+
+    // 2024-01-01T00:00:00Z is already hour-aligned → nextBoundaryAfter
+    // returns one full duration later (review #3 fix: Math.ceil would have
+    // returned `now` itself). ETA = now + 60m.
+    expect(engine.getFeedStatus().nextCandleEta).toBe(1_704_070_800_000);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Long timeframe — no confirmed candle yet',
+      expect.objectContaining({ symbol: 'BTCUSDT', timeframe: '60', minutes: 60 }),
+    );
+
+    // Short timeframe (1m) → no ETA, no warning.
+    engine.configure({ ...defaultConfig, pairs: [{ symbol: 'BTCUSDT', timeframe: '1' }] });
+    e.updateNextCandleEta();
+    expect(engine.getFeedStatus().nextCandleEta).toBeUndefined();
+  });
+
+  it('toggleChaosMode persists through onConfigPersist so the mode survives a restart (D4)', async () => {
+    const onConfigPersist = vi.fn();
+    const engine = new BotEngine({ onConfigPersist });
+    engine.configure({ ...defaultConfig, chaosMode: { enabled: false } });
+
+    await engine.toggleChaosMode(true);
+
+    expect(engine.config?.chaosMode).toEqual({ enabled: true });
+    expect(onConfigPersist).toHaveBeenCalledTimes(1);
+    expect(onConfigPersist.mock.calls[0]![0]).toMatchObject({ chaosMode: { enabled: true } });
   });
 });

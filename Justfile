@@ -9,6 +9,10 @@ test:
 dev:
     pnpm run dev
 
+# dev-bot: backend WITHOUT file-watch — watch-restart kills the live bot's Bybit WS mid-handshake
+dev-bot:
+    pnpm --filter pine-framework-backend run dev:bot
+
 check:
     pnpm run typecheck:all
     pnpm run lint

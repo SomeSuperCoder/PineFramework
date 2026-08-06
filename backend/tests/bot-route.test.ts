@@ -228,3 +228,155 @@ describe('POST /api/bot/configure merge (D4)', () => {
     expect(lastSaved.dex).toBe('jupiter-ultra');
   });
 });
+
+// ---- Persistence ordering (D7): PERSIST BEFORE APPLY ----
+
+describe('POST /bot/configure + /bot/chaos-mode persistence ordering (D7)', () => {
+  let server: Server;
+  let baseUrl: string;
+  let engine: ReturnType<typeof makeEngine>;
+  let store: ReturnType<typeof makeStore>;
+
+  const BASE: BotConfig = {
+    strategySource: '//@version=5\nstrategy("existing")',
+    dex: 'jupiter-swap',
+    pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
+    risk: { maxDailyLoss: 100 },
+    chaosMode: { enabled: false },
+  };
+
+  beforeEach(async () => {
+    engine = makeEngine(BASE);
+    store = makeStore();
+
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api',
+      createBotRouter({
+        getEngine: () => engine as unknown as BotEngine,
+        getConfigStore: () => store as unknown as BotConfigStore,
+      }),
+    );
+
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  });
+
+  afterEach(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  it('configure: a failed disk save (persist) leaves the engine untouched and returns 400', async () => {
+    store.save.mockImplementationOnce(() => {
+      throw new Error('disk full');
+    });
+
+    const res = await fetch(`${baseUrl}/bot/configure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(VALID_PAYLOAD),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe('disk full');
+
+    // PERSIST BEFORE APPLY: the engine was never configured — neither side
+    // changed (the observed divergence class this ordering kills).
+    expect(engine.configure).not.toHaveBeenCalled();
+    expect(engine.config).toEqual(BASE);
+  });
+
+  it('configure: the engine state guard runs BEFORE persisting (a Running engine never reaches disk)', async () => {
+    (engine as { state: string }).state = 'Running';
+
+    const res = await fetch(`${baseUrl}/bot/configure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(VALID_PAYLOAD),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toContain('Must be Idle or Stopped');
+
+    // The guard mirrors the engine's configure() guard and runs FIRST — disk
+    // never holds a config the engine would refuse (no inverted divergence).
+    expect(store.save).not.toHaveBeenCalled();
+    expect(engine.configure).not.toHaveBeenCalled();
+  });
+
+  it('chaos-mode: a failed disk save (persist) never hot-swaps the engine and returns 400', async () => {
+    store.save.mockImplementationOnce(() => {
+      throw new Error('disk full');
+    });
+
+    const res = await fetch(`${baseUrl}/bot/chaos-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.success).toBe(false);
+
+    // PERSIST BEFORE APPLY: toggleChaosMode never ran — engine unchanged.
+    expect(engine.toggleChaosMode).not.toHaveBeenCalled();
+    expect(engine.config.chaosMode).toEqual({ enabled: false });
+  });
+
+  it('chaos-mode: persists the toggled config BEFORE the hot-swap, then again after (belt-and-suspenders)', async () => {
+    const res = await fetch(`${baseUrl}/bot/chaos-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(engine.toggleChaosMode).toHaveBeenCalledWith(true);
+
+    // Exactly two disk writes, both holding the toggled value.
+    expect(store.save).toHaveBeenCalledTimes(2);
+    const firstSave = store.save.mock.calls[0]![0] as BotConfig;
+    const secondSave = store.save.mock.calls[1]![0] as BotConfig;
+    expect(firstSave.chaosMode).toEqual({ enabled: true });
+    expect(secondSave.chaosMode).toEqual({ enabled: true });
+
+    // Ordering: save #1 → toggle → save #2 (persist BEFORE apply).
+    const firstSaveIdx = store.save.mock.invocationCallOrder[0]!;
+    const toggleIdx = engine.toggleChaosMode.mock.invocationCallOrder[0]!;
+    const secondSaveIdx = store.save.mock.invocationCallOrder[1]!;
+    expect(firstSaveIdx).toBeLessThan(toggleIdx);
+    expect(toggleIdx).toBeLessThan(secondSaveIdx);
+  });
+
+  it('PATCH /bot/config/chaos-mode merges into the persisted config (never drops other fields)', async () => {
+    // Seed disk with a full config (as a prior configure would leave it).
+    store.save(BASE);
+
+    const res = await fetch(`${baseUrl}/bot/config/chaos-mode`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const lastSaved = store.save.mock.calls[store.save.mock.calls.length - 1]![0] as BotConfig;
+    expect(lastSaved.chaosMode).toEqual({ enabled: true });
+    // Fields beyond the toggle survive the merge (D4 — no silent drop).
+    expect(lastSaved.strategySource).toBe(BASE.strategySource);
+    expect(lastSaved.risk).toEqual(BASE.risk);
+    expect(lastSaved.pairs).toEqual(BASE.pairs);
+    expect(lastSaved.dex).toBe(BASE.dex);
+  });
+});

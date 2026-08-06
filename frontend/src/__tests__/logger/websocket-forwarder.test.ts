@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RingBuffer } from '../../utils/logger/ring-buffer.js';
 import { getForwarder } from '../../utils/logger/websocket-forwarder.js';
+import type { FrontendLogEntry } from '../../utils/logger/types.js';
 
 describe('WebSocketForwarder (via getForwarder)', () => {
-  let ringBuffer: RingBuffer<{ timestamp: number; level: string; message: string }>;
+  let ringBuffer: RingBuffer<FrontendLogEntry>;
   let forwarder: ReturnType<typeof getForwarder>;
 
   const mockSend = vi.fn();
@@ -20,7 +21,12 @@ describe('WebSocketForwarder (via getForwarder)', () => {
   const OPEN = 1;
   const CLOSED = 3;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // getForwarder is a module-level singleton whose destroy()/connect() calls
+    // mutate state permanently. Reset the module registry so every test starts
+    // with a fresh forwarder — otherwise destroyed/ws/connected state leaks
+    // across tests and connect() becomes a silent no-op.
+    vi.resetModules();
     ringBuffer = new RingBuffer(500);
     mockSend.mockClear();
     mockClose.mockClear();
@@ -34,17 +40,19 @@ describe('WebSocketForwarder (via getForwarder)', () => {
       onerror: null,
     };
 
-    vi.stubGlobal('WebSocket', vi.fn(() => mockWsInstance));
+    vi.stubGlobal('WebSocket', Object.assign(vi.fn(() => mockWsInstance), { OPEN, CLOSED }));
     vi.stubGlobal('window', {
       location: { protocol: 'http:', host: 'localhost:3000' },
     } as unknown as Window & typeof globalThis);
 
-    forwarder = getForwarder(ringBuffer);
+    const { getForwarder: getFreshForwarder } = await import('../../utils/logger/websocket-forwarder.js');
+    forwarder = getFreshForwarder(ringBuffer);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   describe('connect', () => {
@@ -73,10 +81,54 @@ describe('WebSocketForwarder (via getForwarder)', () => {
     it('queues entry in pending when not connected', () => {
       forwarder.connect();
       mockWsInstance.readyState = CLOSED;
-      const entry = { timestamp: Date.now(), level: 'info', message: 'test' };
+      const entry: FrontendLogEntry = {
+        timestamp: Date.now(),
+        level: 'info',
+        message: 'test',
+        category: 'frontend',
+        subcategory: 'ui',
+      };
       forwarder.forward(entry);
 
       expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('sends { channel, data } on an OPEN socket (live-forward path)', () => {
+      forwarder.connect();
+      mockWsInstance.onopen?.(); // socket opens → connected = true
+
+      const entry: FrontendLogEntry = {
+        timestamp: Date.now(),
+        level: 'info',
+        message: 'live',
+        category: 'frontend',
+        subcategory: 'ws',
+      };
+      forwarder.forward(entry);
+
+      expect(mockSend).toHaveBeenCalledWith(
+        JSON.stringify({ channel: 'frontend:log', data: entry }),
+      );
+    });
+
+    it('drains entries queued while disconnected once the socket opens', () => {
+      forwarder.connect();
+      mockWsInstance.readyState = CLOSED;
+      const entry: FrontendLogEntry = {
+        timestamp: Date.now(),
+        level: 'warn',
+        message: 'queued',
+        category: 'frontend',
+        subcategory: 'ui',
+      };
+      forwarder.forward(entry);
+      expect(mockSend).not.toHaveBeenCalled();
+
+      mockWsInstance.readyState = OPEN;
+      mockWsInstance.onopen?.();
+      expect(mockSend).toHaveBeenCalledWith(
+        JSON.stringify({ channel: 'frontend:log', data: entry }),
+      );
     });
   });
 

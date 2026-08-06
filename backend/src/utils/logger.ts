@@ -14,9 +14,11 @@ const isDev = process.env.NODE_ENV !== 'production';
 /**
  * Application-wide logger instance.
  *
- * In development, logs are pretty-printed to stdout.
- * In production, logs are emitted as newline-delimited JSON for ingestion by
- * log aggregators (e.g., Loki, Datadog, CloudWatch).
+ * Logs are ALWAYS emitted as newline-delimited JSON to
+ * `logs/{category}/{subcategory}.log` so AI agents and the operator can
+ * diagnose runs post-hoc from disk (and via GET /api/logs). In development
+ * they are additionally pretty-printed to stdout for humans; in production
+ * they are file-only for aggregator ingestion (e.g., Loki, Datadog, CloudWatch).
  *
  * Backward-compatible export — other files import `{ logger }` from here.
  */
@@ -59,7 +61,10 @@ function createLevelTransform(logFile: string): Transform {
 /**
  * Create a backend logger that writes structured JSON to `logs/{category}/{subcategory}.log`.
  *
- * In development mode, uses pino-pretty stdout instead of file transport.
+ * Files are always written — dev and prod — so every run leaves on-disk NDJSON
+ * for AI-agent/operator diagnosis. In development, logs are additionally
+ * pretty-printed to stdout for humans; in production they are file-only for
+ * log aggregators.
  * Respects the `LOG_LEVEL` environment variable for controlling the minimum log level.
  * Auto-creates the log directory if it does not exist.
  *
@@ -87,7 +92,13 @@ export function createBackendLogger(category: string, subcategory: string) {
     },
   };
 
-  const baseLogger = isDev
+  // Always write structured NDJSON to disk so AI agents and the operator can
+  // diagnose runs post-hoc (logs/{category}/{subcategory}.log, GET /api/logs).
+  const fileLogger = pino(pinoOptions, createLevelTransform(logFile));
+
+  // In development, also pretty-print to stdout for humans. Production stays
+  // file-only for aggregator ingestion — unchanged from before.
+  const prettyLogger = isDev
     ? pino({
         ...pinoOptions,
         transport: {
@@ -99,7 +110,7 @@ export function createBackendLogger(category: string, subcategory: string) {
           },
         },
       })
-    : pino(pinoOptions, createLevelTransform(logFile));
+    : null;
 
   /**
    * PineLogger-compatible wrapper.
@@ -111,19 +122,19 @@ export function createBackendLogger(category: string, subcategory: string) {
    * Using `Record<string, unknown>` for meta keeps the wrapper compatible
    * with both `PineLogger` (runtime) and the existing `BotLogger` interface.
    */
+  const emit =
+    (level: 'info' | 'warn' | 'error' | 'debug') =>
+    (event: string, meta?: Record<string, unknown>) => {
+      const record = { ...meta, category, subcategory };
+      fileLogger[level](record, event);
+      prettyLogger?.[level](record, event);
+    };
+
   return {
-    info: (event: string, meta?: Record<string, unknown>) => {
-      baseLogger.info({ ...meta, category, subcategory }, event);
-    },
-    warn: (event: string, meta?: Record<string, unknown>) => {
-      baseLogger.warn({ ...meta, category, subcategory }, event);
-    },
-    error: (event: string, meta?: Record<string, unknown>) => {
-      baseLogger.error({ ...meta, category, subcategory }, event);
-    },
-    debug: (event: string, meta?: Record<string, unknown>) => {
-      baseLogger.debug({ ...meta, category, subcategory }, event);
-    },
+    info: emit('info'),
+    warn: emit('warn'),
+    error: emit('error'),
+    debug: emit('debug'),
   };
 }
 

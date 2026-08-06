@@ -83,6 +83,10 @@ const NULL_ENGINE_FEED_STATE: FeedState = {
   subscriptions: [],
   lastCandleAt: null,
   candleCount: 0,
+  // Truthful "no feed" defaults for the liveness fields added in 4c7c11e —
+  // no engine means no kline messages, so no tick timestamp and zero ticks.
+  lastTickAt: null,
+  tickCount: 0,
 };
 
 /**

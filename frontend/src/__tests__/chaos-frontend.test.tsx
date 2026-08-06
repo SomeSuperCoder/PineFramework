@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useBotWebSocket } from '../components/TradingBotPanel';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
-import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord } from '../types';
+import { useChaosMode } from '../hooks/useChaosMode';
+import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot } from '../types';
 
 // ─── WebSocket stub ───────────────────────────────────────────────
 let wsInstances: MockWS[] = [];
@@ -619,5 +620,239 @@ describe('useBotMiniChartData full-window reindex + heartbeats + filters (fix-ch
 
     const markers = result.current.displayScriptResult?.strategyMarkers ?? [];
     expect(markers.map((m) => m.name)).toEqual(['Matching']);
+  });
+});
+
+describe('useChaosMode toggle truth (live-bot fix wave)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  function mockFetchRoutes(overrides: {
+    config?: { ok: boolean; chaosEnabled?: boolean };
+    chaosPost?: { ok: boolean; status?: number; error?: string };
+  }) {
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      if (url.endsWith('/api/bot/config') && method === 'GET') {
+        const cfg = overrides.config;
+        if (!cfg?.ok) {
+          return Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ chaosMode: { enabled: cfg.chaosEnabled } }),
+        });
+      }
+      if (url.endsWith('/api/bot/chaos-mode') && method === 'POST') {
+        const cp = overrides.chaosPost ?? { ok: true };
+        return Promise.resolve({
+          ok: cp.ok,
+          status: cp.status ?? 200,
+          json: () => Promise.resolve(cp.ok ? {} : { error: cp.error ?? 'failed' }),
+        });
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  // Drain the full fetch promise chain (fetch → res.json → setState) inside
+  // act so no state update lands outside the wrapper.
+  async function flush() {
+    await act(async () => {
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+    });
+  }
+
+  // Controlled promise so a test can resolve POST responses out of order.
+  function deferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  // Toggle POSTs return deferred promises (resolved by the test in any order);
+  // the config GET on mount resolves to "no disk config" so the initial state
+  // is deterministic (false).
+  function mockDeferredChaosPosts() {
+    const posts: Array<ReturnType<typeof deferred<Response>>> = [];
+    fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith('/api/bot/chaos-mode') && init?.method === 'POST') {
+        const d = deferred<Response>();
+        posts.push(d);
+        return d.promise;
+      }
+      return Promise.resolve({ ok: false, json: () => Promise.resolve(null) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return posts;
+  }
+
+  function okResponse() {
+    return { ok: true, status: 200, json: () => Promise.resolve({}) } as Response;
+  }
+
+  function failResponse(message: string) {
+    return { ok: false, status: 400, json: () => Promise.resolve({ error: message }) } as Response;
+  }
+
+  it('optimistically toggles, then reverts on backend rejection and surfaces chaosError', async () => {
+    mockFetchRoutes({
+      config: { ok: true, chaosEnabled: false },
+      chaosPost: { ok: false, status: 400, error: 'Bot not configured' },
+    });
+    const { result } = renderHook(() => useChaosMode('http://test:8081', null));
+    await flush();
+
+    expect(result.current.chaosMode).toBe(false);
+
+    act(() => result.current.toggleChaosMode());
+    // Optimistic value applied immediately…
+    expect(result.current.chaosMode).toBe(true);
+    // …and the POST fired with the new value.
+    expect(fetchMock).toHaveBeenCalledWith('http://test:8081/api/bot/chaos-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+
+    // Backend rejected → the optimistic value is reverted and the badge falls
+    // back to engine/disk truth — never a state the engine did not reach.
+    await flush();
+    expect(result.current.chaosMode).toBe(false);
+    expect(result.current.chaosError).toBe('Bot not configured');
+  });
+
+  it('clears chaosError and keeps the applied value after a successful toggle', async () => {
+    mockFetchRoutes({ config: { ok: true, chaosEnabled: false }, chaosPost: { ok: true } });
+    const { result } = renderHook(() => useChaosMode('http://test:8081', null));
+    await flush();
+
+    act(() => result.current.toggleChaosMode());
+    await flush();
+
+    expect(result.current.chaosMode).toBe(true);
+    expect(result.current.chaosError).toBeNull();
+  });
+
+  it('stale failure (slow earlier toggle) resolving after a newer success does NOT set chaosError or revert the applied value', async () => {
+    const posts = mockDeferredChaosPosts();
+    const { result } = renderHook(() => useChaosMode('http://test:8081', null));
+    await flush();
+
+    // Toggle B (will fail, slowly) — request #1.
+    act(() => result.current.toggleChaosMode());
+    expect(result.current.chaosMode).toBe(true);
+    // Toggle C (will succeed, fast) — request #2 supersedes #1.
+    act(() => result.current.toggleChaosMode());
+    expect(result.current.chaosMode).toBe(false);
+
+    // The LATEST attempt (C, request #2) succeeds fast → no error, value kept.
+    await act(async () => {
+      posts[1].resolve(okResponse());
+      await Promise.resolve();
+    });
+    await flush();
+    expect(result.current.chaosError).toBeNull();
+    expect(result.current.chaosMode).toBe(false);
+
+    // The STALE attempt (B, request #1) then fails — its response is no longer
+    // the latest attempt, so it must NOT set chaosError or flip the value.
+    await act(async () => {
+      posts[0].resolve(failResponse('Bot not configured'));
+      await Promise.resolve();
+    });
+    await flush();
+    expect(result.current.chaosError).toBeNull();
+    expect(result.current.chaosMode).toBe(false);
+  });
+
+  it('stale success (slow earlier toggle) resolving after a newer failure does NOT clear chaosError', async () => {
+    const posts = mockDeferredChaosPosts();
+    const { result } = renderHook(() => useChaosMode('http://test:8081', null));
+    await flush();
+
+    // Toggle X (will succeed, slowly) — request #1.
+    act(() => result.current.toggleChaosMode());
+    // Toggle Y (will fail) — request #2 supersedes #1.
+    act(() => result.current.toggleChaosMode());
+
+    // The NEWER attempt (Y) fails → reverts the optimistic value and surfaces
+    // the error (latest-attempt behavior, unchanged).
+    await act(async () => {
+      posts[1].resolve(failResponse('Bot not configured'));
+      await Promise.resolve();
+    });
+    await flush();
+    expect(result.current.chaosError).toBe('Bot not configured');
+    expect(result.current.chaosMode).toBe(false);
+
+    // The STALE attempt (X) then succeeds — must NOT wipe the newer failure's
+    // error (a stale success cannot clear a newer error).
+    await act(async () => {
+      posts[0].resolve(okResponse());
+      await Promise.resolve();
+    });
+    await flush();
+    expect(result.current.chaosError).toBe('Bot not configured');
+    expect(result.current.chaosMode).toBe(false);
+  });
+
+  it('engine snapshot truth wins over the optimistic toggle once it arrives', async () => {
+    mockFetchRoutes({ config: { ok: true, chaosEnabled: false }, chaosPost: { ok: true } });
+    // Typed initialProps so renderHook's Props generic is the union — not the
+    // `null` literal inferred from the bare initialProps below (which would
+    // reject the rerender's snapshot fixture below).
+    const initialProps: { engineChaosMode: ChaosModeSnapshot | null } = { engineChaosMode: null };
+    const { result, rerender } = renderHook(
+      ({ engineChaosMode }: { engineChaosMode: ChaosModeSnapshot | null }) =>
+        useChaosMode('http://test:8081', engineChaosMode),
+      { initialProps },
+    );
+    await flush();
+
+    act(() => result.current.toggleChaosMode());
+    expect(result.current.chaosMode).toBe(true);
+
+    // A later snapshot says the engine is actually off (e.g. a server-side
+    // correction) — the badge settles on the engine, dropping the guess.
+    rerender({ engineChaosMode: { enabled: false, executionMode: 'live' } });
+    // Drain the in-flight POST that the rerender's reset raced against.
+    await flush();
+    expect(result.current.chaosMode).toBe(false);
+    expect(result.current.chaosError).toBeNull();
+  });
+
+  it('hidden 5-tap gesture activates chaos mode through the POST', async () => {
+    mockFetchRoutes({ config: { ok: true, chaosEnabled: false }, chaosPost: { ok: true } });
+    const { result } = renderHook(() => useChaosMode('http://test:8081', null));
+    await flush();
+
+    expect(result.current.chaosMode).toBe(false);
+
+    act(() => {
+      for (let i = 0; i < 5; i++) result.current.tapTargetProps.onClick();
+    });
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledWith('http://test:8081/api/bot/chaos-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+    expect(result.current.chaosMode).toBe(true);
   });
 });

@@ -64,7 +64,9 @@ function makeEngine(overrides: Partial<Record<keyof BotEngine, unknown>> = {}): 
       connected: false,
       subscriptions: [],
       lastCandleAt: null,
+      lastTickAt: null,
       candleCount: 0,
+      tickCount: 0,
     })),
     getChaosHistory: vi.fn(() => []),
     ...overrides,
@@ -88,7 +90,9 @@ const ENGINE_FEED_STATE = {
   connected: true,
   subscriptions: [{ pair: 'BTCUSDT', timeframe: '60', ok: true }],
   lastCandleAt: 1_700_000_000_000,
+  lastTickAt: 1_700_000_000_000,
   candleCount: 12,
+  tickCount: 12,
 };
 
 describe('buildSnapshotPayload contract (design D2)', () => {
@@ -106,7 +110,9 @@ describe('buildSnapshotPayload contract (design D2)', () => {
       connected: false,
       subscriptions: [],
       lastCandleAt: null,
+      lastTickAt: null,
       candleCount: 0,
+      tickCount: 0,
     });
     // status.positions is array-typed truth, never undefined.
     expect(Array.isArray(payload.status.positions)).toBe(true);

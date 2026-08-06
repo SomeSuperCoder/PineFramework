@@ -22,6 +22,7 @@ const { mockSchedulerOpts, mockFeedCallbacks } = vi.hoisted(() => ({
   mockSchedulerOpts: { current: null as { submitOrders?: (signals: unknown[]) => Promise<void> } | null },
   mockFeedCallbacks: {
     candle: null as ((candle: unknown) => void) | null,
+    tick: null as ((tick: unknown) => void) | null,
     error: null as ((error: Error) => void) | null,
     connection: null as ((connected: boolean) => void) | null,
   },
@@ -48,6 +49,9 @@ vi.mock('../../../src/trading/bybit-websocket.js', () => ({
     setCandleCallback: (cb: (candle: unknown) => void) => {
       mockFeedCallbacks.candle = cb;
     },
+    setTickCallback: (cb: (tick: unknown) => void) => {
+      mockFeedCallbacks.tick = cb;
+    },
     setErrorCallback: (cb: (error: Error) => void) => {
       mockFeedCallbacks.error = cb;
     },
@@ -55,6 +59,25 @@ vi.mock('../../../src/trading/bybit-websocket.js', () => ({
       mockFeedCallbacks.connection = cb;
     },
   })),
+  // bot-engine imports timeframeToMinutes from this module; without a
+  // faithful export the initialize() → updateNextCandleEta path throws.
+  timeframeToMinutes: (timeframe: string) => {
+    const numeric = Number(timeframe);
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+    const unit = timeframe.toUpperCase();
+    if (unit === 'D') return 1440;
+    if (unit === 'W') return 10080;
+    if (unit === 'M') return 43_200;
+    return 0;
+  },
+  // Same import block in bot-engine.ts pulls this constant for ETA warnings.
+  LONG_TIMEFRAME_WARN_MINUTES: 10,
+  // bot-engine also imports the shared next-boundary ETA helper (review #3);
+  // faithful inline copy so initialize() → updateNextCandleEta works.
+  nextBoundaryAfter: (now: number, durationMs: number) => {
+    const boundary = Math.ceil(now / durationMs) * durationMs;
+    return boundary > now ? boundary : boundary + durationMs;
+  },
 }));
 
 vi.mock('../../../src/trading/dex/jupiter-swap-adapter.js', () => ({
@@ -231,6 +254,7 @@ describe('feed telemetry emit + throttled persistence (task 1.3 / D1)', () => {
 
   beforeEach(async () => {
     mockFeedCallbacks.candle = null;
+    mockFeedCallbacks.tick = null;
     mockFeedCallbacks.connection = null;
     mockFeedCallbacks.error = null;
     engine = await initChaosEngine();
@@ -243,20 +267,38 @@ describe('feed telemetry emit + throttled persistence (task 1.3 / D1)', () => {
     vi.useRealTimers();
   });
 
-  it('emits bot:feedStatus on connection change and on every candle tick', async () => {
+  it('emits bot:feedStatus immediately on structural changes and throttles candle ticks to ~1/s (review #2)', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_700_000_000_000);
+
     const statuses: FeedStatus[] = [];
     engine.on('feedStatus', (s) => statuses.push(s));
 
+    // Structural change (connect) → immediate emit (forcePersist bypasses the
+    // broadcast throttle).
     mockFeedCallbacks.connection!(true);
     expect(statuses).toHaveLength(1);
     expect(statuses[0]).toMatchObject({ connected: true, candleCount: 0 });
 
+    // Structural change (disconnect) inside the throttle window STILL emits.
+    mockFeedCallbacks.connection!(false);
+    expect(statuses).toHaveLength(2);
+    expect(statuses[1]).toMatchObject({ connected: false });
+
+    mockFeedCallbacks.connection!(true);
+    expect(statuses).toHaveLength(3);
+
+    // Candle ticks: two candles back-to-back in the same ms are suppressed —
+    // tick-level broadcasts fire at most once per FEED_STATUS_BROADCAST_THROTTLE_MS.
     mockFeedCallbacks.candle!(makeCandle(1_700_000_000_000));
     mockFeedCallbacks.candle!(makeCandle(1_700_000_060_000));
-
     expect(statuses).toHaveLength(3);
-    expect(statuses[1]).toMatchObject({ connected: true, candleCount: 1, lastCandleAt: 1_700_000_000_000 });
-    expect(statuses[2]).toMatchObject({ connected: true, candleCount: 2, lastCandleAt: 1_700_000_060_000 });
+
+    // Once ≥1s has elapsed since the last broadcast, the next tick emits.
+    vi.advanceTimersByTime(1_000);
+    mockFeedCallbacks.candle!(makeCandle(1_700_000_100_000));
+    expect(statuses).toHaveLength(4);
+    expect(statuses[3]).toMatchObject({ connected: true, candleCount: 3, lastCandleAt: 1_700_000_100_000 });
   });
 
   it('persists structural changes immediately but throttles candle-count-only writes to once per window', async () => {
@@ -314,6 +356,7 @@ describe('feed silence marker on a connected feed with zero candles (QA S3 / FIX
 
   beforeEach(async () => {
     mockFeedCallbacks.candle = null;
+    mockFeedCallbacks.tick = null;
     mockFeedCallbacks.connection = null;
     mockFeedCallbacks.error = null;
     vi.useFakeTimers();

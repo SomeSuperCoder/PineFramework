@@ -37,6 +37,11 @@
       "types": "./dist/utils/time.d.ts",
       "import": "./dist/utils/time.js"
     },
+    "./utils/logger/types": {
+      "source": "./src/utils/logger/types.ts",
+      "types": "./dist/utils/logger/types.d.ts",
+      "import": "./dist/utils/logger/types.js"
+    },
     "./utils/script-name": {
       "source": "./src/utils/script-name.ts",
       "types": "./dist/utils/script-name.d.ts",
