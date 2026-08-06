@@ -78,7 +78,7 @@ export class JupiterSwapAdapter extends DexAdapter {
   private readonly baseUrl: string;
   private readonly connection;
 
-  constructor(baseUrl = 'https://quote-api.jup.ag/v6') {
+  constructor(baseUrl = process.env.JUPITER_BASE_URL ?? 'https://api.jup.ag/swap/v1') {
     super();
     this.baseUrl = baseUrl;
     this.connection = createConnection();
@@ -98,7 +98,12 @@ export class JupiterSwapAdapter extends DexAdapter {
         slippageBps: slippageBps.toString(),
       });
 
-      const response = await fetch(`${this.baseUrl}/quote?${params}`);
+      const headers: Record<string, string> = {};
+      if (process.env.JUPITER_API_KEY) {
+        headers['x-api-key'] = process.env.JUPITER_API_KEY;
+      }
+
+      const response = await fetch(`${this.baseUrl}/quote?${params}`, { headers });
       if (!response.ok) {
         throw new Error(`Jupiter quote API error: ${response.status} ${response.statusText}`);
       }
@@ -108,7 +113,7 @@ export class JupiterSwapAdapter extends DexAdapter {
         outputMint: string;
         inAmount: string;
         outAmount: string;
-        priceImpactPct: number;
+        priceImpactPct: string | number;
         routePlan: Array<{ swapInfo: { ammKey: string } }>;
       };
 
@@ -117,7 +122,7 @@ export class JupiterSwapAdapter extends DexAdapter {
         outputMint: data.outputMint,
         inAmount: data.inAmount,
         outAmount: data.outAmount,
-        priceImpactPct: data.priceImpactPct,
+        priceImpactPct: Number(data.priceImpactPct), // v1 returns string; coerce (Number() handles both)
         slippageBps,
         feeBps: 0, // Jupiter API doesn't return fee in quote — computed at swap
         routePlan: data.routePlan, // Preserve original routePlan array for swap requests
@@ -132,10 +137,15 @@ export class JupiterSwapAdapter extends DexAdapter {
         const keypair = Keypair.fromSecretKey(privateKey);
 
         // Get swap transaction from Jupiter API
-        // Send routePlan array (not route string) for API v6 compatibility
+        // Send routePlan array (not route string) per the swap/v1 contract
+        const swapHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (process.env.JUPITER_API_KEY) {
+          swapHeaders['x-api-key'] = process.env.JUPITER_API_KEY;
+        }
+
         const swapResponse = await fetch(`${this.baseUrl}/swap`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: swapHeaders,
           body: JSON.stringify({
             quoteResponse: {
               inputMint: quote.inputMint,

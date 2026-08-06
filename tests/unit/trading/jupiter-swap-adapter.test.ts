@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Keypair } from '@solana/web3.js';
 import { JupiterSwapAdapter } from '../../../src/trading/dex/jupiter-swap-adapter.js';
+import type { Quote } from '../../../src/trading/dex/dex-adapter.js';
 import { USDC_MINT } from '../../../src/trading/solana-wallet.js';
 import { TOKEN_MINTS } from '../../../src/trading/token-registry.js';
 
@@ -24,10 +25,25 @@ vi.mock('../../../src/trading/solana-wallet.js', async (importOriginal) => {
 
 describe('JupiterSwapAdapter', () => {
   let adapter: JupiterSwapAdapter;
+  let originalFetch: typeof globalThis.fetch;
+
+  beforeAll(() => {
+    originalFetch = globalThis.fetch;
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Clean env so the adapter is always constructed with production defaults.
+    delete process.env.JUPITER_BASE_URL;
+    delete process.env.JUPITER_API_KEY;
     adapter = new JupiterSwapAdapter();
+  });
+
+  afterEach(() => {
+    // Restore the real fetch + env so no test leaks into the next.
+    globalThis.fetch = originalFetch;
+    delete process.env.JUPITER_BASE_URL;
+    delete process.env.JUPITER_API_KEY;
   });
 
   describe('constructor', () => {
@@ -71,7 +87,9 @@ describe('JupiterSwapAdapter', () => {
       expect(quote.outAmount).toBe('5000000');
       expect(quote.priceImpactPct).toBe(0.1);
       // Adapter returns the routePlan (API v6) and never sets `route`.
-      expect(quote.routePlan[0].swapInfo.ammKey).toBe('amm1');
+      // Quote.routePlan is typed `unknown[] | undefined`, so cast before indexing.
+      const routePlan = quote.routePlan as Array<{ swapInfo: { ammKey: string } }>;
+      expect(routePlan[0].swapInfo.ammKey).toBe('amm1');
     });
 
     it('should retry on failure', async () => {
@@ -99,6 +117,149 @@ describe('JupiterSwapAdapter', () => {
 
       expect(quote.inAmount).toBe('1000000');
       expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('contract regression — live v1 endpoint (dead v6 quote-api.jup.ag)', () => {
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+
+    // v1 quote response shape: priceImpactPct is a STRING and routePlan is an array.
+    const v1QuoteResponse = (priceImpactPct: number | string = 0.1) => ({
+      inputMint: USDC_MINT,
+      outputMint: SOL_MINT,
+      inAmount: '1000000',
+      outAmount: '5000000',
+      priceImpactPct,
+      routePlan: [],
+    });
+
+    const okFetch = (body: unknown) =>
+      vi.fn().mockResolvedValue({ ok: true, json: vi.fn().mockResolvedValue(body) });
+
+    const swapQuote: Quote = {
+      inputMint: USDC_MINT,
+      outputMint: SOL_MINT,
+      inAmount: '1000000',
+      outAmount: '5000000',
+      priceImpactPct: 0.0010622,
+      slippageBps: 50,
+      feeBps: 0,
+      routePlan: [{ swapInfo: { ammKey: 'amm1' } }],
+    };
+
+    it('quotes against the live v1 endpoint by default — never the decommissioned v6 host', async () => {
+      const mockFetch = okFetch(v1QuoteResponse());
+      global.fetch = mockFetch;
+
+      await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      // Regression guard: the old hardcoded default was
+      // https://quote-api.jup.ag/v6 (decommissioned, dead in global DNS).
+      expect(String(url)).toMatch(/^https:\/\/api\.jup\.ag\/swap\/v1\/quote\?/);
+      expect(String(url)).not.toContain('quote-api.jup.ag');
+      expect(String(url)).toContain('inputMint=');
+      expect(String(url)).toContain('outputMint=');
+      expect(String(url)).toContain('amount=1000000');
+      expect(String(url)).toContain('slippageBps=50');
+      expect(init?.headers).not.toHaveProperty('x-api-key');
+    });
+
+    it('targets JUPITER_BASE_URL when the env override is set', async () => {
+      process.env.JUPITER_BASE_URL = 'https://example.com/api';
+      // The baseUrl is captured at construction time, so build a fresh adapter
+      // after setting the env var (the beforeEach adapter kept the default).
+      const envAdapter = new JupiterSwapAdapter();
+      const mockFetch = okFetch(v1QuoteResponse());
+      global.fetch = mockFetch;
+
+      await envAdapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url] = mockFetch.mock.calls[0];
+      expect(String(url)).toMatch(/^https:\/\/example\.com\/api\/quote\?/);
+      expect(String(url)).not.toContain('api.jup.ag');
+    });
+
+    it('coerces the v1 string priceImpactPct to a number (the v1 reality)', async () => {
+      global.fetch = okFetch(v1QuoteResponse('0.0010622'));
+
+      const quote = await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      expect(quote.priceImpactPct).toBe(0.0010622);
+      expect(typeof quote.priceImpactPct).toBe('number');
+    });
+
+    it('keeps a numeric priceImpactPct intact', async () => {
+      global.fetch = okFetch(v1QuoteResponse(0.1));
+
+      const quote = await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      expect(quote.priceImpactPct).toBe(0.1);
+      expect(typeof quote.priceImpactPct).toBe('number');
+    });
+
+    it('sends x-api-key on the quote GET when JUPITER_API_KEY is set', async () => {
+      process.env.JUPITER_API_KEY = 'test-api-key-123';
+      const mockFetch = okFetch(v1QuoteResponse());
+      global.fetch = mockFetch;
+
+      await adapter.quote(USDC_MINT, SOL_MINT, BigInt(1000000));
+
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(String(url)).toMatch(/^https:\/\/api\.jup\.ag\/swap\/v1\/quote\?/);
+      expect(init?.headers).toMatchObject({ 'x-api-key': 'test-api-key-123' });
+    });
+
+    it('sends the swap POST to the v1 /swap endpoint, without x-api-key when unset', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('mocked failure'),
+      });
+      global.fetch = mockFetch;
+      const keypair = Keypair.generate();
+
+      // ok:false returns before the real transaction pipeline (deserialize/
+      // simulate/send) runs — the request contract is what we assert here.
+      await adapter.swap(swapQuote, keypair.secretKey);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(String(url)).toBe('https://api.jup.ag/swap/v1/swap');
+      expect(init?.method).toBe('POST');
+      expect(init?.headers).not.toHaveProperty('x-api-key');
+      expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+
+      // Swap POST body contract (unchanged by the endpoint fix).
+      const body = JSON.parse(init?.body as string);
+      expect(body.quoteResponse.inputMint).toBe(USDC_MINT);
+      expect(body.quoteResponse.priceImpactPct).toBe(0.0010622);
+      expect(body.userPublicKey).toBe(keypair.publicKey.toBase58());
+      expect(body.wrapAndUnwrapSol).toBe(true);
+      expect(body.dynamicComputeUnitLimit).toBe(true);
+      expect(body.prioritizationFeeLamports).toBe('auto');
+    });
+
+    it('carries x-api-key on the swap POST when JUPITER_API_KEY is set', async () => {
+      process.env.JUPITER_API_KEY = 'test-api-key-123';
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        text: vi.fn().mockResolvedValue('mocked failure'),
+      });
+      global.fetch = mockFetch;
+      const keypair = Keypair.generate();
+
+      await adapter.swap(swapQuote, keypair.secretKey);
+
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(String(url)).toBe('https://api.jup.ag/swap/v1/swap');
+      expect(init?.method).toBe('POST');
+      expect(init?.headers).toMatchObject({ 'x-api-key': 'test-api-key-123' });
     });
   });
 
