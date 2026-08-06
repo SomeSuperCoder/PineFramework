@@ -190,10 +190,13 @@ export class JupiterSwapAdapter extends DexAdapter {
           swapTransaction: string;
         };
 
-        // Deserialize the transaction
+        // Deserialize the VersionedTransaction (v0) that /swap always returns.
+        // solana-wallet's helper now uses VersionedTransaction.deserialize();
+        // legacy Transaction.from() throws on the 0x80 version marker.
         const transaction = deserializeTransaction(swapData.swapTransaction);
 
-        // Sign the transaction
+        // Sign the transaction (v0: VersionedTransaction.sign() — the adapter
+        // passes the signer before send; v0 has no legacy partialSign path)
         signTransaction(transaction, keypair);
 
         // Simulate before submission
@@ -208,10 +211,10 @@ export class JupiterSwapAdapter extends DexAdapter {
           };
         }
 
-        // Submit the transaction
-        const result = await sendAndConfirmTransactionWithTimeout(this.connection, transaction, [
-          keypair,
-        ]);
+        // Submit the transaction. v0 transactions are already signed above, so
+        // no signers list is passed (legacy sendAndConfirmTransaction cannot
+        // handle v0; solana-wallet uses sendTransaction + confirmTransaction).
+        const result = await sendAndConfirmTransactionWithTimeout(this.connection, transaction);
 
         if (!result.success) {
           return {

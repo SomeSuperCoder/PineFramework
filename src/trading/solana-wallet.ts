@@ -11,8 +11,7 @@ import {
   Connection,
   PublicKey,
   Keypair,
-  Transaction,
-  sendAndConfirmTransaction,
+  VersionedTransaction,
   LAMPORTS_PER_SOL,
   ParsedAccountData,
 } from '@solana/web3.js';
@@ -163,26 +162,42 @@ export async function getSplTokenBalance(
 
 /**
  * Deserialize a base64-encoded transaction.
+ *
+ * Jupiter Swap v1 ALWAYS returns a VersionedTransaction (v0 message — 0x80
+ * version marker). Legacy `Transaction.from()` routes to `Message.from()`,
+ * which throws "Versioned messages must be deserialized with
+ * VersionedMessage.deserialize()" on v0 payloads. The v0 deserializer is the
+ * only correct path here.
  */
-export function deserializeTransaction(base64Tx: string): Transaction {
+export function deserializeTransaction(base64Tx: string): VersionedTransaction {
   const txBuffer = Buffer.from(base64Tx, 'base64');
-  return Transaction.from(txBuffer);
+  return VersionedTransaction.deserialize(txBuffer);
 }
 
 /**
- * Sign a transaction with a keypair.
+ * Sign a VersionedTransaction with a keypair.
+ *
+ * v0 messages have no legacy `partialSign()` — `VersionedTransaction.sign()`
+ * (v1.98.4) signs in place by signer index and is the only supported path.
+ * The instance is returned so callers can chain; it is the same object.
  */
-export function signTransaction(transaction: Transaction, keypair: Keypair): Transaction {
-  transaction.partialSign(keypair);
+export function signTransaction(
+  transaction: VersionedTransaction,
+  keypair: Keypair,
+): VersionedTransaction {
+  transaction.sign([keypair]);
   return transaction;
 }
 
 /**
  * Simulate a transaction before submission.
+ *
+ * Uses the v1.98.4 v0 overload
+ * `Connection.simulateTransaction(transaction: VersionedTransaction, config?)`.
  */
 export async function simulateTransaction(
   connection: Connection,
-  transaction: Transaction,
+  transaction: VersionedTransaction,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const simulation = await connection.simulateTransaction(transaction);
@@ -205,19 +220,35 @@ export async function simulateTransaction(
 }
 
 /**
- * Send a transaction and wait for confirmation.
+ * Send a VersionedTransaction and wait for confirmation.
+ *
+ * The legacy `sendAndConfirmTransaction()` helper (v1.98.4) only accepts a
+ * legacy `Transaction`, so it cannot send v0. Equivalent path:
+ * `Connection.sendTransaction(transaction, { preflightCommitment })` (v0
+ * overload) followed by `Connection.confirmTransaction(signature, commitment)`
+ * — preserving the old 'confirmed' preflight + confirm semantics.
+ *
+ * v0 transactions are fully signed by `signTransaction()` BEFORE this is
+ * called, so no `signers` argument exists (legacy `sendAndConfirmTransaction`
+ * signed internally; `VersionedTransaction.sign()` cannot run here — it must
+ * happen before serialization and is part of the swap flow upstream).
  */
 export async function sendAndConfirmTransactionWithTimeout(
   connection: Connection,
-  transaction: Transaction,
-  signers: Keypair[],
-  _timeoutMs: number = MAX_CONFIRM_TIMEOUT_MS,
+  transaction: VersionedTransaction,
 ): Promise<TransactionResult> {
   try {
-    const signature = await sendAndConfirmTransaction(connection, transaction, signers, {
-      commitment: 'confirmed',
+    const signature = await connection.sendTransaction(transaction, {
       preflightCommitment: 'confirmed',
     });
+
+    const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+    if (confirmation.value.err) {
+      return {
+        success: false,
+        error: `Transaction failed: ${JSON.stringify(confirmation.value.err)}`,
+      };
+    }
 
     return {
       success: true,
