@@ -16,6 +16,7 @@ import type {
   PositionSummary,
   PairConfig,
   ChaosHeartbeat,
+  DexKind,
   TradeRecord,
 } from './types.js';
 import type { CandleErrorInfo } from './types.js';
@@ -1181,6 +1182,12 @@ export class BotEngine {
               // point — buy filled → long, sell/close filled → flat. Telemetry
               // only; execution state stays owned by the executor.
               this.emitPositionEvent(signal);
+              // BUG 4b: fire the Telegram position notifications at the same
+              // confirmed order-result point — buy filled → position_open,
+              // sell/close filled → position_close. Best-effort: a Telegram
+              // failure is logged and never breaks trading (same tolerance as
+              // the notifyDailyLossTriggered call sites).
+              this.notifyPositionResult(signal, result);
             } else {
               this.chaosStats.ordersFailed++;
               this.logger.warn('chaos.order.failed', {
@@ -1439,6 +1446,91 @@ export class BotEngine {
       entryPrice: isOpen ? signal.price : 0,
       entryTime: isOpen ? signal.timestamp : 0,
     });
+  }
+
+  /**
+   * Fire the Telegram position notifications (BUG 4b) at the confirmed
+   * order-result point, mirroring emitPositionEvent: buy filled → position
+   * opened, sell/close filled → position closed. Best-effort by design — a
+   * Telegram failure is logged and never propagates, so a notification outage
+   * can never break trading (same tolerance as the notifyDailyLossTriggered
+   * call sites and the notifyWarning fire-and-forget seam).
+   */
+  private notifyPositionResult(signal: SchedulerTradeSignal, result: ExecutionResult): void {
+    if (!this.telegramBot) return;
+    try {
+      const trade = this.buildPositionNotificationTrade(signal, result);
+      if (!trade) return;
+      const notification =
+        signal.action === 'buy'
+          ? this.telegramBot.notifyPositionOpened(trade)
+          : this.telegramBot.notifyPositionClosed(trade);
+      // Fire-and-forget: never await a Telegram round-trip inside the
+      // order-result loop, and a rejection must not surface into submitOrders
+      // (it would be misread as an order failure).
+      void notification.catch((err) => {
+        this.logger.warn('Telegram position notification failed', {
+          action: signal.action,
+          symbol: signal.pair.symbol,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    } catch (err) {
+      this.logger.warn('Telegram position notification failed', {
+        action: signal.action,
+        symbol: signal.pair.symbol,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Build the TradeRecord a position notification expects from the signal and
+   * swap result available at the order-result point. The spot DEX only opens
+   * longs, so side is always 'buy' (the closed position's open direction —
+   * same convention as the executor's persistClosedTradeRecord).
+   *
+   * A confirmed close whose entry is unknown is skipped (returns undefined):
+   * without the B1 entry snapshot there is no truthful PnL, and a $0.00 readout
+   * would mislead the subscriber — mirrors persistClosedTradeRecord's
+   * "never guess a PnL" fail-safe. PnL for a long close = (exit − entry) × qty.
+   */
+  private buildPositionNotificationTrade(
+    signal: SchedulerTradeSignal,
+    result: ExecutionResult,
+  ): TradeRecord | undefined {
+    const isOpen = signal.action === 'buy';
+    if (!isOpen && signal.positionEntryPrice === undefined) return undefined;
+
+    const txSignature =
+      result.swapResult && 'signature' in result.swapResult
+        ? (result.swapResult as { signature: string }).signature
+        : undefined;
+    const closedAt = Date.now();
+    const botId = this.botId ?? 'default-bot';
+    // Adapter name when live (same vocabulary as DexKind); configured kind as
+    // a fallback so a notification never carries an undefined dex.
+    const dex = (this.dex?.name ?? this._config?.dex ?? 'jupiter-swap') as DexKind;
+
+    return {
+      id: `${botId}-${closedAt}-${signal.pair.symbol}`,
+      botId,
+      symbol: signal.pair.symbol,
+      side: 'buy',
+      entryPrice: isOpen ? signal.price : (signal.positionEntryPrice as number),
+      exitPrice: signal.price,
+      size: signal.quantity,
+      fees: 0,
+      realizedPnl: isOpen
+        ? 0
+        : (signal.price - (signal.positionEntryPrice as number)) * signal.quantity,
+      dex,
+      ...(txSignature ? { transactionSignature: txSignature } : {}),
+      openedAt: signal.timestamp,
+      closedAt,
+      ...(signal.pair.timeframe ? { timeframe: signal.pair.timeframe } : {}),
+      status: 'confirmed',
+    };
   }
 
   /** Feed-liveness telemetry (liveness suite): every kline message — confirmed

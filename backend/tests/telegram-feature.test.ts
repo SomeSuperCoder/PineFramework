@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TelegramConfigStore } from '../src/store/TelegramConfigStore.js';
+import { TelegramConfigStore, NOTIFICATION_TYPES } from '../src/store/TelegramConfigStore.js';
 import {
   TelegramBotFeature,
   type CallbackContext,
@@ -489,7 +489,7 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     const buttons = dashboardButtons(h.reply);
     expect(buttons.some((b) => b.callback_data.startsWith('stop:'))).toBe(false);
     expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(false);
-    expect(buttons.some((b) => b.callback_data === 'sub:menu')).toBe(true);
+    expect(buttons.some((b) => b.callback_data === 'notif:menu')).toBe(true);
     cleanHarness(h);
   });
 
@@ -498,7 +498,9 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     h.store.setAdmin(1, 'boss');
     await h.feature.handleStart(h.ctx({ from: { id: 1, username: 'boss' } }));
     const buttons = dashboardButtons(h.reply);
-    expect(buttons.some((b) => b.callback_data === 'stop:confirm')).toBe(true);
+    // The dashboard Stop emits stop:ask (two-step confirm), not stop:confirm.
+    expect(buttons.some((b) => b.callback_data === 'stop:ask')).toBe(true);
+    expect(buttons.some((b) => b.callback_data === 'emergency:ask')).toBe(true);
     expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(true);
     cleanHarness(h);
   });
@@ -703,10 +705,20 @@ describe('TelegramBotFeature.deliver routing', () => {
 
   it('does NOT deliver when a chat is not subscribed to the type', async () => {
     // A linked group with NO member subscriptions defaults to [] — nothing
-    // subscribed ⇒ no delivery (private chats always default to ALL, so they
-    // can never be "not subscribed" to everything).
+    // subscribed ⇒ no delivery.
     store.addChat(7000, 'group');
     store.linkChat(7000, 1);
+    const n = await feature.deliver('trading', () => 'x');
+    expect(n).toBe(0);
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it('does NOT deliver to a private chat that unsubscribed from EVERY type', async () => {
+    // Private chats default to ALL — but an explicit full unsubscribe must
+    // stick: an explicit [] is authoritative, so deliver returns 0 for that
+    // member (no ALL-default resurrection).
+    store.addChat(9000, 'private');
+    store.memberUnsubscribe(9000, 9000, [...NOTIFICATION_TYPES]);
     const n = await feature.deliver('trading', () => 'x');
     expect(n).toBe(0);
     expect(onMessage).not.toHaveBeenCalled();

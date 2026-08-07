@@ -122,21 +122,33 @@ describe('TelegramConfigStore data model', () => {
       expect(store.getMemberSubscription(5555, 1200)).toEqual(['trading', 'error']);
     });
 
-    it('memberUnsubscribe removes types, and deletes the key when nothing remains', () => {
+    it('memberUnsubscribe removes types, and persists an explicit empty list when nothing remains', () => {
       store.memberSubscribe(5555, 1200, ['trading', 'error']);
       store.memberUnsubscribe(5555, 1200, ['trading']);
       expect(store.getMemberSubscription(5555, 1200)).toEqual(['error']);
       store.memberUnsubscribe(5555, 1200, ['error']);
-      // Key fully removed on a private chat ⇒ falls back to the ALL default.
-      expect(store.getMemberSubscription(5555, 1200)).toEqual([...NOTIFICATION_TYPES]);
+      // The result is ALWAYS persisted — including an explicit empty array —
+      // so a fully-unsubscribed member stays unsubscribed (no ALL-default
+      // resurrection). Every type is now off.
+      expect(store.getMemberSubscription(5555, 1200)).toEqual([]);
+      for (const type of NOTIFICATION_TYPES) {
+        expect(store.isMemberSubscribed(5555, 1200, type)).toBe(false);
+      }
+      // The explicit empty list is authoritative on disk, not "unset".
+      const raw = store.getAll().chats.find((c) => c.chatId === 5555)!;
+      expect(raw.memberSubscriptions['1200']).toEqual([]);
     });
 
-    it('memberUnsubscribe is a no-op for unknown chats or unsubscribed members', () => {
-      store.memberUnsubscribe(99999, 1, ['trading']); // unknown chat
+    it('memberUnsubscribe is a no-op for unknown chats, but diffs the effective subscription for unset members', () => {
+      store.memberUnsubscribe(99999, 1, ['trading']); // unknown chat → no-op
       store.addChat(9001, 'private');
-      store.memberUnsubscribe(9001, 500, ['trading']); // member not in the map
+      // No more no-op on an UNSET private member: the diff runs against the
+      // effective default (ALL) and the result is persisted (bug 1 fix).
+      store.memberUnsubscribe(9001, 500, ['trading']);
       expect(store.getChats()).toHaveLength(1); // only addChat(9001) created a chat
-      expect(store.getMemberSubscription(9001, 500)).toEqual([...NOTIFICATION_TYPES]);
+      expect(store.getMemberSubscription(9001, 500)).toEqual(
+        NOTIFICATION_TYPES.filter((t) => t !== 'trading'),
+      );
     });
 
     it('isMemberSubscribed reflects the effective default', () => {

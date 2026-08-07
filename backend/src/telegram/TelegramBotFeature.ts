@@ -161,12 +161,14 @@ const STOP_CONFIRM_WORDS: ReadonlySet<string> = new Set(['yes', 'y', 'confirm', 
 /**
  * The callback prefixes the feature's inline keyboards EMIT — the single
  * source of truth for `validateActionRegistry`. The union of every keyboard
- * emitter below: /start dashboard (sub, unsub, lang, report, stats, stop),
- * LANG_PICKER_KEYBOARD (lang), STOP_CONFIRM_KEYBOARD (stop),
- * EMERGENCY_CONFIRM_KEYBOARD (emergency), and buildTypeKeyboard callers
- * (sub, unsub). When a new inline button is added to a keyboard, its prefix
- * must be added here (and the action registered in the SSOT registry) so the
- * validator covers it automatically — never maintain a parallel list.
+ * emitter below: /start dashboard (notif, lang, report, stats, stop,
+ * emergency), the back-to-dashboard rows (start), LANG_PICKER_KEYBOARD
+ * (lang, start), STOP_CONFIRM_KEYBOARD (stop), EMERGENCY_CONFIRM_KEYBOARD
+ * (emergency), buildTypeKeyboard callers (sub, unsub), and the manage
+ * notifications submenu (notif). When a new inline button is added to a
+ * keyboard, its prefix must be added here (and the action registered in the
+ * SSOT registry) so the validator covers it automatically — never maintain a
+ * parallel list.
  */
 const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'sub',
@@ -176,6 +178,8 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'stats',
   'stop',
   'emergency',
+  'notif',
+  'start',
 ];
 
 /**
@@ -192,6 +196,14 @@ const STOP_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
   ],
 };
 
+/**
+ * Back-to-dashboard row appended to every inline submenu keyboard, so users
+ * can always return to the /start dashboard without re-sending /start.
+ */
+const BACK_TO_MAIN_ROW: Array<{ text: string; callback_data: string }> = [
+  { text: '↩️ Main menu', callback_data: 'start:menu' },
+];
+
 /** Language picker keyboard shown by /lang and the lang:menu callback. */
 const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
   inline_keyboard: [
@@ -200,6 +212,7 @@ const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
       { text: '🇪🇸 Español', callback_data: 'lang:es' },
       { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
     ],
+    BACK_TO_MAIN_ROW,
   ],
 };
 
@@ -236,7 +249,15 @@ export class TelegramBotFeature {
    * wire-up list, so a command and its keyboard can never drift apart.
    */
   private readonly actions: BotAction[] = [
-    { name: 'start', command: 'start', handler: (ctx) => this.handleStart(ctx) },
+    {
+      name: 'start',
+      command: 'start',
+      handler: (ctx) => this.handleStart(ctx),
+      // The back-to-dashboard rows ('start:menu') re-render the /start
+      // dashboard in-place via editMessage.
+      callbackPrefix: 'start',
+      callbackHandler: (ctx) => this.handleDashboardCallback(ctx),
+    },
     { name: 'request', command: 'request', handler: (ctx) => this.handleRequest(ctx) },
     {
       name: 'subscribe',
@@ -251,6 +272,13 @@ export class TelegramBotFeature {
       handler: (ctx) => this.handleUnsubscribe(ctx),
       callbackPrefix: 'unsub',
       callbackHandler: (ctx) => this.handleUnsubscribeCallback(ctx),
+    },
+    {
+      // Callback-only action: the /start dashboard "Manage notifications"
+      // button (notif:menu) and the submenu's toggle/all/none buttons.
+      name: 'notifications',
+      callbackPrefix: 'notif',
+      callbackHandler: (ctx) => this.handleNotificationsCallback(ctx),
     },
     {
       name: 'lang',
@@ -516,31 +544,30 @@ export class TelegramBotFeature {
       this.store.addChat(chatId, isGroup ? 'group' : 'private');
     }
 
-    // Operator-only row (Stats / Stop) is hidden from non-operators. The
-    // Stats callback is already wired to assertController, and the Stop
-    // callbacks now are too — this is defense in depth on visibility only.
+    // Operator-only row (Stats / Stop / Emergency) is hidden from
+    // non-operators. The Stats callback is already wired to
+    // assertController, and the Stop / Emergency callbacks now are too —
+    // this is defense in depth on visibility only.
     const isOperator = ctx.from?.id !== undefined && this.isAdminOrController(ctx.from.id);
 
     await ctx.reply(t(lang, 'startWelcome'), {
       reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '🔔 Subscribe', callback_data: 'sub:menu' },
-            { text: '🔕 Unsubscribe', callback_data: 'unsub:menu' },
-          ],
-          [
-            { text: '🌐 Language', callback_data: 'lang:menu' },
-            { text: '📊 Report', callback_data: 'report:show' },
-          ],
-          ...(isOperator
-            ? [
-                [
-                  { text: '⚙️ Stats', callback_data: 'stats:show' },
-                  { text: '🛑 Stop', callback_data: 'stop:confirm' },
-                ],
-              ]
-            : []),
-        ],
+        inline_keyboard: this.buildDashboardKeyboard(isOperator),
+      },
+    });
+  }
+
+  /**
+   * Inline callback for the back-to-dashboard "Main menu" buttons. Re-renders
+   * the /start dashboard in-place (no new message), honoring the same
+   * operator-row visibility as /start.
+   */
+  async handleDashboardCallback(ctx: CallbackContext): Promise<void> {
+    await ctx.answerCallback();
+    const isOperator = ctx.from?.id !== undefined && this.isAdminOrController(ctx.from.id);
+    await ctx.editMessage(this.t(ctx, 'startWelcome'), {
+      reply_markup: {
+        inline_keyboard: this.buildDashboardKeyboard(isOperator),
       },
     });
   }
@@ -765,6 +792,62 @@ export class TelegramBotFeature {
     });
   }
 
+  /**
+   * Callback handler for the "Manage notifications" dashboard button. Shows
+   * the per-type toggle submenu in-place, with bulk Enable all / Disable all
+   * controls and a back-to-dashboard row. Every mutation re-renders the
+   * submenu with the updated checkbox state (bug: green checkboxes after
+   * unsubscribing).
+   */
+  async handleNotificationsCallback(ctx: CallbackContext): Promise<void> {
+    const chatId = ctx.chat?.id;
+    const fromId = ctx.from?.id;
+
+    if (!chatId || fromId === undefined) {
+      await ctx.answerCallback();
+      return;
+    }
+
+    const isGroup = ctx.chat?.type === 'group';
+    const memberId = isGroup ? fromId : chatId;
+    this.store.addChat(chatId, isGroup ? 'group' : 'private');
+
+    // "menu" from the dashboard → show the toggle submenu.
+    if (ctx.params === 'menu') {
+      await ctx.answerCallback();
+      await this.editNotificationsMenu(ctx, chatId, memberId);
+      return;
+    }
+
+    // Bulk controls: subscribe / unsubscribe every type at once.
+    if (ctx.params === 'all' || ctx.params === 'none') {
+      if (ctx.params === 'all') {
+        this.store.memberSubscribe(chatId, memberId, [...NOTIFICATION_TYPES]);
+      } else {
+        this.store.memberUnsubscribe(chatId, memberId, [...NOTIFICATION_TYPES]);
+      }
+      await ctx.answerCallback();
+      await this.editNotificationsMenu(ctx, chatId, memberId);
+      return;
+    }
+
+    // Single type → toggle.
+    const type = ctx.params.split(':').pop() ?? '';
+    if (!isNotificationType(type)) {
+      await ctx.answerCallback();
+      return;
+    }
+    const current = this.store.getMemberSubscription(chatId, memberId);
+    if (current.includes(type)) {
+      this.store.memberUnsubscribe(chatId, memberId, [type]);
+    } else {
+      this.store.memberSubscribe(chatId, memberId, [type]);
+    }
+
+    await ctx.answerCallback();
+    await this.editNotificationsMenu(ctx, chatId, memberId);
+  }
+
   /** Parses the optional [type] arg: no arg -> ALL, valid type -> [type], else invalid. */
   private resolveTypes(args: string[]): NotificationType[] | null {
     if (args.length === 0) return [...NOTIFICATION_TYPES];
@@ -819,15 +902,7 @@ export class TelegramBotFeature {
     if (ctx.params === 'menu') {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'langUsage'), {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🇬🇧 English', callback_data: 'lang:en' },
-              { text: '🇪🇸 Español', callback_data: 'lang:es' },
-              { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
-            ],
-          ],
-        },
+        reply_markup: LANG_PICKER_KEYBOARD,
       });
       return;
     }
@@ -977,6 +1052,24 @@ export class TelegramBotFeature {
     if (!(await this.assertController(ctx))) return;
     const { params } = ctx;
 
+    if (params === 'ask') {
+      // Dashboard "Stop" must ask before acting — the same two-step flow as
+      // /stop. Set the pending entry so the text fallback ("yes" reply)
+      // stays consistent with the inline-button path.
+      const chatId = ctx.chat?.id;
+      if (chatId !== undefined) {
+        this.pendingStops.set(chatId, {
+          chatId,
+          askedAt: Date.now(),
+          confirmingUserId: ctx.from?.id ?? 0,
+        });
+      }
+      await ctx.editMessage(t(lang, 'stopConfirmRequest'), {
+        reply_markup: STOP_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
+
     if (params === 'confirm') {
       const engine = this.getEngine();
       if (!engine || engine.state !== 'Running') {
@@ -1083,6 +1176,15 @@ export class TelegramBotFeature {
     if (!(await this.assertController(ctx))) return;
     const lang = this.chatLang(ctx);
 
+    if (ctx.params === 'ask') {
+      // Dashboard "Emergency" must ask before acting — the same two-step flow
+      // as /emergency.
+      await ctx.editMessage(t(lang, 'emergencyResult'), {
+        reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
+
     if (ctx.params === 'confirm') {
       const engine = this.getEngine();
       if (!engine) {
@@ -1155,12 +1257,79 @@ export class TelegramBotFeature {
   }
 
   /**
+   * Build the /start dashboard keyboard. Shared by `handleStart` (reply) and
+   * `handleDashboardCallback` (in-place edit of the back-to-dashboard rows),
+   * so the two can never drift apart.
+   *
+   * @param isOperator  When true, the operator-only row (Stats / Stop /
+   *                    Emergency) is included; otherwise it is omitted.
+   */
+  private buildDashboardKeyboard(
+    isOperator: boolean,
+  ): Array<Array<{ text: string; callback_data: string }>> {
+    return [
+      [{ text: '🔔 Manage notifications', callback_data: 'notif:menu' }],
+      [
+        { text: '🌐 Language', callback_data: 'lang:menu' },
+        { text: '📊 Report', callback_data: 'report:show' },
+      ],
+      ...(isOperator
+        ? [
+            [
+              { text: '⚙️ Stats', callback_data: 'stats:show' },
+              { text: '🛑 Stop', callback_data: 'stop:ask' },
+              { text: '🚨 Emergency', callback_data: 'emergency:ask' },
+            ],
+          ]
+        : []),
+    ];
+  }
+
+  /**
+   * Build the "Manage notifications" submenu keyboard: one toggle per
+   * notification type, a bulk Enable all / Disable all row, then the
+   * back-to-dashboard row. Reuses `buildTypeKeyboard` so the toggles share
+   * the exact visuals of the /subscribe /unsubscribe keyboards.
+   */
+  private buildNotificationsKeyboard(
+    currentTypes: readonly NotificationType[],
+  ): Array<Array<{ text: string; callback_data: string }>> {
+    // buildTypeKeyboard ends with the back-to-dashboard row; keep it last and
+    // insert the bulk controls just above it.
+    const rows = this.buildTypeKeyboard(currentTypes, 'notif');
+    const backRow = rows[rows.length - 1];
+    return [
+      ...rows.slice(0, -1),
+      [
+        { text: '✅ Enable all', callback_data: 'notif:all' },
+        { text: '❌ Disable all', callback_data: 'notif:none' },
+      ],
+      backRow,
+    ];
+  }
+
+  /** Re-render the "Manage notifications" submenu in-place with current state. */
+  private async editNotificationsMenu(
+    ctx: CallbackContext,
+    chatId: number,
+    memberId: number,
+  ): Promise<void> {
+    const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+    await ctx.editMessage(this.t(ctx, 'notificationsMenuTitle'), {
+      reply_markup: {
+        inline_keyboard: this.buildNotificationsKeyboard(currentTypes),
+      },
+    });
+  }
+
+  /**
    * Build an inline keyboard with one button per notification type. Types
    * the member is currently subscribed to are prefixed with ✅; others with ⬜.
-   * Buttons are laid out in rows of 2 for a balanced grid.
+   * Buttons are laid out in rows of 2 for a balanced grid, followed by the
+   * back-to-dashboard row.
    *
    * @param currentTypes  The member's active subscription list.
-   * @param actionPrefix  The callback_data prefix (e.g. "sub", "unsub").
+   * @param actionPrefix  The callback_data prefix (e.g. "sub", "unsub", "notif").
    */
   private buildTypeKeyboard(
     currentTypes: readonly NotificationType[],
@@ -1176,6 +1345,7 @@ export class TelegramBotFeature {
     for (let i = 0; i < buttons.length; i += 2) {
       rows.push(buttons.slice(i, i + 2));
     }
+    rows.push(BACK_TO_MAIN_ROW);
     return rows;
   }
 }

@@ -399,3 +399,100 @@ describe('feed silence marker on a connected feed with zero candles (QA S3 / FIX
     expect(status.silentSince).toBe(1_700_000_000_000 + FEED_SILENCE_THRESHOLD_MS);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Telegram position notifications at confirmed order results (BUG 4b)
+// ---------------------------------------------------------------------------
+// Drives the engine's REAL submitOrders closure (captured through the mocked
+// LiveScheduler, same as the telemetry suites above) with an injected
+// telegramBot mock: a confirmed buy must fire notifyPositionOpened, a
+// confirmed sell/close must fire notifyPositionClosed, and a FAILED order must
+// fire nothing (no phantom open/close notification).
+
+describe('Telegram position notifications at confirmed order results (BUG 4b)', () => {
+  let engine: BotEngine;
+  let execSpy: ReturnType<typeof vi.spyOn>;
+  let telegramBot: {
+    notifyPositionOpened: ReturnType<typeof vi.fn>;
+    notifyPositionClosed: ReturnType<typeof vi.fn>;
+  };
+
+  async function initEngineWithTelegramBot(): Promise<BotEngine> {
+    const e = new BotEngine({ telegramBot: telegramBot as never });
+    e.configure({
+      strategySource: '',
+      dex: 'jupiter-swap',
+      pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
+      risk: { maxDailyLoss: 100 },
+      chaosMode: { enabled: true },
+    });
+    await (e as unknown as { initialize: () => Promise<void> }).initialize();
+    return e;
+  }
+
+  beforeEach(async () => {
+    mockSchedulerOpts.current = null;
+    telegramBot = {
+      notifyPositionOpened: vi.fn().mockResolvedValue(undefined),
+      notifyPositionClosed: vi.fn().mockResolvedValue(undefined),
+    };
+    engine = await initEngineWithTelegramBot();
+    // Control the executor's DEX outcome from the engine's REAL submitOrders
+    // closure: success → the position notification fires at the confirmed
+    // order-result point.
+    execSpy = vi
+      .spyOn(LiveStrategyExecutor.prototype, 'executeSignal')
+      .mockResolvedValue({ success: true, signal: makeSignal('buy') } as never);
+  });
+
+  afterEach(() => {
+    execSpy.mockRestore();
+  });
+
+  it('calls notifyPositionOpened when a buy is confirmed', async () => {
+    await mockSchedulerOpts.current!.submitOrders!([makeSignal('buy')]);
+
+    // Fire-and-forget by design: wait for the never-awaited notification.
+    await vi.waitFor(() => expect(telegramBot.notifyPositionOpened).toHaveBeenCalledTimes(1));
+    expect(telegramBot.notifyPositionClosed).not.toHaveBeenCalled();
+    const trade = telegramBot.notifyPositionOpened.mock.calls[0]![0] as {
+      symbol: string;
+      side: string;
+      status: string;
+    };
+    expect(trade.symbol).toBe('BTCUSDT');
+    expect(trade.side).toBe('buy');
+    expect(trade.status).toBe('confirmed');
+  });
+
+  it('calls notifyPositionClosed when a sell/close with an entry snapshot is confirmed', async () => {
+    const sellSignal = makeSignal('sell');
+    sellSignal.positionEntryPrice = 50_000;
+    execSpy.mockResolvedValue({ success: true, signal: sellSignal } as never);
+
+    await mockSchedulerOpts.current!.submitOrders!([sellSignal]);
+
+    await vi.waitFor(() => expect(telegramBot.notifyPositionClosed).toHaveBeenCalledTimes(1));
+    expect(telegramBot.notifyPositionOpened).not.toHaveBeenCalled();
+    const trade = telegramBot.notifyPositionClosed.mock.calls[0]![0] as {
+      symbol: string;
+      realizedPnl: number;
+    };
+    expect(trade.symbol).toBe('BTCUSDT');
+    // (exit 51_000 − entry 50_000) × qty 0.1
+    expect(trade.realizedPnl).toBe(100);
+  });
+
+  it('does NOT fire a position notification when the order FAILS (no phantom open/close)', async () => {
+    execSpy.mockResolvedValue({
+      success: false,
+      signal: makeSignal('buy'),
+      error: 'dex down',
+    } as never);
+
+    await mockSchedulerOpts.current!.submitOrders!([makeSignal('buy')]);
+
+    expect(telegramBot.notifyPositionOpened).not.toHaveBeenCalled();
+    expect(telegramBot.notifyPositionClosed).not.toHaveBeenCalled();
+  });
+});

@@ -309,6 +309,12 @@ export class TelegramConfigStore {
   /**
    * Subscribes a member to extra notification types (union with existing).
    * Creates the chat as 'private' if it doesn't exist yet.
+   *
+   * The union is computed against the EFFECTIVE subscription
+   * (getMemberSubscription), not the raw map: a member who has never set
+   * anything in a private chat is effectively subscribed to ALL, so a first
+   * subscribe must not silently drop the other default-on types. Once written,
+   * this entry becomes the member's explicit, authoritative state.
    */
   memberSubscribe(chatId: number, memberId: number, types: NotificationType[]): void {
     const data = this.store.read();
@@ -318,30 +324,38 @@ export class TelegramConfigStore {
       data.chats.push(chat);
     }
     const key = String(memberId);
-    const current = chat.memberSubscriptions[key] ?? [];
+    // For a chat created just above, getMemberSubscription re-reads the store
+    // (which doesn't contain the new chat yet) and returns [] — so a brand-new
+    // chat is seeded with exactly `types`, matching the pre-existing behavior.
+    const current = this.getMemberSubscription(chatId, memberId);
     chat.memberSubscriptions[key] = [...new Set([...current, ...types])];
     this.store.write(data);
   }
 
+  /**
+   * Removes notification types from a member's subscription.
+   *
+   * Diffs against the EFFECTIVE subscription (getMemberSubscription) so the
+   * first toggle-off in a fresh private chat (raw key unset) actually works.
+   * The result is ALWAYS persisted — including an explicit empty array: an
+   * empty array is truthy, so getMemberSubscription returns it instead of
+   * falling back to the private-chat default-ALL. Deleting the key here would
+   * resurrect ALL and keep delivering notifications to an unsubscribed member.
+   */
   memberUnsubscribe(chatId: number, memberId: number, types: NotificationType[]): void {
     const data = this.store.read();
     const chat = data.chats.find((c) => c.chatId === chatId);
     if (!chat) return;
     const key = String(memberId);
-    const current = chat.memberSubscriptions[key];
-    if (!current) return;
-    const remaining = current.filter((t) => !types.includes(t));
-    if (remaining.length === 0) {
-      delete chat.memberSubscriptions[key];
-    } else {
-      chat.memberSubscriptions[key] = remaining;
-    }
+    const remaining = this.getMemberSubscription(chatId, memberId).filter((t) => !types.includes(t));
+    chat.memberSubscriptions[key] = remaining;
     this.store.write(data);
   }
 
   /**
    * A member's current subscriptions. When never explicitly set, private chats
-   * default to ALL types on; groups default to nothing.
+   * default to ALL types on; groups default to nothing. An explicitly stored
+   * empty array is authoritative and returns [] — it is NOT treated as unset.
    */
   getMemberSubscription(chatId: number, memberId: number): NotificationType[] {
     const chat = this.store.read().chats.find((c) => c.chatId === chatId);

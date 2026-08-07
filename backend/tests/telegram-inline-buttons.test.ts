@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TelegramConfigStore } from '../src/store/TelegramConfigStore.js';
+import { TelegramConfigStore, NOTIFICATION_TYPES } from '../src/store/TelegramConfigStore.js';
 import { TelegramBotFeature, type CallbackContext } from '../src/telegram/TelegramBotFeature.js';
 
 type Reply = ReturnType<typeof vi.fn>;
@@ -415,6 +415,10 @@ describe('handleSubscribeCallback', () => {
 
   it('uses chatId as memberId in private chats', async () => {
     const h = makeHarness();
+    // Fresh private chats default to ALL — make the subscription list explicit
+    // and empty so clicking the type turns it ON (post-fix toggle semantics).
+    h.store.addChat(9000, 'private');
+    h.store.memberUnsubscribe(9000, 9000, [...NOTIFICATION_TYPES]);
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -711,6 +715,70 @@ describe('handleEmergencyCallback', () => {
     assertEditKeepsKeyboard(editMessage);
     cleanHarness(h);
   });
+
+  it('ask: shows the emergency-confirm keyboard and does NOT emergencyStop yet', async () => {
+    const emergencyStop = vi.fn();
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    // Dashboard "Emergency" (emergency:ask) must ask before acting — the same
+    // two-step flow as /emergency (bug 5/6 fix).
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:ask', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(emergencyStop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1); // spinner dismiss only
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('emergency:confirm');
+    expect(allCallbackData).toContain('emergency:cancel');
+    cleanHarness(h);
+  });
+
+  it('ask → confirm: emergency:confirm then calls engine.emergencyStop()', async () => {
+    const emergencyStop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:ask', {
+      answerCallback,
+      editMessage,
+    }));
+    expect(emergencyStop).not.toHaveBeenCalled();
+
+    // Operator confirms on the second click → the engine halts.
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      answerCallback,
+      editMessage,
+    }));
+    expect(emergencyStop).toHaveBeenCalledTimes(1);
+    cleanHarness(h);
+  });
+
+  it('ask: a non-operator pressing emergency:ask is denied', async () => {
+    const emergencyStop = vi.fn();
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:ask', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(emergencyStop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+    expect(editMessage).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -734,12 +802,17 @@ describe('handleStart', () => {
     const allCallbackData = markup.reply_markup.inline_keyboard.flat().map(
       (b: { callback_data: string }) => b.callback_data,
     );
-    expect(allCallbackData).toContain('sub:menu');
-    expect(allCallbackData).toContain('unsub:menu');
+    // Post-fix dashboard: ONE "Manage notifications" button (notif:menu)
+    // replaces the old separate Sub/Unsub buttons; Stop emits stop:ask and a
+    // distinct Emergency button exists.
+    expect(allCallbackData).toContain('notif:menu');
+    expect(allCallbackData).not.toContain('sub:menu');
+    expect(allCallbackData).not.toContain('unsub:menu');
     expect(allCallbackData).toContain('lang:menu');
     expect(allCallbackData).toContain('report:show');
     expect(allCallbackData).toContain('stats:show');
-    expect(allCallbackData).toContain('stop:confirm');
+    expect(allCallbackData).toContain('stop:ask');
+    expect(allCallbackData).toContain('emergency:ask');
     cleanHarness(h);
   });
 
@@ -839,7 +912,6 @@ describe('handleStopCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     await h.feature.handleStopCallback(h.cb('stop', 'stop:cancel', {
-      
       answerCallback,
       editMessage,
     }));
@@ -847,6 +919,258 @@ describe('handleStopCallback', () => {
     expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + path answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     assertEditKeepsKeyboard(editMessage);
+    cleanHarness(h);
+  });
+
+  it('ask: shows the stop-confirm keyboard and does NOT call engine.stop() yet', async () => {
+    const stop = vi.fn();
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    // Dashboard "Stop" (stop:ask) must ask before acting — the same two-step
+    // flow as /stop (bug 6 fix).
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(stop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1); // spinner dismiss only
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('stop:confirm');
+    expect(allCallbackData).toContain('stop:cancel');
+    cleanHarness(h);
+  });
+
+  it('ask → confirm: stop:confirm then calls engine.stop()', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', {
+      answerCallback,
+      editMessage,
+    }));
+    expect(stop).not.toHaveBeenCalled();
+
+    // Operator confirms on the second click → the engine stops.
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      answerCallback,
+      editMessage,
+    }));
+    expect(stop).toHaveBeenCalledTimes(1);
+    cleanHarness(h);
+  });
+
+  it('ask: a non-operator pressing stop:ask is denied and engine.stop() is NOT called', async () => {
+    const stop = vi.fn();
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(stop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+    expect(editMessage).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleNotificationsCallback — the "Manage notifications" submenu (notif:)
+// ---------------------------------------------------------------------------
+
+describe('handleNotificationsCallback', () => {
+  it('menu: shows the manage submenu with type toggles + Enable all + Disable all + back row', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:menu', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    const callbacks = kb.map((b) => b.callback_data);
+    // Every type toggle is present, plus the bulk controls and the back row.
+    for (const type of ['trading', 'position_open', 'position_close', 'report', 'daily', 'error', 'bot_lifecycle']) {
+      expect(callbacks).toContain(`notif:${type}`);
+    }
+    expect(callbacks).toContain('notif:all');
+    expect(callbacks).toContain('notif:none');
+    expect(callbacks).toContain('start:menu');
+    cleanHarness(h);
+  });
+
+  it('menu: fresh private chat (default ALL) shows every type as ✅', async () => {
+    const h = makeHarness();
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:menu', { editMessage }));
+
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    const notifButtons = kb.filter((b) => b.callback_data.startsWith('notif:') && !b.callback_data.includes('all') && !b.callback_data.includes('none'));
+    expect(notifButtons).toHaveLength(7);
+    for (const b of notifButtons) expect(b.text).toContain('✅');
+    cleanHarness(h);
+  });
+
+  it('notif:<type> toggles a single type OFF (✅ → ⬜) and re-renders with updated state', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    // Fresh private chat defaults to ALL → trading is ON.
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:trading', {
+      answerCallback,
+      editMessage,
+    }));
+
+    // Store: trading was actually removed (bug 1 fix — no no-op on unset).
+    expect(h.store.getMemberSubscription(1000, 1000)).not.toContain('trading');
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.find((b) => b.callback_data === 'notif:trading')?.text).toContain('⬜');
+    expect(kb.find((b) => b.callback_data === 'notif:error')?.text).toContain('✅');
+    cleanHarness(h);
+  });
+
+  it('notif:<type> toggles a single type back ON (⬜ → ✅) and re-renders', async () => {
+    const h = makeHarness();
+    h.store.addChat(1000, 'private');
+    h.store.memberUnsubscribe(1000, 1000, [...NOTIFICATION_TYPES]);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    // All types are now OFF → trading is ⬜.
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:trading', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(h.store.getMemberSubscription(1000, 1000)).toContain('trading');
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.find((b) => b.callback_data === 'notif:trading')?.text).toContain('✅');
+    cleanHarness(h);
+  });
+
+  it('all: subscribes to every type', async () => {
+    const h = makeHarness();
+    h.store.addChat(1000, 'private');
+    h.store.memberUnsubscribe(1000, 1000, [...NOTIFICATION_TYPES]);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:all', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(h.store.getMemberSubscription(1000, 1000)).toEqual([
+      'trading', 'position_open', 'position_close', 'report', 'daily', 'error', 'bot_lifecycle',
+    ]);
+    cleanHarness(h);
+  });
+
+  it('none: unsubscribes from EVERY type and the re-rendered keyboard shows all ⬜ (bug 3 regression)', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    // Fresh private chat defaults to ALL — disable everything in one tap.
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:none', {
+      answerCallback,
+      editMessage,
+    }));
+
+    // Explicit empty list is persisted — no ALL-default resurrection.
+    expect(h.store.getMemberSubscription(1000, 1000)).toEqual([]);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    const notifButtons = kb.filter((b) => b.callback_data.startsWith('notif:') && !b.callback_data.includes('all') && !b.callback_data.includes('none'));
+    expect(notifButtons).toHaveLength(7);
+    // The exact bug-3 regression: ZERO green checkboxes after unsubscribing.
+    expect(notifButtons.filter((b) => b.text.includes('✅'))).toEqual([]);
+    for (const b of notifButtons) expect(b.text).toContain('⬜');
+    cleanHarness(h);
+  });
+
+  it('ignores an invalid notification type', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleNotificationsCallback(h.cb('notif', 'notif:bogus', {
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleDashboardCallback — the "↩️ Main menu" back rows (start:menu)
+// ---------------------------------------------------------------------------
+
+describe('handleDashboardCallback', () => {
+  it('start:menu re-renders the dashboard in-place (editMessage) for a non-operator', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleDashboardCallback(h.cb('start', 'start:menu', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const [text] = editMessage.mock.calls[0]!;
+    expect(text).toContain('Welcome');
+    const allCallbackData = editCallbackData(editMessage);
+    // The dashboard uses the single Manage notifications button (not sub/unsub).
+    expect(allCallbackData).toContain('notif:menu');
+    expect(allCallbackData).not.toContain('sub:menu');
+    expect(allCallbackData).not.toContain('unsub:menu');
+    // Non-operator: the Stats/Stop/Emergency row stays hidden.
+    expect(allCallbackData).not.toContain('stop:ask');
+    expect(allCallbackData).not.toContain('stats:show');
+    cleanHarness(h);
+  });
+
+  it('start:menu re-renders the dashboard with the operator row for an operator', async () => {
+    const h = makeHarness();
+    h.store.setAdmin(1000, 'tester');
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleDashboardCallback(h.cb('start', 'start:menu', {
+      answerCallback,
+      editMessage,
+    }));
+
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('stats:show');
+    expect(allCallbackData).toContain('stop:ask');
+    expect(allCallbackData).toContain('emergency:ask');
     cleanHarness(h);
   });
 });

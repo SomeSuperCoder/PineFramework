@@ -669,13 +669,17 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     await h.feature.handleStart(h.cbCtx());
     const dashboardData = replyCallbackData(h.reply);
 
-    // The exact dashboard buttons exist:
+    // The exact dashboard buttons exist (post-fix: ONE Manage notifications
+    // button replaces the old Sub/Unsub pair; Stop/Emergency emit ask, not
+    // confirm — the two-step flow).
     expect(dashboardData).toContain('report:show');
     expect(dashboardData).toContain('stats:show');
-    expect(dashboardData).toContain('sub:menu');
-    expect(dashboardData).toContain('unsub:menu');
+    expect(dashboardData).toContain('notif:menu');
+    expect(dashboardData).not.toContain('sub:menu');
+    expect(dashboardData).not.toContain('unsub:menu');
     expect(dashboardData).toContain('lang:menu');
-    expect(dashboardData).toContain('stop:confirm');
+    expect(dashboardData).toContain('stop:ask');
+    expect(dashboardData).toContain('emergency:ask');
 
     // Every emitted dashboard button matches a registered prefix:
     for (const data of dashboardData) {

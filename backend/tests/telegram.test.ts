@@ -287,9 +287,11 @@ describe('B1 — sendAlertToSubscribers subscription gating', () => {
 
   it('B1: SKIPS a private chat whose member is NOT subscribed to trading', async () => {
     configStore.addChat(12345, 'private');
-    // Force an EXPLICIT subscription list that does not include 'trading', so
-    // the private chat no longer gets the ALL default for that member.
-    configStore.memberSubscribe(12345, 12345, ['error']);
+    // Post-fix union semantics: memberSubscribe UNIONS with the private ALL
+    // default, so subscribing to ['error'] alone can no longer drop trading.
+    // To build a member that is genuinely NOT subscribed to trading, explicitly
+    // unsubscribe trading from the ALL default (bug 1 fix persists the diff).
+    configStore.memberUnsubscribe(12345, 12345, ['trading']);
     await service.sendAlertToSubscribers('msg', 'a1');
     expect(sent).toHaveLength(0);
   });
