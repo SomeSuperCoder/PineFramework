@@ -10,6 +10,7 @@ import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
 import { ControlPanel, type PanelId } from './components/ControlPanel';
+import { SettingsPanel } from './components/SettingsPanel';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
@@ -654,11 +655,9 @@ function App() {
         />
       )}
 
-      {/* === Settings Panel (placeholder) === */}
+      {/* === Settings Panel === */}
       {activePanel === 'settings' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 14 }}>
-          Settings panel — coming soon.
-        </div>
+        <SettingsPanel onClose={() => setActivePanel('dashboard')} />
       )}
 
       {/* === Overlays (fixed position, always available) === */}
