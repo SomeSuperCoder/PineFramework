@@ -1,0 +1,70 @@
+export interface ContentAreaProps {
+  /** Breadcrumb segments (optional — if not provided, no breadcrumb shown) */
+  breadcrumb?: string[];
+  /** Panel label for breadcrumb (auto-derived from panel ID if not set) */
+  panelLabel?: string;
+  children: React.ReactNode;
+}
+
+export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaProps) {
+  const segments = breadcrumb ?? (panelLabel ? [panelLabel] : []);
+
+  return (
+    <div style={styles.contentArea}>
+      {/* Breadcrumb bar */}
+      {segments.length > 0 && (
+        <div style={styles.breadcrumbBar}>
+          {segments.map((segment, i) => (
+            <span key={i}>
+              {i > 0 && <span style={styles.separator}>{'>'}</span>}
+              <span
+                style={{
+                  ...styles.crumb,
+                  color: i === segments.length - 1 ? '#e0e0e0' : '#555',
+                }}
+              >
+                {segment}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Scrollable content */}
+      <div style={styles.scrollContainer}>{children}</div>
+    </div>
+  );
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  contentArea: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    overflow: 'hidden',
+    background: '#0a0a14',
+  },
+  breadcrumbBar: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '6px 16px',
+    fontSize: 11,
+    color: '#555',
+    borderBottom: '1px solid #111128',
+    background: '#0f1520',
+    flexShrink: 0,
+    gap: 4,
+  },
+  separator: {
+    margin: '0 6px',
+    color: '#333',
+  },
+  crumb: {
+    color: '#555',
+  },
+  scrollContainer: {
+    flex: 1,
+    overflow: 'auto',
+    padding: 0,
+  },
+};

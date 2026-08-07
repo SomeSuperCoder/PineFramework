@@ -8,7 +8,7 @@ import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
-import { AppToolbar } from './components/AppToolbar';
+import { ControlPanel, type PanelId } from './components/ControlPanel';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
@@ -47,7 +47,6 @@ function App() {
   const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
   const [debugMode, setDebugMode] = useState(false);
-  const [telegramOpen, setTelegramOpen] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
   const [computingIndicators, setComputingIndicators] = useState<Set<string>>(new Set());
@@ -69,6 +68,10 @@ function App() {
   });
   const chartRef = useRef<ChartComponentHandle>(null);
 
+  // ControlPanel state
+  const [activePanel, setActivePanel] = useState<PanelId>('dashboard');
+  const [botDashboardOpen, setBotDashboardOpen] = useState(false);
+
   const backendUrl = `http://${window.location.hostname}:8081`;
   const {
     connected: botConnected,
@@ -87,7 +90,6 @@ function App() {
     liveTrades: botLiveTrades,
     connectionEpoch: botConnectionEpoch,
   } = useBotWebSocket(backendUrl);
-  const [botDashboardOpen, setBotDashboardOpen] = useState(false);
   const { chaosMode, chaosError, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
@@ -359,82 +361,213 @@ function App() {
     reset();
   }, [reset]);
 
+  // Sidebar navigation handler — also syncs sub-panel states
+  const handlePanelChange = useCallback((panel: PanelId) => {
+    setActivePanel(panel);
+    // Sync sub-panel visibility for backward compatibility
+    if (panel === 'backtest') {
+      setShowSettingsPopup(true);
+    }
+  }, []);
+
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Pine Script Engine</h1>
-        <div className="header-controls">
-          <select value={symbol} onChange={(e) => { const v = e.target.value; setSymbol(v); localStorage.setItem('pine-symbol', v); }}>
-            {SYMBOLS.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <select value={timeframe} onChange={(e) => { const v = e.target.value; setTimeframe(v); localStorage.setItem('pine-timeframe', v); }}>
-            {INTERVALS.map((i) => (
-              <option key={i.value} value={i.value}>{i.label}</option>
-            ))}
-          </select>
-          <span style={{ fontSize: '12px', color: isConnected ? '#4caf50' : '#e94560' }}>
-            {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
-          </span>
+    <ControlPanel
+      activePanel={activePanel}
+      onPanelChange={handlePanelChange}
+      botConnected={botConnected}
+      botState={botStatus?.state ?? 'Idle'}
+      errorCount={errors.length}
+      settingsOpen={activePanel === 'settings'}
+    >
+      {/* === Dashboard Panel === */}
+      {activePanel === 'dashboard' && !botDashboardOpen && (
+        <div style={dashboardStyles.container}>
+          {/* Top toolbar: symbol, timeframe, quick actions */}
+          <div style={dashboardStyles.toolbar}>
+            <select
+              value={symbol}
+              onChange={(e) => { const v = e.target.value; setSymbol(v); localStorage.setItem('pine-symbol', v); }}
+              style={dashboardStyles.select}
+            >
+              {SYMBOLS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              value={timeframe}
+              onChange={(e) => { const v = e.target.value; setTimeframe(v); localStorage.setItem('pine-timeframe', v); }}
+              style={dashboardStyles.select}
+            >
+              {INTERVALS.map((i) => (
+                <option key={i.value} value={i.value}>{i.label}</option>
+              ))}
+            </select>
+
+            <div style={dashboardStyles.divider} />
+
+            <span style={{
+              fontSize: 12,
+              color: isConnected ? '#4caf50' : '#e94560',
+            }}>
+              {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
+            </span>
+
+            <div style={{ flex: 1 }} />
+
+            {/* Quick action buttons */}
+            <button onClick={() => { setEditingScriptId(null); setQuickAdderOpen(true); }} style={dashboardStyles.actionBtn}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="6" y1="2" x2="6" y2="10" />
+                <line x1="2" y1="6" x2="10" y2="6" />
+              </svg>
+              Add
+            </button>
+            <button onClick={() => { setEditingScriptId(null); setEditorOpen(true); }} style={dashboardStyles.actionBtn}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8.5 1.5l2 2L4 10H2v-2z" />
+              </svg>
+              Editor
+            </button>
+
+            {isStrategy && (
+              <>
+                <div style={dashboardStyles.divider} />
+                <button onClick={() => setShowSettingsPopup(true)} style={dashboardStyles.primaryBtn}>
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
+                    <polygon points="2,0 10,5.5 2,11" />
+                  </svg>
+                  Backtest
+                </button>
+              </>
+            )}
+
+            <div style={dashboardStyles.divider} />
+
+            <button
+              onClick={() => setAutoScale(!autoScale)}
+              style={{
+                ...dashboardStyles.actionBtn,
+                background: autoScale ? '#1a3328' : undefined,
+                color: autoScale ? '#4caf50' : undefined,
+                borderColor: autoScale ? '#4caf50' : undefined,
+              }}
+            >
+              {autoScale ? 'Auto Scale' : 'Manual'}
+            </button>
+            <button
+              onClick={() => setDebugMode(!debugMode)}
+              style={{
+                ...dashboardStyles.actionBtn,
+                background: debugMode ? '#2a2a10' : undefined,
+                color: debugMode ? '#ff9800' : undefined,
+                borderColor: debugMode ? '#ff9800' : undefined,
+              }}
+            >
+              Debug
+            </button>
+
+            <div style={dashboardStyles.divider} />
+
+            <button onClick={() => setGoToDateOpen(true)} style={dashboardStyles.actionBtn}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <circle cx="6" cy="6" r="4.5" />
+                <polyline points="6,3 6,6 8,7" />
+              </svg>
+              Go to Date
+            </button>
+
+            <div style={dashboardStyles.divider} />
+
+            {/* Bot Dashboard toggle */}
+            {backendUrl && (
+              <>
+                <button
+                  onClick={() => setBotDashboardOpen((v) => !v)}
+                  style={{
+                    ...dashboardStyles.actionBtn,
+                    background: botDashboardOpen ? '#1a1a2e' : undefined,
+                    color: botConnected ? '#4caf50' : '#e94560',
+                    borderColor: botConnected ? '#4caf50' : '#e94560',
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <rect x="1" y="1" width="10" height="10" rx="1" />
+                    <line x1="1" y1="4" x2="11" y2="4" />
+                    <line x1="4" y1="4" x2="4" y2="11" />
+                  </svg>
+                  Bot: {botStatus?.state ?? 'Idle'}
+                </button>
+                <div style={dashboardStyles.divider} />
+              </>
+            )}
+
+            <button
+              onClick={async () => {
+                const path = await exportChartData();
+                if (path) {
+                  alert(`Chart data exported to:\n${path}`);
+                } else {
+                  alert('Export failed. Check console for details.');
+                }
+              }}
+              style={dashboardStyles.actionBtn}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2v7M3 6l3 3 3-3M2 10h8" />
+              </svg>
+              Export
+            </button>
+
+            <div style={dashboardStyles.divider} />
+
+            <button
+              onClick={() => setErrorConsoleOpen(!errorConsoleOpen)}
+              style={{
+                ...dashboardStyles.actionBtn,
+                background: errorConsoleOpen ? '#2a1520' : undefined,
+                color: errors.length > 0 ? '#e94560' : undefined,
+                borderColor: errors.length > 0 ? '#e94560' : undefined,
+                position: 'relative',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 1L1 11h10z" />
+                <line x1="6" y1="5" x2="6" y2="7.5" />
+                <circle cx="6" cy="9.5" r="0.5" fill="currentColor" />
+              </svg>
+              Errors
+              {errors.length > 0 && (
+                <span style={dashboardStyles.errorBadge}>{errors.length}</span>
+              )}
+            </button>
+          </div>
+
+          {/* Chart */}
+          <div style={dashboardStyles.chartArea}>
+            <ChartComponent
+              ref={chartRef}
+              data={candles}
+              dataVersion={dataVersion}
+              scriptResult={scriptResult}
+              symbol={symbol}
+              interval={timeframe}
+              fetchOlderOHLCV={fetchOlderOHLCV}
+              indicatorLabels={overlayIndicatorLabels}
+              indicatorResults={indicatorResults}
+              computingIndicators={computingIndicators}
+              onRemoveIndicator={handleRemoveIndicator}
+              onEditIndicator={handleEditIndicator}
+              forceAutoScale={autoScale}
+              debugMode={debugMode}
+              chunkBorders={chunkBorders}
+            />
+          </div>
         </div>
-      </header>
+      )}
 
-      <main className="main-content">
-        <ChartComponent
-          ref={chartRef}
-          data={candles}
-          dataVersion={dataVersion}
-          scriptResult={scriptResult}
-          symbol={symbol}
-          interval={timeframe}
-          fetchOlderOHLCV={fetchOlderOHLCV}
-          indicatorLabels={overlayIndicatorLabels}
-          indicatorResults={indicatorResults}
-          computingIndicators={computingIndicators}
-          onRemoveIndicator={handleRemoveIndicator}
-          onEditIndicator={handleEditIndicator}
-          forceAutoScale={autoScale}
-          debugMode={debugMode}
-          chunkBorders={chunkBorders}
-        />
-      </main>
-
-      <AppToolbar
-        isStrategy={isStrategy}
-        autoScale={autoScale}
-        onToggleAutoScale={() => setAutoScale(!autoScale)}
-        debugMode={debugMode}
-        onToggleDebugMode={() => setDebugMode(!debugMode)}
-        errors={errors}
-        errorConsoleOpen={errorConsoleOpen}
-        onToggleErrorConsole={() => setErrorConsoleOpen(!errorConsoleOpen)}
-        telegramOpen={telegramOpen}
-        onToggleTelegram={() => setTelegramOpen(!telegramOpen)}
-        onOpenQuickAdder={() => { setEditingScriptId(null); setQuickAdderOpen(true); }}
-        onOpenEditor={() => { setEditingScriptId(null); setEditorOpen(true); }}
-        onOpenBacktest={() => setShowSettingsPopup(true)}
-        onOpenGoToDate={() => setGoToDateOpen(true)}
-        onExport={async () => {
-          const path = await exportChartData();
-          if (path) {
-            alert(`Chart data exported to:\n${path}`);
-          } else {
-            alert('Export failed. Check console for details.');
-          }
-        }}
-        backendUrl={backendUrl}
-        botState={botStatus?.state ?? 'Idle'}
-        botConnected={botConnected}
-        botDashboardOpen={botDashboardOpen}
-        onToggleBotDashboard={() => setBotDashboardOpen((v) => !v)}
-      />
-
-      {botDashboardOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 1000, background: '#0d0d18', display: 'flex', flexDirection: 'column',
-        }}>
+      {/* === Bot Dashboard (full takeover of dashboard panel) === */}
+      {activePanel === 'dashboard' && botDashboardOpen && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0d0d18' }}>
           {botStatus ? (
             <LiveDashboard
               backendUrl={backendUrl}
@@ -505,6 +638,36 @@ function App() {
         </div>
       )}
 
+      {/* === Telegram Panel === */}
+      {activePanel === 'telegram' && (
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {/* transform creates a new containing block so the fixed-positioned
+              TelegramConfigPanel renders within this area, not the viewport */}
+          <div style={{ width: '100%', height: '100%', transform: 'translateZ(0)' }}>
+            <TelegramConfigPanel
+              alertConditions={scriptResult?.alertConditions || []}
+              isOpen={true}
+              onToggle={() => setActivePanel('dashboard')}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* === Backtest Panel === */}
+      {activePanel === 'backtest' && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 14 }}>
+          Backtest settings open in popup — use the toolbar to configure.
+        </div>
+      )}
+
+      {/* === Settings Panel (placeholder) === */}
+      {activePanel === 'settings' && (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 14 }}>
+          Settings panel — coming soon.
+        </div>
+      )}
+
+      {/* === Overlays (fixed position, always available) === */}
       <ErrorConsole
         errors={errors}
         isOpen={errorConsoleOpen}
@@ -523,12 +686,6 @@ function App() {
         isOpen={quickAdderOpen}
         onClose={() => setQuickAdderOpen(false)}
         onAdd={handleAddIndicator}
-      />
-
-      <TelegramConfigPanel
-        alertConditions={scriptResult?.alertConditions || []}
-        isOpen={telegramOpen}
-        onToggle={() => setTelegramOpen(!telegramOpen)}
       />
 
       <BacktestSettingsPopup
@@ -594,8 +751,88 @@ function App() {
           {chaosMode ? '⚡ Chaos Mode Enabled' : 'Chaos Mode Disabled'}
         </div>
       )}
-    </div>
+    </ControlPanel>
   );
 }
+
+const dashboardStyles: Record<string, React.CSSProperties> = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    overflow: 'hidden',
+  },
+  toolbar: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '6px 12px',
+    background: '#0f1520',
+    borderBottom: '1px solid #111128',
+    gap: 6,
+    flexShrink: 0,
+  },
+  select: {
+    padding: '5px 10px',
+    border: '1px solid #111128',
+    borderRadius: 4,
+    background: '#0d0d18',
+    color: '#e0e0e0',
+    fontSize: 12,
+    cursor: 'pointer',
+  },
+  divider: {
+    width: 1,
+    height: 18,
+    background: '#222',
+    margin: '0 6px',
+  },
+  actionBtn: {
+    padding: '5px 10px',
+    background: '#111128',
+    color: '#e0e0e0',
+    border: '1px solid #111128',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 11,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+  },
+  primaryBtn: {
+    padding: '5px 10px',
+    background: '#2196f3',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+  },
+  errorBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#e94560',
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    borderRadius: '50%',
+    minWidth: 16,
+    height: 16,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
+    pointerEvents: 'none',
+  },
+  chartArea: {
+    flex: 1,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+};
 
 export default App;
