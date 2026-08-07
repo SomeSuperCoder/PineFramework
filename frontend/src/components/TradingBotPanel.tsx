@@ -2707,7 +2707,7 @@ export function LiveDashboard({
         </div>
 
         {/* Right: Logs Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
           <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
             Logs ({logs.length})
           </div>
