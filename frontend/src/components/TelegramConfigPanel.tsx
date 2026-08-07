@@ -11,8 +11,7 @@ import { NOTIFICATION_TYPES } from '../types';
 
 interface TelegramConfigPanelProps {
   alertConditions: AlertConditionData[];
-  isOpen: boolean;
-  onToggle: () => void;
+  onClose?: () => void;
 }
 
 const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
@@ -117,7 +116,7 @@ async function unlinkChat(chatId: number): Promise<void> {
   await fetch(`/api/settings/telegram/chats/${chatId}/unlink`, { method: 'POST' });
 }
 
-export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigPanelProps) {
+export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfigPanelProps) {
   const [config, setConfig] = useState<TelegramConfig | null>(null);
   const [botToken, setBotToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -167,11 +166,11 @@ export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigP
   }, []);
 
   useEffect(() => {
-    if (isOpen) loadConfig();
-  }, [isOpen, loadConfig]);
+    loadConfig();
+  }, [loadConfig]);
 
   useEffect(() => {
-    if (isOpen && config && alertConditions.length > 0 && config.chats.length > 0) {
+    if (config && alertConditions.length > 0 && config.chats.length > 0) {
       const loadPrefs = async () => {
         const prefs: Record<string, Record<number, boolean>> = {};
         for (const alert of alertConditions) {
@@ -189,7 +188,7 @@ export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigP
       };
       loadPrefs();
     }
-  }, [isOpen, config, alertConditions]);
+  }, [config, alertConditions]);
 
   const runAction = async (key: string, fn: () => Promise<void>) => {
     setBusy((prev) => ({ ...prev, [key]: true }));
@@ -332,26 +331,42 @@ export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigP
     }
   };
 
-  return isOpen ? (
+  return (
     <div
       className="telegram-panel"
       style={{
-        position: 'fixed',
-        top: '60px',
-        right: '20px',
-        width: '420px',
-        maxHeight: 'calc(100vh - 180px)',
-        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
         background: '#0f1520',
         border: '1px solid #111128',
         borderRadius: '8px',
         padding: '20px',
-        zIndex: 99,
         color: '#e0e0e0',
         fontSize: '13px',
       }}
     >
-      <h3 style={{ margin: '0 0 16px', color: '#2196f3' }}>Telegram Configuration</h3>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px' }}>
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Back to dashboard"
+            style={{
+              background: 'none',
+              border: '1px solid #333',
+              borderRadius: '4px',
+              color: '#aaa',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              fontSize: '13px',
+            }}
+          >
+            ← Back
+          </button>
+        )}
+        <h3 style={{ margin: 0, color: '#2196f3' }}>Telegram Configuration</h3>
+      </div>
 
       {loading && <div style={{ color: '#888' }}>Loading...</div>}
 
@@ -928,5 +943,5 @@ export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigP
         </>
       )}
     </div>
-  ) : null;
+  );
 }

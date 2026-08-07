@@ -640,17 +640,10 @@ function App() {
 
       {/* === Telegram Panel === */}
       {activePanel === 'telegram' && (
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {/* transform creates a new containing block so the fixed-positioned
-              TelegramConfigPanel renders within this area, not the viewport */}
-          <div style={{ width: '100%', height: '100%', transform: 'translateZ(0)' }}>
-            <TelegramConfigPanel
-              alertConditions={scriptResult?.alertConditions || []}
-              isOpen={true}
-              onToggle={() => setActivePanel('dashboard')}
-            />
-          </div>
-        </div>
+        <TelegramConfigPanel
+          alertConditions={scriptResult?.alertConditions || []}
+          onClose={() => setActivePanel('dashboard')}
+        />
       )}
 
       {/* === Backtest Panel === */}
