@@ -542,7 +542,7 @@ function App() {
 
       {/* === Bot Dashboard Panel === */}
       {activePanel === 'bot' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0d0d18' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0d0d18', minHeight: 0, overflow: 'hidden' }}>
           {botStatus ? (
             <LiveDashboard
               backendUrl={backendUrl}
