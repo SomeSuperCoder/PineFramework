@@ -89,6 +89,7 @@ const en = {
   // ── notifications ──────────────────────────────────────────────────────────
   positionOpened: '📈 Position opened: {{symbol}} {{side}} — qty {{qty}} @ {{price}}',
   positionClosed: '📉 Position closed: {{symbol}} — PnL {{pnl}}',
+  positionClosedNoPnl: '📉 Position closed: {{symbol}}',
   botStarted: '🟢 PineFramework bot is back online.',
   botStopped: '🛑 PineFramework bot went offline.',
   emergency: '🚨 EMERGENCY — bot stepping away. Verify everything manually.',
@@ -178,6 +179,7 @@ const es: Record<keyof typeof en, string> = {
   // ── notifications ──────────────────────────────────────────────────────────
   positionOpened: '📈 Posición abierta: {{symbol}} {{side}} — cantidad {{qty}} @ {{price}}',
   positionClosed: '📉 Posición cerrada: {{symbol}} — PnL {{pnl}}',
+  positionClosedNoPnl: '📉 Posición cerrada: {{symbol}}',
   botStarted: '🟢 PineFramework Bot está de nuevo en línea.',
   botStopped: '🛑 PineFramework Bot se ha detenido.',
   emergency: '🚨 EMERGENCIA: el bot se retira. Verifícalo todo de inmediato.',
@@ -264,6 +266,7 @@ const ru: Record<keyof typeof en, string> = {
     '📭 Допустимые типы: trading, position_open, position_close, report, daily, error, bot_lifecycle.',
   positionOpened: '📈 Позиция открыта: {{symbol}} {{side}} — объём {{qty}} @ {{price}}',
   positionClosed: '📉 Позиция закрыта: {{symbol}} — PnL {{pnl}}',
+  positionClosedNoPnl: '📉 Позиция закрыта: {{symbol}}',
   botStarted: '🤖 PineFramework Bot снова в сети.',
   botStopped: '🛑 PineFramework Bot остановлен.',
   emergency: '🚨 ТРЕВОГА: бот останавливается. Немедленно всё проверьте.',

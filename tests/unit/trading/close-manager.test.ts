@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   CloseManager,
   CloseManagerOptions,
+  CloseResult,
   CloseSummary,
   MAX_PARALLEL_CLOSES,
   PER_CLOSE_TIMEOUT_MS,
@@ -225,9 +226,19 @@ describe('CloseManager — happy path (every stop closes all positions, confirme
 
     swap.mockImplementation(async (q: Quote) => {
       if (q.inputMint === btcInfo.mint) {
-        return makeSwapResult({ signature: 'sig-btc', inputAmount: btcAmount.toString() });
+        return makeSwapResult({
+          signature: 'sig-btc',
+          inputAmount: btcAmount.toString(),
+          // 25_000 USDC in micro-units → exit price = 25_000 / 0.5 BTC = 50_000.
+          outputAmount: '25000000000',
+        });
       }
-      return makeSwapResult({ signature: 'sig-sol', inputAmount: solAmount.toString() });
+      return makeSwapResult({
+        signature: 'sig-sol',
+        inputAmount: solAmount.toString(),
+        // 300 USDC in micro-units → exit price = 300 / 2 SOL = 150.
+        outputAmount: '300000000',
+      });
     });
 
     const summary: CloseSummary = await manager.closeAllPositions('test', 'graceful');
@@ -262,8 +273,18 @@ describe('CloseManager — happy path (every stop closes all positions, confirme
     // Chain truth: each confirmed signature fires position_closed side effects,
     // and no position is reported failed.
     expect(onPositionClosed).toHaveBeenCalledTimes(2);
-    expect(onPositionClosed).toHaveBeenCalledWith('BTC', '1', 'sig-btc');
-    expect(onPositionClosed).toHaveBeenCalledWith('SOL', '1', 'sig-sol');
+    // NEW (BUG 7): the seam receives the full PositionInfo + CloseResult so the
+    // engine can notify a force-close like a natural close. The closed result
+    // carries the truthful exitPrice derived from the swap output
+    // (outputAmount / 10^6 / quantity — USDC has a fixed 6 decimals).
+    expect(onPositionClosed).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'BTC', timeframe: '1', quantity: 0.5, entryPrice: 100 }),
+      expect.objectContaining({ status: 'closed', txSignature: 'sig-btc', exitPrice: 50_000 }),
+    );
+    expect(onPositionClosed).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'SOL', timeframe: '1', quantity: 2, entryPrice: 100 }),
+      expect.objectContaining({ status: 'closed', txSignature: 'sig-sol', exitPrice: 150 }),
+    );
     expect(onPositionCloseFailed).not.toHaveBeenCalled();
     // The position accessor view is untouched by the CloseManager itself — the
     // engine's onPositionClosed seam owns state removal (chain-truth gate).
@@ -399,7 +420,18 @@ describe('CloseManager — ambiguous confirm → getTransactionStatus, no double
 
     // Confirmed on-chain → the signature IS the truth → closed.
     expect(summary).toMatchObject({ total: 1, closed: 1, failed: 0 });
-    expect(onPositionClosed).toHaveBeenCalledWith('BTC', '1', 'sig-abc');
+    expect(onPositionClosed).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'BTC', timeframe: '1' }),
+      expect.objectContaining({ status: 'closed', txSignature: 'sig-abc' }),
+    );
+    // Ambiguous-confirm path has NO swap output → the confirmed verdict carries
+    // NO exitPrice (never-guess PnL — the engine then renders a PnL-less
+    // notice instead of inventing $0.00).
+    const ambiguousClosed = onPositionClosed.mock.calls[0]![1] as Extract<
+      CloseResult,
+      { status: 'closed' }
+    >;
+    expect(ambiguousClosed.exitPrice).toBeUndefined();
     expect(getTransactionStatus).toHaveBeenCalledWith('sig-abc');
     // Exactly ONE swap attempt — the ambiguous attempt is never retried.
     expect(swap).toHaveBeenCalledTimes(1);
@@ -522,7 +554,10 @@ describe('CloseManager — allSettled isolation (one failing close never blocks 
     });
     // The success still fired its confirmed-close side effect despite siblings failing.
     expect(onPositionClosed).toHaveBeenCalledTimes(1);
-    expect(onPositionClosed).toHaveBeenCalledWith('SOL', '1', 'sig-sol');
+    expect(onPositionClosed).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'SOL', timeframe: '1' }),
+      expect.objectContaining({ status: 'closed', txSignature: 'sig-sol' }),
+    );
   });
 });
 

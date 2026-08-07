@@ -4,7 +4,8 @@ import { BotState, ErrorSeverity } from '../../../src/trading/types.js';
 import type { BotConfig } from '../../../src/trading/types.js';
 import { RiskManager } from '../../../src/trading/risk/risk-manager.js';
 import { CloseManager } from '../../../src/trading/close-manager.js';
-import type { CloseSummary } from '../../../src/trading/close-manager.js';
+import type { CloseResult, CloseSummary } from '../../../src/trading/close-manager.js';
+import type { PositionInfo } from '../../../src/trading/live-strategy-executor.js';
 
 // Mock modules before importing LiveStrategyExecutor — same surface as
 // live-strategy-executor.test.ts (these modules carry import-time side
@@ -877,7 +878,7 @@ describe('BotEngine stop paths call the close manager (auto-close-on-stop)', () 
 describe('BotEngine close-attempt tombstones (F3 security)', () => {
   type CloseAttemptEngine = {
     prepareCloseAttempt: (symbol: string, timeframe: string, closeRunId: string) => Promise<string | undefined>;
-    handlePositionClosed: (symbol: string, timeframe: string, txSignature: string) => void;
+    handlePositionClosed: (position: PositionInfo, result: CloseResult) => void;
     loadCloseAttemptsFromDisk: () => Promise<void>;
   };
 
@@ -909,7 +910,17 @@ describe('BotEngine close-attempt tombstones (F3 security)', () => {
     await engine.prepareCloseAttempt('BTC', '1', 'run-1');
     // Confirmed signature → the tombstone is removed so a legitimately
     // re-opened position can close again under a fresh run.
-    engine.handlePositionClosed('BTC', '1', 'sig-ok');
+    engine.handlePositionClosed(
+      {
+        symbol: 'BTC',
+        timeframe: '1',
+        direction: 'long',
+        quantity: 1,
+        entryPrice: 100,
+        entryTime: 1_700_000_000_000,
+      },
+      { status: 'closed', txSignature: 'sig-ok' },
+    );
 
     expect(await engine.prepareCloseAttempt('BTC', '1', 'run-2')).toBeUndefined();
   });
@@ -942,6 +953,171 @@ describe('BotEngine close-attempt tombstones (F3 security)', () => {
     );
     await engine.loadCloseAttemptsFromDisk();
     expect(await engine.prepareCloseAttempt('BTC', '1', 'run-2')).toBeUndefined();
+  });
+});
+
+// ---- BUG 7: force-close (stop/emergency) notifies like a natural close ----
+//
+// The CloseManager seam now delivers (PositionInfo, CloseResult) and
+// handlePositionClosed fires telegramBot.notifyPositionClosed for a confirmed
+// close with a known entry — the same trade shape and message as a natural
+// close (bot-engine.ts:1859-1963). Entry unknown → skip entirely; exit unknown
+// → the notice is still sent but renders PnL-less (never $0.00, never a guess).
+
+describe('BotEngine force-close notification (BUG 7)', () => {
+  // Structural type only — a `BotEngine & ForceCloseEngine` intersection
+  // collapses to `never` (same trap the F3 suite documents); cast via unknown.
+  type ForceCloseEngine = {
+    handlePositionClosed: (position: PositionInfo, result: CloseResult) => void;
+    closeManager: CloseManager | null;
+    configure: (config: BotConfig) => void;
+    start: () => Promise<void>;
+    emergencyStop: () => Promise<void>;
+    state: BotState;
+  };
+
+  function makeEngine(telegramBot?: {
+    notifyPositionClosed: ReturnType<typeof vi.fn>;
+  }): ForceCloseEngine {
+    return new BotEngine({
+      telegramBot: (telegramBot ?? { notifyPositionClosed: vi.fn() }) as never,
+    }) as unknown as ForceCloseEngine;
+  }
+
+  function makePosition(overrides: Partial<PositionInfo> = {}): PositionInfo {
+    return {
+      symbol: 'SOLUSDT',
+      timeframe: '60',
+      direction: 'long',
+      quantity: 0.1,
+      entryPrice: 100,
+      entryTime: 1_700_000_000_000,
+      ...overrides,
+    };
+  }
+
+  it('a CONFIRMED force-close with an open position notifies via notifyPositionClosed (same trade shape as a natural close)', async () => {
+    const notifyPositionClosed = vi.fn().mockResolvedValue(undefined);
+    const engine = makeEngine({ notifyPositionClosed });
+
+    engine.handlePositionClosed(makePosition(), {
+      status: 'closed',
+      txSignature: 'sig-stop',
+      exitPrice: 101,
+    });
+
+    await vi.waitFor(() => expect(notifyPositionClosed).toHaveBeenCalledTimes(1));
+    const trade = notifyPositionClosed.mock.calls[0]![0] as {
+      symbol: string;
+      side: string;
+      entryPrice: number;
+      exitPrice: number;
+      realizedPnl: number;
+      transactionSignature: string;
+      status: string;
+    };
+    expect(trade.symbol).toBe('SOLUSDT');
+    expect(trade.side).toBe('buy');
+    expect(trade.entryPrice).toBe(100);
+    expect(trade.exitPrice).toBe(101);
+    // (exit 101 − entry 100) × qty 0.1 — a truthful PnL, never a guess.
+    expect(trade.realizedPnl).toBe(0.1);
+    expect(trade.transactionSignature).toBe('sig-stop');
+    expect(trade.status).toBe('confirmed');
+  });
+
+  it('skips the notification entirely when the position entry price is unknown (entryPrice <= 0)', async () => {
+    const notifyPositionClosed = vi.fn().mockResolvedValue(undefined);
+    const engine = makeEngine({ notifyPositionClosed });
+
+    engine.handlePositionClosed(makePosition({ entryPrice: 0 }), {
+      status: 'closed',
+      txSignature: 'sig-unknown-entry',
+      exitPrice: 101,
+    });
+
+    // Never-guess PnL: without a truthful entry there is no PnL → notify
+    // nothing (a $0.00 readout would mislead the subscriber).
+    expect(notifyPositionClosed).not.toHaveBeenCalled();
+  });
+
+  it('still notifies when the exit price is unknown — the trade carries NO realizedPnl (PnL-less notice)', async () => {
+    const notifyPositionClosed = vi.fn().mockResolvedValue(undefined);
+    const engine = makeEngine({ notifyPositionClosed });
+
+    // Ambiguous-confirm force-close: confirmed on-chain, but no swap output
+    // was ever returned → CloseResult.closed.exitPrice is undefined.
+    engine.handlePositionClosed(makePosition(), { status: 'closed', txSignature: 'sig-no-exit' });
+
+    await vi.waitFor(() => expect(notifyPositionClosed).toHaveBeenCalledTimes(1));
+    const trade = notifyPositionClosed.mock.calls[0]![0] as {
+      symbol: string;
+      exitPrice?: number;
+      realizedPnl?: number;
+    };
+    expect(trade.symbol).toBe('SOLUSDT');
+    // PnL-less: exitPrice/realizedPnl are OMITTED from the payload — the
+    // renderer then omits the lines instead of inventing $0.00.
+    expect('exitPrice' in trade).toBe(false);
+    expect('realizedPnl' in trade).toBe(false);
+  });
+
+  it('EMERGENCY-STOP force-close notifies with close-reason metadata (real emergency stop path)', async () => {
+    const notifyPositionClosed = vi.fn().mockResolvedValue(undefined);
+    const engine = new BotEngine({
+      telegramBot: { notifyPositionClosed } as never,
+    }) as unknown as ForceCloseEngine;
+    // The injected manager ALWAYS wins (bot-engine.ts:1010-1012). Its
+    // closeAllPositions fires the engine's confirmed-close seam exactly as a
+    // real CloseManager would (applyCloseSideEffects → onPositionClosed).
+    const closeAllPositions = vi.fn().mockImplementation(async (_reason: string, _mode: string) => {
+      engine.handlePositionClosed(makePosition(), {
+        status: 'closed',
+        txSignature: 'sig-emergency',
+        exitPrice: 99,
+      });
+      return {
+        closeRunId: 'test-run',
+        total: 1,
+        closed: 1,
+        failed: 0,
+        timedOut: 0,
+        durationMs: 0,
+        failedSymbols: [],
+      } satisfies CloseSummary;
+    });
+    engine.closeManager = { closeAllPositions } as unknown as CloseManager;
+
+    // Same start harness as the stop-paths suite (initialize/shutdown mocked).
+    // initialize() is mocked, so the injected-manager wiring never overwrites
+    // the closeManager field assigned above.
+    engine.configure(defaultConfig);
+    const engineSeams = engine as unknown as {
+      initialize: () => Promise<void>;
+      shutdown: () => Promise<void>;
+    };
+    vi.spyOn(engineSeams, 'initialize').mockResolvedValue(undefined);
+    vi.spyOn(engineSeams, 'shutdown').mockResolvedValue(undefined);
+    await engine.start();
+    expect(engine.state).toBe(BotState.Running);
+
+    await engine.emergencyStop();
+    expect(closeAllPositions).toHaveBeenCalledTimes(1);
+    expect(closeAllPositions).toHaveBeenCalledWith('emergency_stop', 'emergency');
+
+    // The emergency close notifies like a natural close — and carries the
+    // close reason as data-only metadata (closeOpenPositions sets closeRunReason
+    // for the run, bot-engine.ts:1669).
+    await vi.waitFor(() => expect(notifyPositionClosed).toHaveBeenCalledTimes(1));
+    const trade = notifyPositionClosed.mock.calls[0]![0] as {
+      symbol: string;
+      closeReason?: string;
+      realizedPnl: number;
+    };
+    expect(trade.symbol).toBe('SOLUSDT');
+    expect(trade.closeReason).toBe('emergency_stop');
+    // (exit 99 − entry 100) × qty 0.1 — a truthful negative PnL, never $0.00.
+    expect(trade.realizedPnl).toBe(-0.1);
   });
 });
 

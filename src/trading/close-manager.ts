@@ -20,7 +20,7 @@
  * @module trading
  */
 
-import type { DexAdapter, TxStatus } from './dex/dex-adapter.js';
+import type { DexAdapter, SwapResult, TxStatus } from './dex/dex-adapter.js';
 import type { PositionInfo } from './live-strategy-executor.js';
 import type { SensitiveData } from './wallet/sensitive-data.js';
 import type { WalletKeypair } from './wallet/wallet-manager.js';
@@ -60,15 +60,29 @@ export const RETRY_BACKOFF_BASE_MS = 1_000;
  *  (live-strategy-executor.ts passes 50 bps, the adapter default). */
 export const CLOSE_SLIPPAGE_BPS = 50;
 
+/** Decimals of the close swap's OUTPUT token. A close is always base → USDC
+ *  (USDC_MINT is the hardcoded outputMint in attemptClose), and USDC is a
+ *  fixed 6-decimal token — the same assumption the executor and every DEX
+ *  adapter make (live-strategy-executor.ts 660-661 "USDC has 6 decimals →
+ *  × 1_000_000"; jupiter-swap-adapter getBalance: mint === USDC_MINT ? 6 : 9;
+ *  solana-wallet default ?? 6). This is reliably determinable — the close
+ *  path can never output a non-USDC token — so the exit price is derivable. */
+export const CLOSE_OUTPUT_DECIMALS = 6;
+
 // ---- Types ----
 
 /** Close mode is a budget, not a mechanism (design decision 2). */
 export type CloseMode = 'emergency' | 'graceful';
 
 /** Per-position close outcome (design decision 5). ONLY 'closed' removes the
- *  position and mutates state — failed/timed_out leave it in place. */
+ *  position and mutates state — failed/timed_out leave it in place.
+ *
+ *  `exitPrice` (per base token, USDC) is the truthful close price derived from
+ *  the confirmed swap output — present only when the swap produced a derivable
+ *  output amount (never a guess). It feeds the force-close Telegram notice so
+ *  a stop/emergency close notifies like a natural close (BUG 7). */
 export type CloseResult =
-  | { status: 'closed'; txSignature: string }
+  | { status: 'closed'; txSignature: string; exitPrice?: number }
   | { status: 'failed'; error: string }
   | { status: 'timed_out' };
 
@@ -128,7 +142,7 @@ export type CloseEvent =
 /** Internal per-attempt outcome — adds the retryability signal consumed by
  *  the retry loop. Never part of the public CloseResult contract. */
 type AttemptResult =
-  | { status: 'closed'; txSignature: string }
+  | { status: 'closed'; txSignature: string; exitPrice?: number }
   | { status: 'failed'; error: string; retryable: boolean };
 
 /** Constructor DI (tasks.md 2.1). Every dependency is a narrow seam so Wave 3
@@ -146,8 +160,11 @@ export interface CloseManagerOptions {
    *  truth, design decision 5). */
   getPositions: () => PositionInfo[];
   /** Confirmed-close side effects — Wave 3 wires engine state removal +
-   *  persistence. Only ever called with a confirmed signature (decision 5). */
-  onPositionClosed: (symbol: string, timeframe: string, txSignature: string) => void;
+   *  persistence. Only ever called with a confirmed signature (decision 5).
+   *  The full PositionInfo + CloseResult are passed so the engine can build a
+   *  truthful force-close Telegram notice (exitPrice from the swap output)
+   *  without the CloseManager knowing anything about Telegram (BUG 7). */
+  onPositionClosed: (position: PositionInfo, result: CloseResult) => void;
   /** Failed/timed-out side effects — Wave 3 wires close_failed delivery. The
    *  position stays in place (decision 5). */
   onPositionCloseFailed: (symbol: string, timeframe: string, error: string) => void;
@@ -452,7 +469,14 @@ export class CloseManager {
       const attemptResult = await this.attemptClose(position, closeRunId, privateKey);
 
       if (attemptResult.status === 'closed') {
-        const result: CloseResult = { status: 'closed', txSignature: attemptResult.txSignature };
+        // Propagate the truthful exit price from the confirmed swap output —
+        // without it, handlePositionClosed's exitPrice destructure is undefined
+        // and confirmed force-closes notify PnL-less (CloseManagerOptions JSDoc).
+        const result: CloseResult = {
+          status: 'closed',
+          txSignature: attemptResult.txSignature,
+          exitPrice: attemptResult.exitPrice,
+        };
         fireVerdict(result);
         return result;
       }
@@ -538,7 +562,14 @@ export class CloseManager {
       const swapResult = await this.dex.swap(quote, privateKey);
 
       if (swapResult.success && swapResult.signature) {
-        return { status: 'closed', txSignature: swapResult.signature };
+        return {
+          status: 'closed',
+          txSignature: swapResult.signature,
+          // Truthful exit price from the confirmed swap output — undefined
+          // when the output cannot be derived (never-guess PnL rule). The
+          // engine's force-close notice uses it to notify like a natural close.
+          exitPrice: this.deriveCloseExitPrice(swapResult, position),
+        };
       }
 
       if (swapResult.success && !swapResult.signature) {
@@ -618,6 +649,31 @@ export class CloseManager {
       error: `Ambiguous swap outcome — signature ${signature} is ${status} on-chain; not retried to prevent double-sell`,
       retryable: false,
     };
+  }
+
+  /**
+   * Derive the truthful close exit price (USDC per base token) from a
+   * confirmed swap output — undefined when it cannot be derived (never-guess
+   * PnL rule; the engine then renders a PnL-less notice instead of inventing
+   * $0.00).
+   *
+   * A close is always base → USDC (USDC_MINT hardcoded above), so the output
+   * amount is micro-USDC and USDC has a fixed 6 decimals (CLOSE_OUTPUT_DECIMALS
+   * — same assumption the executor and DEX adapters make). Exit price =
+   * outputAmount / 10^6 / quantity.
+   *
+   * Guards: the output amount must parse to a finite positive number and the
+   * quantity must be positive. The ambiguous-confirm path
+   * (resolveAmbiguousOutcome) never reaches here — it has no output amount —
+   * so its confirmed verdicts carry no exitPrice (undefined).
+   */
+  private deriveCloseExitPrice(swapResult: SwapResult, position: PositionInfo): number | undefined {
+    if (!Number.isFinite(position.quantity) || position.quantity <= 0) return undefined;
+    const outputAmount = swapResult.outputAmount;
+    if (typeof outputAmount !== 'string' || outputAmount.trim() === '') return undefined;
+    const output = Number(outputAmount);
+    if (!Number.isFinite(output) || output <= 0) return undefined;
+    return output / 10 ** CLOSE_OUTPUT_DECIMALS / position.quantity;
   }
 
   /**
@@ -724,7 +780,7 @@ export class CloseManager {
         txSignature: result.txSignature,
       });
       this.callSafely(
-        () => this.onPositionClosed(position.symbol, position.timeframe, result.txSignature),
+        () => this.onPositionClosed(position, result),
         'onPositionClosed',
         closeRunId,
       );

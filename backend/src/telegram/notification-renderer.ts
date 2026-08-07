@@ -82,23 +82,36 @@ export function renderNotification(
     case 'position_close': {
       const { trade } = data as TradingNotificationData & { kind: 'position_close' };
       const side = trade.side === 'buy' ? 'Long' : 'Short';
+      // Never-guess PnL: a force-close may confirm without a truthfully
+      // derivable exit price. The PnL/Exit/Fees lines are then OMITTED — never
+      // 'undefined'/'NaN', never an invented $0.00.
       const pnlStr =
-        trade.realizedPnl >= 0
-          ? `+$${trade.realizedPnl.toFixed(2)}`
-          : `-$${Math.abs(trade.realizedPnl).toFixed(2)}`;
-      return [
-        t(lang, 'positionClosed', {
-          symbol: escapeMarkdown(trade.symbol),
-          pnl: escapeMarkdown(pnlStr),
-        }),
+        trade.realizedPnl === undefined
+          ? undefined
+          : trade.realizedPnl >= 0
+            ? `+$${trade.realizedPnl.toFixed(2)}`
+            : `-$${Math.abs(trade.realizedPnl).toFixed(2)}`;
+
+      const lines = [
+        pnlStr === undefined
+          ? t(lang, 'positionClosedNoPnl', { symbol: escapeMarkdown(trade.symbol) })
+          : t(lang, 'positionClosed', {
+              symbol: escapeMarkdown(trade.symbol),
+              pnl: escapeMarkdown(pnlStr),
+            }),
         '',
         `Side: \`${escapeMarkdown(side)}\``,
         `Size: \`${escapeMarkdown(String(trade.size))}\``,
         `Entry: \`$${USD(trade.entryPrice)}\``,
-        `Exit: \`$${USD(trade.exitPrice)}\``,
-        `Fees: \`$${USD(trade.fees)}\``,
-        `DEX: \`${escapeMarkdown(trade.dex)}\``,
-      ].join('\n');
+      ];
+      if (trade.exitPrice !== undefined) {
+        lines.push(`Exit: \`$${USD(trade.exitPrice)}\``);
+      }
+      if (trade.fees !== undefined) {
+        lines.push(`Fees: \`$${USD(trade.fees)}\``);
+      }
+      lines.push(`DEX: \`${escapeMarkdown(trade.dex)}\``);
+      return lines.join('\n');
     }
 
     case 'emergency_stop': {

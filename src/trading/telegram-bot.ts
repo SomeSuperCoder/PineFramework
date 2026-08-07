@@ -45,12 +45,33 @@ export type TradingNotificationData =
   | { kind: 'bot_started'; config: BotConfig }
   | { kind: 'bot_stopped'; runtimeMs: number; tradeCount: number; pnl: number }
   | { kind: 'position_open'; trade: TradeRecord }
-  | { kind: 'position_close'; trade: TradeRecord }
+  | { kind: 'position_close'; trade: PositionNotificationTrade }
   | { kind: 'emergency_stop'; source: string }
   | { kind: 'daily_loss'; loss: number; maxLoss: number }
   | { kind: 'error'; code: string; message: string }
   | { kind: 'warning'; message: string }
   | { kind: 'state_change'; from: BotState; to: BotState; reason: string };
+
+/**
+ * Trade payload for position notifications. exitPrice / realizedPnl / fees are
+ * optional because a FORCE close (stop/emergency button) may confirm on-chain
+ * without a truthfully derivable exit price — the notice must then omit those
+ * fields rather than invent a $0.00 PnL (never-guess PnL rule). Natural closes
+ * always carry them. The renderer (backend notification-renderer + the legacy
+ * fallback here) omits the corresponding lines when a field is missing.
+ */
+export interface PositionNotificationTrade extends Omit<
+  TradeRecord,
+  'exitPrice' | 'realizedPnl' | 'fees'
+> {
+  exitPrice?: number;
+  realizedPnl?: number;
+  fees?: number;
+  /** Why the position closed (e.g. 'user_stop' / 'emergency_stop'). Metadata
+   *  only — never rendered into the message (a force-close notice is IDENTICAL
+   *  to a natural close). */
+  closeReason?: string;
+}
 
 /** Router implemented by the BACKEND. Core defines; backend implements. */
 export interface TradingNotificationRouter {
@@ -151,34 +172,47 @@ export class TradingTelegramBot {
     await this.broadcast(message);
   }
 
-  async notifyPositionClosed(trade: TradeRecord): Promise<void> {
+  /**
+   * Notify a position close. exitPrice / realizedPnl / fees may be absent for
+   * a force-close (stop/emergency) whose exit price was not truthfully
+   * derivable — the PnL/Exit/Fees lines are omitted rather than inventing
+   * $0.00 (never-guess PnL rule). With all fields present the message is
+   * byte-identical to a natural close.
+   */
+  async notifyPositionClosed(trade: PositionNotificationTrade): Promise<void> {
     if (this.options.routing) {
       await this.options.routing.deliver('position_close', { kind: 'position_close', trade }, undefined);
       return;
     }
-    const pnlStr =
-      trade.realizedPnl >= 0
-        ? `+$${trade.realizedPnl.toFixed(2)}`
-        : `-$${Math.abs(trade.realizedPnl).toFixed(2)}`;
-
     const txLink =
       trade.transactionSignature && this.options.includeTxLinks
         ? `\n[View TX](${this.options.explorerUrlTemplate!.replace('{signature}', trade.transactionSignature)})`
         : '';
 
-    const message =
-      '*📉 Position Closed*\n\n' +
-      `Symbol: \`${escapeMarkdown(trade.symbol)}\`\n` +
-      `Side: \`${trade.side === 'buy' ? 'Long' : 'Short'}\`\n` +
-      `Size: \`${trade.size}\`\n` +
-      `Entry: \`$${trade.entryPrice.toFixed(2)}\`\n` +
-      `Exit: \`$${trade.exitPrice.toFixed(2)}\`\n` +
-      `PnL: \`${escapeMarkdown(pnlStr)}\`\n` +
-      `Fees: \`$${trade.fees.toFixed(2)}\`\n` +
-      `DEX: \`${trade.dex}\`` +
-      txLink;
+    const lines = [
+      '*📉 Position Closed*',
+      '',
+      `Symbol: \`${escapeMarkdown(trade.symbol)}\``,
+      `Side: \`${trade.side === 'buy' ? 'Long' : 'Short'}\``,
+      `Size: \`${trade.size}\``,
+      `Entry: \`$${trade.entryPrice.toFixed(2)}\``,
+    ];
+    if (trade.exitPrice !== undefined) {
+      lines.push(`Exit: \`$${trade.exitPrice.toFixed(2)}\``);
+    }
+    if (trade.realizedPnl !== undefined) {
+      const pnlStr =
+        trade.realizedPnl >= 0
+          ? `+$${trade.realizedPnl.toFixed(2)}`
+          : `-$${Math.abs(trade.realizedPnl).toFixed(2)}`;
+      lines.push(`PnL: \`${escapeMarkdown(pnlStr)}\``);
+    }
+    if (trade.fees !== undefined) {
+      lines.push(`Fees: \`$${trade.fees.toFixed(2)}\``);
+    }
+    lines.push(`DEX: \`${trade.dex}\`` + txLink);
 
-    await this.broadcast(message);
+    await this.broadcast(lines.join('\n'));
   }
 
   async notifyEmergencyStop(source: string): Promise<void> {

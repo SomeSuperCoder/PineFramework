@@ -23,7 +23,7 @@ import type { CandleErrorInfo } from './types.js';
 import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
-import type { TradingTelegramBot } from './telegram-bot.js';
+import type { TradingTelegramBot, PositionNotificationTrade } from './telegram-bot.js';
 import {
   BybitWebSocketService,
   BybitTick,
@@ -33,7 +33,7 @@ import {
 } from './bybit-websocket.js';
 import { LiveStrategyExecutor } from './live-strategy-executor.js';
 import { CloseManager } from './close-manager.js';
-import type { CloseEvent, CloseMode } from './close-manager.js';
+import type { CloseEvent, CloseMode, CloseResult } from './close-manager.js';
 import { JupiterSwapAdapter } from './dex/jupiter-swap-adapter.js';
 import { LiveScheduler } from './live-scheduler.js';
 import { ClosedCandle, PairId } from './scheduler.js';
@@ -367,6 +367,13 @@ export class BotEngine {
    *  closeOpenPositions — that would run two swaps for one position. One
    *  close run per engine lifetime. */
   private closeRunInProgress = false;
+
+  /** Reason of the close run in flight ('user_stop' | 'emergency_stop'),
+   *  captured by closeOpenPositions for the duration of the run. Carried as
+   *  metadata (closeReason) on force-close trade notifications — never
+   *  rendered into the message (a force-close notice is identical to a
+   *  natural close). */
+  private closeRunReason: string | undefined = undefined;
 
   /** Persisted per-position close-attempt tombstones (security F3), keyed by
    *  `SYMBOL:TIMEFRAME`. A close run marks a position before attempting its
@@ -1008,8 +1015,7 @@ export class BotEngine {
         dex,
         getKeypair: () => walletManager.getKeypair(),
         getPositions: () => this.getPositions(),
-        onPositionClosed: (symbol, timeframe, txSignature) =>
-          this.handlePositionClosed(symbol, timeframe, txSignature),
+        onPositionClosed: (position, result) => this.handlePositionClosed(position, result),
         onPositionCloseFailed: (symbol, timeframe, error) =>
           this.handlePositionCloseFailed(symbol, timeframe, error),
         // F3 (security): engine-owned cross-run double-sell guard — persist the
@@ -1533,6 +1539,57 @@ export class BotEngine {
     };
   }
 
+  /**
+   * Build the TradeRecord a FORCE close (stop/emergency) notification expects
+   * from the PositionInfo snapshot and the confirmed close result (BUG 7) —
+   * same shape and message as a natural close.
+   *
+   * The spot DEX only opens longs, so side is always 'buy' (the closed
+   * position's open direction — same convention as buildPositionNotificationTrade
+   * and the executor's persistClosedTradeRecord). PnL for a long close =
+   * (exit − entry) × qty.
+   *
+   * Never-guess PnL: exitPrice (and therefore realizedPnl) is omitted when the
+   * close could not derive a truthful exit price (CloseResult.closed.exitPrice
+   * undefined — e.g. an ambiguous-confirm close with no swap output amount).
+   * The renderer then omits the PnL line instead of inventing $0.00. Callers
+   * MUST NOT invoke this for a position with an unknown entry price
+   * (entryPrice <= 0) — handlePositionClosed guards that before notifying.
+   */
+  private buildClosedTradeFromPositionInfo(
+    position: PositionInfo,
+    opts: { exitPrice?: number; txSignature: string; closeReason?: string },
+  ): PositionNotificationTrade {
+    const closedAt = Date.now();
+    const botId = this.botId ?? 'default-bot';
+    // Adapter name when live (same vocabulary as DexKind); configured kind as
+    // a fallback so a notification never carries an undefined dex.
+    const dex = (this.dex?.name ?? this._config?.dex ?? 'jupiter-swap') as DexKind;
+
+    return {
+      id: `${botId}-${closedAt}-${position.symbol}`,
+      botId,
+      symbol: position.symbol,
+      side: 'buy',
+      entryPrice: position.entryPrice,
+      size: position.quantity,
+      fees: 0,
+      dex,
+      ...(opts.txSignature ? { transactionSignature: opts.txSignature } : {}),
+      openedAt: position.entryTime,
+      closedAt,
+      ...(position.timeframe ? { timeframe: position.timeframe } : {}),
+      status: 'confirmed',
+      ...(opts.exitPrice !== undefined
+        ? {
+            exitPrice: opts.exitPrice,
+            realizedPnl: (opts.exitPrice - position.entryPrice) * position.quantity,
+          }
+        : {}),
+      ...(opts.closeReason ? { closeReason: opts.closeReason } : {}),
+    };
+  }
+
   /** Feed-liveness telemetry (liveness suite): every kline message — confirmed
    *  or not — advances the tick counters and refreshes the silence reference,
    *  so a connected feed that has not yet delivered a confirmed candle still
@@ -1606,6 +1663,10 @@ export class BotEngine {
       this.logger.info('Close manager not available — skipping position closes', { reason, mode });
       return;
     }
+    // Capture the close reason for the duration of the run so confirmed-close
+    // notifications can carry it as metadata (closeReason) — the DI seam
+    // delivers (position, result) without the run reason (BUG 7).
+    this.closeRunReason = reason;
     try {
       await closeManager.closeAllPositions(reason, mode);
     } catch (err) {
@@ -1614,6 +1675,8 @@ export class BotEngine {
         mode,
         error: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      this.closeRunReason = undefined;
     }
   }
 
@@ -1785,8 +1848,29 @@ export class BotEngine {
    * here; flattening state.position is sufficient because getPositions()
    * skips flat positions BEFORE the confirmed-fill gate, and the map is inert
    * once the engine stops.
+   *
+   * BUG 7: a force-close (stop/emergency) now ALSO delivers the position_close
+   * Telegram notice — same trade shape and message as a natural close. The
+   * close result carries a truthful exitPrice when the swap output allowed it;
+   * with exitPrice unknown the notice renders PnL-less (never $0.00, never a
+   * guess), and with an unknown entry (entryPrice <= 0) the notice is skipped
+   * entirely (never-guess PnL rule).
    */
-  private handlePositionClosed(symbol: string, timeframe: string, txSignature: string): void {
+  private handlePositionClosed(position: PositionInfo, result: CloseResult): void {
+    // Chain-truth seam: only a confirmed close is ever wired here (design
+    // decision 5). The guard keeps the union honest — a future caller wiring a
+    // non-closed verdict must not silently flatten state.
+    if (result.status !== 'closed') {
+      this.logger.warn('position_closed seam invoked without a confirmed close', {
+        symbol: position.symbol,
+        timeframe: position.timeframe,
+        status: result.status,
+      });
+      return;
+    }
+
+    const { symbol, timeframe } = position;
+    const { txSignature, exitPrice } = result;
     const executor = this.strategyExecutor;
     if (executor) {
       const states = executor.getState();
@@ -1848,6 +1932,33 @@ export class BotEngine {
           error: err instanceof Error ? err.message : String(err),
         });
       });
+    }
+
+    // BUG 7: notify the force-close like a natural close — same trade shape
+    // and message, fire-and-forget (a Telegram failure must never break the
+    // close run; mirrors notifyPositionResult's tolerance). Never-guess PnL:
+    // entry unknown → skip entirely; exit unknown → PnL-less notice.
+    if (this.telegramBot && position.entryPrice > 0) {
+      try {
+        const trade = this.buildClosedTradeFromPositionInfo(position, {
+          exitPrice,
+          txSignature,
+          closeReason: this.closeRunReason,
+        });
+        void this.telegramBot.notifyPositionClosed(trade).catch((err) => {
+          this.logger.warn('[Notify] position_close failed', {
+            symbol,
+            timeframe,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      } catch (err) {
+        this.logger.warn('[Notify] position_close failed', {
+          symbol,
+          timeframe,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 

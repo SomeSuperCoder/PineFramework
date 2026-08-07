@@ -224,16 +224,13 @@ describe('BUG 4b — production engine must invoke position-open/close notificat
     expect(deliver).toHaveBeenCalledWith('position_open', expect.anything(), undefined);
   });
 
-  it('bot-engine.ts must call notifyPositionOpened / notifyPositionClosed (currently never)', () => {
-    const engineSrc = fs.readFileSync(
-      path.resolve(__dirname, '../../..', 'src/trading/bot-engine.ts'),
-      'utf-8',
-    );
-    // CORRECT: when the engine opens/closes a position it must fire the
-    // Telegram notification the bot was wired to route (index.ts L462-466).
-    expect(engineSrc).toMatch(/notifyPositionOpened\(/);
-    expect(engineSrc).toMatch(/notifyPositionClosed\(/);
-  });
+  // NOTE: the previous source-regex assertion ("bot-engine.ts must call
+  // notifyPositionOpened / notifyPositionClosed (currently never)") was REMOVED
+  // as stale — the regex matched the long-existing natural-close chaos path
+  // (bot-engine.ts:1465-1473), and the force-close gap it tracked is now
+  // asserted behaviorally by the canonical repro
+  // backend/tests/bug-repro/force-close-notification.test.ts (BUG 7). A
+  // source-regex test added no behavioral value over those two suites.
 });
 
 describe('BUG 2 — inline submenus must have a back button', () => {
