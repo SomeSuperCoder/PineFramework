@@ -103,7 +103,7 @@ describe('TelegramService with token (no actual connection)', () => {
   });
 });
 
-describe('TelegramConfigStore SOCKS5 proxy', () => {
+describe('TelegramConfigStore HTTP proxy', () => {
   let filePath: string;
   let configStore: TelegramConfigStore;
 
@@ -190,7 +190,7 @@ describe('TelegramConfigStore SOCKS5 proxy', () => {
   });
 });
 
-describe('SOCKS5 proxy with TelegramService', () => {
+describe('HTTP proxy with TelegramService', () => {
   let filePath: string;
   let configStore: TelegramConfigStore;
   let service: TelegramService;

@@ -573,9 +573,9 @@ This document preserves the complete implementation task list from the project's
 
 - [x] 73. Checkpoint - Telegram Notification and JSON File Persistence Validation
 
-- [x] 74. Implement SOCKS5 Proxy Support for Telegram Bot
+- [x] 74. Implement HTTP Proxy Support for Telegram Bot
   - [x] 74.1 Read proxy settings from telegram.json
-  - [x] 74.2 Create SOCKS5 agent on bot initialization
+  - [x] 74.2 Create HTTP proxy agent on bot initialization
   - [x] 74.3 Fall back to direct connection when no proxy configured
   - [x] 74.4 Expose proxy configuration via REST API
 

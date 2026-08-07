@@ -137,8 +137,8 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
     return;
   }
   try {
-    const { SocksProxyAgent } = await import('socks-proxy-agent');
-    let proxyUrl = `socks5://`;
+    const { HttpsProxyAgent } = await import('https-proxy-agent');
+    let proxyUrl = `http://`;
     if (proxy.username) {
       proxyUrl += encodeURIComponent(proxy.username);
       if (proxy.password) proxyUrl += `:${encodeURIComponent(proxy.password)}`;
@@ -146,8 +146,8 @@ app.get('/api/telegram/proxy-test', async (_req, res) => {
     }
     proxyUrl += `${proxy.host}:${proxy.port}`;
     // H3: never log the full URL (it embeds the proxy password). host:port only.
-    logger.info(`[Proxy-Test] Testing SOCKS5 proxy: ${proxy.host}:${proxy.port}`);
-    const agent = new SocksProxyAgent(proxyUrl);
+    logger.info(`[Proxy-Test] Testing HTTP proxy: ${proxy.host}:${proxy.port}`);
+    const agent = new HttpsProxyAgent(proxyUrl);
     const https = await import('node:https');
     await new Promise<void>((resolve, reject) => {
       const req = https.get('https://api.telegram.org', { agent, timeout: 10000 }, (resp) => {

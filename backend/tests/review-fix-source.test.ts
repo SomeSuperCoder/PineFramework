@@ -44,7 +44,7 @@ describe('H3 — proxy-test log omits credentials', () => {
   it('logs host:port only, never the password-bearing proxyUrl', () => {
     const line = src
       .split('\n')
-      .find((l) => l.includes('[Proxy-Test] Testing SOCKS5 proxy'));
+      .find((l) => l.includes('[Proxy-Test] Testing HTTP proxy'));
     expect(line).toBeDefined();
     expect(line).toContain('${proxy.host}:${proxy.port}');
     // The log statement must not interpolate the full proxyUrl (which embeds

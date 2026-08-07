@@ -418,7 +418,7 @@ export function TelegramConfigPanel({ alertConditions, isOpen }: TelegramConfigP
 
           <div style={{ marginBottom: '16px', borderTop: '1px solid #111128', paddingTop: '12px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>
-              SOCKS5 Proxy (optional)
+              HTTP Proxy (optional)
             </label>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
               <input

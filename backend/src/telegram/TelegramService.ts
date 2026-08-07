@@ -1,5 +1,5 @@
 import { Telegraf, type Context } from 'telegraf';
-import { SocksProxyAgent } from 'socks-proxy-agent';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { type FeatureCommandContext } from './TelegramBotFeature.js';
 import {
   type TelegramConfigStore,
@@ -23,9 +23,9 @@ interface TelegramServiceOptions {
   configStore: TelegramConfigStore;
 }
 
-function createSocksAgent(proxy: ProxyConfig): SocksProxyAgent {
+function createHttpAgent(proxy: ProxyConfig): HttpsProxyAgent<string> {
   const { host, port, username, password } = proxy;
-  let proxyUrl = `socks5://`;
+  let proxyUrl = `http://`;
   if (username) {
     proxyUrl += encodeURIComponent(username);
     if (password) {
@@ -34,7 +34,7 @@ function createSocksAgent(proxy: ProxyConfig): SocksProxyAgent {
     proxyUrl += `@`;
   }
   proxyUrl += `${host}:${port}`;
-  return new SocksProxyAgent(proxyUrl);
+  return new HttpsProxyAgent(proxyUrl);
 }
 
 export class TelegramService {
@@ -98,15 +98,15 @@ export class TelegramService {
     }
 
     const proxy = this.configStore.getProxy();
-    let agent: SocksProxyAgent | undefined;
+    let agent: HttpsProxyAgent<string> | undefined;
     if (proxy && proxy.host && proxy.port) {
       try {
-        agent = createSocksAgent(proxy);
+        agent = createHttpAgent(proxy);
         const authInfo = proxy.username ? ' (with auth)' : '';
-        logger.info(`[Telegram] SOCKS5 proxy agent created for ${proxy.host}:${proxy.port}${authInfo}`);
+        logger.info(`[Telegram] HTTP proxy agent created for ${proxy.host}:${proxy.port}${authInfo}`);
         logger.info(`[Telegram] Bot will route all Telegram API calls through proxy`);
       } catch (err) {
-        logger.error('[Telegram] Failed to create SOCKS5 proxy agent:', { err });
+        logger.error('[Telegram] Failed to create HTTP proxy agent:', { err });
       }
     } else {
       logger.info('[Telegram] No proxy configured, connecting directly');

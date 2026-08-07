@@ -63,10 +63,10 @@ Uses the **Telegraf** library (v4+, 9.2k GitHub stars, Bot API v7.1 compatible) 
 - Webhook mode support for production: attaches to the existing Express server via `bot.createWebhook()` for shared port usage
 - Graceful error handling for Telegram API failures (rate limits, network, Bot API errors)
 
-### 2.5 SOCKS5 Proxy
-All Telegram Bot API outbound connections are routed through a configurable SOCKS5 proxy:
+### 2.5 HTTP Proxy
+All Telegram Bot API outbound connections are routed through a configurable HTTP proxy:
 - Proxy settings (host, port, username, password) are persisted in the `proxy` key under `settings` in `backend/data/telegram.json`
-- On bot initialization, if proxy settings are present, a SOCKS5 agent (via `socks-proxy-agent` or equivalent) is created and passed as the Telegram HTTP agent via Telegraf's `telegram.options.agent` configuration
+- On bot initialization, if proxy settings are present, an HTTP proxy agent (via `https-proxy-agent`) is created and passed as the Telegram HTTP agent via Telegraf's `telegram.options.agent` configuration
 - If no proxy is configured, the bot connects directly (backward compatible)
 - Proxy configuration is exposed via REST endpoints `GET /api/settings/telegram/proxy` and `PUT /api/settings/telegram/proxy`
 

@@ -109,7 +109,7 @@ pine-framework/          ← Root (engine)
 ### Backend & Integration
 - Express REST API + WebSocket real-time streaming
 - Bybit market data (WebSocket + REST historical)
-- Telegram Bot (Telegraf v4+) with SOCKS5 proxy support
+- Telegram Bot (Telegraf v4+) with HTTP proxy support
 - CLI backtest tool with configurable parameters
 
 ### Alert System
@@ -161,7 +161,7 @@ The following design documents in `openspec/docs/design/` contain the full archi
 | `chart-interactions.md` | Viewport auto-fit, auto-scale toggle, scroll re-execution, go-to-date |
 | `backtest-engine.md` | Broker simulator, orchestrator, metrics, commission methods |
 | `script-bank-ai-editor.md` | Script bank, AI agent integration, file-based storage, built-in tests |
-| `telegram-alerts.md` | Alert system, Telegram bot, SOCKS5 proxy, database layer |
+| `telegram-alerts.md` | Alert system, Telegram bot, HTTP proxy, database layer |
 | `cli-backtest-tool.md` | CLI backtest tool for multi-symbol strategy validation |
 | `single-strategy-enforcement.md` | Single strategy per script enforcement |
 
