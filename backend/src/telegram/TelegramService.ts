@@ -168,16 +168,17 @@ export class TelegramService {
       await ctx.reply(escapeMarkdownV2(t(lang, 'helpCommands')), { parse_mode: 'MarkdownV2' });
     });
 
+    // Attach any feature-registered command handlers BEFORE launch
+    // (launch() starts polling which never returns, so code after it is unreachable)
+    for (const [command, handler] of this.registeredCommands) {
+      this.attachCommand(command, handler);
+    }
+    for (const handler of this.textHandlers) {
+      this.attachTextHandler(handler);
+    }
+
     try {
       await this.bot.launch();
-      // Attach any feature-registered command handlers that were deferred until
-      // the transport was actually running.
-      for (const [command, handler] of this.registeredCommands) {
-        this.attachCommand(command, handler);
-      }
-      for (const handler of this.textHandlers) {
-        this.attachTextHandler(handler);
-      }
       logger.info('[Telegram] Bot started');
     } catch (err) {
       logger.error('[Telegram] Failed to start bot:', { err });
