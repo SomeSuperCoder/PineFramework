@@ -5,6 +5,7 @@ import { ErrorConsole } from './components/ErrorConsole';
 import { GoToDatePopup } from './components/GoToDatePopup';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
+import { BacktestPanel } from './components/BacktestPanel';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
@@ -364,10 +365,6 @@ function App() {
   // Sidebar navigation handler — also syncs sub-panel states
   const handlePanelChange = useCallback((panel: PanelId) => {
     setActivePanel(panel);
-    // Sync sub-panel visibility for backward compatibility
-    if (panel === 'backtest') {
-      setShowSettingsPopup(true);
-    }
   }, []);
 
   return (
@@ -648,9 +645,13 @@ function App() {
 
       {/* === Backtest Panel === */}
       {activePanel === 'backtest' && (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 14 }}>
-          Backtest settings open in popup — use the toolbar to configure.
-        </div>
+        <BacktestPanel
+          onRun={handleRunBacktest}
+          onClose={() => setActivePanel('dashboard')}
+          scriptSource={strategySource}
+          timeframe={timeframe}
+          symbol={symbol}
+        />
       )}
 
       {/* === Settings Panel (placeholder) === */}

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
-import { useBacktest } from '../hooks/useBacktest';
+import { useState, useCallback } from 'react';
 import { extractStrategyParams } from '../utils/extractStrategyParams';
-import { ProgressBar } from './ProgressBar';
-import type { BacktestConfig, BacktestResultResponse } from '../types';
+import type { BacktestConfig, CommissionMethodId, DateRangeMode } from '../types';
+import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
+import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -10,268 +10,188 @@ const defaultConfig: BacktestConfig = {
   slippage: 0,
   commissionType: 'percent',
   slippageType: 'ticks',
-  defaultQty: 1,
-  defaultQtyType: 'contracts',
+  defaultQty: 20,
+  defaultQtyType: 'percent_of_equity',
   pyramiding: 0,
   marginLong: 1,
   marginShort: 1,
   currency: 'USD',
 };
 
-interface BacktestPanelProps {
-  symbol: string;
-  timeframe: string;
-  scriptSource?: string;
-  onResult: (result: BacktestResultResponse) => void;
+interface UserSettings {
+  initialCapital: number;
+  daysBack: number;
+  dateRangeMode: DateRangeMode;
+  startDate: string;
+  endDate: string;
+  commissionMethod?: CommissionMethodId;
+  commissionMethodSettings?: Record<string, unknown> | null;
 }
 
-export function BacktestPanel({ symbol, timeframe, scriptSource, onResult }: BacktestPanelProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [config, setConfig] = useState<BacktestConfig>({ ...defaultConfig });
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [loadedFromScript, setLoadedFromScript] = useState(false);
-  const { status, progress, result, error, loading, submitBacktest } = useBacktest();
-  const prevResultRef = useRef<BacktestResultResponse | null>(null);
+const STORAGE_KEY = 'pine-backtest-settings';
 
-  useEffect(() => {
-    if (!scriptSource || isOpen) return;
-    const scriptParams = extractStrategyParams(scriptSource);
-    if (Object.keys(scriptParams).length > 0) {
-      setConfig((prev) => ({ ...prev, ...scriptParams }));
-      setLoadedFromScript(true);
-    }
-  }, [scriptSource, isOpen]);
+function loadUserSettings(): UserSettings | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as UserSettings;
+  } catch {
+    return null;
+  }
+}
 
-  useEffect(() => {
-    if (result && result !== prevResultRef.current) {
-      prevResultRef.current = result;
-      onResult(result);
-    }
-  }, [result, onResult]);
+function saveUserSettings(settings: UserSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // localStorage may be unavailable
+  }
+}
 
-  const handleSubmit = () => {
-    submitBacktest(
-      symbol,
-      timeframe,
-      { ...config, script: scriptSource },
-      startDate || undefined,
-      endDate || undefined,
-    );
+function buildConfig(scriptParams: Partial<BacktestConfig>, user: UserSettings): BacktestConfig {
+  return {
+    ...defaultConfig,
+    ...scriptParams,
+    initialCapital: user.initialCapital,
+    commission: 0,
+    commissionMethod: user.commissionMethod ?? 'jupiter_manual',
+    commissionMethodSettings: user.commissionMethodSettings ?? null,
   };
+}
+
+export interface BacktestPanelProps {
+  onRun: (config: BacktestConfig, startDate?: string, endDate?: string) => void;
+  onClose: () => void;
+  scriptSource: string;
+  timeframe: string;
+  symbol?: string;
+}
+
+export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol }: BacktestPanelProps) {
+  const saved = loadUserSettings();
+  const scriptParams = extractStrategyParams(scriptSource);
+
+  const [initialCapital, setInitialCapital] = useState<number>(() => saved?.initialCapital ?? scriptParams.initialCapital ?? defaultConfig.initialCapital);
+  const [daysBack, setDaysBack] = useState<number>(() => saved?.daysBack ?? 30);
+  const [dateRangeMode, setDateRangeMode] = useState<DateRangeMode>(() => saved?.dateRangeMode ?? 'days_back');
+  const [startDate, setStartDate] = useState(() => saved?.startDate ?? '');
+  const [endDate, setEndDate] = useState(() => saved?.endDate ?? '');
+
+  const [commissionMethod, setCommissionMethod] = useState<CommissionMethodId>(
+    () => saved?.commissionMethod ?? 'jupiter_manual',
+  );
+  const [commissionMethodSettings, setCommissionMethodSettings] = useState<Record<string, unknown> | null>(
+    () => saved?.commissionMethodSettings ?? { dexFeeBps: 25, solPriceUsd: 150 },
+  );
+
+  const [barsExceedLimit, setBarsExceedLimit] = useState(false);
+
+  const persist = useCallback((updates: Partial<UserSettings>) => {
+    const current: UserSettings = {
+      initialCapital, daysBack, dateRangeMode, startDate, endDate,
+      commissionMethod, commissionMethodSettings,
+      ...updates,
+    };
+    saveUserSettings(current);
+  }, [initialCapital, daysBack, dateRangeMode, startDate, endDate, commissionMethod, commissionMethodSettings]);
+
+  const handleRun = useCallback(() => {
+    let effectiveStartDate = startDate || undefined;
+    let effectiveEndDate = endDate || undefined;
+
+    if (dateRangeMode === 'days_back' && daysBack > 0) {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
+      effectiveStartDate = start.toISOString().split('T')[0];
+      effectiveEndDate = end.toISOString().split('T')[0];
+    }
+
+    const config = buildConfig(scriptParams, {
+      initialCapital, daysBack, dateRangeMode, startDate, endDate,
+      commissionMethod, commissionMethodSettings,
+    });
+    onRun(config, effectiveStartDate, effectiveEndDate);
+  }, [scriptParams, initialCapital, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
 
   return (
-    <>
-      <button
-        className="backtest-button"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          bottom: '80px',
-          right: '20px',
-          zIndex: 100,
-          padding: '10px 16px',
-          background: '#111128',
-          color: '#e0e0e0',
-          border: '1px solid #2196f3',
-          borderRadius: '6px',
-          cursor: 'pointer',
-        }}
-      >
-        {isOpen ? '✕ Close Backtest' : '📊 Backtest'}
-      </button>
-
-      {isOpen && (
-        <div
-          className="backtest-panel"
+    <div
+      className="backtest-panel"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        background: '#0f1520',
+        border: '1px solid #111128',
+        borderRadius: '8px',
+        padding: '20px',
+        color: '#e0e0e0',
+        fontSize: '13px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px' }}>
+        <button
+          onClick={onClose}
+          aria-label="Back to dashboard"
           style={{
-            position: 'fixed',
-            top: '60px',
-            right: '20px',
-            width: '380px',
-            maxHeight: 'calc(100vh - 100px)',
-            overflowY: 'auto',
-            background: '#0f1520',
-            border: '1px solid #111128',
-            borderRadius: '8px',
-            padding: '20px',
-            zIndex: 99,
-            color: '#e0e0e0',
+            background: 'none',
+            border: '1px solid #333',
+            borderRadius: '4px',
+            color: '#aaa',
+            cursor: 'pointer',
+            padding: '4px 8px',
             fontSize: '13px',
           }}
         >
-          <h3 style={{ margin: '0 0 16px', color: '#2196f3' }}>Backtest Configuration</h3>
-          {loadedFromScript && (
-            <div style={{
-              padding: '6px 10px',
-              marginBottom: '12px',
-              background: '#0a2e1a',
-              border: '1px solid #4caf50',
-              borderRadius: '4px',
-              color: '#4caf50',
-              fontSize: '11px',
-            }}>
-              Settings auto-loaded from your strategy() declaration. You can override any value below.
-            </div>
-          )}
+          ← Back
+        </button>
+        <h3 style={{ margin: 0, color: '#2196f3' }}>Backtest Settings</h3>
+      </div>
 
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-            />
-          </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+        <BacktestGeneralSettings
+          initialCapital={initialCapital}
+          onInitialCapitalChange={(v) => { setInitialCapital(v); persist({ initialCapital: v }); }}
+          daysBack={daysBack}
+          onDaysBackChange={(v) => { setDaysBack(v); persist({ daysBack: v }); }}
+          dateRangeMode={dateRangeMode}
+          onDateRangeModeChange={(mode) => { setDateRangeMode(mode); persist({ dateRangeMode: mode }); }}
+          startDate={startDate}
+          onStartDateChange={(d) => { setStartDate(d); persist({ startDate: d }); }}
+          endDate={endDate}
+          onEndDateChange={(d) => { setEndDate(d); persist({ endDate: d }); }}
+          timeframe={timeframe}
+          onBarsExceededChange={setBarsExceedLimit}
+        />
 
-          <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-            />
-          </div>
+        <BacktestCommissionSettings
+          commissionMethod={commissionMethod}
+          onCommissionMethodChange={setCommissionMethod}
+          commissionMethodSettings={commissionMethodSettings}
+          onCommissionMethodSettingsChange={setCommissionMethodSettings}
+          symbol={symbol}
+        />
 
-          <fieldset style={{ border: '1px solid #111128', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
-            <legend style={{ color: '#2196f3', padding: '0 6px' }}>Broker Emulator</legend>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Initial Capital</label>
-              <input
-                type="number"
-                value={config.initialCapital}
-                onChange={(e) => setConfig({ ...config, initialCapital: Number(e.target.value) })}
-                style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Commission</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={config.commission}
-                  onChange={(e) => setConfig({ ...config, commission: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                />
-                <select
-                  value={config.commissionType}
-                  onChange={(e) => setConfig({ ...config, commissionType: e.target.value as BacktestConfig['commissionType'] })}
-                  style={{ width: '120px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                >
-                  <option value="percent">Percent</option>
-                  <option value="fixed">Fixed</option>
-                  <option value="per_contract">Per Contract</option>
-                  <option value="per_order">Per Order</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Slippage</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={config.slippage}
-                  onChange={(e) => setConfig({ ...config, slippage: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                />
-                <select
-                  value={config.slippageType}
-                  onChange={(e) => setConfig({ ...config, slippageType: e.target.value as BacktestConfig['slippageType'] })}
-                  style={{ width: '120px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                >
-                  <option value="ticks">Ticks</option>
-                  <option value="points">Points</option>
-                  <option value="percent">Percent</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Default Quantity</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={config.defaultQty}
-                  onChange={(e) => setConfig({ ...config, defaultQty: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                />
-                <select
-                  value={config.defaultQtyType}
-                  onChange={(e) => setConfig({ ...config, defaultQtyType: e.target.value as BacktestConfig['defaultQtyType'] })}
-                  style={{ width: '160px', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                >
-                  <option value="contracts">Contracts</option>
-                  <option value="percent_of_equity">% of Equity</option>
-                  <option value="cash">Cash</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Pyramiding</label>
-              <input
-                type="number"
-                value={config.pyramiding}
-                onChange={(e) => setConfig({ ...config, pyramiding: Number(e.target.value) })}
-                style={{ width: '100%', padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '8px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Margin (Long / Short)</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="number"
-                  value={config.marginLong}
-                  onChange={(e) => setConfig({ ...config, marginLong: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                  placeholder="Long"
-                />
-                <input
-                  type="number"
-                  value={config.marginShort}
-                  onChange={(e) => setConfig({ ...config, marginShort: Number(e.target.value) })}
-                  style={{ flex: 1, padding: '6px', background: '#0d0d18', color: '#e0e0e0', border: '1px solid #111128', borderRadius: '4px' }}
-                  placeholder="Short"
-                />
-              </div>
-            </div>
-          </fieldset>
-
+        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
           <button
-            onClick={handleSubmit}
-            disabled={loading}
+            onClick={handleRun}
+            disabled={barsExceedLimit}
             style={{
-              width: '100%',
-              padding: '10px',
-              background: loading ? '#333' : '#2196f3',
+              padding: '8px 24px',
+              background: barsExceedLimit ? '#555' : '#2196f3',
               color: '#fff',
               border: 'none',
               borderRadius: '6px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
+              cursor: barsExceedLimit ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
               fontWeight: 'bold',
             }}
           >
-            {loading ? `Running... ${progress}%` : 'Run Backtest'}
+            Run Backtest
           </button>
-
-          {status === 'running' && (
-            <ProgressBar progress={progress} phase="Processing" variant="inline" status={status} />
-          )}
-
-          {status === 'failed' && error && (
-            <div style={{ marginTop: '12px', padding: '8px', background: '#3a1a1a', borderRadius: '4px', color: '#e94560', fontSize: '12px' }}>
-              {error}
-            </div>
-          )}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
