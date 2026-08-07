@@ -15,6 +15,13 @@
  * keys in `./i18n.ts`. Controllers and the admin share one operator gate; every
  * other member is bound to the chat-level subscription model owned by
  * TelegramConfigStore.
+ *
+ * Commands with interactive UIs (lang, subscribe, unsubscribe, emergency,
+ * start) present inline keyboards via `reply_markup.inline_keyboard`. Button
+ * presses route through the `BotCommandTransport.registerBotCallback` seam
+ * (action prefix matching) to dedicated callback handlers. Every callback
+ * handler calls `answerCallbackQuery` to dismiss the spinner and uses
+ * `editMessageText` to update the original message in-place.
  */
 
 import type { BotEngine, BotState } from 'pine-framework';
@@ -93,10 +100,7 @@ export interface BotCommandTransport {
    * Safe to call before `start()` (deferred) or after (attached immediately).
    * Registering the same prefix twice overrides the previous handler.
    */
-  registerBotCallback?: (
-    actionPrefix: string,
-    handler: BotCallbackHandler,
-  ) => void;
+  registerBotCallback?: (actionPrefix: string, handler: BotCallbackHandler) => void;
 }
 
 interface TelegramBotFeatureOptions {
@@ -148,6 +152,7 @@ export class TelegramBotFeature {
    * before the transport has launched: the seam defers/attaches them.
    */
   install(transport: BotCommandTransport): void {
+    transport.registerBotCommand('start', (ctx) => this.handleStart(ctx));
     transport.registerBotCommand('request', (ctx) => this.handleRequest(ctx));
     transport.registerBotCommand('subscribe', (ctx) => this.handleSubscribe(ctx));
     transport.registerBotCommand('unsubscribe', (ctx) => this.handleUnsubscribe(ctx));
@@ -157,11 +162,16 @@ export class TelegramBotFeature {
     transport.registerBotCommand('stop', (ctx) => this.handleStop(ctx));
     transport.registerBotCommand('emergency', (ctx) => this.handleEmergency(ctx));
 
-    // Inline button callback for /stop confirmation. When the transport
-    // supports it, button presses route here instead of the text fallback.
+    // Inline button callbacks — the interactive UI path. Each prefix routes
+    // through the transport's callback_query matching to the handler below.
     if (transport.registerBotCallback) {
+      transport.registerBotCallback('lang', (ctx) => this.handleLangCallback(ctx));
+      transport.registerBotCallback('sub', (ctx) => this.handleSubscribeCallback(ctx));
+      transport.registerBotCallback('unsub', (ctx) => this.handleUnsubscribeCallback(ctx));
+      transport.registerBotCallback('emergency', (ctx) => this.handleEmergencyCallback(ctx));
       transport.registerBotCallback('stop', (ctx) => this.handleStopCallback(ctx));
     }
+
     transport.registerBotCommand('link', (ctx) => this.handleLink(ctx));
     transport.registerBotCommand('unlink', (ctx) => this.handleUnlink(ctx));
 
@@ -297,6 +307,40 @@ export class TelegramBotFeature {
 
   // ---- Command handlers ----------------------------------------------------
 
+  /**
+   * /start — welcome dashboard with navigation inline buttons.
+   *
+   * Registers the chat and presents a menu of the most common actions
+   * so users can navigate without memorizing commands.
+   */
+  async handleStart(ctx: FeatureCommandContext): Promise<void> {
+    const lang = this.chatLang(ctx);
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+      const isGroup = ctx.chat?.type === 'group';
+      this.store.addChat(chatId, isGroup ? 'group' : 'private');
+    }
+
+    await ctx.reply(t(lang, 'startWelcome'), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔔 Subscribe', callback_data: 'sub:menu' },
+            { text: '🔕 Unsubscribe', callback_data: 'unsub:menu' },
+          ],
+          [
+            { text: '🌐 Language', callback_data: 'lang:menu' },
+            { text: '📊 Report', callback_data: 'report:show' },
+          ],
+          [
+            { text: '⚙️ Stats', callback_data: 'stats:show' },
+            { text: '🛑 Stop', callback_data: 'stop:confirm' },
+          ],
+        ],
+      },
+    });
+  }
+
   /** /request — ask the team to grant operator access. */
   async handleRequest(ctx: FeatureCommandContext): Promise<void> {
     const username = ctx.from?.username ?? '';
@@ -319,7 +363,13 @@ export class TelegramBotFeature {
     await ctx.reply(this.t(ctx, 'requestSubmitted'));
   }
 
-  /** /subscribe [type] — opt (a member of) a chat into notification types. */
+  /**
+   * /subscribe [type] — opt (a member of) a chat into notification types.
+   *
+   * Without a type arg: shows an inline keyboard with toggle buttons for
+   * every notification type, reflecting current subscription state.
+   * With a type arg: subscribes to that type directly (text fallback).
+   */
   async handleSubscribe(ctx: FeatureCommandContext): Promise<void> {
     const chatId = ctx.chat?.id;
     const fromId = ctx.from?.id;
@@ -330,17 +380,27 @@ export class TelegramBotFeature {
 
     const isGroup = ctx.chat?.type === 'group';
     const memberId = isGroup ? fromId : chatId;
-    const types = this.resolveTypes(this.args(ctx));
+
+    // No type arg → present toggle keyboard with current state.
+    const args = this.args(ctx);
+    if (args.length === 0) {
+      this.store.addChat(chatId, isGroup ? 'group' : 'private');
+      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+      await ctx.reply(this.t(ctx, 'subscribeSuccess'), {
+        reply_markup: {
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub:toggle'),
+        },
+      });
+      return;
+    }
+
+    const types = this.resolveTypes(args);
     if (types === null) {
       await ctx.reply(`${this.t(ctx, 'invalidArgs')}\n${this.t(ctx, 'validTypes')}`);
       return;
     }
 
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
-    // Decide success/failure on the EFFECTIVE subscription state — the same
-    // view deliver()/isMemberSubscribed reads. memberSubscribe is a union, so
-    // the list only ever grows: when already subscribed to every requested type
-    // nothing was added, so reply failure rather than faking success.
     const before = this.store.getMemberSubscription(chatId, memberId);
     this.store.memberSubscribe(chatId, memberId, types);
     const after = this.store.getMemberSubscription(chatId, memberId);
@@ -348,7 +408,68 @@ export class TelegramBotFeature {
     await ctx.reply(this.t(ctx, changed ? 'subscribeSuccess' : 'subscribeFailure'));
   }
 
-  /** /unsubscribe [type] — mirror of /subscribe. */
+  /**
+   * Callback handler for subscribe toggle buttons. Toggles a single
+   * notification type and refreshes the inline keyboard to reflect
+   * the updated subscription state. Also handles the "menu" action
+   * from the /start dashboard — shows the toggle keyboard in-place.
+   */
+  async handleSubscribeCallback(ctx: CallbackContext): Promise<void> {
+    const chatId = ctx.chat?.id;
+    const fromId = ctx.from?.id;
+
+    if (!chatId || fromId === undefined) {
+      await ctx.answerCallback();
+      return;
+    }
+
+    const isGroup = ctx.chat?.type === 'group';
+    const memberId = isGroup ? fromId : chatId;
+    this.store.addChat(chatId, isGroup ? 'group' : 'private');
+
+    // "menu" from /start dashboard → show toggle keyboard.
+    if (ctx.params === 'menu') {
+      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+      await ctx.answerCallback();
+      await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
+        reply_markup: {
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub:toggle'),
+        },
+      });
+      return;
+    }
+
+    const type = ctx.params;
+    if (!isNotificationType(type)) {
+      await ctx.answerCallback();
+      return;
+    }
+
+    // Toggle: if subscribed → unsubscribe; else → subscribe.
+    const current = this.store.getMemberSubscription(chatId, memberId);
+    if (current.includes(type)) {
+      this.store.memberUnsubscribe(chatId, memberId, [type]);
+    } else {
+      this.store.memberSubscribe(chatId, memberId, [type]);
+    }
+
+    // Refresh the keyboard with updated state.
+    const updated = this.store.getMemberSubscription(chatId, memberId);
+    await ctx.answerCallback();
+    await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
+      reply_markup: {
+        inline_keyboard: this.buildTypeKeyboard(updated, 'sub:toggle'),
+      },
+    });
+  }
+
+  /**
+   * /unsubscribe [type] — mirror of /subscribe.
+   *
+   * Without a type arg: shows an inline keyboard with toggle buttons for
+   * every notification type, reflecting current subscription state.
+   * With a type arg: unsubscribes from that type directly (text fallback).
+   */
   async handleUnsubscribe(ctx: FeatureCommandContext): Promise<void> {
     const chatId = ctx.chat?.id;
     const fromId = ctx.from?.id;
@@ -359,20 +480,85 @@ export class TelegramBotFeature {
 
     const isGroup = ctx.chat?.type === 'group';
     const memberId = isGroup ? fromId : chatId;
-    const types = this.resolveTypes(this.args(ctx));
+
+    // No type arg → present toggle keyboard with current state.
+    const args = this.args(ctx);
+    if (args.length === 0) {
+      this.store.addChat(chatId, isGroup ? 'group' : 'private');
+      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+      await ctx.reply(this.t(ctx, 'unsubscribeSuccess'), {
+        reply_markup: {
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub:toggle'),
+        },
+      });
+      return;
+    }
+
+    const types = this.resolveTypes(args);
     if (types === null) {
       await ctx.reply(`${this.t(ctx, 'invalidArgs')}\n${this.t(ctx, 'validTypes')}`);
       return;
     }
-    // Same effective-state view as /subscribe: memberUnsubscribe only shrinks
-    // the list, so a smaller after-list proves at least one requested type was
-    // actually removed. When nothing shrank there was nothing to unsubscribe —
-    // reply failure instead of claiming a removal that did not happen.
     const before = this.store.getMemberSubscription(chatId, memberId);
     this.store.memberUnsubscribe(chatId, memberId, types);
     const after = this.store.getMemberSubscription(chatId, memberId);
     const changed = after.length < before.length;
     await ctx.reply(this.t(ctx, changed ? 'unsubscribeSuccess' : 'unsubscribeFailure'));
+  }
+
+  /**
+   * Callback handler for unsubscribe toggle buttons. Toggles a single
+   * notification type and refreshes the inline keyboard to reflect
+   * the updated subscription state. Also handles the "menu" action
+   * from the /start dashboard — shows the toggle keyboard in-place.
+   */
+  async handleUnsubscribeCallback(ctx: CallbackContext): Promise<void> {
+    const chatId = ctx.chat?.id;
+    const fromId = ctx.from?.id;
+
+    if (!chatId || fromId === undefined) {
+      await ctx.answerCallback();
+      return;
+    }
+
+    const isGroup = ctx.chat?.type === 'group';
+    const memberId = isGroup ? fromId : chatId;
+    this.store.addChat(chatId, isGroup ? 'group' : 'private');
+
+    // "menu" from /start dashboard → show toggle keyboard.
+    if (ctx.params === 'menu') {
+      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+      await ctx.answerCallback();
+      await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
+        reply_markup: {
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub:toggle'),
+        },
+      });
+      return;
+    }
+
+    const type = ctx.params;
+    if (!isNotificationType(type)) {
+      await ctx.answerCallback();
+      return;
+    }
+
+    // Toggle: if subscribed → unsubscribe; else → subscribe.
+    const current = this.store.getMemberSubscription(chatId, memberId);
+    if (current.includes(type)) {
+      this.store.memberUnsubscribe(chatId, memberId, [type]);
+    } else {
+      this.store.memberSubscribe(chatId, memberId, [type]);
+    }
+
+    // Refresh the keyboard with updated state.
+    const updated = this.store.getMemberSubscription(chatId, memberId);
+    await ctx.answerCallback();
+    await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
+      reply_markup: {
+        inline_keyboard: this.buildTypeKeyboard(updated, 'unsub:toggle'),
+      },
+    });
   }
 
   /** Parses the optional [type] arg: no arg -> ALL, valid type -> [type], else invalid. */
@@ -383,15 +569,32 @@ export class TelegramBotFeature {
     return [first];
   }
 
-  /** /lang [en|es|ru] — read or change the chat's language. */
+  /**
+   * /lang [en|es|ru] — read or change the chat's language.
+   *
+   * Without args: shows an inline keyboard with language buttons.
+   * With an arg: applies the language immediately (text fallback path).
+   */
   async handleLang(ctx: FeatureCommandContext): Promise<void> {
     const chatId = ctx.chat?.id;
     const arg = this.args(ctx)[0];
 
+    // No arg → present language picker with inline buttons.
     if (arg === undefined) {
-      await ctx.reply(this.t(ctx, 'langUsage'));
+      await ctx.reply(this.t(ctx, 'langUsage'), {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🇬🇧 English', callback_data: 'lang:set:en' },
+              { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
+              { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
+            ],
+          ],
+        },
+      });
       return;
     }
+
     if (chatId === undefined || !isSupportedLanguage(arg)) {
       await ctx.reply(this.t(ctx, 'langInvalid'));
       return;
@@ -400,6 +603,50 @@ export class TelegramBotFeature {
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
     this.store.setChatLanguage(chatId, arg);
     await ctx.reply(this.t(ctx, 'langChanged', { lang: arg }));
+  }
+
+  /**
+   * Callback handler for the language picker inline buttons. Receives the
+   * selected language code via `params` (e.g. "en", "es", "ru"), persists
+   * it, and edits the original message to confirm the change. Also handles
+   * the "menu" action from the /start dashboard — shows the picker in-place.
+   */
+  async handleLangCallback(ctx: CallbackContext): Promise<void> {
+    const chatId = ctx.chat?.id;
+
+    if (!chatId) {
+      await ctx.answerCallback(this.t(ctx, 'langInvalid'));
+      return;
+    }
+
+    // "menu" from /start dashboard → show language picker.
+    if (ctx.params === 'menu') {
+      await ctx.answerCallback();
+      await ctx.editMessage(this.t(ctx, 'langUsage'), {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🇬🇧 English', callback_data: 'lang:set:en' },
+              { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
+              { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
+            ],
+          ],
+        },
+      });
+      return;
+    }
+
+    const lang = ctx.params as BotLanguage;
+    if (!isSupportedLanguage(lang)) {
+      await ctx.answerCallback(this.t(ctx, 'langInvalid'));
+      return;
+    }
+
+    const isGroup = ctx.chat?.type === 'group';
+    this.store.addChat(chatId, isGroup ? 'group' : 'private');
+    this.store.setChatLanguage(chatId, lang);
+    await ctx.answerCallback();
+    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }));
   }
 
   /** /report — compact performance recap (any chat member). */
@@ -570,7 +817,12 @@ export class TelegramBotFeature {
     }
   }
 
-  /** /emergency — operator halt, instant. */
+  /**
+   * /emergency — operator halt with confirmation button.
+   *
+   * Shows a confirmation keyboard before executing the emergency stop.
+   * The confirmation callback handles the actual engine halt.
+   */
   async handleEmergency(ctx: FeatureCommandContext): Promise<void> {
     if (!(await this.assertController(ctx))) return;
     const lang = this.chatLang(ctx);
@@ -579,11 +831,48 @@ export class TelegramBotFeature {
       await ctx.reply(t(lang, 'engineNotInitialized'));
       return;
     }
-    try {
-      await engine.emergencyStop();
-      await ctx.reply(t(lang, 'emergencyResult'));
-    } catch {
-      await ctx.reply(t(lang, 'emergencyResult'));
+
+    await ctx.reply(t(lang, 'emergencyResult'), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🚨 EMERGENCY STOP', callback_data: 'emergency:confirm' },
+            { text: '❌ Cancel', callback_data: 'emergency:cancel' },
+          ],
+        ],
+      },
+    });
+  }
+
+  /**
+   * Callback handler for the emergency stop confirmation button.
+   * Dispatches on `params` ("confirm" to halt, "cancel" to dismiss).
+   */
+  async handleEmergencyCallback(ctx: CallbackContext): Promise<void> {
+    const lang = this.chatLang(ctx);
+
+    if (ctx.params === 'confirm') {
+      const engine = this.getEngine();
+      if (!engine) {
+        await ctx.answerCallback(t(lang, 'engineNotInitialized'));
+        await ctx.editMessage(t(lang, 'engineNotInitialized'));
+        return;
+      }
+      try {
+        await engine.emergencyStop();
+        await ctx.answerCallback();
+        await ctx.editMessage(t(lang, 'emergencyResult'));
+      } catch {
+        await ctx.answerCallback(t(lang, 'emergencyResult'));
+        await ctx.editMessage(t(lang, 'emergencyResult'));
+      }
+      return;
+    }
+
+    if (ctx.params === 'cancel') {
+      await ctx.answerCallback();
+      await ctx.editMessage('↩️ Emergency cancelled.');
+      return;
     }
   }
 
@@ -623,6 +912,31 @@ export class TelegramBotFeature {
   private formatPnl(value: number): string {
     const sign = value >= 0 ? '+' : '';
     return `${sign}${value.toFixed(2)}`;
+  }
+
+  /**
+   * Build an inline keyboard with one button per notification type. Types
+   * the member is currently subscribed to are prefixed with ✅; others with ⬜.
+   * Buttons are laid out in rows of 2 for a balanced grid.
+   *
+   * @param currentTypes  The member's active subscription list.
+   * @param actionPrefix  The callback_data prefix (e.g. "sub:toggle", "unsub:toggle").
+   */
+  private buildTypeKeyboard(
+    currentTypes: readonly NotificationType[],
+    actionPrefix: string,
+  ): Array<Array<{ text: string; callback_data: string }>> {
+    const buttons = NOTIFICATION_TYPES.map((type) => ({
+      text: currentTypes.includes(type) ? `✅ ${type}` : `⬜ ${type}`,
+      callback_data: `${actionPrefix}:${type}`,
+    }));
+
+    // Split into rows of 2 for a balanced grid.
+    const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+    for (let i = 0; i < buttons.length; i += 2) {
+      rows.push(buttons.slice(i, i + 2));
+    }
+    return rows;
   }
 }
 

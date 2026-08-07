@@ -215,15 +215,6 @@ export class TelegramService {
       }
     });
 
-    this.bot.command('start', async (ctx: Context) => {
-      const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
-      const chatId = ctx.chat?.id;
-      if (chatId) {
-        this.configStore.addChat(chatId, ctx.chat.type === 'group' ? 'group' : 'private');
-      }
-      await ctx.reply(escapeMarkdownV2(t(lang, 'startWelcome')), { parse_mode: 'MarkdownV2' });
-    });
-
     this.bot.command('help', async (ctx: Context) => {
       const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
       await ctx.reply(escapeMarkdownV2(t(lang, 'helpCommands')), { parse_mode: 'MarkdownV2' });
