@@ -12,7 +12,11 @@ import path from 'node:path';
 import os from 'node:os';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TelegramConfigStore } from '../src/store/TelegramConfigStore.js';
-import { TelegramBotFeature, type FeatureCommandContext } from '../src/telegram/TelegramBotFeature.js';
+import {
+  TelegramBotFeature,
+  type CallbackContext,
+  type FeatureCommandContext,
+} from '../src/telegram/TelegramBotFeature.js';
 import type { StatsService } from '../src/services/StatsService.js';
 import type { SessionSummary } from '../src/services/StatsService.js';
 
@@ -20,6 +24,19 @@ type Reply = ReturnType<typeof vi.fn>;
 
 function tmpFile(): string {
   return path.join(os.tmpdir(), `feat-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
+}
+
+/**
+ * Replica of the REAL transport parse: `new RegExp('^' + prefix + '(?::(.+))?$')`
+ * + `params = match?.[1] ?? ''` (TelegramService.attachCallback). Callback tests
+ * derive `action`/`params` from the emitted callback_data via this — never by
+ * fabricating `params` independently of `data` (same discipline as
+ * telegram-inline-buttons.test.ts / telegram-button-params.test.ts).
+ */
+function transportParse(actionPrefix: string, data: string): { action: string; params: string } {
+  const re = new RegExp(`^${actionPrefix}(?::(.+))?$`);
+  const match = data.match(re);
+  return { action: actionPrefix, params: match?.[1] ?? '' };
 }
 
 /** Builds a fabricated context whose reply is the SAME spy the harness asserts on. */
@@ -30,6 +47,10 @@ interface Harness {
   feature: TelegramBotFeature;
   reply: Reply;
   ctx: (overrides?: CtxOverrides) => FeatureCommandContext;
+  /** Fabricated inline-button callback context (callback handlers). */
+  cbCtx: (overrides?: Partial<CallbackContext>) => CallbackContext;
+  /** Callback context with `action`/`params` derived from callback_data via the REAL transport parse. */
+  cb: (prefix: string, data: string, overrides?: Partial<CallbackContext>) => CallbackContext;
 }
 
 function makeHarness(opts: { stats?: Partial<StatsService> | null; engine?: unknown } = {}): Harness {
@@ -63,8 +84,28 @@ function makeHarness(opts: { stats?: Partial<StatsService> | null; engine?: unkn
     message: overrides.message ?? { text: '' },
     reply: overrides.reply ?? reply,
   });
+  const cbCtx = (overrides: Partial<CallbackContext> = {}): CallbackContext => ({
+    from: overrides.from ?? { id: 1000, username: 'tester', first_name: 'Tester' },
+    chat: overrides.chat ?? { id: 1000, type: 'private' },
+    message: overrides.message ?? { text: '' },
+    reply: overrides.reply ?? reply,
+    callbackQueryId: overrides.callbackQueryId ?? 'cb-test-001',
+    data: overrides.data ?? 'stop:confirm',
+    action: overrides.action ?? 'stop',
+    params: overrides.params ?? 'confirm',
+    answerCallback: overrides.answerCallback ?? vi.fn().mockResolvedValue(undefined),
+    editMessage: overrides.editMessage ?? vi.fn().mockResolvedValue(undefined),
+  });
+  const cb = (
+    prefix: string,
+    data: string,
+    overrides: Partial<CallbackContext> = {},
+  ): CallbackContext => {
+    const { action, params } = transportParse(prefix, data);
+    return cbCtx({ data, action, params, ...overrides });
+  };
   (feature as unknown as { __tk: string }).__tk = filePath;
-  return { store, feature, reply, ctx };
+  return { store, feature, reply, ctx, cbCtx, cb };
 }
 
 function cleanHarness(h: Harness): void {
@@ -324,8 +365,9 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     const h = makeHarness({ engine: { state: 'Running', config: { pairs: [{ p: 1 }] }, positions: [{ p: 1 }], stop, emergencyStop: vi.fn() } });
     h.store.addController(2, 'op', 1);
     await h.feature.handleStop(h.ctx({ from: { id: 2, username: 'op' } }));
-    // The next plain text from the same chat confirms.
-    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
+    // The next plain text from the SAME operator who initiated /stop confirms
+    // (confirmingUserId gate — id 2).
+    await h.feature.handleText(h.ctx({ from: { id: 2, username: 'op' }, message: { text: 'yes' } }));
     expect(stop).toHaveBeenCalledTimes(1);
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine stopped'));
     cleanHarness(h);
@@ -338,7 +380,8 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
       const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
       h.store.setAdmin(1, 'boss');
       await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-      await h.feature.handleText(h.ctx({ message: { text: word } }));
+      // The reply must come from the operator who initiated /stop (admin id 1).
+      await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: word } }));
       expect(stop).toHaveBeenCalledTimes(1);
       cleanHarness(h);
     },
@@ -349,11 +392,11 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
     h.store.setAdmin(1, 'boss');
     await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-    await h.feature.handleText(h.ctx({ message: { text: 'no' } }));
+    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'no' } }));
     expect(stop).not.toHaveBeenCalled();
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('cancelled'));
     // The pending entry was consumed — a later "yes" no longer stops.
-    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
+    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'yes' } }));
     expect(stop).not.toHaveBeenCalled();
     cleanHarness(h);
   });
@@ -412,7 +455,7 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
     h.store.setAdmin(1, 'boss');
     await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
+    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'yes' } }));
     expect(stop).toHaveBeenCalledTimes(1);
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('cancelled'));
     cleanHarness(h);
@@ -425,6 +468,134 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     expect(stop).not.toHaveBeenCalled();
     // No reply was emitted for a stray text.
     expect(h.reply).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
+});
+
+describe('TelegramBotFeature stop/emergency gating (operator-only controls)', () => {
+  /** All buttons on the keyboard of the FIRST reply call. */
+  function dashboardButtons(reply: Reply): Array<{ text: string; callback_data: string }> {
+    const extra = reply.mock.calls[0]?.[1] as
+      | { reply_markup: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> } }
+      | undefined;
+    expect(extra, 'reply must carry reply_markup extras').toBeDefined();
+    return extra!.reply_markup.inline_keyboard.flat();
+  }
+
+  it('A: /start hides the Stats/Stop row from a non-operator', async () => {
+    const h = makeHarness();
+    // Known non-controller, non-admin user.
+    await h.feature.handleStart(h.ctx({ from: { id: 500, username: 'nobody' } }));
+    const buttons = dashboardButtons(h.reply);
+    expect(buttons.some((b) => b.callback_data.startsWith('stop:'))).toBe(false);
+    expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(false);
+    expect(buttons.some((b) => b.callback_data === 'sub:menu')).toBe(true);
+    cleanHarness(h);
+  });
+
+  it('B: /start shows the Stats/Stop row for the admin/controller', async () => {
+    const h = makeHarness();
+    h.store.setAdmin(1, 'boss');
+    await h.feature.handleStart(h.ctx({ from: { id: 1, username: 'boss' } }));
+    const buttons = dashboardButtons(h.reply);
+    expect(buttons.some((b) => b.callback_data === 'stop:confirm')).toBe(true);
+    expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(true);
+    cleanHarness(h);
+  });
+
+  it.each(['stop:done', 'stop:confirm'])(
+    'C: a non-operator pressing %s is denied — engine.stop() is NOT called',
+    async (data) => {
+      const stop = vi.fn();
+      const h = makeHarness({
+        engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() },
+      });
+      const answerCallback = vi.fn().mockResolvedValue(undefined);
+      const editMessage = vi.fn().mockResolvedValue(undefined);
+      await h.feature.handleStopCallback(
+        h.cb('stop', data, { from: { id: 500, username: 'nobody' }, answerCallback, editMessage }),
+      );
+      expect(stop).not.toHaveBeenCalled();
+      expect(answerCallback).toHaveBeenCalledTimes(1); // spinner dismissed so the denial reads
+      expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+      expect(editMessage).not.toHaveBeenCalled();
+      cleanHarness(h);
+    },
+  );
+
+  it('D: the operator CAN stop via the stop:confirm callback', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({
+      engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() },
+    });
+    h.store.addController(42, 'op', 1);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(
+      h.cb('stop', 'stop:confirm', { from: { id: 42, username: 'op' }, answerCallback, editMessage }),
+    );
+    expect(stop).toHaveBeenCalledTimes(1);
+    // Dismiss the spinner twice: once for the query, once for the success toast.
+    expect(answerCallback).toHaveBeenCalledTimes(2);
+    cleanHarness(h);
+  });
+
+  it('D2: the unhandled "done" stop param does NOT stop the engine (contract: only confirm stops)', async () => {
+    const stop = vi.fn();
+    const h = makeHarness({
+      engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() },
+    });
+    h.store.addController(42, 'op', 1);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(
+      h.cb('stop', 'stop:done', { from: { id: 42, username: 'op' }, answerCallback }),
+    );
+    // An operator pressing an UNKNOWN stop param gets the spinner answered but
+    // the engine is NOT halted — only `stop:confirm` halts it.
+    expect(stop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    cleanHarness(h);
+  });
+
+  it('E: a non-operator pressing emergency:confirm cannot trigger emergencyStop()', async () => {
+    const emergencyStop = vi.fn();
+    const h = makeHarness({
+      engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() },
+    });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleEmergencyCallback(
+      h.cb('emergency', 'emergency:confirm', {
+        from: { id: 500, username: 'nobody' },
+        answerCallback,
+        editMessage,
+      }),
+    );
+    expect(emergencyStop).not.toHaveBeenCalled();
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+    expect(editMessage).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
+
+  it('F: handleText confirmation is scoped to the confirming userId', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({
+      engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() },
+    });
+    h.store.setAdmin(42, 'boss');
+    // Operator 42 initiates /stop → pending.confirmingUserId = 42.
+    await h.feature.handleStop(h.ctx({ from: { id: 42, username: 'boss' } }));
+    // A DIFFERENT user (default tester, id 1000) replies "yes".
+    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
+    expect(stop).not.toHaveBeenCalled();
+    // The foreign reply was a silent no-op: only /stop's confirmation request
+    // has been emitted (no cancel/success reply for the interloper).
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    // The pending entry is PRESERVED — the initiating operator can still confirm.
+    await h.feature.handleText(h.ctx({ from: { id: 42, username: 'boss' }, message: { text: 'yes' } }));
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine stopped'));
     cleanHarness(h);
   });
 });

@@ -591,6 +591,7 @@ describe('handleEmergencyCallback', () => {
   it('confirm: calls engine.emergencyStop() and edits message', async () => {
     const emergencyStop = vi.fn().mockResolvedValue(undefined);
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -601,7 +602,7 @@ describe('handleEmergencyCallback', () => {
     }));
 
     expect(emergencyStop).toHaveBeenCalledTimes(1);
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + success answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     cleanHarness(h);
   });
@@ -609,6 +610,7 @@ describe('handleEmergencyCallback', () => {
   it('confirm: handles engine.emergencyStop() throwing gracefully', async () => {
     const emergencyStop = vi.fn().mockRejectedValue(new Error('boom'));
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -620,7 +622,7 @@ describe('handleEmergencyCallback', () => {
 
     expect(emergencyStop).toHaveBeenCalledTimes(1);
     // Should still answer and edit even on failure
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + failure answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     cleanHarness(h);
   });
@@ -628,6 +630,7 @@ describe('handleEmergencyCallback', () => {
   it('confirm: keeps the emergency-confirm keyboard on the edited message (regression)', async () => {
     const emergencyStop = vi.fn().mockResolvedValue(undefined);
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -648,6 +651,7 @@ describe('handleEmergencyCallback', () => {
   it('confirm (emergencyStop throws): keeps the emergency-confirm keyboard', async () => {
     const emergencyStop = vi.fn().mockRejectedValue(new Error('boom'));
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -665,6 +669,7 @@ describe('handleEmergencyCallback', () => {
 
   it('confirm: shows engine-not-initialized when engine is null', async () => {
     const h = makeHarness(); // no engine
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -687,6 +692,7 @@ describe('handleEmergencyCallback', () => {
   it('cancel: does not call engine and edits with cancellation message', async () => {
     const emergencyStop = vi.fn();
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -696,7 +702,7 @@ describe('handleEmergencyCallback', () => {
     }));
 
     expect(emergencyStop).not.toHaveBeenCalled();
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + cancel answer
     // Regression: the cancel edit re-attaches the emergency keyboard.
     expect(editMessage).toHaveBeenCalledWith(
       '↩️ Emergency cancelled.',
@@ -714,6 +720,9 @@ describe('handleEmergencyCallback', () => {
 describe('handleStart', () => {
   it('sends the welcome message with inline keyboard buttons', async () => {
     const h = makeHarness();
+    // Operator (from.id 1000): the dashboard shows the Stats/Stop row, which is
+    // hidden for non-operators (handleStart gates on isAdminOrController).
+    h.store.setAdmin(1000, 'tester');
     await h.feature.handleStart(h.cbCtx());
 
     expect(h.reply).toHaveBeenCalledTimes(1);
@@ -767,6 +776,7 @@ describe('handleStopCallback', () => {
   it('confirm (running): stops the engine and keeps the stop-confirm keyboard (regression)', async () => {
     const stop = vi.fn().mockResolvedValue(undefined);
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -777,7 +787,7 @@ describe('handleStopCallback', () => {
     }));
 
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + success answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     const allCallbackData = editCallbackData(editMessage);
     expect(allCallbackData).toContain('stop:confirm');
@@ -787,6 +797,7 @@ describe('handleStopCallback', () => {
 
   it('confirm (engine not running): keeps the stop-confirm keyboard', async () => {
     const h = makeHarness({ engine: { state: 'Stopped', config: {}, positions: [], emergencyStop: vi.fn(), stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -796,7 +807,7 @@ describe('handleStopCallback', () => {
       editMessage,
     }));
 
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + path answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     assertEditKeepsKeyboard(editMessage);
     cleanHarness(h);
@@ -805,6 +816,7 @@ describe('handleStopCallback', () => {
   it('confirm (engine.stop throws): keeps the stop-confirm keyboard', async () => {
     const stop = vi.fn().mockRejectedValue(new Error('boom'));
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop } });
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -822,6 +834,7 @@ describe('handleStopCallback', () => {
 
   it('cancel: keeps the stop-confirm keyboard', async () => {
     const h = makeHarness();
+    h.store.setAdmin(1000, 'tester'); // operator: the callback is gated by assertController
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -831,7 +844,7 @@ describe('handleStopCallback', () => {
       editMessage,
     }));
 
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + path answer
     expect(editMessage).toHaveBeenCalledTimes(1);
     assertEditKeepsKeyboard(editMessage);
     cleanHarness(h);

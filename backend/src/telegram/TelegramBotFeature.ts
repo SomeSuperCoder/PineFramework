@@ -218,7 +218,7 @@ interface PendingStopConfirm {
   chatId: number;
   /** Timestamp of the /stop that started the confirmation window. */
   askedAt: number;
-  /** Operator that issued the /stop (recorded for audit; not enforced on reply). */
+  /** Operator that issued the /stop; only they may confirm it on reply. */
   confirmingUserId: number;
 }
 
@@ -516,6 +516,11 @@ export class TelegramBotFeature {
       this.store.addChat(chatId, isGroup ? 'group' : 'private');
     }
 
+    // Operator-only row (Stats / Stop) is hidden from non-operators. The
+    // Stats callback is already wired to assertController, and the Stop
+    // callbacks now are too — this is defense in depth on visibility only.
+    const isOperator = ctx.from?.id !== undefined && this.isAdminOrController(ctx.from.id);
+
     await ctx.reply(t(lang, 'startWelcome'), {
       reply_markup: {
         inline_keyboard: [
@@ -527,10 +532,14 @@ export class TelegramBotFeature {
             { text: '🌐 Language', callback_data: 'lang:menu' },
             { text: '📊 Report', callback_data: 'report:show' },
           ],
-          [
-            { text: '⚙️ Stats', callback_data: 'stats:show' },
-            { text: '🛑 Stop', callback_data: 'stop:confirm' },
-          ],
+          ...(isOperator
+            ? [
+                [
+                  { text: '⚙️ Stats', callback_data: 'stats:show' },
+                  { text: '🛑 Stop', callback_data: 'stop:confirm' },
+                ],
+              ]
+            : []),
         ],
       },
     });
@@ -833,7 +842,9 @@ export class TelegramBotFeature {
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
     this.store.setChatLanguage(chatId, lang);
     await ctx.answerCallback();
-    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }), { reply_markup: LANG_PICKER_KEYBOARD });
+    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }), {
+      reply_markup: LANG_PICKER_KEYBOARD,
+    });
   }
 
   /** /report — compact performance recap (any chat member). */
@@ -960,6 +971,10 @@ export class TelegramBotFeature {
    */
   async handleStopCallback(ctx: CallbackContext): Promise<void> {
     const lang = this.chatLang(ctx);
+    // Stop controls are operator-scoped: deny any non-operator who manages to
+    // tap the confirmation button, and dismiss the spinner so the denial reads.
+    await ctx.answerCallback();
+    if (!(await this.assertController(ctx))) return;
     const { params } = ctx;
 
     if (params === 'confirm') {
@@ -973,7 +988,9 @@ export class TelegramBotFeature {
       try {
         await engine.stop();
         await ctx.answerCallback();
-        await ctx.editMessage(t(lang, 'stopConfirmSuccess'), { reply_markup: STOP_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'stopConfirmSuccess'), {
+          reply_markup: STOP_CONFIRM_KEYBOARD,
+        });
       } catch {
         await ctx.answerCallback(t(lang, 'stopCancelled'));
         await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
@@ -1003,6 +1020,13 @@ export class TelegramBotFeature {
     // Stale confirmations (older than the TTL) are dropped and ignored.
     if (Date.now() - pending.askedAt > STOP_CONFIRM_TTL_MS) {
       this.pendingStops.delete(chatId);
+      return;
+    }
+
+    // Only the operator who initiated the /stop may confirm it. A foreign
+    // reply must neither stop the engine nor consume the pending entry, so the
+    // initiating operator can still respond.
+    if (ctx.from?.id === undefined || ctx.from.id !== pending.confirmingUserId) {
       return;
     }
 
@@ -1053,29 +1077,41 @@ export class TelegramBotFeature {
    * Dispatches on `params` ("confirm" to halt, "cancel" to dismiss).
    */
   async handleEmergencyCallback(ctx: CallbackContext): Promise<void> {
+    // Defense in depth: /emergency is operator-gated, but the callback itself
+    // must ALSO reject non-operators before it can halt the engine.
+    await ctx.answerCallback();
+    if (!(await this.assertController(ctx))) return;
     const lang = this.chatLang(ctx);
 
     if (ctx.params === 'confirm') {
       const engine = this.getEngine();
       if (!engine) {
         await ctx.answerCallback(t(lang, 'engineNotInitialized'));
-        await ctx.editMessage(t(lang, 'engineNotInitialized'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'engineNotInitialized'), {
+          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+        });
         return;
       }
       try {
         await engine.emergencyStop();
         await ctx.answerCallback();
-        await ctx.editMessage(t(lang, 'emergencyResult'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'emergencyResult'), {
+          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+        });
       } catch {
         await ctx.answerCallback(t(lang, 'emergencyResult'));
-        await ctx.editMessage(t(lang, 'emergencyResult'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'emergencyResult'), {
+          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+        });
       }
       return;
     }
 
     if (ctx.params === 'cancel') {
       await ctx.answerCallback();
-      await ctx.editMessage('↩️ Emergency cancelled.', { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
+      await ctx.editMessage('↩️ Emergency cancelled.', {
+        reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+      });
       return;
     }
   }

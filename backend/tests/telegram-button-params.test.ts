@@ -461,6 +461,8 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     const h = makeHarness({
       engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop },
     });
+    // Operator (from.id 1000): the Stop/Emergency callbacks are gated by assertController.
+    h.store.setAdmin(1000, 'tester');
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -470,7 +472,7 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     await h.feature.handleStopCallback(ctx);
 
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + success answer
     expect(editMessage).toHaveBeenCalledTimes(1);
 
     cleanHarness(h);
@@ -481,6 +483,8 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     const h = makeHarness({
       engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop },
     });
+    // Operator (from.id 1000): the Stop/Emergency callbacks are gated by assertController.
+    h.store.setAdmin(1000, 'tester');
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -490,7 +494,7 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     await h.feature.handleStopCallback(ctx);
 
     expect(stop).not.toHaveBeenCalled();
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + cancel answer
     expect(editMessage).toHaveBeenCalledTimes(1);
 
     cleanHarness(h);
@@ -501,6 +505,8 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     const h = makeHarness({
       engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() },
     });
+    // Operator (from.id 1000): the Stop/Emergency callbacks are gated by assertController.
+    h.store.setAdmin(1000, 'tester');
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -510,7 +516,7 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     await h.feature.handleEmergencyCallback(ctx);
 
     expect(emergencyStop).toHaveBeenCalledTimes(1);
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + success answer
     expect(editMessage).toHaveBeenCalledTimes(1);
 
     cleanHarness(h);
@@ -521,6 +527,8 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     const h = makeHarness({
       engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() },
     });
+    // Operator (from.id 1000): the Stop/Emergency callbacks are gated by assertController.
+    h.store.setAdmin(1000, 'tester');
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
@@ -530,7 +538,7 @@ describe('FIXED: stop/emergency confirm/cancel', () => {
     await h.feature.handleEmergencyCallback(ctx);
 
     expect(emergencyStop).not.toHaveBeenCalled();
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(2); // top spinner dismiss + cancel answer
     expect(editMessage).toHaveBeenCalledTimes(1);
 
     cleanHarness(h);
@@ -655,6 +663,9 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     const fake = makeFakeTransport();
     h.feature.install(fake as unknown as BotCommandTransport);
 
+    // Operator (from.id 1000): the dashboard includes the Stats/Stop row, which
+    // is hidden for non-operators (handleStart gates on isAdminOrController).
+    h.store.setAdmin(1000, 'tester');
     await h.feature.handleStart(h.cbCtx());
     const dashboardData = replyCallbackData(h.reply);
 
