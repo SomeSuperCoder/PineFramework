@@ -2,7 +2,7 @@
  * TelegramBotFeature — the policy layer for the PineFramework Telegram bot.
  *
  * Owns the button-only control surface (notifications, language, reports,
- * stats, stop, emergency, group link/unlink, operator-access requests), the
+ * stats, stop, emergency, operator-access requests), the
  * operator auth gate, and the notification-type routing core. Control is
  * reached EXCLUSIVELY through inline buttons — /start is the only registered
  * command. It is transport-agnostic by design:
@@ -154,14 +154,13 @@ function isNotificationType(value: string): value is NotificationType {
  * The callback prefixes the feature's inline keyboards EMIT — the single
  * source of truth for `validateActionRegistry`. The union of every keyboard
  * emitter below: /start dashboard (notif, lang, report, stats, stop,
- * emergency, link, unlink, request), the back-to-dashboard rows (start),
+ * emergency, request), the back-to-dashboard rows (start),
  * LANG_PICKER_KEYBOARD (lang, start), STOP_CONFIRM_KEYBOARD (stop),
- * EMERGENCY_CONFIRM_KEYBOARD (emergency), LINK/UNLINK_CONFIRM_KEYBOARD
- * (link, unlink), buildTypeKeyboard callers (sub, unsub), and the manage
- * notifications submenu (notif). When a new inline button is added to a
- * keyboard, its prefix must be added here (and the action registered in the
- * SSOT registry) so the validator covers it automatically — never maintain a
- * parallel list.
+ * EMERGENCY_CONFIRM_KEYBOARD (emergency), buildTypeKeyboard callers
+ * (sub, unsub), and the manage notifications submenu (notif). When a new
+ * inline button is added to a keyboard, its prefix must be added here (and
+ * the action registered in the SSOT registry) so the validator covers it
+ * automatically — never maintain a parallel list.
  */
 const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'sub',
@@ -173,8 +172,6 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'emergency',
   'notif',
   'start',
-  'link',
-  'unlink',
   'request',
 ];
 
@@ -218,26 +215,6 @@ const EMERGENCY_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
     [
       { text: '🚨 EMERGENCY STOP', callback_data: 'emergency:confirm' },
       { text: '❌ Cancel', callback_data: 'emergency:cancel' },
-    ],
-  ],
-};
-
-/** Link confirmation keyboard shown by the dashboard "Link group" button. */
-const LINK_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
-  inline_keyboard: [
-    [
-      { text: '✅ Yes, Link', callback_data: 'link:confirm' },
-      { text: '❌ Cancel', callback_data: 'link:cancel' },
-    ],
-  ],
-};
-
-/** Unlink confirmation keyboard shown by the dashboard "Unlink group" button. */
-const UNLINK_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
-  inline_keyboard: [
-    [
-      { text: '✅ Yes, Unlink', callback_data: 'unlink:confirm' },
-      { text: '❌ Cancel', callback_data: 'unlink:cancel' },
     ],
   ],
 };
@@ -316,18 +293,6 @@ export class TelegramBotFeature {
       callbackPrefix: 'emergency',
       callbackHandler: (ctx) => this.handleEmergencyCallback(ctx),
     },
-    {
-      // Operator-gated: link/unlink run against the CURRENT group chat. Each
-      // follows the two-step ask → confirm/cancel flow of stop/emergency.
-      name: 'link',
-      callbackPrefix: 'link',
-      callbackHandler: (ctx) => this.handleLinkCallback(ctx),
-    },
-    {
-      name: 'unlink',
-      callbackPrefix: 'unlink',
-      callbackHandler: (ctx) => this.handleUnlinkCallback(ctx),
-    },
   ];
 
   constructor(opts: TelegramBotFeatureOptions) {
@@ -350,7 +315,7 @@ export class TelegramBotFeature {
     this.registerActions(transport);
 
     // Fail fast: every inline-button prefix the feature *emits* (dashboard,
-    // type keyboards, lang/stop/emergency/link pickers) must resolve to a
+    // type keyboards, lang/stop/emergency pickers) must resolve to a
     // registered action. A dead keyboard button becomes a boot error instead
     // of a silent no-op at click time.
     this.validateActionRegistry();
@@ -540,6 +505,12 @@ export class TelegramBotFeature {
     if (chatId) {
       const isGroup = ctx.chat?.type === 'group';
       this.store.addChat(chatId, isGroup ? 'group' : 'private');
+      // Auto-link: a chat is linked the first time the bot is started there.
+      // Private chats link on creation; a group links here, recording the
+      // starter. linkChat is a no-op on non-groups, so the branch is safe.
+      if (isGroup) {
+        this.store.linkChat(chatId, ctx.from?.id ?? 0);
+      }
     }
 
     // Operator-only row (Stats / Stop / Emergency) is hidden from
@@ -1005,103 +976,6 @@ export class TelegramBotFeature {
     }
   }
 
-  /**
-   * Callback handler for the dashboard "Link group" button. Operator-gated
-   * (assertController) with a two-step ask → confirm/cancel flow. On confirm,
-   * links the CURRENT chat when it is a group — the same store mutation the
-   * old /link command performed.
-   */
-  async handleLinkCallback(ctx: CallbackContext): Promise<void> {
-    await ctx.answerCallback();
-    if (!(await this.assertController(ctx))) return;
-    const lang = this.chatLang(ctx);
-
-    if (ctx.params === 'ask') {
-      await ctx.editMessage(t(lang, 'linkConfirmRequest'), {
-        reply_markup: LINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-
-    if (ctx.params === 'cancel') {
-      await ctx.editMessage(t(lang, 'linkCancelled'), {
-        reply_markup: LINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-
-    if (ctx.params === 'confirm') {
-      const chatId = ctx.chat?.id;
-      const fromId = ctx.from?.id;
-      if (chatId === undefined || fromId === undefined) {
-        await ctx.editMessage(t(lang, 'linkCancelled'), {
-          reply_markup: LINK_CONFIRM_KEYBOARD,
-        });
-        return;
-      }
-      if (ctx.chat?.type !== 'group') {
-        await ctx.editMessage(t(lang, 'linkGroupOnly'), {
-          reply_markup: LINK_CONFIRM_KEYBOARD,
-        });
-        return;
-      }
-      // Ensure the chat exists before linking (group chats may not be registered yet).
-      this.store.addChat(chatId, 'group');
-      const ok = this.store.linkChat(chatId, fromId);
-      await ctx.editMessage(t(lang, ok ? 'linkSuccess' : 'linkFail'), {
-        reply_markup: LINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-  }
-
-  /**
-   * Callback handler for the dashboard "Unlink group" button. Operator-gated
-   * (assertController) with a two-step ask → confirm/cancel flow. On confirm,
-   * unlinks the CURRENT chat when it is a group — the same store mutation the
-   * old /unlink command performed.
-   */
-  async handleUnlinkCallback(ctx: CallbackContext): Promise<void> {
-    await ctx.answerCallback();
-    if (!(await this.assertController(ctx))) return;
-    const lang = this.chatLang(ctx);
-
-    if (ctx.params === 'ask') {
-      await ctx.editMessage(t(lang, 'unlinkConfirmRequest'), {
-        reply_markup: UNLINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-
-    if (ctx.params === 'cancel') {
-      await ctx.editMessage(t(lang, 'unlinkCancelled'), {
-        reply_markup: UNLINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-
-    if (ctx.params === 'confirm') {
-      const chatId = ctx.chat?.id;
-      if (chatId === undefined) {
-        await ctx.editMessage(t(lang, 'unlinkCancelled'), {
-          reply_markup: UNLINK_CONFIRM_KEYBOARD,
-        });
-        return;
-      }
-      if (ctx.chat?.type !== 'group') {
-        await ctx.editMessage(t(lang, 'linkGroupOnly'), {
-          reply_markup: UNLINK_CONFIRM_KEYBOARD,
-        });
-        return;
-      }
-      const ok = this.store.unlinkChat(chatId);
-      await ctx.editMessage(t(lang, ok ? 'unlinkSuccess' : 'unlinkFail'), {
-        reply_markup: UNLINK_CONFIRM_KEYBOARD,
-      });
-      return;
-    }
-  }
-
   // ---- Formatting helpers ---------------------------------------------------
 
   private formatPnl(value: number): string {
@@ -1115,8 +989,8 @@ export class TelegramBotFeature {
    * so the two can never drift apart.
    *
    * @param isOperator  When true, the operator-only rows (Stats / Stop /
-   *                    Emergency / Link / Unlink) are included; otherwise the
-   *                    self-service "Request access" row is shown instead.
+   *                    Emergency) are included; otherwise the self-service
+   *                    "Request access" row is shown instead.
    */
   private buildDashboardKeyboard(
     isOperator: boolean,
@@ -1133,10 +1007,6 @@ export class TelegramBotFeature {
               { text: '⚙️ Stats', callback_data: 'stats:show' },
               { text: '🛑 Stop', callback_data: 'stop:ask' },
               { text: '🚨 Emergency', callback_data: 'emergency:ask' },
-            ],
-            [
-              { text: '🔗 Link group', callback_data: 'link:ask' },
-              { text: '🔓 Unlink group', callback_data: 'unlink:ask' },
             ],
           ]
         : [[{ text: '🪪 Request access', callback_data: 'request:go' }]]),

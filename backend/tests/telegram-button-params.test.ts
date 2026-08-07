@@ -646,8 +646,8 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
 
     // Every prefix the dashboard /start + the toggle/picker/confirm keyboards
     // emit must be registered. A missing one = a dead button (B3). The full set
-    // now also covers the new link/unlink/request button flows.
-    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'link', 'unlink', 'request']) {
+    // covers the request button flow (link/unlink callbacks were removed).
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'request']) {
       expect(fake.callbacks, `callback prefix "${p}" must be registered`).toContain(p);
     }
 
@@ -676,9 +676,10 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     expect(dashboardData).toContain('lang:menu');
     expect(dashboardData).toContain('stop:ask');
     expect(dashboardData).toContain('emergency:ask');
-    // Operator-only row also exposes the group link/unlink ask buttons.
-    expect(dashboardData).toContain('link:ask');
-    expect(dashboardData).toContain('unlink:ask');
+    // The link/unlink callbacks are GONE: the operator row exposes NO link or
+    // unlink buttons (auto-link on /start replaced the manual flows).
+    expect(dashboardData).not.toContain('link:ask');
+    expect(dashboardData).not.toContain('unlink:ask');
     // Operators see no self-service request row (that row is non-operator only).
     expect(dashboardData).not.toContain('request:go');
 

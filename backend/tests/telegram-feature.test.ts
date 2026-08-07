@@ -436,6 +436,10 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     expect(buttons.some((b) => b.callback_data === 'stop:ask')).toBe(true);
     expect(buttons.some((b) => b.callback_data === 'emergency:ask')).toBe(true);
     expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(true);
+    // The link/unlink callbacks are GONE: the operator row exposes NO link or
+    // unlink buttons (auto-link on /start replaced the manual flows).
+    expect(buttons.some((b) => b.callback_data.startsWith('link'))).toBe(false);
+    expect(buttons.some((b) => b.callback_data.startsWith('unlink'))).toBe(false);
     cleanHarness(h);
   });
 
@@ -515,95 +519,47 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
   });
 });
 
-describe('TelegramBotFeature link/unlink (button-only, operator-gated)', () => {
-  it('link:ask presents the confirmation; link:confirm links a group for an operator', async () => {
+describe('TelegramBotFeature auto-link on /start (link/unlink callbacks removed)', () => {
+  it('AUTO-LINK: /start in a GROUP links it, recording the starter as linkedBy', async () => {
     const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLinkCallback(h.cb('link', 'link:ask', { from: { id: 1, username: 'boss' }, editMessage }));
-    expect(editMessage).toHaveBeenCalledWith(
-      expect.stringContaining('Link this group'),
-      expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
-    );
-    await h.feature.handleLinkCallback(h.cb('link', 'link:confirm', {
+    await h.feature.handleStart(h.ctx({
       chat: { id: 7000, type: 'group' },
-      from: { id: 1, username: 'boss' },
-      editMessage,
+      from: { id: 55, username: 'alice', first_name: 'Alice' },
     }));
     expect(h.store.isLinked(7000)).toBe(true);
+    expect(h.store.getChat(7000)!.linkedBy).toBe(55);
     cleanHarness(h);
   });
 
-  it('link:confirm is refused in a private chat', async () => {
+  it('AUTO-LINK: a store-created group (no /start) stays UNLINKED until started', async () => {
     const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLinkCallback(h.cb('link', 'link:confirm', {
-      chat: { id: 1000, type: 'private' },
-      from: { id: 1, username: 'boss' },
-      editMessage,
-    }));
-    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('group chat'), expect.anything());
-    expect(h.store.isLinked(1000)).toBe(false);
-    cleanHarness(h);
-  });
-
-  it('link:ask is denied to a non-operator', async () => {
-    const h = makeHarness();
-    const answerCallback = vi.fn().mockResolvedValue(undefined);
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLinkCallback(h.cb('link', 'link:ask', {
-      from: { id: 500, username: 'nobody' },
-      answerCallback,
-      editMessage,
-    }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized'));
-    expect(editMessage).not.toHaveBeenCalled();
-    cleanHarness(h);
-  });
-
-  it('link:cancel leaves the group unchanged', async () => {
-    const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
     h.store.addChat(7000, 'group');
-    h.store.linkChat(7000, 1);
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLinkCallback(h.cb('link', 'link:cancel', {
-      chat: { id: 7000, type: 'group' },
-      from: { id: 1, username: 'boss' },
-      editMessage,
-    }));
-    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('cancelled'), expect.anything());
-    expect(h.store.isLinked(7000)).toBe(true);
-    cleanHarness(h);
-  });
-
-  it('unlink:ask → unlink:confirm unlinks a group', async () => {
-    const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
-    h.store.addChat(7000, 'group');
-    h.store.linkChat(7000, 1);
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:ask', { from: { id: 1, username: 'boss' }, editMessage }));
-    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:confirm', {
-      chat: { id: 7000, type: 'group' },
-      from: { id: 1, username: 'boss' },
-      editMessage,
-    }));
     expect(h.store.isLinked(7000)).toBe(false);
+    // The first /start in the group is what links it — no operator button needed.
+    await h.feature.handleStart(h.ctx({
+      chat: { id: 7000, type: 'group' },
+      from: { id: 55, username: 'alice', first_name: 'Alice' },
+    }));
+    expect(h.store.isLinked(7000)).toBe(true);
+    expect(h.store.getChat(7000)!.linkedBy).toBe(55);
     cleanHarness(h);
   });
 
-  it('unlink:confirm in a private chat is refused', async () => {
+  it('AUTO-LINK (regression): private chats are still linked on creation', async () => {
     const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:confirm', {
-      chat: { id: 1000, type: 'private' },
-      from: { id: 1, username: 'boss' },
-      editMessage,
+    h.store.addChat(9000, 'private');
+    expect(h.store.isLinked(9000)).toBe(true);
+    cleanHarness(h);
+  });
+
+  it('AUTO-LINK: /start in a group without a from.id still links (linkedBy falls back to 0)', async () => {
+    const h = makeHarness();
+    await h.feature.handleStart(h.ctx({
+      chat: { id: 7001, type: 'group' },
+      from: { username: 'anonymous' } as never,
     }));
-    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('group chat'), expect.anything());
+    expect(h.store.isLinked(7001)).toBe(true);
+    expect(h.store.getChat(7001)!.linkedBy).toBe(0);
     cleanHarness(h);
   });
 });
@@ -643,7 +599,7 @@ describe('B2 — install() transport seam (button-only)', () => {
     const registerBotCallback = vi.fn();
     h.feature.install({ registerBotCommand: vi.fn(), registerBotCallback });
     const prefixes = registerBotCallback.mock.calls.map((c) => c[0]);
-    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'link', 'unlink', 'request']) {
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'request']) {
       expect(prefixes).toContain(p);
     }
     cleanHarness(h);

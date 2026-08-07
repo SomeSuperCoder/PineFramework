@@ -19,7 +19,7 @@ const en = {
     '🚀 *Welcome to PineFramework Bot!*\n\n' +
     'I stream your Pine indicator signals to this chat, so you never miss a move.\n\n' +
     'Use the buttons below to manage alerts, language, reports and more.\n' +
-    'Operators also find the engine controls and group linking here.',
+    'Operators also find the engine controls here.',
   // ── operator-access request ────────────────────────────────────────────────
   requestSubmitted: '✅ Request submitted. You will hear back soon.',
   requestAlreadyPending: '⏳ You already have a pending request — hang tight.',
@@ -41,17 +41,6 @@ const en = {
   reportHeader: '📊 *Performance recap:*',
   reportEmpty: '📊 No trades to report yet. As soon as there is action, you will see it here.',
   reportRow: '• {{symbol}} {{side}} — PnL {{pnl}}',
-  // ── link / unlink ─────────────────────────────────────────────────────────
-  linkGroupOnly: '🔗 Linking only works in a group chat.',
-  linkConfirmRequest: '🔗 Link this group to your channel? Alerts will land here.',
-  linkSuccess: '✅ Group linked to your channel. Alerts will land here.',
-  linkFail:
-    '❌ Could not link this group. Make sure the bot is an admin and has the right to post.',
-  linkCancelled: '↩️ Link cancelled — group unchanged.',
-  unlinkConfirmRequest: '🔓 Unlink this group? Alerts will stop landing here.',
-  unlinkSuccess: '🔓 Group unlinked.',
-  unlinkFail: '❌ Could not unlink this group.',
-  unlinkCancelled: '↩️ Unlink cancelled — group stays linked.',
   // ── stats ──────────────────────────────────────────────────────────────────
   statsHeader: '⚙️ Engine state:',
   statsRunning: '🟢 Status: *running* — all systems go.',
@@ -94,7 +83,7 @@ const es: Record<keyof typeof en, string> = {
     '🚀 ¡Bienvenido a PineFramework Bot!\n\n' +
     'Te envío las señales de tus indicadores Pine a este chat, para que no te pierdas ni un movimiento.\n\n' +
     'Usa los botones de abajo para gestionar alertas, idioma, informes y más.\n' +
-    'Los operadores también encuentran aquí los controles del motor y el enlace de grupos.',
+    'Los operadores también encuentran aquí los controles del motor.',
   // ── solicitud de acceso de operador ────────────────────────────────────────
   requestSubmitted: '✅ Solicitud enviada. Pronto tendrás noticias.',
   requestAlreadyPending: '⏳ Ya tienes una solicitud en curso — paciencia.',
@@ -118,17 +107,6 @@ const es: Record<keyof typeof en, string> = {
   reportHeader: '📊 Resumen de rendimiento',
   reportEmpty: '📊 Aún no hay operaciones que reportar. Cuando haya señales, las verás aquí.',
   reportRow: '• {{symbol}} {{side}} — PnL {{pnl}}',
-  // ── link / unlink ─────────────────────────────────────────────────────────
-  linkGroupOnly: '🔗 Vincular solo funciona en un grupo.',
-  linkConfirmRequest: '🔗 ¿Vincular este grupo a tu canal? Las alertas llegarán aquí.',
-  linkSuccess: '✅ Grupo vinculado a tu canal. Las alertas llegarán aquí.',
-  linkFail:
-    '❌ No se pudo vincular el grupo. Asegúrate de que el bot sea administrador y tenga permiso para publicar.',
-  linkCancelled: '↩️ Vinculación cancelada — el grupo no cambió.',
-  unlinkConfirmRequest: '🔓 ¿Desvincular este grupo? Las alertas dejarán de llegar aquí.',
-  unlinkSuccess: '🔓 Grupo desvinculado.',
-  unlinkFail: '❌ No se pudo desvincular este grupo.',
-  unlinkCancelled: '↩️ Desvinculación cancelada — el grupo sigue vinculado.',
   // ── stats ─────────────────────────────────────────────────────────────────
   statsHeader: '⚙️ Estado del motor:',
   statsRunning: '🟢 Estado: en marcha. Todo en orden.',
@@ -172,7 +150,7 @@ const ru: Record<keyof typeof en, string> = {
     '🚀 Добро пожаловать в PineFramework Bot!\n\n' +
     'Я присылаю сигналы ваших Pine-индикаторов прямо в этот чат, чтобы вы не упустили ни одного движения.\n\n' +
     'Управляйте всем кнопками ниже: оповещения, язык, отчёты и другое.\n' +
-    'Операторы также найдут здесь управление движком и привязку групп.',
+    'Операторы также найдут здесь управление движком.',
   // ── запрос доступа оператора ──────────────────────────────────────────────
   requestSubmitted: '✅ Запрос отправлен. Скоро ответим.',
   requestAlreadyPending: '⏳ У вас уже есть активный запрос — ожидайте.',
@@ -195,16 +173,6 @@ const ru: Record<keyof typeof en, string> = {
   reportHeader: '📊 Итоги производительности',
   reportEmpty: '📊 Пока нет сделок. Появятся сигналы — всё увидите здесь.',
   reportRow: '• {{symbol}} {{side}} — PnL {{pnl}}',
-  // ── link / unlink ─────────────────────────────────────────────────────────
-  linkGroupOnly: '🔗 Привязка работает только в групповом чате.',
-  linkConfirmRequest: '🔗 Привязать эту группу к вашему каналу? Оповещения будут приходить сюда.',
-  linkSuccess: '✅ Группа привязана к вашему каналу. Оповещения придут сюда.',
-  linkFail: '❌ Не удалось привязать группу. Убедитесь, что бот — админ и умеет писать в чат.',
-  linkCancelled: '↩️ Привязка отменена — группа не изменилась.',
-  unlinkConfirmRequest: '🔓 Отвязать эту группу? Оповещения перестанут приходить сюда.',
-  unlinkSuccess: '🔓 Группа отвязана.',
-  unlinkFail: '❌ Не удалось отвязать эту группу.',
-  unlinkCancelled: '↩️ Отмена привязки — группа остаётся привязанной.',
   // ── /stats ─────────────────────────────────────────────────────────────────
   statsHeader: '⚙️ Состояние движка:',
   statsRunning: '🟢 Статус: работает. Полный боевой режим.',
