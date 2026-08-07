@@ -17,8 +17,24 @@ import {
   type CallbackContext,
   type FeatureCommandContext,
 } from '../src/telegram/TelegramBotFeature.js';
+import { renderGlobalPnlCard } from '../src/telegram/report/renderCard.js';
+import { escapeMarkdownV2 } from '../src/telegram/TelegramService.js';
 import type { StatsService } from '../src/services/StatsService.js';
 import type { SessionSummary } from '../src/services/StatsService.js';
+
+// The report card renderer shells out to sharp (real 800x440 rasterization).
+// Mock the module at the boundary so NO real render runs in tests — the
+// deterministic fake Buffer is asserted through the injected onPhoto transport.
+vi.mock('../src/telegram/report/renderCard.js', () => ({
+  renderGlobalPnlCard: vi.fn(),
+}));
+
+// The module-level renderGlobalPnlCard mock is shared across every test in this
+// FILE; its call history must be reset before each test or toHaveBeenCalledTimes
+// assertions leak the previous tests' invocations.
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 type Reply = ReturnType<typeof vi.fn>;
 
@@ -53,7 +69,11 @@ interface Harness {
   cb: (prefix: string, data: string, overrides?: Partial<CallbackContext>) => CallbackContext;
 }
 
-function makeHarness(opts: { stats?: Partial<StatsService> | null; engine?: unknown } = {}): Harness {
+function makeHarness(opts: {
+  stats?: Partial<StatsService> | null;
+  engine?: unknown;
+  onPhoto?: (chatId: number, buffer: Buffer, caption?: string) => Promise<boolean>;
+} = {}): Harness {
   const filePath = tmpFile();
   const store = new TelegramConfigStore(filePath);
   const reply = vi.fn().mockResolvedValue(true);
@@ -74,9 +94,13 @@ function makeHarness(opts: { stats?: Partial<StatsService> | null; engine?: unkn
               maxDrawdown: 0,
               recent: [],
             })),
+            // The report path reads the per-asset grouping for the movers
+            // breakdown; a null grouping means "no movers section".
+            getGroupedStats: vi.fn(() => null),
           } as Partial<StatsService> as StatsService),
     getEngine: () => (opts.engine !== undefined ? opts.engine : null) as never,
     onMessage: async () => true,
+    onPhoto: opts.onPhoto,
   });
   const ctx = (overrides: CtxOverrides = {}): FeatureCommandContext => ({
     from: overrides.from ?? { id: 1000, username: 'tester', first_name: 'Tester' },
@@ -114,26 +138,38 @@ function cleanHarness(h: Harness): void {
 }
 
 describe('TelegramBotFeature auth gate', () => {
-  it('denies non-controller, non-admin with permDeniedControl', async () => {
+  it('M1: the report is member-visible — a non-controller CAN request it', async () => {
+    // The report (merged stats surface) is member-facing, NOT operator-gated:
+    // the old /stats operator gate is gone along with handleStats. A plain
+    // member gets the full report text (no photo transport → text-only
+    // fallback with the image-error note).
     const h = makeHarness();
-    await h.feature.handleStats(h.ctx({ from: { id: 500, username: 'nobody' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+    await h.feature.handleReport(h.ctx({ from: { id: 500, username: 'nobody' } }));
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    expect(h.reply).not.toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
+    const [text, extra] = h.reply.mock.calls[0]!;
+    expect(text).toContain('📊 *Global PnL Report*');
+    expect(extra).toEqual({ parse_mode: 'MarkdownV2' });
     cleanHarness(h);
   });
 
-  it('allows the admin through the gate', async () => {
-    const h = makeHarness({ engine: { state: 'Running', config: { pairs: [{ symbol: 'X' }] }, positions: [], emergencyStop: vi.fn(), stop: vi.fn() } });
+  it('allows the admin through (report is member-visible, admin included)', async () => {
+    const h = makeHarness();
     h.store.setAdmin(1, 'admin');
-    await h.feature.handleStats(h.ctx({ from: { id: 1, username: 'admin' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine state'));
+    await h.feature.handleReport(h.ctx({ from: { id: 1, username: 'admin' } }));
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    const [text] = h.reply.mock.calls[0]!;
+    expect(text).toContain('📊 *Global PnL Report*');
     cleanHarness(h);
   });
 
-  it('allows an approved controller through the gate', async () => {
-    const h = makeHarness({ engine: { state: 'Stopped', config: {}, positions: [], stop: vi.fn(), emergencyStop: vi.fn() } });
+  it('allows an approved controller through (report is member-visible, controller included)', async () => {
+    const h = makeHarness();
     h.store.addController(777, 'oper', 1);
-    await h.feature.handleStats(h.ctx({ from: { id: 777, username: 'oper' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine state'));
+    await h.feature.handleReport(h.ctx({ from: { id: 777, username: 'oper' } }));
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    const [text] = h.reply.mock.calls[0]!;
+    expect(text).toContain('📊 *Global PnL Report*');
     cleanHarness(h);
   });
 });
@@ -272,7 +308,7 @@ describe('TelegramBotFeature lang (button-only picker)', () => {
   });
 });
 
-describe('TelegramBotFeature report (dashboard button report:show)', () => {
+describe('TelegramBotFeature report (dashboard button report:show → global PnL + image)', () => {
   it('explains when no stats service is attached', async () => {
     const h = makeHarness({ stats: null });
     await h.feature.handleReportCallback(h.cb('report', 'report:show'));
@@ -280,24 +316,56 @@ describe('TelegramBotFeature report (dashboard button report:show)', () => {
     cleanHarness(h);
   });
 
-  it('reports empty summary when there are no trades', async () => {
+  it('renders a zeroed report when there are no trades (empty state still renders + image)', async () => {
+    const buf = Buffer.from('fake-png');
+    const onPhoto = vi.fn().mockResolvedValue(true);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
     const h = makeHarness({
-      stats: ({ getSessionSummary: vi.fn(() => ({ totalTrades: 0, recent: [] })) } as Partial<StatsService> as StatsService),
+      stats: ({
+        getSessionSummary: vi.fn(() => ({
+          totalTrades: 0,
+          winRate: 0,
+          netPnl: 0,
+          totalFees: 0,
+          profitFactor: 0,
+          bestTrade: 0,
+          worstTrade: 0,
+          maxDrawdown: 0,
+          recent: [],
+        })),
+        getGroupedStats: vi.fn(() => null),
+      } as Partial<StatsService> as StatsService),
+      onPhoto,
     });
     await h.feature.handleReportCallback(h.cb('report', 'report:show'));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('No trades'));
+    // The empty report still renders the card (reportEmpty short-circuit REMOVED).
+    expect(renderGlobalPnlCard).toHaveBeenCalledTimes(1);
+    // Short report → the full text rides on the photo as its caption.
+    expect(onPhoto).toHaveBeenCalledTimes(1);
+    const [chatId, photoBuf, caption] = onPhoto.mock.calls[0]!;
+    expect(chatId).toBe(1000);
+    expect(photoBuf).toBe(buf);
+    expect(caption).toContain('📊 *Global PnL Report*');
+    expect(caption).toContain('💰 *Total: $0.00*');
+    expect(caption).toContain('⚙️ Engine:');
+    expect((caption as string).length).toBeLessThanOrEqual(1000);
+    // The photo path is the delivery — no separate text reply.
+    expect(h.reply).not.toHaveBeenCalled();
     cleanHarness(h);
   });
 
-  it('renders a report with trade rows', async () => {
+  it('renders a report with trade rows (emojified format on the photo caption)', async () => {
+    const buf = Buffer.from('fake-png');
+    const onPhoto = vi.fn().mockResolvedValue(true);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
     const h = makeHarness({
       stats: ({
         getSessionSummary: vi.fn(() => ({
           totalTrades: 2,
-          winRate: 50,
+          winRate: 0.5,
           netPnl: 10,
           totalFees: 0,
-          profitFactor: 1,
+          profitFactor: 2,
           bestTrade: 10,
           worstTrade: -5,
           maxDrawdown: 5,
@@ -306,13 +374,138 @@ describe('TelegramBotFeature report (dashboard button report:show)', () => {
             { symbol: 'ETHUSDC', side: 'sell', realizedPnl: -2 },
           ],
         } as unknown as SessionSummary)),
+        getGroupedStats: vi.fn(() => ({
+          BTCUSDC: { netPnl: 10.5 } as never,
+          ETHUSDC: { netPnl: -2 } as never,
+        })),
       } as Partial<StatsService> as StatsService),
+      onPhoto,
     });
     await h.feature.handleReportCallback(h.cb('report', 'report:show'));
-    const replyText = (h.reply.mock.calls[0]![0] as string);
-    expect(replyText).toContain('BTCUSDC');
-    expect(replyText).toContain('ETHUSDC');
-    expect(replyText).toContain('10.50');
+    const [, , caption] = onPhoto.mock.calls[0]!;
+    // New emojified format: headline, total, split, metrics, movers, engine, generated.
+    expect(caption).toContain('📊 *Global PnL Report*');
+    expect(caption).toContain('💰 *Total:');
+    expect(caption).toContain('🟢 Realized:');
+    expect(caption).toContain('🧾 2 trades');
+    expect(caption).toContain('🏆 Top movers:');
+    expect(caption).toContain('• BTCUSDC');
+    expect(caption).toContain('• ETHUSDC');
+    expect(caption).toContain('⚙️ Engine:');
+    expect(caption).toContain('⏱ Generated');
+    cleanHarness(h);
+  });
+
+  it('image attach happy path: photo sent with chatId, buffer and the full text caption (≤1000 chars)', async () => {
+    const buf = Buffer.from('png-bytes');
+    const onPhoto = vi.fn().mockResolvedValue(true);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
+    const h = makeHarness({ onPhoto });
+    await h.feature.handleReport(h.ctx());
+    expect(renderGlobalPnlCard).toHaveBeenCalledTimes(1);
+    expect(onPhoto).toHaveBeenCalledTimes(1);
+    const [chatId, buffer, caption] = onPhoto.mock.calls[0]!;
+    expect(chatId).toBe(1000);
+    expect(buffer).toBe(buf);
+    expect(caption).toContain('📊 *Global PnL Report*');
+    expect((caption as string).length).toBeLessThanOrEqual(1000);
+    // Photo delivered → no fallback text reply.
+    expect(h.reply).not.toHaveBeenCalled();
+    cleanHarness(h);
+  });
+
+  it('image fail path: renderGlobalPnlCard throws → text-only reply (escaped + MarkdownV2)', async () => {
+    vi.mocked(renderGlobalPnlCard).mockRejectedValue(new Error('sharp unavailable'));
+    const h = makeHarness();
+    await h.feature.handleReport(h.ctx());
+    expect(renderGlobalPnlCard).toHaveBeenCalledTimes(1);
+    // The full text IS the delivery; never silent.
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    const [text, extra] = h.reply.mock.calls[0]!;
+    expect(text).toContain('📊 *Global PnL Report*');
+    expect(text).toContain(escapeMarkdownV2('💰 *Total: $0.00*'));
+    expect(extra).toEqual({ parse_mode: 'MarkdownV2' });
+    cleanHarness(h);
+  });
+
+  it('sendPhoto returns false → text-only reply carrying the image-error note (escaped + MarkdownV2)', async () => {
+    const buf = Buffer.from('png-bytes');
+    const onPhoto = vi.fn().mockResolvedValue(false);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
+    const h = makeHarness({ onPhoto });
+    await h.feature.handleReport(h.ctx());
+    expect(onPhoto).toHaveBeenCalledTimes(1);
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    const [text, extra] = h.reply.mock.calls[0]!;
+    // The image-error note is appended to the full text, then escaped together.
+    expect(text).toContain('📊 *Global PnL Report*');
+    expect(text).toContain(escapeMarkdownV2('🖼️ Image unavailable — text report above.'));
+    expect(extra).toEqual({ parse_mode: 'MarkdownV2' });
+    cleanHarness(h);
+  });
+
+  it('long report (>1000 chars): full text first, then photo with the short header caption', async () => {
+    const recent = Array.from({ length: 80 }, (_, i) => ({
+      symbol: `SYM${String(i).padStart(2, '0')}`,
+      side: i % 2 === 0 ? 'buy' : 'sell',
+      realizedPnl: i % 2 === 0 ? 10.5 : -2.25,
+    }));
+    const buf = Buffer.from('png-bytes');
+    const onPhoto = vi.fn().mockResolvedValue(true);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
+    const h = makeHarness({
+      stats: ({
+        getSessionSummary: vi.fn(() => ({
+          totalTrades: recent.length,
+          winRate: 0.684,
+          netPnl: 10,
+          totalFees: 0,
+          profitFactor: 2.5,
+          bestTrade: 10,
+          worstTrade: -5,
+          maxDrawdown: 5,
+          recent,
+        } as unknown as SessionSummary)),
+        getGroupedStats: vi.fn(() => null),
+      } as Partial<StatsService> as StatsService),
+      onPhoto,
+    });
+    await h.feature.handleReport(h.ctx());
+    // The long path sends the FULL escaped text as a message first...
+    expect(h.reply).toHaveBeenCalledTimes(1);
+    const [text, extra] = h.reply.mock.calls[0]!;
+    expect(text).toContain('📊 *Global PnL Report*');
+    expect((text as string).length).toBeGreaterThan(1000);
+    expect(extra).toEqual({ parse_mode: 'MarkdownV2' });
+    // ...then the photo with ONLY the bare header as its caption.
+    expect(onPhoto).toHaveBeenCalledTimes(1);
+    const [chatId, buffer, caption] = onPhoto.mock.calls[0]!;
+    expect(chatId).toBe(1000);
+    expect(buffer).toBe(buf);
+    expect(caption).toBe('📊 *Global PnL Report*');
+    cleanHarness(h);
+  });
+
+  it('stats merged: engine state + pairs + open positions render in the report', async () => {
+    const buf = Buffer.from('png-bytes');
+    const onPhoto = vi.fn().mockResolvedValue(true);
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(buf);
+    const h = makeHarness({
+      engine: {
+        state: 'Running',
+        config: { pairs: [{ symbol: 'BTCUSDC' }, { symbol: 'ETHUSDC' }] },
+        positions: [{ symbol: 'BTCUSDC', unrealizedPnl: 2.5 }],
+        stop: vi.fn(),
+        emergencyStop: vi.fn(),
+      },
+      onPhoto,
+    });
+    await h.feature.handleReport(h.ctx());
+    const [, , caption] = onPhoto.mock.calls[0]!;
+    // The merged report line carries engine state + pairs + open positions.
+    expect(caption).toContain('⚙️ Engine: 🟢 running · 👀 2 pairs · 📌 1 open positions');
+    // The open position's unrealized PnL feeds the split line.
+    expect(caption).toContain('🔵 Unrealized: +$2.50');
     cleanHarness(h);
   });
 });
@@ -416,18 +609,19 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     return extra!.reply_markup.inline_keyboard.flat();
   }
 
-  it('A: /start hides the Stats/Stop row from a non-operator', async () => {
+  it('A: /start hides the operator row (Stop/Emergency) from a non-operator', async () => {
     const h = makeHarness();
     // Known non-controller, non-admin user.
     await h.feature.handleStart(h.ctx({ from: { id: 500, username: 'nobody' } }));
     const buttons = dashboardButtons(h.reply);
     expect(buttons.some((b) => b.callback_data.startsWith('stop:'))).toBe(false);
+    expect(buttons.some((b) => b.callback_data.startsWith('emergency:'))).toBe(false);
     expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(false);
     expect(buttons.some((b) => b.callback_data === 'notif:menu')).toBe(true);
     cleanHarness(h);
   });
 
-  it('B: /start shows the Stats/Stop row for the admin/controller', async () => {
+  it('B: /start shows the operator row (Stop + Emergency) for the admin/controller', async () => {
     const h = makeHarness();
     h.store.setAdmin(1, 'boss');
     await h.feature.handleStart(h.ctx({ from: { id: 1, username: 'boss' } }));
@@ -435,7 +629,8 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     // The dashboard Stop emits stop:ask (two-step confirm), not stop:confirm.
     expect(buttons.some((b) => b.callback_data === 'stop:ask')).toBe(true);
     expect(buttons.some((b) => b.callback_data === 'emergency:ask')).toBe(true);
-    expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(true);
+    // The ⚙️ Stats dashboard button is GONE — its surface merged into Report.
+    expect(buttons.some((b) => b.callback_data === 'stats:show')).toBe(false);
     // The link/unlink callbacks are GONE: the operator row exposes NO link or
     // unlink buttons (auto-link on /start replaced the manual flows).
     expect(buttons.some((b) => b.callback_data.startsWith('link'))).toBe(false);
@@ -599,9 +794,12 @@ describe('B2 — install() transport seam (button-only)', () => {
     const registerBotCallback = vi.fn();
     h.feature.install({ registerBotCommand: vi.fn(), registerBotCallback });
     const prefixes = registerBotCallback.mock.calls.map((c) => c[0]);
-    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'request']) {
+    // 9 emitted prefixes: the 'stats' entry was REMOVED (surface merged into
+    // the report button).
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stop', 'emergency', 'notif', 'start', 'request']) {
       expect(prefixes).toContain(p);
     }
+    expect(prefixes).not.toContain('stats');
     cleanHarness(h);
   });
 

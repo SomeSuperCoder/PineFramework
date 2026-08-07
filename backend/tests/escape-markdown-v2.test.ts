@@ -1,35 +1,7 @@
 import { describe, it, expect } from 'vitest';
-
-/**
- * DUPLICATED from TelegramService.ts for unit testing.
- * The function is not exported, so we duplicate it here.
- * This is acceptable for a pure function with no side effects.
- *
- * Escape all MarkdownV2 special characters EXCEPT `*` (which is used for
- * bold formatting in i18n strings). This ensures dynamic text is safe to
- * send with `parse_mode: 'MarkdownV2'` while preserving intentional bold.
- */
-function escapeMarkdownV2(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')  // must be first to avoid double-escaping
-    .replace(/_/g, '\\_')
-    .replace(/\[/g, '\\[')
-    .replace(/\]/g, '\\]')
-    .replace(/\(/g, '\\(')
-    .replace(/\)/g, '\\)')
-    .replace(/~/g, '\\~')
-    .replace(/`/g, '\\`')
-    .replace(/>/g, '\\>')
-    .replace(/#/g, '\\#')
-    .replace(/\+/g, '\\+')
-    .replace(/-/g, '\\-')
-    .replace(/=/g, '\\=')
-    .replace(/\|/g, '\\|')
-    .replace(/\{/g, '\\{')
-    .replace(/\}/g, '\\}')
-    .replace(/\./g, '\\.')
-    .replace(/!/g, '\\!');
-}
+// SSOT: escapeMarkdownV2 is now EXPORTED from TelegramService.ts. Test the real
+// implementation — no local duplicated copy (the old duplicate was removed).
+import { escapeMarkdownV2 } from '../src/telegram/TelegramService.js';
 
 describe('escapeMarkdownV2', () => {
   // ─── Individual special characters ───

@@ -35,7 +35,8 @@ describe('t() interpolation', () => {
   });
 
   it('leaves the string untouched when no params are given', () => {
-    expect(t('es', 'statsRunning')).toBe(es.statsRunning);
+    // reportHeader has no placeholders — it must be returned verbatim.
+    expect(t('es', 'reportHeader')).toBe(es.reportHeader);
   });
 });
 

@@ -13,7 +13,7 @@
  *        lang:en | lang:es | lang:ru          (language picker)
  *        sub:trading | unsub:daily | ...      (toggle keyboards)
  *        sub:menu / unsub:menu / lang:menu     (dashboard navigation)
- *        report:show / stats:show / stop:confirm / emergency:confirm
+ *        report:show / stop:confirm / emergency:confirm
  *   2. Handlers parse values TOLERANTLY via `params.split(':').pop()`, so
  *      legacy multi-segment data (`lang:set:en`, `sub:toggle:trading`) STILL
  *      WORKS. Reserved exact matches (`menu`, `confirm`, `cancel`, `show`)
@@ -36,6 +36,13 @@ import {
   type CallbackContext,
   type BotCommandTransport,
 } from '../src/telegram/TelegramBotFeature.js';
+import { renderGlobalPnlCard } from '../src/telegram/report/renderCard.js';
+
+// The report card renderer shells out to sharp — mock at the module boundary
+// so the report:show tests never run a real rasterization.
+vi.mock('../src/telegram/report/renderCard.js', () => ({
+  renderGlobalPnlCard: vi.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // The REAL transport parse (TelegramService.attachCallback, TelegramService.ts:158-159)
@@ -398,9 +405,15 @@ describe('FIXED: menu callbacks from the /start dashboard', () => {
 // FIXED — Report / Stats dashboard callbacks
 // ---------------------------------------------------------------------------
 
-describe('FIXED: report:show / stats:show callbacks', () => {
+describe('FIXED: report:show callback (stats merged into the report surface)', () => {
   it('report:show → answers the query and produces the report reply', async () => {
-    const h = makeHarness({ stats: { getSessionSummary: () => makeSummary() } });
+    const h = makeHarness({
+      stats: {
+        getSessionSummary: () => makeSummary(),
+        getGroupedStats: () => null,
+      },
+    });
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(Buffer.from('png'));
     const answerCallback = vi.fn().mockResolvedValue(undefined);
 
     const ctx = parseCtx(h, 'report', 'report:show', { answerCallback });
@@ -418,34 +431,37 @@ describe('FIXED: report:show / stats:show callbacks', () => {
     cleanHarness(h);
   });
 
-  it('stats:show → controller-gated: non-controller is DENIED', async () => {
-    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop: vi.fn() } });
+  it('report:show → member-visible: a non-controller gets the report, NOT permDeniedControl', async () => {
+    // The old stats:show surface was operator-gated; the merged report is
+    // member-visible — a plain member gets the full report, never the gate.
+    const h = makeHarness({
+      stats: { getSessionSummary: () => makeSummary(), getGroupedStats: () => null },
+    });
+    vi.mocked(renderGlobalPnlCard).mockResolvedValue(Buffer.from('png'));
     const answerCallback = vi.fn().mockResolvedValue(undefined);
 
-    // from.id 1000 is NOT admin and NOT a controller.
-    const ctx = parseCtx(h, 'stats', 'stats:show', { answerCallback });
-    await h.feature.handleStatsCallback(ctx);
+    const ctx = parseCtx(h, 'report', 'report:show', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+    });
 
-    expect(answerCallback).toHaveBeenCalledTimes(1);
+    await h.feature.handleReportCallback(ctx);
+
     expect(h.reply).toHaveBeenCalledTimes(1);
-    expect(h.reply.mock.calls[0]![0]).toContain('Only an authorized operator');
+    expect(h.reply).not.toHaveBeenCalledWith(expect.stringContaining('Only an authorized operator'));
 
     cleanHarness(h);
   });
 
-  it('stats:show → controller-gated: the admin IS allowed', async () => {
-    const h = makeHarness({ engine: { state: 'Running', config: { pairs: [{ symbol: 'X' }] }, positions: [], emergencyStop: vi.fn(), stop: vi.fn() } });
-    const answerCallback = vi.fn().mockResolvedValue(undefined);
-
-    h.store.setAdmin(1, 'boss');
-    const ctx = parseCtx(h, 'stats', 'stats:show', { from: { id: 1, username: 'boss' }, answerCallback });
-    expect(ctx.params).toBe('show');
-
-    await h.feature.handleStatsCallback(ctx);
-
-    expect(answerCallback).toHaveBeenCalledTimes(1);
-    expect(h.reply).toHaveBeenCalledTimes(1);
-    expect(h.reply.mock.calls[0]![0]).toContain('Engine state');
+  it('stats:show is now an UNKNOWN prefix — no feature handler is registered for it', async () => {
+    const h = makeHarness();
+    const fake = makeFakeTransport();
+    h.feature.install(fake as unknown as BotCommandTransport);
+    // The merged report surface replaced the old stats:show surface: install()
+    // must NOT register a 'stats' callback. An old stats button is a STALE
+    // button answered by the transport's fallback guard ("This button is
+    // outdated — use /start"), never a live handler.
+    expect(fake.callbacks).not.toContain('stats');
 
     cleanHarness(h);
   });
@@ -602,16 +618,15 @@ describe('FIXED: unknown legacy junk is a graceful no-op', () => {
     cleanHarness(h);
   });
 
-  it('stats:garbage → answered, no-op produced (not even the gate applies), no throw', async () => {
+  it('stats:garbage (legacy prefix) → no feature handler exists — nothing to answer or reply', async () => {
+    // The 'stats' prefix was REMOVED from the registry along with handleStats.
+    // A legacy stats callback never reaches a feature handler anymore; the
+    // transport's fallback guard answers it ("This button is outdated — use
+    // /start"). At the feature level there is simply nothing to call.
     const h = makeHarness();
-    const answerCallback = vi.fn().mockResolvedValue(undefined);
-
-    const ctx = parseCtx(h, 'stats', 'stats:garbage', { answerCallback });
-
-    await expect(h.feature.handleStatsCallback(ctx)).resolves.toBeUndefined();
-
-    expect(answerCallback).toHaveBeenCalledTimes(1);
-    expect(h.reply).not.toHaveBeenCalled();
+    const fake = makeFakeTransport();
+    h.feature.install(fake as unknown as BotCommandTransport);
+    expect(fake.callbacks).not.toContain('stats');
 
     cleanHarness(h);
   });
@@ -638,7 +653,7 @@ function makeFakeTransport() {
 }
 
 describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback prefix', () => {
-  it('registers callbacks for sub, unsub, lang, report, stats, stop, emergency', async () => {
+  it('registers callbacks for sub, unsub, lang, report, stop, emergency (no stats)', async () => {
     const h = makeHarness();
     const fake = makeFakeTransport();
 
@@ -647,29 +662,31 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     // Every prefix the dashboard /start + the toggle/picker/confirm keyboards
     // emit must be registered. A missing one = a dead button (B3). The full set
     // covers the request button flow (link/unlink callbacks were removed).
-    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'request']) {
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stop', 'emergency', 'notif', 'start', 'request']) {
       expect(fake.callbacks, `callback prefix "${p}" must be registered`).toContain(p);
     }
+    // The 'stats' prefix is GONE — the merged report surface replaced it.
+    expect(fake.callbacks).not.toContain('stats');
 
     cleanHarness(h);
   });
 
-  it('dashboard callback_data (report:show / stats:show etc.) all match a registered prefix', async () => {
+  it('dashboard callback_data (report:show etc.) all match a registered prefix', async () => {
     const h = makeHarness();
     const fake = makeFakeTransport();
     h.feature.install(fake as unknown as BotCommandTransport);
 
-    // Operator (from.id 1000): the dashboard includes the Stats/Stop row, which
-    // is hidden for non-operators (handleStart gates on isAdminOrController).
+    // Operator (from.id 1000): the dashboard includes the Stop/Emergency row,
+    // which is hidden for non-operators (handleStart gates on isAdminOrController).
     h.store.setAdmin(1000, 'tester');
     await h.feature.handleStart(h.cbCtx());
     const dashboardData = replyCallbackData(h.reply);
 
     // The exact dashboard buttons exist (post-fix: ONE Manage notifications
     // button replaces the old Sub/Unsub pair; Stop/Emergency emit ask, not
-    // confirm — the two-step flow).
+    // confirm — the two-step flow; the ⚙️ Stats button is GONE).
     expect(dashboardData).toContain('report:show');
-    expect(dashboardData).toContain('stats:show');
+    expect(dashboardData).not.toContain('stats:show');
     expect(dashboardData).toContain('notif:menu');
     expect(dashboardData).not.toContain('sub:menu');
     expect(dashboardData).not.toContain('unsub:menu');
@@ -704,18 +721,21 @@ interface BotActionLike {
 }
 
 describe('VALIDATION: install() throws when a registry action has no backing callback', () => {
-  it('removing the "stats" action makes install() throw (fail-fast, not a dead button)', async () => {
+  it('removing a live registry action makes install() throw (fail-fast, not a dead button)', async () => {
     const h = makeHarness();
     const fake = makeFakeTransport();
 
-    // Simulate a registry that drifts: drop the 'stats' action.
+    // Simulate a registry that drifts: drop the 'report' action (which the
+    // dashboard Report button emits -> must be a boot error). The old 'stats'
+    // action was REMOVED with the stats-surface merge, so it is no longer in
+    // the registry and no longer emitted — it can no longer trigger this guard.
     const actions = (h.feature as unknown as { actions: BotActionLike[] }).actions;
-    const filtered = actions.filter((a) => a.name !== 'stats');
+    const filtered = actions.filter((a) => a.name !== 'report');
     (h.feature as unknown as { actions: BotActionLike[] }).actions = filtered;
 
-    // install() must throw because 'stats' is still emitted by keyboards but
+    // install() must throw because 'report' is still emitted by keyboards but
     // has no backing action.
-    expect(() => h.feature.install(fake as unknown as BotCommandTransport)).toThrow(/stats/);
+    expect(() => h.feature.install(fake as unknown as BotCommandTransport)).toThrow(/report/);
 
     cleanHarness(h);
   });

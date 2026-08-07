@@ -22,7 +22,7 @@ const logger = createBackendLogger('backend', 'telegram');
  * IMPORTANT: `\` is escaped first to avoid double-escaping when chained
  * with the subsequent replacements.
  */
-function escapeMarkdownV2(text: string): string {
+export function escapeMarkdownV2(text: string): string {
   return text
     .replace(/\\/g, '\\\\')
     .replace(/_/g, '\\_')
@@ -344,7 +344,14 @@ export class TelegramService {
   async sendPhoto(chatId: number, buffer: Buffer, caption?: string): Promise<boolean> {
     if (!this.bot || !this.isRunning) return false;
     try {
-      await this.bot.telegram.sendPhoto(chatId, { source: buffer }, caption ? { caption } : undefined);
+      // Caption is MarkdownV2, escaped exactly like the message path
+      // (escapeMarkdownV2 preserves intentional *bold* pairs from i18n
+      // templates while escaping every other special char). The feature layer
+      // passes raw text — the single escape happens here at the transport.
+      const photoOptions = caption
+        ? { caption: escapeMarkdownV2(caption), parse_mode: 'MarkdownV2' as const }
+        : undefined;
+      await this.bot.telegram.sendPhoto(chatId, { source: buffer }, photoOptions);
       return true;
     } catch (err: unknown) {
       logger.error('[Telegram] sendPhoto error:', { err: err instanceof Error ? err.message : String(err) });

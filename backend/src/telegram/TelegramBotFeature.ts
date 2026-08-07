@@ -2,7 +2,7 @@
  * TelegramBotFeature — the policy layer for the PineFramework Telegram bot.
  *
  * Owns the button-only control surface (notifications, language, reports,
- * stats, stop, emergency, operator-access requests), the
+ * stop, emergency, operator-access requests), the
  * operator auth gate, and the notification-type routing core. Control is
  * reached EXCLUSIVELY through inline buttons — /start is the only registered
  * command. It is transport-agnostic by design:
@@ -26,7 +26,7 @@
  * `editMessageText` to update the original message in-place.
  */
 
-import type { BotEngine, BotState } from 'pine-framework';
+import type { BotEngine } from 'pine-framework';
 import type {
   TelegramConfigStore,
   NotificationType,
@@ -34,8 +34,17 @@ import type {
   TelegramChat,
 } from '../store/TelegramConfigStore.js';
 import { NOTIFICATION_TYPES } from '../store/TelegramConfigStore.js';
-import type { StatsService } from '../services/StatsService.js';
+import type { StatsService, SessionSummary } from '../services/StatsService.js';
+import { buildGlobalPnlSnapshot, type GlobalPnlSnapshot } from '../services/globalPnl.js';
+import { renderGlobalPnlCard } from './report/renderCard.js';
+import {
+  formatMoney,
+  formatRate,
+  formatProfitFactor,
+  formatGeneratedAt,
+} from './report/format.js';
 import { t, isSupportedLanguage, type BotLanguage, type I18nKey } from './i18n.js';
+import { escapeMarkdownV2 } from './TelegramService.js';
 
 /**
  * The minimal, fabricatable message context each handler accepts. Structurally
@@ -144,6 +153,12 @@ interface TelegramBotFeatureOptions {
   getEngine: () => BotEngine | null;
   /** Injected message transport; returns true when the chat accepted the message. */
   onMessage?: (chatId: number, message: string) => Promise<boolean>;
+  /**
+   * Injected photo transport (e.g. a PNG buffer rendered by the report card
+   * pipeline); returns true when the chat accepted the photo. Optional — the
+   * feature degrades to "not delivered" (false) when absent.
+   */
+  onPhoto?: (chatId: number, buffer: Buffer, caption?: string) => Promise<boolean>;
 }
 
 function isNotificationType(value: string): value is NotificationType {
@@ -153,8 +168,8 @@ function isNotificationType(value: string): value is NotificationType {
 /**
  * The callback prefixes the feature's inline keyboards EMIT — the single
  * source of truth for `validateActionRegistry`. The union of every keyboard
- * emitter below: /start dashboard (notif, lang, report, stats, stop,
- * emergency, request), the back-to-dashboard rows (start),
+ * emitter below: /start dashboard (notif, lang, report, stop, emergency,
+ * request), the back-to-dashboard rows (start),
  * LANG_PICKER_KEYBOARD (lang, start), STOP_CONFIRM_KEYBOARD (stop),
  * EMERGENCY_CONFIRM_KEYBOARD (emergency), buildTypeKeyboard callers
  * (sub, unsub), and the manage notifications submenu (notif). When a new
@@ -167,13 +182,20 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'unsub',
   'lang',
   'report',
-  'stats',
   'stop',
   'emergency',
   'notif',
   'start',
   'request',
 ];
+
+/**
+ * Max caption length (chars) for the report text when attached to the PnL
+ * card photo. Telegram's hard caption limit is 1024; staying under ~1000
+ * leaves headroom so long reports fall back to a text message + short-caption
+ * photo instead of a truncated caption.
+ */
+const REPORT_CAPTION_MAX_LENGTH = 1000;
 
 /**
  * Inline keyboards re-attached on every in-place message edit. Each edit call
@@ -224,6 +246,7 @@ export class TelegramBotFeature {
   private readonly stats?: StatsService | null;
   private readonly getEngine: () => BotEngine | null;
   private readonly onMessage?: (chatId: number, message: string) => Promise<boolean>;
+  private readonly onPhoto?: (chatId: number, buffer: Buffer, caption?: string) => Promise<boolean>;
 
   /**
    * SSOT action registry — the single source of truth for every control and
@@ -279,11 +302,6 @@ export class TelegramBotFeature {
       callbackHandler: (ctx) => this.handleReportCallback(ctx),
     },
     {
-      name: 'stats',
-      callbackPrefix: 'stats',
-      callbackHandler: (ctx) => this.handleStatsCallback(ctx),
-    },
-    {
       name: 'stop',
       callbackPrefix: 'stop',
       callbackHandler: (ctx) => this.handleStopCallback(ctx),
@@ -300,6 +318,7 @@ export class TelegramBotFeature {
     this.stats = opts.stats ?? null;
     this.getEngine = opts.getEngine;
     this.onMessage = opts.onMessage;
+    this.onPhoto = opts.onPhoto;
   }
 
   // ---- Transport wiring ----------------------------------------------------
@@ -460,6 +479,24 @@ export class TelegramBotFeature {
     }
   }
 
+  // ---- Photo transport ------------------------------------------------------
+
+  /**
+   * Send a photo (PNG buffer, e.g. the rendered global PnL card) to a chat via
+   * the injected `onPhoto` transport. Returns false when no photo transport was
+   * injected (feature constructed without photo support) or the transport
+   * failed — callers treat false as "not delivered", mirroring `deliver`'s
+   * counting semantics. Never throws.
+   */
+  private async sendPhoto(chatId: number, buffer: Buffer, caption?: string): Promise<boolean> {
+    if (!this.onPhoto) return false;
+    try {
+      return await this.onPhoto(chatId, buffer, caption);
+    } catch {
+      return false;
+    }
+  }
+
   // ---- Auth helpers ----------------------------------------------------------
 
   /** True when `fromId` is the configured admin or an approved controller. */
@@ -513,10 +550,9 @@ export class TelegramBotFeature {
       }
     }
 
-    // Operator-only row (Stats / Stop / Emergency) is hidden from
-    // non-operators. The Stats callback is already wired to
-    // assertController, and the Stop / Emergency callbacks now are too —
-    // this is defense in depth on visibility only.
+    // Operator-only row (Stop / Emergency) is hidden from non-operators. The
+    // Stop / Emergency callbacks assert controller access — this is defense
+    // in depth on visibility only.
     const isOperator = ctx.from?.id !== undefined && this.isAdminOrController(ctx.from.id);
 
     await ctx.reply(t(lang, 'startWelcome'), {
@@ -784,8 +820,16 @@ export class TelegramBotFeature {
   }
 
   /**
-   * Report — compact performance recap (any chat member). Reached via the
-   * dashboard "Report" button; `handleReportCallback` delegates here.
+   * Report — global PnL recap (any chat member). Reached via the dashboard
+   * "Report" button; `handleReportCallback` delegates here.
+   *
+   * Builds the GlobalPnlSnapshot from the live engine + session stats, renders
+   * the data-rich emojified text message, and attaches the real-time PnL card
+   * PNG when a photo transport is available. The text is the guarantee, the
+   * image is a bonus: any render/transport failure falls back to the full text
+   * message — never a silent death. Short reports ride on the photo as its
+   * caption; long ones are sent as text first, then the image with the bare
+   * header as caption (Telegram captions cap at 1024 chars).
    */
   async handleReport(ctx: FeatureCommandContext): Promise<void> {
     const lang = this.chatLang(ctx);
@@ -794,28 +838,56 @@ export class TelegramBotFeature {
       await ctx.reply(t(lang, 'engineNotInitialized'));
       return;
     }
+
+    const engine = this.getEngine();
     const summary = this.stats.getSessionSummary();
-    if (summary.totalTrades === 0) {
-      await ctx.reply(t(lang, 'reportEmpty'));
-      return;
+    const groupedStats = this.stats.getGroupedStats('asset');
+    const perSymbolStats = groupedStats
+      ? Object.entries(groupedStats).map(([key, stats]) => ({ key, stats }))
+      : undefined;
+
+    const snapshot = buildGlobalPnlSnapshot({
+      summary,
+      positions: engine
+        ? engine.positions.map((p) => ({ symbol: p.symbol, unrealizedPnl: p.unrealizedPnl }))
+        : [],
+      engineState: engine?.state ?? null,
+      perSymbolStats,
+    });
+
+    const text = this.buildReportText(lang, snapshot, summary, engine);
+    const chatId = ctx.chat?.id;
+
+    if (chatId !== undefined) {
+      try {
+        const buf = await renderGlobalPnlCard(snapshot);
+        if (text.length <= REPORT_CAPTION_MAX_LENGTH) {
+          // Short report: the photo carries the full text as its caption.
+          if (await this.sendPhoto(chatId, buf, text)) return;
+          await ctx.reply(escapeMarkdownV2(`${text}\n${t(lang, 'reportImageError')}`), {
+            parse_mode: 'MarkdownV2' as const,
+          });
+          return;
+        }
+        // Long report: full text first, then the image with the bare header.
+        await ctx.reply(escapeMarkdownV2(text), { parse_mode: 'MarkdownV2' as const });
+        if (await this.sendPhoto(chatId, buf, t(lang, 'reportHeader'))) return;
+        await ctx.reply(t(lang, 'reportImageError'));
+        return;
+      } catch {
+        // renderGlobalPnlCard threw (e.g. sharp unavailable) — fall through
+        // to the text-only reply below.
+      }
     }
 
-    const rows = summary.recent.map((trade) =>
-      t(lang, 'reportRow', {
-        symbol: trade.symbol,
-        side: trade.side,
-        pnl: this.formatPnl(trade.realizedPnl),
-      }),
-    );
-    const body = [t(lang, 'reportHeader'), ...rows].join('\n');
-    await ctx.reply(body);
+    await ctx.reply(escapeMarkdownV2(text), { parse_mode: 'MarkdownV2' as const });
   }
 
   /**
    * Inline callback for the /start dashboard "Report" button. Dispatches the
-   * reserved `show` action onto the same report logic as /report, then answers
-   * the callback to dismiss the Telegram spinner. Unknown params are a graceful
-   * no-op (never throw).
+   * reserved `show` action onto the report logic, then answers the callback to
+   * dismiss the Telegram spinner. Unknown params are a graceful no-op (never
+   * throw).
    */
   async handleReportCallback(ctx: CallbackContext): Promise<void> {
     if (ctx.params !== 'show') {
@@ -823,51 +895,83 @@ export class TelegramBotFeature {
       return;
     }
     await ctx.answerCallback();
-    // ctx (CallbackContext) satisfies FeatureCommandContext, so /report's
-    // handler runs verbatim against the same context.
+    // ctx (CallbackContext) satisfies FeatureCommandContext, so handleReport
+    // runs verbatim against the same context.
     await this.handleReport(ctx);
   }
 
   /**
-   * Stats — engine status (operator only). Reached via the dashboard "Stats"
-   * button; `handleStatsCallback` delegates here.
+   * Build the full report message from the global PnL snapshot: header, total,
+   * realized/unrealized split, headline metrics, top movers, recent trades,
+   * engine status and the generated-at stamp. Uses the shared formatters
+   * (format.ts) so text and image can never disagree about a rendered value.
+   * Sections with no data (no movers, no recent trades) are omitted; the
+   * headline zeros still render.
    */
-  async handleStats(ctx: FeatureCommandContext): Promise<void> {
-    if (!(await this.assertController(ctx))) return;
-    const lang = this.chatLang(ctx);
-    const engine = this.getEngine();
-    if (!engine) {
-      await ctx.reply(t(lang, 'engineNotInitialized'));
-      return;
+  private buildReportText(
+    lang: BotLanguage,
+    snapshot: GlobalPnlSnapshot,
+    summary: SessionSummary,
+    engine: BotEngine | null,
+  ): string {
+    const lines: string[] = [
+      t(lang, 'reportHeader'),
+      t(lang, 'reportTotal', { total: formatMoney(snapshot.totalPnl) }),
+      t(lang, 'reportSplit', {
+        realized: formatMoney(snapshot.realizedPnl),
+        unrealized: formatMoney(snapshot.unrealizedPnl),
+      }),
+      t(lang, 'reportMetrics', {
+        count: snapshot.tradeCount,
+        winRate: formatRate(snapshot.winRate),
+        pf: formatProfitFactor(snapshot.profitFactor),
+      }),
+      t(lang, 'reportTradeStats', {
+        avg: formatMoney(snapshot.avgTrade),
+        dd: formatMoney(snapshot.maxDrawdown),
+        fees: formatMoney(snapshot.totalFees),
+      }),
+    ];
+
+    if (snapshot.perSymbol.length > 0) {
+      lines.push(t(lang, 'reportMovers'));
+      for (const { symbol, pnl } of snapshot.perSymbol) {
+        lines.push(t(lang, 'reportSymbolRow', { symbol, pnl: formatMoney(pnl) }));
+      }
     }
 
-    const state: BotState = engine.state;
+    if (summary.recent.length > 0) {
+      lines.push(t(lang, 'reportRecent'));
+      for (const trade of summary.recent) {
+        lines.push(
+          t(lang, 'reportRow', {
+            symbol: trade.symbol,
+            side: trade.side,
+            pnl: this.formatPnl(trade.realizedPnl),
+          }),
+        );
+      }
+    }
+
     const stateKey: I18nKey =
-      state === 'Running' ? 'statsRunning' : state === 'Error' ? 'statsError' : 'statsStopped';
-    const pairs = engine.config?.pairs?.length ?? 0;
-    const positions = engine.positions.length;
-    await ctx.reply(
-      [
-        t(lang, 'statsHeader'),
-        t(lang, stateKey),
-        t(lang, 'statsPairs', { count: pairs }),
-        t(lang, 'statsPositions', { count: positions }),
-      ].join('\n'),
-    );
-  }
+      snapshot.engineState === 'running'
+        ? 'reportEngineRunning'
+        : snapshot.engineState === 'stopped'
+          ? 'reportEngineStopped'
+          : snapshot.engineState === 'error'
+            ? 'reportEngineError'
+            : 'reportEngineUnknown';
 
-  /**
-   * Inline callback for the /start dashboard "Stats" button. Dispatches the
-   * reserved `show` action onto the same stats logic as /stats. MUST stay
-   * operator-gated: handleStats asserts controller access before reporting.
-   */
-  async handleStatsCallback(ctx: CallbackContext): Promise<void> {
-    if (ctx.params !== 'show') {
-      await ctx.answerCallback();
-      return;
-    }
-    await ctx.answerCallback();
-    await this.handleStats(ctx);
+    lines.push(
+      t(lang, 'reportEngine', {
+        state: t(lang, stateKey),
+        pairs: engine?.config?.pairs?.length ?? 0,
+        open: snapshot.openPositionsCount,
+      }),
+    );
+    lines.push(t(lang, 'reportGenerated', { time: formatGeneratedAt(snapshot.generatedAt) }));
+
+    return lines.join('\n');
   }
 
   /**
@@ -988,9 +1092,9 @@ export class TelegramBotFeature {
    * `handleDashboardCallback` (in-place edit of the back-to-dashboard rows),
    * so the two can never drift apart.
    *
-   * @param isOperator  When true, the operator-only rows (Stats / Stop /
-   *                    Emergency) are included; otherwise the self-service
-   *                    "Request access" row is shown instead.
+   * @param isOperator  When true, the operator-only row (Stop / Emergency) is
+   *                    included; otherwise the self-service "Request access"
+   *                    row is shown instead.
    */
   private buildDashboardKeyboard(
     isOperator: boolean,
@@ -1004,7 +1108,6 @@ export class TelegramBotFeature {
       ...(isOperator
         ? [
             [
-              { text: '⚙️ Stats', callback_data: 'stats:show' },
               { text: '🛑 Stop', callback_data: 'stop:ask' },
               { text: '🚨 Emergency', callback_data: 'emergency:ask' },
             ],

@@ -804,13 +804,14 @@ describe('handleStart', () => {
     );
     // Post-fix dashboard: ONE "Manage notifications" button (notif:menu)
     // replaces the old separate Sub/Unsub buttons; Stop emits stop:ask and a
-    // distinct Emergency button exists.
+    // distinct Emergency button exists. The ⚙️ Stats button is GONE (its
+    // surface merged into Report).
     expect(allCallbackData).toContain('notif:menu');
     expect(allCallbackData).not.toContain('sub:menu');
     expect(allCallbackData).not.toContain('unsub:menu');
     expect(allCallbackData).toContain('lang:menu');
     expect(allCallbackData).toContain('report:show');
-    expect(allCallbackData).toContain('stats:show');
+    expect(allCallbackData).not.toContain('stats:show');
     expect(allCallbackData).toContain('stop:ask');
     expect(allCallbackData).toContain('emergency:ask');
     cleanHarness(h);
@@ -1150,8 +1151,10 @@ describe('handleDashboardCallback', () => {
     expect(allCallbackData).toContain('notif:menu');
     expect(allCallbackData).not.toContain('sub:menu');
     expect(allCallbackData).not.toContain('unsub:menu');
-    // Non-operator: the Stats/Stop/Emergency row stays hidden.
+    // Non-operator: the operator row (Stop/Emergency) stays hidden, and the
+    // Stats dashboard button is gone entirely.
     expect(allCallbackData).not.toContain('stop:ask');
+    expect(allCallbackData).not.toContain('emergency:ask');
     expect(allCallbackData).not.toContain('stats:show');
     cleanHarness(h);
   });
@@ -1168,7 +1171,7 @@ describe('handleDashboardCallback', () => {
     }));
 
     const allCallbackData = editCallbackData(editMessage);
-    expect(allCallbackData).toContain('stats:show');
+    expect(allCallbackData).not.toContain('stats:show');
     expect(allCallbackData).toContain('stop:ask');
     expect(allCallbackData).toContain('emergency:ask');
     cleanHarness(h);

@@ -118,6 +118,10 @@ const telegramFeature = new TelegramBotFeature({
   stats: statsService,
   getEngine: () => liveEngine,
   onMessage: (chatId, msg) => telegramService.sendMessage(chatId, msg),
+  // Photo transport: routes rendered report-card PNG buffers (e.g. the global
+  // PnL image pipeline) into the existing Telegram transport. sendPhoto
+  // returns false on failure/absence — deliver-style semantics.
+  onPhoto: (chatId, buffer, caption) => telegramService.sendPhoto(chatId, buffer, caption),
 });
 telegramFeature.install(telegramService);
 
