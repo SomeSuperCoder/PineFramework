@@ -2230,9 +2230,9 @@ export function LiveDashboard({
 
   // Auto-scroll logs (scroll container, not page)
   useEffect(() => {
-    const container = logContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
+    const el = logEndRef.current;
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
   }, [logs]);
 
@@ -2527,7 +2527,7 @@ export function LiveDashboard({
 
       {activeTab === 'overview' && (
         // Three-column body (byte-identical to the pre-tabs layout)
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gap: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gridTemplateRows: '1fr', gap: 1, overflow: 'hidden' }}>
         {/* Left: Status Panel */}
         <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
           <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
@@ -2705,11 +2705,11 @@ export function LiveDashboard({
         </div>
 
         {/* Right: Logs Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+          <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
             Logs ({logs.length})
           </div>
-          <div ref={logContainerRef} style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6 }}>
+          <div ref={logContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, minHeight: 0 }}>
             {logs.length === 0 && (
               <span style={{ color: '#888', fontStyle: 'italic' }}>No log entries yet...</span>
             )}
