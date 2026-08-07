@@ -247,7 +247,7 @@ describe('MarkdownV2 escaping in TelegramService', () => {
     configStore.addChat(12345, 'private');
     await service.sendAlertToSubscribers('Price [BTC] *high* _low_', 'alert_1', 'BTCUSDT', '1m');
 
-    expect(lastMessage).toContain('\\*high\\*');
+    expect(lastMessage).toContain('*high*');
     expect(lastMessage).toContain('\\_low\\_');
     expect(lastMessage).toContain('BTCUSDT');
     expect(lastMessage).toContain('1m');
@@ -353,8 +353,8 @@ describe('M4 — alert header escapes symbol and timeframe', () => {
     expect(lastMessage).not.toContain(nasty);
     const escapedSymbol = nasty.replace(/\]/g, '\\]').replace(/\*/g, '\\*');
     expect(lastMessage).toContain(escapedSymbol);
-    // The message body is independently escaped too (`body*` → `body\*`).
-    expect(lastMessage).toContain('body\\*');
+    // The message body preserves `*` for bold formatting.
+    expect(lastMessage).toContain('body*');
 
     try { fs.unlinkSync(filePath); } catch { /* ignore */ }
   });

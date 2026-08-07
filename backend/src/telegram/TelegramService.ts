@@ -12,6 +12,36 @@ import { createBackendLogger } from '../utils/logger.js';
 const logger = createBackendLogger('backend', 'telegram');
 
 /**
+ * Escape all MarkdownV2 special characters EXCEPT `*` (which is used for
+ * bold formatting in i18n strings). This ensures dynamic text is safe to
+ * send with `parse_mode: 'MarkdownV2'` while preserving intentional bold.
+ *
+ * IMPORTANT: `\` is escaped first to avoid double-escaping when chained
+ * with the subsequent replacements.
+ */
+function escapeMarkdownV2(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/_/g, '\\_')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/~/g, '\\~')
+    .replace(/`/g, '\\`')
+    .replace(/>/g, '\\>')
+    .replace(/#/g, '\\#')
+    .replace(/\+/g, '\\+')
+    .replace(/-/g, '\\-')
+    .replace(/=/g, '\\=')
+    .replace(/\|/g, '\\|')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
+    .replace(/\./g, '\\.')
+    .replace(/!/g, '\\!');
+}
+
+/**
  * Feature-registered command handler. Telegraf's `Context` structurally
  * satisfies `FeatureCommandContext` at runtime (from/chat/message/reply), so a
  * raw telegraf `Context` can be handed to a feature handler — the seam is
@@ -130,12 +160,12 @@ export class TelegramService {
       if (chatId) {
         this.configStore.addChat(chatId, ctx.chat.type === 'group' ? 'group' : 'private');
       }
-      await ctx.reply(t(lang, 'startWelcome'), { parse_mode: 'MarkdownV2' });
+      await ctx.reply(escapeMarkdownV2(t(lang, 'startWelcome')), { parse_mode: 'MarkdownV2' });
     });
 
     this.bot.command('help', async (ctx: Context) => {
       const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
-      await ctx.reply(t(lang, 'helpCommands'), { parse_mode: 'MarkdownV2' });
+      await ctx.reply(escapeMarkdownV2(t(lang, 'helpCommands')), { parse_mode: 'MarkdownV2' });
     });
 
     try {
@@ -233,25 +263,7 @@ export class TelegramService {
     const chats = this.configStore.getChats();
     logger.info('sendAlertToSubscribers', { alertId, subscriberCount: chats.length, symbol, timeframe });
 
-    const escapedMessage = message
-      .replace(/_/g, '\\_')
-      .replace(/\*/g, '\\*')
-      .replace(/\[/g, '\\[')
-      .replace(/\]/g, '\\]')
-      .replace(/\(/g, '\\(')
-      .replace(/\)/g, '\\)')
-      .replace(/~/g, '\\~')
-      .replace(/`/g, '\\`')
-      .replace(/>/g, '\\>')
-      .replace(/#/g, '\\#')
-      .replace(/\+/g, '\\+')
-      .replace(/-/g, '\\-')
-      .replace(/=/g, '\\=')
-      .replace(/\|/g, '\\|')
-      .replace(/\{/g, '\\{')
-      .replace(/\}/g, '\\}')
-      .replace(/\./g, '\\.')
-      .replace(/!/g, '\\!');
+    const escapedMessage = escapeMarkdownV2(message);
 
     const header = symbol || timeframe
       ? `*Alert*${symbol ? ` \\- ${escapeMarkdown(symbol)}` : ''}${timeframe ? ` \\- ${escapeMarkdown(timeframe)}` : ''}`
