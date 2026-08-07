@@ -16,6 +16,48 @@ import { TelegramBotFeature, type CallbackContext } from '../src/telegram/Telegr
 
 type Reply = ReturnType<typeof vi.fn>;
 
+/**
+ * The extras object the feature passes as the 2nd arg of `ctx.editMessage(...)`.
+ * Contract (post-fix): EVERY in-place edit carries `reply_markup.inline_keyboard`
+ * so Telegram does not remove the inline buttons when the message is edited.
+ */
+interface EditExtras {
+  reply_markup: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+}
+
+/** The extras of the first `editMessage` call captured by the mock. */
+function editExtras(editMessage: Reply): EditExtras {
+  const extras = editMessage.mock.calls[0]?.[1] as EditExtras | undefined;
+  expect(extras, 'editMessage must be called with an extras (2nd) argument').toBeDefined();
+  return extras!;
+}
+
+/**
+ * CORE REGRESSION ASSERTION: an in-place edit MUST carry a non-empty inline
+ * keyboard. Returns the extras so callers can inspect the buttons further.
+ */
+function assertEditKeepsKeyboard(editMessage: Reply): EditExtras {
+  const extras = editExtras(editMessage);
+  expect(extras.reply_markup, 'edit extras must carry reply_markup').toBeDefined();
+  const kb = extras.reply_markup.inline_keyboard;
+  expect(kb, 'reply_markup must carry inline_keyboard').toBeDefined();
+  expect(kb.length, 'inline_keyboard must not be empty').toBeGreaterThan(0);
+  const buttons = kb.flat();
+  expect(buttons.length, 'inline_keyboard must contain buttons').toBeGreaterThan(0);
+  for (const b of buttons) {
+    expect(typeof b.text).toBe('string');
+    expect(typeof b.callback_data).toBe('string');
+  }
+  return extras;
+}
+
+/** callback_data values on the keyboard of the first `editMessage` call. */
+function editCallbackData(editMessage: Reply): string[] {
+  return assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat().map(
+    (b) => b.callback_data,
+  );
+}
+
 function tmpFile(): string {
   return path.join(os.tmpdir(), `cb-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 }
@@ -112,11 +154,29 @@ describe('handleLangCallback', () => {
 
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
-    // The keyboard should contain callback_data for each language
-    const markup = editMessage.mock.calls[0]![1] as { reply_markup: { inline_keyboard: unknown[][] } };
-    const allCallbackData = markup.reply_markup.inline_keyboard.flat().map(
-      (b: { callback_data: string }) => b.callback_data,
-    );
+    // Regression: the in-place edit MUST carry the language picker keyboard,
+    // otherwise Telegram removes the inline buttons when the message is edited.
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('lang:set:en');
+    expect(allCallbackData).toContain('lang:set:es');
+    expect(allCallbackData).toContain('lang:set:ru');
+    cleanHarness(h);
+  });
+
+  it('set:<lang>: keeps the language picker keyboard on the edited message (regression)', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleLangCallback(h.cbCtx({
+      params: 'es',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const allCallbackData = editCallbackData(editMessage);
     expect(allCallbackData).toContain('lang:set:en');
     expect(allCallbackData).toContain('lang:set:es');
     expect(allCallbackData).toContain('lang:set:ru');
@@ -235,11 +295,52 @@ describe('handleSubscribeCallback', () => {
 
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
-    const markup = editMessage.mock.calls[0]![1] as { reply_markup: { inline_keyboard: unknown[][] } };
-    const allCallbackData = markup.reply_markup.inline_keyboard.flat().map(
-      (b: { callback_data: string }) => b.callback_data,
-    );
+    // Regression: the in-place edit MUST carry the toggle keyboard.
+    const allCallbackData = editCallbackData(editMessage);
     expect(allCallbackData.some((d: string) => d.startsWith('sub:toggle:'))).toBe(true);
+    cleanHarness(h);
+  });
+
+  it('toggle ON: keeps the subscribe toggle keyboard on the edited message (regression)', async () => {
+    const h = makeHarness();
+    h.store.addChat(7000, 'group');
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleSubscribeCallback(h.cbCtx({
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1200, username: 'member' },
+      params: 'trading',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.some((b) => b.callback_data.startsWith('sub:toggle:'))).toBe(true);
+    // The just-subscribed type is reflected with ✅ on the surviving keyboard.
+    expect(kb.find((b) => b.callback_data === 'sub:toggle:trading')?.text).toContain('✅');
+    cleanHarness(h);
+  });
+
+  it('toggle OFF: keeps the subscribe toggle keyboard with the unsubscribed state', async () => {
+    const h = makeHarness();
+    h.store.addChat(7000, 'group');
+    h.store.memberSubscribe(7000, 1200, ['trading', 'error']);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleSubscribeCallback(h.cbCtx({
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1200, username: 'member' },
+      params: 'trading',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.find((b) => b.callback_data === 'sub:toggle:trading')?.text).toContain('⬜');
     cleanHarness(h);
   });
 
@@ -391,11 +492,52 @@ describe('handleUnsubscribeCallback', () => {
 
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
-    const markup = editMessage.mock.calls[0]![1] as { reply_markup: { inline_keyboard: unknown[][] } };
-    const allCallbackData = markup.reply_markup.inline_keyboard.flat().map(
-      (b: { callback_data: string }) => b.callback_data,
-    );
+    // Regression: the in-place edit MUST carry the toggle keyboard.
+    const allCallbackData = editCallbackData(editMessage);
     expect(allCallbackData.some((d: string) => d.startsWith('unsub:toggle:'))).toBe(true);
+    cleanHarness(h);
+  });
+
+  it('toggle OFF: keeps the unsubscribe toggle keyboard on the edited message (regression)', async () => {
+    const h = makeHarness();
+    h.store.addChat(7000, 'group');
+    h.store.memberSubscribe(7000, 1200, ['trading', 'error']);
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1200, username: 'member' },
+      params: 'trading',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.some((b) => b.callback_data.startsWith('unsub:toggle:'))).toBe(true);
+    // The just-unsubscribed type is reflected with ⬜ on the surviving keyboard.
+    expect(kb.find((b) => b.callback_data === 'unsub:toggle:trading')?.text).toContain('⬜');
+    cleanHarness(h);
+  });
+
+  it('toggle ON: keeps the unsubscribe toggle keyboard with the subscribed state', async () => {
+    const h = makeHarness();
+    h.store.addChat(7000, 'group');
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1200, username: 'member' },
+      params: 'trading',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
+    expect(kb.find((b) => b.callback_data === 'unsub:toggle:trading')?.text).toContain('✅');
     cleanHarness(h);
   });
 
@@ -478,6 +620,44 @@ describe('handleEmergencyCallback', () => {
     cleanHarness(h);
   });
 
+  it('confirm: keeps the emergency-confirm keyboard on the edited message (regression)', async () => {
+    const emergencyStop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleEmergencyCallback(h.cbCtx({
+      params: 'confirm',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(emergencyStop).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('emergency:confirm');
+    expect(allCallbackData).toContain('emergency:cancel');
+    cleanHarness(h);
+  });
+
+  it('confirm (emergencyStop throws): keeps the emergency-confirm keyboard', async () => {
+    const emergencyStop = vi.fn().mockRejectedValue(new Error('boom'));
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop, stop: vi.fn() } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleEmergencyCallback(h.cbCtx({
+      params: 'confirm',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(emergencyStop).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    assertEditKeepsKeyboard(editMessage);
+    cleanHarness(h);
+  });
+
   it('confirm: shows engine-not-initialized when engine is null', async () => {
     const h = makeHarness(); // no engine
     const answerCallback = vi.fn().mockResolvedValue(undefined);
@@ -490,7 +670,12 @@ describe('handleEmergencyCallback', () => {
     }));
 
     expect(answerCallback).toHaveBeenCalledWith(expect.stringContaining('not initialized'));
-    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('not initialized'));
+    // Regression: the no-engine edit still re-attaches the emergency keyboard.
+    expect(editMessage).toHaveBeenCalledWith(
+      expect.stringContaining('not initialized'),
+      expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
+    );
+    assertEditKeepsKeyboard(editMessage);
     cleanHarness(h);
   });
 
@@ -508,7 +693,12 @@ describe('handleEmergencyCallback', () => {
 
     expect(emergencyStop).not.toHaveBeenCalled();
     expect(answerCallback).toHaveBeenCalledTimes(1);
-    expect(editMessage).toHaveBeenCalledWith('↩️ Emergency cancelled.');
+    // Regression: the cancel edit re-attaches the emergency keyboard.
+    expect(editMessage).toHaveBeenCalledWith(
+      '↩️ Emergency cancelled.',
+      expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
+    );
+    assertEditKeepsKeyboard(editMessage);
     cleanHarness(h);
   });
 });
@@ -561,6 +751,139 @@ describe('handleStart', () => {
     const chat = h.store.getChat(7500);
     expect(chat).not.toBeNull();
     expect(chat!.type).toBe('group');
+    cleanHarness(h);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleStopCallback — every in-place edit must re-attach the stop keyboard
+// ---------------------------------------------------------------------------
+
+describe('handleStopCallback', () => {
+  it('confirm (running): stops the engine and keeps the stop-confirm keyboard (regression)', async () => {
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cbCtx({
+      params: 'confirm',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    const allCallbackData = editCallbackData(editMessage);
+    expect(allCallbackData).toContain('stop:confirm');
+    expect(allCallbackData).toContain('stop:cancel');
+    cleanHarness(h);
+  });
+
+  it('confirm (engine not running): keeps the stop-confirm keyboard', async () => {
+    const h = makeHarness({ engine: { state: 'Stopped', config: {}, positions: [], emergencyStop: vi.fn(), stop: vi.fn() } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cbCtx({
+      params: 'confirm',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    assertEditKeepsKeyboard(editMessage);
+    cleanHarness(h);
+  });
+
+  it('confirm (engine.stop throws): keeps the stop-confirm keyboard', async () => {
+    const stop = vi.fn().mockRejectedValue(new Error('boom'));
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop } });
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cbCtx({
+      params: 'confirm',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    assertEditKeepsKeyboard(editMessage);
+    cleanHarness(h);
+  });
+
+  it('cancel: keeps the stop-confirm keyboard', async () => {
+    const h = makeHarness();
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+
+    await h.feature.handleStopCallback(h.cbCtx({
+      params: 'cancel',
+      answerCallback,
+      editMessage,
+    }));
+
+    expect(answerCallback).toHaveBeenCalledTimes(1);
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    assertEditKeepsKeyboard(editMessage);
+    cleanHarness(h);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regression core: the keyboard on EVERY in-place edit equals the keyboard the
+// send path presented — same buttons, same callback_data. This is the Director's
+// bug: inline keyboards vanished on button tap because terminal handlers edited
+// the message WITHOUT re-attaching the keyboard the send path had used.
+// ---------------------------------------------------------------------------
+
+describe('inline keyboard survives in-place edits — send ⇄ edit equality', () => {
+  function sendKeyboard(reply: Reply): EditExtras['reply_markup'] {
+    const extra = reply.mock.calls[0]?.[1] as EditExtras | undefined;
+    expect(extra, 'send path must pass extras').toBeDefined();
+    expect(extra!.reply_markup, 'send extras must carry reply_markup').toBeDefined();
+    return extra!.reply_markup;
+  }
+
+  it('lang set: the edited message carries the same keyboard /lang presented', async () => {
+    const h = makeHarness();
+    await h.feature.handleLang(h.cbCtx());
+    const sent = sendKeyboard(h.reply);
+
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cbCtx({ params: 'es', editMessage }));
+
+    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
+    cleanHarness(h);
+  });
+
+  it('stop confirm: the edited message carries the same keyboard /stop presented', async () => {
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) } });
+    h.store.setAdmin(1000, 'tester');
+    await h.feature.handleStop(h.cbCtx());
+    const sent = sendKeyboard(h.reply);
+
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cbCtx({ params: 'confirm', editMessage }));
+
+    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
+    cleanHarness(h);
+  });
+
+  it('emergency confirm: the edited message carries the same keyboard /emergency presented', async () => {
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn().mockResolvedValue(undefined), stop: vi.fn() } });
+    h.store.setAdmin(1000, 'tester');
+    await h.feature.handleEmergency(h.cbCtx());
+    const sent = sendKeyboard(h.reply);
+
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleEmergencyCallback(h.cbCtx({ params: 'confirm', editMessage }));
+
+    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
     cleanHarness(h);
   });
 });

@@ -161,13 +161,24 @@ export class TelegramService {
         from: ctx.from,
         chat: ctx.chat,
         message: ctx.message,
-        reply: (text, extra) => ctx.reply(text, extra),
+        // The feature seam keeps `extra` loosely typed (`unknown`) to stay
+        // transport-agnostic; cast at the boundary to exactly what telegraf's
+        // `ctx.reply` accepts (second parameter of its `sendMessage` shorthand).
+        reply: (text, extra) => ctx.reply(text, extra as Parameters<typeof ctx.reply>[1]),
         callbackQueryId: ctx.callbackQuery?.id ?? '',
         data: (ctx.callbackQuery as any)?.data ?? '',
         action: actionPrefix,
         params,
-        answerCallback: (text) => ctx.answerCbQuery(text),
-        editMessage: (text, markup) => ctx.editMessageText(text, { reply_markup: markup }),
+        // telegraf's answerCbQuery returns Promise<true>; the seam declares
+        // Promise<void>. Await inside an async wrapper (same pattern as
+        // editMessage below) so the seam's void contract holds and errors
+        // still propagate to the handler's await.
+        answerCallback: async (text) => {
+          await ctx.answerCbQuery(text);
+        },
+        editMessage: async (text, extra) => {
+          await ctx.editMessageText(text, extra);
+        },
       };
       try {
         await handler(callbackCtx);

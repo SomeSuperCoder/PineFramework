@@ -51,6 +51,18 @@ export interface FeatureCommandContext {
 export type BotTextHandler = (ctx: FeatureCommandContext) => Promise<void> | void;
 
 /**
+ * Extras forwarded verbatim to the transport's in-place message edit
+ * (`ctx.editMessageText`). `reply_markup` is required: every edit call
+ * site must re-attach the original message's inline keyboard, otherwise
+ * Telegram silently removes it during the edit.
+ */
+export interface EditMessageExtras {
+  reply_markup: {
+    inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+  };
+}
+
+/**
  * Extended context for inline button callback handlers. Carries the parsed
  * callback data alongside the base `FeatureCommandContext` fields, plus
  * helpers for answering the callback query and editing the original message.
@@ -75,10 +87,13 @@ export interface CallbackContext extends FeatureCommandContext {
   answerCallback: (text?: string) => Promise<void>;
   /**
    * Edit the original message text in-place. Use for inline menus.
+   * Extras are forwarded verbatim to the transport; always pass
+   * `{ reply_markup: <the original message's keyboard> }` so the inline
+   * keyboard survives the edit.
    * @param text   New message text (MarkdownV2).
-   * @param markup Optional reply_markup (e.g. InlineKeyboardMarkup).
+   * @param extra  Optional extras, forwarded verbatim (see EditMessageExtras).
    */
-  editMessage: (text: string, markup?: unknown) => Promise<void>;
+  editMessage: (text: string, extra?: EditMessageExtras) => Promise<void>;
 }
 
 /** A feature-registered callback handler for inline buttons. */
@@ -120,6 +135,41 @@ function isNotificationType(value: string): value is NotificationType {
 const STOP_CONFIRM_TTL_MS = 60_000;
 /** Explicit confirmations for the two-step /stop flow, matched case-insensitively. */
 const STOP_CONFIRM_WORDS: ReadonlySet<string> = new Set(['yes', 'y', 'confirm', 'да', 'si']);
+
+/**
+ * Inline keyboards re-attached on every in-place message edit. Each edit call
+ * site must pass the SAME keyboard the original message carried, otherwise
+ * Telegram removes the inline buttons when the text is edited.
+ */
+const STOP_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
+  inline_keyboard: [
+    [
+      { text: '✅ Yes, Stop', callback_data: 'stop:confirm' },
+      { text: '❌ Cancel', callback_data: 'stop:cancel' },
+    ],
+  ],
+};
+
+/** Language picker keyboard shown by /lang and the lang:menu callback. */
+const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
+  inline_keyboard: [
+    [
+      { text: '🇬🇧 English', callback_data: 'lang:set:en' },
+      { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
+      { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
+    ],
+  ],
+};
+
+/** Emergency confirmation keyboard shown by /emergency. */
+const EMERGENCY_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
+  inline_keyboard: [
+    [
+      { text: '🚨 EMERGENCY STOP', callback_data: 'emergency:confirm' },
+      { text: '❌ Cancel', callback_data: 'emergency:cancel' },
+    ],
+  ],
+};
 
 interface PendingStopConfirm {
   /** Chat id that requested the stop. */
@@ -582,15 +632,7 @@ export class TelegramBotFeature {
     // No arg → present language picker with inline buttons.
     if (arg === undefined) {
       await ctx.reply(this.t(ctx, 'langUsage'), {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🇬🇧 English', callback_data: 'lang:set:en' },
-              { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
-              { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
-            ],
-          ],
-        },
+        reply_markup: LANG_PICKER_KEYBOARD,
       });
       return;
     }
@@ -646,7 +688,7 @@ export class TelegramBotFeature {
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
     this.store.setChatLanguage(chatId, lang);
     await ctx.answerCallback();
-    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }));
+    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }), { reply_markup: LANG_PICKER_KEYBOARD });
   }
 
   /** /report — compact performance recap (any chat member). */
@@ -718,14 +760,7 @@ export class TelegramBotFeature {
     // The text fallback in handleText still works for transports without
     // registerBotCallback (pendingStops map is kept for that path).
     await ctx.reply(t(lang, 'stopConfirmRequest'), {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Yes, Stop', callback_data: 'stop:confirm' },
-            { text: '❌ Cancel', callback_data: 'stop:cancel' },
-          ],
-        ],
-      },
+      reply_markup: STOP_CONFIRM_KEYBOARD,
     });
 
     // Also set pending for the text fallback path — if the transport does NOT
@@ -755,24 +790,24 @@ export class TelegramBotFeature {
       const engine = this.getEngine();
       if (!engine || engine.state !== 'Running') {
         await ctx.answerCallback(t(lang, 'stopCancelled'));
-        await ctx.editMessage(t(lang, 'stopCancelled'));
+        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
         return;
       }
 
       try {
         await engine.stop();
         await ctx.answerCallback();
-        await ctx.editMessage(t(lang, 'stopConfirmSuccess'));
+        await ctx.editMessage(t(lang, 'stopConfirmSuccess'), { reply_markup: STOP_CONFIRM_KEYBOARD });
       } catch {
         await ctx.answerCallback(t(lang, 'stopCancelled'));
-        await ctx.editMessage(t(lang, 'stopCancelled'));
+        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
       }
       return;
     }
 
     if (params === 'cancel') {
       await ctx.answerCallback();
-      await ctx.editMessage(t(lang, 'stopCancelled'));
+      await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
       return;
     }
   }
@@ -833,14 +868,7 @@ export class TelegramBotFeature {
     }
 
     await ctx.reply(t(lang, 'emergencyResult'), {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '🚨 EMERGENCY STOP', callback_data: 'emergency:confirm' },
-            { text: '❌ Cancel', callback_data: 'emergency:cancel' },
-          ],
-        ],
-      },
+      reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
     });
   }
 
@@ -855,23 +883,23 @@ export class TelegramBotFeature {
       const engine = this.getEngine();
       if (!engine) {
         await ctx.answerCallback(t(lang, 'engineNotInitialized'));
-        await ctx.editMessage(t(lang, 'engineNotInitialized'));
+        await ctx.editMessage(t(lang, 'engineNotInitialized'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
         return;
       }
       try {
         await engine.emergencyStop();
         await ctx.answerCallback();
-        await ctx.editMessage(t(lang, 'emergencyResult'));
+        await ctx.editMessage(t(lang, 'emergencyResult'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
       } catch {
         await ctx.answerCallback(t(lang, 'emergencyResult'));
-        await ctx.editMessage(t(lang, 'emergencyResult'));
+        await ctx.editMessage(t(lang, 'emergencyResult'), { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
       }
       return;
     }
 
     if (ctx.params === 'cancel') {
       await ctx.answerCallback();
-      await ctx.editMessage('↩️ Emergency cancelled.');
+      await ctx.editMessage('↩️ Emergency cancelled.', { reply_markup: EMERGENCY_CONFIRM_KEYBOARD });
       return;
     }
   }
