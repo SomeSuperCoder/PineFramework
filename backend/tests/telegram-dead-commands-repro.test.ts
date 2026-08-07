@@ -8,7 +8,7 @@
  * This test verifies:
  * 1. Feature command handlers are stored in `registeredCommands` before start()
  * 2. `attachCommand()` IS called for each feature command (before launch)
- * 3. Only /start and /help are still registered before launch (unchanged)
+ * 3. Only /start is registered before launch (the 11 text commands were removed)
  * 4. All feature commands appear on the bot instance before launch() hangs
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -39,19 +39,10 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
     const service = new TelegramService({ configStore });
     configStore.setBotToken('123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11');
 
-    // Register feature commands BEFORE start — exactly as TelegramBotFeature.install() does
+    // Register feature commands BEFORE start — exactly as TelegramBotFeature.install() does.
+    // /start is the ONLY registered command: every other control is button-only.
     const handler = async () => {};
     service.registerBotCommand('start', handler);
-    service.registerBotCommand('request', handler);
-    service.registerBotCommand('subscribe', handler);
-    service.registerBotCommand('unsubscribe', handler);
-    service.registerBotCommand('lang', handler);
-    service.registerBotCommand('report', handler);
-    service.registerBotCommand('link', handler);
-    service.registerBotCommand('unlink', handler);
-    service.registerBotCommand('stats', handler);
-    service.registerBotCommand('stop', handler);
-    service.registerBotCommand('emergency', handler);
 
     // Spy on the private attachCommand method via prototype
     const attachSpy = vi.spyOn(service as any, 'attachCommand');
@@ -65,11 +56,11 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
 
     // The registered commands are in the map
     const registeredCommands = (service as any).registeredCommands;
-    expect(registeredCommands.size).toBe(11);
+    expect(registeredCommands.size).toBe(1);
 
-    // FIX VERIFIED: attachCommand IS called for each feature command
+    // FIX VERIFIED: attachCommand IS called for the single feature command
     // Feature commands are now attached in the loops BEFORE bot.launch()
-    const featureCommands = ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
+    const featureCommands = ['start'];
 
     for (const cmd of featureCommands) {
       const callsForCmd = attachSpy.mock.calls.filter(
@@ -101,25 +92,20 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
         return new Promise<void>(() => {}); // hangs forever
       }),
       stop: vi.fn(),
-      telegram: { getMe: vi.fn().mockResolvedValue({ id: 1, is_bot: true, first_name: 'test', username: 'testbot' }) },
+      telegram: {
+        getMe: vi.fn().mockResolvedValue({ id: 1, is_bot: true, first_name: 'test', username: 'testbot' }),
+        // TelegramService.start() now wires the button-only command menu.
+        setMyCommands: vi.fn().mockResolvedValue(undefined),
+      },
       on: vi.fn(),
     };
 
     vi.spyOn(await import('telegraf'), 'Telegraf').mockImplementation(() => mockBot as any);
 
     try {
-      // Register feature commands BEFORE start() — as TelegramBotFeature.install() does
+      // Register feature commands BEFORE start() — as TelegramBotFeature.install() does.
+      // /start is the ONLY registered command: every other control is button-only.
       service.registerBotCommand('start', async () => {});
-      service.registerBotCommand('request', async () => {});
-      service.registerBotCommand('subscribe', async () => {});
-      service.registerBotCommand('unsubscribe', async () => {});
-      service.registerBotCommand('lang', async () => {});
-      service.registerBotCommand('report', async () => {});
-      service.registerBotCommand('link', async () => {});
-      service.registerBotCommand('unlink', async () => {});
-      service.registerBotCommand('stats', async () => {});
-      service.registerBotCommand('stop', async () => {});
-      service.registerBotCommand('emergency', async () => {});
 
       // start() will attach feature commands BEFORE launch(), then hang at launch()
       service.start();
@@ -127,12 +113,9 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
       // Let the event loop tick — attachCommand calls happen synchronously before launch()
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // /help is registered by the service itself (unchanged); /start is now a
-      // feature command registered through install() — both land before launch.
-      expect(botCommandCalls).toContain('help');
-
-      // FIX VERIFIED: feature commands ARE also on the bot (attached before launch)
-      const featureCommands = ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
+      // FIX VERIFIED: /start IS on the bot (attached before launch); the /help
+      // hardcoded command was REMOVED, and no other text command is registered.
+      const featureCommands = ['start'];
       for (const cmd of featureCommands) {
         expect(botCommandCalls).toContain(cmd);
       }

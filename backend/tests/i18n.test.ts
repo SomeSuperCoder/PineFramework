@@ -56,8 +56,10 @@ describe('t() fallback', () => {
     // All keys exist in all three dicts today, so the defensive fallback cannot
     // trigger with typed inputs (the parity test enforces the same). This pins
     // the safety net's behaviour: en is never blank and is always resolvable.
-    expect(en.validTypes).toBeTruthy();
-    expect(t('en', 'validTypes')).toBe(en.validTypes);
+    // The sample key is a surviving key: validTypes was removed along with the
+    // text-command error paths in the command-removal change (2026-08-07).
+    expect(en.unknownCommand).toBeTruthy();
+    expect(t('en', 'unknownCommand')).toBe(en.unknownCommand);
   });
 });
 

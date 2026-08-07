@@ -59,6 +59,8 @@ const { mockTelegraf, middleware } = vi.hoisted(() => {
     telegram: {
       sendMessage: vi.fn().mockResolvedValue({}),
       sendPhoto: vi.fn().mockResolvedValue({}),
+      // TelegramService.start() now wires the button-only command menu.
+      setMyCommands: vi.fn().mockResolvedValue(undefined),
     },
   };
   return { mockTelegraf, middleware };

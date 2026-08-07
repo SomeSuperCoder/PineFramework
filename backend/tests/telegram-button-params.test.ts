@@ -625,19 +625,14 @@ describe('FIXED: unknown legacy junk is a graceful no-op', () => {
 function makeFakeTransport() {
   const commands: string[] = [];
   const callbacks: string[] = [];
-  let texts = 0;
   return {
     commands,
     callbacks,
-    texts: () => texts,
     registerBotCommand: (c: string) => {
       commands.push(c);
     },
     registerBotCallback: (p: string) => {
       callbacks.push(p);
-    },
-    registerBotText: () => {
-      texts++;
     },
   };
 }
@@ -650,8 +645,9 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     h.feature.install(fake as unknown as BotCommandTransport);
 
     // Every prefix the dashboard /start + the toggle/picker/confirm keyboards
-    // emit must be registered. A missing one = a dead button (B3).
-    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency']) {
+    // emit must be registered. A missing one = a dead button (B3). The full set
+    // now also covers the new link/unlink/request button flows.
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'link', 'unlink', 'request']) {
       expect(fake.callbacks, `callback prefix "${p}" must be registered`).toContain(p);
     }
 
@@ -680,6 +676,11 @@ describe('DEAD-BUTTON REGRESSION: install() registers every emitted callback pre
     expect(dashboardData).toContain('lang:menu');
     expect(dashboardData).toContain('stop:ask');
     expect(dashboardData).toContain('emergency:ask');
+    // Operator-only row also exposes the group link/unlink ask buttons.
+    expect(dashboardData).toContain('link:ask');
+    expect(dashboardData).toContain('unlink:ask');
+    // Operators see no self-service request row (that row is non-operator only).
+    expect(dashboardData).not.toContain('request:go');
 
     // Every emitted dashboard button matches a registered prefix:
     for (const data of dashboardData) {

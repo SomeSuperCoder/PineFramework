@@ -138,80 +138,56 @@ describe('TelegramBotFeature auth gate', () => {
   });
 });
 
-describe('TelegramBotFeature /request', () => {
-  it('submits a request and persists it', async () => {
+describe('TelegramBotFeature request (dashboard button request:go)', () => {
+  it('request:go submits a request and persists it', async () => {
     const h = makeHarness();
-    await h.feature.handleRequest(h.ctx({ from: { id: 50, username: 'newbie', first_name: 'New' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('submitted'));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleRequestCallback(h.cb('request', 'request:go', {
+      from: { id: 50, username: 'newbie', first_name: 'New' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('submitted'), expect.anything());
     expect(h.store.getRequests()).toHaveLength(1);
     expect(h.store.getRequests()[0]!.username).toBe('newbie');
     cleanHarness(h);
   });
 
-  it('rejects a duplicate pending request', async () => {
+  it('request:go rejects a duplicate pending request', async () => {
     const h = makeHarness();
     h.store.addRequest(50, 'newbie', 'New');
-    await h.feature.handleRequest(h.ctx({ from: { id: 50, username: 'newbie' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('pending'));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleRequestCallback(h.cb('request', 'request:go', {
+      from: { id: 50, username: 'newbie' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('pending'), expect.anything());
+    expect(h.store.getRequests()).toHaveLength(1);
     cleanHarness(h);
   });
 
-  it('tells existing controllers/admin they are already granted', async () => {
+  it('request:go tells existing controllers/admin they are already granted', async () => {
     const h = makeHarness();
     h.store.addController(50, 'c', 1);
-    await h.feature.handleRequest(h.ctx({ from: { id: 50, username: 'c' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('already granted access') as string);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleRequestCallback(h.cb('request', 'request:go', {
+      from: { id: 50, username: 'c' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('already granted access') as string, expect.anything());
+    expect(h.store.getRequests()).toHaveLength(0);
     cleanHarness(h);
   });
 });
 
-describe('TelegramBotFeature /subscribe & /unsubscribe', () => {
-  it('M1: already-all private chat reports failure, not fake success', async () => {
-    // A fresh private chat defaults to ALL types, so subscribing to 'trading'
-    // changes nothing — the reply must be subscribeFailure (M1), not a claim of
-    // a subscription that was already present.
+describe('TelegramBotFeature subscribe/unsubscribe (button-only toggles)', () => {
+  it('sub:<type> subscribes a group member by member id (not chat id)', async () => {
     const h = makeHarness();
-    await h.feature.handleSubscribe(h.ctx({ message: { text: '/subscribe trading' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Could not subscribe'));
-    cleanHarness(h);
-  });
-
-  it('M1: a chat that actually gains a type reports success', async () => {
-    // A GROUP chat defaults to NO subscriptions (empty list), so subscribing a
-    // group member to a type genuinely adds it → subscribeSuccess.
-    const h = makeHarness();
-    await h.feature.handleSubscribe(h.ctx({
+    h.store.addChat(7000, 'group');
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:error', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      message: { text: '/subscribe error' },
-    }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('subscribed'));
-    expect(h.store.getMemberSubscription(7000, 1200)).toEqual(['error']);
-    cleanHarness(h);
-  });
-
-  it('subscribes to ALL when no type given', async () => {
-    const h = makeHarness();
-    await h.feature.handleSubscribe(h.ctx({ message: { text: '/subscribe' } }));
-    expect(h.store.getMemberSubscription(1000, 1000)).toEqual([
-      'trading', 'position_open', 'position_close', 'report', 'daily', 'error', 'bot_lifecycle',
-    ]);
-    cleanHarness(h);
-  });
-
-  it('rejects an invalid type', async () => {
-    const h = makeHarness();
-    await h.feature.handleSubscribe(h.ctx({ message: { text: '/subscribe bogus' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringMatching(/Invalid args|Invalid arguments/));
-    cleanHarness(h);
-  });
-
-  it('subscribes a group member by member id (not chat id)', async () => {
-    const h = makeHarness();
-    await h.feature.handleSubscribe(h.ctx({
-      chat: { id: 7000, type: 'group' },
-      from: { id: 1200, username: 'member' },
-      message: { text: '/subscribe error' },
+      editMessage,
     }));
     const chat = h.store.getChat(7000)!;
     expect(chat.type).toBe('group');
@@ -219,90 +195,87 @@ describe('TelegramBotFeature /subscribe & /unsubscribe', () => {
     cleanHarness(h);
   });
 
-  it('unsubscribes a specific type and drops the key when empty', async () => {
-    // Use a GROUP chat so the empty-key default is [] (not the private ALL default).
+  it('M1: sub:<type> on a fresh private chat TOGGLES the type OFF (ALL default is authoritative)', async () => {
+    // A fresh private chat defaults to ALL types. The button path is a TOGGLE:
+    // tapping sub:trading on an already-subscribed private chat REMOVES it — it
+    // never claims a fake success (the old /subscribe failure case is gone).
+    const h = makeHarness();
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', { editMessage }));
+    expect(h.store.getMemberSubscription(1000, 1000)).not.toContain('trading');
+    // The refreshed toggle keyboard reflects the change.
+    expect(editMessage).toHaveBeenCalledTimes(1);
+    cleanHarness(h);
+  });
+
+  it('M1: unsub:<type> on a group member with no explicit subscription TOGGLES it ON', async () => {
+    // Group members default to [] — the button path toggles: tapping
+    // unsub:trading ADDS the type rather than reporting an unsubscribe failure.
+    const h = makeHarness();
+    h.store.addChat(7000, 'group');
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1200, username: 'm' },
+      editMessage,
+    }));
+    expect(h.store.getMemberSubscription(7000, 1200)).toEqual(['trading']);
+    cleanHarness(h);
+  });
+
+  it('unsub:<type> removes a type and drops the key when empty (group)', async () => {
     const h = makeHarness();
     h.store.addChat(7000, 'group');
     h.store.memberSubscribe(7000, 1200, ['trading']);
-    await h.feature.handleUnsubscribe(h.ctx({
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'm' },
-      message: { text: '/unsubscribe trading' },
+      editMessage,
     }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Unsubscribed'));
-    // Group empty default ⇒ nothing.
     expect(h.store.getMemberSubscription(7000, 1200)).toEqual([]);
-    cleanHarness(h);
-  });
-
-  it('rejects invalid unsubscribe type', async () => {
-    const h = makeHarness();
-    await h.feature.handleUnsubscribe(h.ctx({ message: { text: '/unsubscribe nope' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringMatching(/Invalid args|Invalid arguments/));
-    cleanHarness(h);
-  });
-
-  it('M1: unsubscribe reports failure when nothing was actually removed', async () => {
-    // The member has no explicit subscriptions on a group → nothing to remove.
-    const h = makeHarness();
-    h.store.addChat(7000, 'group');
-    await h.feature.handleUnsubscribe(h.ctx({
-      chat: { id: 7000, type: 'group' },
-      from: { id: 1200, username: 'm' },
-      message: { text: '/unsubscribe trading' },
-    }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Could not unsubscribe'));
-    cleanHarness(h);
-  });
-
-  it('M1: unsubscribe reports success when a type was removed', async () => {
-    const h = makeHarness();
-    h.store.addChat(7000, 'group');
-    h.store.memberSubscribe(7000, 1200, ['trading', 'error']);
-    await h.feature.handleUnsubscribe(h.ctx({
-      chat: { id: 7000, type: 'group' },
-      from: { id: 1200, username: 'm' },
-      message: { text: '/unsubscribe trading' },
-    }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Unsubscribed'));
-    expect(h.store.getMemberSubscription(7000, 1200)).toEqual(['error']);
     cleanHarness(h);
   });
 });
 
-describe('TelegramBotFeature /lang', () => {
-  it('reports usage when no language given', async () => {
+describe('TelegramBotFeature lang (button-only picker)', () => {
+  it('lang:menu shows the picker with the back-to-dashboard row', async () => {
     const h = makeHarness();
-    await h.feature.handleLang(h.ctx());
-    // The usage reply now ALSO carries the language picker keyboard (2nd arg).
-    expect(h.reply).toHaveBeenCalledWith(
-      expect.stringContaining('/lang'),
-      expect.objectContaining({ reply_markup: expect.anything() }),
-    );
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:menu', { editMessage }));
+    const data = (editMessage.mock.calls[0]![1] as {
+      reply_markup: { inline_keyboard: Array<Array<{ callback_data: string }>> };
+    }).reply_markup.inline_keyboard.flat().map((b) => b.callback_data);
+    expect(data).toContain('lang:en');
+    expect(data).toContain('lang:es');
+    expect(data).toContain('lang:ru');
+    expect(data).toContain('start:menu');
     cleanHarness(h);
   });
 
-  it('sets a valid language', async () => {
+  it('lang:es sets a valid language and edits the message', async () => {
     const h = makeHarness();
-    await h.feature.handleLang(h.ctx({ message: { text: '/lang es' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('es'));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage }));
     expect(h.store.getChatLanguage(1000)).toBe('es');
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('es'), expect.anything());
     cleanHarness(h);
   });
 
-  it('rejects an invalid language', async () => {
+  it('lang:de is answered with an invalid-language toast and leaves the language unchanged', async () => {
     const h = makeHarness();
-    await h.feature.handleLang(h.ctx({ message: { text: '/lang de' } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Invalid language'));
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:de', { answerCallback }));
+    expect(answerCallback).toHaveBeenCalledWith(expect.stringContaining('Invalid language'));
     expect(h.store.getChatLanguage(1000)).toBe('en');
     cleanHarness(h);
   });
 });
 
-describe('TelegramBotFeature /report', () => {
+describe('TelegramBotFeature report (dashboard button report:show)', () => {
   it('explains when no stats service is attached', async () => {
     const h = makeHarness({ stats: null });
-    await h.feature.handleReport(h.ctx());
+    await h.feature.handleReportCallback(h.cb('report', 'report:show'));
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('not initialized'));
     cleanHarness(h);
   });
@@ -311,7 +284,7 @@ describe('TelegramBotFeature /report', () => {
     const h = makeHarness({
       stats: ({ getSessionSummary: vi.fn(() => ({ totalTrades: 0, recent: [] })) } as Partial<StatsService> as StatsService),
     });
-    await h.feature.handleReport(h.ctx());
+    await h.feature.handleReportCallback(h.cb('report', 'report:show'));
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('No trades'));
     cleanHarness(h);
   });
@@ -335,7 +308,7 @@ describe('TelegramBotFeature /report', () => {
         } as unknown as SessionSummary)),
       } as Partial<StatsService> as StatsService),
     });
-    await h.feature.handleReport(h.ctx());
+    await h.feature.handleReportCallback(h.cb('report', 'report:show'));
     const replyText = (h.reply.mock.calls[0]![0] as string);
     expect(replyText).toContain('BTCUSDC');
     expect(replyText).toContain('ETHUSDC');
@@ -344,106 +317,76 @@ describe('TelegramBotFeature /report', () => {
   });
 });
 
-describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
-  it('M1: /stop does NOT stop immediately — it asks for confirmation', async () => {
+describe('TelegramBotFeature stop/emergency (button-only two-step flow)', () => {
+  it('M1: stop:ask does NOT stop immediately — it asks for confirmation', async () => {
     const stop = vi.fn();
     const h = makeHarness({ engine: { state: 'Running', config: { pairs: [{ p: 1 }] }, positions: [{ p: 1 }], stop, emergencyStop: vi.fn() } });
     h.store.addController(2, 'op', 1);
-    await h.feature.handleStop(h.ctx({ from: { id: 2, username: 'op' } }));
-    // Two-step: engine must NOT be stopped on the first command.
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', {
+      from: { id: 2, username: 'op' },
+      editMessage,
+    }));
+    // Two-step: the ask must NOT stop the engine.
     expect(stop).not.toHaveBeenCalled();
-    // The confirmation request now carries the stop-continue keyboard.
-    expect(h.reply).toHaveBeenCalledWith(
+    // The ask edits the message to the stop-continue keyboard.
+    expect(editMessage).toHaveBeenCalledWith(
       expect.stringContaining('Confirm engine stop'),
       expect.objectContaining({ reply_markup: expect.anything() }),
     );
     cleanHarness(h);
   });
 
-  it('M1: confirming with "yes" runs engine.stop() and reports success', async () => {
+  it('M1: stop:ask → stop:confirm runs engine.stop() and reports success', async () => {
     const stop = vi.fn().mockResolvedValue(undefined);
     const h = makeHarness({ engine: { state: 'Running', config: { pairs: [{ p: 1 }] }, positions: [{ p: 1 }], stop, emergencyStop: vi.fn() } });
     h.store.addController(2, 'op', 1);
-    await h.feature.handleStop(h.ctx({ from: { id: 2, username: 'op' } }));
-    // The next plain text from the SAME operator who initiated /stop confirms
-    // (confirmingUserId gate — id 2).
-    await h.feature.handleText(h.ctx({ from: { id: 2, username: 'op' }, message: { text: 'yes' } }));
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', { from: { id: 2, username: 'op' } }));
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', { from: { id: 2, username: 'op' } }));
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine stopped'));
     cleanHarness(h);
   });
 
-  it.each(['y', 'Y', 'confirm', 'да', 'Si', 'YES'])(
-    'M1: accepts "%s" (case-insensitive) as confirmation',
-    async (word) => {
-      const stop = vi.fn().mockResolvedValue(undefined);
-      const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
-      h.store.setAdmin(1, 'boss');
-      await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-      // The reply must come from the operator who initiated /stop (admin id 1).
-      await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: word } }));
-      expect(stop).toHaveBeenCalledTimes(1);
-      cleanHarness(h);
-    },
-  );
+  it('M1: stop:confirm with a missing engine reports stop cancelled (engine untouched)', async () => {
+    const h = makeHarness(); // no engine
+    h.store.setAdmin(1, 'boss');
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('cancelled'), expect.anything());
+    cleanHarness(h);
+  });
 
-  it('M1: non-confirmation text cancels the stop', async () => {
+  it('stop denies a non-operator even on the confirm button', async () => {
     const stop = vi.fn();
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
-    h.store.setAdmin(1, 'boss');
-    await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'no' } }));
-    expect(stop).not.toHaveBeenCalled();
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('cancelled'));
-    // The pending entry was consumed — a later "yes" no longer stops.
-    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'yes' } }));
-    expect(stop).not.toHaveBeenCalled();
-    cleanHarness(h);
-  });
-
-  it('M1: stale confirmations older than 60s are ignored', async () => {
-    vi.useFakeTimers();
-    try {
-      const stop = vi.fn();
-      const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
-      h.store.setAdmin(1, 'boss');
-      await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-      // Advance past the 60s TTL.
-      vi.advanceTimersByTime(61_000);
-      await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
-      expect(stop).not.toHaveBeenCalled();
-      cleanHarness(h);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('M1: /stop with a missing engine reports engine-not-initialized', async () => {
-    const h = makeHarness();
-    h.store.setAdmin(1, 'boss');
-    await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('not initialized'));
-    cleanHarness(h);
-  });
-
-  it('stop denies a non-operator', async () => {
-    const stop = vi.fn();
-    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
-    await h.feature.handleStop(h.ctx());
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+      editMessage,
+    }));
     expect(stop).not.toHaveBeenCalled();
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized'));
+    expect(editMessage).not.toHaveBeenCalled();
     cleanHarness(h);
   });
 
-  it('emergency asks the operator to confirm before stopping', async () => {
+  it('emergency:ask asks the operator to confirm before stopping', async () => {
     const emergencyStop = vi.fn();
     const h = makeHarness({ engine: { state: 'Error', config: {}, positions: [], stop: vi.fn(), emergencyStop } });
     h.store.setAdmin(1, 'boss');
-    await h.feature.handleEmergency(h.ctx({ from: { id: 1 } }));
-    // Two-step confirm: /emergency presents the confirmation keyboard and must
-    // NOT stop the engine until the operator presses emergency:confirm.
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:ask', {
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
+    // Two-step confirm: the ask must NOT stop the engine until confirm is pressed.
     expect(emergencyStop).not.toHaveBeenCalled();
-    expect(h.reply).toHaveBeenCalledWith(
+    expect(editMessage).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
     );
@@ -454,20 +397,11 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     const stop = vi.fn().mockRejectedValue(new Error('boom'));
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
     h.store.setAdmin(1, 'boss');
-    await h.feature.handleStop(h.ctx({ from: { id: 1 } }));
-    await h.feature.handleText(h.ctx({ from: { id: 1 }, message: { text: 'yes' } }));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', { from: { id: 1 }, editMessage }));
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', { from: { id: 1 }, editMessage }));
     expect(stop).toHaveBeenCalledTimes(1);
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('cancelled'));
-    cleanHarness(h);
-  });
-
-  it('M1: plain text with no pending confirmation is ignored', async () => {
-    const stop = vi.fn();
-    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
-    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
-    expect(stop).not.toHaveBeenCalled();
-    // No reply was emitted for a stray text.
-    expect(h.reply).not.toHaveBeenCalled();
+    expect(editMessage).toHaveBeenLastCalledWith(expect.stringContaining('cancelled'), expect.anything());
     cleanHarness(h);
   });
 });
@@ -579,102 +513,159 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     expect(editMessage).not.toHaveBeenCalled();
     cleanHarness(h);
   });
-
-  it('F: handleText confirmation is scoped to the confirming userId', async () => {
-    const stop = vi.fn().mockResolvedValue(undefined);
-    const h = makeHarness({
-      engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() },
-    });
-    h.store.setAdmin(42, 'boss');
-    // Operator 42 initiates /stop → pending.confirmingUserId = 42.
-    await h.feature.handleStop(h.ctx({ from: { id: 42, username: 'boss' } }));
-    // A DIFFERENT user (default tester, id 1000) replies "yes".
-    await h.feature.handleText(h.ctx({ message: { text: 'yes' } }));
-    expect(stop).not.toHaveBeenCalled();
-    // The foreign reply was a silent no-op: only /stop's confirmation request
-    // has been emitted (no cancel/success reply for the interloper).
-    expect(h.reply).toHaveBeenCalledTimes(1);
-    // The pending entry is PRESERVED — the initiating operator can still confirm.
-    await h.feature.handleText(h.ctx({ from: { id: 42, username: 'boss' }, message: { text: 'yes' } }));
-    expect(stop).toHaveBeenCalledTimes(1);
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Engine stopped'));
-    cleanHarness(h);
-  });
 });
 
-describe('TelegramBotFeature /link and /unlink (group gating)', () => {
-  it('link succeeds on a group for an operator', async () => {
+describe('TelegramBotFeature link/unlink (button-only, operator-gated)', () => {
+  it('link:ask presents the confirmation; link:confirm links a group for an operator', async () => {
     const h = makeHarness();
     h.store.setAdmin(1, 'boss');
-    await h.feature.handleLink(h.ctx({ chat: { id: 7000, type: 'group' }, from: { id: 1 } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('linked'));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLinkCallback(h.cb('link', 'link:ask', { from: { id: 1, username: 'boss' }, editMessage }));
+    expect(editMessage).toHaveBeenCalledWith(
+      expect.stringContaining('Link this group'),
+      expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
+    );
+    await h.feature.handleLinkCallback(h.cb('link', 'link:confirm', {
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
     expect(h.store.isLinked(7000)).toBe(true);
     cleanHarness(h);
   });
 
-  it('link is refused in a private chat', async () => {
+  it('link:confirm is refused in a private chat', async () => {
     const h = makeHarness();
     h.store.setAdmin(1, 'boss');
-    await h.feature.handleLink(h.ctx({ from: { id: 1 } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('group chat'));
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLinkCallback(h.cb('link', 'link:confirm', {
+      chat: { id: 1000, type: 'private' },
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('group chat'), expect.anything());
+    expect(h.store.isLinked(1000)).toBe(false);
     cleanHarness(h);
   });
 
-  it('link is denied to a non-operator', async () => {
+  it('link:ask is denied to a non-operator', async () => {
     const h = makeHarness();
-    await h.feature.handleLink(h.ctx({ chat: { id: 7000, type: 'group' } }));
+    const answerCallback = vi.fn().mockResolvedValue(undefined);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLinkCallback(h.cb('link', 'link:ask', {
+      from: { id: 500, username: 'nobody' },
+      answerCallback,
+      editMessage,
+    }));
     expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Only an authorized'));
+    expect(editMessage).not.toHaveBeenCalled();
     cleanHarness(h);
   });
 
-  it('unlink unlinks a group', async () => {
+  it('link:cancel leaves the group unchanged', async () => {
     const h = makeHarness();
     h.store.setAdmin(1, 'boss');
     h.store.addChat(7000, 'group');
-    await h.feature.handleUnlink(h.ctx({ chat: { id: 7000, type: 'group' }, from: { id: 1 } }));
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Group unlinked'));
+    h.store.linkChat(7000, 1);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLinkCallback(h.cb('link', 'link:cancel', {
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('cancelled'), expect.anything());
+    expect(h.store.isLinked(7000)).toBe(true);
+    cleanHarness(h);
+  });
+
+  it('unlink:ask → unlink:confirm unlinks a group', async () => {
+    const h = makeHarness();
+    h.store.setAdmin(1, 'boss');
+    h.store.addChat(7000, 'group');
+    h.store.linkChat(7000, 1);
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:ask', { from: { id: 1, username: 'boss' }, editMessage }));
+    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:confirm', {
+      chat: { id: 7000, type: 'group' },
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
     expect(h.store.isLinked(7000)).toBe(false);
     cleanHarness(h);
   });
-});
 
-describe('TelegramBotFeature unknown command', () => {
-  it('responds with the unknown-command message', async () => {
+  it('unlink:confirm in a private chat is refused', async () => {
     const h = makeHarness();
-    await h.feature.handleUnknown(h.ctx());
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Unknown command'));
+    h.store.setAdmin(1, 'boss');
+    const editMessage = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleUnlinkCallback(h.cb('unlink', 'unlink:confirm', {
+      chat: { id: 1000, type: 'private' },
+      from: { id: 1, username: 'boss' },
+      editMessage,
+    }));
+    expect(editMessage).toHaveBeenCalledWith(expect.stringContaining('group chat'), expect.anything());
     cleanHarness(h);
   });
 });
 
-describe('B2 — install() transport seam', () => {
-  it('registers every supported command on the transport', async () => {
+describe('TelegramBotFeature button-only: no text control seam', () => {
+  it('a stray "yes" text cannot stop the engine — the fallback only replies unknownCommand', async () => {
+    const stop = vi.fn();
+    const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], stop, emergencyStop: vi.fn() } });
+    h.store.setAdmin(1, 'boss');
+    // The text seam is GONE: install() registers no text handler and there is
+    // no pendingStops 'yes' path. The only public text fallback (handleUnknown)
+    // answers with the unknown-command message and never touches the engine.
+    await h.feature.handleUnknown(h.ctx({ from: { id: 1, username: 'boss' }, message: { text: 'yes' } }));
+    expect(stop).not.toHaveBeenCalled();
+    // The rewritten unknownCommand copy no longer contains the literal phrase
+    // "Unknown command" — assert the stable i18n text instead.
+    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('I do not understand'));
+    cleanHarness(h);
+  });
+});
+
+describe('B2 — install() transport seam (button-only)', () => {
+  it('registers EXACTLY /start as the only command on the transport', async () => {
     const h = makeHarness();
     const registered: string[] = [];
     const registerBotCommand = vi.fn((cmd: string) => { registered.push(cmd); });
-    const registerBotText = vi.fn();
-    h.feature.install({ registerBotCommand, registerBotText });
-    for (const cmd of ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'stats', 'stop', 'emergency', 'link', 'unlink']) {
-      expect(registered).toContain(cmd);
-    }
-    expect(registerBotCommand).toHaveBeenCalledTimes(11);
+    h.feature.install({ registerBotCommand });
+    // /start is the ONLY registered command — every other control is
+    // button-only (the 11 text commands were removed).
+    expect(registered).toEqual(['start']);
+    expect(registerBotCommand).toHaveBeenCalledTimes(1);
     cleanHarness(h);
   });
 
-  it('wires the text seam when the transport exposes registerBotText', async () => {
+  it('registers every emitted inline-button callback prefix (no dead buttons)', async () => {
+    const h = makeHarness();
+    const registerBotCallback = vi.fn();
+    h.feature.install({ registerBotCommand: vi.fn(), registerBotCallback });
+    const prefixes = registerBotCallback.mock.calls.map((c) => c[0]);
+    for (const p of ['sub', 'unsub', 'lang', 'report', 'stats', 'stop', 'emergency', 'notif', 'start', 'link', 'unlink', 'request']) {
+      expect(prefixes).toContain(p);
+    }
+    cleanHarness(h);
+  });
+
+  it('does NOT wire any text seam — control is button-only', async () => {
     const h = makeHarness();
     const registerBotText = vi.fn();
-    h.feature.install({ registerBotCommand: vi.fn(), registerBotText });
-    // The two-step /stop confirmation relies on this catch-all text handler.
-    expect(registerBotText).toHaveBeenCalledTimes(1);
+    // The transport contract no longer offers a text seam; if one is passed
+    // anyway, install() must NOT consume it (the pendingStops 'yes' path is gone).
+    const transport = { registerBotCommand: vi.fn(), registerBotText };
+    h.feature.install(transport);
+    expect(registerBotText).not.toHaveBeenCalled();
     cleanHarness(h);
   });
 
-  it('still works on a command-only transport (no text seam)', async () => {
+  it('still works on a command-only transport (no callback seam)', async () => {
     const h = makeHarness();
     const registerBotCommand = vi.fn();
     h.feature.install({ registerBotCommand });
-    expect(registerBotCommand).toHaveBeenCalledTimes(11);
+    expect(registerBotCommand).toHaveBeenCalledTimes(1);
+    expect(registerBotCommand).toHaveBeenCalledWith('start', expect.any(Function));
     cleanHarness(h);
   });
 });

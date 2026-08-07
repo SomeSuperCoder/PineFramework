@@ -271,7 +271,7 @@ describe('BUG 5 — operator dashboard must distinguish emergency and regular st
   });
 });
 
-describe('BUG 6 — inline Stop must ask for confirmation like /stop does', () => {
+describe('BUG 6 — the inline Stop button asks for confirmation before stopping', () => {
   let h: Harness;
   let stop: ReturnType<typeof vi.fn>;
   beforeEach(() => {
@@ -281,17 +281,12 @@ describe('BUG 6 — inline Stop must ask for confirmation like /stop does', () =
   });
   afterEach(() => cleanHarness(h));
 
-  it('control: /stop asks for confirmation and does NOT stop yet', async () => {
-    await h.feature.handleStop(h.ctx({ from: { id: 1, username: 'admin' } }));
-    expect(h.repliedCallbacks()).toContain('stop:confirm');
-    expect(stop).not.toHaveBeenCalled();
-  });
-
   it('dashboard stop:ask click must request confirmation BEFORE stopping', async () => {
     await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', { from: { id: 1, username: 'admin' } }));
     // CORRECT (post-fix): the dashboard Stop emits stop:ask, which presents the
-    // STOP_CONFIRM_KEYBOARD and does NOT stop the engine — the same two-step
-    // semantics as /stop (bug 6). The confirmation buttons are on the edit.
+    // STOP_CONFIRM_KEYBOARD and does NOT stop the engine — the button-only
+    // two-step flow replaced the old /stop command (bug 6). The confirmation
+    // buttons are on the edit.
     expect(h.editedCallbacks()).toContain('stop:confirm');
     expect(h.editedCallbacks()).toContain('stop:cancel');
     expect(stop).not.toHaveBeenCalled();

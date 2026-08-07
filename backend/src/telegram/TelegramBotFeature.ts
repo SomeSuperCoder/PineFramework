@@ -1,25 +1,27 @@
 /**
  * TelegramBotFeature — the policy layer for the PineFramework Telegram bot.
  *
- * Owns the command surface (request/subscribe/unsubscribe/lang/report/stats/
- * stop/emergency/link/unlink), the operator auth gate, and the notification-type
- * routing core. It is transport-agnostic by design:
+ * Owns the button-only control surface (notifications, language, reports,
+ * stats, stop, emergency, group link/unlink, operator-access requests), the
+ * operator auth gate, and the notification-type routing core. Control is
+ * reached EXCLUSIVELY through inline buttons — /start is the only registered
+ * command. It is transport-agnostic by design:
  *
  *  - `getEngine` and `onMessage` are injected, so the feature is constructible
  *    and its handlers are drivable WITHOUT a live Telegraf instance (the Test
  *    Engineer drives handlers with fabricated ctx objects).
- *  - `install(transport)` binds every command handler onto a transport that only
- *    needs a `registerBotCommand` seam (see TelegramService.registerBotCommand).
+ *  - `install(transport)` binds every action handler onto a transport that only
+ *    needs `registerBotCommand` / `registerBotCallback` seams (see
+ *    TelegramService).
  *
  * All user-facing text is resolved through i18n `t()` with the exact dictionary
  * keys in `./i18n.ts`. Controllers and the admin share one operator gate; every
  * other member is bound to the chat-level subscription model owned by
  * TelegramConfigStore.
  *
- * Commands with interactive UIs (lang, subscribe, unsubscribe, emergency,
- * start) present inline keyboards via `reply_markup.inline_keyboard`. Button
- * presses route through the `BotCommandTransport.registerBotCallback` seam
- * (action prefix matching) to dedicated callback handlers. Every callback
+ * Every control presents inline keyboards via `reply_markup.inline_keyboard`.
+ * Button presses route through the `BotCommandTransport.registerBotCallback`
+ * seam (action prefix matching) to dedicated callback handlers. Every callback
  * handler calls `answerCallbackQuery` to dismiss the spinner and uses
  * `editMessageText` to update the original message in-place.
  */
@@ -46,9 +48,6 @@ export interface FeatureCommandContext {
   message?: { text?: string };
   reply: (text: string, extra?: unknown) => Promise<unknown>;
 }
-
-/** A feature-registered catch-all text handler (e.g. /stop confirmation). */
-export type BotTextHandler = (ctx: FeatureCommandContext) => Promise<void> | void;
 
 /**
  * Extras forwarded verbatim to the transport's in-place message edit
@@ -127,8 +126,6 @@ export interface BotCommandTransport {
     command: string,
     handler: (ctx: FeatureCommandContext) => Promise<void> | void,
   ) => void;
-  /** Optional seam for sessionful text flows (two-step /stop). */
-  registerBotText?: (handler: BotTextHandler) => void;
   /**
    * Register a callback_query handler by action prefix. The transport matches
    * `callback_query.data` against `^{prefix}(?::(.+))?$` and routes matches
@@ -153,18 +150,14 @@ function isNotificationType(value: string): value is NotificationType {
   return (NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
-/** How long a /stop confirmation stays valid before it is ignored. */
-const STOP_CONFIRM_TTL_MS = 60_000;
-/** Explicit confirmations for the two-step /stop flow, matched case-insensitively. */
-const STOP_CONFIRM_WORDS: ReadonlySet<string> = new Set(['yes', 'y', 'confirm', 'да', 'si']);
-
 /**
  * The callback prefixes the feature's inline keyboards EMIT — the single
  * source of truth for `validateActionRegistry`. The union of every keyboard
  * emitter below: /start dashboard (notif, lang, report, stats, stop,
- * emergency), the back-to-dashboard rows (start), LANG_PICKER_KEYBOARD
- * (lang, start), STOP_CONFIRM_KEYBOARD (stop), EMERGENCY_CONFIRM_KEYBOARD
- * (emergency), buildTypeKeyboard callers (sub, unsub), and the manage
+ * emergency, link, unlink, request), the back-to-dashboard rows (start),
+ * LANG_PICKER_KEYBOARD (lang, start), STOP_CONFIRM_KEYBOARD (stop),
+ * EMERGENCY_CONFIRM_KEYBOARD (emergency), LINK/UNLINK_CONFIRM_KEYBOARD
+ * (link, unlink), buildTypeKeyboard callers (sub, unsub), and the manage
  * notifications submenu (notif). When a new inline button is added to a
  * keyboard, its prefix must be added here (and the action registered in the
  * SSOT registry) so the validator covers it automatically — never maintain a
@@ -180,6 +173,9 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'emergency',
   'notif',
   'start',
+  'link',
+  'unlink',
+  'request',
 ];
 
 /**
@@ -216,7 +212,7 @@ const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
   ],
 };
 
-/** Emergency confirmation keyboard shown by /emergency. */
+/** Emergency confirmation keyboard shown by the dashboard "Emergency" button. */
 const EMERGENCY_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
   inline_keyboard: [
     [
@@ -226,27 +222,38 @@ const EMERGENCY_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
   ],
 };
 
-interface PendingStopConfirm {
-  /** Chat id that requested the stop. */
-  chatId: number;
-  /** Timestamp of the /stop that started the confirmation window. */
-  askedAt: number;
-  /** Operator that issued the /stop; only they may confirm it on reply. */
-  confirmingUserId: number;
-}
+/** Link confirmation keyboard shown by the dashboard "Link group" button. */
+const LINK_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
+  inline_keyboard: [
+    [
+      { text: '✅ Yes, Link', callback_data: 'link:confirm' },
+      { text: '❌ Cancel', callback_data: 'link:cancel' },
+    ],
+  ],
+};
+
+/** Unlink confirmation keyboard shown by the dashboard "Unlink group" button. */
+const UNLINK_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
+  inline_keyboard: [
+    [
+      { text: '✅ Yes, Unlink', callback_data: 'unlink:confirm' },
+      { text: '❌ Cancel', callback_data: 'unlink:cancel' },
+    ],
+  ],
+};
 
 export class TelegramBotFeature {
   private readonly store: TelegramConfigStore;
   private readonly stats?: StatsService | null;
   private readonly getEngine: () => BotEngine | null;
   private readonly onMessage?: (chatId: number, message: string) => Promise<boolean>;
-  /** In-flight /stop confirmations, keyed by chatId (M1 two-step stop). */
-  private readonly pendingStops = new Map<number, PendingStopConfirm>();
 
   /**
-   * SSOT action registry — the single source of truth for every command and
-   * its inline-button callback. `install()` iterates this instead of a hardcoded
-   * wire-up list, so a command and its keyboard can never drift apart.
+   * SSOT action registry — the single source of truth for every control and
+   * its inline-button callback. `install()` iterates this instead of a
+   * hardcoded wire-up list, so a control and its keyboard can never drift
+   * apart. /start is the ONLY registered command; every other control is
+   * reached exclusively through inline buttons.
    */
   private readonly actions: BotAction[] = [
     {
@@ -258,18 +265,22 @@ export class TelegramBotFeature {
       callbackPrefix: 'start',
       callbackHandler: (ctx) => this.handleDashboardCallback(ctx),
     },
-    { name: 'request', command: 'request', handler: (ctx) => this.handleRequest(ctx) },
     {
+      // Callback-only: the dashboard "Request access" button submits a
+      // self-service operator-access request for non-operators.
+      name: 'request',
+      callbackPrefix: 'request',
+      callbackHandler: (ctx) => this.handleRequestCallback(ctx),
+    },
+    {
+      // Callback-only: the subscribe toggle buttons (sub:<type>) and the
+      // dashboard notification entry points.
       name: 'subscribe',
-      command: 'subscribe',
-      handler: (ctx) => this.handleSubscribe(ctx),
       callbackPrefix: 'sub',
       callbackHandler: (ctx) => this.handleSubscribeCallback(ctx),
     },
     {
       name: 'unsubscribe',
-      command: 'unsubscribe',
-      handler: (ctx) => this.handleUnsubscribe(ctx),
       callbackPrefix: 'unsub',
       callbackHandler: (ctx) => this.handleUnsubscribeCallback(ctx),
     },
@@ -282,43 +293,41 @@ export class TelegramBotFeature {
     },
     {
       name: 'lang',
-      command: 'lang',
-      handler: (ctx) => this.handleLang(ctx),
       callbackPrefix: 'lang',
       callbackHandler: (ctx) => this.handleLangCallback(ctx),
     },
     {
       name: 'report',
-      command: 'report',
-      handler: (ctx) => this.handleReport(ctx),
       callbackPrefix: 'report',
       callbackHandler: (ctx) => this.handleReportCallback(ctx),
     },
     {
       name: 'stats',
-      command: 'stats',
-      handler: (ctx) => this.handleStats(ctx),
       callbackPrefix: 'stats',
       callbackHandler: (ctx) => this.handleStatsCallback(ctx),
     },
     {
       name: 'stop',
-      command: 'stop',
-      handler: (ctx) => this.handleStop(ctx),
       callbackPrefix: 'stop',
-      // stop/emergency keep DEDICATED handlers — never collapsed onto the
-      // command path, because their confirm/cancel semantics differ from /stop.
       callbackHandler: (ctx) => this.handleStopCallback(ctx),
     },
     {
       name: 'emergency',
-      command: 'emergency',
-      handler: (ctx) => this.handleEmergency(ctx),
       callbackPrefix: 'emergency',
       callbackHandler: (ctx) => this.handleEmergencyCallback(ctx),
     },
-    { name: 'link', command: 'link', handler: (ctx) => this.handleLink(ctx) },
-    { name: 'unlink', command: 'unlink', handler: (ctx) => this.handleUnlink(ctx) },
+    {
+      // Operator-gated: link/unlink run against the CURRENT group chat. Each
+      // follows the two-step ask → confirm/cancel flow of stop/emergency.
+      name: 'link',
+      callbackPrefix: 'link',
+      callbackHandler: (ctx) => this.handleLinkCallback(ctx),
+    },
+    {
+      name: 'unlink',
+      callbackPrefix: 'unlink',
+      callbackHandler: (ctx) => this.handleUnlinkCallback(ctx),
+    },
   ];
 
   constructor(opts: TelegramBotFeatureOptions) {
@@ -331,25 +340,19 @@ export class TelegramBotFeature {
   // ---- Transport wiring ----------------------------------------------------
 
   /**
-   * Register every supported command handler against a transport. Safe to call
+   * Register every supported action handler against a transport. Safe to call
    * before the transport has launched: the seam defers/attaches them.
    */
   install(transport: BotCommandTransport): void {
-    // Iterate the SSOT action registry: every command and its inline callback
-    // is bound here. This replaces the old hardcoded wire-up list.
+    // Iterate the SSOT action registry: every action and its inline callback
+    // is bound here. Commands are intentionally limited to /start — every
+    // other control is reached exclusively through inline buttons.
     this.registerActions(transport);
 
-    // Reserved wiring for sessionful text flow / linked-group commands. link
-    // and unlink are in the registry; registerBotText is the optional seam for
-    // the two-step /stop confirmation text path (see handleStop).
-    if (transport.registerBotText) {
-      transport.registerBotText((ctx) => this.handleText(ctx));
-    }
-
     // Fail fast: every inline-button prefix the feature *emits* (dashboard,
-    // type keyboards, lang/stop/emergency pickers) must resolve to a registered
-    // action. A dead keyboard button becomes a boot error instead of a silent
-    // no-op at click time.
+    // type keyboards, lang/stop/emergency/link pickers) must resolve to a
+    // registered action. A dead keyboard button becomes a boot error instead
+    // of a silent no-op at click time.
     this.validateActionRegistry();
   }
 
@@ -406,9 +409,10 @@ export class TelegramBotFeature {
   }
 
   /**
-   * Catch-all for text that matched no known command. Named so the wiring wave
-   * can route it to a transport text/fallback hook; the command-only `install`
-   * surface cannot register a catch-all.
+   * Catch-all for text that matched no known command. Public API surface for
+   * transports that want a text fallback; the button-only `install` surface
+   * registers no text seam, so production routes everything through inline
+   * buttons and this handler is only exercised directly.
    */
   async handleUnknown(ctx: FeatureCommandContext): Promise<void> {
     await ctx.reply(this.t(ctx, 'unknownCommand'));
@@ -522,13 +526,7 @@ export class TelegramBotFeature {
     return t(this.chatLang(ctx), key, params);
   }
 
-  /** Tokenized args after the command word, e.g. "/subscribe trading" -> ["trading"]. */
-  private args(ctx: FeatureCommandContext): string[] {
-    const text = ctx.message?.text ?? '';
-    return text.split(/\s+/).slice(1).filter(Boolean);
-  }
-
-  // ---- Command handlers ----------------------------------------------------
+  // ---- Control handlers -----------------------------------------------------
 
   /**
    * /start — welcome dashboard with navigation inline buttons.
@@ -572,71 +570,42 @@ export class TelegramBotFeature {
     });
   }
 
-  /** /request — ask the team to grant operator access. */
-  async handleRequest(ctx: FeatureCommandContext): Promise<void> {
+  /**
+   * Callback handler for the dashboard "Request access" button. Non-operators
+   * submit a self-service operator-access request (the same store mutation the
+   * old /request command performed); operators get a friendly "already
+   * granted" confirmation.
+   */
+  async handleRequestCallback(ctx: CallbackContext): Promise<void> {
+    await ctx.answerCallback();
+    if (ctx.params !== 'go') return;
+
     const username = ctx.from?.username ?? '';
     const firstName = ctx.from?.first_name ?? '';
     const fromId = ctx.from?.id;
 
     if (fromId === undefined) {
-      await ctx.reply(this.t(ctx, 'invalidArgs'));
-      return;
-    }
-    if (this.store.isController(fromId) || fromId === this.store.getAdmin()?.userId) {
-      await ctx.reply(this.t(ctx, 'requestAlreadyGranted'));
-      return;
-    }
-    if (this.store.getRequests().some((r) => r.userId === fromId)) {
-      await ctx.reply(this.t(ctx, 'requestAlreadyPending'));
-      return;
-    }
-    this.store.addRequest(fromId, username, firstName);
-    await ctx.reply(this.t(ctx, 'requestSubmitted'));
-  }
-
-  /**
-   * /subscribe [type] — opt (a member of) a chat into notification types.
-   *
-   * Without a type arg: shows an inline keyboard with toggle buttons for
-   * every notification type, reflecting current subscription state.
-   * With a type arg: subscribes to that type directly (text fallback).
-   */
-  async handleSubscribe(ctx: FeatureCommandContext): Promise<void> {
-    const chatId = ctx.chat?.id;
-    const fromId = ctx.from?.id;
-    if (chatId === undefined || fromId === undefined) {
-      await ctx.reply(this.t(ctx, 'invalidArgs'));
-      return;
-    }
-
-    const isGroup = ctx.chat?.type === 'group';
-    const memberId = isGroup ? fromId : chatId;
-
-    // No type arg → present toggle keyboard with current state.
-    const args = this.args(ctx);
-    if (args.length === 0) {
-      this.store.addChat(chatId, isGroup ? 'group' : 'private');
-      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
-      await ctx.reply(this.t(ctx, 'subscribeSuccess'), {
-        reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub'),
-        },
+      await ctx.editMessage(this.t(ctx, 'invalidArgs'), {
+        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
       });
       return;
     }
-
-    const types = this.resolveTypes(args);
-    if (types === null) {
-      await ctx.reply(`${this.t(ctx, 'invalidArgs')}\n${this.t(ctx, 'validTypes')}`);
+    if (this.store.isController(fromId) || fromId === this.store.getAdmin()?.userId) {
+      await ctx.editMessage(this.t(ctx, 'requestAlreadyGranted'), {
+        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+      });
       return;
     }
-
-    this.store.addChat(chatId, isGroup ? 'group' : 'private');
-    const before = this.store.getMemberSubscription(chatId, memberId);
-    this.store.memberSubscribe(chatId, memberId, types);
-    const after = this.store.getMemberSubscription(chatId, memberId);
-    const changed = after.length > before.length;
-    await ctx.reply(this.t(ctx, changed ? 'subscribeSuccess' : 'subscribeFailure'));
+    if (this.store.getRequests().some((r) => r.userId === fromId)) {
+      await ctx.editMessage(this.t(ctx, 'requestAlreadyPending'), {
+        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+      });
+      return;
+    }
+    this.store.addRequest(fromId, username, firstName);
+    await ctx.editMessage(this.t(ctx, 'requestSubmitted'), {
+      reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+    });
   }
 
   /**
@@ -692,49 +661,6 @@ export class TelegramBotFeature {
         inline_keyboard: this.buildTypeKeyboard(updated, 'sub'),
       },
     });
-  }
-
-  /**
-   * /unsubscribe [type] — mirror of /subscribe.
-   *
-   * Without a type arg: shows an inline keyboard with toggle buttons for
-   * every notification type, reflecting current subscription state.
-   * With a type arg: unsubscribes from that type directly (text fallback).
-   */
-  async handleUnsubscribe(ctx: FeatureCommandContext): Promise<void> {
-    const chatId = ctx.chat?.id;
-    const fromId = ctx.from?.id;
-    if (chatId === undefined || fromId === undefined) {
-      await ctx.reply(this.t(ctx, 'invalidArgs'));
-      return;
-    }
-
-    const isGroup = ctx.chat?.type === 'group';
-    const memberId = isGroup ? fromId : chatId;
-
-    // No type arg → present toggle keyboard with current state.
-    const args = this.args(ctx);
-    if (args.length === 0) {
-      this.store.addChat(chatId, isGroup ? 'group' : 'private');
-      const currentTypes = this.store.getMemberSubscription(chatId, memberId);
-      await ctx.reply(this.t(ctx, 'unsubscribeSuccess'), {
-        reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub'),
-        },
-      });
-      return;
-    }
-
-    const types = this.resolveTypes(args);
-    if (types === null) {
-      await ctx.reply(`${this.t(ctx, 'invalidArgs')}\n${this.t(ctx, 'validTypes')}`);
-      return;
-    }
-    const before = this.store.getMemberSubscription(chatId, memberId);
-    this.store.memberUnsubscribe(chatId, memberId, types);
-    const after = this.store.getMemberSubscription(chatId, memberId);
-    const changed = after.length < before.length;
-    await ctx.reply(this.t(ctx, changed ? 'unsubscribeSuccess' : 'unsubscribeFailure'));
   }
 
   /**
@@ -848,42 +774,6 @@ export class TelegramBotFeature {
     await this.editNotificationsMenu(ctx, chatId, memberId);
   }
 
-  /** Parses the optional [type] arg: no arg -> ALL, valid type -> [type], else invalid. */
-  private resolveTypes(args: string[]): NotificationType[] | null {
-    if (args.length === 0) return [...NOTIFICATION_TYPES];
-    const [first] = args;
-    if (!isNotificationType(first)) return null;
-    return [first];
-  }
-
-  /**
-   * /lang [en|es|ru] — read or change the chat's language.
-   *
-   * Without args: shows an inline keyboard with language buttons.
-   * With an arg: applies the language immediately (text fallback path).
-   */
-  async handleLang(ctx: FeatureCommandContext): Promise<void> {
-    const chatId = ctx.chat?.id;
-    const arg = this.args(ctx)[0];
-
-    // No arg → present language picker with inline buttons.
-    if (arg === undefined) {
-      await ctx.reply(this.t(ctx, 'langUsage'), {
-        reply_markup: LANG_PICKER_KEYBOARD,
-      });
-      return;
-    }
-
-    if (chatId === undefined || !isSupportedLanguage(arg)) {
-      await ctx.reply(this.t(ctx, 'langInvalid'));
-      return;
-    }
-    const isGroup = ctx.chat?.type === 'group';
-    this.store.addChat(chatId, isGroup ? 'group' : 'private');
-    this.store.setChatLanguage(chatId, arg);
-    await ctx.reply(this.t(ctx, 'langChanged', { lang: arg }));
-  }
-
   /**
    * Callback handler for the language picker inline buttons. Receives the
    * selected language code via `params` (e.g. "en", "es", "ru"), persists
@@ -922,7 +812,10 @@ export class TelegramBotFeature {
     });
   }
 
-  /** /report — compact performance recap (any chat member). */
+  /**
+   * Report — compact performance recap (any chat member). Reached via the
+   * dashboard "Report" button; `handleReportCallback` delegates here.
+   */
   async handleReport(ctx: FeatureCommandContext): Promise<void> {
     const lang = this.chatLang(ctx);
 
@@ -964,7 +857,10 @@ export class TelegramBotFeature {
     await this.handleReport(ctx);
   }
 
-  /** /stats — engine status (operator only). */
+  /**
+   * Stats — engine status (operator only). Reached via the dashboard "Stats"
+   * button; `handleStatsCallback` delegates here.
+   */
   async handleStats(ctx: FeatureCommandContext): Promise<void> {
     if (!(await this.assertController(ctx))) return;
     const lang = this.chatLang(ctx);
@@ -1003,40 +899,6 @@ export class TelegramBotFeature {
     await this.handleStats(ctx);
   }
 
-  /** /stop — operator authority, two-step confirmation via inline buttons. */
-  async handleStop(ctx: FeatureCommandContext): Promise<void> {
-    if (!(await this.assertController(ctx))) return;
-    const lang = this.chatLang(ctx);
-    const engine = this.getEngine();
-    if (!engine) {
-      await ctx.reply(t(lang, 'engineNotInitialized'));
-      return;
-    }
-
-    if (engine.state !== 'Running') {
-      await ctx.reply(t(lang, 'statsStopped'));
-      return;
-    }
-
-    // Inline buttons: primary path when the transport supports callbacks.
-    // The text fallback in handleText still works for transports without
-    // registerBotCallback (pendingStops map is kept for that path).
-    await ctx.reply(t(lang, 'stopConfirmRequest'), {
-      reply_markup: STOP_CONFIRM_KEYBOARD,
-    });
-
-    // Also set pending for the text fallback path — if the transport does NOT
-    // support inline callbacks, the user can still reply "yes" in text.
-    const chatId = ctx.chat?.id;
-    if (chatId !== undefined) {
-      this.pendingStops.set(chatId, {
-        chatId,
-        askedAt: Date.now(),
-        confirmingUserId: ctx.from?.id ?? 0,
-      });
-    }
-  }
-
   /**
    * Inline button callback handler for /stop confirmation. Dispatches on the
    * `params` value ("confirm" or "cancel") extracted from callback_data.
@@ -1054,16 +916,8 @@ export class TelegramBotFeature {
 
     if (params === 'ask') {
       // Dashboard "Stop" must ask before acting — the same two-step flow as
-      // /stop. Set the pending entry so the text fallback ("yes" reply)
-      // stays consistent with the inline-button path.
-      const chatId = ctx.chat?.id;
-      if (chatId !== undefined) {
-        this.pendingStops.set(chatId, {
-          chatId,
-          askedAt: Date.now(),
-          confirmingUserId: ctx.from?.id ?? 0,
-        });
-      }
+      // the old /stop command. Confirmation is button-only now: no text path
+      // is armed, the "confirm" callback is the only way to stop the engine.
       await ctx.editMessage(t(lang, 'stopConfirmRequest'), {
         reply_markup: STOP_CONFIRM_KEYBOARD,
       });
@@ -1096,73 +950,6 @@ export class TelegramBotFeature {
       await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
       return;
     }
-  }
-
-  /**
-   * Catch-all text handler. Resolves any in-flight /stop confirmation for the
-   * chat: an explicit confirmation runs engine.stop(); anything else (or an
-   * expired/absent pending entry) is a no-op or cancels. Non-command text with
-   * no pending entry is ignored here (the unknown-command hook is separate).
-   */
-  async handleText(ctx: FeatureCommandContext): Promise<void> {
-    const chatId = ctx.chat?.id;
-    if (chatId === undefined) return;
-    const pending = this.pendingStops.get(chatId);
-    if (!pending) return;
-
-    // Stale confirmations (older than the TTL) are dropped and ignored.
-    if (Date.now() - pending.askedAt > STOP_CONFIRM_TTL_MS) {
-      this.pendingStops.delete(chatId);
-      return;
-    }
-
-    // Only the operator who initiated the /stop may confirm it. A foreign
-    // reply must neither stop the engine nor consume the pending entry, so the
-    // initiating operator can still respond.
-    if (ctx.from?.id === undefined || ctx.from.id !== pending.confirmingUserId) {
-      return;
-    }
-
-    const lang = this.chatLang(ctx);
-    this.pendingStops.delete(chatId); // consume regardless of the reply text
-
-    const text = (ctx.message?.text ?? '').trim().toLowerCase();
-    if (!STOP_CONFIRM_WORDS.has(text)) {
-      await ctx.reply(t(lang, 'stopCancelled'));
-      return;
-    }
-
-    const engine = this.getEngine();
-    if (!engine) {
-      await ctx.reply(t(lang, 'engineNotInitialized'));
-      return;
-    }
-    try {
-      await engine.stop();
-      await ctx.reply(t(lang, 'stopConfirmSuccess'));
-    } catch {
-      await ctx.reply(t(lang, 'stopCancelled'));
-    }
-  }
-
-  /**
-   * /emergency — operator halt with confirmation button.
-   *
-   * Shows a confirmation keyboard before executing the emergency stop.
-   * The confirmation callback handles the actual engine halt.
-   */
-  async handleEmergency(ctx: FeatureCommandContext): Promise<void> {
-    if (!(await this.assertController(ctx))) return;
-    const lang = this.chatLang(ctx);
-    const engine = this.getEngine();
-    if (!engine) {
-      await ctx.reply(t(lang, 'engineNotInitialized'));
-      return;
-    }
-
-    await ctx.reply(t(lang, 'emergencyResult'), {
-      reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
-    });
   }
 
   /**
@@ -1218,35 +1005,101 @@ export class TelegramBotFeature {
     }
   }
 
-  /** /link — operator links a group chat. */
-  async handleLink(ctx: FeatureCommandContext): Promise<void> {
+  /**
+   * Callback handler for the dashboard "Link group" button. Operator-gated
+   * (assertController) with a two-step ask → confirm/cancel flow. On confirm,
+   * links the CURRENT chat when it is a group — the same store mutation the
+   * old /link command performed.
+   */
+  async handleLinkCallback(ctx: CallbackContext): Promise<void> {
+    await ctx.answerCallback();
     if (!(await this.assertController(ctx))) return;
-    const chatId = ctx.chat?.id;
-    const fromId = ctx.from?.id;
-    if (chatId === undefined || fromId === undefined) return;
+    const lang = this.chatLang(ctx);
 
-    if (ctx.chat?.type !== 'group') {
-      await ctx.reply(this.t(ctx, 'linkGroupOnly'));
+    if (ctx.params === 'ask') {
+      await ctx.editMessage(t(lang, 'linkConfirmRequest'), {
+        reply_markup: LINK_CONFIRM_KEYBOARD,
+      });
       return;
     }
-    // Ensure the chat exists before linking (group chats may not be registered yet).
-    this.store.addChat(chatId, 'group');
-    const ok = this.store.linkChat(chatId, fromId);
-    await ctx.reply(this.t(ctx, ok ? 'linkSuccess' : 'linkFail'));
+
+    if (ctx.params === 'cancel') {
+      await ctx.editMessage(t(lang, 'linkCancelled'), {
+        reply_markup: LINK_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
+
+    if (ctx.params === 'confirm') {
+      const chatId = ctx.chat?.id;
+      const fromId = ctx.from?.id;
+      if (chatId === undefined || fromId === undefined) {
+        await ctx.editMessage(t(lang, 'linkCancelled'), {
+          reply_markup: LINK_CONFIRM_KEYBOARD,
+        });
+        return;
+      }
+      if (ctx.chat?.type !== 'group') {
+        await ctx.editMessage(t(lang, 'linkGroupOnly'), {
+          reply_markup: LINK_CONFIRM_KEYBOARD,
+        });
+        return;
+      }
+      // Ensure the chat exists before linking (group chats may not be registered yet).
+      this.store.addChat(chatId, 'group');
+      const ok = this.store.linkChat(chatId, fromId);
+      await ctx.editMessage(t(lang, ok ? 'linkSuccess' : 'linkFail'), {
+        reply_markup: LINK_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
   }
 
-  /** /unlink — operator unlinks a group chat. */
-  async handleUnlink(ctx: FeatureCommandContext): Promise<void> {
+  /**
+   * Callback handler for the dashboard "Unlink group" button. Operator-gated
+   * (assertController) with a two-step ask → confirm/cancel flow. On confirm,
+   * unlinks the CURRENT chat when it is a group — the same store mutation the
+   * old /unlink command performed.
+   */
+  async handleUnlinkCallback(ctx: CallbackContext): Promise<void> {
+    await ctx.answerCallback();
     if (!(await this.assertController(ctx))) return;
-    const chatId = ctx.chat?.id;
-    if (chatId === undefined) return;
+    const lang = this.chatLang(ctx);
 
-    if (ctx.chat?.type !== 'group') {
-      await ctx.reply(this.t(ctx, 'linkGroupOnly'));
+    if (ctx.params === 'ask') {
+      await ctx.editMessage(t(lang, 'unlinkConfirmRequest'), {
+        reply_markup: UNLINK_CONFIRM_KEYBOARD,
+      });
       return;
     }
-    const ok = this.store.unlinkChat(chatId);
-    await ctx.reply(this.t(ctx, ok ? 'unlinkSuccess' : 'unlinkFail'));
+
+    if (ctx.params === 'cancel') {
+      await ctx.editMessage(t(lang, 'unlinkCancelled'), {
+        reply_markup: UNLINK_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
+
+    if (ctx.params === 'confirm') {
+      const chatId = ctx.chat?.id;
+      if (chatId === undefined) {
+        await ctx.editMessage(t(lang, 'unlinkCancelled'), {
+          reply_markup: UNLINK_CONFIRM_KEYBOARD,
+        });
+        return;
+      }
+      if (ctx.chat?.type !== 'group') {
+        await ctx.editMessage(t(lang, 'linkGroupOnly'), {
+          reply_markup: UNLINK_CONFIRM_KEYBOARD,
+        });
+        return;
+      }
+      const ok = this.store.unlinkChat(chatId);
+      await ctx.editMessage(t(lang, ok ? 'unlinkSuccess' : 'unlinkFail'), {
+        reply_markup: UNLINK_CONFIRM_KEYBOARD,
+      });
+      return;
+    }
   }
 
   // ---- Formatting helpers ---------------------------------------------------
@@ -1261,8 +1114,9 @@ export class TelegramBotFeature {
    * `handleDashboardCallback` (in-place edit of the back-to-dashboard rows),
    * so the two can never drift apart.
    *
-   * @param isOperator  When true, the operator-only row (Stats / Stop /
-   *                    Emergency) is included; otherwise it is omitted.
+   * @param isOperator  When true, the operator-only rows (Stats / Stop /
+   *                    Emergency / Link / Unlink) are included; otherwise the
+   *                    self-service "Request access" row is shown instead.
    */
   private buildDashboardKeyboard(
     isOperator: boolean,
@@ -1280,8 +1134,12 @@ export class TelegramBotFeature {
               { text: '🛑 Stop', callback_data: 'stop:ask' },
               { text: '🚨 Emergency', callback_data: 'emergency:ask' },
             ],
+            [
+              { text: '🔗 Link group', callback_data: 'link:ask' },
+              { text: '🔓 Unlink group', callback_data: 'unlink:ask' },
+            ],
           ]
-        : []),
+        : [[{ text: '🪪 Request access', callback_data: 'request:go' }]]),
     ];
   }
 

@@ -1182,49 +1182,45 @@ describe('handleDashboardCallback', () => {
 // the message WITHOUT re-attaching the keyboard the send path had used.
 // ---------------------------------------------------------------------------
 
-describe('inline keyboard survives in-place edits — send ⇄ edit equality', () => {
-  function sendKeyboard(reply: Reply): EditExtras['reply_markup'] {
-    const extra = reply.mock.calls[0]?.[1] as EditExtras | undefined;
-    expect(extra, 'send path must pass extras').toBeDefined();
-    expect(extra!.reply_markup, 'send extras must carry reply_markup').toBeDefined();
-    return extra!.reply_markup;
-  }
-
-  it('lang set: the edited message carries the same keyboard /lang presented', async () => {
+describe('inline keyboard survives in-place edits — present ⇄ confirm equality', () => {
+  it('lang set: the edited message carries the same keyboard lang:menu presented', async () => {
     const h = makeHarness();
-    await h.feature.handleLang(h.cbCtx());
-    const sent = sendKeyboard(h.reply);
+    const presentEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:menu', { editMessage: presentEdit }));
+    const presented = assertEditKeepsKeyboard(presentEdit).reply_markup;
 
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage }));
+    const confirmEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage: confirmEdit }));
 
-    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
+    expect(assertEditKeepsKeyboard(confirmEdit).reply_markup).toEqual(presented);
     cleanHarness(h);
   });
 
-  it('stop confirm: the edited message carries the same keyboard /stop presented', async () => {
+  it('stop confirm: the edited message carries the same keyboard stop:ask presented', async () => {
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) } });
     h.store.setAdmin(1000, 'tester');
-    await h.feature.handleStop(h.cbCtx());
-    const sent = sendKeyboard(h.reply);
+    const presentEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:ask', { editMessage: presentEdit }));
+    const presented = assertEditKeepsKeyboard(presentEdit).reply_markup;
 
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', { editMessage }));
+    const confirmEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', { editMessage: confirmEdit }));
 
-    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
+    expect(assertEditKeepsKeyboard(confirmEdit).reply_markup).toEqual(presented);
     cleanHarness(h);
   });
 
-  it('emergency confirm: the edited message carries the same keyboard /emergency presented', async () => {
+  it('emergency confirm: the edited message carries the same keyboard emergency:ask presented', async () => {
     const h = makeHarness({ engine: { state: 'Running', config: {}, positions: [], emergencyStop: vi.fn().mockResolvedValue(undefined), stop: vi.fn() } });
     h.store.setAdmin(1000, 'tester');
-    await h.feature.handleEmergency(h.cbCtx());
-    const sent = sendKeyboard(h.reply);
+    const presentEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:ask', { editMessage: presentEdit }));
+    const presented = assertEditKeepsKeyboard(presentEdit).reply_markup;
 
-    const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', { editMessage }));
+    const confirmEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', { editMessage: confirmEdit }));
 
-    expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
+    expect(assertEditKeepsKeyboard(confirmEdit).reply_markup).toEqual(presented);
     cleanHarness(h);
   });
 });

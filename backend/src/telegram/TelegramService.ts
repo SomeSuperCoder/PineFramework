@@ -10,7 +10,6 @@ import {
   type ProxyConfig,
 } from '../store/TelegramConfigStore.js';
 import { escapeMarkdown } from 'pine-framework/trading/telegram-bot';
-import { t } from './i18n.js';
 import { createBackendLogger } from '../utils/logger.js';
 
 const logger = createBackendLogger('backend', 'telegram');
@@ -77,8 +76,6 @@ export class TelegramService {
   private isRunning = false;
   /** Feature-registered command handlers, attached once the bot is launched. */
   private readonly registeredCommands = new Map<string, BotCommandHandler>();
-  /** Feature-registered text handlers, attached once the bot is launched. */
-  private readonly textHandlers: BotCommandHandler[] = [];
   /**
    * Feature-registered callback_query handlers, keyed by action prefix.
    * Attached once the bot is launched; each prefix maps to a single handler
@@ -109,23 +106,6 @@ export class TelegramService {
   /** Attach a feature handler to the live telegraf transport. */
   private attachCommand(command: string, handler: BotCommandHandler): void {
     this.bot?.command(command, handler as (ctx: Context) => Promise<void> | void);
-  }
-
-  /** Attach a feature text handler to the live telegraf transport. */
-  private attachTextHandler(handler: BotCommandHandler): void {
-    this.bot?.on('text', handler as (ctx: Context) => Promise<void> | void);
-  }
-
-  /**
-   * Register a catch-all text handler. Safe to call before `start()` (deferred
-   * and attached after launch); if already running, attached immediately. Used
-   * by the feature for sessionful flows such as /stop confirmation (M1).
-   */
-  registerBotText(handler: BotCommandHandler): void {
-    this.textHandlers.push(handler);
-    if (this.bot) {
-      this.attachTextHandler(handler);
-    }
   }
 
   /**
@@ -270,11 +250,6 @@ export class TelegramService {
       }
     });
 
-    this.bot.command('help', async (ctx: Context) => {
-      const lang = this.configStore.getChatLanguage(ctx.chat?.id ?? 0);
-      await ctx.reply(escapeMarkdownV2(t(lang, 'helpCommands')), { parse_mode: 'MarkdownV2' });
-    });
-
     // Attach any feature-registered command handlers BEFORE launch
     // (launch() starts polling which never returns, so code after it is unreachable)
     for (const [action, handler] of this.registeredCallbacks) {
@@ -287,9 +262,17 @@ export class TelegramService {
     for (const [command, handler] of this.registeredCommands) {
       this.attachCommand(command, handler);
     }
-    for (const handler of this.textHandlers) {
-      this.attachTextHandler(handler);
-    }
+
+    // The command menu lists ONLY /start — every other control is reached
+    // exclusively through inline buttons. Failure-tolerant: a stale command
+    // menu must never prevent the bot from starting.
+    this.bot.telegram
+      .setMyCommands([{ command: 'start', description: 'Start' }])
+      .catch((err: unknown) => {
+        logger.warn('[Telegram] Failed to set bot command menu:', {
+          err: err instanceof Error ? err.message : String(err),
+        });
+      });
 
     try {
       await this.bot.launch();
