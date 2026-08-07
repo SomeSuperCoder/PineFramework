@@ -64,6 +64,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   scrollContainer: {
     flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'auto',
     padding: 0,
   },
