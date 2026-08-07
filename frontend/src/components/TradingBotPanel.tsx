@@ -2172,6 +2172,7 @@ export function LiveDashboard({
     walletPublicKey?: string;
   } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch wallet status on mount — don't assume anything until we know
   useEffect(() => {
@@ -2227,9 +2228,12 @@ export function LiveDashboard({
     }
   }, [status.state, backendUrl]);
 
-  // Auto-scroll logs
+  // Auto-scroll logs (scroll container, not page)
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = logContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [logs]);
 
   // Timer for live duration updates (updates every second)
@@ -2705,7 +2709,7 @@ export function LiveDashboard({
           <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
             Logs ({logs.length})
           </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6 }}>
+          <div ref={logContainerRef} style={{ flex: 1, overflow: 'auto', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6 }}>
             {logs.length === 0 && (
               <span style={{ color: '#888', fontStyle: 'italic' }}>No log entries yet...</span>
             )}

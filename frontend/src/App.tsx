@@ -72,7 +72,6 @@ function App() {
 
   // ControlPanel state
   const [activePanel, setActivePanel] = useState<PanelId>('dashboard');
-  const [botDashboardOpen, setBotDashboardOpen] = useState(false);
 
   const backendUrl = `http://${window.location.hostname}:8081`;
   const {
@@ -378,7 +377,7 @@ function App() {
       settingsOpen={activePanel === 'settings'}
     >
       {/* === Dashboard Panel === */}
-      {activePanel === 'dashboard' && !botDashboardOpen && (
+      {activePanel === 'dashboard' && (
         <div style={dashboardStyles.container}>
           {/* Top toolbar: symbol, timeframe, quick actions */}
           <div style={dashboardStyles.toolbar}>
@@ -477,28 +476,6 @@ function App() {
             <div style={dashboardStyles.divider} />
 
             {/* Bot Dashboard toggle */}
-            {backendUrl && (
-              <>
-                <button
-                  onClick={() => setBotDashboardOpen((v) => !v)}
-                  style={{
-                    ...dashboardStyles.actionBtn,
-                    background: botDashboardOpen ? '#1a1a2e' : undefined,
-                    color: botConnected ? '#4caf50' : '#e94560',
-                    borderColor: botConnected ? '#4caf50' : '#e94560',
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <rect x="1" y="1" width="10" height="10" rx="1" />
-                    <line x1="1" y1="4" x2="11" y2="4" />
-                    <line x1="4" y1="4" x2="4" y2="11" />
-                  </svg>
-                  Bot: {botStatus?.state ?? 'Idle'}
-                </button>
-                <div style={dashboardStyles.divider} />
-              </>
-            )}
-
             <button
               onClick={async () => {
                 const path = await exportChartData();
@@ -563,15 +540,15 @@ function App() {
         </div>
       )}
 
-      {/* === Bot Dashboard (full takeover of dashboard panel) === */}
-      {activePanel === 'dashboard' && botDashboardOpen && (
+      {/* === Bot Dashboard Panel === */}
+      {activePanel === 'bot' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0d0d18' }}>
           {botStatus ? (
             <LiveDashboard
               backendUrl={backendUrl}
               status={botStatus}
               logs={botLogs}
-              onClose={() => setBotDashboardOpen(false)}
+              onClose={() => setActivePanel('dashboard')}
               autoSelectProgress={autoSelectProgress}
               autoSelectResult={autoSelectResult}
               chaosMode={chaosMode}
@@ -607,7 +584,7 @@ function App() {
                 Retry Connection
               </button>
               <button
-                onClick={() => setBotDashboardOpen(false)}
+                onClick={() => setActivePanel('dashboard')}
                 style={{
                   padding: '6px 16px', background: 'transparent', color: '#888',
                   border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
@@ -622,7 +599,7 @@ function App() {
               <div style={{ color: '#888', fontSize: 14 }}>Connecting to bot...</div>
               <div style={{ color: '#555', fontSize: 11 }}>Waiting for WebSocket connection</div>
               <button
-                onClick={() => setBotDashboardOpen(false)}
+                onClick={() => setActivePanel('dashboard')}
                 style={{
                   padding: '6px 16px', background: '#1a1a2e', color: '#888',
                   border: '1px solid #333', borderRadius: 4, cursor: 'pointer',

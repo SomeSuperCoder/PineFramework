@@ -3,7 +3,7 @@ import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { ContentArea } from './ContentArea';
 
-export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'settings';
+export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'settings' | 'bot';
 
 export interface ControlPanelProps {
   /** Currently active panel */
@@ -47,12 +47,15 @@ export function ControlPanel({
           onPanelChange('dashboard');
           break;
         case '2':
-          onPanelChange('telegram');
+          onPanelChange('bot');
           break;
         case '3':
-          onPanelChange('backtest');
+          onPanelChange('telegram');
           break;
         case '4':
+          onPanelChange('backtest');
+          break;
+        case '5':
           onPanelChange('settings');
           break;
       }

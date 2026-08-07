@@ -31,9 +31,32 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    id: 'bot',
+    label: 'Bot',
+    shortcut: '2',
+    icon: (
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="6" width="14" height="10" rx="2" />
+        <circle cx="7" cy="11" r="1.5" />
+        <circle cx="13" cy="11" r="1.5" />
+        <path d="M7 14h6" />
+        <path d="M6 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      </svg>
+    ),
+  },
+  {
     id: 'telegram',
     label: 'Telegram',
-    shortcut: '2',
+    shortcut: '3',
     icon: (
       <svg
         width="20"
@@ -53,7 +76,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'backtest',
     label: 'Backtest',
-    shortcut: '3',
+    shortcut: '4',
     icon: (
       <svg
         width="20"
@@ -73,7 +96,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: 'settings',
     label: 'Settings',
-    shortcut: '4',
+    shortcut: '5',
     icon: (
       <svg
         width="20"
