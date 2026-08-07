@@ -130,8 +130,10 @@ export class TelegramService {
 
   /**
    * Register a callback_query handler by action prefix. The handler receives a
-   * `CallbackContext` with the parsed action and params from the callback data
-   * (format: `"{action}:{param1}:{param2}"`).
+   * `CallbackContext` with the parsed action and params. Transport protocol is
+   * flat `action:value` (e.g. `lang:en`, `sub:trading`, `report:show`,
+   * `stop:confirm`): everything after the first `:` is the single `params`
+   * value handed to the handler.
    *
    * Safe to call before `start()` (deferred) or after (attached immediately).
    * Registering the same prefix twice overrides the previous handler.
@@ -190,6 +192,48 @@ export class TelegramService {
     });
   }
 
+  /**
+   * Defense-in-depth guard for callback queries whose data matches NO
+   * registered callback prefix (e.g. a stale inline button rendered before the
+   * bot rebooted or after a feature changed its action set). Prefix handlers
+   * attached via `bot.action(regex)` only fire on a regex match, so without
+   * this fallback an unmatched `callback_query.data` fires no handler and the
+   * user's Telegram spinner stays stuck.
+   *
+   * Registered ONCE in `start()` via `bot.on('callback_query')`. Because it is
+   * registered BEFORE any callback that `registerBotCallback` attaches after
+   * `start()` (Telegraf runs middleware in registration order), it sees every
+   * callback_query and must branch on whether the data's action prefix
+   * (everything before the first `:`) is known:
+   *
+   *  - NOT in `registeredCallbacks` (or empty) → unmatched: answer the query,
+   *    log it, and STOP. The event belongs to no specific handler.
+   *  - IN `registeredCallbacks` → matched: re-enter the chain via `next()` so
+   *    the matching specific handler can still receive the event. In the
+   *    normal pre-launch wiring the specific handler was attached BEFORE this
+   *    fallback, so it runs first, handles the event, and never reaches `next`
+   *    here — hence no double-answer. The `next()` call exists for the
+   *    LATE-registration path: a callback registered via `registerBotCallback`
+   *    after `start()` is attached AFTER this fallback, so without `next()` it
+   *    would swallow that prefix and the new handler would silently never run
+   *    (the dead-button + stuck-spinner bug this fallback exists to prevent).
+   */
+  private attachCallbackFallback(): void {
+    this.bot?.on('callback_query', async (ctx: Context, next: () => Promise<void>) => {
+      const data = (ctx.callbackQuery as any)?.data ?? '';
+      const prefix = data.split(':')[0];
+      if (!prefix || this.registeredCallbacks.has(prefix)) {
+        // Known (or later-registered) prefix — fall through so its specific
+        // handler is reached; the specific handler answers, not this guard.
+        return next();
+      }
+      // Best-effort answer to dismiss the Telegram spinner; the warn log below
+      // is the source of truth for diagnostics.
+      await ctx.answerCbQuery('This button is outdated — use /start').catch(() => {});
+      logger.warn('Unmatched callback_query data', { data });
+    });
+  }
+
   async start(): Promise<void> {
     if (this.isRunning) return;
 
@@ -236,6 +280,10 @@ export class TelegramService {
     for (const [action, handler] of this.registeredCallbacks) {
       this.attachCallback(action, handler);
     }
+    // Register the catch-all AFTER the specific prefixes so unmatched callback
+    // queries are answered+logged instead of leaving the spinner stuck. The
+    // prefix guard prevents double-handling of matched data.
+    this.attachCallbackFallback();
     for (const [command, handler] of this.registeredCommands) {
       this.attachCommand(command, handler);
     }

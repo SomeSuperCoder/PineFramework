@@ -233,7 +233,11 @@ describe('TelegramBotFeature /lang', () => {
   it('reports usage when no language given', async () => {
     const h = makeHarness();
     await h.feature.handleLang(h.ctx());
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('/lang'));
+    // The usage reply now ALSO carries the language picker keyboard (2nd arg).
+    expect(h.reply).toHaveBeenCalledWith(
+      expect.stringContaining('/lang'),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
     cleanHarness(h);
   });
 
@@ -307,7 +311,11 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     await h.feature.handleStop(h.ctx({ from: { id: 2, username: 'op' } }));
     // Two-step: engine must NOT be stopped on the first command.
     expect(stop).not.toHaveBeenCalled();
-    expect(h.reply).toHaveBeenCalledWith(expect.stringContaining('Confirm engine stop'));
+    // The confirmation request now carries the stop-continue keyboard.
+    expect(h.reply).toHaveBeenCalledWith(
+      expect.stringContaining('Confirm engine stop'),
+      expect.objectContaining({ reply_markup: expect.anything() }),
+    );
     cleanHarness(h);
   });
 
@@ -384,12 +392,18 @@ describe('TelegramBotFeature /stats /stop /emergency (operator only)', () => {
     cleanHarness(h);
   });
 
-  it('emergency calls engine.emergencyStop() for an operator', async () => {
+  it('emergency asks the operator to confirm before stopping', async () => {
     const emergencyStop = vi.fn();
     const h = makeHarness({ engine: { state: 'Error', config: {}, positions: [], stop: vi.fn(), emergencyStop } });
     h.store.setAdmin(1, 'boss');
     await h.feature.handleEmergency(h.ctx({ from: { id: 1 } }));
-    expect(emergencyStop).toHaveBeenCalled();
+    // Two-step confirm: /emergency presents the confirmation keyboard and must
+    // NOT stop the engine until the operator presses emergency:confirm.
+    expect(emergencyStop).not.toHaveBeenCalled();
+    expect(h.reply).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ reply_markup: expect.objectContaining({ inline_keyboard: expect.any(Array) }) }),
+    );
     cleanHarness(h);
   });
 
@@ -467,10 +481,10 @@ describe('B2 — install() transport seam', () => {
     const registerBotCommand = vi.fn((cmd: string) => { registered.push(cmd); });
     const registerBotText = vi.fn();
     h.feature.install({ registerBotCommand, registerBotText });
-    for (const cmd of ['request', 'subscribe', 'unsubscribe', 'lang', 'report', 'stats', 'stop', 'emergency', 'link', 'unlink']) {
+    for (const cmd of ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'stats', 'stop', 'emergency', 'link', 'unlink']) {
       expect(registered).toContain(cmd);
     }
-    expect(registerBotCommand).toHaveBeenCalledTimes(10);
+    expect(registerBotCommand).toHaveBeenCalledTimes(11);
     cleanHarness(h);
   });
 
@@ -487,7 +501,7 @@ describe('B2 — install() transport seam', () => {
     const h = makeHarness();
     const registerBotCommand = vi.fn();
     h.feature.install({ registerBotCommand });
-    expect(registerBotCommand).toHaveBeenCalledTimes(10);
+    expect(registerBotCommand).toHaveBeenCalledTimes(11);
     cleanHarness(h);
   });
 });

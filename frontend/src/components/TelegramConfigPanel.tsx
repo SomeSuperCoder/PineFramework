@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type {
   TelegramConfig,
-  TelegramChat,
   AlertConditionData,
   ProxyConfig,
   NotificationType,
@@ -102,10 +101,6 @@ async function removeController(userId: number): Promise<void> {
 
 async function updateChatLanguage(chatId: number, language: ChatLanguage): Promise<void> {
   await putJson(`/api/settings/telegram/chats/${chatId}/language`, { language });
-}
-
-async function updateSubscriptions(chatId: number, memberId: string, types: NotificationType[]): Promise<void> {
-  await putJson(`/api/settings/telegram/chats/${chatId}/subscriptions/${memberId}`, { types });
 }
 
 async function linkChat(chatId: number): Promise<void> {
@@ -295,25 +290,6 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
       );
       await unlinkChat(chatId);
     });
-
-  const handleMemberType = (chat: TelegramChat, memberId: string, type: NotificationType) => {
-    const current = chat.memberSubscriptions[memberId] ?? [];
-    const enabled = current.includes(type);
-    const next = enabled ? current.filter((t) => t !== type) : [...current, type];
-    setConfig((prev) =>
-      prev
-        ? {
-            ...prev,
-            chats: prev.chats.map((c) =>
-              c.chatId === chat.chatId
-                ? { ...c, memberSubscriptions: { ...c.memberSubscriptions, [memberId]: next } }
-                : c,
-            ),
-          }
-        : prev,
-    );
-    updateSubscriptions(chat.chatId, memberId, next).catch(() => refreshConfig());
-  };
 
   const toggleAlert = async (chatId: number, alertId: string, currentEnabled: boolean) => {
     const newEnabled = !currentEnabled;
@@ -856,6 +832,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                         <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '4px' }}>
                           {chat.type === 'group' ? `Member ${memberId}` : 'Notifications'}
                         </div>
+                        <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>
+                          Manage via the bot: /subscribe /unsubscribe
+                        </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                           {NOTIFICATION_TYPES.map((type) => {
                             const sub = chat.memberSubscriptions[memberId] ?? [];
@@ -867,15 +846,16 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                                   display: 'flex',
                                   alignItems: 'center',
                                   gap: '4px',
-                                  cursor: 'pointer',
+                                  cursor: 'default',
                                   fontSize: '11px',
-                                  color: '#aaa',
+                                  color: '#777',
                                 }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={enabled}
-                                  onChange={() => handleMemberType(chat, memberId, type)}
+                                  disabled
+                                  style={{ cursor: 'not-allowed', opacity: 0.7 }}
                                 />
                                 {NOTIFICATION_TYPE_LABELS[type]}
                               </label>

@@ -5,6 +5,12 @@
  *
  * Uses a real TelegramConfigStore on a tmpdir and fabricated CallbackContext
  * objects (transport-agnostic, same pattern as telegram-feature.test.ts).
+ *
+ * IMPORTANT (post-fix): `action` and `params` are DERIVED from the `data`
+ * callback_data via the REAL transport regex (`^{prefix}(?::(.+))?$`), exactly
+ * like TelegramService.attachCallback — tests never fabricate `params`
+ * independently of `data`, so the multi-segment-params class of bug cannot be
+ * re-hidden (see telegram-button-params.test.ts).
  */
 
 import fs from 'node:fs';
@@ -15,6 +21,16 @@ import { TelegramConfigStore } from '../src/store/TelegramConfigStore.js';
 import { TelegramBotFeature, type CallbackContext } from '../src/telegram/TelegramBotFeature.js';
 
 type Reply = ReturnType<typeof vi.fn>;
+
+/**
+ * Replica of the REAL transport parse: `new RegExp('^' + prefix + '(?::(.+))?$')`
+ * + `params = match?.[1] ?? ''` (TelegramService.attachCallback).
+ */
+function transportParse(actionPrefix: string, data: string): { action: string; params: string } {
+  const re = new RegExp(`^${actionPrefix}(?::(.+))?$`);
+  const match = data.match(re);
+  return { action: actionPrefix, params: match?.[1] ?? '' };
+}
 
 /**
  * The extras object the feature passes as the 2nd arg of `ctx.editMessage(...)`.
@@ -67,6 +83,8 @@ interface Harness {
   feature: TelegramBotFeature;
   reply: Reply;
   cbCtx: (overrides?: Partial<CallbackContext>) => CallbackContext;
+  /** Build a callback context derived from emitted callback_data (real transport). */
+  cb: (prefix: string, data: string, overrides?: Partial<CallbackContext>) => CallbackContext;
 }
 
 function makeHarness(opts: { engine?: unknown } = {}): Harness {
@@ -80,13 +98,24 @@ function makeHarness(opts: { engine?: unknown } = {}): Harness {
     onMessage: async () => true,
   });
 
+  /**
+   * Build a callback context the way the REAL transport delivers it: derive
+   * `action` and `params` from the emitted `data` via transportParse instead of
+   * fabricating either. `prefix` is the registered action prefix (e.g. 'lang',
+   * 'sub', 'stop'); `data` is the raw callback_data the keyboard emits.
+   */
+  const cb = (prefix: string, data: string, overrides: Partial<CallbackContext> = {}): CallbackContext => {
+    const { action, params } = transportParse(prefix, data);
+    return cbCtx({ data, action, params, ...overrides });
+  };
+
   const cbCtx = (overrides: Partial<CallbackContext> = {}): CallbackContext => ({
     from: overrides.from ?? { id: 1000, username: 'tester', first_name: 'Tester' },
     chat: overrides.chat ?? { id: 1000, type: 'private' },
     message: overrides.message ?? { text: '' },
     reply: overrides.reply ?? reply,
     callbackQueryId: overrides.callbackQueryId ?? 'cb-test-001',
-    data: overrides.data ?? 'lang:set:en',
+    data: overrides.data ?? 'lang:en',
     action: overrides.action ?? 'lang',
     params: overrides.params ?? 'en',
     answerCallback: overrides.answerCallback ?? vi.fn().mockResolvedValue(undefined),
@@ -94,7 +123,7 @@ function makeHarness(opts: { engine?: unknown } = {}): Harness {
   });
 
   (feature as unknown as { __tk: string }).__tk = filePath;
-  return { store, feature, reply, cbCtx };
+  return { store, feature, reply, cbCtx, cb };
 }
 
 function cleanHarness(h: Harness): void {
@@ -112,8 +141,7 @@ describe('handleLangCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleLangCallback(h.cbCtx({
-      params: 'es',
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', {
       answerCallback,
       editMessage,
     }));
@@ -129,8 +157,7 @@ describe('handleLangCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleLangCallback(h.cbCtx({
-      params: 'de',
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:de', {
       answerCallback,
       editMessage,
     }));
@@ -146,8 +173,7 @@ describe('handleLangCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleLangCallback(h.cbCtx({
-      params: 'menu',
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:menu', {
       answerCallback,
       editMessage,
     }));
@@ -157,9 +183,9 @@ describe('handleLangCallback', () => {
     // Regression: the in-place edit MUST carry the language picker keyboard,
     // otherwise Telegram removes the inline buttons when the message is edited.
     const allCallbackData = editCallbackData(editMessage);
-    expect(allCallbackData).toContain('lang:set:en');
-    expect(allCallbackData).toContain('lang:set:es');
-    expect(allCallbackData).toContain('lang:set:ru');
+    expect(allCallbackData).toContain('lang:en');
+    expect(allCallbackData).toContain('lang:es');
+    expect(allCallbackData).toContain('lang:ru');
     cleanHarness(h);
   });
 
@@ -168,8 +194,7 @@ describe('handleLangCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleLangCallback(h.cbCtx({
-      params: 'es',
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', {
       answerCallback,
       editMessage,
     }));
@@ -177,9 +202,9 @@ describe('handleLangCallback', () => {
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
     const allCallbackData = editCallbackData(editMessage);
-    expect(allCallbackData).toContain('lang:set:en');
-    expect(allCallbackData).toContain('lang:set:es');
-    expect(allCallbackData).toContain('lang:set:ru');
+    expect(allCallbackData).toContain('lang:en');
+    expect(allCallbackData).toContain('lang:es');
+    expect(allCallbackData).toContain('lang:ru');
     cleanHarness(h);
   });
 
@@ -189,9 +214,8 @@ describe('handleLangCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     // chat without an `id` property → ctx.chat?.id is undefined → !chatId is true
-    await h.feature.handleLangCallback(h.cbCtx({
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:en', {
       chat: { type: 'private' } as never,
-      params: 'en',
       answerCallback,
       editMessage,
     }));
@@ -206,9 +230,8 @@ describe('handleLangCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleLangCallback(h.cbCtx({
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:ru', {
       chat: { id: 7000, type: 'group' },
-      params: 'ru',
       answerCallback,
       editMessage,
     }));
@@ -231,10 +254,9 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -252,10 +274,9 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -271,8 +292,7 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
-      params: 'bogus',
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:bogus', {
       answerCallback,
       editMessage,
     }));
@@ -287,17 +307,16 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
-      params: 'menu',
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:menu', {
       answerCallback,
       editMessage,
     }));
 
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
-    // Regression: the in-place edit MUST carry the toggle keyboard.
+    // Regression: the in-place edit MUST carry the toggle keyboard (flat `sub:`).
     const allCallbackData = editCallbackData(editMessage);
-    expect(allCallbackData.some((d: string) => d.startsWith('sub:toggle:'))).toBe(true);
+    expect(allCallbackData.some((d: string) => d.startsWith('sub:'))).toBe(true);
     cleanHarness(h);
   });
 
@@ -307,19 +326,18 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
 
     expect(editMessage).toHaveBeenCalledTimes(1);
     const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
-    expect(kb.some((b) => b.callback_data.startsWith('sub:toggle:'))).toBe(true);
+    expect(kb.some((b) => b.callback_data.startsWith('sub:'))).toBe(true);
     // The just-subscribed type is reflected with ✅ on the surviving keyboard.
-    expect(kb.find((b) => b.callback_data === 'sub:toggle:trading')?.text).toContain('✅');
+    expect(kb.find((b) => b.callback_data === 'sub:trading')?.text).toContain('✅');
     cleanHarness(h);
   });
 
@@ -330,17 +348,16 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
 
     expect(editMessage).toHaveBeenCalledTimes(1);
     const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
-    expect(kb.find((b) => b.callback_data === 'sub:toggle:trading')?.text).toContain('⬜');
+    expect(kb.find((b) => b.callback_data === 'sub:trading')?.text).toContain('⬜');
     cleanHarness(h);
   });
 
@@ -350,9 +367,8 @@ describe('handleSubscribeCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     // chat without `id` → ctx.chat?.id is undefined → !chatId is true
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       chat: { type: 'private' } as never,
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -368,9 +384,8 @@ describe('handleSubscribeCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     // from without `id` → ctx.from?.id is undefined → fromId === undefined guard
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:trading', {
       from: { username: 'tester' } as never,
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -386,10 +401,9 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:error', {
       chat: { id: 7000, type: 'group' },
       from: { id: 55, username: 'alice' },
-      params: 'error',
       answerCallback,
       editMessage,
     }));
@@ -404,10 +418,9 @@ describe('handleSubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleSubscribeCallback(h.cbCtx({
+    await h.feature.handleSubscribeCallback(h.cb('sub', 'sub:daily', {
       chat: { id: 9000, type: 'private' },
       from: { id: 55, username: 'alice' },
-      params: 'daily',
       answerCallback,
       editMessage,
     }));
@@ -430,10 +443,9 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -450,10 +462,9 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -468,8 +479,7 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
-      params: 'bogus',
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:bogus', {
       answerCallback,
       editMessage,
     }));
@@ -484,17 +494,16 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
-      params: 'menu',
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:menu', {
       answerCallback,
       editMessage,
     }));
 
     expect(answerCallback).toHaveBeenCalledTimes(1);
     expect(editMessage).toHaveBeenCalledTimes(1);
-    // Regression: the in-place edit MUST carry the toggle keyboard.
+    // Regression: the in-place edit MUST carry the toggle keyboard (flat `unsub:`).
     const allCallbackData = editCallbackData(editMessage);
-    expect(allCallbackData.some((d: string) => d.startsWith('unsub:toggle:'))).toBe(true);
+    expect(allCallbackData.some((d: string) => d.startsWith('unsub:'))).toBe(true);
     cleanHarness(h);
   });
 
@@ -505,19 +514,18 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
 
     expect(editMessage).toHaveBeenCalledTimes(1);
     const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
-    expect(kb.some((b) => b.callback_data.startsWith('unsub:toggle:'))).toBe(true);
+    expect(kb.some((b) => b.callback_data.startsWith('unsub:'))).toBe(true);
     // The just-unsubscribed type is reflected with ⬜ on the surviving keyboard.
-    expect(kb.find((b) => b.callback_data === 'unsub:toggle:trading')?.text).toContain('⬜');
+    expect(kb.find((b) => b.callback_data === 'unsub:trading')?.text).toContain('⬜');
     cleanHarness(h);
   });
 
@@ -527,17 +535,16 @@ describe('handleUnsubscribeCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { id: 7000, type: 'group' },
       from: { id: 1200, username: 'member' },
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
 
     expect(editMessage).toHaveBeenCalledTimes(1);
     const kb = assertEditKeepsKeyboard(editMessage).reply_markup.inline_keyboard.flat();
-    expect(kb.find((b) => b.callback_data === 'unsub:toggle:trading')?.text).toContain('✅');
+    expect(kb.find((b) => b.callback_data === 'unsub:trading')?.text).toContain('✅');
     cleanHarness(h);
   });
 
@@ -547,9 +554,8 @@ describe('handleUnsubscribeCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     // chat without `id` → ctx.chat?.id is undefined → !chatId is true
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       chat: { type: 'private' } as never,
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -565,9 +571,8 @@ describe('handleUnsubscribeCallback', () => {
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
     // from without `id` → ctx.from?.id is undefined → fromId === undefined guard
-    await h.feature.handleUnsubscribeCallback(h.cbCtx({
+    await h.feature.handleUnsubscribeCallback(h.cb('unsub', 'unsub:trading', {
       from: { username: 'tester' } as never,
-      params: 'trading',
       answerCallback,
       editMessage,
     }));
@@ -589,8 +594,8 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -607,8 +612,8 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -626,8 +631,8 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -646,8 +651,8 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -663,8 +668,8 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -685,8 +690,7 @@ describe('handleEmergencyCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleEmergencyCallback(h.cbCtx({
-      params: 'cancel',
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:cancel', {
       answerCallback,
       editMessage,
     }));
@@ -766,8 +770,8 @@ describe('handleStopCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleStopCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -786,8 +790,8 @@ describe('handleStopCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleStopCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -804,8 +808,8 @@ describe('handleStopCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleStopCallback(h.cbCtx({
-      params: 'confirm',
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', {
+      
       answerCallback,
       editMessage,
     }));
@@ -821,8 +825,8 @@ describe('handleStopCallback', () => {
     const answerCallback = vi.fn().mockResolvedValue(undefined);
     const editMessage = vi.fn().mockResolvedValue(undefined);
 
-    await h.feature.handleStopCallback(h.cbCtx({
-      params: 'cancel',
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:cancel', {
+      
       answerCallback,
       editMessage,
     }));
@@ -855,7 +859,7 @@ describe('inline keyboard survives in-place edits — send ⇄ edit equality', (
     const sent = sendKeyboard(h.reply);
 
     const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLangCallback(h.cbCtx({ params: 'es', editMessage }));
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage }));
 
     expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
     cleanHarness(h);
@@ -868,7 +872,7 @@ describe('inline keyboard survives in-place edits — send ⇄ edit equality', (
     const sent = sendKeyboard(h.reply);
 
     const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleStopCallback(h.cbCtx({ params: 'confirm', editMessage }));
+    await h.feature.handleStopCallback(h.cb('stop', 'stop:confirm', { editMessage }));
 
     expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
     cleanHarness(h);
@@ -881,7 +885,7 @@ describe('inline keyboard survives in-place edits — send ⇄ edit equality', (
     const sent = sendKeyboard(h.reply);
 
     const editMessage = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleEmergencyCallback(h.cbCtx({ params: 'confirm', editMessage }));
+    await h.feature.handleEmergencyCallback(h.cb('emergency', 'emergency:confirm', { editMessage }));
 
     expect(assertEditKeepsKeyboard(editMessage).reply_markup).toEqual(sent);
     cleanHarness(h);

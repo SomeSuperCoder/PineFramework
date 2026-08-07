@@ -37,6 +37,8 @@ const { mockTelegraf, actionHandlers } = vi.hoisted(() => {
     action: vi.fn((prefix: string, handler: (ctx: never) => Promise<void>) => {
       actionHandlers.push({ prefix: String(prefix), handler });
     }),
+    // attachCallbackFallback() registers a catch-all callback_query listener.
+    on: vi.fn(),
     launch: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     telegram: {

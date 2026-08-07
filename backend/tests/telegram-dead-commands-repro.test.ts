@@ -41,6 +41,7 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
 
     // Register feature commands BEFORE start — exactly as TelegramBotFeature.install() does
     const handler = async () => {};
+    service.registerBotCommand('start', handler);
     service.registerBotCommand('request', handler);
     service.registerBotCommand('subscribe', handler);
     service.registerBotCommand('unsubscribe', handler);
@@ -64,11 +65,11 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
 
     // The registered commands are in the map
     const registeredCommands = (service as any).registeredCommands;
-    expect(registeredCommands.size).toBe(10);
+    expect(registeredCommands.size).toBe(11);
 
     // FIX VERIFIED: attachCommand IS called for each feature command
     // Feature commands are now attached in the loops BEFORE bot.launch()
-    const featureCommands = ['request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
+    const featureCommands = ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
 
     for (const cmd of featureCommands) {
       const callsForCmd = attachSpy.mock.calls.filter(
@@ -108,6 +109,7 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
 
     try {
       // Register feature commands BEFORE start() — as TelegramBotFeature.install() does
+      service.registerBotCommand('start', async () => {});
       service.registerBotCommand('request', async () => {});
       service.registerBotCommand('subscribe', async () => {});
       service.registerBotCommand('unsubscribe', async () => {});
@@ -125,12 +127,12 @@ describe('✅ COMMANDS ATTACHED — feature commands are attached before bot.lau
       // Let the event loop tick — attachCommand calls happen synchronously before launch()
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // /start and /help are registered BEFORE launch (unchanged)
-      expect(botCommandCalls).toContain('start');
+      // /help is registered by the service itself (unchanged); /start is now a
+      // feature command registered through install() — both land before launch.
       expect(botCommandCalls).toContain('help');
 
       // FIX VERIFIED: feature commands ARE also on the bot (attached before launch)
-      const featureCommands = ['request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
+      const featureCommands = ['start', 'request', 'subscribe', 'unsubscribe', 'lang', 'report', 'link', 'unlink', 'stats', 'stop', 'emergency'];
       for (const cmd of featureCommands) {
         expect(botCommandCalls).toContain(cmd);
       }

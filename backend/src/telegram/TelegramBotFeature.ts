@@ -67,9 +67,12 @@ export interface EditMessageExtras {
  * callback data alongside the base `FeatureCommandContext` fields, plus
  * helpers for answering the callback query and editing the original message.
  *
- * Callback data protocol: `"{action}:{param1}:{param2}"` (max 64 bytes).
- * The `action` prefix is matched against registered prefixes; `params` is
- * the colon-delimited string after the first `:`.
+ * Callback data protocol: `"{action}:{value}"` (max 64 bytes). The `action`
+ * prefix is matched against registered prefixes; `params` is everything after
+ * the first `:` and holds a single `value` (e.g. `sub:trading`). Handlers
+ * parse the value tolerantly via `params.split(':').pop()` so legacy
+ * multi-segment keys (`sub:toggle:trading`, `lang:set:en`) keep working until
+ * the inline keyboards they were emitted by finish rolling out.
  */
 export interface CallbackContext extends FeatureCommandContext {
   /** The raw `callback_query.id` — pass to `answerCallback`. */
@@ -98,6 +101,25 @@ export interface CallbackContext extends FeatureCommandContext {
 
 /** A feature-registered callback handler for inline buttons. */
 export type BotCallbackHandler = (ctx: CallbackContext) => Promise<void>;
+
+/**
+ * One entry in the SSOT action registry. A single logical action may offer a
+ * slash-command handler and/or an inline-keyboard callback handler (e.g.
+ * /subscribe ↔ its `sub:` buttons). The registry is the single source of truth
+ * that `install()` iterates, so commands and their keyboards stay in sync.
+ */
+interface BotAction {
+  /** Stable logical name used as the registry key and by validation. */
+  name: string;
+  /** Slash command to register (e.g. "subscribe"); omitted for callback-only. */
+  command?: string;
+  /** Inline-keyboard callback prefix (e.g. "sub"). */
+  callbackPrefix?: string;
+  /** Handler for the slash-command path. */
+  handler?: (ctx: FeatureCommandContext) => Promise<void>;
+  /** Handler for the inline-keyboard callback path. */
+  callbackHandler?: (ctx: CallbackContext) => Promise<void>;
+}
 
 /** The transport surface a feature installs against. */
 export interface BotCommandTransport {
@@ -137,6 +159,26 @@ const STOP_CONFIRM_TTL_MS = 60_000;
 const STOP_CONFIRM_WORDS: ReadonlySet<string> = new Set(['yes', 'y', 'confirm', 'да', 'si']);
 
 /**
+ * The callback prefixes the feature's inline keyboards EMIT — the single
+ * source of truth for `validateActionRegistry`. The union of every keyboard
+ * emitter below: /start dashboard (sub, unsub, lang, report, stats, stop),
+ * LANG_PICKER_KEYBOARD (lang), STOP_CONFIRM_KEYBOARD (stop),
+ * EMERGENCY_CONFIRM_KEYBOARD (emergency), and buildTypeKeyboard callers
+ * (sub, unsub). When a new inline button is added to a keyboard, its prefix
+ * must be added here (and the action registered in the SSOT registry) so the
+ * validator covers it automatically — never maintain a parallel list.
+ */
+const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
+  'sub',
+  'unsub',
+  'lang',
+  'report',
+  'stats',
+  'stop',
+  'emergency',
+];
+
+/**
  * Inline keyboards re-attached on every in-place message edit. Each edit call
  * site must pass the SAME keyboard the original message carried, otherwise
  * Telegram removes the inline buttons when the text is edited.
@@ -154,9 +196,9 @@ const STOP_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
 const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
   inline_keyboard: [
     [
-      { text: '🇬🇧 English', callback_data: 'lang:set:en' },
-      { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
-      { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
+      { text: '🇬🇧 English', callback_data: 'lang:en' },
+      { text: '🇪🇸 Español', callback_data: 'lang:es' },
+      { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
     ],
   ],
 };
@@ -188,6 +230,69 @@ export class TelegramBotFeature {
   /** In-flight /stop confirmations, keyed by chatId (M1 two-step stop). */
   private readonly pendingStops = new Map<number, PendingStopConfirm>();
 
+  /**
+   * SSOT action registry — the single source of truth for every command and
+   * its inline-button callback. `install()` iterates this instead of a hardcoded
+   * wire-up list, so a command and its keyboard can never drift apart.
+   */
+  private readonly actions: BotAction[] = [
+    { name: 'start', command: 'start', handler: (ctx) => this.handleStart(ctx) },
+    { name: 'request', command: 'request', handler: (ctx) => this.handleRequest(ctx) },
+    {
+      name: 'subscribe',
+      command: 'subscribe',
+      handler: (ctx) => this.handleSubscribe(ctx),
+      callbackPrefix: 'sub',
+      callbackHandler: (ctx) => this.handleSubscribeCallback(ctx),
+    },
+    {
+      name: 'unsubscribe',
+      command: 'unsubscribe',
+      handler: (ctx) => this.handleUnsubscribe(ctx),
+      callbackPrefix: 'unsub',
+      callbackHandler: (ctx) => this.handleUnsubscribeCallback(ctx),
+    },
+    {
+      name: 'lang',
+      command: 'lang',
+      handler: (ctx) => this.handleLang(ctx),
+      callbackPrefix: 'lang',
+      callbackHandler: (ctx) => this.handleLangCallback(ctx),
+    },
+    {
+      name: 'report',
+      command: 'report',
+      handler: (ctx) => this.handleReport(ctx),
+      callbackPrefix: 'report',
+      callbackHandler: (ctx) => this.handleReportCallback(ctx),
+    },
+    {
+      name: 'stats',
+      command: 'stats',
+      handler: (ctx) => this.handleStats(ctx),
+      callbackPrefix: 'stats',
+      callbackHandler: (ctx) => this.handleStatsCallback(ctx),
+    },
+    {
+      name: 'stop',
+      command: 'stop',
+      handler: (ctx) => this.handleStop(ctx),
+      callbackPrefix: 'stop',
+      // stop/emergency keep DEDICATED handlers — never collapsed onto the
+      // command path, because their confirm/cancel semantics differ from /stop.
+      callbackHandler: (ctx) => this.handleStopCallback(ctx),
+    },
+    {
+      name: 'emergency',
+      command: 'emergency',
+      handler: (ctx) => this.handleEmergency(ctx),
+      callbackPrefix: 'emergency',
+      callbackHandler: (ctx) => this.handleEmergencyCallback(ctx),
+    },
+    { name: 'link', command: 'link', handler: (ctx) => this.handleLink(ctx) },
+    { name: 'unlink', command: 'unlink', handler: (ctx) => this.handleUnlink(ctx) },
+  ];
+
   constructor(opts: TelegramBotFeatureOptions) {
     this.store = opts.store;
     this.stats = opts.stats ?? null;
@@ -202,33 +307,73 @@ export class TelegramBotFeature {
    * before the transport has launched: the seam defers/attaches them.
    */
   install(transport: BotCommandTransport): void {
-    transport.registerBotCommand('start', (ctx) => this.handleStart(ctx));
-    transport.registerBotCommand('request', (ctx) => this.handleRequest(ctx));
-    transport.registerBotCommand('subscribe', (ctx) => this.handleSubscribe(ctx));
-    transport.registerBotCommand('unsubscribe', (ctx) => this.handleUnsubscribe(ctx));
-    transport.registerBotCommand('lang', (ctx) => this.handleLang(ctx));
-    transport.registerBotCommand('report', (ctx) => this.handleReport(ctx));
-    transport.registerBotCommand('stats', (ctx) => this.handleStats(ctx));
-    transport.registerBotCommand('stop', (ctx) => this.handleStop(ctx));
-    transport.registerBotCommand('emergency', (ctx) => this.handleEmergency(ctx));
+    // Iterate the SSOT action registry: every command and its inline callback
+    // is bound here. This replaces the old hardcoded wire-up list.
+    this.registerActions(transport);
 
-    // Inline button callbacks — the interactive UI path. Each prefix routes
-    // through the transport's callback_query matching to the handler below.
-    if (transport.registerBotCallback) {
-      transport.registerBotCallback('lang', (ctx) => this.handleLangCallback(ctx));
-      transport.registerBotCallback('sub', (ctx) => this.handleSubscribeCallback(ctx));
-      transport.registerBotCallback('unsub', (ctx) => this.handleUnsubscribeCallback(ctx));
-      transport.registerBotCallback('emergency', (ctx) => this.handleEmergencyCallback(ctx));
-      transport.registerBotCallback('stop', (ctx) => this.handleStopCallback(ctx));
-    }
-
-    transport.registerBotCommand('link', (ctx) => this.handleLink(ctx));
-    transport.registerBotCommand('unlink', (ctx) => this.handleUnlink(ctx));
-
-    // Sessionful text flow (two-step /stop confirmation). Optional seam: when
-    // the transport exposes it, route every non-command text message here.
+    // Reserved wiring for sessionful text flow / linked-group commands. link
+    // and unlink are in the registry; registerBotText is the optional seam for
+    // the two-step /stop confirmation text path (see handleStop).
     if (transport.registerBotText) {
       transport.registerBotText((ctx) => this.handleText(ctx));
+    }
+
+    // Fail fast: every inline-button prefix the feature *emits* (dashboard,
+    // type keyboards, lang/stop/emergency pickers) must resolve to a registered
+    // action. A dead keyboard button becomes a boot error instead of a silent
+    // no-op at click time.
+    this.validateActionRegistry();
+  }
+
+  /**
+   * Bind every action in the SSOT registry onto the transport. Command handlers
+   * go through `registerBotCommand`; actions exposing a `callbackPrefix` go
+   * through `registerBotCallback` — either their dedicated `callbackHandler` or
+   * (for simple value-agnostic actions) the shared command handler.
+   */
+  private registerActions(transport: BotCommandTransport): void {
+    for (const action of this.actions) {
+      // Command path.
+      if (action.command && action.handler !== undefined) {
+        const handler = action.handler;
+        transport.registerBotCommand(action.command, (ctx) => handler(ctx));
+      }
+      // Callback path. A dedicated callbackHandler wins; otherwise fall back to
+      // the shared command handler for simple, value-agnostic actions.
+      if (action.callbackPrefix && transport.registerBotCallback) {
+        const dedicated = action.callbackHandler;
+        const shared = action.handler;
+        if (dedicated) {
+          transport.registerBotCallback(action.callbackPrefix, dedicated);
+        } else if (shared) {
+          // CallbackContext extends FeatureCommandContext, so the command
+          // handler is structurally compatible with the callback seam.
+          transport.registerBotCallback(action.callbackPrefix, (ctx) => shared(ctx));
+        }
+      }
+    }
+  }
+
+  /**
+   * Assert every inline-button prefix the feature's keyboards emit maps to a
+   * registered action. The emitted set is derived from the single shared
+   * constant `EMITTED_CALLBACK_PREFIXES` (the keyboards' actual output), not a
+   * parallel hand-maintained array; the registry's `callbackPrefix` fields are
+   * the other side of the equation. Throws at install time if any emitted
+   * prefix has no backing action — turning a dead button into a boot failure
+   * (B3 / B5).
+   */
+  private validateActionRegistry(): void {
+    const registeredPrefixes = new Set(
+      this.actions.map((a) => a.callbackPrefix).filter((p): p is string => p !== undefined),
+    );
+    for (const prefix of EMITTED_CALLBACK_PREFIXES) {
+      if (!registeredPrefixes.has(prefix)) {
+        throw new Error(
+          `TelegramBotFeature install failed: inline button prefix "${prefix}" is emitted ` +
+            'by keyboards but has no registered callbackPrefix in the action registry.',
+        );
+      }
     }
   }
 
@@ -438,7 +583,7 @@ export class TelegramBotFeature {
       const currentTypes = this.store.getMemberSubscription(chatId, memberId);
       await ctx.reply(this.t(ctx, 'subscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub:toggle'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub'),
         },
       });
       return;
@@ -483,13 +628,13 @@ export class TelegramBotFeature {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub:toggle'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub'),
         },
       });
       return;
     }
 
-    const type = ctx.params;
+    const type = ctx.params.split(':').pop() ?? '';
     if (!isNotificationType(type)) {
       await ctx.answerCallback();
       return;
@@ -508,7 +653,7 @@ export class TelegramBotFeature {
     await ctx.answerCallback();
     await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
       reply_markup: {
-        inline_keyboard: this.buildTypeKeyboard(updated, 'sub:toggle'),
+        inline_keyboard: this.buildTypeKeyboard(updated, 'sub'),
       },
     });
   }
@@ -538,7 +683,7 @@ export class TelegramBotFeature {
       const currentTypes = this.store.getMemberSubscription(chatId, memberId);
       await ctx.reply(this.t(ctx, 'unsubscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub:toggle'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub'),
         },
       });
       return;
@@ -581,13 +726,13 @@ export class TelegramBotFeature {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub:toggle'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub'),
         },
       });
       return;
     }
 
-    const type = ctx.params;
+    const type = ctx.params.split(':').pop() ?? '';
     if (!isNotificationType(type)) {
       await ctx.answerCallback();
       return;
@@ -606,7 +751,7 @@ export class TelegramBotFeature {
     await ctx.answerCallback();
     await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
       reply_markup: {
-        inline_keyboard: this.buildTypeKeyboard(updated, 'unsub:toggle'),
+        inline_keyboard: this.buildTypeKeyboard(updated, 'unsub'),
       },
     });
   }
@@ -668,9 +813,9 @@ export class TelegramBotFeature {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🇬🇧 English', callback_data: 'lang:set:en' },
-              { text: '🇪🇸 Español', callback_data: 'lang:set:es' },
-              { text: '🇷🇺 Русский', callback_data: 'lang:set:ru' },
+              { text: '🇬🇧 English', callback_data: 'lang:en' },
+              { text: '🇪🇸 Español', callback_data: 'lang:es' },
+              { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
             ],
           ],
         },
@@ -678,7 +823,7 @@ export class TelegramBotFeature {
       return;
     }
 
-    const lang = ctx.params as BotLanguage;
+    const lang = ctx.params.split(':').pop() as BotLanguage;
     if (!isSupportedLanguage(lang)) {
       await ctx.answerCallback(this.t(ctx, 'langInvalid'));
       return;
@@ -716,6 +861,23 @@ export class TelegramBotFeature {
     await ctx.reply(body);
   }
 
+  /**
+   * Inline callback for the /start dashboard "Report" button. Dispatches the
+   * reserved `show` action onto the same report logic as /report, then answers
+   * the callback to dismiss the Telegram spinner. Unknown params are a graceful
+   * no-op (never throw).
+   */
+  async handleReportCallback(ctx: CallbackContext): Promise<void> {
+    if (ctx.params !== 'show') {
+      await ctx.answerCallback();
+      return;
+    }
+    await ctx.answerCallback();
+    // ctx (CallbackContext) satisfies FeatureCommandContext, so /report's
+    // handler runs verbatim against the same context.
+    await this.handleReport(ctx);
+  }
+
   /** /stats — engine status (operator only). */
   async handleStats(ctx: FeatureCommandContext): Promise<void> {
     if (!(await this.assertController(ctx))) return;
@@ -739,6 +901,20 @@ export class TelegramBotFeature {
         t(lang, 'statsPositions', { count: positions }),
       ].join('\n'),
     );
+  }
+
+  /**
+   * Inline callback for the /start dashboard "Stats" button. Dispatches the
+   * reserved `show` action onto the same stats logic as /stats. MUST stay
+   * operator-gated: handleStats asserts controller access before reporting.
+   */
+  async handleStatsCallback(ctx: CallbackContext): Promise<void> {
+    if (ctx.params !== 'show') {
+      await ctx.answerCallback();
+      return;
+    }
+    await ctx.answerCallback();
+    await this.handleStats(ctx);
   }
 
   /** /stop — operator authority, two-step confirmation via inline buttons. */
@@ -948,7 +1124,7 @@ export class TelegramBotFeature {
    * Buttons are laid out in rows of 2 for a balanced grid.
    *
    * @param currentTypes  The member's active subscription list.
-   * @param actionPrefix  The callback_data prefix (e.g. "sub:toggle", "unsub:toggle").
+   * @param actionPrefix  The callback_data prefix (e.g. "sub", "unsub").
    */
   private buildTypeKeyboard(
     currentTypes: readonly NotificationType[],
