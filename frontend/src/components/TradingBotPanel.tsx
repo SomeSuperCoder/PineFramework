@@ -2228,11 +2228,13 @@ export function LiveDashboard({
     }
   }, [status.state, backendUrl]);
 
-  // Auto-scroll logs (scroll container, not page)
+  // Auto-scroll logs — use scrollTop on the container ref so ONLY the logs
+  // container scrolls, not the entire page. scrollIntoView scrolls ALL
+  // scrollable ancestors which breaks the dashboard layout.
   useEffect(() => {
-    const el = logEndRef.current;
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const container = logContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [logs]);
 
