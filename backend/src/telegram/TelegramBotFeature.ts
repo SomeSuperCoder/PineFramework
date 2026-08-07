@@ -43,6 +43,40 @@ export interface FeatureCommandContext {
 /** A feature-registered catch-all text handler (e.g. /stop confirmation). */
 export type BotTextHandler = (ctx: FeatureCommandContext) => Promise<void> | void;
 
+/**
+ * Extended context for inline button callback handlers. Carries the parsed
+ * callback data alongside the base `FeatureCommandContext` fields, plus
+ * helpers for answering the callback query and editing the original message.
+ *
+ * Callback data protocol: `"{action}:{param1}:{param2}"` (max 64 bytes).
+ * The `action` prefix is matched against registered prefixes; `params` is
+ * the colon-delimited string after the first `:`.
+ */
+export interface CallbackContext extends FeatureCommandContext {
+  /** The raw `callback_query.id` — pass to `answerCallback`. */
+  callbackQueryId: string;
+  /** The full `callback_query.data` string (e.g. `"stop:confirm"`). */
+  data: string;
+  /** The matched action prefix (e.g. `"stop"`). */
+  action: string;
+  /** Everything after the action prefix and its trailing `:` (e.g. `"confirm"`). */
+  params: string;
+  /**
+   * Acknowledge the callback query so the Telegram spinner disappears.
+   * @param text  Optional toast text shown briefly to the user.
+   */
+  answerCallback: (text?: string) => Promise<void>;
+  /**
+   * Edit the original message text in-place. Use for inline menus.
+   * @param text   New message text (MarkdownV2).
+   * @param markup Optional reply_markup (e.g. InlineKeyboardMarkup).
+   */
+  editMessage: (text: string, markup?: unknown) => Promise<void>;
+}
+
+/** A feature-registered callback handler for inline buttons. */
+export type BotCallbackHandler = (ctx: CallbackContext) => Promise<void>;
+
 /** The transport surface a feature installs against. */
 export interface BotCommandTransport {
   registerBotCommand: (
@@ -51,6 +85,18 @@ export interface BotCommandTransport {
   ) => void;
   /** Optional seam for sessionful text flows (two-step /stop). */
   registerBotText?: (handler: BotTextHandler) => void;
+  /**
+   * Register a callback_query handler by action prefix. The transport matches
+   * `callback_query.data` against `^{prefix}(?::(.+))?$` and routes matches
+   * to the handler with parsed `action` and `params`.
+   *
+   * Safe to call before `start()` (deferred) or after (attached immediately).
+   * Registering the same prefix twice overrides the previous handler.
+   */
+  registerBotCallback?: (
+    actionPrefix: string,
+    handler: BotCallbackHandler,
+  ) => void;
 }
 
 interface TelegramBotFeatureOptions {
@@ -110,6 +156,12 @@ export class TelegramBotFeature {
     transport.registerBotCommand('stats', (ctx) => this.handleStats(ctx));
     transport.registerBotCommand('stop', (ctx) => this.handleStop(ctx));
     transport.registerBotCommand('emergency', (ctx) => this.handleEmergency(ctx));
+
+    // Inline button callback for /stop confirmation. When the transport
+    // supports it, button presses route here instead of the text fallback.
+    if (transport.registerBotCallback) {
+      transport.registerBotCallback('stop', (ctx) => this.handleStopCallback(ctx));
+    }
     transport.registerBotCommand('link', (ctx) => this.handleLink(ctx));
     transport.registerBotCommand('unlink', (ctx) => this.handleUnlink(ctx));
 
@@ -400,30 +452,82 @@ export class TelegramBotFeature {
     );
   }
 
-  /** /stop — operator authority, two-step confirmation (M1). */
+  /** /stop — operator authority, two-step confirmation via inline buttons. */
   async handleStop(ctx: FeatureCommandContext): Promise<void> {
     if (!(await this.assertController(ctx))) return;
     const lang = this.chatLang(ctx);
-    const chatId = ctx.chat?.id;
-    const fromId = ctx.from?.id;
-    if (chatId === undefined) {
-      await ctx.reply(t(lang, 'engineNotInitialized'));
-      return;
-    }
     const engine = this.getEngine();
     if (!engine) {
       await ctx.reply(t(lang, 'engineNotInitialized'));
       return;
     }
-    // Record a pending confirmation and ask for an explicit "yes" reply. The
-    // next text message from this chat is resolved by `handleText` (driven with
-    // a fabricated ctx in tests — this feature stays transport-agnostic).
-    this.pendingStops.set(chatId, {
-      chatId,
-      askedAt: Date.now(),
-      confirmingUserId: fromId ?? 0,
+
+    if (engine.state !== 'Running') {
+      await ctx.reply(t(lang, 'statsStopped'));
+      return;
+    }
+
+    // Inline buttons: primary path when the transport supports callbacks.
+    // The text fallback in handleText still works for transports without
+    // registerBotCallback (pendingStops map is kept for that path).
+    await ctx.reply(t(lang, 'stopConfirmRequest'), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Yes, Stop', callback_data: 'stop:confirm' },
+            { text: '❌ Cancel', callback_data: 'stop:cancel' },
+          ],
+        ],
+      },
     });
-    await ctx.reply(t(lang, 'stopConfirmRequest'));
+
+    // Also set pending for the text fallback path — if the transport does NOT
+    // support inline callbacks, the user can still reply "yes" in text.
+    const chatId = ctx.chat?.id;
+    if (chatId !== undefined) {
+      this.pendingStops.set(chatId, {
+        chatId,
+        askedAt: Date.now(),
+        confirmingUserId: ctx.from?.id ?? 0,
+      });
+    }
+  }
+
+  /**
+   * Inline button callback handler for /stop confirmation. Dispatches on the
+   * `params` value ("confirm" or "cancel") extracted from callback_data.
+   *
+   * Always calls answerCallbackQuery to dismiss the Telegram spinner, then
+   * edits the original message to reflect the outcome.
+   */
+  async handleStopCallback(ctx: CallbackContext): Promise<void> {
+    const lang = this.chatLang(ctx);
+    const { params } = ctx;
+
+    if (params === 'confirm') {
+      const engine = this.getEngine();
+      if (!engine || engine.state !== 'Running') {
+        await ctx.answerCallback(t(lang, 'stopCancelled'));
+        await ctx.editMessage(t(lang, 'stopCancelled'));
+        return;
+      }
+
+      try {
+        await engine.stop();
+        await ctx.answerCallback();
+        await ctx.editMessage(t(lang, 'stopConfirmSuccess'));
+      } catch {
+        await ctx.answerCallback(t(lang, 'stopCancelled'));
+        await ctx.editMessage(t(lang, 'stopCancelled'));
+      }
+      return;
+    }
+
+    if (params === 'cancel') {
+      await ctx.answerCallback();
+      await ctx.editMessage(t(lang, 'stopCancelled'));
+      return;
+    }
   }
 
   /**

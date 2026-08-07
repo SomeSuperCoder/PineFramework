@@ -1,6 +1,10 @@
 import { Telegraf, type Context } from 'telegraf';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { type FeatureCommandContext } from './TelegramBotFeature.js';
+import {
+  type FeatureCommandContext,
+  type CallbackContext,
+  type BotCallbackHandler,
+} from './TelegramBotFeature.js';
 import {
   type TelegramConfigStore,
   type ProxyConfig,
@@ -75,6 +79,12 @@ export class TelegramService {
   private readonly registeredCommands = new Map<string, BotCommandHandler>();
   /** Feature-registered text handlers, attached once the bot is launched. */
   private readonly textHandlers: BotCommandHandler[] = [];
+  /**
+   * Feature-registered callback_query handlers, keyed by action prefix.
+   * Attached once the bot is launched; each prefix maps to a single handler
+   * (registering the same prefix twice overrides the previous handler).
+   */
+  private readonly registeredCallbacks = new Map<string, BotCallbackHandler>();
 
   constructor(options: TelegramServiceOptions) {
     this.configStore = options.configStore;
@@ -116,6 +126,57 @@ export class TelegramService {
     if (this.bot) {
       this.attachTextHandler(handler);
     }
+  }
+
+  /**
+   * Register a callback_query handler by action prefix. The handler receives a
+   * `CallbackContext` with the parsed action and params from the callback data
+   * (format: `"{action}:{param1}:{param2}"`).
+   *
+   * Safe to call before `start()` (deferred) or after (attached immediately).
+   * Registering the same prefix twice overrides the previous handler.
+   *
+   * @param actionPrefix  The prefix to match (e.g. `"stop"`, `"lang"`).
+   *                      The transport matches `^{prefix}(?::(.+))?$` against
+   *                      `callback_query.data`, so the handler fires for any
+   *                      data starting with this prefix.
+   * @param handler       The handler invoked with the parsed callback context.
+   */
+  registerBotCallback(actionPrefix: string, handler: BotCallbackHandler): void {
+    this.registeredCallbacks.set(actionPrefix, handler);
+    if (this.bot) {
+      this.attachCallback(actionPrefix, handler);
+    }
+  }
+
+  /**
+   * Attach a callback_query handler to the live Telegraf transport. The regex
+   * matches `"{prefix}"` (no params) or `"{prefix}:something"` — the captured
+   * group is the `params` string the handler receives.
+   */
+  private attachCallback(actionPrefix: string, handler: BotCallbackHandler): void {
+    this.bot?.action(new RegExp(`^${actionPrefix}(?::(.+))?$`), async (ctx) => {
+      const params = ctx.match?.[1] ?? '';
+      const callbackCtx: CallbackContext = {
+        from: ctx.from,
+        chat: ctx.chat,
+        message: ctx.message,
+        reply: (text, extra) => ctx.reply(text, extra),
+        callbackQueryId: ctx.callbackQuery?.id ?? '',
+        data: (ctx.callbackQuery as any)?.data ?? '',
+        action: actionPrefix,
+        params,
+        answerCallback: (text) => ctx.answerCbQuery(text),
+        editMessage: (text, markup) => ctx.editMessageText(text, { reply_markup: markup }),
+      };
+      try {
+        await handler(callbackCtx);
+      } catch (err) {
+        logger.error(`[Telegram] Callback error for ${actionPrefix}:`, { err });
+        // Always answer the query to dismiss the Telegram spinner, even on error.
+        await ctx.answerCbQuery('An error occurred').catch(() => {});
+      }
+    });
   }
 
   async start(): Promise<void> {
@@ -170,6 +231,9 @@ export class TelegramService {
 
     // Attach any feature-registered command handlers BEFORE launch
     // (launch() starts polling which never returns, so code after it is unreachable)
+    for (const [action, handler] of this.registeredCallbacks) {
+      this.attachCallback(action, handler);
+    }
     for (const [command, handler] of this.registeredCommands) {
       this.attachCommand(command, handler);
     }
