@@ -14,11 +14,23 @@
  */
 
 import { round2 } from '../../services/globalPnl.js';
+import type { BotLanguage } from '../i18n.js';
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-] as const;
+/** Localized short month names by language (UTC-safe abbreviations). */
+const MONTHS_BY_LANG: Record<BotLanguage, readonly string[]> = {
+  en: [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ],
+  es: [
+    'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+    'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+  ],
+  ru: [
+    'янв', 'фев', 'мар', 'апр', 'май', 'июн',
+    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек',
+  ],
+};
 
 /**
  * Format a signed dollar amount with thousands separators, 2 decimals.
@@ -57,10 +69,13 @@ export function formatProfitFactor(n: number): string {
 /**
  * Format a UTC epoch (ms) as a human-readable generated-at stamp, e.g.
  * 'Aug 7, 2026 · 14:32 UTC'. UTC-only fields — deterministic on any host.
+ *
+ * @param lang  Locale for the month name; defaults to 'en' for back-compat.
  */
-export function formatGeneratedAt(ts: number): string {
+export function formatGeneratedAt(ts: number, lang: BotLanguage = 'en'): string {
   const d = new Date(ts);
-  const month = MONTHS[d.getUTCMonth()];
+  const months = MONTHS_BY_LANG[lang] ?? MONTHS_BY_LANG.en;
+  const month = months[d.getUTCMonth()];
   const day = d.getUTCDate();
   const year = d.getUTCFullYear();
   const hh = String(d.getUTCHours()).padStart(2, '0');

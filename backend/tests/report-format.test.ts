@@ -81,4 +81,20 @@ describe('formatGeneratedAt', () => {
     const ts = Date.UTC(2026, 11, 31, 23, 59);
     expect(formatGeneratedAt(ts)).toBe('Dec 31, 2026 · 23:59 UTC');
   });
+
+  it('localizes the month name to Spanish when lang=es (fixed timestamp)', () => {
+    const ts = Date.UTC(2026, 7, 7, 14, 32); // 2026-08-07T14:32:00Z -> 'ago'
+    expect(formatGeneratedAt(ts, 'es')).toBe('ago 7, 2026 · 14:32 UTC');
+  });
+
+  it('localizes the month name to Russian when lang=ru (fixed timestamp)', () => {
+    const ts = Date.UTC(2026, 7, 7, 14, 32); // 2026-08-07T14:32:00Z -> 'авг'
+    expect(formatGeneratedAt(ts, 'ru')).toBe('авг 7, 2026 · 14:32 UTC');
+  });
+
+  it('defaults to en month names when no lang is passed (back-compat)', () => {
+    const ts = Date.UTC(2026, 7, 7, 14, 32);
+    expect(formatGeneratedAt(ts)).toBe('Aug 7, 2026 · 14:32 UTC');
+    expect(formatGeneratedAt(ts, 'en')).toBe('Aug 7, 2026 · 14:32 UTC');
+  });
 });

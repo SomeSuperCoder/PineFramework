@@ -36,7 +36,7 @@ import type {
 import { NOTIFICATION_TYPES } from '../store/TelegramConfigStore.js';
 import type { StatsService, SessionSummary } from '../services/StatsService.js';
 import { buildGlobalPnlSnapshot, type GlobalPnlSnapshot } from '../services/globalPnl.js';
-import { renderGlobalPnlCard } from './report/renderCard.js';
+import { renderGlobalPnlCard, type PnlCardLabels } from './report/renderCard.js';
 import {
   formatMoney,
   formatRate,
@@ -165,13 +165,24 @@ function isNotificationType(value: string): value is NotificationType {
   return (NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
+/** Maps each notification type to its localized display-name i18n key. */
+const NOTIFICATION_TYPE_KEYS: Record<NotificationType, I18nKey> = {
+  trading: 'notifTypeTrading',
+  position_open: 'notifTypePositionOpen',
+  position_close: 'notifTypePositionClose',
+  report: 'notifTypeReport',
+  daily: 'notifTypeDaily',
+  error: 'notifTypeError',
+  bot_lifecycle: 'notifTypeBotLifecycle',
+};
+
 /**
  * The callback prefixes the feature's inline keyboards EMIT — the single
  * source of truth for `validateActionRegistry`. The union of every keyboard
  * emitter below: /start dashboard (notif, lang, report, stop, emergency,
  * request), the back-to-dashboard rows (start),
- * LANG_PICKER_KEYBOARD (lang, start), STOP_CONFIRM_KEYBOARD (stop),
- * EMERGENCY_CONFIRM_KEYBOARD (emergency), buildTypeKeyboard callers
+ * langPickerKeyboard (lang, start), stopConfirmKeyboard (stop),
+ * emergencyConfirmKeyboard (emergency), buildTypeKeyboard callers
  * (sub, unsub), and the manage notifications submenu (notif). When a new
  * inline button is added to a keyboard, its prefix must be added here (and
  * the action registered in the SSOT registry) so the validator covers it
@@ -200,46 +211,53 @@ const REPORT_CAPTION_MAX_LENGTH = 1000;
 /**
  * Inline keyboards re-attached on every in-place message edit. Each edit call
  * site must pass the SAME keyboard the original message carried, otherwise
- * Telegram removes the inline buttons when the text is edited.
+ * Telegram removes the inline buttons when the text is edited. Labels resolve
+ * via i18n, so each takes the chat's language.
  */
-const STOP_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
-  inline_keyboard: [
-    [
-      { text: '✅ Yes, Stop', callback_data: 'stop:confirm' },
-      { text: '❌ Cancel', callback_data: 'stop:cancel' },
+function stopConfirmKeyboard(lang: BotLanguage): EditMessageExtras['reply_markup'] {
+  return {
+    inline_keyboard: [
+      [
+        { text: t(lang, 'btnConfirm'), callback_data: 'stop:confirm' },
+        { text: t(lang, 'btnCancel'), callback_data: 'stop:cancel' },
+      ],
     ],
-  ],
-};
+  };
+}
 
 /**
  * Back-to-dashboard row appended to every inline submenu keyboard, so users
  * can always return to the /start dashboard without re-sending /start.
  */
-const BACK_TO_MAIN_ROW: Array<{ text: string; callback_data: string }> = [
-  { text: '↩️ Main menu', callback_data: 'start:menu' },
-];
+function backToMainRow(lang: BotLanguage): Array<{ text: string; callback_data: string }> {
+  return [{ text: t(lang, 'btnBackMain'), callback_data: 'start:menu' }];
+}
 
 /** Language picker keyboard shown by /lang and the lang:menu callback. */
-const LANG_PICKER_KEYBOARD: EditMessageExtras['reply_markup'] = {
-  inline_keyboard: [
-    [
-      { text: '🇬🇧 English', callback_data: 'lang:en' },
-      { text: '🇪🇸 Español', callback_data: 'lang:es' },
-      { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
+function langPickerKeyboard(lang: BotLanguage): EditMessageExtras['reply_markup'] {
+  return {
+    inline_keyboard: [
+      [
+        { text: '🇬🇧 English', callback_data: 'lang:en' },
+        { text: '🇪🇸 Español', callback_data: 'lang:es' },
+        { text: '🇷🇺 Русский', callback_data: 'lang:ru' },
+      ],
+      backToMainRow(lang),
     ],
-    BACK_TO_MAIN_ROW,
-  ],
-};
+  };
+}
 
 /** Emergency confirmation keyboard shown by the dashboard "Emergency" button. */
-const EMERGENCY_CONFIRM_KEYBOARD: EditMessageExtras['reply_markup'] = {
-  inline_keyboard: [
-    [
-      { text: '🚨 EMERGENCY STOP', callback_data: 'emergency:confirm' },
-      { text: '❌ Cancel', callback_data: 'emergency:cancel' },
+function emergencyConfirmKeyboard(lang: BotLanguage): EditMessageExtras['reply_markup'] {
+  return {
+    inline_keyboard: [
+      [
+        { text: t(lang, 'btnEmergencyStop'), callback_data: 'emergency:confirm' },
+        { text: t(lang, 'btnCancel'), callback_data: 'emergency:cancel' },
+      ],
     ],
-  ],
-};
+  };
+}
 
 export class TelegramBotFeature {
   private readonly store: TelegramConfigStore;
@@ -557,7 +575,7 @@ export class TelegramBotFeature {
 
     await ctx.reply(t(lang, 'startWelcome'), {
       reply_markup: {
-        inline_keyboard: this.buildDashboardKeyboard(isOperator),
+        inline_keyboard: this.buildDashboardKeyboard(isOperator, lang),
       },
     });
   }
@@ -570,9 +588,10 @@ export class TelegramBotFeature {
   async handleDashboardCallback(ctx: CallbackContext): Promise<void> {
     await ctx.answerCallback();
     const isOperator = ctx.from?.id !== undefined && this.isAdminOrController(ctx.from.id);
+    const lang = this.chatLang(ctx);
     await ctx.editMessage(this.t(ctx, 'startWelcome'), {
       reply_markup: {
-        inline_keyboard: this.buildDashboardKeyboard(isOperator),
+        inline_keyboard: this.buildDashboardKeyboard(isOperator, lang),
       },
     });
   }
@@ -586,6 +605,8 @@ export class TelegramBotFeature {
   async handleRequestCallback(ctx: CallbackContext): Promise<void> {
     await ctx.answerCallback();
     if (ctx.params !== 'go') return;
+    const lang = this.chatLang(ctx);
+    const mainRow = backToMainRow(lang);
 
     const username = ctx.from?.username ?? '';
     const firstName = ctx.from?.first_name ?? '';
@@ -593,25 +614,25 @@ export class TelegramBotFeature {
 
     if (fromId === undefined) {
       await ctx.editMessage(this.t(ctx, 'invalidArgs'), {
-        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+        reply_markup: { inline_keyboard: [mainRow] },
       });
       return;
     }
     if (this.store.isController(fromId) || fromId === this.store.getAdmin()?.userId) {
       await ctx.editMessage(this.t(ctx, 'requestAlreadyGranted'), {
-        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+        reply_markup: { inline_keyboard: [mainRow] },
       });
       return;
     }
     if (this.store.getRequests().some((r) => r.userId === fromId)) {
       await ctx.editMessage(this.t(ctx, 'requestAlreadyPending'), {
-        reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+        reply_markup: { inline_keyboard: [mainRow] },
       });
       return;
     }
     this.store.addRequest(fromId, username, firstName);
     await ctx.editMessage(this.t(ctx, 'requestSubmitted'), {
-      reply_markup: { inline_keyboard: [BACK_TO_MAIN_ROW] },
+      reply_markup: { inline_keyboard: [mainRow] },
     });
   }
 
@@ -633,6 +654,7 @@ export class TelegramBotFeature {
     const isGroup = ctx.chat?.type === 'group';
     const memberId = isGroup ? fromId : chatId;
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
+    const lang = this.chatLang(ctx);
 
     // "menu" from /start dashboard → show toggle keyboard.
     if (ctx.params === 'menu') {
@@ -640,7 +662,7 @@ export class TelegramBotFeature {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'sub', lang),
         },
       });
       return;
@@ -665,7 +687,7 @@ export class TelegramBotFeature {
     await ctx.answerCallback();
     await ctx.editMessage(this.t(ctx, 'subscribeSuccess'), {
       reply_markup: {
-        inline_keyboard: this.buildTypeKeyboard(updated, 'sub'),
+        inline_keyboard: this.buildTypeKeyboard(updated, 'sub', lang),
       },
     });
   }
@@ -688,6 +710,7 @@ export class TelegramBotFeature {
     const isGroup = ctx.chat?.type === 'group';
     const memberId = isGroup ? fromId : chatId;
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
+    const lang = this.chatLang(ctx);
 
     // "menu" from /start dashboard → show toggle keyboard.
     if (ctx.params === 'menu') {
@@ -695,7 +718,7 @@ export class TelegramBotFeature {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
         reply_markup: {
-          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub'),
+          inline_keyboard: this.buildTypeKeyboard(currentTypes, 'unsub', lang),
         },
       });
       return;
@@ -720,7 +743,7 @@ export class TelegramBotFeature {
     await ctx.answerCallback();
     await ctx.editMessage(this.t(ctx, 'unsubscribeSuccess'), {
       reply_markup: {
-        inline_keyboard: this.buildTypeKeyboard(updated, 'unsub'),
+        inline_keyboard: this.buildTypeKeyboard(updated, 'unsub', lang),
       },
     });
   }
@@ -794,28 +817,29 @@ export class TelegramBotFeature {
       await ctx.answerCallback(this.t(ctx, 'langInvalid'));
       return;
     }
+    const lang = this.chatLang(ctx);
 
     // "menu" from /start dashboard → show language picker.
     if (ctx.params === 'menu') {
       await ctx.answerCallback();
       await ctx.editMessage(this.t(ctx, 'langUsage'), {
-        reply_markup: LANG_PICKER_KEYBOARD,
+        reply_markup: langPickerKeyboard(lang),
       });
       return;
     }
 
-    const lang = ctx.params.split(':').pop() as BotLanguage;
-    if (!isSupportedLanguage(lang)) {
+    const langSelected = ctx.params.split(':').pop() as BotLanguage;
+    if (!isSupportedLanguage(langSelected)) {
       await ctx.answerCallback(this.t(ctx, 'langInvalid'));
       return;
     }
 
     const isGroup = ctx.chat?.type === 'group';
     this.store.addChat(chatId, isGroup ? 'group' : 'private');
-    this.store.setChatLanguage(chatId, lang);
+    this.store.setChatLanguage(chatId, langSelected);
     await ctx.answerCallback();
-    await ctx.editMessage(this.t(ctx, 'langChanged', { lang }), {
-      reply_markup: LANG_PICKER_KEYBOARD,
+    await ctx.editMessage(this.t(ctx, 'langChanged', { lang: langSelected }), {
+      reply_markup: langPickerKeyboard(langSelected),
     });
   }
 
@@ -860,7 +884,7 @@ export class TelegramBotFeature {
 
     if (chatId !== undefined) {
       try {
-        const buf = await renderGlobalPnlCard(snapshot);
+        const buf = await renderGlobalPnlCard(snapshot, this.buildCardLabels(lang, snapshot));
         if (text.length <= REPORT_CAPTION_MAX_LENGTH) {
           // Short report: the photo carries the full text as its caption.
           if (await this.sendPhoto(chatId, buf, text)) return;
@@ -969,9 +993,42 @@ export class TelegramBotFeature {
         open: snapshot.openPositionsCount,
       }),
     );
-    lines.push(t(lang, 'reportGenerated', { time: formatGeneratedAt(snapshot.generatedAt) }));
+    lines.push(t(lang, 'reportGenerated', { time: formatGeneratedAt(snapshot.generatedAt, lang) }));
 
     return lines.join('\n');
+  }
+
+  /**
+   * Build the localized label map the PnL card renderer consumes. The renderer
+   * stays pure (no i18n import); every user-facing card string is resolved
+   * here through `t(lang, ...)` and passed in as a plain argument.
+   */
+  private buildCardLabels(lang: BotLanguage, snapshot: GlobalPnlSnapshot): PnlCardLabels {
+    return {
+      brand: t(lang, 'cardBrand'),
+      global: t(lang, 'cardGlobal'),
+      netRealizedUnrealized: t(lang, 'cardNetRealizedUnrealized'),
+      realized: t(lang, 'cardRealized'),
+      unrealized: t(lang, 'cardUnrealized'),
+      symbolPnl: t(lang, 'cardSymbolPnl'),
+      topMovers: t(lang, 'cardTopMovers'),
+      winRate: t(lang, 'cardWinRate'),
+      profitFactor: t(lang, 'cardProfitFactor'),
+      avgTrade: t(lang, 'cardAvgTrade'),
+      maxDrawdown: t(lang, 'cardMaxDrawdown'),
+      openPositions: t(lang, 'cardOpenPositions'),
+      generated: t(lang, 'cardGenerated', {
+        time: formatGeneratedAt(snapshot.generatedAt, lang),
+      }),
+      emptyState: t(lang, 'cardEmptyState'),
+      engineState: {
+        running: t(lang, 'cardEngineRunning'),
+        stopped: t(lang, 'cardEngineStopped'),
+        error: t(lang, 'cardEngineError'),
+        unknown: t(lang, 'cardEngineUnknown'),
+      },
+      footer: t(lang, 'cardFooter', { report: t(lang, 'cardReportWord') }),
+    };
   }
 
   /**
@@ -994,7 +1051,7 @@ export class TelegramBotFeature {
       // the old /stop command. Confirmation is button-only now: no text path
       // is armed, the "confirm" callback is the only way to stop the engine.
       await ctx.editMessage(t(lang, 'stopConfirmRequest'), {
-        reply_markup: STOP_CONFIRM_KEYBOARD,
+        reply_markup: stopConfirmKeyboard(lang),
       });
       return;
     }
@@ -1003,7 +1060,7 @@ export class TelegramBotFeature {
       const engine = this.getEngine();
       if (!engine || engine.state !== 'Running') {
         await ctx.answerCallback(t(lang, 'stopCancelled'));
-        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: stopConfirmKeyboard(lang) });
         return;
       }
 
@@ -1011,18 +1068,18 @@ export class TelegramBotFeature {
         await engine.stop();
         await ctx.answerCallback();
         await ctx.editMessage(t(lang, 'stopConfirmSuccess'), {
-          reply_markup: STOP_CONFIRM_KEYBOARD,
+          reply_markup: stopConfirmKeyboard(lang),
         });
       } catch {
         await ctx.answerCallback(t(lang, 'stopCancelled'));
-        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
+        await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: stopConfirmKeyboard(lang) });
       }
       return;
     }
 
     if (params === 'cancel') {
       await ctx.answerCallback();
-      await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: STOP_CONFIRM_KEYBOARD });
+      await ctx.editMessage(t(lang, 'stopCancelled'), { reply_markup: stopConfirmKeyboard(lang) });
       return;
     }
   }
@@ -1042,7 +1099,7 @@ export class TelegramBotFeature {
       // Dashboard "Emergency" must ask before acting — the same two-step flow
       // as /emergency.
       await ctx.editMessage(t(lang, 'emergencyResult'), {
-        reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+        reply_markup: emergencyConfirmKeyboard(lang),
       });
       return;
     }
@@ -1052,7 +1109,7 @@ export class TelegramBotFeature {
       if (!engine) {
         await ctx.answerCallback(t(lang, 'engineNotInitialized'));
         await ctx.editMessage(t(lang, 'engineNotInitialized'), {
-          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+          reply_markup: emergencyConfirmKeyboard(lang),
         });
         return;
       }
@@ -1060,12 +1117,12 @@ export class TelegramBotFeature {
         await engine.emergencyStop();
         await ctx.answerCallback();
         await ctx.editMessage(t(lang, 'emergencyResult'), {
-          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+          reply_markup: emergencyConfirmKeyboard(lang),
         });
       } catch {
         await ctx.answerCallback(t(lang, 'emergencyResult'));
         await ctx.editMessage(t(lang, 'emergencyResult'), {
-          reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+          reply_markup: emergencyConfirmKeyboard(lang),
         });
       }
       return;
@@ -1073,8 +1130,8 @@ export class TelegramBotFeature {
 
     if (ctx.params === 'cancel') {
       await ctx.answerCallback();
-      await ctx.editMessage('↩️ Emergency cancelled.', {
-        reply_markup: EMERGENCY_CONFIRM_KEYBOARD,
+      await ctx.editMessage(t(lang, 'emergencyCancelled'), {
+        reply_markup: emergencyConfirmKeyboard(lang),
       });
       return;
     }
@@ -1095,24 +1152,26 @@ export class TelegramBotFeature {
    * @param isOperator  When true, the operator-only row (Stop / Emergency) is
    *                    included; otherwise the self-service "Request access"
    *                    row is shown instead.
+   * @param lang        Chat language for every button label.
    */
   private buildDashboardKeyboard(
     isOperator: boolean,
+    lang: BotLanguage,
   ): Array<Array<{ text: string; callback_data: string }>> {
     return [
-      [{ text: '🔔 Manage notifications', callback_data: 'notif:menu' }],
+      [{ text: t(lang, 'dashBtnManage'), callback_data: 'notif:menu' }],
       [
-        { text: '🌐 Language', callback_data: 'lang:menu' },
-        { text: '📊 Report', callback_data: 'report:show' },
+        { text: t(lang, 'dashBtnLang'), callback_data: 'lang:menu' },
+        { text: t(lang, 'dashBtnReport'), callback_data: 'report:show' },
       ],
       ...(isOperator
         ? [
             [
-              { text: '🛑 Stop', callback_data: 'stop:ask' },
-              { text: '🚨 Emergency', callback_data: 'emergency:ask' },
+              { text: t(lang, 'dashBtnStop'), callback_data: 'stop:ask' },
+              { text: t(lang, 'dashBtnEmergency'), callback_data: 'emergency:ask' },
             ],
           ]
-        : [[{ text: '🪪 Request access', callback_data: 'request:go' }]]),
+        : [[{ text: t(lang, 'dashBtnRequest'), callback_data: 'request:go' }]]),
     ];
   }
 
@@ -1124,16 +1183,17 @@ export class TelegramBotFeature {
    */
   private buildNotificationsKeyboard(
     currentTypes: readonly NotificationType[],
+    lang: BotLanguage,
   ): Array<Array<{ text: string; callback_data: string }>> {
     // buildTypeKeyboard ends with the back-to-dashboard row; keep it last and
     // insert the bulk controls just above it.
-    const rows = this.buildTypeKeyboard(currentTypes, 'notif');
+    const rows = this.buildTypeKeyboard(currentTypes, 'notif', lang);
     const backRow = rows[rows.length - 1];
     return [
       ...rows.slice(0, -1),
       [
-        { text: '✅ Enable all', callback_data: 'notif:all' },
-        { text: '❌ Disable all', callback_data: 'notif:none' },
+        { text: t(lang, 'btnNotifEnableAll'), callback_data: 'notif:all' },
+        { text: t(lang, 'btnNotifDisableAll'), callback_data: 'notif:none' },
       ],
       backRow,
     ];
@@ -1146,28 +1206,33 @@ export class TelegramBotFeature {
     memberId: number,
   ): Promise<void> {
     const currentTypes = this.store.getMemberSubscription(chatId, memberId);
+    const lang = this.chatLang(ctx);
     await ctx.editMessage(this.t(ctx, 'notificationsMenuTitle'), {
       reply_markup: {
-        inline_keyboard: this.buildNotificationsKeyboard(currentTypes),
+        inline_keyboard: this.buildNotificationsKeyboard(currentTypes, lang),
       },
     });
   }
 
-  /**
-   * Build an inline keyboard with one button per notification type. Types
-   * the member is currently subscribed to are prefixed with ✅; others with ⬜.
-   * Buttons are laid out in rows of 2 for a balanced grid, followed by the
-   * back-to-dashboard row.
-   *
-   * @param currentTypes  The member's active subscription list.
-   * @param actionPrefix  The callback_data prefix (e.g. "sub", "unsub", "notif").
-   */
-  private buildTypeKeyboard(
+/**
+ * Build an inline keyboard with one button per notification type. Types
+ * the member is currently subscribed to are prefixed with ✅; others with ⬜.
+ * Buttons are laid out in rows of 2 for a balanced grid, followed by the
+ * back-to-dashboard row.
+ *
+ * @param currentTypes  The member's active subscription list.
+ * @param actionPrefix  The callback_data prefix (e.g. "sub", "unsub", "notif").
+ * @param lang          Chat language for the type display names + back row.
+ */
+private buildTypeKeyboard(
     currentTypes: readonly NotificationType[],
     actionPrefix: string,
+    lang: BotLanguage,
   ): Array<Array<{ text: string; callback_data: string }>> {
     const buttons = NOTIFICATION_TYPES.map((type) => ({
-      text: currentTypes.includes(type) ? `✅ ${type}` : `⬜ ${type}`,
+      text: currentTypes.includes(type)
+        ? `✅ ${t(lang, NOTIFICATION_TYPE_KEYS[type])}`
+        : `⬜ ${t(lang, NOTIFICATION_TYPE_KEYS[type])}`,
       callback_data: `${actionPrefix}:${type}`,
     }));
 
@@ -1176,7 +1241,7 @@ export class TelegramBotFeature {
     for (let i = 0; i < buttons.length; i += 2) {
       rows.push(buttons.slice(i, i + 2));
     }
-    rows.push(BACK_TO_MAIN_ROW);
+    rows.push(backToMainRow(lang));
     return rows;
   }
 }

@@ -19,6 +19,31 @@ describe('i18n dictionary parity', () => {
     expect(DICTIONARIES.es).toBe(es);
     expect(DICTIONARIES.ru).toBe(ru);
   });
+
+  it('keeps the parallel dictionaries at exactly 91 keys each (localization change)', () => {
+    const count = Object.keys(en).length;
+    expect(count).toBe(91);
+    expect(Object.keys(es).length).toBe(count);
+    expect(Object.keys(ru).length).toBe(count);
+  });
+
+  it('covers the localized keyboard + PnL-card label key groups in every language', () => {
+    const enKeys = new Set(Object.keys(en));
+    const groups = [
+      ['dashBtnManage', 'dashBtnLang', 'dashBtnReport', 'dashBtnStop', 'dashBtnEmergency', 'dashBtnRequest'],
+      ['btnConfirm', 'btnCancel', 'btnEmergencyStop', 'btnBackMain', 'btnNotifEnableAll', 'btnNotifDisableAll'],
+      ['notifTypeTrading', 'notifTypePositionOpen', 'notifTypePositionClose', 'notifTypeReport', 'notifTypeDaily', 'notifTypeError', 'notifTypeBotLifecycle'],
+      ['cardBrand', 'cardGlobal', 'cardRealized', 'cardUnrealized', 'cardNetRealizedUnrealized', 'cardSymbolPnl', 'cardTopMovers', 'cardWinRate', 'cardProfitFactor', 'cardAvgTrade', 'cardMaxDrawdown', 'cardOpenPositions', 'cardGenerated', 'cardEmptyState', 'cardEngineRunning', 'cardEngineStopped', 'cardEngineError', 'cardEngineUnknown', 'cardFooter', 'cardReportWord'],
+    ];
+    for (const group of groups) {
+      for (const key of group) {
+        expect(enKeys.has(key), `en must define "${key}"`).toBe(true);
+      }
+    }
+    // Same sets exist in es and ru (parallel dictionaries).
+    expect(new Set(Object.keys(es)).has('dashBtnReport')).toBe(true);
+    expect(new Set(Object.keys(ru)).has('dashBtnReport')).toBe(true);
+  });
 });
 
 describe('t() interpolation', () => {
@@ -37,6 +62,19 @@ describe('t() interpolation', () => {
   it('leaves the string untouched when no params are given', () => {
     // reportHeader has no placeholders — it must be returned verbatim.
     expect(t('es', 'reportHeader')).toBe(es.reportHeader);
+  });
+
+  it('resolves the report generated + engine-state keys in every language', () => {
+    const languages = Object.keys(DICTIONARIES) as Array<keyof typeof DICTIONARIES>;
+    for (const lang of languages) {
+      // Generated-time key interpolates the time placeholder.
+      expect(t(lang, 'reportGenerated', { time: 'Aug 7, 2026 · 14:32 UTC' })).toContain('Aug 7, 2026 · 14:32 UTC');
+      // Engine-state words all resolve to non-blank, real strings.
+      expect(t(lang, 'reportEngineRunning').length).toBeGreaterThan(0);
+      expect(t(lang, 'reportEngineStopped').length).toBeGreaterThan(0);
+      expect(t(lang, 'reportEngineError').length).toBeGreaterThan(0);
+      expect(t(lang, 'reportEngineUnknown').length).toBeGreaterThan(0);
+    }
   });
 });
 

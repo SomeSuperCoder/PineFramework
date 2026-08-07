@@ -3,8 +3,11 @@
  *
  * The card template (pnl-card.template.svg) is embedded verbatim below as a
  * static template literal: it contains NO backticks and NO `${` sequences, so
- * pasting it is safe. Values and colors are injected via plain `{{...}}`
- * string replacement — never `${}` interpolation — per the design artifact.
+ * pasting it is safe. Values, colors AND localized labels are injected via
+ * plain `{{...}}` string replacement — never `${}` interpolation — per the
+ * design artifact. All user-facing label text is a `{{lbl...}}` placeholder
+ * resolved from the `PnlCardLabels` argument (the caller localizes via i18n);
+ * only geometry/colors stay literal.
  *
  * SIGN RULE (one rule, applied everywhere by this renderer):
  *   pnl >= 0  -> green #35D07F  (bar gradient url(#gradGreen))
@@ -37,7 +40,6 @@ import {
   formatMoney,
   formatRate,
   formatProfitFactor,
-  formatGeneratedAt,
 } from './format.js';
 
 // ── Palette tokens (single source of truth for the sign rule) ────────────────
@@ -53,26 +55,29 @@ const MONO_FONT =
   "'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', " +
   'Consolas, \'Liberation Mono\', Menlo, monospace';
 
-/** Engine-state pill tokens (color + background). */
+/** Engine-state pill tokens (color + background). The word is localized by the
+ *  caller and injected through `PnlCardLabels.engineState`. */
 const ENGINE_STATE_TOKENS: Record<
   GlobalPnlSnapshot['engineState'],
-  { label: string; color: string; bg: string }
+  { color: string; bg: string }
 > = {
-  running: { label: 'Running', color: GREEN, bg: 'rgba(53,208,127,0.14)' },
-  stopped: { label: 'Stopped', color: '#F59E0B', bg: 'rgba(245,158,11,0.14)' },
-  error: { label: 'Error', color: RED, bg: 'rgba(246,70,93,0.14)' },
-  unknown: { label: 'Unknown', color: NEUTRAL, bg: 'rgba(166,174,191,0.14)' },
+  running: { color: GREEN, bg: 'rgba(53,208,127,0.14)' },
+  stopped: { color: '#F59E0B', bg: 'rgba(245,158,11,0.14)' },
+  error: { color: RED, bg: 'rgba(246,70,93,0.14)' },
+  unknown: { color: NEUTRAL, bg: 'rgba(166,174,191,0.14)' },
 };
 
 /** Empty-state group shown when there are no per-symbol rows. */
-const EMPTY_STATE_GROUP = `<g>
-    <text x="392" y="266" text-anchor="middle" font-size="13" font-weight="500" fill="#6B7386">No trades yet — awaiting the first signal</text>
+function emptyStateGroup(label: string): string {
+  return `<g>
+    <text x="392" y="266" text-anchor="middle" font-size="13" font-weight="500" fill="#6B7386">${escapeXml(label)}</text>
   </g>`;
+}
 
 /**
  * The card template, embedded VERBATIM from pnl-card.template.svg (svg element
- * only; the design formulas live in this file's header comment). 18 {{...}}
- * placeholders — do not add `${` interpolation here.
+ * only; the design formulas live in this file's header comment). A set of
+ * {{...}} placeholders — do not add `${` interpolation here.
  */
 const PNL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="440" viewBox="0 0 800 440" font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
   <defs>
@@ -111,7 +116,7 @@ const PNL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height
   <!-- Header: brand eyebrow (left) + engine state pill (right) -->
   <g>
     <rect x="32" y="33" width="6" height="6" rx="3" fill="url(#gradGreen)"/>
-    <text x="44" y="41" font-size="11" font-weight="700" letter-spacing="2.2" fill="#8A93A6">PINE FRAMEWORK</text>
+    <text x="44" y="41" font-size="11" font-weight="700" letter-spacing="2.2" fill="#8A93A6">{{lblBrand}}</text>
 
     <rect x="668" y="28" width="100" height="22" rx="11" fill="{{engineStateBg}}" stroke="#FFFFFF" stroke-opacity="0.08"/>
     <circle cx="688" cy="39" r="3" fill="{{engineStateColor}}"/>
@@ -120,24 +125,24 @@ const PNL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height
 
   <!-- Headline zone: Global PnL hero number (left) + Realized/Unrealized split panel (right) -->
   <g>
-    <text x="32" y="78" font-size="12" font-weight="700" letter-spacing="2.4" fill="#8A93A6">GLOBAL PNL</text>
+    <text x="32" y="78" font-size="12" font-weight="700" letter-spacing="2.4" fill="#8A93A6">{{lblGlobal}}</text>
     <text x="32" y="124" font-size="46" font-weight="800" letter-spacing="-1" fill="{{headlineColor}}" font-family="'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace">{{totalPnl}}</text>
-    <text x="32" y="146" font-size="11.5" font-weight="500" fill="#6B7386">Net realized + unrealized across all symbols</text>
+    <text x="32" y="146" font-size="11.5" font-weight="500" fill="#6B7386">{{lblNet}}</text>
 
     <rect x="486" y="62" width="282" height="84" rx="16" fill="url(#panelGrad)" stroke="#FFFFFF" stroke-opacity="0.08"/>
     <line x1="627" y1="74" x2="627" y2="134" stroke="#FFFFFF" stroke-opacity="0.08"/>
-    <text x="556.5" y="84" font-size="10" font-weight="700" letter-spacing="1.2" fill="#6B7386" text-anchor="middle">REALIZED</text>
+    <text x="556.5" y="84" font-size="10" font-weight="700" letter-spacing="1.2" fill="#6B7386" text-anchor="middle">{{lblRealized}}</text>
     <g font-family="'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace">
       <text x="556.5" y="122" font-size="20" font-weight="700" fill="{{realizedColor}}" text-anchor="middle">{{realizedPnl}}</text>
       <text x="697.5" y="122" font-size="20" font-weight="700" fill="{{unrealizedColor}}" text-anchor="middle">{{unrealizedPnl}}</text>
     </g>
-    <text x="697.5" y="84" font-size="10" font-weight="700" letter-spacing="1.2" fill="#6B7386" text-anchor="middle">UNREALIZED</text>
+    <text x="697.5" y="84" font-size="10" font-weight="700" letter-spacing="1.2" fill="#6B7386" text-anchor="middle">{{lblUnrealized}}</text>
   </g>
 
   <!-- Per-symbol section header -->
   <g>
-    <text x="32" y="174" font-size="11" font-weight="700" letter-spacing="2" fill="#8A93A6">SYMBOL PNL</text>
-    <text x="768" y="174" font-size="10.5" font-weight="500" fill="#5E6678" text-anchor="end">TOP MOVERS · |PnL|</text>
+    <text x="32" y="174" font-size="11" font-weight="700" letter-spacing="2" fill="#8A93A6">{{lblSymbolPnl}}</text>
+    <text x="768" y="174" font-size="10.5" font-weight="500" fill="#5E6678" text-anchor="end">{{lblTopMovers}}</text>
   </g>
 
   <!-- Per-symbol bars: backend generates 0..6 row groups (see comment header for
@@ -148,11 +153,11 @@ const PNL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height
   <g>
     <rect x="32" y="356" width="736" height="40" rx="14" fill="url(#panelGrad)" stroke="#FFFFFF" stroke-opacity="0.08"/>
     <g font-size="10" font-weight="700" letter-spacing="1" fill="#6B7386" text-anchor="middle">
-      <text x="105.6" y="374">WIN RATE</text>
-      <text x="252.8" y="374">PROFIT FACTOR</text>
-      <text x="400" y="374">AVG TRADE</text>
-      <text x="547.2" y="374">MAX DRAWDOWN</text>
-      <text x="694.4" y="374">OPEN POSITIONS</text>
+      <text x="105.6" y="374">{{lblWinRate}}</text>
+      <text x="252.8" y="374">{{lblProfitFactor}}</text>
+      <text x="400" y="374">{{lblAvgTrade}}</text>
+      <text x="547.2" y="374">{{lblMaxDrawdown}}</text>
+      <text x="694.4" y="374">{{lblOpenPositions}}</text>
     </g>
     <g font-size="15" font-weight="600" text-anchor="middle" font-family="'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace">
       <text x="105.6" y="390" fill="#E6E9F0">{{winRate}}</text>
@@ -165,8 +170,8 @@ const PNL_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height
 
   <!-- Footer meta: generated-at timestamp (left) + brand (right) -->
   <g>
-    <text x="32" y="414" font-size="10.5" font-weight="500" fill="#5E6678" font-family="'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace">Generated {{generatedAt}}</text>
-    <text x="768" y="414" font-size="10.5" font-weight="500" fill="#5E6678" text-anchor="end">PineFramework · automated report</text>
+    <text x="32" y="414" font-size="10.5" font-weight="500" fill="#5E6678" font-family="'JetBrains Mono', 'SF Mono', 'Roboto Mono', 'Fira Code', 'Cascadia Mono', Consolas, 'Liberation Mono', Menlo, monospace">{{generated}}</text>
+    <text x="768" y="414" font-size="10.5" font-weight="500" fill="#5E6678" text-anchor="end">{{lblFooter}}</text>
   </g>
 </svg>`;
 
@@ -222,8 +227,8 @@ function renderRow(symbol: GlobalPnlSymbol, index: number, maxAbs: number): stri
  * Returns the row markup; the caller already decides neutral colors for the
  * empty case.
  */
-function buildSymbolRows(symbols: GlobalPnlSymbol[]): string {
-  if (symbols.length === 0) return EMPTY_STATE_GROUP;
+function buildSymbolRows(symbols: GlobalPnlSymbol[], emptyLabel: string): string {
+  if (symbols.length === 0) return emptyStateGroup(emptyLabel);
 
   const rows = [...symbols]
     .sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl))
@@ -233,13 +238,54 @@ function buildSymbolRows(symbols: GlobalPnlSymbol[]): string {
 }
 
 /**
+ * Localized label set for the global PnL card. The renderer stays PURE: it
+ * imports no i18n — the caller resolves every label through `t(lang, ...)`
+ * and passes the finished strings in. Emoji is intentionally absent from
+ * these card strings (SVG text does not render color emoji); the pill dot and
+ * sign colors carry the semantic signal.
+ */
+export interface PnlCardLabels {
+  /** Header brand eyebrow, e.g. "PINE FRAMEWORK". */
+  brand: string;
+  /** Headline "GLOBAL PNL". */
+  global: string;
+  /** Subtitle under the hero number. */
+  netRealizedUnrealized: string;
+  /** "REALIZED" split label. */
+  realized: string;
+  /** "UNREALIZED" split label. */
+  unrealized: string;
+  /** Per-symbol section header. */
+  symbolPnl: string;
+  /** Top-movers annotation (may include the "· |PnL|" axis hint). */
+  topMovers: string;
+  /** Footer metric labels. */
+  winRate: string;
+  profitFactor: string;
+  avgTrade: string;
+  maxDrawdown: string;
+  openPositions: string;
+  /** Fully-resolved generated-at stamp, e.g. t(lang,'cardGenerated',{time}). */
+  generated: string;
+  /** Empty-state message when there are no trades. */
+  emptyState: string;
+  /** Localized engine-state words (pill dot carries color). */
+  engineState: Record<GlobalPnlSnapshot['engineState'], string>;
+  /** Footer brand line, e.g. "PineFramework · report". */
+  footer: string;
+}
+
+/**
  * Render the global PnL card as an 800x440 PNG buffer.
  *
- * Pure-ish: snapshot in -> Buffer out. No fs, no telegram. The empty state
- * (no per-symbol rows) forces every value color to neutral and injects the
- * "No trades yet" group, per the design artifact.
+ * Pure-ish: snapshot + localized labels in -> Buffer out. No fs, no telegram.
+ * The empty state (no per-symbol rows) forces every value color to neutral
+ * and injects the localized "No trades yet" group, per the design artifact.
  */
-export async function renderGlobalPnlCard(snapshot: GlobalPnlSnapshot): Promise<Buffer> {
+export async function renderGlobalPnlCard(
+  snapshot: GlobalPnlSnapshot,
+  labels: PnlCardLabels,
+): Promise<Buffer> {
   const empty = snapshot.perSymbol.length === 0;
 
   // Colors: empty state -> every value neutral; otherwise the sign rule.
@@ -260,9 +306,22 @@ export async function renderGlobalPnlCard(snapshot: GlobalPnlSnapshot): Promise<
     .replaceAll('{{avgTrade}}', formatMoney(snapshot.avgTrade))
     .replaceAll('{{maxDrawdown}}', formatMoney(snapshot.maxDrawdown))
     .replaceAll('{{openPositions}}', String(snapshot.openPositionsCount))
-    .replaceAll('{{engineState}}', engine.label)
-    .replaceAll('{{generatedAt}}', formatGeneratedAt(snapshot.generatedAt))
-    .replaceAll('{{symbolRows}}', buildSymbolRows(snapshot.perSymbol))
+    .replaceAll('{{engineState}}', labels.engineState[snapshot.engineState])
+    .replaceAll('{{symbolRows}}', buildSymbolRows(snapshot.perSymbol, labels.emptyState))
+    .replaceAll('{{lblBrand}}', labels.brand)
+    .replaceAll('{{lblGlobal}}', labels.global)
+    .replaceAll('{{lblNet}}', labels.netRealizedUnrealized)
+    .replaceAll('{{lblRealized}}', labels.realized)
+    .replaceAll('{{lblUnrealized}}', labels.unrealized)
+    .replaceAll('{{lblSymbolPnl}}', labels.symbolPnl)
+    .replaceAll('{{lblTopMovers}}', labels.topMovers)
+    .replaceAll('{{lblWinRate}}', labels.winRate)
+    .replaceAll('{{lblProfitFactor}}', labels.profitFactor)
+    .replaceAll('{{lblAvgTrade}}', labels.avgTrade)
+    .replaceAll('{{lblMaxDrawdown}}', labels.maxDrawdown)
+    .replaceAll('{{lblOpenPositions}}', labels.openPositions)
+    .replaceAll('{{generated}}', labels.generated)
+    .replaceAll('{{lblFooter}}', labels.footer)
     .replaceAll('{{headlineColor}}', headlineColor)
     .replaceAll('{{realizedColor}}', realizedColor)
     .replaceAll('{{unrealizedColor}}', unrealizedColor)

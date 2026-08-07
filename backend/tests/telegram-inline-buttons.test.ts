@@ -1186,16 +1186,42 @@ describe('handleDashboardCallback', () => {
 // ---------------------------------------------------------------------------
 
 describe('inline keyboard survives in-place edits — present ⇄ confirm equality', () => {
-  it('lang set: the edited message carries the same keyboard lang:menu presented', async () => {
+  it('lang set: the edited message carries the same keyboard lang:menu presented (same-language confirm)', async () => {
     const h = makeHarness();
     const presentEdit = vi.fn().mockResolvedValue(undefined);
     await h.feature.handleLangCallback(h.cb('lang', 'lang:menu', { editMessage: presentEdit }));
     const presented = assertEditKeepsKeyboard(presentEdit).reply_markup;
 
+    // Confirm in the SAME language (en): the keyboard must be byte-identical.
     const confirmEdit = vi.fn().mockResolvedValue(undefined);
-    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage: confirmEdit }));
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:en', { editMessage: confirmEdit }));
 
     expect(assertEditKeepsKeyboard(confirmEdit).reply_markup).toEqual(presented);
+    cleanHarness(h);
+  });
+
+  it('lang set to es: the confirm keyboard re-renders localized to the SELECTED language', async () => {
+    const h = makeHarness();
+    const presentEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:menu', { editMessage: presentEdit }));
+    const presented = assertEditKeepsKeyboard(presentEdit).reply_markup;
+
+    // Selecting es intentionally changes the visible labels (back row becomes
+    // "↩️ Menú principal") — the keyboard still SURVIVES the edit, same buttons
+    // and callback_data, only the labels localize to the new chat language.
+    const confirmEdit = vi.fn().mockResolvedValue(undefined);
+    await h.feature.handleLangCallback(h.cb('lang', 'lang:es', { editMessage: confirmEdit }));
+    const confirmed = assertEditKeepsKeyboard(confirmEdit).reply_markup as {
+      inline_keyboard: Array<Array<{ text: string; callback_data: string }>>;
+    };
+
+    // Same buttons / callback_data survive the edit…
+    const flat = (k: typeof confirmed) => k.inline_keyboard.flat().map((b) => b.callback_data);
+    expect(flat(confirmed)).toEqual(flat(presented as typeof confirmed));
+    // …but the back row label is localized to the newly selected language.
+    const texts = confirmed.inline_keyboard.flat().map((b) => b.text);
+    expect(texts).toContain('↩️ Menú principal');
+    expect(texts).not.toContain('↩️ Main menu');
     cleanHarness(h);
   });
 
