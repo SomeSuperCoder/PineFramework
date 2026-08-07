@@ -3,17 +3,21 @@
 ## Purpose
 
 Defines the preconditions and error behavior for starting the trading bot, ensuring `engine.start()` never silently blocks on long-running operations like auto-selection.
-
 ## Requirements
-
 ### Requirement: Start precondition — autoSelect must be resolved
 
-The system SHALL allow starting the bot when `config.pairs` is a non-empty array, regardless of the `autoSelect` flag value. When `config.autoSelect` is `true` and `config.pairs` is empty, the system SHALL refuse to start and require auto-selection to run first. When `config.autoSelect` is `true` and `config.pairs` is non-empty, the system SHALL skip auto-selection and use the configured pairs directly.
+The system SHALL allow starting the bot when `config.pairs` is a non-empty array, regardless of the `autoSelect` flag value. When `config.autoSelect` is `true` and `config.pairs` is empty, the system SHALL invoke the auto-selection callback (`onAutoSelect`) to resolve pairs; if no callback is configured, the system SHALL throw an error indicating auto-selection returned no pairs. When `config.autoSelect` is `true` and `config.pairs` is non-empty, the system SHALL skip auto-selection and use the configured pairs directly.
 
 #### Scenario: Start rejected when autoSelect is true and no pairs configured
 
 - **WHEN** `engine.start()` is called and `config.autoSelect` is `true` and `config.pairs` is empty or undefined
-- **THEN** the system SHALL throw an error with a message indicating that auto-selection must be resolved before starting, and the engine state SHALL remain `Idle`
+- **THEN** the system SHALL invoke the configured auto-selection callback (`onAutoSelect`) to resolve pairs; if no callback is configured or the callback fails to resolve pairs, the system SHALL throw an error indicating auto-selection returned no pairs
+- **AND** the engine state SHALL remain `Idle`
+
+#### Scenario: Auto-select callback invoked when pairs empty
+
+- **WHEN** `engine.start()` is called and `config.autoSelect` is `true` and `config.pairs` is empty or undefined and an auto-select callback is configured
+- **THEN** the system SHALL invoke the callback to resolve pairs before proceeding with the state transition
 
 #### Scenario: Start proceeds when autoSelect is true but pairs are already configured
 
@@ -190,3 +194,4 @@ The bot status snapshot SHALL expose the derived strategy name in `strategyName`
 
 - **WHEN** the derived name is longer than 50 characters
 - **THEN** the snapshot SHALL truncate the displayed name to at most 50 characters to keep the left panel compact
+

@@ -1,27 +1,4 @@
-## Purpose
-Implement and verify Telegram Notification Integration functionality for the telegram-notification module.
-## Requirements
-### Requirement: Telegram Notification Integration
-The system SHALL integrate with Telegram Bot API to send trading notifications (signals, alerts, errors) to configured recipients.
-
-#### Scenario: Signal Notification
-- **WHEN** a trading signal is generated
-- **THEN** the system SHALL send a notification via Telegram
-
-#### Scenario: Error Notification
-- **WHEN** an execution error occurs
-- **THEN** the system SHALL notify the configured Telegram recipients
-
-#### Scenario: Alert Configuration
-- **WHEN** configuring alerts
-- **THEN** the user SHALL specify which events trigger Telegram notifications
-
-### Requirement: Customizable Notification Content
-The system SHALL allow customizable notification message templates.
-
-#### Scenario: Message Template
-- **WHEN** a notification is sent
-- **THEN** it SHALL use the configured message template with dynamic fields
+## ADDED Requirements
 
 ### Requirement: Deliverable Trading Event Types
 The system MUST deliver position open, position close, bot lifecycle (start/stop/emergency/state change), errors, and warnings to subscribed chats, in addition to `alertcondition` alerts.
@@ -52,3 +29,6 @@ The system MUST route messages and content via Notification subscription policy 
 - **WHEN** MarkdownV2 encoding fails for a chat
 - **THEN** the transport falls back to plain text for that chat (existing behavior preserved)
 
+## Implementation Notes
+- Reuse the existing `escapeMarkdown`/MarkdownV2 + plain-text fallback + 429-retry path in `TelegramService.sendMessage`.
+- The legacy per-alert preference gating for `alertcondition` deliveries is preserved.

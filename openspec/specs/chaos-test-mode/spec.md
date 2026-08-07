@@ -3,9 +3,7 @@
 ## Purpose
 
 Provides a chaos testing mode that bypasses user strategy logic and generates random trading signals on every real-time candle close, enabling continuous stress-testing of the bot's order execution pipeline, position management, and error handling under unpredictable conditions.
-
 ## Requirements
-
 ### Requirement: Chaos mode configuration
 
 The system SHALL support a `chaosMode` flag in `BotConfig` that, when enabled, overrides normal strategy execution with random signal generation.
@@ -36,17 +34,24 @@ The system SHALL generate a random trading signal on the close of every real-tim
 
 ### Requirement: Fixed 10% capital sizing in chaos mode
 
-The system SHALL use exactly 10% of current equity for every position opened during chaos mode, regardless of the strategy's `default_qty_value` or other sizing configuration.
+The system SHALL use exactly 10% of current equity for every position opened during chaos mode, regardless of the strategy's `default_qty_value` or other sizing configuration. The resulting USDC buy input SHALL be computed from equity without price division and converted to micro-USDC units, so the on-chain order matches the intended 10% exposure.
 
 #### Scenario: Position sized at 10% of equity
 
 - **WHEN** chaos mode generates a `long` or `short` signal and current equity is $10,000
 - **THEN** the position size SHALL be $1,000 (10% of equity)
+- **AND** the on-chain buy input SHALL be 1,000 USDC in micro-USDC units (1_000_000_000 lamports)
 
 #### Scenario: Equity recalculated per signal
 
 - **WHEN** chaos mode generates consecutive signals
 - **THEN** each position size SHALL be calculated from the current equity at the time of the signal, not the initial capital
+
+#### Scenario: Chaos sizing overrides positionSizePercent
+
+- **WHEN** chaos mode is enabled and `positionSizePercent` is unset (defaults to 100) or set to any other value
+- **THEN** the on-chain buy input SHALL still be exactly 10% of available USDC balance
+- **AND** the buy SHALL NOT spend the full balance
 
 ### Requirement: Chaos mode signal logging
 
@@ -96,7 +101,13 @@ The system SHALL display a persistent indicator when chaos mode is active, visib
 
 ### Requirement: Chaos mode signal execution
 
-When chaos mode is active, the system SHALL execute chaos-generated signals on the DEX, but ONLY on confirmed real-time candle closes. Signals SHALL NOT be generated or executed during backtesting, on forming/in-progress candles, or when the bot is not connected to a live data feed. The `submitOrders` callback SHALL only fire when the scheduler receives a confirmed candle from the real-time bar feed. Each `long` signal SHALL result in a buy order, each `exit` signal SHALL result in a sell order closing the current position, and each `short` signal SHALL close any existing long position (spot DEX constraint).
+When chaos mode is active, the system SHALL execute chaos-generated signals on the DEX, but ONLY on confirmed real-time candle closes. Signals SHALL NOT be generated or executed during backtesting, on forming/in-progress candles, or when the bot is not connected to a live data feed. The `submitOrders` callback SHALL only fire when the scheduler receives a confirmed candle from the real-time bar feed. Each `long` signal SHALL result in a buy order, each `exit` signal SHALL result in a sell order closing the current position, and each `short` signal SHALL close any existing long position (spot DEX constraint). When the real wallet balance is zero or unreachable, the chaos engine SHALL still drive the strategy machinery using a documented simulated equity floor, and SHALL log the failure mode loudly instead of silently generating zero-quantity entries.
+
+#### Scenario: Chaos buy blocked by risk gate
+
+- **WHEN** chaos mode generates a `long` signal but the daily loss limit has been breached
+- **THEN** the system SHALL NOT place a buy order
+- **AND** the signal SHALL be recorded as blocked by risk controls
 
 #### Scenario: Long signal executes buy order
 
@@ -116,6 +127,19 @@ When chaos mode is active, the system SHALL execute chaos-generated signals on t
 - **THEN** the system SHALL submit a sell order to close the position (spot DEX constraint)
 - **AND** if no position exists, the signal SHALL be logged and discarded
 
+#### Scenario: Wallet empty falls back to simulated equity
+
+- **WHEN** chaos mode generates a `long` signal and the real wallet USDC balance is zero
+- **THEN** the system SHALL size the chaos engine entry using the documented simulated equity floor
+- **AND** the system SHALL log the `wallet-empty` failure mode and that execution is not live-tested
+- **AND** the strategy machinery (engine markers, scheduler flow, executor path) SHALL continue to run
+
+#### Scenario: Balance fetch failure is distinguishable from empty wallet
+
+- **WHEN** the balance provider cannot be reached (RPC/transport error)
+- **THEN** the system SHALL record the `rpc-unreachable` failure mode distinctly from `wallet-empty`
+- **AND** the system SHALL NOT report the balance as a plain zero
+
 #### Scenario: Insufficient balance
 
 - **WHEN** chaos mode generates a `long` signal but USDC balance is insufficient for the 10% position size
@@ -124,16 +148,31 @@ When chaos mode is active, the system SHALL execute chaos-generated signals on t
 
 ### Requirement: Chaos mode execution result tracking
 
-The system SHALL track and expose chaos mode execution results including successful orders, failed orders, and total execution time.
+The system SHALL track and expose chaos mode execution results including successful orders, failed orders, and total execution time. In addition, every processed candle SHALL produce an observable outcome (signal, explicit no-op reason, or error) so a running chaos mode is never silently idle.
 
 #### Scenario: Execution stats available
 
 - **WHEN** chaos mode has been running for multiple candle closes
 - **THEN** the system SHALL track: total signals generated, orders executed, orders failed, total execution time
 
+#### Scenario: Snapshot includes recent chaos markers on connect
+
+- **WHEN** a WebSocket client connects while chaos mode has been active
+- **THEN** the `bot:snapshot` payload SHALL include the most recent chaos markers from the in-memory ring buffer
+
+#### Scenario: State-change snapshot preserves chaos markers
+
+- **WHEN** the bot transitions state (e.g., enters Running) and broadcasts a `bot:snapshot`
+- **THEN** the snapshot payload SHALL include the full `chaosSignals` history in the same shape as the connect-time snapshot
+
+#### Scenario: Every candle produces an observable outcome
+
+- **WHEN** a real-time candle closes while chaos mode is active
+- **THEN** the system SHALL record and expose one of: a generated signal, an explicit no-op reason (e.g. impossible transition), or an error
+
 ### Requirement: Chaos mode simulates a real strategy
 
-When chaos mode is active, the system SHALL simulate a real strategy by driving the strategy engine with random `long`/`short`/`exit` actions rather than emitting raw signals directly. The resulting markers SHALL be produced by the strategy engine itself, so their labels, colors, and types are indistinguishable from a real strategy's output.
+When chaos mode is active, the system SHALL simulate a real strategy by driving the strategy engine with random `long`/`short`/`exit` actions rather than emitting raw signals directly. The resulting markers SHALL be produced by the strategy engine itself, so their labels, colors, and types are indistinguishable from a real strategy's output. The chaos engine SHALL never be seeded with zero or negative equity: when the real wallet balance is zero or unreachable, a documented simulated equity floor SHALL be used so the engine machinery always produces markers.
 
 #### Scenario: Long entry while flat
 
@@ -154,6 +193,12 @@ When chaos mode is active, the system SHALL simulate a real strategy by driving 
 
 - **WHEN** chaos mode generates `long` while the simulated position is already long, or `short`/`exit` while the simulated position is flat
 - **THEN** the strategy engine SHALL produce no marker for that candle, matching real strategy position-state semantics
+
+#### Scenario: Zero balance does not stop the engine machinery
+
+- **WHEN** the real wallet balance is zero or unreachable and a chaos action is generated
+- **THEN** the strategy engine SHALL be driven with the simulated equity floor
+- **AND** the resulting markers SHALL be produced and flow through the same scheduler and executor path a real strategy uses
 
 ### Requirement: Chaos entries are sized at 10% of equity
 
@@ -185,9 +230,40 @@ The system SHALL broadcast every chaos-generated marker over the `bot:chaosSigna
 
 ### Requirement: Chaos history replayed on connect
 
-The system SHALL retain a bounded in-memory history of recent chaos markers and include it in the `bot:snapshot` message sent to a WebSocket client on connect, so a page reload preserves the recent chaos trace.
+The system SHALL retain a bounded in-memory history of recent chaos markers and include it in the `bot:snapshot` message sent to a WebSocket client on connect, so a page reload preserves the recent chaos trace. The same complete payload SHALL be produced by a single shared snapshot builder used by every snapshot broadcast site.
 
 #### Scenario: Snapshot includes recent chaos markers
 
 - **WHEN** a WebSocket client connects while chaos mode has been active
 - **THEN** the `bot:snapshot` payload SHALL include the most recent chaos markers from the in-memory ring buffer
+
+#### Scenario: Every snapshot broadcast uses the shared builder
+
+- **WHEN** any code path broadcasts a `bot:snapshot`
+- **THEN** the payload SHALL be built by the single shared snapshot-payload builder so `chaosSignals` is never omitted
+
+### Requirement: Per-candle errors are observable, not swallowed
+
+When processing a candle fails while chaos mode (or any live strategy) is active, the system SHALL surface the error through the bot event channel and WebSocket so the failure is visible to the operator, instead of silently skipping the candle.
+
+#### Scenario: Candle processing error is broadcast
+
+- **WHEN** an exception occurs while processing a candle for a configured pair
+- **THEN** the system SHALL emit a `candle-error` event containing the pair, timeframe, candle timestamp, and error message
+- **AND** the event SHALL be broadcast to connected clients via WebSocket
+- **AND** the bot SHALL continue processing subsequent candles (no crash)
+
+#### Scenario: Error counter is tracked
+
+- **WHEN** one or more candle processing errors occur
+- **THEN** the system SHALL maintain a running `totalCandleErrors` counter alongside the signals-generated counter
+
+### Requirement: Chaos execution mode is exposed
+
+The system SHALL expose the current chaos execution mode (`live` when real wallet funds back the engine, `simulated` when the equity floor is in use) so operators can tell whether the execution layer was genuinely exercised.
+
+#### Scenario: Execution mode reported
+
+- **WHEN** chaos mode is active and the bot snapshot is requested
+- **THEN** the snapshot SHALL include the current chaos execution mode (`live` or `simulated`) and the reason when simulated
+
