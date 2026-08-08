@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { BotStatusSnapshot, WalletInfo, LogEntry } from '../types/bot';
-import { MiniChart } from './MiniChart';
-import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { ChaosModeWarning } from './ChaosModeWarning';
 import { TradeHistoryTab } from './TradeHistoryTab';
 import { StatisticsTab } from './StatisticsTab';
-import { DASH, fmtBaseSymbol, fmtDur, fmtPnl, fmtSize, fmtUsd } from '../utils/format';
 import type { TradeRecord } from '../types/trade';
 import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot, FeedStatus } from '../types';
-import { AutoSelectGrid } from './bot/AutoSelectGrid';
-import { MetricValue } from './bot/MetricValue';
 import { SetupWizard } from './bot/BotControls';
+import { BotStatusPanel } from './bot/BotStatusPanel';
+import { BotMetrics } from './bot/BotMetrics';
 
 // Stable empty array references for optional chaos props. A fresh `[]` literal
 // (default parameter or `?? []`) would create a new array every render and,
@@ -122,99 +119,6 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
       </div>
     </div>
   );
-}
-
-function LiveBotView({
-  backendUrl,
-  activePair,
-  strategySource,
-  chaosMode,
-  chaosSignals,
-  chaosHeartbeats,
-}: {
-  backendUrl: string;
-  activePair: { symbol: string; timeframe: string } | null;
-  strategySource: string | null;
-  chaosMode: boolean;
-  chaosSignals: ChaosSignalRecord[];
-  chaosHeartbeats: ChaosHeartbeatRecord[];
-}) {
-  // Mini chart data — fetch OHLCV + execute script for the first configured pair.
-  // Lives in a component that only mounts in Running/Stopping/Error states, so the
-  // data pipeline (OHLCV fetch, /api/execute, kline WS subscription) never runs
-  // while the bot is Idle/Stopped (SetupWizard view).
-  const miniChartData = useBotMiniChartData(
-    backendUrl,
-    activePair?.symbol ?? null,
-    activePair?.timeframe ?? null,
-    strategySource ?? null,
-    chaosMode,
-    chaosSignals,
-    chaosHeartbeats,
-  );
-
-  if (!activePair) return null;
-
-  return (
-    <div style={{ marginBottom: 12, borderBottom: '1px solid #1a1a2e', paddingBottom: 12 }}>
-      <div style={{ color: '#888', fontWeight: 600, marginBottom: 6, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span>{activePair.symbol}</span>
-        <span style={{ color: '#555', fontWeight: 400 }}>{activePair.timeframe}</span>
-        {miniChartData.loading && (
-          <span style={{ color: '#ff9800', fontSize: 10, fontWeight: 400 }}>loading…</span>
-        )}
-      </div>
-      <MiniChart
-        data={miniChartData.displayCandles}
-        scriptResult={miniChartData.displayScriptResult}
-        dataVersion={miniChartData.dataVersion}
-        height={180}
-      />
-    </div>
-  );
-}
-
-// ---- Chaos observability helpers ----
-
-/** Short human-readable label for the last chaos candle outcome. */
-function formatChaosHeartbeat(h: ChaosHeartbeatRecord | null | undefined): string {
-  if (!h) return '\u2014';
-  switch (h.outcome) {
-    case 'signal':
-      return `signal${h.action ? ` (${h.action})` : ''}`;
-    case 'noop':
-      return `no-op${h.reason ? ` (${h.reason})` : ''}`;
-    case 'error':
-      return `error${h.reason ? `: ${h.reason.length > 48 ? `${h.reason.slice(0, 48)}…` : h.reason}` : ''}`;
-  }
-}
-
-function chaosHeartbeatColor(h: ChaosHeartbeatRecord | null | undefined): string | undefined {
-  if (!h) return undefined;
-  if (h.outcome === 'signal') return '#4caf50';
-  if (h.outcome === 'noop') return '#ff9800';
-  return '#e94560';
-}
-
-/** Human-readable feed status for the dashboard: connected / disconnected /
- *  connected-but-silent, with last-candle + candle-count detail in the title. */
-function formatFeedStatus(feed: FeedStatus | null | undefined): { text: string; color?: string; title?: string } {
-  if (!feed) return { text: '\u2014' };
-  const parts: string[] = [];
-  if (feed.lastCandleAt != null) {
-    parts.push(`last candle ${new Date(feed.lastCandleAt).toLocaleTimeString()}`);
-  }
-  parts.push(`${feed.candleCount} candles`);
-  if (feed.silentSince != null) {
-    parts.push(`silent since ${new Date(feed.silentSince).toLocaleTimeString()}`);
-  }
-  if (!feed.connected) {
-    return { text: 'Disconnected', color: '#e94560', title: parts.join(' · ') };
-  }
-  if (feed.silentSince != null) {
-    return { text: 'Connected · silent', color: '#ff9800', title: parts.join(' · ') };
-  }
-  return { text: 'Connected', color: '#4caf50', title: parts.join(' · ') };
 }
 
 // ---- Dashboard tabs (design D6 — Overview | Trade History | Statistics) ----
@@ -421,10 +325,6 @@ export function LiveDashboard({
     setWalletLocked(false);
     setWallet({ hasWallet: true, publicKey });
   };
-
-  // Feed connectivity for the left Status panel — live `bot:feedStatus` state
-  // wins over the snapshot-carried `status.feedState`.
-  const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
 
   const isIdle = status.state === 'Idle' || status.state === 'Stopped';
   const isRunning = status.state === 'Running';
@@ -683,180 +583,30 @@ export function LiveDashboard({
         // Three-column body (byte-identical to the pre-tabs layout)
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gridTemplateRows: '1fr', gap: 1, overflow: 'hidden' }}>
         {/* Left: Status Panel */}
-        <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
-          <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <MetricValue label="State" value={status.state} color={stateColor} />
-            {wallet.publicKey && (
-              <MetricValue
-                label="Wallet"
-                value={`${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}`}
-                color="#4caf50"
-              />
-            )}
-            <MetricValue label="Strategy" value={status.strategyName} />
-            <MetricValue label="DEX" value={status.dex} />
-            <MetricValue label="Duration" value={status.startedAt != null ? fmtDur(now - status.startedAt) : DASH} />
-            <MetricValue label="Balance" value={`$${status.balance.toFixed(2)}`} />
-            <MetricValue label="Realized PnL" value={fmtPnl(status.realizedPnl).text} color={fmtPnl(status.realizedPnl).color} />
-            <MetricValue label="Unrealized PnL" value={fmtPnl(status.unrealizedPnl).text} color={fmtPnl(status.unrealizedPnl).color} />
-            <MetricValue label="Exposure" value={`${(status.exposure * 100).toFixed(1)}%`} />
-
-            {chaosMode && (
-              <MetricValue
-                label="Chaos Last Candle"
-                value={formatChaosHeartbeat(chaosHeartbeat)}
-                color={chaosHeartbeatColor(chaosHeartbeat)}
-              />
-            )}
-            <MetricValue
-              label="Candle Errors"
-              value={String(totalCandleErrors)}
-              color={totalCandleErrors > 0 ? '#e94560' : undefined}
-              title={lastCandleError
-                ? `${lastCandleError.pair} ${lastCandleError.timeframe}: ${lastCandleError.message}`
-                : undefined}
-            />
-            <MetricValue
-              label="Feed"
-              value={feedDisplay.text}
-              color={feedDisplay.color}
-              title={feedDisplay.title}
-            />
-
-            {status.errors.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <span style={{ color: '#e94560', fontWeight: 600, fontSize: 11 }}>Errors ({status.errors.length}):</span>
-                {status.errors.slice(-3).map((err, i) => (
-                  <div key={i} style={{ color: '#e94560', fontSize: 10, marginTop: 2 }}>
-                    [{err.code}] {err.message}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <BotStatusPanel
+          status={status}
+          stateColor={stateColor}
+          now={now}
+          wallet={wallet}
+          chaosMode={chaosMode}
+          chaosHeartbeat={chaosHeartbeat}
+          totalCandleErrors={totalCandleErrors}
+          lastCandleError={lastCandleError}
+          feedStatus={feedStatus}
+        />
 
         {/* Center: Mini Chart + Metrics + Positions */}
-        <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
-          {/* Mini Chart — only mounted in running states; never while Idle/Stopped */}
-          <LiveBotView
-            backendUrl={backendUrl}
-            activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
-            strategySource={persistedConfig?.strategySource ?? null}
-            chaosMode={chaosMode === true}
-            chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
-            chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
-          />
-
-          <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Metrics</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 16 }}>
-            <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : DASH} />
-            <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : DASH} color="#4caf50" />
-            <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : DASH} color="#e94560" />
-            <MetricValue label="Win Rate" value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : DASH} />
-            <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : DASH} color={status.avgWin != null && status.avgWin > 0 ? '#4caf50' : undefined} />
-            <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : DASH} color={status.avgLoss != null && status.avgLoss < 0 ? '#e94560' : undefined} />
-            <MetricValue label="Profit Factor" value={status.profitFactor != null ? status.profitFactor.toFixed(2) : DASH}
-              color={status.profitFactor != null ? status.profitFactor >= 1.5 ? '#4caf50' : status.profitFactor >= 1 ? '#ff9800' : '#e94560' : undefined}
-            />
-            <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : DASH} color="#e94560" />
-            <MetricValue label="Total Fees" value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : DASH} />
-            <MetricValue label="Avg Latency" value={status.avgLatency != null ? `${status.avgLatency.toFixed(0)}ms` : DASH} />
-          </div>
-
-          {/* Positions */}
-          <>
-              <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Positions</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {status.positions.length === 0 && (
-                  <div style={{ padding: '8px 12px', background: '#111128', borderRadius: 4, color: '#666', fontSize: 11, fontStyle: 'italic' }}>
-                    No open positions
-                  </div>
-                )}
-                {status.positions.map((pos, i) => {
-                  const pnl = pos.unrealizedPnl ?? 0;
-                  const pnlPercent = pos.entryPrice > 0 && pos.quantity > 0
-                    ? (pnl / (pos.entryPrice * pos.quantity)) * 100
-                    : 0;
-                  const pnlColor = pnl >= 0 ? '#4caf50' : '#e94560';
-                  const duration = now - pos.entryTime;
-                  const isLong = pos.direction !== 'flat';
-                  return (
-                    <div key={i} style={{ padding: '8px 12px', background: '#111128', borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ color: '#e0e0e0', fontWeight: 600, fontSize: 12 }}>{pos.symbol}</span>
-                        {pos.timeframe && (
-                          <span style={{ color: '#555', fontSize: 10 }}>{pos.timeframe}</span>
-                        )}
-                        <span style={{ color: isLong ? '#4caf50' : '#888', fontSize: 11, fontWeight: 600 }}>
-                          {isLong ? 'LONG' : 'FLAT'}
-                        </span>
-                        {pos.direction === 'flat' ||
-                        !isFinite(pos.quantity) ||
-                        pos.quantity <= 0 ||
-                        !isFinite(pos.entryPrice) ? (
-                          <span style={{ color: '#666', fontSize: 11 }}>{'\u2014'}</span>
-                        ) : (
-                          <>
-                            <span style={{ color: '#d0d0d0', fontWeight: 600, fontSize: 12 }}>
-                              {fmtSize(pos.quantity)} {fmtBaseSymbol(pos.symbol)}
-                            </span>
-                            {/* Notional = entry size in USD (qty × entry price, not live mark). */}
-                            <span style={{ color: '#aaa', fontSize: 11 }}>
-                              {'\u2248'} {fmtUsd(pos.quantity * pos.entryPrice)}
-                            </span>
-                            <span style={{ color: '#888', fontSize: 11 }}>
-                              @ ${pos.entryPrice.toFixed(2)}
-                            </span>
-                          </>
-                        )}
-                        <span style={{ color: '#888', fontSize: 11, marginLeft: 'auto' }}>
-                          {pos.unrealizedPnl != null ? `$${pos.unrealizedPnl.toFixed(2)}` : '\u2014'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
-                        <span style={{ color: pnlColor, fontWeight: 600 }}>
-                          {fmtPnl(pnl).text}
-                        </span>
-                        <span style={{ color: pnlColor, fontWeight: 600 }}>
-                          ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)
-                        </span>
-                        <span style={{ color: '#666', marginLeft: 'auto' }}>
-                          {fmtDur(duration)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-
-          {/* Auto-Select Results */}
-          {autoSelectResult && (
-            <div style={{ marginTop: 16 }}>
-              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Auto-Select Results</div>
-              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
-                Evaluated {autoSelectResult.evaluatedCount} pair{autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
-                {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
-              </div>
-              <AutoSelectGrid
-                statuses={Object.fromEntries(
-                  autoSelectResult.ranking.map(r => [r.label, { phase: 'done', status: 'done' as const }])
-                )}
-                ranking={autoSelectResult.ranking}
-              />
-              <div style={{ marginTop: 6, padding: '6px 8px', background: '#1a3328', borderRadius: 3 }}>
-                <span style={{ color: '#4caf50', fontWeight: 700, fontSize: 11 }}>
-                  ★ Best: {autoSelectResult.best.label}
-                </span>
-                <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
-                  PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+        <BotMetrics
+          backendUrl={backendUrl}
+          status={status}
+          activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
+          strategySource={persistedConfig?.strategySource ?? null}
+          chaosMode={chaosMode === true}
+          chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
+          chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
+          autoSelectResult={autoSelectResult}
+          now={now}
+        />
 
         {/* Right: Logs Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
