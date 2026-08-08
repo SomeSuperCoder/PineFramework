@@ -1,4 +1,5 @@
 import React from 'react';
+import { tokens } from '../../theme/tokens';
 
 // ---- Auto-Select Progress Grid ----
 
@@ -7,13 +8,13 @@ export type CandidateStatus = { phase: string; status: 'pending' | 'active' | 'd
 export function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
   switch (status) {
     case 'pending':
-      return <span style={{ color: '#555', fontSize: 11 }}>—</span>;
+      return <span style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>—</span>;
     case 'active':
-      return <span style={{ color: '#ff9800', fontSize: 11, animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>;
+      return <span style={{ color: tokens.colors.semantic.warning, fontSize: 11, animation: 'spin 1s linear infinite', display: 'inline-block' }}>⟳</span>;
     case 'done':
-      return <span style={{ color: '#4caf50', fontSize: 11 }}>✓</span>;
+      return <span style={{ color: tokens.colors.semantic.success, fontSize: 11 }}>✓</span>;
     case 'failed':
-      return <span style={{ color: '#e94560', fontSize: 11 }}>✗</span>;
+      return <span style={{ color: tokens.colors.semantic.error, fontSize: 11 }}>✗</span>;
   }
 }
 
@@ -48,7 +49,7 @@ export function AutoSelectGrid({
 
   return (
     <div style={{
-      marginTop: 8, padding: 8, background: '#111128', borderRadius: 6,
+      marginTop: 8, padding: 8, background: tokens.colors.hairline.default, borderRadius: 6,
       border: '1px solid #333', maxHeight: 200, overflow: 'auto',
     }}>
       <div style={{
@@ -69,8 +70,8 @@ export function AutoSelectGrid({
 
           return (
             <React.Fragment key={key}>
-              <div style={{ color: '#e0e0e0' }}>{formatPairLabel(key)}</div>
-              <div style={{ color: '#888' }}>
+              <div style={{ color: tokens.colors.ink['1'] }}>{formatPairLabel(key)}</div>
+              <div style={{ color: tokens.colors.steel.muted }}>
                 {showCandleProgress
                   ? `${candleProgress.fetched}/${candleProgress.total}`
                   : displayPhase}
@@ -78,11 +79,11 @@ export function AutoSelectGrid({
               <div title={st.error}>
                 <StatusIcon status={st.status} />
               </div>
-              <div style={{ color: rankEntry?.metrics.totalPnlPercent != null && rankEntry.metrics.totalPnlPercent >= 0 ? '#4caf50' : '#e94560' }}>
+              <div style={{ color: rankEntry?.metrics.totalPnlPercent != null && rankEntry.metrics.totalPnlPercent >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
                 {rankEntry?.metrics.totalPnlPercent != null ? `${rankEntry.metrics.totalPnlPercent >= 0 ? '+' : ''}${rankEntry.metrics.totalPnlPercent.toFixed(2)}%` : ''}
               </div>
               {st.error && st.status === 'failed' && (
-                <div style={{ gridColumn: '1 / -1', color: '#e94560', fontSize: 9, marginTop: 1, opacity: 0.8 }}>
+                <div style={{ gridColumn: '1 / -1', color: tokens.colors.semantic.error, fontSize: 9, marginTop: 1, opacity: 0.8 }}>
                   {st.error.length > 80 ? st.error.slice(0, 80) + '...' : st.error}
                 </div>
               )}
@@ -93,7 +94,7 @@ export function AutoSelectGrid({
                   }}>
                     <div style={{
                       width: `${(candleProgress.fetched / Math.max(candleProgress.total, 1)) * 100}%`,
-                      height: '100%', background: '#2196f3', borderRadius: 2,
+                      height: '100%', background: tokens.colors.semantic.info, borderRadius: 2,
                       transition: 'width 0.2s ease',
                     }} />
                   </div>

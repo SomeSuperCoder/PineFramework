@@ -2,6 +2,7 @@ import type { BotStatusSnapshot, WalletInfo } from '../../types/bot';
 import type { ChaosHeartbeatRecord, CandleErrorRecord, FeedStatus } from '../../types';
 import { MetricValue } from './MetricValue';
 import { DASH, fmtDur, fmtPnl } from '../../utils/format';
+import { tokens } from '../../theme/tokens';
 
 // ---- Chaos observability helpers ----
 
@@ -20,9 +21,9 @@ function formatChaosHeartbeat(h: ChaosHeartbeatRecord | null | undefined): strin
 
 function chaosHeartbeatColor(h: ChaosHeartbeatRecord | null | undefined): string | undefined {
   if (!h) return undefined;
-  if (h.outcome === 'signal') return '#4caf50';
-  if (h.outcome === 'noop') return '#ff9800';
-  return '#e94560';
+  if (h.outcome === 'signal') return tokens.colors.semantic.success;
+  if (h.outcome === 'noop') return tokens.colors.semantic.warning;
+  return tokens.colors.semantic.error;
 }
 
 /** Human-readable feed status for the dashboard: connected / disconnected /
@@ -38,12 +39,12 @@ function formatFeedStatus(feed: FeedStatus | null | undefined): { text: string; 
     parts.push(`silent since ${new Date(feed.silentSince).toLocaleTimeString()}`);
   }
   if (!feed.connected) {
-    return { text: 'Disconnected', color: '#e94560', title: parts.join(' · ') };
+    return { text: 'Disconnected', color: tokens.colors.semantic.error, title: parts.join(' · ') };
   }
   if (feed.silentSince != null) {
-    return { text: 'Connected · silent', color: '#ff9800', title: parts.join(' · ') };
+    return { text: 'Connected · silent', color: tokens.colors.semantic.warning, title: parts.join(' · ') };
   }
-  return { text: 'Connected', color: '#4caf50', title: parts.join(' · ') };
+  return { text: 'Connected', color: tokens.colors.semantic.success, title: parts.join(' · ') };
 }
 
 // ---- Left: Status Panel ----
@@ -74,15 +75,15 @@ export function BotStatusPanel({
   const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
 
   return (
-    <div style={{ borderRight: '1px solid #1a1a2e', padding: 12, overflow: 'auto' }}>
-      <div style={{ color: '#888', fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
+    <div style={{ borderRight: `1px solid ${tokens.colors.surface['1']}`, padding: 12, overflow: 'auto' }}>
+      <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <MetricValue label="State" value={status.state} color={stateColor} />
         {wallet.publicKey && (
           <MetricValue
             label="Wallet"
             value={`${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}`}
-            color="#4caf50"
+            color={tokens.colors.semantic.success}
           />
         )}
         <MetricValue label="Strategy" value={status.strategyName} />
@@ -103,7 +104,7 @@ export function BotStatusPanel({
         <MetricValue
           label="Candle Errors"
           value={String(totalCandleErrors)}
-          color={totalCandleErrors > 0 ? '#e94560' : undefined}
+          color={totalCandleErrors > 0 ? tokens.colors.semantic.error : undefined}
           title={lastCandleError
             ? `${lastCandleError.pair} ${lastCandleError.timeframe}: ${lastCandleError.message}`
             : undefined}
@@ -117,9 +118,9 @@ export function BotStatusPanel({
 
         {status.errors.length > 0 && (
           <div style={{ marginTop: 8 }}>
-            <span style={{ color: '#e94560', fontWeight: 600, fontSize: 11 }}>Errors ({status.errors.length}):</span>
+            <span style={{ color: tokens.colors.semantic.error, fontWeight: 600, fontSize: 11 }}>Errors ({status.errors.length}):</span>
             {status.errors.slice(-3).map((err, i) => (
-              <div key={i} style={{ color: '#e94560', fontSize: 10, marginTop: 2 }}>
+              <div key={i} style={{ color: tokens.colors.semantic.error, fontSize: 10, marginTop: 2 }}>
                 [{err.code}] {err.message}
               </div>
             ))}

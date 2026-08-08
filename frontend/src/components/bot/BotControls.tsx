@@ -5,6 +5,7 @@ import type { BotStateT, WalletInfo, ConfigValues } from '../../types/bot';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { AutoSelectGrid } from './AutoSelectGrid';
+import { tokens } from '../../theme/tokens';
 
 // ---- Timezone Utilities ----
 
@@ -242,10 +243,10 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
       </div>
       {wallet.hasWallet ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ color: '#4caf50', fontSize: 11, fontFamily: 'monospace' }}>
+          <span style={{ color: tokens.colors.semantic.success, fontSize: 11, fontFamily: 'monospace' }}>
             {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-4)}
           </span>
-          <span style={{ color: '#888', fontSize: 11 }}>
+          <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
             {importedBalanceLoading ? (
               'Loading balance...'
             ) : importedBalance !== null ? (
@@ -258,8 +259,8 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             onClick={handleRemove}
             disabled={importing}
             style={{
-              padding: '3px 8px', background: '#2a1520', color: '#e94560',
-              border: '1px solid #e94560', borderRadius: 3, cursor: 'pointer',
+              padding: '3px 8px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.error,
+              border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 3, cursor: 'pointer',
               fontSize: 10,
             }}
           >
@@ -279,7 +280,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             placeholder="Paste 12 or 24 word seed phrase..."
             rows={2}
             style={{
-              width: '100%', background: '#111128', color: '#e0e0e0',
+              width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
               border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
               fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
             }}
@@ -288,14 +289,14 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
           {/* Balance preview — shown after valid seed phrase */}
           {(previewLoading || previewPublicKey) && (
             <div style={{
-              padding: '8px 10px', background: '#0d1a10', borderRadius: 4,
+              padding: '8px 10px', background: tokens.colors.semantic.successBg, borderRadius: 4,
               border: '1px solid #333',
             }}>
               {previewLoading ? (
-                <span style={{ color: '#888', fontSize: 11 }}>Checking wallet...</span>
+                <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Checking wallet...</span>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ color: '#4caf50', fontSize: 11, fontFamily: 'monospace' }}>
+                  <span style={{ color: tokens.colors.semantic.success, fontSize: 11, fontFamily: 'monospace' }}>
                     {previewPublicKey?.slice(0, 8)}...{previewPublicKey?.slice(-4)}
                   </span>
                   <span style={{ color: '#64b5f6', fontSize: 11 }}>
@@ -312,7 +313,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Set encryption password (min 8 chars)"
             style={{
-              width: '100%', background: '#111128', color: '#e0e0e0',
+              width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
               border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
               fontSize: 11, boxSizing: 'border-box',
             }}
@@ -322,15 +323,15 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
               onClick={handleImport}
               disabled={importing || !seedPhrase.trim() || !password}
               style={{
-                padding: '4px 12px', background: '#1a3328', color: '#4caf50',
-                border: '1px solid #4caf50', borderRadius: 3, cursor: importing ? 'wait' : 'pointer',
+                padding: '4px 12px', background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success,
+                border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 3, cursor: importing ? 'wait' : 'pointer',
                 fontSize: 10, fontWeight: 600, opacity: importing || !seedPhrase.trim() || !password ? 0.6 : 1,
               }}
             >
               {importing ? 'Importing...' : 'Import Wallet'}
             </button>
           </div>
-          {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}
+          {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 10 }}>{error}</div>}
         </div>
       )}
     </div>
@@ -459,13 +460,13 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           onChange={(src, _name, _id) => { setStrategySource(src); }}
         />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ color: '#888', fontSize: 11 }}>
+          <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
             DEX:{' '}
             <select
               value={dex}
               onChange={(e) => setDex(e.target.value as 'jupiter-swap' | 'jupiter-ultra')}
               style={{
-                background: '#111128', color: '#e0e0e0', border: '1px solid #333',
+                background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
                 borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
               }}
             >
@@ -474,7 +475,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
             </select>
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <label style={{ color: tokens.colors.steel.muted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
               <input
                 type="checkbox"
                 checked={manualOverride}
@@ -484,7 +485,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
               Manual Override
             </label>
             {manualOverride ? (
-              <label style={{ color: '#888', fontSize: 11 }}>
+              <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
                 Max Daily Loss ($):{' '}
                 <input
                   type="number"
@@ -493,14 +494,14 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
                   min="0"
                   step="0.01"
                   style={{
-                    width: 70, background: '#111128', color: '#e0e0e0',
+                    width: 70, background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
                     border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
                     fontSize: 11, marginLeft: 4,
                   }}
                 />
               </label>
             ) : (
-              <span style={{ color: '#888', fontSize: 11 }}>
+              <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
                 Max Daily Loss:{' '}
                 <span style={{ color: '#64b5f6', fontWeight: 600 }}>
                   ${maxDailyLoss.toFixed(2)}
@@ -511,7 +512,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
               </span>
             )}
           </div>
-          <label style={{ color: '#888', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label style={{ color: tokens.colors.steel.muted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
             Timezone:{' '}
             <input
               type="text"
@@ -519,7 +520,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
               value={timezoneFilter}
               onChange={(e) => setTimezoneFilter(e.target.value)}
               style={{
-                width: 80, background: '#111128', color: '#e0e0e0',
+                width: 80, background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
                 border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
                 fontSize: 10, marginLeft: 4,
               }}
@@ -528,7 +529,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
               style={{
-                background: '#111128', color: '#e0e0e0',
+                background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
                 border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
                 fontSize: 11, marginLeft: 4,
               }}
@@ -549,13 +550,13 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
             </select>
           </label>
         </div>
-        {error && <div style={{ color: '#e94560', fontSize: 10 }}>{error}</div>}
+        {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 10 }}>{error}</div>}
         {compatibilityWarnings.length > 0 && (
           <div style={{
-            background: '#2a2010', border: '1px solid #ff9800', borderRadius: 4,
+            background: tokens.colors.semantic.warningBg, border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4,
             padding: '6px 10px', marginTop: 4,
           }}>
-            <div style={{ color: '#ff9800', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+            <div style={{ color: tokens.colors.semantic.warning, fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
               ⚠ Live Trading Compatibility Notes
             </div>
             {compatibilityWarnings.map((w, i) => (
@@ -567,7 +568,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           onClick={handleConfigure}
           disabled={configuring}
           style={{
-            padding: '6px 16px', background: '#1a3a6a', color: '#64b5f6',
+            padding: '6px 16px', background: tokens.colors.semantic.infoBg, color: '#64b5f6',
             border: '1px solid #64b5f6', borderRadius: 4, cursor: configuring ? 'wait' : 'pointer',
             fontSize: 11, fontWeight: 600, alignSelf: 'flex-start',
             opacity: configuring ? 0.7 : 1,
@@ -617,9 +618,9 @@ export function TradingBotControlButton({
         title={isStopped && dashboardOpen ? 'Start Live Trading Bot' : dashboardOpen ? 'Hide Dashboard' : 'Show Bot Dashboard'}
         style={{
           padding: '5px 10px',
-          background: dashboardOpen ? '#1a3328' : '#111128',
-          color: dashboardOpen ? '#4caf50' : '#888',
-          border: `1px solid ${dashboardOpen ? '#4caf50' : '#333'}`,
+          background: dashboardOpen ? tokens.colors.semantic.successBg : tokens.colors.hairline.default,
+          color: dashboardOpen ? tokens.colors.semantic.success : tokens.colors.steel.muted,
+          border: `1px solid ${dashboardOpen ? tokens.colors.semantic.success : '#333'}`,
           borderRadius: '4px',
           cursor: loading ? 'wait' : 'pointer',
           fontSize: '11px',
@@ -643,7 +644,7 @@ export function TradingBotControlButton({
             title="Stop Bot"
             style={{
               padding: '5px 10px',
-              background: '#e94560',
+              background: tokens.colors.semantic.error,
               color: '#fff',
               border: 'none',
               borderRadius: '4px',
@@ -690,9 +691,9 @@ export function TradingBotControlButton({
           title="Reset Bot"
           style={{
             padding: '5px 10px',
-            background: '#2a1520',
-            color: '#ff9800',
-            border: '1px solid #ff9800',
+            background: tokens.colors.semantic.errorBg,
+            color: tokens.colors.semantic.warning,
+            border: `1px solid ${tokens.colors.semantic.warning}`,
             borderRadius: '4px',
             cursor: loading ? 'wait' : 'pointer',
             fontSize: '11px',
@@ -705,10 +706,10 @@ export function TradingBotControlButton({
         </button>
       )}
       {transitioning && (
-        <span style={{ color: '#ff9800', fontSize: '11px', fontStyle: 'italic' }}>{botState}...</span>
+        <span style={{ color: tokens.colors.semantic.warning, fontSize: '11px', fontStyle: 'italic' }}>{botState}...</span>
       )}
       {!connected && (botState !== 'Idle' || dashboardOpen) && (
-        <span style={{ color: '#ff9800', fontSize: '10px', marginLeft: '2px' }} title="Reconnecting...">
+        <span style={{ color: tokens.colors.semantic.warning, fontSize: '10px', marginLeft: '2px' }} title="Reconnecting...">
           ○
         </span>
       )}
@@ -895,7 +896,7 @@ export function SetupWizard({
         onClick={done ? () => setStep(s) : undefined}
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
-          color: active ? '#fff' : done ? '#4caf50' : '#555',
+          color: active ? '#fff' : done ? tokens.colors.semantic.success : tokens.colors.steel.disabled,
           cursor: done ? 'pointer' : 'default',
           fontSize: 11, fontWeight: active ? 600 : 400,
           padding: '4px 8px',
@@ -904,9 +905,9 @@ export function SetupWizard({
         <span style={{
           width: 18, height: 18, borderRadius: '50%',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: active ? '#1a3a6a' : done ? '#1a3328' : '#222',
-          border: `1px solid ${active ? '#64b5f6' : done ? '#4caf50' : '#333'}`,
-          fontSize: 10, fontWeight: 700, color: active ? '#64b5f6' : done ? '#4caf50' : '#555',
+          background: active ? tokens.colors.semantic.infoBg : done ? tokens.colors.semantic.successBg : '#222',
+          border: `1px solid ${active ? '#64b5f6' : done ? tokens.colors.semantic.success : '#333'}`,
+          fontSize: 10, fontWeight: 700, color: active ? '#64b5f6' : done ? tokens.colors.semantic.success : tokens.colors.steel.disabled,
         }}>
           {done ? '✓' : idx}
         </span>
@@ -936,7 +937,7 @@ export function SetupWizard({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Step indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', paddingBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, paddingBottom: 8 }}>
         <StepDot s="wallet" label="Wallet" />
         <span style={{ color: '#333', margin: '0 2px' }}>→</span>
         <StepDot s="config" label="Config" />
@@ -946,7 +947,7 @@ export function SetupWizard({
         <StepDot s="review" label="Review" />
         <div style={{ flex: 1 }} />
         <button onClick={onClose} style={{
-          padding: '4px 10px', background: 'transparent', color: '#888',
+          padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
           border: 'none', cursor: 'pointer', fontSize: 14,
         }}>
           ✕
@@ -962,8 +963,8 @@ export function SetupWizard({
               onClick={() => setStep('config')}
               disabled={!wallet.hasWallet}
               style={{
-                padding: '6px 20px', background: wallet.hasWallet ? '#1a3a6a' : '#111',
-                color: wallet.hasWallet ? '#64b5f6' : '#555',
+                padding: '6px 20px', background: wallet.hasWallet ? tokens.colors.semantic.infoBg : '#111',
+                color: wallet.hasWallet ? '#64b5f6' : tokens.colors.steel.disabled,
                 border: `1px solid ${wallet.hasWallet ? '#64b5f6' : '#333'}`,
                 borderRadius: 4, cursor: wallet.hasWallet ? 'pointer' : 'default',
                 fontSize: 11, fontWeight: 600,
@@ -988,7 +989,7 @@ export function SetupWizard({
             <button
               onClick={() => setStep('wallet')}
               style={{
-                padding: '6px 14px', background: 'transparent', color: '#888',
+                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
                 border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
                 fontSize: 11,
               }}
@@ -1005,33 +1006,33 @@ export function SetupWizard({
           <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
             Backtest Selection
           </div>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: tokens.colors.steel.muted, marginBottom: 12 }}>
             How would you like to select your trading pair?
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <button
               onClick={() => handleBacktestChoice('auto')}
               style={{
-                padding: '12px 16px', background: '#1a3a6a', color: '#64b5f6',
+                padding: '12px 16px', background: tokens.colors.semantic.infoBg, color: '#64b5f6',
                 border: '1px solid #64b5f6', borderRadius: 6, cursor: 'pointer',
                 fontSize: 12, fontWeight: 600, textAlign: 'left',
               }}
             >
               <div style={{ marginBottom: 4 }}>🚀 Run Auto-Select Backtest</div>
-              <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>
+              <div style={{ fontSize: 10, color: tokens.colors.steel.muted, fontWeight: 400 }}>
                 Automatically evaluate multiple pairs and timeframes to find the best performer
               </div>
             </button>
             <button
               onClick={() => handleBacktestChoice('manual')}
               style={{
-                padding: '12px 16px', background: '#2a2010', color: '#ff9800',
-                border: '1px solid #ff9800', borderRadius: 6, cursor: 'pointer',
+                padding: '12px 16px', background: tokens.colors.semantic.warningBg, color: tokens.colors.semantic.warning,
+                border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 6, cursor: 'pointer',
                 fontSize: 12, fontWeight: 600, textAlign: 'left',
               }}
             >
               <div style={{ marginBottom: 4 }}>✋ Manually Select Pair & Timeframe</div>
-              <div style={{ fontSize: 10, color: '#888', fontWeight: 400 }}>
+              <div style={{ fontSize: 10, color: tokens.colors.steel.muted, fontWeight: 400 }}>
                 Choose your own pair and timeframe — you take full responsibility for the selection
               </div>
             </button>
@@ -1040,7 +1041,7 @@ export function SetupWizard({
             <button
               onClick={() => setStep('config')}
               style={{
-                padding: '6px 14px', background: 'transparent', color: '#888',
+                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
                 border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
                 fontSize: 11,
               }}
@@ -1057,10 +1058,10 @@ export function SetupWizard({
           {/* Manual Selection Mode */}
           {backtestMode === 'manual' && (
             <div style={{
-              padding: 12, background: '#2a2010', borderRadius: 6,
-              border: '1px solid #ff9800', marginBottom: 12,
+              padding: 12, background: tokens.colors.semantic.warningBg, borderRadius: 6,
+              border: `1px solid ${tokens.colors.semantic.warning}`, marginBottom: 12,
             }}>
-              <div style={{ color: '#ff9800', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+              <div style={{ color: tokens.colors.semantic.warning, fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
                 ⚠ Manual Selection Mode
               </div>
               <div style={{ fontSize: 10, color: '#e0a040', marginBottom: 8 }}>
@@ -1068,7 +1069,7 @@ export function SetupWizard({
                 The bot will only trade the pair you select — no automated evaluation was performed.
               </div>
                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <label style={{ color: '#888', fontSize: 11 }}>
+                <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
                   Pair:{' '}
                   <select
                     value={manualPair?.symbol ?? ''}
@@ -1077,7 +1078,7 @@ export function SetupWizard({
                       timeframe: prev?.timeframe ?? '60',
                     }))}
                     style={{
-                      background: '#111128', color: '#e0e0e0', border: '1px solid #333',
+                      background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
                       borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
                     }}
                   >
@@ -1089,7 +1090,7 @@ export function SetupWizard({
                     })}
                   </select>
                 </label>
-                <label style={{ color: '#888', fontSize: 11 }}>
+                <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
                   Timeframe:{' '}
                   <select
                     value={manualPair?.timeframe ?? '60'}
@@ -1098,7 +1099,7 @@ export function SetupWizard({
                       timeframe: e.target.value,
                     }))}
                     style={{
-                      background: '#111128', color: '#e0e0e0', border: '1px solid #333',
+                      background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
                       borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
                     }}
                   >
@@ -1114,7 +1115,7 @@ export function SetupWizard({
               </div>
               {/* Validation: empty check */}
               {manualPair && (!manualPair.symbol || !manualPair.timeframe) && (
-                <div style={{ color: '#e94560', fontSize: 10, marginTop: 8 }}>
+                <div style={{ color: tokens.colors.semantic.error, fontSize: 10, marginTop: 8 }}>
                   Both pair and timeframe are required
                 </div>
               )}
@@ -1127,7 +1128,7 @@ export function SetupWizard({
               <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
                 Auto-Select Backtest
               </div>
-              <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+              <div style={{ fontSize: 11, color: tokens.colors.steel.muted, marginBottom: 8 }}>
                 Evaluating candidate pairs sequentially...
               </div>
 
@@ -1162,8 +1163,8 @@ export function SetupWizard({
               {/* Auto-Select Progress */}
               {autoSelectProgress && (
             <div style={{
-              padding: 12, background: '#111128', borderRadius: 6,
-              border: '1px solid #ff9800',
+              padding: 12, background: tokens.colors.hairline.default, borderRadius: 6,
+              border: `1px solid ${tokens.colors.semantic.warning}`,
             }}>
               <ProgressBar
                 progress={(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}
@@ -1185,10 +1186,10 @@ export function SetupWizard({
           {/* Auto-Select Results */}
           {autoSelectResult && (
             <div style={{
-              marginTop: 12, padding: 12, background: '#0d1a10', borderRadius: 6,
-              border: '1px solid #4caf50',
+              marginTop: 12, padding: 12, background: tokens.colors.semantic.successBg, borderRadius: 6,
+              border: `1px solid ${tokens.colors.semantic.success}`,
             }}>
-              <div style={{ color: '#4caf50', fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+              <div style={{ color: tokens.colors.semantic.success, fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
                 Auto-Select Complete
               </div>
               <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
@@ -1202,11 +1203,11 @@ export function SetupWizard({
                 )}
                 ranking={autoSelectResult.ranking}
               />
-              <div style={{ marginTop: 8, padding: '6px 8px', background: '#1a3328', borderRadius: 3 }}>
-                <span style={{ color: '#4caf50', fontWeight: 700, fontSize: 11 }}>
+              <div style={{ marginTop: 8, padding: '6px 8px', background: tokens.colors.semantic.successBg, borderRadius: 3 }}>
+                <span style={{ color: tokens.colors.semantic.success, fontWeight: 700, fontSize: 11 }}>
                   ★ Best: {autoSelectResult.best.label}
                 </span>
-                <span style={{ color: '#888', fontSize: 10, marginLeft: 8 }}>
+                <span style={{ color: tokens.colors.steel.muted, fontSize: 10, marginLeft: 8 }}>
                   PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                   {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                 </span>
@@ -1217,7 +1218,7 @@ export function SetupWizard({
           )}
 
           {configureError && (
-            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>
+            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>
               ⚠ {configureError}
             </div>
           )}
@@ -1226,7 +1227,7 @@ export function SetupWizard({
               onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
               disabled={!!autoSelectProgress}
               style={{
-                padding: '6px 14px', background: 'transparent', color: '#888',
+                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
                 border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
                 fontSize: 11,
               }}
@@ -1238,8 +1239,8 @@ export function SetupWizard({
                 onClick={() => setStep('review')}
                 disabled={!autoSelectResult}
                 style={{
-                  padding: '8px 24px', background: autoSelectResult ? '#1a3328' : '#222',
-                  color: autoSelectResult ? '#4caf50' : '#555', border: `1px solid ${autoSelectResult ? '#4caf50' : '#333'}`,
+                  padding: '8px 24px', background: autoSelectResult ? tokens.colors.semantic.successBg : '#222',
+                  color: autoSelectResult ? tokens.colors.semantic.success : tokens.colors.steel.disabled, border: `1px solid ${autoSelectResult ? tokens.colors.semantic.success : '#333'}`,
                   borderRadius: 4, cursor: autoSelectResult ? 'pointer' : 'default',
                   fontSize: 12, fontWeight: 700,
                 }}
@@ -1281,8 +1282,8 @@ export function SetupWizard({
                 }}
                 disabled={!manualPair?.symbol}
                 style={{
-                  padding: '8px 24px', background: manualPair?.symbol ? '#1a3328' : '#222',
-                  color: manualPair?.symbol ? '#4caf50' : '#555', border: `1px solid ${manualPair?.symbol ? '#4caf50' : '#333'}`,
+                  padding: '8px 24px', background: manualPair?.symbol ? tokens.colors.semantic.successBg : '#222',
+                  color: manualPair?.symbol ? tokens.colors.semantic.success : tokens.colors.steel.disabled, border: `1px solid ${manualPair?.symbol ? tokens.colors.semantic.success : '#333'}`,
                   borderRadius: 4, cursor: manualPair?.symbol ? 'pointer' : 'default',
                   fontSize: 12, fontWeight: 700,
                 }}
@@ -1302,74 +1303,74 @@ export function SetupWizard({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
             <div>
-              <span style={{ color: '#888' }}>Wallet: </span>
-              <span style={{ color: '#4caf50' }}>
+              <span style={{ color: tokens.colors.steel.muted }}>Wallet: </span>
+              <span style={{ color: tokens.colors.semantic.success }}>
                 {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
               </span>
             </div>
             {configValues && (
               <>
                 <div>
-                  <span style={{ color: '#888' }}>Strategy: </span>
-                  <span style={{ color: '#e0e0e0' }}>
+                  <span style={{ color: tokens.colors.steel.muted }}>Strategy: </span>
+                  <span style={{ color: tokens.colors.ink['1'] }}>
                     {extractScriptName(configValues.strategySource) ?? '(unnamed strategy)'}
                   </span>
                 </div>
                 <div>
-                  <span style={{ color: '#888' }}>DEX: </span>
-                  <span style={{ color: '#e0e0e0' }}>{configValues.dex}</span>
+                  <span style={{ color: tokens.colors.steel.muted }}>DEX: </span>
+                  <span style={{ color: tokens.colors.ink['1'] }}>{configValues.dex}</span>
                 </div>
                 <div>
-                  <span style={{ color: '#888' }}>Selected Pair: </span>
-                  <span style={{ color: '#4caf50', fontWeight: 600 }}>
+                  <span style={{ color: tokens.colors.steel.muted }}>Selected Pair: </span>
+                  <span style={{ color: tokens.colors.semantic.success, fontWeight: 600 }}>
                     {backtestMode === 'manual' && manualPair
                       ? `${manualPair.symbol} (${manualPair.timeframe === '5' ? '5m' : manualPair.timeframe === '15' ? '15m' : manualPair.timeframe === '60' ? '1h' : '4h'})`
                       : autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
                   </span>
                 </div>
                 {backtestMode === 'manual' && (
-                  <div style={{ fontSize: 10, color: '#ff9800', marginLeft: 60 }}>
+                  <div style={{ fontSize: 10, color: tokens.colors.semantic.warning, marginLeft: 60 }}>
                     Manual selection — no auto-select evaluation performed
                   </div>
                 )}
                 {autoSelectResult && backtestMode === 'auto' && (
-                  <div style={{ fontSize: 10, color: '#888', marginLeft: 60 }}>
+                  <div style={{ fontSize: 10, color: tokens.colors.steel.muted, marginLeft: 60 }}>
                     PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                     {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                   </div>
                 )}
                 <div>
-                  <span style={{ color: '#888' }}>Max Daily Loss: </span>
-                  <span style={{ color: '#e0e0e0' }}>${configValues.maxDailyLoss}</span>
+                  <span style={{ color: tokens.colors.steel.muted }}>Max Daily Loss: </span>
+                  <span style={{ color: tokens.colors.ink['1'] }}>${configValues.maxDailyLoss}</span>
                 </div>
                 <div>
-                  <span style={{ color: '#888' }}>Timezone: </span>
-                  <span style={{ color: '#e0e0e0' }}>{getTimezoneLabel(configValues.timezone)}</span>
+                  <span style={{ color: tokens.colors.steel.muted }}>Timezone: </span>
+                  <span style={{ color: tokens.colors.ink['1'] }}>{getTimezoneLabel(configValues.timezone)}</span>
                 </div>
               </>
             )}
           </div>
 
           {startError && (
-            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{startError}</div>
+            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>{startError}</div>
           )}
           {resetError && (
-            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>{resetError}</div>
+            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>{resetError}</div>
           )}
           {chaosError && (
-            <div style={{ color: '#e94560', fontSize: 11, marginTop: 8 }}>
+            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>
               ⚠ Chaos mode toggle failed: {chaosError}. Start is blocked until chaos mode matches the engine.
             </div>
           )}
 
           {/* Reset buttons */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: '1px solid #1a1a2e', paddingTop: 12 }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: `1px solid ${tokens.colors.surface['1']}`, paddingTop: 12 }}>
             <button
               onClick={() => handleResetConfig(false)}
               disabled={resetting}
               style={{
-                padding: '4px 10px', background: 'transparent', color: '#ff9800',
-                border: '1px solid #ff9800', borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
+                padding: '4px 10px', background: 'transparent', color: tokens.colors.semantic.warning,
+                border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
                 fontSize: 10,
               }}
             >
@@ -1379,8 +1380,8 @@ export function SetupWizard({
               onClick={() => handleResetConfig(true)}
               disabled={resetting}
               style={{
-                padding: '4px 10px', background: 'transparent', color: '#e94560',
-                border: '1px solid #e94560', borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
+                padding: '4px 10px', background: 'transparent', color: tokens.colors.semantic.error,
+                border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
                 fontSize: 10,
               }}
             >
@@ -1391,18 +1392,18 @@ export function SetupWizard({
           {/* Re-run backtest button when config has autoSelect but hasn't been run this session */}
           {persistedConfig?.autoSelect === true && !backtestRunThisSession && !autoSelectResult && (
             <div style={{ 
-              padding: '8px 12px', background: '#1a1a2e', borderRadius: 6, 
-              border: '1px solid #ff9800', marginTop: 12 
+              padding: '8px 12px', background: tokens.colors.surface['1'], borderRadius: 6, 
+              border: `1px solid ${tokens.colors.semantic.warning}`, marginTop: 12 
             }}>
-              <div style={{ color: '#ff9800', fontSize: 11, marginBottom: 6 }}>
+              <div style={{ color: tokens.colors.semantic.warning, fontSize: 11, marginBottom: 6 }}>
                 Auto-select backtest hasn't been run since page reload.
               </div>
               <button
                 onClick={handleRerunBacktest}
                 disabled={!!autoSelectProgress}
                 style={{
-                  padding: '6px 14px', background: '#2a2010', color: '#ff9800',
-                  border: '1px solid #ff9800', borderRadius: 4, 
+                  padding: '6px 14px', background: tokens.colors.semantic.warningBg, color: tokens.colors.semantic.warning,
+                  border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, 
                   cursor: autoSelectProgress ? 'wait' : 'pointer',
                   fontSize: 11, fontWeight: 600,
                 }}
@@ -1417,7 +1418,7 @@ export function SetupWizard({
               onClick={() => setStep('config')}
               disabled={!!autoSelectProgress}
               style={{
-                padding: '6px 14px', background: 'transparent', color: '#888',
+                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
                 border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
                 fontSize: 11,
               }}
@@ -1429,8 +1430,8 @@ export function SetupWizard({
               disabled={starting || !!autoSelectProgress || !!chaosError}
               title={chaosError ? 'Cannot start — chaos mode is in a failed state' : undefined}
               style={{
-                padding: '8px 24px', background: starting ? '#1a3328' : '#1a3328',
-                color: '#4caf50', border: '1px solid #4caf50', borderRadius: 4,
+                padding: '8px 24px', background: starting ? tokens.colors.semantic.successBg : tokens.colors.semantic.successBg,
+                color: tokens.colors.semantic.success, border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 4,
                 cursor: (starting || !!autoSelectProgress) ? 'wait' : chaosError ? 'not-allowed' : 'pointer',
                 fontSize: 12, fontWeight: 700,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1439,7 +1440,7 @@ export function SetupWizard({
             >
               {starting ? 'Starting...' : (
                 <>
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill="#4caf50">
+                  <svg width="12" height="12" viewBox="0 0 10 10" fill={tokens.colors.semantic.success}>
                     <polygon points="2,0 9,5 2,10" />
                   </svg>
                   Start Bot
