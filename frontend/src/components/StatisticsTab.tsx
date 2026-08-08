@@ -10,8 +10,16 @@ import type {
 import { useTradeStats } from '../hooks/useTradeStats';
 import { matchesTradeFilter } from '../hooks/useTradeHistory';
 import { fmtAmount, fmtSignedUsd } from '../utils/format';
-import { ErrorState, ModeToggle, StatusSelect, filterControlStyle } from './TradeTabShared';
+import { ErrorState, ModeToggle, StatusSelect } from './TradeTabShared';
 import { tokens } from '../theme/tokens';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface StatisticsTabProps {
   backendUrl: string;
@@ -39,7 +47,7 @@ const GROUP_BY_LABEL: Record<Exclude<TradeGroupBy, 'global'>, string> = {
   asset: 'Asset',
 };
 
-/** Equity curve canvas — hand-rolled 2D polyline (BacktestResults precedent,
+/** Equity curve canvas — hand-rolled 2D polyline (pennant precedent,
  *  DPR-aware), x = close time, y = cumulative PnL, zero line dashed. */
 function EquityCurveChart({ points }: { points: Array<{ time: number; equity: number }> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,7 +85,7 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
     const y = (e: number) => pad.top + (1 - (e - minE) / rangeE) * plotH;
 
     // Zero line
-    ctx.strokeStyle = '#333';
+    ctx.strokeStyle = tokens.chart.grid;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(pad.left, y(0));
@@ -107,15 +115,10 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
   if (points.length === 0) return null;
   return (
     <div
-      style={{
-        width: '100%',
-        height: 220,
-        background: tokens.colors.canvas,
-        borderRadius: 6,
-        border: `1px solid ${tokens.colors.hairline.default}`,
-      }}
+      className="w-full h-[220px] rounded-md border bg-[color:var(--pf-canvas)]"
+      style={{ borderColor: tokens.colors.hairline.default }}
     >
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
 }
@@ -155,7 +158,7 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
     const scale = (v: number) => (Math.abs(v) / maxAbs) * halfW;
 
     // Central zero axis
-    ctx.strokeStyle = '#333';
+    ctx.strokeStyle = tokens.chart.grid;
     ctx.beginPath();
     ctx.moveTo(midX, 6);
     ctx.lineTo(midX, h - 6);
@@ -169,7 +172,7 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
       const x0 = pnl >= 0 ? midX : midX - barW;
 
       // Label (group key)
-      ctx.fillStyle = g.key === 'Chaos Mode' ? tokens.colors.semantic.warning : '#aaa';
+      ctx.fillStyle = g.key === 'Chaos Mode' ? tokens.colors.semantic.warning : tokens.colors.ink['2'];
       const label = g.key.length > 24 ? `${g.key.slice(0, 24)}…` : g.key;
       ctx.fillText(label, 10, y + 7);
 
@@ -192,16 +195,10 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
   if (groups.length === 0) return null;
   return (
     <div
-      style={{
-        width: '100%',
-        maxHeight: 400,
-        overflow: 'auto',
-        background: tokens.colors.canvas,
-        borderRadius: 6,
-        border: `1px solid ${tokens.colors.hairline.default}`,
-      }}
+      className="w-full max-h-[400px] overflow-auto rounded-md border bg-[color:var(--pf-canvas)]"
+      style={{ borderColor: tokens.colors.hairline.default }}
     >
-      <canvas ref={canvasRef} style={{ width: '100%', display: 'block' }} />
+      <canvas ref={canvasRef} className="block w-full" />
     </div>
   );
 }
@@ -218,43 +215,30 @@ function StatCard({
   title?: string;
 }) {
   return (
-    <div
-      style={{
-        background: tokens.colors.canvas,
-        border: `1px solid ${tokens.colors.hairline.default}`,
-        padding: '10px 12px',
-        borderRadius: 6,
-        textAlign: 'center',
-      }}
+    <Card
+      className="p-2.5 text-center rounded-md border bg-[color:var(--pf-canvas)]"
       title={title}
     >
-      <div
-        style={{
-          fontSize: 10,
-          color: tokens.colors.steel.muted,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 15,
-          fontWeight: 700,
-          color: color ?? tokens.colors.ink['1'],
-          fontFamily: 'monospace',
-        }}
-      >
-        {value}
-      </div>
-    </div>
+      <CardContent className="p-0">
+        <div
+          className="text-[10px] uppercase tracking-[0.5px] mb-1"
+          style={{ color: tokens.colors.steel.muted }}
+        >
+          {label}
+        </div>
+        <div
+          className="text-[15px] font-semibold font-mono"
+          style={{ color: color ?? tokens.colors.ink['1'] }}
+        >
+          {value}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 const NO_TRADES = (
-  <div style={{ padding: 32, textAlign: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
+  <div className="p-8 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
     No trades yet.
   </div>
 );
@@ -353,53 +337,50 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
   const groupLabel = GROUP_BY_LABEL[groupBy];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="flex flex-col gap-3.5">
       {/* Controls */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="flex gap-2 items-center flex-wrap">
         <ModeToggle value={mode} onChange={setMode} />
         <StatusSelect value={status} onChange={setStatus} />
-        <div style={{ flex: 1 }} />
-        <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Group by:</span>
-        <select
+        <div className="flex-1" />
+        <span className="text-[11px]" style={{ color: tokens.colors.steel.muted }}>
+          Group by:
+        </span>
+        <Select
           value={groupBy}
-          onChange={(e) => setGroupBy(e.target.value as Exclude<TradeGroupBy, 'global'>)}
-          style={filterControlStyle}
-          title="Group the PnL comparison chart by strategy, timeframe, or asset"
+          onValueChange={(v) => setGroupBy(v as Exclude<TradeGroupBy, 'global'>)}
         >
-          <option value="strategy">Strategy</option>
-          <option value="timeframe">Timeframe</option>
-          <option value="asset">Asset</option>
-        </select>
+          <SelectTrigger
+            className="h-9"
+            aria-label="Group the PnL comparison chart by strategy, timeframe, or asset"
+            title="Group the PnL comparison chart by strategy, timeframe, or asset"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="strategy">Strategy</SelectItem>
+            <SelectItem value="timeframe">Timeframe</SelectItem>
+            <SelectItem value="asset">Asset</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Global metric cards */}
       <div>
         <div
-          style={{
-            color: tokens.colors.steel.muted,
-            fontWeight: 600,
-            marginBottom: 8,
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-          }}
+          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
+          style={{ color: tokens.colors.steel.muted }}
         >
           Global Metrics
         </div>
         {error && !summary ? (
           <ErrorState message={error} onRetry={refresh} />
         ) : loading && !summary ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#666', fontSize: 12 }}>
+          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
             Loading statistics…
           </div>
         ) : summary && summary.totalTrades > 0 ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-              gap: 8,
-            }}
-          >
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
             <StatCard label="Total Trades" value={String(summary.totalTrades)} />
             <StatCard label="Win Rate" value={`${(summary.winRate * 100).toFixed(1)}%`} />
             <StatCard
@@ -414,7 +395,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
               color={summary.netPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
               title="Gross PnL minus fees (fees are 0 in this version — equals gross PnL)"
             />
-            <StatCard label="Fees" value={fmtAmount(summary.totalFees)} title="Fees are not included in this version — always 0 (real fee parsing deferred)" />
+            <StatCard label="Fees" value={fmtAmount(summary.totalFees)} title="Fees are not included in this version -- always 0 (real fee parsing deferred)" />
             <StatCard
               label="Profit Factor"
               value={
@@ -453,17 +434,11 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       {/* Equity curve */}
       <div>
         <div
-          style={{
-            color: tokens.colors.steel.muted,
-            fontWeight: 600,
-            marginBottom: 8,
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-          }}
+          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
+          style={{ color: tokens.colors.steel.muted }}
         >
           Equity Curve{' '}
-          <span style={{ color: '#666', fontWeight: 400, letterSpacing: 0 }}>
+          <span className="text-[color:var(--pf-ink-3)] font-normal tracking-normal">
             — cumulative realized PnL over close time (est.)
           </span>
         </div>
@@ -471,33 +446,15 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
           <ErrorState message={equityError} />
         ) : equityLoading && equityTrades.length === 0 ? (
           <div
-            style={{
-              height: 220,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#666',
-              fontSize: 12,
-              background: tokens.colors.canvas,
-              borderRadius: 6,
-              border: `1px solid ${tokens.colors.hairline.default}`,
-            }}
+            className="h-[220px] flex items-center justify-center rounded-md border bg-[color:var(--pf-canvas)]"
+            style={{ color: tokens.colors.ink['3'], fontSize: 12, borderColor: tokens.colors.hairline.default }}
           >
             Loading equity curve…
           </div>
         ) : equityPoints.length === 0 ? (
           <div
-            style={{
-              height: 100,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: tokens.colors.steel.disabled,
-              fontSize: 12,
-              background: tokens.colors.canvas,
-              borderRadius: 6,
-              border: `1px solid ${tokens.colors.hairline.default}`,
-            }}
+            className="h-[100px] flex items-center justify-center rounded-md border bg-[color:var(--pf-canvas)]"
+            style={{ color: tokens.colors.steel.disabled, fontSize: 12, borderColor: tokens.colors.hairline.default }}
           >
             No trades to chart.
           </div>
@@ -509,27 +466,21 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       {/* Grouped PnL comparison */}
       <div>
         <div
-          style={{
-            color: tokens.colors.steel.muted,
-            fontWeight: 600,
-            marginBottom: 8,
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-          }}
+          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
+          style={{ color: tokens.colors.steel.muted }}
         >
           PnL by {groupLabel}
         </div>
         {error && !groups ? (
           <ErrorState message={error} onRetry={refresh} />
         ) : loading && !groups ? (
-          <div style={{ padding: 24, textAlign: 'center', color: '#666', fontSize: 12 }}>
+          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
             Loading groups…
           </div>
         ) : groups && groups.length > 0 ? (
           <GroupedPnlChart groups={groups} />
         ) : (
-          <div style={{ padding: 24, textAlign: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
+          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
             No groups to chart.
           </div>
         )}

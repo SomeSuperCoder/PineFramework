@@ -1,4 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Badge } from '@/components/ui/badge';
 
 interface ScriptEntry {
   id: string;
@@ -32,9 +45,7 @@ export function QuickAdderPopup({ isOpen, onClose, onAdd }: QuickAdderPopupProps
   const [scripts, setScripts] = useState<MergedScript[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const fetchScripts = useCallback(async () => {
     setLoading(true);
@@ -73,7 +84,6 @@ export function QuickAdderPopup({ isOpen, onClose, onAdd }: QuickAdderPopupProps
   useEffect(() => {
     if (isOpen) {
       setSearch('');
-      setHighlightIndex(0);
       fetchScripts();
     }
   }, [isOpen, fetchScripts]);
@@ -88,86 +98,68 @@ export function QuickAdderPopup({ isOpen, onClose, onAdd }: QuickAdderPopupProps
     s.name.toLowerCase().includes(search.toLowerCase()),
   );
 
-  useEffect(() => {
-    setHighlightIndex(0);
-  }, [search]);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const item = list.children[highlightIndex] as HTMLElement | undefined;
-    if (item && typeof item.scrollIntoView === 'function') {
-      item.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightIndex]);
-
   const handleAdd = useCallback((s: MergedScript) => {
     onAdd(s.id, s.source);
   }, [onAdd]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      onClose();
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.min(i + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filtered[highlightIndex]) {
-        handleAdd(filtered[highlightIndex]);
-      }
-    }
-  }, [onClose, filtered, highlightIndex, handleAdd]);
-
-  if (!isOpen) return null;
-
   return (
-    <div className="quick-adder-overlay" onClick={onClose}>
-      <div className="quick-adder-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="quick-adder-header">
-          <input
+    <Popover open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      {/* Invisible anchor keeps the Radix popover positioned at the top-center
+          while the popup opens programmatically from App. */}
+      <PopoverAnchor asChild>
+        <span className="pointer-events-none fixed top-1/4 left-1/2 h-0 w-0 -translate-x-1/2" aria-hidden="true" />
+      </PopoverAnchor>
+      <PopoverContent
+        align="center"
+        sideOffset={0}
+        className="w-[440px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl p-0"
+      >
+        <Command shouldFilter={false}>
+          <CommandInput
             ref={inputRef}
-            type="text"
-            className="quick-adder-search"
-            placeholder="Search indicators & strategies..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onValueChange={setSearch}
+            placeholder="Search indicators & strategies..."
           />
-          <button className="quick-adder-close" onClick={onClose}>×</button>
-        </div>
-        <div className="quick-adder-list" ref={listRef}>
-          {loading ? (
-            <div className="quick-adder-loading">Loading scripts...</div>
-          ) : filtered.length === 0 ? (
-            <div className="quick-adder-empty">No scripts found</div>
-          ) : (
-            filtered.map((s, i) => (
-              <div
-                key={s.id}
-                className={`quick-adder-item ${i === highlightIndex ? 'highlighted' : ''}`}
-                onClick={() => handleAdd(s)}
-                onMouseEnter={() => setHighlightIndex(i)}
-                title={s.name}
-              >
-                <span className="quick-adder-item-name">{s.name}</span>
-                <span className="quick-adder-item-badges">
-                  <span className={`badge badge-type badge-${s.type}`}>
-                    {s.type === 'strategy' ? 'STG' : 'IND'}
-                  </span>
-                  {s.isBuiltIn && (
-                    <span className="badge badge-built-in">Built-In</span>
-                  )}
-                </span>
+          <CommandList>
+            {loading ? (
+              <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+                Loading scripts...
               </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+            ) : filtered.length === 0 ? (
+              <CommandEmpty className="py-6">No scripts found</CommandEmpty>
+            ) : (
+              filtered.map((s) => (
+                <CommandItem
+                  key={s.id}
+                  value={s.id}
+                  onSelect={() => handleAdd(s)}
+                  className="cursor-pointer gap-2"
+                  title={s.name}
+                >
+                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <Badge
+                      className={
+                        s.type === 'strategy'
+                          ? 'bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)]'
+                          : 'bg-[var(--pf-semantic-warning-bg)] text-[var(--pf-semantic-warning)]'
+                      }
+                    >
+                      {s.type === 'strategy' ? 'STG' : 'IND'}
+                    </Badge>
+                    {s.isBuiltIn && (
+                      <Badge variant="outline" className="border-border text-[var(--pf-ink-2)]">
+                        Built-In
+                      </Badge>
+                    )}
+                  </span>
+                </CommandItem>
+              ))
+            )}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }

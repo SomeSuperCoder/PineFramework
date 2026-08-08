@@ -1,5 +1,21 @@
-import { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface ScriptEntry {
   id: string;
@@ -43,14 +59,10 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
-  const [highlightIndex, setHighlightIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedName, setSelectedName] = useState('');
   const [useRawPaste, setUseRawPaste] = useState(false);
   const [rawSource, setRawSource] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchStrategies = useCallback(async () => {
     setLoading(true);
@@ -95,46 +107,15 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
   useEffect(() => {
     if (isOpen) {
       setSearch('');
-      setHighlightIndex(0);
       if (strategies.length === 0 && !error) {
         fetchStrategies();
       }
     }
   }, [isOpen, fetchStrategies, strategies.length, error]);
 
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
   const filtered = strategies.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()),
   );
-
-  useEffect(() => {
-    setHighlightIndex(0);
-  }, [search]);
-
-  useEffect(() => {
-    const list = listRef.current;
-    if (!list) return;
-    const item = list.children[highlightIndex] as HTMLElement | undefined;
-    if (item && typeof item.scrollIntoView === 'function') {
-      item.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightIndex]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSelect = useCallback((s: MergedStrategy) => {
     setSelectedName(s.name);
@@ -144,212 +125,188 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
     setUseRawPaste(false);
   }, [onChange]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      setIsOpen(false);
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.min(i + 1, filtered.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filtered[highlightIndex]) {
-        handleSelect(filtered[highlightIndex]);
-      }
-    }
-  }, [filtered, highlightIndex, handleSelect]);
-
   const sourceLoaded = value.length > 0;
   const sourceLabel = selectedName || (sourceLoaded ? `Source loaded (${value.length} bytes)` : '');
 
   if (useRawPaste) {
     return (
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Paste Pine Script Strategy Source:</span>
-          <button
+        <div className="flex justify-between items-center mb-1.5">
+          <span className="text-[11px]" style={{ color: tokens.colors.steel.muted }}>
+            Paste Pine Script Strategy Source:
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => {
               setUseRawPaste(false);
               setRawSource('');
             }}
-            style={{
-              padding: '2px 8px', background: tokens.colors.surface['1'], color: '#64b5f6',
-              border: '1px solid #333', borderRadius: 3, cursor: 'pointer',
-              fontSize: 10,
-            }}
+            className="h-6 px-2 text-[10px]"
           >
             ← Select from list
-          </button>
+          </Button>
         </div>
         <textarea
           value={rawSource}
           onChange={(e) => { setRawSource(e.target.value); onChange(e.target.value, '', ''); }}
           placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"
           rows={4}
-          style={{
-            width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-            border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
-            fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
-          }}
+          className="w-full resize-y border border-[var(--pf-hairline-strong)] bg-[color:var(--pf-canvas)] p-1.5 font-mono text-[11px] text-[color:var(--pf-ink-1)] rounded-md"
         />
       </div>
     );
   }
 
+  const triggerContent = selectedName ? (
+    <>
+      <Check className="size-3.5" style={{ color: tokens.colors.semantic.success }} />
+      {selectedName}
+    </>
+  ) : sourceLoaded ? (
+    <span className="text-[color:var(--pf-steel-muted)]">{sourceLabel}</span>
+  ) : (
+    'Select a strategy...'
+  );
+
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
+    <div>
       {label !== undefined ? (
-        <label htmlFor={inputId} style={{ color: '#aaa', fontWeight: 600, marginBottom: 6, fontSize: 12, display: 'block' }}>
+        <label
+          htmlFor={inputId}
+          className="text-[12px] font-semibold mb-1.5 block"
+          style={{ color: tokens.colors.steel.muted }}
+        >
           {label}
         </label>
       ) : (
-        <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 6, fontSize: 12 }}>
+        <div className="text-[12px] font-semibold mb-1.5" style={{ color: tokens.colors.steel.muted }}>
           Strategy
         </div>
       )}
-      <div
-        onClick={() => setIsOpen(!isOpen)}
-        onKeyDown={(e) => {
-          if (!isOpen && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            setIsOpen(true);
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '6px 8px', background: tokens.colors.hairline.default, color: selectedName ? tokens.colors.ink['1'] : tokens.colors.steel.muted,
-          border: `1px solid ${isOpen ? '#64b5f6' : '#333'}`,
-          borderRadius: 4, cursor: 'pointer', fontSize: 11, minHeight: 28,
-          ...heightStyle,
-        }}
-      >
-        <span>
-          {selectedName
-            ? <><span style={{ color: tokens.colors.semantic.success }}>✓</span> {selectedName}</>
-            : sourceLoaded
-              ? <span style={{ color: tokens.colors.steel.muted }}>{sourceLabel}</span>
-              : 'Select a strategy...'}
-        </span>
-        <span style={{ color: '#666', fontSize: 10 }}>{isOpen ? '▲' : '▼'}</span>
-      </div>
 
-      {isOpen && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-          background: tokens.colors.surface['1'], border: '1px solid #333', borderRadius: 4,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)', marginTop: 2, overflow: 'hidden',
-        }}>
-          <div style={{ padding: '6px', borderBottom: '1px solid #222', ...heightStyle }}>
-            <input
-              ref={inputRef}
+      <Popover
+        open={isOpen}
+        onOpenChange={setIsOpen}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-haspopup="listbox"
+            aria-expanded={isOpen}
+            aria-controls={listId}
+            className="w-full justify-between border-[var(--pf-hairline-strong)] text-[11px]"
+            style={{
+              ...heightStyle,
+              minHeight: height ?? 40,
+              color: selectedName ? tokens.colors.ink['1'] : tokens.colors.steel.muted,
+            }}
+          >
+            <span className="inline-flex items-center gap-1.5 truncate">{triggerContent}</span>
+            {isOpen ? (
+              <ChevronUp className="size-3.5 shrink-0" style={{ color: tokens.colors.steel.muted }} />
+            ) : (
+              <ChevronDown className="size-3.5 shrink-0" style={{ color: tokens.colors.steel.muted }} />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={2}
+          className="w-full p-0"
+          style={{ width: 'var(--radix-popover-trigger-width)' }}
+        >
+          <Command
+            className="rounded-md border border-[var(--pf-hairline-strong)] bg-[color:var(--pf-surface-1)]"
+            shouldFilter={false}
+          >
+            <CommandInput
               id={inputId}
-              type="text"
-              className="quick-adder-search"
-              role="combobox"
-              aria-expanded={isOpen}
-              aria-controls={listId}
-              aria-autocomplete="list"
               placeholder={placeholder}
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{
-                width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                border: '1px solid #333', borderRadius: 3, padding: '6px 8px',
-                fontSize: 11, ...heightStyle,
-              }}
+              onValueChange={(v) => setSearch(v)}
             />
-          </div>
-
-          <div ref={listRef} id={listId} className="quick-adder-list" style={{ maxHeight: 200, overflow: 'auto' }}>
-            {loading ? (
-              <div style={{ padding: '12px', color: tokens.colors.steel.muted, fontSize: 11, textAlign: 'center' }}>
-                Loading strategies...
-              </div>
-            ) : error ? (
-              <div style={{ padding: '12px' }}>
-                <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginBottom: 6 }}>{error}</div>
-                <button
-                  onClick={fetchStrategies}
-                  style={{
-                    padding: '4px 12px', background: tokens.colors.surface['1'], color: '#64b5f6',
-                    border: '1px solid #64b5f6', borderRadius: 3, cursor: 'pointer',
-                    fontSize: 10,
-                  }}
-                >
-                  Retry
-                </button>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: '12px', color: tokens.colors.steel.muted, fontSize: 11, textAlign: 'center' }}>
-                {search
-                  ? `No strategies matching "${search}"`
-                  : 'No strategies found. Write one in the editor first.'}
-              </div>
-            ) : (
-              filtered.map((s, i) => (
-                <div
-                  key={s.id}
-                  className={`quick-adder-item ${i === highlightIndex ? 'highlighted' : ''}`}
-                  onClick={() => handleSelect(s)}
-                  onMouseEnter={() => setHighlightIndex(i)}
-                  style={{
-                    padding: '6px 8px', cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', justifyContent: 'space-between',
-                    background: i === highlightIndex ? tokens.colors.semantic.infoBg : 'transparent',
-                    color: tokens.colors.ink['1'],
-                    fontSize: 11, borderBottom: `1px solid ${tokens.colors.surface['1']}`,
-                  }}
-                >
-                  <span>{s.name}</span>
-                  <span className="quick-adder-item-badges" style={{ display: 'flex', gap: 4 }}>
-                    <span className={`badge badge-type badge-${s.type}`}
-                      style={{
-                        padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                        background: s.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.infoBg,
-                        color: s.type === 'strategy' ? tokens.colors.semantic.success : '#64b5f6',
-                      }}
-                    >
-                      {s.type === 'strategy' ? 'STG' : 'IND'}
-                    </span>
-                    {s.isBuiltIn && (
-                      <span className="badge badge-built-in"
-                        style={{
-                          padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                          background: '#2a1a3a', color: '#b388ff',
-                        }}
-                      >
-                        Built-In
-                      </span>
-                    )}
-                  </span>
+            <CommandList id={listId} className="max-h-[200px] overflow-auto">
+              {loading ? (
+                <CommandEmpty className="py-3 text-center text-[11px]">
+                  Loading strategies...
+                </CommandEmpty>
+              ) : error ? (
+                <div className="p-3">
+                  <div className="text-[11px] mb-1.5" style={{ color: tokens.colors.semantic.error }}>
+                    {error}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchStrategies}
+                    className="h-6 px-3 text-[10px]"
+                  >
+                    Retry
+                  </Button>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+              ) : filtered.length === 0 ? (
+                <CommandEmpty className="py-3 text-center text-[11px]">
+                  {search
+                    ? `No strategies matching "${search}"`
+                    : 'No strategies found. Write one in the editor first.'}
+                </CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {filtered.map((s) => (
+                    <CommandItem
+                      key={s.id}
+                      value={`${s.id} ${s.name}`}
+                      onSelect={() => handleSelect(s)}
+                    >
+                      <span className="flex-1 truncate">{s.name}</span>
+                      <span className="flex gap-1 ml-2 shrink-0">
+                        <Badge
+                          variant="secondary"
+                          className="h-[14px] px-1 text-[9px] font-semibold"
+                          style={
+                            s.type === 'strategy'
+                              ? { background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success }
+                              : { background: tokens.colors.semantic.infoBg, color: tokens.colors.semantic.info }
+                          }
+                        >
+                          {s.type === 'strategy' ? 'STG' : 'IND'}
+                        </Badge>
+                        {s.isBuiltIn && (
+                          <Badge
+                            variant="secondary"
+                            className="h-[14px] px-1 text-[9px] font-semibold"
+                            style={{ background: tokens.colors.semantic.infoBg, color: tokens.colors.semantic.info }}
+                          >
+                            Built-In
+                          </Badge>
+                        )}
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
 
       {/* Paste as fallback */}
-      <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end' }}>
-        <button
+      <div className="mt-1.5 flex justify-end">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
           onClick={() => setUseRawPaste(true)}
-          style={{
-            padding: '2px 8px', background: 'transparent', color: '#666',
-            border: '1px solid #333', borderRadius: 3, cursor: 'pointer',
-            fontSize: 10,
-          }}
+          className="h-10 px-3 text-[11px] text-[var(--pf-steel-muted)]"
           title="Paste raw Pine Script code instead"
         >
           Paste raw source
-        </button>
+        </Button>
       </div>
     </div>
   );

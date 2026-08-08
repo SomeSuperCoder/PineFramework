@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatTime, parseMsk, now } from 'pine-framework/utils/time';
-import { tokens } from '../theme/tokens';
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 interface GoToDatePopupProps {
   isOpen: boolean;
@@ -24,8 +31,6 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
     }
   }, [isOpen, lastTeleport]);
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const utc = parseMsk(dateStr, timeStr);
@@ -34,88 +39,52 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
     onClose();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') onClose();
-  };
-
   return (
-    <div
-      onClick={onClose}
-      onKeyDown={handleKeyDown}
-      style={{
-        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
-        background: 'rgba(0,0,0,0.4)', zIndex: 300,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: tokens.colors.surface['1'], border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '8px',
-          padding: '20px 24px', width: 300, color: tokens.colors.ink['1'],
-          fontFamily: tokens.typography.fontFamily, fontSize: '13px',
-        }}
-      >
-        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: 16 }}>
+    <Popover open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <PopoverAnchor asChild>
+        <span className="pointer-events-none fixed top-1/2 left-1/2 h-0 w-0 -translate-x-1/2 -translate-y-1/2" aria-hidden="true" />
+      </PopoverAnchor>
+      <PopoverContent align="center" sideOffset={0} className="w-[300px] rounded-xl p-4">
+        <div className="mb-4 text-sm font-semibold text-foreground">
           Go to Date
         </div>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', marginBottom: 4, color: tokens.colors.steel.muted }}>Date</label>
-            <input
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="goto-date" className="text-[13px] text-[var(--pf-steel-muted)]">
+              Date
+            </Label>
+            <Input
+              id="goto-date"
               type="date"
               value={dateStr}
               onChange={(e) => setDateStr(e.target.value)}
-              style={{
-                width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
-                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
-                color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
-                boxSizing: 'border-box',
-              }}
+              className="h-11"
             />
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, color: tokens.colors.steel.muted }}>Time (MSK, HH:MM)</label>
-            <input
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="goto-time" className="text-[13px] text-[var(--pf-steel-muted)]">
+              Time (MSK, HH:MM)
+            </Label>
+            <Input
               ref={inputRef}
+              id="goto-time"
               type="text"
               placeholder="HH:MM"
               value={timeStr}
               onChange={(e) => setTimeStr(e.target.value)}
-              style={{
-                width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
-                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
-                color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
-                boxSizing: 'border-box', textAlign: 'center',
-                fontFamily: 'monospace',
-              }}
+              className="h-11 text-center font-mono"
             />
           </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              style={{
-                padding: '6px 14px', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
-                cursor: 'pointer', fontSize: '12px',
-              }}
-            >
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                padding: '6px 14px', background: tokens.colors.brand.blue, color: tokens.colors.ink.default,
-                border: 'none', borderRadius: '4px', cursor: 'pointer',
-                fontSize: '12px', fontWeight: 600,
-              }}
-            >
+            </Button>
+            <Button type="submit" className="bg-[var(--pf-brand-blue)] text-white hover:bg-[var(--pf-brand-blue-hover)]">
               Go
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

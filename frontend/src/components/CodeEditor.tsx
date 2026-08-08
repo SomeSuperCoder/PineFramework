@@ -1,6 +1,13 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { extractScriptName as extractName } from 'pine-framework/utils/script-name';
 import { tokens } from '../theme/tokens';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface ScriptEntry {
   id: string;
@@ -246,149 +253,125 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
   const currentBuiltIn = builtInScripts.find((s) => s.id === currentScriptId);
   const isBuiltIn = !!currentBuiltIn;
 
-  if (!isOpen) return null;
-
   return (
-    <div className="editor-overlay" onClick={onClose}>
-      <div className="editor-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="editor-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-            <h2 style={{ margin: 0, whiteSpace: 'nowrap' }}>Pine Script Editor</h2>
-            {(scripts.length > 0 || builtInScripts.length > 0) && (
-              <select
-                value={currentScriptId || ''}
-                onChange={handleDropdownChange}
-                style={{
-                  flex: 1,
-                  padding: '4px 8px',
-                  background: tokens.colors.canvas,
-                  color: tokens.colors.ink['1'],
-                  border: `1px solid ${tokens.colors.hairline.default}`,
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  minWidth: 0,
-                }}
-              >
-                {scripts.length > 0 && (
-                  <optgroup label="My Scripts">
-                    {scripts.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {builtInScripts.length > 0 && (
-                  <optgroup label="Built-In Tests">
-                    {builtInScripts.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            )}
-          </div>
-          <div className="editor-actions">
-            <button onClick={handleNewScript}>New</button>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        className="flex h-[90vh] w-[92vw] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[92vw]"
+      >
+        <DialogHeader className="flex flex-row items-center gap-2 border-b border-border px-4 py-3">
+          <DialogTitle className="whitespace-nowrap text-sm">Pine Script Editor</DialogTitle>
+          {(scripts.length > 0 || builtInScripts.length > 0) && (
+            <select
+              value={currentScriptId || ''}
+              onChange={handleDropdownChange}
+              className="min-w-0 flex-1 rounded-md border border-border bg-[var(--pf-canvas)] px-2 py-1.5 text-[13px] text-foreground outline-none"
+            >
+              {scripts.length > 0 && (
+                <optgroup label="My Scripts">
+                  {scripts.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {builtInScripts.length > 0 && (
+                <optgroup label="Built-In Tests">
+                  {builtInScripts.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <Button variant="ghost" size="sm" onClick={handleNewScript}>
+              New
+            </Button>
             {currentScript && (
-              <button onClick={handleDelete}>Delete</button>
+              <Button variant="ghost" size="sm" onClick={handleDelete}>
+                Delete
+              </Button>
             )}
-            <button
-              className="primary"
+            <Button
+              size="sm"
               onClick={() => {
                 if (currentScriptId) onAdd(currentScriptId, source);
               }}
               disabled={!currentScriptId}
             >
               Add (Ctrl+Enter)
-            </button>
-            <button onClick={onClose}>Close</button>
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Close
+            </Button>
           </div>
-        </div>
+        </DialogHeader>
         {currentScript && (
-          <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
-            <span style={{
-              padding: '1px 5px',
-              background: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
-              color: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
-              borderRadius: '3px',
-              fontSize: '10px',
-            }}>
+          <div className="flex items-center gap-1.5 border-b border-border bg-[var(--pf-canvas)] px-4 py-1 text-[11px] text-[var(--pf-steel-muted)]">
+            <span
+              className="rounded px-1.5 py-0.5 text-[10px]"
+              style={{
+                background: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
+                color: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
+              }}
+            >
               {currentScript.scriptType}
             </span>
             {(() => {
               const pineVersion = extractVersion(source);
               return pineVersion ? (
-                <span style={{
-                  marginLeft: '6px',
-                  padding: '1px 5px',
-                  background: tokens.colors.semantic.infoBg,
-                  color: '#64b5f6',
-                  borderRadius: '3px',
-                  fontSize: '10px',
-                }}>
+                <span
+                  className="rounded px-1.5 py-0.5 text-[10px]"
+                  style={{
+                    background: tokens.colors.semantic.infoBg,
+                    color: tokens.colors.semantic.info,
+                  }}
+                >
                   v{pineVersion}
                 </span>
               ) : null;
             })()}
-            <span style={{ marginLeft: '8px' }}>
+            <span className="ml-2">
               Updated {new Date(currentScript.updatedAt).toLocaleDateString()}
             </span>
           </div>
         )}
         {currentBuiltIn && (
-          <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
-            <span style={{
-              padding: '1px 5px',
-              background: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
-              color: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
-              borderRadius: '3px',
-              fontSize: '10px',
-            }}>
+          <div className="flex items-center gap-1.5 border-b border-border bg-[var(--pf-canvas)] px-4 py-1 text-[11px] text-[var(--pf-steel-muted)]">
+            <span
+              className="rounded px-1.5 py-0.5 text-[10px]"
+              style={{
+                background: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
+                color: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
+              }}
+            >
               {currentBuiltIn.type}
             </span>
-            <span style={{
-              marginLeft: '6px',
-              padding: '1px 5px',
-              background: '#3e2a1a',
-              color: '#ffb74d',
-              borderRadius: '3px',
-              fontSize: '10px',
-            }}>
+            <span
+              className="rounded px-1.5 py-0.5 text-[10px]"
+              style={{
+                background: tokens.colors.semantic.warningBg,
+                color: tokens.colors.semantic.warning,
+              }}
+            >
               Built-In
             </span>
           </div>
         )}
-        <div className="editor-content">
+        <div className="min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <div style={{ padding: '16px', color: tokens.colors.steel.muted }}>Loading scripts...</div>
+            <div className="p-4 text-[var(--pf-steel-muted)]">Loading scripts...</div>
           ) : scripts.length === 0 && builtInScripts.length === 0 ? (
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '100%',
-              gap: '16px',
-              color: tokens.colors.steel.muted,
-            }}>
-              <div style={{ fontSize: '15px', color: tokens.colors.ink['1'] }}>No scripts yet</div>
-              <div style={{ fontSize: '13px', maxWidth: '320px', textAlign: 'center', lineHeight: '1.5' }}>
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-[var(--pf-steel-muted)]">
+              <div className="text-[15px] text-foreground">No scripts yet</div>
+              <div className="max-w-[320px] text-center text-[13px] leading-6">
                 Create your first Pine Script to get started. You can write indicators and strategies, then run them on the chart.
               </div>
-              <button
+              <Button
                 onClick={handleNewScript}
-                style={{
-                  padding: '10px 24px',
-                  background: tokens.colors.semantic.success,
-                  color: tokens.colors.ink.default,
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                }}
+                className="bg-[var(--pf-semantic-success)] text-[var(--pf-ink)] hover:bg-[var(--pf-semantic-success-hover)]"
               >
                 Create Your First Script
-              </button>
+              </Button>
             </div>
           ) : (
             <textarea
@@ -401,7 +384,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
                 width: '100%',
                 height: '100%',
                 backgroundColor: isBuiltIn ? tokens.colors.surface['2'] : tokens.colors.surface['1'],
-                color: isBuiltIn ? '#999' : '#d4d4d4',
+                color: isBuiltIn ? tokens.colors.ink['2'] : tokens.colors.ink['1'],
                 border: 'none',
                 padding: '16px',
                 fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
@@ -416,7 +399,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
             />
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

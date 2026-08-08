@@ -1,7 +1,14 @@
 import { BacktestResults } from './BacktestResults';
 import { ProgressBar } from './ProgressBar';
 import type { BacktestStatusResponse, BacktestResultResponse } from '../types';
-import { tokens } from '../theme/tokens';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface StrategyResultsPopupProps {
   isOpen: boolean;
@@ -15,98 +22,58 @@ interface StrategyResultsPopupProps {
 }
 
 export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, progress, phase, result, error }: StrategyResultsPopupProps) {
-  if (!isOpen) return null;
-
   const isLoading = status === null || status === 'queued' || status === 'running';
   const displayProgress = status === 'completed' ? 100 : progress;
 
   return (
-    <div className="strategy-popup-overlay" onClick={onClose} style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      background: 'rgba(0,0,0,0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 200,
-    }}>
-      <div className="strategy-popup" onClick={(e) => e.stopPropagation()} style={{
-        width: '90vw',
-        height: '90vh',
-        background: tokens.colors.surface['1'],
-        border: `1px solid ${tokens.colors.hairline.default}`,
-        borderRadius: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        color: tokens.colors.ink['1'],
-        fontSize: '13px',
-      }}>
-        <div className="strategy-popup-header" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 20px',
-          borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-          flexShrink: 0,
-        }}>
-          <h2 style={{ margin: 0, color: tokens.colors.brand.blue, fontSize: '18px' }}>Backtest Results</h2>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[90vh] w-[90vw] max-w-[90vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[90vw]"
+      >
+        <DialogHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <DialogTitle className="text-lg text-[var(--pf-brand-blue-hover)]">
+            Backtest Results
+          </DialogTitle>
+          <div className="flex items-center gap-2">
             {status === 'running' && (
-              <span style={{ fontSize: '12px', color: tokens.colors.semantic.warning }}>{displayProgress}%</span>
+              <span className="text-xs text-[var(--pf-semantic-warning)]">{displayProgress}%</span>
             )}
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onOpenSettings}
               title="Open Backtest"
-              style={{
-                padding: '6px 10px',
-                background: 'transparent',
-                color: tokens.colors.ink['1'],
-                border: `1px solid ${tokens.colors.hairline.default}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '16px',
-                lineHeight: '1',
-              }}
+              className="size-9"
             >
               ⚙
-            </button>
-            <button
-              onClick={onClose}
-              style={{
-                padding: '6px 12px',
-                background: '#3a1a1a',
-                color: tokens.colors.semantic.error,
-                border: `1px solid ${tokens.colors.semantic.error}`,
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '14px',
-              }}
-            >
-              ✕
-            </button>
+            </Button>
+            <DialogClose asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Close"
+                className="size-9"
+              >
+                ✕
+              </Button>
+            </DialogClose>
           </div>
-        </div>
+        </DialogHeader>
 
-        <div className="strategy-popup-content" style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '20px',
-          ...(isLoading && { display: 'flex', alignItems: 'center', justifyContent: 'center' }),
-        }}>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {isLoading && (
-            <ProgressBar
-              progress={displayProgress}
-              phase={phase || 'Starting backtest'}
-              variant="modal"
-              status={status}
-            />
+            <div className="flex h-full items-center justify-center">
+              <ProgressBar
+                progress={displayProgress}
+                phase={phase || 'Starting backtest'}
+                variant="modal"
+                status={status}
+              />
+            </div>
           )}
           {status === 'failed' && error && (
-            <div style={{ padding: '40px', textAlign: 'center', color: tokens.colors.semantic.error }}>
+            <div className="py-10 text-center text-[var(--pf-semantic-error)]">
               Backtest failed: {error}
             </div>
           )}
@@ -114,7 +81,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             <BacktestResults result={result} onClose={() => {}} />
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -18,7 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "pine-framework": ["../src/frontend-safe.ts"],
-      "pine-framework/utils/time": ["../src/utils/time.ts"]
+      "pine-framework/utils/time": ["../src/utils/time.ts"],
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

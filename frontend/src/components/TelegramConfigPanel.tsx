@@ -8,6 +8,17 @@ import type {
 } from '../types';
 import { NOTIFICATION_TYPES } from '../types';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface TelegramConfigPanelProps {
   alertConditions: AlertConditionData[];
@@ -118,6 +129,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testSending, setTestSending] = useState(false);
+  const [testStatus, setTestStatus] = useState<'idle' | 'ok' | 'error'>('idle');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [alertPrefs, setAlertPrefs] = useState<Record<string, Record<number, boolean>>>({});
   const [, setProxy] = useState<ProxyConfig | null>(null);
@@ -214,10 +226,12 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
 
   const handleTest = async () => {
     setTestSending(true);
+    setTestStatus('idle');
     try {
       await sendTestMessage();
+      setTestStatus('ok');
     } catch {
-      // ignore
+      setTestStatus('error');
     } finally {
       setTestSending(false);
     }
@@ -308,6 +322,8 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
     }
   };
 
+  const formControlStyle = { color: tokens.colors.ink['2'], fontWeight: 600, margin: '0 0 8px', fontSize: 13 };
+
   return (
     <div
       className="telegram-panel"
@@ -324,343 +340,195 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
         fontSize: '13px',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px' }}>
+      <div className="flex items-center gap-2.5 mt-0 mb-4">
         {onClose && (
-          <button
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={onClose}
             aria-label="Back to dashboard"
-            style={{
-              background: 'none',
-              border: '1px solid #333',
-              borderRadius: '4px',
-              color: '#aaa',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              fontSize: '13px',
-            }}
           >
             ← Back
-          </button>
+          </Button>
         )}
-        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Telegram Configuration</h3>
+        <h3 className="m-0 text-[16px] font-semibold">Telegram Configuration</h3>
       </div>
 
       {loading && <div style={{ color: tokens.colors.steel.muted }}>Loading...</div>}
 
       {!loading && (
         <>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Bot Token</label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
+          <div className="mb-4">
+            <Label className="block mb-1 text-[13px] font-medium" style={{ color: tokens.colors.ink['2'] }}>Bot Token</Label>
+            <div className="flex gap-2">
+              <Input
                 type="password"
                 value={botToken}
                 onChange={(e) => setBotToken(e.target.value)}
                 placeholder="Enter your bot token"
-                style={{
-                  flex: 1,
-                  padding: '6px',
-                  background: tokens.colors.canvas,
-                  color: tokens.colors.ink['1'],
-                  border: `1px solid ${tokens.colors.hairline.default}`,
-                  borderRadius: '4px',
-                }}
+                className="flex-1 h-9"
               />
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                style={{
-                  padding: '6px 12px',
-                  background: saving ? '#333' : tokens.colors.brand.blue,
-                  color: tokens.colors.ink.default,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <Button type="button" onClick={handleSave} disabled={saving} aria-busy={saving} className="h-9 whitespace-nowrap">
                 {saving ? '...' : 'Save'}
-              </button>
+              </Button>
             </div>
             {saveStatus === 'saved' && (
-              <div style={{ marginTop: '4px', color: tokens.colors.semantic.success, fontSize: '11px' }}>Token saved</div>
+              <div className="mt-1 text-[11px]" style={{ color: tokens.colors.semantic.success }}>Token saved</div>
             )}
             {saveStatus === 'error' && (
-              <div style={{ marginTop: '4px', color: tokens.colors.semantic.error, fontSize: '11px' }}>Failed to save</div>
+              <div className="mt-1 text-[11px]" style={{ color: tokens.colors.semantic.error }}>Failed to save</div>
             )}
           </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>Test</label>
-            <button
-              onClick={handleTest}
-              disabled={testSending || !botToken}
-              style={{
-                padding: '6px 12px',
-                background: testSending ? '#333' : tokens.colors.semantic.success,
-                color: tokens.colors.ink.default,
-                border: 'none',
-                borderRadius: '4px',
-                cursor: testSending || !botToken ? 'not-allowed' : 'pointer',
-              }}
-            >
+          <div className="mb-4">
+            <Label className="block mb-1 text-[13px] font-medium" style={{ color: tokens.colors.ink['2'] }}>Test</Label>
+            <Button type="button" onClick={handleTest} disabled={testSending || !botToken} aria-busy={testSending} className="h-9">
               {testSending ? 'Sending...' : 'Send Test Message'}
-            </button>
+            </Button>
+            {testStatus === 'ok' && (
+              <div role="status" className="mt-1 text-[11px]" style={{ color: tokens.colors.semantic.success }}>
+                Connected — test message sent.
+              </div>
+            )}
+            {testStatus === 'error' && (
+              <div role="status" className="mt-1 text-[11px]" style={{ color: tokens.colors.semantic.error }}>
+                Failed — click Send Test Message to retry.
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '16px',         borderTop: `1px solid ${tokens.colors.hairline.default}`, paddingTop: '12px' }}>
-            <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>
+          <div className="mb-4 border-t pt-3" style={{ borderColor: tokens.colors.hairline.default }}>
+            <Label className="block mb-2" style={{ color: tokens.colors.ink['2'] }}>
               HTTP Proxy (optional)
-            </label>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
-              <input
+            </Label>
+            <div className="flex gap-2 mb-1.5">
+              <Input
                 type="text"
                 value={proxyHost}
                 onChange={(e) => setProxyHost(e.target.value)}
                 placeholder="Host (e.g., 127.0.0.1)"
-                style={{
-                  flex: 1,
-                  padding: '6px',
-                  background: tokens.colors.canvas,
-                  color: tokens.colors.ink['1'],
-                  border: `1px solid ${tokens.colors.hairline.default}`,
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                }}
+                className="flex-1 h-9 text-[12px]"
               />
-              <input
+              <Input
                 type="number"
                 value={proxyPort}
                 onChange={(e) => setProxyPort(e.target.value)}
                 placeholder="Port"
                 min={1}
                 max={65535}
-                style={{
-                  width: '80px',
-                  padding: '6px',
-                  background: tokens.colors.canvas,
-                  color: tokens.colors.ink['1'],
-                  border: `1px solid ${tokens.colors.hairline.default}`,
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                }}
+                className="w-[80px] h-9 text-[12px]"
               />
             </div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
-              <input
+            <div className="flex gap-2 mb-1.5">
+              <Input
                 type="text"
                 value={proxyUsername}
                 onChange={(e) => setProxyUsername(e.target.value)}
                 placeholder="Username (optional)"
-                style={{
-                  flex: 1,
-                  padding: '6px',
-                  background: tokens.colors.canvas,
-                  color: tokens.colors.ink['1'],
-                  border: `1px solid ${tokens.colors.hairline.default}`,
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                }}
+                className="flex-1 h-11 text-[12px]"
               />
-              <div style={{ position: 'relative', flex: 1 }}>
-                <input
+              <div className="relative flex-1">
+                <Input
                   type={showProxyPassword ? 'text' : 'password'}
                   value={proxyPassword}
                   onChange={(e) => setProxyPassword(e.target.value)}
                   placeholder="Password (optional)"
-                  style={{
-                    width: '100%',
-                    padding: '6px',
-                    paddingRight: '28px',
-                    background: tokens.colors.canvas,
-                    color: tokens.colors.ink['1'],
-                    border: `1px solid ${tokens.colors.hairline.default}`,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    boxSizing: 'border-box',
-                  }}
+                  className="w-full h-11 pr-11 text-[12px] box-border"
                 />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setShowProxyPassword(!showProxyPassword)}
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: tokens.colors.steel.muted,
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    padding: '2px 4px',
-                  }}
+                  aria-label={showProxyPassword ? 'Hide proxy password' : 'Show proxy password'}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-11 w-11 p-0 text-[12px]"
+                  style={{ color: tokens.colors.steel.muted }}
                 >
                   {showProxyPassword ? '🙈' : '👁'}
-                </button>
+                </Button>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button
-                onClick={handleProxySave}
-                disabled={proxySaving}
-                style={{
-                  padding: '6px 12px',
-                  background: proxySaving ? '#333' : tokens.colors.semantic.warning,
-                  color: tokens.colors.ink.default,
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: proxySaving ? 'not-allowed' : 'pointer',
-                  whiteSpace: 'nowrap',
-                  fontSize: '12px',
-                }}
-              >
+            <div className="flex gap-2 items-center">
+              <Button type="button" variant="secondary" onClick={handleProxySave} disabled={proxySaving} aria-busy={proxySaving} className="h-9 whitespace-nowrap text-[12px]">
                 {proxySaving ? '...' : 'Save Proxy'}
-              </button>
+              </Button>
               {proxySaveStatus === 'saved' && (
-                <span style={{ color: tokens.colors.semantic.success, fontSize: '11px' }}>Proxy saved</span>
+                <span className="text-[11px]" style={{ color: tokens.colors.semantic.success }}>Proxy saved</span>
               )}
               {proxySaveStatus === 'error' && (
-                <span style={{ color: tokens.colors.semantic.error, fontSize: '11px' }}>Failed to save</span>
+                <span className="text-[11px]" style={{ color: tokens.colors.semantic.error }}>Failed to save</span>
               )}
             </div>
           </div>
 
           {config && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'block', marginBottom: '8px', color: '#aaa', fontWeight: 'bold' }}>
-                Admin
-              </div>
+            <div className="mb-4">
+              <div style={formControlStyle}>Admin</div>
               {config.admin ? (
                 <div
-                  style={{
-                    padding: '6px 8px',
-                    background: tokens.colors.canvas,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                    color: tokens.colors.ink['1'],
-                  }}
+                  className="rounded-md px-2 py-1.5 text-[12px]"
+                  style={{ background: tokens.colors.canvas, color: tokens.colors.ink['1'] }}
                 >
                   {'@'}
                   {config.admin.username || config.admin.userId}
-                  <span style={{ color: '#aaa' }}> (ID: {config.admin.userId})</span>
+                  <span style={{ color: tokens.colors.ink['2'] }}> (ID: {config.admin.userId})</span>
                 </div>
               ) : (
-                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>Not configured</div>
+                <div className="text-[12px]" style={{ color: tokens.colors.steel.muted }}>Not configured</div>
               )}
-              <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                <input
+              <div className="flex gap-2 mt-1.5">
+                <Input
                   type="number"
                   value={adminUserId}
                   onChange={(e) => setAdminUserId(e.target.value)}
                   placeholder="User ID"
                   aria-label="Admin Telegram user ID"
-                  style={{
-                    flex: 1,
-                    padding: '6px',
-                    background: tokens.colors.canvas,
-                    color: tokens.colors.ink['1'],
-                    border: `1px solid ${tokens.colors.hairline.default}`,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                  }}
+                  className="flex-1 h-9 text-[12px]"
                 />
-                <input
+                <Input
                   type="text"
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
                   placeholder="@username (optional)"
                   aria-label="Admin username (optional)"
-                  style={{
-                    flex: 1.5,
-                    padding: '6px',
-                    background: tokens.colors.canvas,
-                    color: tokens.colors.ink['1'],
-                    border: `1px solid ${tokens.colors.hairline.default}`,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                  }}
+                  className="flex-[1.5] h-9 text-[12px]"
                 />
-                <button
-                  onClick={handleSetAdmin}
-                  disabled={busy['admin'] || !adminUserId.trim()}
-                  style={{
-                    padding: '6px 10px',
-                    background: busy['admin'] ? '#333' : tokens.colors.brand.blue,
-                    color: tokens.colors.ink.default,
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: busy['admin'] || !adminUserId.trim() ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap',
-                    fontSize: '12px',
-                  }}
-                >
+                <Button type="button" onClick={handleSetAdmin} disabled={busy['admin'] || !adminUserId.trim()} aria-busy={!!busy['admin']} className="h-9 whitespace-nowrap text-[12px]">
                   {busy['admin'] ? '...' : 'Set as Admin'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
           {config && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'block', marginBottom: '8px', color: '#aaa', fontWeight: 'bold' }}>
-                Controller Requests ({config.requests.length})
-              </div>
+            <div className="mb-4">
+              <div style={formControlStyle}>Controller Requests ({config.requests.length})</div>
               {config.requests.length === 0 && (
-                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
+                <div className="text-[12px]" style={{ color: tokens.colors.steel.muted }}>
                   No controller requests pending.
                 </div>
               )}
               {config.requests.map((req) => (
                 <div
                   key={req.userId}
-                  style={{
-                    padding: '8px',
-                    marginBottom: '6px',
-                    background: tokens.colors.canvas,
-                    borderRadius: '4px',
-                    border: `1px solid ${tokens.colors.hairline.default}`,
-                  }}
+                  className="rounded-md p-2 mb-1.5 border"
+                  style={{ background: tokens.colors.canvas, borderColor: tokens.colors.hairline.default }}
                 >
-                  <div style={{ fontWeight: 'bold', color: tokens.colors.ink['1'] }}>
+                  <div className="font-semibold" style={{ color: tokens.colors.ink['1'] }}>
                     @{req.username || req.userId}
                     {req.firstName && <span style={{ color: tokens.colors.steel.muted, fontWeight: 'normal' }}> · {req.firstName}</span>}
                   </div>
-                  <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '6px' }}>
+                  <div className="text-[11px] mb-1.5" style={{ color: tokens.colors.steel.muted }}>
                     ID: {req.userId}
                     {req.requestedAt ? ` · requested ${new Date(req.requestedAt).toLocaleString()}` : ''}
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => handleApprove(req.userId)}
-                      disabled={busy[`approve:${req.userId}`]}
-                      style={{
-                        padding: '4px 10px',
-                        background: busy[`approve:${req.userId}`] ? '#333' : tokens.colors.semantic.success,
-                        color: tokens.colors.ink.default,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: busy[`approve:${req.userId}`] ? 'not-allowed' : 'pointer',
-                        fontSize: '12px',
-                      }}
-                    >
+                  <div className="flex gap-2">
+                    <Button type="button" onClick={() => handleApprove(req.userId)} disabled={busy[`approve:${req.userId}`]} aria-busy={!!busy[`approve:${req.userId}`]} className="h-10 px-2.5 text-[12px]">
                       {busy[`approve:${req.userId}`] ? '...' : 'Approve'}
-                    </button>
-                    <button
-                      onClick={() => handleDeny(req.userId)}
-                      disabled={busy[`deny:${req.userId}`]}
-                      style={{
-                        padding: '4px 10px',
-                        background: busy[`deny:${req.userId}`] ? '#333' : tokens.colors.semantic.error,
-                        color: tokens.colors.ink.default,
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: busy[`deny:${req.userId}`] ? 'not-allowed' : 'pointer',
-                        fontSize: '12px',
-                      }}
-                    >
+                    </Button>
+                    <Button type="button" variant="destructive" onClick={() => handleDeny(req.userId)} disabled={busy[`deny:${req.userId}`]} aria-busy={!!busy[`deny:${req.userId}`]} className="h-10 px-2.5 text-[12px]">
                       {busy[`deny:${req.userId}`] ? '...' : 'Deny'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -668,60 +536,36 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
           )}
 
           {config && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'block', marginBottom: '8px', color: '#aaa', fontWeight: 'bold' }}>
-                Controllers ({config.controllers.length})
-              </div>
+            <div className="mb-4">
+              <div style={formControlStyle}>Controllers ({config.controllers.length})</div>
               {config.controllers.length === 0 && (
-                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
+                <div className="text-[12px]" style={{ color: tokens.colors.steel.muted }}>
                   No controllers yet.
                 </div>
               )}
               {config.controllers.map((ctrl) => (
                 <div
                   key={ctrl.userId}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '6px 8px',
-                    marginTop: '4px',
-                    background: tokens.colors.canvas,
-                    borderRadius: '4px',
-                    fontSize: '12px',
-                  }}
+                  className="flex justify-between items-center rounded-md px-2 py-1.5 mt-1 text-[12px]"
+                  style={{ background: tokens.colors.canvas }}
                 >
                   <span>
                     @{ctrl.username || ctrl.userId}
-                    <span style={{ color: '#aaa' }}> (ID: {ctrl.userId})</span>
+                    <span style={{ color: tokens.colors.ink['2'] }}> (ID: {ctrl.userId})</span>
                   </span>
-                  <button
-                    onClick={() => handleRemoveController(ctrl.userId)}
-                    disabled={busy[`remove:${ctrl.userId}`]}
-                    style={{
-                      padding: '3px 8px',
-                      background: busy[`remove:${ctrl.userId}`] ? '#333' : tokens.colors.semantic.error,
-                      color: tokens.colors.ink.default,
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: busy[`remove:${ctrl.userId}`] ? 'not-allowed' : 'pointer',
-                      fontSize: '11px',
-                    }}
-                  >
+                  <Button type="button" variant="destructive" onClick={() => handleRemoveController(ctrl.userId)} disabled={busy[`remove:${ctrl.userId}`]} aria-busy={!!busy[`remove:${ctrl.userId}`]} className="h-10 px-2 text-[11px]">
                     {busy[`remove:${ctrl.userId}`] ? '...' : 'Remove'}
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           )}
 
           {config && (
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'block', marginBottom: '8px', color: '#aaa', fontWeight: 'bold' }}>
-                Chats ({config.chats.length})
-              </div>
+            <div className="mb-4">
+              <div style={formControlStyle}>Chats ({config.chats.length})</div>
               {config.chats.length === 0 && (
-                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
+                <div className="text-[12px]" style={{ color: tokens.colors.steel.muted }}>
                   No chats yet. Start the bot to link chats.
                 </div>
               )}
@@ -733,130 +577,91 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 return (
                   <div
                     key={chat.chatId}
-                    style={{
-                      padding: '8px',
-                      marginBottom: '6px',
-                      background: tokens.colors.canvas,
-                      borderRadius: '4px',
-                      border: `1px solid ${tokens.colors.hairline.default}`,
-                    }}
+                    className="rounded-md p-2 mb-1.5 border"
+                    style={{ background: tokens.colors.canvas, borderColor: tokens.colors.hairline.default }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div className="flex justify-between items-center">
                       <div>
                         <span
+                          className="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold uppercase"
                           style={{
-                            display: 'inline-block',
-                            padding: '1px 6px',
-                            borderRadius: '3px',
                             background: chat.type === 'group' ? '#5c6bc0' : '#26a69a',
                             color: tokens.colors.ink.default,
-                            fontSize: '10px',
-                            fontWeight: 'bold',
-                            textTransform: 'uppercase',
                           }}
                         >
                           {chat.type === 'group' ? 'Group' : 'Private'}
                         </span>
-                        <span style={{ fontWeight: 'bold', marginLeft: '6px', color: tokens.colors.ink['1'] }}>
+                        <span className="font-semibold ml-1.5" style={{ color: tokens.colors.ink['1'] }}>
                           {chat.title || `Chat ${chat.chatId}`}
                         </span>
                       </div>
                       {chat.type === 'group' && (
-                        <button
+                        <Button
+                          type="button"
+                          variant={chat.linked ? 'destructive' : 'default'}
                           onClick={() => (chat.linked ? handleUnlink(chat.chatId) : handleLink(chat.chatId))}
                           disabled={busy[`${chat.linked ? 'unlink' : 'link'}:${chat.chatId}`]}
-                          style={{
-                            padding: '3px 8px',
-                            background: chat.linked
-                              ? busy[`unlink:${chat.chatId}`]
-                                ? '#333'
-                                : tokens.colors.semantic.error
-                              : busy[`link:${chat.chatId}`]
-                                ? '#333'
-                                : tokens.colors.semantic.success,
-                            color: tokens.colors.ink.default,
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '11px',
-                            whiteSpace: 'nowrap',
-                          }}
+                          aria-busy={!!busy[`${chat.linked ? 'unlink' : 'link'}:${chat.chatId}`]}
+                          className="h-10 px-2 text-[11px] whitespace-nowrap"
                         >
                           {busy[`${chat.linked ? 'unlink' : 'link'}:${chat.chatId}`] ? '...' : chat.linked ? 'Unlink' : 'Link'}
-                        </button>
+                        </Button>
                       )}
                     </div>
                     <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        marginTop: '6px',
-                        color: tokens.colors.steel.muted,
-                        fontSize: '11px',
-                        flexWrap: 'wrap',
-                      }}
+                      className="flex items-center gap-2 mt-1.5 flex-wrap text-[11px]"
+                      style={{ color: tokens.colors.steel.muted }}
                     >
                       <span>Chat ID: {chat.chatId}</span>
                       <span>· {chat.type === 'group' ? chat.linked ? 'Linked' : 'Not linked' : 'Always linked'}</span>
                       <span>· Language:</span>
-                      <select
+                      <Select
                         value={chat.language}
-                        onChange={(e) => handleChatLanguage(chat.chatId, e.target.value as ChatLanguage)}
+                        onValueChange={(v) => handleChatLanguage(chat.chatId, v as ChatLanguage)}
                         disabled={busy[`lang:${chat.chatId}`]}
-                        aria-label={`Language for chat ${chat.chatId}`}
-                        style={{
-                          padding: '3px 4px',
-                          background: tokens.colors.canvas,
-                          color: tokens.colors.ink['1'],
-                          border: `1px solid ${tokens.colors.hairline.default}`,
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                        }}
                       >
-                        {CHAT_LANGUAGES.map((lang) => (
-                          <option key={lang} value={lang}>
-                            {CHAT_LANGUAGE_LABELS[lang]}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-8 text-[11px]" aria-label={`Language for chat ${chat.chatId}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CHAT_LANGUAGES.map((lang) => (
+                            <SelectItem key={lang} value={lang}>
+                              {CHAT_LANGUAGE_LABELS[lang]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     {chat.type === 'group' && members.length === 0 && (
-                      <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginTop: '6px' }}>
+                      <div className="text-[11px] mt-1.5" style={{ color: tokens.colors.steel.muted }}>
                         No members yet.
                       </div>
                     )}
 
                     {members.map((memberId) => (
-                      <div key={memberId} style={{ marginTop: '8px' }}>
-                        <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '4px' }}>
+                      <div key={memberId} className="mt-2">
+                        <div className="text-[11px] mb-1" style={{ color: tokens.colors.ink['2'] }}>
                           {chat.type === 'group' ? `Member ${memberId}` : 'Notifications'}
                         </div>
-                        <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '4px' }}>
+                        <div className="text-[11px] mb-1" style={{ color: tokens.colors.steel.muted }}>
                           Manage via the bot: /subscribe /unsubscribe
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        <div className="flex flex-wrap gap-2">
                           {NOTIFICATION_TYPES.map((type) => {
                             const sub = chat.memberSubscriptions[memberId] ?? [];
                             const enabled = sub.includes(type);
                             return (
                               <label
                                 key={type}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  cursor: 'default',
-                                  fontSize: '11px',
-                                  color: '#777',
-                                }}
+                                className="flex items-center gap-1 text-[11px] cursor-default"
+                                style={{ color: tokens.colors.ink['3'] }}
                               >
                                 <input
                                   type="checkbox"
                                   checked={enabled}
                                   disabled
-                                  style={{ cursor: 'not-allowed', opacity: 0.7 }}
+                                  className="cursor-not-allowed opacity-70"
                                 />
                                 {NOTIFICATION_TYPE_LABELS[type]}
                               </label>
@@ -873,48 +678,34 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
 
           {alertConditions.length > 0 && config && config.chats.length > 0 && (
             <div>
-              <div style={{ display: 'block', marginBottom: '8px', color: '#aaa', fontWeight: 'bold' }}>
-                Per-Alert Telegram Toggles
-              </div>
+              <div style={formControlStyle}>Per-Alert Telegram Toggles</div>
               {alertConditions.map((alert) => (
                 <div
                   key={alert.id}
-                  style={{
-                    padding: '8px',
-                    marginBottom: '6px',
-                    background: tokens.colors.canvas,
-                    borderRadius: '4px',
-                    border: `1px solid ${tokens.colors.hairline.default}`,
-                  }}
+                  className="rounded-md p-2 mb-1.5 border"
+                  style={{ background: tokens.colors.canvas, borderColor: tokens.colors.hairline.default }}
                 >
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px', color: tokens.colors.ink['1'] }}>
+                  <div className="font-semibold mb-1" style={{ color: tokens.colors.ink['1'] }}>
                     {alert.title}
                   </div>
-                  <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '4px' }}>
+                  <div className="text-[11px] mb-1" style={{ color: tokens.colors.steel.muted }}>
                     {alert.message}
                   </div>
                   {config.chats.map((chat) => {
                     const enabled = alertPrefs[alert.id]?.[chat.chatId] ?? true;
                     return (
-                      <label
+                      <div
                         key={chat.chatId}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          marginTop: '2px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          color: '#aaa',
-                        }}
+                        className="flex items-center gap-1.5 mt-0.5 text-[12px] cursor-pointer"
+                        style={{ color: tokens.colors.ink['2'] }}
                       >
-                        <input
-                          type="checkbox"
+                        <Switch
                           checked={enabled}
-                          onChange={() => toggleAlert(chat.chatId, alert.id, enabled)}
+                          onCheckedChange={() => toggleAlert(chat.chatId, alert.id, enabled)}
+                          className="scale-90"
                         />
                         Notify Chat {chat.chatId}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>

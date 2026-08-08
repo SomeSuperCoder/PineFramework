@@ -278,43 +278,9 @@ body {
   100% { transform: translateX(-100%); }
 }
 
-/* Quick-adder popup (§15.4 Popup recipe) */
-.quick-adder-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--pf-scrim);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 300;
-}
-
-.quick-adder-modal {
-  width: 340px;
-  max-height: 400px;
-  background-color: var(--pf-surface-3);
-  border: 1px solid var(--pf-hairline);
-  border-radius: var(--pf-radius-md);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--pf-shadow-3);
-}
-
 /* §15.4 Popup motion — enter: fade + translateY(4px) on --pf-motion-base/--pf-motion-ease.
    Offset mirrors tokens.recipes.modalMotionOffset (TS-only, no --pf-* name by design).
    Covered by the global prefers-reduced-motion guard (§13): animation-duration 0.01ms. */
-.quick-adder-overlay {
-  animation: pf-overlay-in var(--pf-motion-base) var(--pf-motion-ease);
-}
-
-.quick-adder-modal {
-  animation: pf-popup-in var(--pf-motion-base) var(--pf-motion-ease);
-}
-
 @keyframes pf-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -325,125 +291,13 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.quick-adder-header {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border-bottom: 1px solid var(--pf-hairline);
-}
-
-.quick-adder-search {
-  flex: 1;
-  padding: 6px 10px;
-  background-color: var(--pf-canvas); /* §1 canvas = input fill */
-  color: var(--pf-ink-1);
-  border: 1px solid var(--pf-hairline-strong); /* §15.3 input default border */
-  border-radius: var(--pf-radius-xs);
-  font-size: 13px;
-  outline: none;
-}
-
-.quick-adder-search::placeholder {
-  color: var(--pf-steel-placeholder);
-}
-
-.quick-adder-close {
-  width: 28px;
-  height: 28px;
-  margin-left: 6px;
-  background: none;
-  border: none;
-  color: var(--pf-steel-muted);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--pf-radius-xs);
-}
-
-.quick-adder-close:hover {
-  color: var(--pf-ink-1);
-  background-color: var(--pf-surface-2);
-}
-
-.quick-adder-list {
-  overflow-y: auto;
-  max-height: 340px;
-}
-
-.quick-adder-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--pf-ink-1);
-}
-
-.quick-adder-item:hover,
-.quick-adder-item.highlighted {
-  background-color: var(--pf-surface-2);
-}
-
-.quick-adder-item-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.quick-adder-item-badges {
-  display: flex;
-  gap: 4px;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.badge {
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.badge-indicator {
-  background-color: var(--pf-semantic-warning-bg);
-  color: var(--pf-semantic-warning);
-}
-
-.badge-strategy {
-  background-color: var(--pf-semantic-success-bg);
-  color: var(--pf-semantic-success);
-}
-
-.badge-built-in {
-  background-color: var(--pf-semantic-info-bg);
-  color: var(--pf-semantic-info);
-}
-
-.quick-adder-loading,
-.quick-adder-empty {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--pf-steel-muted);
-  font-size: 13px;
-}
-
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
 /* ─── 4. Focus states (§12 focus ring — mandatory on interactive elements) ─── */
-.backtest-panel button:focus-visible,
-.quick-adder-search:focus-visible {
+.backtest-panel button:focus-visible {
   outline: none;
   box-shadow: var(--pf-focus-ring);
-}
-
-.quick-adder-search:focus {
-  border-color: var(--pf-brand-blue); /* §15.3 focus-visible: brand-blue border */
 }

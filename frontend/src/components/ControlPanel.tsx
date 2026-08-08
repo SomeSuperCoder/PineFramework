@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { ContentArea } from './ContentArea';
-import { tokens } from '../theme/tokens';
 
 export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'settings' | 'bot';
 
@@ -71,7 +70,9 @@ export function ControlPanel({
   }, []);
 
   return (
-    <div style={styles.root}>
+    <div
+      className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--pf-canvas)]"
+    >
       <TopBar
         botConnected={botConnected}
         botState={botState}
@@ -80,7 +81,7 @@ export function ControlPanel({
         onOpenSettings={() => onPanelChange('settings')}
       />
 
-      <div style={styles.body}>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar
           activePanel={activePanel}
           onPanelChange={onPanelChange}
@@ -88,24 +89,18 @@ export function ControlPanel({
           onHoverChange={handleSidebarHover}
         />
 
-        <ContentArea>{children}</ContentArea>
+        {/* Content region — the panel swaps its payload here */}
+        <ContentArea>
+          <div
+            key={activePanel}
+            role="region"
+            aria-label={`${activePanel} panel`}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            {children}
+          </div>
+        </ContentArea>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100vw',
-    height: '100vh',
-    background: tokens.colors.canvas,
-    overflow: 'hidden',
-  },
-  body: {
-    display: 'flex',
-    flex: 1,
-    overflow: 'hidden',
-  },
-};

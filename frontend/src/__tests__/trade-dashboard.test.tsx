@@ -320,9 +320,10 @@ describe('DashboardTabs (LiveDashboard) — task 4.7', () => {
 
   it('renders Overview | Trade History | Statistics tabs with the Overview panel active by default', async () => {
     renderRunningDashboard();
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Trade History' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Statistics' })).toBeInTheDocument();
+    // LiveDashboard tabs are shadcn Tabs (Radix) — role is `tab`, not `button`.
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Trade History' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Statistics' })).toBeInTheDocument();
     // Overview 3-col grid content is present (Status panel).
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Test strategy')).toBeInTheDocument();
@@ -334,7 +335,7 @@ describe('DashboardTabs (LiveDashboard) — task 4.7', () => {
   it('switches to Trade History, then Statistics, then back — Overview stays intact', async () => {
     renderRunningDashboard();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Trade History' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Trade History' }));
     // History panel mounts and renders mocked rows.
     await waitFor(() =>
       expect(screen.getByPlaceholderText('Symbol (e.g. BTCUSDT)')).toBeInTheDocument(),
@@ -342,13 +343,13 @@ describe('DashboardTabs (LiveDashboard) — task 4.7', () => {
     await waitFor(() => expect(screen.getByText('BTCUSDT')).toBeInTheDocument());
     expect(screen.getByText('ETHUSDT')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Statistics' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Statistics' }));
     // Wait on a data-dependent element so the mocked stats fetch has resolved.
     await waitFor(() => expect(screen.getByText('Total Trades')).toBeInTheDocument());
     expect(screen.getByText('Global Metrics')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Symbol (e.g. BTCUSDT)')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     // Overview panel is back, byte-identical content.
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Test strategy')).toBeInTheDocument();
@@ -403,7 +404,7 @@ describe('TradeHistoryTab — task 4.7', () => {
     renderTab();
     await waitFor(() => expect(screen.getByText('SOLUSDT')).toBeInTheDocument());
 
-    await userEvent.click(screen.getByRole('button', { name: 'Live' }));
+    await userEvent.click(screen.getByRole('tab', { name: 'Live' }));
     await waitFor(() => expect(screen.queryByText('SOLUSDT')).not.toBeInTheDocument());
     expect(screen.getByText('BTCUSDT')).toBeInTheDocument();
     expect(screen.getByText('ETHUSDT')).toBeInTheDocument();
@@ -601,10 +602,15 @@ describe('StatisticsTab — task 4.7', () => {
     await waitFor(() => expect(screen.getByText('Global Metrics')).toBeInTheDocument());
     expect(screen.getByText('PnL by Strategy')).toBeInTheDocument();
 
-    await userEvent.selectOptions(
-      screen.getByTitle('Group the PnL comparison chart by strategy, timeframe, or asset'),
-      'asset',
+    // The groupBy control is now a shadcn Select (Radix): open the combobox
+    // trigger, then pick the option from the portal'd listbox (native
+    // selectOptions no longer applies).
+    await userEvent.click(
+      screen.getByRole('combobox', {
+        name: 'Group the PnL comparison chart by strategy, timeframe, or asset',
+      }),
     );
+    await userEvent.click(await screen.findByRole('option', { name: 'Asset' }));
     await waitFor(() => expect(screen.getByText('PnL by Asset')).toBeInTheDocument());
     expect(statsCalls.some((u) => u.includes('groupBy=asset'))).toBe(true);
   });

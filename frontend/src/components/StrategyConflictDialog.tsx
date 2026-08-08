@@ -1,4 +1,13 @@
-import { tokens } from '../theme/tokens';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export interface StrategyConflictDialogProps {
   isOpen: boolean;
@@ -9,73 +18,35 @@ export interface StrategyConflictDialogProps {
 }
 
 export function StrategyConflictDialog({ isOpen, existingName, incomingName, onReplace, onCancel }: StrategyConflictDialogProps) {
-  if (!isOpen) return null;
-
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 300,
-    }} onClick={onCancel}>
-      <div style={{
-        width: 380,
-        backgroundColor: tokens.colors.canvas,
-        border: `1px solid ${tokens.colors.hairline.default}`,
-        borderRadius: 8,
-        padding: '20px 24px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
-      }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: '0 0 12px', color: tokens.colors.semantic.warning, fontSize: '14px' }}>
-          Strategy Conflict
-        </h3>
-        <p style={{ margin: '0 0 8px', color: tokens.colors.ink['1'], fontSize: '13px', lineHeight: '1.5' }}>
-          A strategy is already running on the chart:
-        </p>
-        <p style={{ margin: '0 0 12px', color: tokens.colors.semantic.warning, fontSize: '13px', fontWeight: 'bold' }}>
-          {existingName}
-        </p>
-        <p style={{ margin: '0 0 8px', color: tokens.colors.ink['1'], fontSize: '13px', lineHeight: '1.5' }}>
-          You are trying to add:
-        </p>
-        <p style={{ margin: '0 0 16px', color: tokens.colors.brand.blue, fontSize: '13px', fontWeight: 'bold' }}>
-          {incomingName}
-        </p>
-        <p style={{ margin: '0 0 16px', color: '#aaa', fontSize: '12px', lineHeight: '1.5' }}>
-          Only one strategy can run at a time. Replace the existing strategy?
-        </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{
-            padding: '6px 16px',
-            background: tokens.colors.hairline.default,
-            color: tokens.colors.ink['1'],
-            border: '1px solid #333',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: '12px',
-          }}>
-            Cancel
-          </button>
-          <button onClick={onReplace} style={{
-            padding: '6px 16px',
-            background: tokens.colors.semantic.warning,
-            color: '#000',
-            border: 'none',
-            borderRadius: 4,
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 'bold',
-          }}>
+    <AlertDialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <AlertDialogContent className="max-w-[380px] gap-4 p-5">
+        <AlertDialogHeader className="gap-2">
+          <AlertDialogTitle className="text-sm text-[var(--pf-semantic-warning)]">
+            Strategy Conflict
+          </AlertDialogTitle>
+          <AlertDialogDescription className="flex flex-col gap-1 text-[13px] leading-5 text-foreground">
+            <span>A strategy is already running on the chart:</span>
+            <span className="font-semibold text-[var(--pf-semantic-warning)]">{existingName}</span>
+            <span className="mt-1">You are trying to add:</span>
+            <span className="font-semibold text-[var(--pf-brand-blue-hover)]">{incomingName}</span>
+            <span className="mt-1 text-xs text-muted-foreground">
+              Only one strategy can run at a time. Replace the existing strategy?
+            </span>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel} className="rounded-full">Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onReplace} className="rounded-full">
             Replace
-          </button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

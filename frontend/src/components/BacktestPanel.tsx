@@ -4,7 +4,7 @@ import type { BacktestConfig, CommissionMethodId, DateRangeMode } from '../types
 import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
 import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
 import { StrategySelector } from './StrategySelector.js';
-import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -132,43 +132,26 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
 
   return (
     <div
-      className="backtest-panel"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        overflow: 'auto',
-        background: tokens.colors.surface['1'],
-        border: `1px solid ${tokens.colors.hairline.default}`,
-        borderRadius: tokens.radius.md,
-        padding: tokens.spacing.xl,
-        color: tokens.colors.ink['1'],
-        fontSize: tokens.typography.type.bodySm.size,
-      }}
+      className="backtest-panel flex flex-1 flex-col overflow-auto rounded-md border border-border bg-card p-5 text-foreground"
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, margin: `0 0 ${tokens.spacing.lg}` }}>
-        <button
+      <div className="mb-4 flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
           onClick={onClose}
           aria-label="Back to dashboard"
-          style={{
-            background: 'transparent',
-            border: `1px solid ${tokens.colors.hairline.default}`,
-            borderRadius: tokens.radius.sm,
-            color: tokens.colors.ink['2'],
-            cursor: 'pointer',
-            padding: '4px 8px',
-            fontSize: tokens.typography.type.bodySm.size,
-          }}
+          className="h-10"
         >
           ← Back
-        </button>
-        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Backtest Settings</h3>
+        </Button>
+        {/* DESIGN §15 heading — ink-1 (text-foreground), NOT brand-blue */}
+        <h3 className="m-0 text-base font-semibold text-foreground">Backtest Settings</h3>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.lg, flex: 1 }}>
+      <div className="flex flex-1 flex-col gap-4">
         {/* §5.3 Config bar: [Strategy Selector ▾] ... [Run Backtest ▼] */}
-        <div style={{ display: 'flex', gap: tokens.spacing.md, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="mb-4 flex items-end gap-3">
+          <div className="min-w-0 flex-1">
             <StrategySelector
               backendUrl={backendUrl}
               value={selectedStrategy?.source ?? ''}
@@ -177,28 +160,17 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
               height={36}
             />
           </div>
-          <button
+          <Button
             onClick={handleRun}
             disabled={!selectedStrategy || barsExceedLimit}
             title={!selectedStrategy ? 'Select a strategy to run the backtest' : undefined}
-            style={{
-              height: 36,
-              padding: `0 ${tokens.spacing.lg}`,
-              background: !selectedStrategy || barsExceedLimit ? tokens.colors.surface['2'] : tokens.colors.brand.blue,
-              color: !selectedStrategy || barsExceedLimit ? tokens.colors.steel.disabled : tokens.colors.ink.default,
-              border: `1px solid ${tokens.colors.hairline.default}`,
-              borderRadius: tokens.radius.sm,
-              cursor: !selectedStrategy || barsExceedLimit ? 'not-allowed' : 'pointer',
-              fontSize: tokens.typography.type.bodySm.size,
-              fontWeight: tokens.typography.weights.medium,
-              whiteSpace: 'nowrap',
-            }}
+            className="h-11 whitespace-nowrap px-4"
           >
             Run Backtest
-          </button>
+          </Button>
         </div>
         {validationError && (
-          <div role="alert" style={{ color: tokens.colors.semantic.error, fontSize: tokens.typography.type.caption.size, marginTop: '-8px' }}>
+          <div role="alert" className="-mt-2 text-xs text-destructive">
             {validationError}
           </div>
         )}

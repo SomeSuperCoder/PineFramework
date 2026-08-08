@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import type { PineScriptError } from '../types';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
 
 interface ErrorConsoleProps {
   errors: PineScriptError[];
@@ -9,81 +11,123 @@ interface ErrorConsoleProps {
 }
 
 export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Modal a11y contract (§15.4 / UX 4.3): initial focus, Escape close, focus trap, focus restore.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+
+    // Initial focus → the dialog panel; interactive children carry their own focus rings.
+    panelRef.current?.focus();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+
+      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 300,
-    }} onClick={onClose}>
-      <div style={{
-        width: 520,
-        maxHeight: '60vh',
-        backgroundColor: tokens.colors.canvas,
-        border: `1px solid ${tokens.colors.hairline.default}`,
-        borderRadius: 8,
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Errors (${errors.length})`}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'var(--pf-scrim)',
         display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 300,
+      }}
+      onClick={onClose}
+    >
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        style={{
+          width: 520,
+          maxHeight: '60vh',
+          backgroundColor: tokens.colors.canvas,
+          border: `1px solid ${tokens.colors.hairline.default}`,
+          borderRadius: 'var(--pf-radius-lg)',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '10px 14px',
-          borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-        }}>
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: tokens.colors.semantic.error }}>
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: 'var(--pf-shadow-4)',
+          outline: 'none',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '10px 14px',
+            borderBottom: `1px solid ${tokens.colors.hairline.default}`,
+          }}
+        >
+          <h3 className="m-0 text-sm font-semibold" style={{ color: tokens.colors.semantic.error }}>
             Errors ({errors.length})
           </h3>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={onClear}
-              style={{
-                padding: '4px 10px',
-                border: '1px solid #333',
-                borderRadius: 4,
-                backgroundColor: tokens.colors.hairline.default,
-                color: tokens.colors.ink['1'],
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >
+          <div className="flex gap-1.5">
+            <Button type="button" variant="outline" size="sm" onClick={onClear}>
               Clear
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
               onClick={onClose}
-              style={{
-                padding: '4px 10px',
-                border: 'none',
-                borderRadius: 4,
-                backgroundColor: tokens.colors.hairline.default,
-                color: tokens.colors.ink['1'],
-                fontSize: '14px',
-                cursor: 'pointer',
-                lineHeight: 1,
-              }}
+              aria-label="Close errors"
+              className="px-2 text-sm leading-none"
             >
               ×
-            </button>
+            </Button>
           </div>
         </div>
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '8px 14px',
-        }}>
+        <div
+          role="log"
+          aria-live="polite"
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '8px 14px',
+          }}
+        >
           {errors.length === 0 ? (
-            <div style={{ padding: '8px 0', fontSize: '12px', color: tokens.colors.semantic.success, fontFamily: 'monospace' }}>
+            <div className="py-2 text-[12px] font-mono" style={{ color: tokens.colors.semantic.success }}>
               No errors
             </div>
           ) : (
@@ -94,7 +138,12 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
                   padding: '4px 0',
                   fontSize: '12px',
                   fontFamily: "'Monaco', 'Menlo', monospace",
-                  color: error.type === 'error' ? tokens.colors.semantic.error : error.type === 'warning' ? '#ffc107' : tokens.colors.semantic.success,
+                  color:
+                    error.type === 'error'
+                      ? tokens.colors.semantic.error
+                      : error.type === 'warning'
+                        ? tokens.colors.semantic.warning
+                        : tokens.colors.semantic.success,
                 }}
               >
                 {error.line && error.column

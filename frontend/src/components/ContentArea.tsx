@@ -1,4 +1,6 @@
-import { tokens } from '../theme/tokens';
+import { ChevronRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface ContentAreaProps {
   /** Breadcrumb segments (optional — if not provided, no breadcrumb shown) */
@@ -12,63 +14,45 @@ export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaPro
   const segments = breadcrumb ?? (panelLabel ? [panelLabel] : []);
 
   return (
-    <div style={styles.contentArea}>
+    <div className="flex flex-1 flex-col overflow-hidden bg-[var(--pf-surface-0)]">
       {/* Breadcrumb bar */}
       {segments.length > 0 && (
-        <div style={styles.breadcrumbBar}>
-          {segments.map((segment, i) => (
-            <span key={i}>
-              {i > 0 && <span style={styles.separator}>{'>'}</span>}
-              <span
-                style={{
-                  ...styles.crumb,
-                  color: i === segments.length - 1 ? tokens.colors.ink['1'] : tokens.colors.steel.disabled,
-                }}
-              >
-                {segment}
+        <nav
+          aria-label="Breadcrumb"
+          className="flex shrink-0 items-center gap-1 border-b border-[var(--pf-hairline)] bg-[var(--pf-surface-1)] px-4 py-1.5"
+        >
+          {segments.map((segment, i) => {
+            const isLast = i === segments.length - 1;
+            return (
+              <span key={i} className="flex items-center gap-1">
+                {i > 0 && (
+                  <ChevronRight
+                    className="size-3 text-[var(--pf-steel-muted)]"
+                    aria-hidden="true"
+                  />
+                )}
+                <Button
+                  variant="link"
+                  type="button"
+                  tabIndex={isLast ? -1 : 0}
+                  aria-current={isLast ? 'page' : undefined}
+                  className={cn(
+                    'h-7 rounded-full px-2 text-sm no-underline',
+                    isLast
+                      ? 'font-medium text-[var(--pf-ink-1)]'
+                      : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)] hover:underline',
+                  )}
+                >
+                  {segment}
+                </Button>
               </span>
-            </span>
-          ))}
-        </div>
+            );
+          })}
+        </nav>
       )}
 
       {/* Scrollable content */}
-      <div style={styles.scrollContainer}>{children}</div>
+      <div className="flex flex-1 flex-col overflow-auto p-0">{children}</div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  contentArea: {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-    overflow: 'hidden',
-    background: tokens.colors.surface['0'],
-  },
-  breadcrumbBar: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '6px 16px',
-    fontSize: 11,
-    color: tokens.colors.steel.disabled,
-    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-    background: tokens.colors.surface['1'],
-    flexShrink: 0,
-    gap: 4,
-  },
-  separator: {
-    margin: '0 6px',
-    color: '#333',
-  },
-  crumb: {
-    color: tokens.colors.steel.disabled,
-  },
-  scrollContainer: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'auto',
-    padding: 0,
-  },
-};

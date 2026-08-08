@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
+import { LayoutDashboard, OctagonX, Play, RotateCcw, Square, X } from 'lucide-react';
 import { StrategySelector } from '../StrategySelector';
 import { ProgressBar } from '../ProgressBar';
 import type { BotStateT, WalletInfo, ConfigValues } from '../../types/bot';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { AutoSelectGrid } from './AutoSelectGrid';
-import { tokens } from '../../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 // ---- Timezone Utilities ----
 
@@ -237,38 +239,36 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   };
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+    <div className="mb-4">
+      <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
         Wallet {wallet.hasWallet ? '✓ Imported' : '— Not Imported'}
       </div>
       {wallet.hasWallet ? (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ color: tokens.colors.semantic.success, fontSize: 11, fontFamily: 'monospace' }}>
+          <span className="font-mono text-[11px] text-[var(--pf-semantic-success)]">
             {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-4)}
           </span>
-          <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+          <span className="text-[11px] text-[var(--pf-steel-muted)]">
             {importedBalanceLoading ? (
               'Loading balance...'
             ) : importedBalance !== null ? (
-              <span style={{ color: '#64b5f6' }}>
+              <span className="text-[var(--pf-brand-blue)]">
                 USDC: {importedBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             ) : null}
           </span>
-          <button
+          <Button
+            type="button"
+            variant="ghost"
             onClick={handleRemove}
             disabled={importing}
-            style={{
-              padding: '3px 8px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.error,
-              border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 3, cursor: 'pointer',
-              fontSize: 10,
-            }}
+            className="h-9 border border-[var(--pf-semantic-error)]/40 px-3 text-xs text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]"
           >
             Remove
-          </button>
+          </Button>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div className="flex flex-col gap-1.5">
           <textarea
             value={seedPhrase}
             onChange={(e) => {
@@ -279,27 +279,20 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             }}
             placeholder="Paste 12 or 24 word seed phrase..."
             rows={2}
-            style={{
-              width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-              border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
-              fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
-            }}
+            className="w-full resize-y rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-2)] p-2 font-mono text-[11px] text-[var(--pf-ink-1)]"
           />
 
           {/* Balance preview — shown after valid seed phrase */}
           {(previewLoading || previewPublicKey) && (
-            <div style={{
-              padding: '8px 10px', background: tokens.colors.semantic.successBg, borderRadius: 4,
-              border: '1px solid #333',
-            }}>
+            <div className="rounded-md border border-[var(--pf-border)] bg-[var(--pf-semantic-success-bg)] p-2">
               {previewLoading ? (
-                <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Checking wallet...</span>
+                <span className="text-[11px] text-[var(--pf-steel-muted)]">Checking wallet...</span>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ color: tokens.colors.semantic.success, fontSize: 11, fontFamily: 'monospace' }}>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-mono text-[11px] text-[var(--pf-semantic-success)]">
                     {previewPublicKey?.slice(0, 8)}...{previewPublicKey?.slice(-4)}
                   </span>
-                  <span style={{ color: '#64b5f6', fontSize: 11 }}>
+                  <span className="text-[11px] text-[var(--pf-brand-blue)]">
                     USDC: {(previewBalance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -312,26 +305,20 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Set encryption password (min 8 chars)"
-            style={{
-              width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-              border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
-              fontSize: 11, boxSizing: 'border-box',
-            }}
+            className="w-full box-border rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-2)] p-2 text-[11px] text-[var(--pf-ink-1)]"
           />
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
               onClick={handleImport}
               disabled={importing || !seedPhrase.trim() || !password}
-              style={{
-                padding: '4px 12px', background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success,
-                border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 3, cursor: importing ? 'wait' : 'pointer',
-                fontSize: 10, fontWeight: 600, opacity: importing || !seedPhrase.trim() || !password ? 0.6 : 1,
-              }}
+              className="h-10 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-3 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
             >
               {importing ? 'Importing...' : 'Import Wallet'}
-            </button>
+            </Button>
           </div>
-          {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 10 }}>{error}</div>}
+          {error && <div className="text-[10px] text-[var(--pf-semantic-error)]">{error}</div>}
         </div>
       )}
     </div>
@@ -450,42 +437,39 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
 
   return (
     <div>
-      <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+      <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
         Configuration
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="flex flex-col gap-2">
         <StrategySelector
           backendUrl={backendUrl}
           value={strategySource}
           onChange={(src, _name, _id) => { setStrategySource(src); }}
         />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+          <label className="text-[11px] text-[var(--pf-steel-muted)]">
             DEX:{' '}
             <select
               value={dex}
               onChange={(e) => setDex(e.target.value as 'jupiter-swap' | 'jupiter-ultra')}
-              style={{
-                background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
-                borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
-              }}
+              className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
             >
               <option value="jupiter-swap">Jupiter Swap</option>
               <option value="jupiter-ultra">Jupiter Ultra</option>
             </select>
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label style={{ color: tokens.colors.steel.muted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <label className="flex items-center gap-1 text-[11px] text-[var(--pf-steel-muted)]">
               <input
                 type="checkbox"
                 checked={manualOverride}
                 onChange={(e) => setManualOverride(e.target.checked)}
-                style={{ accentColor: '#64b5f6' }}
+                className="accent-[var(--pf-brand-blue)]"
               />
               Manual Override
             </label>
             {manualOverride ? (
-              <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+              <label className="text-[11px] text-[var(--pf-steel-muted)]">
                 Max Daily Loss ($):{' '}
                 <input
                   type="number"
@@ -493,46 +477,34 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
                   onChange={(e) => setManualMaxDailyLoss(e.target.value)}
                   min="0"
                   step="0.01"
-                  style={{
-                    width: 70, background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                    border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
-                    fontSize: 11, marginLeft: 4,
-                  }}
+                  className="ml-1 w-[70px] rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
                 />
               </label>
             ) : (
-              <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+              <span className="text-[11px] text-[var(--pf-steel-muted)]">
                 Max Daily Loss:{' '}
-                <span style={{ color: '#64b5f6', fontWeight: 600 }}>
+                <span className="font-semibold text-[var(--pf-brand-blue)]">
                   ${maxDailyLoss.toFixed(2)}
                 </span>
-                <span style={{ color: '#666', fontSize: 10, marginLeft: 4 }}>
+                <span className="ml-1 text-[10px] text-[var(--pf-steel-disabled)]">
                   (10% × ${usdcBalance?.toFixed(2) ?? '0.00'})
                 </span>
               </span>
             )}
           </div>
-          <label style={{ color: tokens.colors.steel.muted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label className="flex items-center gap-1 text-[11px] text-[var(--pf-steel-muted)]">
             Timezone:{' '}
             <input
               type="text"
               placeholder="Filter..."
               value={timezoneFilter}
               onChange={(e) => setTimezoneFilter(e.target.value)}
-              style={{
-                width: 80, background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
-                fontSize: 10, marginLeft: 4,
-              }}
+              className="ml-1 w-20 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[10px] text-[var(--pf-ink-1)]"
             />
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              style={{
-                background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                border: '1px solid #333', borderRadius: 3, padding: '2px 6px',
-                fontSize: 11, marginLeft: 4,
-              }}
+              className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
             >
               {TIMEZONE_GROUPS.map((group) => {
                 const filtered = timezoneFilter
@@ -550,32 +522,26 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
             </select>
           </label>
         </div>
-        {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 10 }}>{error}</div>}
+        {error && <div className="text-[10px] text-[var(--pf-semantic-error)]">{error}</div>}
         {compatibilityWarnings.length > 0 && (
-          <div style={{
-            background: tokens.colors.semantic.warningBg, border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4,
-            padding: '6px 10px', marginTop: 4,
-          }}>
-            <div style={{ color: tokens.colors.semantic.warning, fontSize: 10, fontWeight: 600, marginBottom: 2 }}>
+          <div className="mt-1 rounded border border-[var(--pf-semantic-warning)] bg-[var(--pf-semantic-warning-bg)] px-2.5 py-1.5">
+            <div className="mb-0.5 text-[10px] font-semibold text-[var(--pf-semantic-warning)]">
               ⚠ Live Trading Compatibility Notes
             </div>
             {compatibilityWarnings.map((w, i) => (
-              <div key={i} style={{ color: '#e0a040', fontSize: 10 }}>{w}</div>
+              <div key={i} className="text-[10px] text-[var(--pf-semantic-warning)]">{w}</div>
             ))}
           </div>
         )}
-        <button
+        <Button
+          type="button"
+          variant="outline"
           onClick={handleConfigure}
           disabled={configuring}
-          style={{
-            padding: '6px 16px', background: tokens.colors.semantic.infoBg, color: '#64b5f6',
-            border: '1px solid #64b5f6', borderRadius: 4, cursor: configuring ? 'wait' : 'pointer',
-            fontSize: 11, fontWeight: 600, alignSelf: 'flex-start',
-            opacity: configuring ? 0.7 : 1,
-          }}
+          className="h-11 self-start border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-4 text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
         >
           {configuring ? 'Configuring...' : 'Apply Configuration'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -611,105 +577,73 @@ export function TradingBotControlButton({
   const transitioning = botState === 'Starting' || botState === 'Stopping';
 
   return (
-    <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
-      <button
+    <div className="inline-flex items-center gap-1">
+      <Button
+        type="button"
+        variant={dashboardOpen ? 'secondary' : 'ghost'}
         onClick={isStopped && dashboardOpen ? () => sendCommand('start') : onToggleDashboard}
         disabled={loading}
         title={isStopped && dashboardOpen ? 'Start Live Trading Bot' : dashboardOpen ? 'Hide Dashboard' : 'Show Bot Dashboard'}
-        style={{
-          padding: '5px 10px',
-          background: dashboardOpen ? tokens.colors.semantic.successBg : tokens.colors.hairline.default,
-          color: dashboardOpen ? tokens.colors.semantic.success : tokens.colors.steel.muted,
-          border: `1px solid ${dashboardOpen ? tokens.colors.semantic.success : '#333'}`,
-          borderRadius: '4px',
-          cursor: loading ? 'wait' : 'pointer',
-          fontSize: '11px',
-          fontWeight: 600,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-          opacity: loading ? 0.7 : 1,
-        }}
+        aria-pressed={isStopped && dashboardOpen ? undefined : dashboardOpen}
+        className={cn(
+          'h-10 px-3 text-sm',
+          dashboardOpen
+            ? 'bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]'
+            : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+        )}
       >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-          <polygon points="2,0 9,5 2,10" />
-        </svg>
+        {isStopped && dashboardOpen ? (
+          <Play className="size-4" aria-hidden="true" />
+        ) : (
+          <LayoutDashboard className="size-4" aria-hidden="true" />
+        )}
         Bot Dashboard
-      </button>
+      </Button>
       {isRunning && (
         <>
-          <button
+          <Button
+            type="button"
+            variant="destructive"
             onClick={() => sendCommand('stop')}
             disabled={loading}
             title="Stop Bot"
-            style={{
-              padding: '5px 10px',
-              background: tokens.colors.semantic.error,
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'wait' : 'pointer',
-              fontSize: '11px',
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              opacity: loading ? 0.7 : 1,
-            }}
+            className="h-10 px-3 text-sm font-semibold"
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
-              <rect x="1" y="1" width="8" height="8" rx="1" />
-            </svg>
+            <Square className="size-3.5" aria-hidden="true" />
             Stop Bot
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
             onClick={() => sendCommand('emergency-stop')}
             disabled={loading}
             title="Emergency Stop"
-            style={{
-              padding: '5px 8px',
-              background: '#ff1744',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: loading ? 'wait' : 'pointer',
-              fontSize: '11px',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              opacity: loading ? 0.7 : 1,
-            }}
+            aria-label="Emergency Stop"
+            className="h-10 w-10"
           >
-            ⚠
-          </button>
+            <OctagonX className="size-4" aria-hidden="true" />
+          </Button>
         </>
       )}
       {isError && (
-        <button
+        <Button
+          type="button"
+          variant="outline"
           onClick={() => sendCommand('reset')}
           disabled={loading}
           title="Reset Bot"
-          style={{
-            padding: '5px 10px',
-            background: tokens.colors.semantic.errorBg,
-            color: tokens.colors.semantic.warning,
-            border: `1px solid ${tokens.colors.semantic.warning}`,
-            borderRadius: '4px',
-            cursor: loading ? 'wait' : 'pointer',
-            fontSize: '11px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
+          className="h-10 border-[var(--pf-semantic-warning)]/50 px-3 text-sm text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
         >
-          ⟳ Reset
-        </button>
+          <RotateCcw className="size-3.5" aria-hidden="true" />
+          Reset
+        </Button>
       )}
       {transitioning && (
-        <span style={{ color: tokens.colors.semantic.warning, fontSize: '11px', fontStyle: 'italic' }}>{botState}...</span>
+        <span className="text-[11px] font-medium italic text-[var(--pf-semantic-warning)]">{botState}...</span>
       )}
       {!connected && (botState !== 'Idle' || dashboardOpen) && (
-        <span style={{ color: tokens.colors.semantic.warning, fontSize: '10px', marginLeft: '2px' }} title="Reconnecting...">
+        <span className="ml-0.5 text-[10px] text-[var(--pf-semantic-warning)]" title="Reconnecting...">
           ○
         </span>
       )}
@@ -894,21 +828,25 @@ export function SetupWizard({
     return (
       <span
         onClick={done ? () => setStep(s) : undefined}
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          color: active ? '#fff' : done ? tokens.colors.semantic.success : tokens.colors.steel.disabled,
-          cursor: done ? 'pointer' : 'default',
-          fontSize: 11, fontWeight: active ? 600 : 400,
-          padding: '4px 8px',
-        }}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]',
+          active
+            ? 'font-semibold text-[var(--pf-ink-1)]'
+            : done
+              ? 'cursor-pointer text-[var(--pf-semantic-success)]'
+              : 'text-[var(--pf-steel-disabled)]',
+        )}
       >
-        <span style={{
-          width: 18, height: 18, borderRadius: '50%',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: active ? tokens.colors.semantic.infoBg : done ? tokens.colors.semantic.successBg : '#222',
-          border: `1px solid ${active ? '#64b5f6' : done ? tokens.colors.semantic.success : '#333'}`,
-          fontSize: 10, fontWeight: 700, color: active ? '#64b5f6' : done ? tokens.colors.semantic.success : tokens.colors.steel.disabled,
-        }}>
+        <span
+          className={cn(
+            'inline-flex size-[18px] items-center justify-center rounded-full border font-semibold',
+            active
+              ? 'border-[var(--pf-brand-blue)] bg-[var(--pf-semantic-info-bg)] text-[var(--pf-brand-blue)]'
+              : done
+                ? 'border-[var(--pf-semantic-success)] bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)]'
+                : 'border-[var(--pf-hairline-strong)] bg-[var(--pf-surface-3)] text-[var(--pf-steel-disabled)]',
+          )}
+        >
           {done ? '✓' : idx}
         </span>
         {label}
@@ -935,23 +873,27 @@ export function SetupWizard({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="flex flex-col gap-3">
       {/* Step indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, paddingBottom: 8 }}>
+      <div className="flex items-center border-b border-[var(--pf-surface-1)] pb-2">
         <StepDot s="wallet" label="Wallet" />
-        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
         <StepDot s="config" label="Config" />
-        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
         <StepDot s="backtest-choice" label="Backtest" />
-        <span style={{ color: '#333', margin: '0 2px' }}>→</span>
+        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
         <StepDot s="review" label="Review" />
-        <div style={{ flex: 1 }} />
-        <button onClick={onClose} style={{
-          padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
-          border: 'none', cursor: 'pointer', fontSize: 14,
-        }}>
-          ✕
-        </button>
+        <div className="flex-1" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label="Close"
+          className="h-9 w-9 text-[var(--pf-steel-muted)]"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </Button>
       </div>
 
       {/* Step 1: Wallet */}
@@ -959,19 +901,15 @@ export function SetupWizard({
         <div>
           <WalletImportPanel backendUrl={backendUrl} wallet={wallet} onWalletChange={setWallet} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setStep('config')}
               disabled={!wallet.hasWallet}
-              style={{
-                padding: '6px 20px', background: wallet.hasWallet ? tokens.colors.semantic.infoBg : '#111',
-                color: wallet.hasWallet ? '#64b5f6' : tokens.colors.steel.disabled,
-                border: `1px solid ${wallet.hasWallet ? '#64b5f6' : '#333'}`,
-                borderRadius: 4, cursor: wallet.hasWallet ? 'pointer' : 'default',
-                fontSize: 11, fontWeight: 600,
-              }}
+              className="h-11 border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-5 text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
             >
               Next →
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -986,16 +924,14 @@ export function SetupWizard({
             usdcBalance={usdcBalance}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setStep('wallet')}
-              style={{
-                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
-                border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
-                fontSize: 11,
-              }}
+              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
             >
               ← Back
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1003,51 +939,45 @@ export function SetupWizard({
       {/* Step 3: Backtest Choice */}
       {step === 'backtest-choice' && (
         <div>
-          <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+          <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
             Backtest Selection
           </div>
-          <div style={{ fontSize: 11, color: tokens.colors.steel.muted, marginBottom: 12 }}>
+          <div className="mb-3 text-[11px] text-[var(--pf-steel-muted)]">
             How would you like to select your trading pair?
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <button
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => handleBacktestChoice('auto')}
-              style={{
-                padding: '12px 16px', background: tokens.colors.semantic.infoBg, color: '#64b5f6',
-                border: '1px solid #64b5f6', borderRadius: 6, cursor: 'pointer',
-                fontSize: 12, fontWeight: 600, textAlign: 'left',
-              }}
+              className="h-auto flex-col items-start gap-1 border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-4 py-3 text-left text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
             >
-              <div style={{ marginBottom: 4 }}>🚀 Run Auto-Select Backtest</div>
-              <div style={{ fontSize: 10, color: tokens.colors.steel.muted, fontWeight: 400 }}>
+              <span>🚀 Run Auto-Select Backtest</span>
+              <span className="text-[10px] font-normal text-[var(--pf-steel-muted)]">
                 Automatically evaluate multiple pairs and timeframes to find the best performer
-              </div>
-            </button>
-            <button
+              </span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => handleBacktestChoice('manual')}
-              style={{
-                padding: '12px 16px', background: tokens.colors.semantic.warningBg, color: tokens.colors.semantic.warning,
-                border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 6, cursor: 'pointer',
-                fontSize: 12, fontWeight: 600, textAlign: 'left',
-              }}
+              className="h-auto flex-col items-start gap-1 border-[var(--pf-semantic-warning)]/60 bg-[var(--pf-semantic-warning-bg)] px-4 py-3 text-left text-xs font-semibold text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
             >
-              <div style={{ marginBottom: 4 }}>✋ Manually Select Pair & Timeframe</div>
-              <div style={{ fontSize: 10, color: tokens.colors.steel.muted, fontWeight: 400 }}>
+              <span>✋ Manually Select Pair & Timeframe</span>
+              <span className="text-[10px] font-normal text-[var(--pf-steel-muted)]">
                 Choose your own pair and timeframe — you take full responsibility for the selection
-              </div>
-            </button>
+              </span>
+            </Button>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 12 }}>
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setStep('config')}
-              style={{
-                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
-                border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
-                fontSize: 11,
-              }}
+              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
             >
               ← Back
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1057,19 +987,16 @@ export function SetupWizard({
         <div>
           {/* Manual Selection Mode */}
           {backtestMode === 'manual' && (
-            <div style={{
-              padding: 12, background: tokens.colors.semantic.warningBg, borderRadius: 6,
-              border: `1px solid ${tokens.colors.semantic.warning}`, marginBottom: 12,
-            }}>
-              <div style={{ color: tokens.colors.semantic.warning, fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+            <div className="mb-3 rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-semantic-warning-bg)] p-3">
+              <div className="mb-1 text-[11px] font-semibold text-[var(--pf-semantic-warning)]">
                 ⚠ Manual Selection Mode
               </div>
-              <div style={{ fontSize: 10, color: '#e0a040', marginBottom: 8 }}>
+              <div className="mb-2 text-[10px] text-[var(--pf-semantic-warning)]">
                 Auto-select was skipped. You are fully responsible for your pair/timeframe choice.
                 The bot will only trade the pair you select — no automated evaluation was performed.
               </div>
                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+                <label className="text-[11px] text-[var(--pf-steel-muted)]">
                   Pair:{' '}
                   <select
                     value={manualPair?.symbol ?? ''}
@@ -1077,10 +1004,7 @@ export function SetupWizard({
                       symbol: e.target.value,
                       timeframe: prev?.timeframe ?? '60',
                     }))}
-                    style={{
-                      background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
-                      borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
-                    }}
+                    className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
                   >
                     <option value="">Select pair...</option>
                     {TRADABLE_PAIRS.map(pair => {
@@ -1090,7 +1014,7 @@ export function SetupWizard({
                     })}
                   </select>
                 </label>
-                <label style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>
+                <label className="text-[11px] text-[var(--pf-steel-muted)]">
                   Timeframe:{' '}
                   <select
                     value={manualPair?.timeframe ?? '60'}
@@ -1098,10 +1022,7 @@ export function SetupWizard({
                       symbol: prev?.symbol ?? '',
                       timeframe: e.target.value,
                     }))}
-                    style={{
-                      background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: '1px solid #333',
-                      borderRadius: 3, padding: '2px 6px', fontSize: 11, marginLeft: 4,
-                    }}
+                    className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
                   >
                     <option value="1">1m</option>
                     <option value="5">5m</option>
@@ -1115,7 +1036,7 @@ export function SetupWizard({
               </div>
               {/* Validation: empty check */}
               {manualPair && (!manualPair.symbol || !manualPair.timeframe) && (
-                <div style={{ color: tokens.colors.semantic.error, fontSize: 10, marginTop: 8 }}>
+                <div className="mt-2 text-[10px] text-[var(--pf-semantic-error)]">
                   Both pair and timeframe are required
                 </div>
               )}
@@ -1125,20 +1046,20 @@ export function SetupWizard({
           {/* Auto-Select Mode */}
           {backtestMode === 'auto' && (
             <>
-              <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+              <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
                 Auto-Select Backtest
               </div>
-              <div style={{ fontSize: 11, color: tokens.colors.steel.muted, marginBottom: 8 }}>
+              <div className="mb-2 text-[11px] text-[var(--pf-steel-muted)]">
                 Evaluating candidate pairs sequentially...
               </div>
 
               {/* Timeframe Selection */}
               {!autoSelectProgress && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>Select Timeframes:</div>
+                <div className="mb-3">
+                  <div className="mb-1.5 text-[11px] text-[var(--pf-ink-3)]">Select Timeframes:</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {['5', '15', '60', '240'].map(tf => (
-                      <label key={tf} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <label key={tf} className="flex cursor-pointer items-center gap-1">
                         <input
                           type="checkbox"
                           checked={selectedTimeframes.includes(tf)}
@@ -1149,9 +1070,9 @@ export function SetupWizard({
                               setSelectedTimeframes(prev => prev.filter(t => t !== tf));
                             }
                           }}
-                          style={{ accentColor: '#64b5f6' }}
+                          className="accent-[var(--pf-brand-blue)]"
                         />
-                        <span style={{ fontSize: 11, color: '#ccc' }}>
+                        <span className="text-[11px] text-[var(--pf-ink-2)]">
                           {tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : '4h'}
                         </span>
                       </label>
@@ -1162,10 +1083,7 @@ export function SetupWizard({
 
               {/* Auto-Select Progress */}
               {autoSelectProgress && (
-            <div style={{
-              padding: 12, background: tokens.colors.hairline.default, borderRadius: 6,
-              border: `1px solid ${tokens.colors.semantic.warning}`,
-            }}>
+            <div className="rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-surface-2)]/60 p-3">
               <ProgressBar
                 progress={(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}
                 phase="Evaluating"
@@ -1185,14 +1103,11 @@ export function SetupWizard({
 
           {/* Auto-Select Results */}
           {autoSelectResult && (
-            <div style={{
-              marginTop: 12, padding: 12, background: tokens.colors.semantic.successBg, borderRadius: 6,
-              border: `1px solid ${tokens.colors.semantic.success}`,
-            }}>
-              <div style={{ color: tokens.colors.semantic.success, fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+            <div className="mt-3 rounded-md border border-[var(--pf-semantic-success)] bg-[var(--pf-semantic-success-bg)] p-3">
+              <div className="mb-1 text-[11px] font-semibold text-[var(--pf-semantic-success)]">
                 Auto-Select Complete
               </div>
-              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
+              <div className="mb-1 text-[11px] text-[var(--pf-ink-3)]">
                 Evaluated {autoSelectResult.evaluatedCount} pair
                 {autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
                 {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
@@ -1203,11 +1118,11 @@ export function SetupWizard({
                 )}
                 ranking={autoSelectResult.ranking}
               />
-              <div style={{ marginTop: 8, padding: '6px 8px', background: tokens.colors.semantic.successBg, borderRadius: 3 }}>
-                <span style={{ color: tokens.colors.semantic.success, fontWeight: 700, fontSize: 11 }}>
+              <div className="mt-2 rounded bg-[var(--pf-semantic-success-bg)] px-2 py-1.5">
+                <span className="text-[11px] font-semibold text-[var(--pf-semantic-success)]">
                   ★ Best: {autoSelectResult.best.label}
                 </span>
-                <span style={{ color: tokens.colors.steel.muted, fontSize: 10, marginLeft: 8 }}>
+                <span className="ml-2 text-[10px] text-[var(--pf-steel-muted)]">
                   PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                   {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                 </span>
@@ -1218,37 +1133,34 @@ export function SetupWizard({
           )}
 
           {configureError && (
-            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>
+            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">
               ⚠ {configureError}
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
               disabled={!!autoSelectProgress}
-              style={{
-                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
-                border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
-                fontSize: 11,
-              }}
+              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
             >
               ← Back
-            </button>
+            </Button>
             {backtestMode === 'auto' ? (
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setStep('review')}
                 disabled={!autoSelectResult}
-                style={{
-                  padding: '8px 24px', background: autoSelectResult ? tokens.colors.semantic.successBg : '#222',
-                  color: autoSelectResult ? tokens.colors.semantic.success : tokens.colors.steel.disabled, border: `1px solid ${autoSelectResult ? tokens.colors.semantic.success : '#333'}`,
-                  borderRadius: 4, cursor: autoSelectResult ? 'pointer' : 'default',
-                  fontSize: 12, fontWeight: 700,
-                }}
+                className="h-11 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
               >
                 Next →
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={async () => {
                   if (!manualPair) return;
                   setConfigureError('');
@@ -1281,15 +1193,10 @@ export function SetupWizard({
                   }
                 }}
                 disabled={!manualPair?.symbol}
-                style={{
-                  padding: '8px 24px', background: manualPair?.symbol ? tokens.colors.semantic.successBg : '#222',
-                  color: manualPair?.symbol ? tokens.colors.semantic.success : tokens.colors.steel.disabled, border: `1px solid ${manualPair?.symbol ? tokens.colors.semantic.success : '#333'}`,
-                  borderRadius: 4, cursor: manualPair?.symbol ? 'pointer' : 'default',
-                  fontSize: 12, fontWeight: 700,
-                }}
+                className="h-11 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
               >
                 Next →
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -1298,155 +1205,135 @@ export function SetupWizard({
       {/* Step 4: Review & Start */}
       {step === 'review' && (
         <div>
-          <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 8, fontSize: 12 }}>
+          <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
             Review & Start
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+          <div className="flex flex-col gap-1.5 text-[11px]">
             <div>
-              <span style={{ color: tokens.colors.steel.muted }}>Wallet: </span>
-              <span style={{ color: tokens.colors.semantic.success }}>
+              <span className="text-[var(--pf-steel-muted)]">Wallet: </span>
+              <span className="text-[var(--pf-semantic-success)]">
                 {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
               </span>
             </div>
             {configValues && (
               <>
                 <div>
-                  <span style={{ color: tokens.colors.steel.muted }}>Strategy: </span>
-                  <span style={{ color: tokens.colors.ink['1'] }}>
+                  <span className="text-[var(--pf-steel-muted)]">Strategy: </span>
+                  <span className="text-[var(--pf-ink-1)]">
                     {extractScriptName(configValues.strategySource) ?? '(unnamed strategy)'}
                   </span>
                 </div>
                 <div>
-                  <span style={{ color: tokens.colors.steel.muted }}>DEX: </span>
-                  <span style={{ color: tokens.colors.ink['1'] }}>{configValues.dex}</span>
+                  <span className="text-[var(--pf-steel-muted)]">DEX: </span>
+                  <span className="text-[var(--pf-ink-1)]">{configValues.dex}</span>
                 </div>
                 <div>
-                  <span style={{ color: tokens.colors.steel.muted }}>Selected Pair: </span>
-                  <span style={{ color: tokens.colors.semantic.success, fontWeight: 600 }}>
+                  <span className="text-[var(--pf-steel-muted)]">Selected Pair: </span>
+                  <span className="font-semibold text-[var(--pf-semantic-success)]">
                     {backtestMode === 'manual' && manualPair
                       ? `${manualPair.symbol} (${manualPair.timeframe === '5' ? '5m' : manualPair.timeframe === '15' ? '15m' : manualPair.timeframe === '60' ? '1h' : '4h'})`
                       : autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
                   </span>
                 </div>
                 {backtestMode === 'manual' && (
-                  <div style={{ fontSize: 10, color: tokens.colors.semantic.warning, marginLeft: 60 }}>
+                  <div className="ml-[60px] text-[10px] text-[var(--pf-semantic-warning)]">
                     Manual selection — no auto-select evaluation performed
                   </div>
                 )}
                 {autoSelectResult && backtestMode === 'auto' && (
-                  <div style={{ fontSize: 10, color: tokens.colors.steel.muted, marginLeft: 60 }}>
+                  <div className="ml-[60px] text-[10px] text-[var(--pf-steel-muted)]">
                     PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                     {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                   </div>
                 )}
                 <div>
-                  <span style={{ color: tokens.colors.steel.muted }}>Max Daily Loss: </span>
-                  <span style={{ color: tokens.colors.ink['1'] }}>${configValues.maxDailyLoss}</span>
+                  <span className="text-[var(--pf-steel-muted)]">Max Daily Loss: </span>
+                  <span className="text-[var(--pf-ink-1)]">${configValues.maxDailyLoss}</span>
                 </div>
                 <div>
-                  <span style={{ color: tokens.colors.steel.muted }}>Timezone: </span>
-                  <span style={{ color: tokens.colors.ink['1'] }}>{getTimezoneLabel(configValues.timezone)}</span>
+                  <span className="text-[var(--pf-steel-muted)]">Timezone: </span>
+                  <span className="text-[var(--pf-ink-1)]">{getTimezoneLabel(configValues.timezone)}</span>
                 </div>
               </>
             )}
           </div>
 
           {startError && (
-            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>{startError}</div>
+            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">{startError}</div>
           )}
           {resetError && (
-            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>{resetError}</div>
+            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">{resetError}</div>
           )}
           {chaosError && (
-            <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginTop: 8 }}>
+            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">
               ⚠ Chaos mode toggle failed: {chaosError}. Start is blocked until chaos mode matches the engine.
             </div>
           )}
 
           {/* Reset buttons */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, borderTop: `1px solid ${tokens.colors.surface['1']}`, paddingTop: 12 }}>
-            <button
+          <div className="mt-3 flex gap-2 border-t border-[var(--pf-surface-1)] pt-3">
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => handleResetConfig(false)}
               disabled={resetting}
-              style={{
-                padding: '4px 10px', background: 'transparent', color: tokens.colors.semantic.warning,
-                border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
-                fontSize: 10,
-              }}
+              className="h-9 border-[var(--pf-semantic-warning)]/50 px-2.5 text-[10px] text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
             >
               {resetting ? 'Resetting...' : 'Reset Config'}
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => handleResetConfig(true)}
               disabled={resetting}
-              style={{
-                padding: '4px 10px', background: 'transparent', color: tokens.colors.semantic.error,
-                border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 4, cursor: resetting ? 'wait' : 'pointer',
-                fontSize: 10,
-              }}
+              className="h-9 border-[var(--pf-semantic-error)]/50 px-2.5 text-[10px] text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]"
             >
               Reset Everything
-            </button>
+            </Button>
           </div>
 
           {/* Re-run backtest button when config has autoSelect but hasn't been run this session */}
           {persistedConfig?.autoSelect === true && !backtestRunThisSession && !autoSelectResult && (
-            <div style={{ 
-              padding: '8px 12px', background: tokens.colors.surface['1'], borderRadius: 6, 
-              border: `1px solid ${tokens.colors.semantic.warning}`, marginTop: 12 
-            }}>
-              <div style={{ color: tokens.colors.semantic.warning, fontSize: 11, marginBottom: 6 }}>
+            <div className="mt-3 rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-surface-1)] p-2">
+              <div className="mb-1.5 text-[11px] text-[var(--pf-semantic-warning)]">
                 Auto-select backtest hasn't been run since page reload.
               </div>
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={handleRerunBacktest}
                 disabled={!!autoSelectProgress}
-                style={{
-                  padding: '6px 14px', background: tokens.colors.semantic.warningBg, color: tokens.colors.semantic.warning,
-                  border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, 
-                  cursor: autoSelectProgress ? 'wait' : 'pointer',
-                  fontSize: 11, fontWeight: 600,
-                }}
+                className="h-10 border-[var(--pf-semantic-warning)]/60 bg-[var(--pf-semantic-warning-bg)] px-3.5 text-[11px] font-semibold text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
               >
                 {autoSelectProgress ? 'Running...' : 'Re-run Backtest'}
-              </button>
+              </Button>
             </div>
           )}
 
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
-            <button
+            <Button
+              type="button"
+              variant="outline"
               onClick={() => setStep('config')}
               disabled={!!autoSelectProgress}
-              style={{
-                padding: '6px 14px', background: 'transparent', color: tokens.colors.steel.muted,
-                border: '1px solid #333', borderRadius: 4, cursor: autoSelectProgress ? 'default' : 'pointer',
-                fontSize: 11,
-              }}
+              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
             >
               ← Back
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
               onClick={handleStart}
               disabled={starting || !!autoSelectProgress || !!chaosError}
               title={chaosError ? 'Cannot start — chaos mode is in a failed state' : undefined}
-              style={{
-                padding: '8px 24px', background: starting ? tokens.colors.semantic.successBg : tokens.colors.semantic.successBg,
-                color: tokens.colors.semantic.success, border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 4,
-                cursor: (starting || !!autoSelectProgress) ? 'wait' : chaosError ? 'not-allowed' : 'pointer',
-                fontSize: 12, fontWeight: 700,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                opacity: (starting || !!autoSelectProgress || !!chaosError) ? 0.7 : 1,
-              }}
+              className="h-11 border border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
             >
               {starting ? 'Starting...' : (
                 <>
-                  <svg width="12" height="12" viewBox="0 0 10 10" fill={tokens.colors.semantic.success}>
-                    <polygon points="2,0 9,5 2,10" />
-                  </svg>
+                  <Play className="size-3.5 text-[var(--pf-semantic-success)]" aria-hidden="true" />
                   Start Bot
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       )}

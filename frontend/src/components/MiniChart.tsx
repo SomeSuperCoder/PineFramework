@@ -11,6 +11,7 @@ import type {
 } from '../chart';
 import type { ScriptResult } from '../types';
 import { tokens } from '../theme/tokens';
+import { Card } from '@/components/ui/card';
 
 const COLORS = [
   tokens.colors.brand.blue,
@@ -256,19 +257,21 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
   }, [data, scriptResult, dataVersion]);
 
   return (
-    <div
-      ref={(node) => {
-        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-        if (typeof ref === 'function') ref(node);
-        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
-      }}
-      style={{
-        width: '100%',
-        height: `${height}px`,
-        background: tokens.colors.canvas,
-        borderRadius: 4,
-        overflow: 'hidden',
-      }}
-    />
+    <Card className="overflow-hidden p-0!" style={{ height: `${height}px` }}>
+      <div
+        ref={(node) => {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          if (typeof ref === 'function') ref(node);
+          else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }}
+        style={{
+          width: '100%',
+          height: '100%',
+          background: tokens.colors.canvas,
+          borderRadius: 4,
+          overflow: 'hidden',
+        }}
+      />
+    </Card>
   );
 });

@@ -3,6 +3,11 @@ import { PineChart, createChart } from '../chart';
 import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
 import type { ScriptResult } from '../types';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Check, Loader2, Pencil, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface IndicatorLabel {
   id: string;
@@ -557,105 +562,81 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     onEditIndicator?.(indicatorId);
   }, [onEditIndicator]);
 
-  const labelButtonStyle: React.CSSProperties = {
-    background: 'none',
-    border: 'none',
-    color: '#aaa',
-    cursor: 'pointer',
-    padding: '2px 4px',
-    fontSize: '13px',
-    lineHeight: 1,
-    borderRadius: '3px',
-    pointerEvents: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '20px',
-    height: '20px',
-  };
-
   return (
     <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       {indicatorLabels.length > 0 && (
-        <div style={{
-          position: 'absolute',
-          top: '8px',
-          left: '8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-          zIndex: 10,
-          pointerEvents: 'auto',
-        }}>
-          {indicatorLabels.map((label) => (
-            <div
-              key={label.id}
-              title={label.name}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                background: 'rgba(12, 15, 30, 0.9)',
-                border: `1px solid ${label.overlay ? tokens.colors.brand.blue : tokens.colors.semantic.warning}`,
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontFamily: tokens.typography.fontFamily,
-                color: tokens.colors.ink['1'],
-                cursor: 'default',
-                whiteSpace: 'nowrap',
-                pointerEvents: 'auto',
-              }}
-            >
-              <span style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: label.overlay ? tokens.colors.brand.blue : tokens.colors.semantic.warning,
-                flexShrink: 0,
-              }} />
-              <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {label.name}
-              </span>
-              {computingIndicators.has(label.id) ? (
-                <span title="Computing..." style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: '14px', height: '14px', fontSize: '10px', flexShrink: 0,
-                }}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" style={{ animation: 'spin 1s linear infinite' }}>
-                    <circle cx="6" cy="6" r="4" fill="none" stroke="#ffa726" strokeWidth="1.5"
-                      strokeDasharray="18.85 6.28" strokeLinecap="round" />
-                  </svg>
-                </span>
-              ) : (
-                <span title="Ready" style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: '14px', height: '14px', fontSize: '8px', flexShrink: 0,
-                  color: tokens.colors.semantic.success,
-                }}>✓</span>
-              )}
-              <button
-                onClick={() => handleEditIndicator(label.id)}
-                style={labelButtonStyle}
-                title="Edit script"
-                onMouseEnter={(e) => { e.currentTarget.style.color = tokens.colors.ink['1']; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
+        <TooltipProvider delayDuration={0}>
+          <div className="pointer-events-auto absolute top-2 left-2 z-10 flex flex-col gap-1">
+            {indicatorLabels.map((label) => (
+              <Badge
+                key={label.id}
+                title={label.name}
+                variant="outline"
+                className={cn(
+                  'h-auto! gap-1.5 py-1 pr-1 pl-2 text-[13px] font-medium text-[var(--pf-ink-1)]',
+                  'bg-[var(--pf-canvas)]/90',
+                  label.overlay
+                    ? 'border-[var(--pf-brand-blue)]/70'
+                    : 'border-[var(--pf-semantic-warning)]/70',
+                )}
               >
-                &#9998;
-              </button>
-              <button
-                onClick={() => handleRemoveIndicator(label.id)}
-                style={labelButtonStyle}
-                title="Remove indicator"
-                onMouseEnter={(e) => { e.currentTarget.style.color = tokens.colors.semantic.error; e.currentTarget.style.background = 'rgba(233,69,96,0.15)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'size-2 shrink-0 rounded-full',
+                    label.overlay ? 'bg-[var(--pf-brand-blue)]' : 'bg-[var(--pf-semantic-warning)]',
+                  )}
+                />
+                <span className="max-w-[140px] truncate">{label.name}</span>
+                {computingIndicators.has(label.id) ? (
+                  <span title="Computing..." className="inline-flex shrink-0 items-center justify-center">
+                    <Loader2
+                      className="size-3 animate-spin text-[var(--pf-semantic-warning)] motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">Computing…</span>
+                  </span>
+                ) : (
+                  <span title="Ready" className="inline-flex shrink-0 items-center justify-center text-[var(--pf-semantic-success)]">
+                    <Check className="size-3" aria-hidden="true" />
+                    <span className="sr-only">Ready</span>
+                  </span>
+                )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleEditIndicator(label.id)}
+                      aria-label={`Edit ${label.name}`}
+                      className="text-[var(--pf-steel-icon)] hover:bg-[var(--pf-surface-2)] hover:text-[var(--pf-ink-1)]"
+                    >
+                      <Pencil className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit script</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleRemoveIndicator(label.id)}
+                      aria-label={`Remove ${label.name}`}
+                      className="text-[var(--pf-steel-icon)] hover:bg-[var(--pf-semantic-error-bg)] hover:text-[var(--pf-semantic-error)]"
+                    >
+                      <X className="size-3.5" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove indicator</TooltipContent>
+                </Tooltip>
+              </Badge>
+            ))}
+          </div>
+        </TooltipProvider>
       )}
     </div>
   );

@@ -1,0 +1,183 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+  ─────────────────────────────────────────────────────────────
+  PineFramework → shadcn theme bridge (wave 1.4/1.5)
+  DESIGN.md is the law. Every shadcn theme variable below is a
+  thin `var(--pf-*)` alias — NO literal color values live here.
+  Dark-only per DESIGN §0: the `dark` variant is ALWAYS on.
+  ─────────────────────────────────────────────────────────────
+*/
+
+/* DESIGN §0 dark-only — dark variant resolves on every element.
+   (`:root` and any descendant of `:root` = everything). Without this,
+   Tailwind v4 defaults `dark:` to prefers-color-scheme and a light-OS
+   user flips components to a light mode — forbidden. */
+@custom-variant dark (&:where(:root, :root *));
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--pf-font-family);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   THE BRIDGE — dark-only shadcn token map (all pf aliases, §0–§15)
+   Single dark theme. No light block exists anywhere in this file.
+   ───────────────────────────────────────────────────────────── */
+:root {
+    --background: var(--pf-canvas);
+    --foreground: var(--pf-ink-1);
+    --card: var(--pf-surface-1);
+    --card-foreground: var(--pf-ink-1);
+    --popover: var(--pf-surface-2);
+    --popover-foreground: var(--pf-ink-1);
+    --primary: var(--pf-ink-1); /* §15.1 WHITE PILI dominant CTA — not yellow */
+    --primary-foreground: var(--pf-ink);
+    --secondary: var(--pf-surface-2);
+    --secondary-foreground: var(--pf-ink-1);
+    --muted: var(--pf-surface-2);
+    --muted-foreground: var(--pf-steel-muted);
+    --accent: var(--pf-brand-blue); /* actions/focus accent — not a fill */
+    --accent-foreground: var(--pf-ink-1);
+    --destructive: var(--pf-semantic-error);
+    --destructive-foreground: var(--pf-ink-1);
+    --border: var(--pf-hairline);
+    --input: var(--pf-hairline-strong);
+    --ring: var(--pf-brand-blue); /* §12 focus ring color */
+    --radius: var(--pf-radius-md);
+    /* Chart series (DESIGN §14 priority order). */
+    --chart-1: var(--pf-brand-blue);
+    --chart-2: var(--pf-brand-yellow);
+    --chart-3: var(--pf-brand-coral);
+    --chart-4: var(--pf-brand-teal);
+    --chart-5: var(--pf-ink-3);
+    /* Sidebar chrome (§16). */
+    --sidebar: var(--pf-surface-1);
+    --sidebar-foreground: var(--pf-ink-1);
+    --sidebar-primary: var(--pf-ink-1);
+    --sidebar-primary-foreground: var(--pf-ink);
+    --sidebar-accent: var(--pf-brand-blue);
+    --sidebar-accent-foreground: var(--pf-ink-1);
+    --sidebar-border: var(--pf-hairline);
+    --sidebar-ring: var(--pf-brand-blue);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────────
+  DESIGN-LAW OVERRIDE LAYER
+  Enforces DESIGN §10 (buttons = neutral full pill), §12 (focus
+  ring), §15 (44px fields, not-allowed disabled) and §13 (motion)
+  OVER shadcn's shipped utilities. Unlayered rules win over
+  Tailwind's layered utilities — by design, they are the law.
+  ───────────────────────────────────────────────────────────── */
+
+/* §10 Pill rule — every shadcn Button renders as a full pill. */
+[data-slot="button"] {
+    border-radius: var(--pf-radius-full) !important;
+}
+
+/* §15.3 Fields — fixed 44px hit area (select keeps its height). */
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="input-group"] {
+    min-height: 44px !important;
+    height: 44px !important;
+}
+
+/* §12 Focus ring — the double ring (canvas gap + brand blue) on
+   every interactive element, replacing shadcn's single 50% ring. */
+:is(
+    button, [role="button"], input, select, textarea, a[href],
+    [tabindex]:not([tabindex="-1"])
+):focus-visible {
+    outline: none;
+    box-shadow: var(--pf-focus-ring);
+}
+
+/* §15 Disabled — cursor: not-allowed; button labels lift to
+   steel-muted (steel-disabled on surface-3 = 2.45:1, below DESIGN's
+   2.8 exempt floor — UX audit #28). */
+:is(
+    button, [role="button"], input, select, textarea, [data-slot]
+):disabled,
+:is(
+    button, [role="button"], input, select, textarea, [data-slot]
+)[aria-disabled="true"] {
+    cursor: not-allowed;
+    color: var(--pf-steel-disabled);
+}
+[data-slot="button"]:disabled,
+[data-slot="button"][aria-disabled="true"] {
+    background-color: var(--pf-surface-3);
+    border-color: var(--pf-hairline);
+    opacity: 1;
+    color: var(--pf-steel-muted); /* ≥3:1 on surface-3 (3.45:1) */
+}
+
+/* §13 Motion — shadcn enter/leave/accordion animations at the pf
+   beat (150ms fast / 200ms base, ease). Reduced-motion kill-switch
+   already lives in index.css §13 and targets * ::before/::after. */
+.animate-in,
+.animate-out,
+.animate-zoom-in,
+.animate-accordion-down,
+.animate-accordion-up {
+    animation-duration: var(--pf-motion-base) !important;
+    animation-timing-function: var(--pf-motion-ease) !important;
+}
+.animate-in-fast,
+.animate-out-fast {
+    animation-duration: var(--pf-motion-fast) !important;
+    animation-timing-function: var(--pf-motion-ease) !important;
+}

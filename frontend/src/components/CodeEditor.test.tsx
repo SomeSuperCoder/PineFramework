@@ -156,7 +156,10 @@ describe('CodeEditor', () => {
       ]);
       render(<CodeEditor isOpen={true} onClose={onClose} onAdd={() => {}} />);
       await waitFor(() => expect(screen.getByText('Alpha Strategy')).toBeInTheDocument());
-      await user.click(screen.getByText('Close'));
+      // shadcn Dialog adds a sr-only "Close" (the X button) alongside the
+      // visible header Close — both close the editor; click the visible one
+      // (it renders first in DOM order).
+      await user.click(screen.getAllByRole('button', { name: 'Close' })[0]);
       expect(onClose).toHaveBeenCalledOnce();
     });
   });

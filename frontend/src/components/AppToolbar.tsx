@@ -1,6 +1,18 @@
-import { tokens } from '../theme/tokens';
+import {
+  Plus,
+  Pencil,
+  TrendingUp,
+  Maximize,
+  Bug,
+  Clock,
+  Download,
+  Send,
+  TriangleAlert,
+} from 'lucide-react';
 import type { PineScriptError } from '../types';
 import { TradingBotControlButton, type BotStateT } from './TradingBotPanel';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface AppToolbarProps {
   isStrategy: boolean;
@@ -49,190 +61,73 @@ export function AppToolbar({
 }: AppToolbarProps) {
   return (
     <div
-      className="footer-bar"
-      style={{ display: 'flex', gap: '2px', alignItems: 'center', padding: '6px 12px' }}
+      className="footer-bar flex flex-wrap items-center gap-1 px-2 py-1.5"
     >
-      <button
+      <Button
+        variant="ghost"
         onClick={onOpenQuickAdder}
-        style={{
-          padding: '5px 10px',
-          background: tokens.colors.hairline.default,
-          color: tokens.colors.ink['1'],
-          border: `1px solid ${tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        className="h-10 px-3 text-sm text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <line x1="6" y1="2" x2="6" y2="10" />
-          <line x1="2" y1="6" x2="10" y2="6" />
-        </svg>
+        <Plus className="size-4" aria-hidden="true" />
         Add
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
         onClick={onOpenEditor}
-        style={{
-          padding: '5px 10px',
-          background: tokens.colors.hairline.default,
-          color: tokens.colors.ink['1'],
-          border: `1px solid ${tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        className="h-10 px-3 text-sm text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M8.5 1.5l2 2L4 10H2v-2z" />
-        </svg>
+        <Pencil className="size-4" aria-hidden="true" />
         Editor
-      </button>
-      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
+      </Button>
+      <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
       {isStrategy && (
-        <button
+        <Button
           onClick={onOpenBacktest}
-          style={{
-            padding: '5px 10px',
-            background: tokens.colors.brand.blue,
-            color: tokens.colors.ink.default,
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontWeight: 600,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '5px',
-          }}
+          className="h-10 bg-[var(--pf-brand-blue)] px-3 text-sm font-semibold text-white hover:bg-[var(--pf-brand-blue-hover)]"
         >
-          <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
-            <polygon points="2,0 10,5.5 2,11" />
-          </svg>
+          <TrendingUp className="size-4" aria-hidden="true" />
           Backtest
-        </button>
+        </Button>
       )}
-      {isStrategy && <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />}
-      <button
+      {isStrategy && <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />}
+      <Button
+        variant={autoScale ? 'secondary' : 'ghost'}
         onClick={onToggleAutoScale}
-        style={{
-          padding: '5px 10px',
-          background: autoScale ? tokens.colors.semantic.successBg : tokens.colors.hairline.default,
-          color: autoScale ? tokens.colors.semantic.success : tokens.colors.ink['1'],
-          border: `1px solid ${autoScale ? tokens.colors.semantic.success : tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        aria-pressed={autoScale}
+        className={cn(
+          'h-10 px-3 text-sm',
+          autoScale
+            ? 'bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]'
+            : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+        )}
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <polyline points="1,4 1,1 4,1" />
-          <polyline points="8,1 11,1 11,4" />
-          <polyline points="11,8 11,11 8,11" />
-          <polyline points="4,11 1,11 1,8" />
-        </svg>
+        <Maximize className="size-4" aria-hidden="true" />
         {autoScale ? 'Auto Scale' : 'Manual'}
-      </button>
-      <button
+      </Button>
+      <Button
+        variant={debugMode ? 'secondary' : 'ghost'}
         onClick={onToggleDebugMode}
-        style={{
-          padding: '5px 10px',
-          background: debugMode ? tokens.colors.semantic.warningBg : tokens.colors.hairline.default,
-          color: debugMode ? tokens.colors.semantic.warning : tokens.colors.ink['1'],
-          border: `1px solid ${debugMode ? tokens.colors.semantic.warning : tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        aria-pressed={debugMode}
+        className={cn(
+          'h-10 px-3 text-sm',
+          debugMode
+            ? 'bg-[var(--pf-semantic-warning-bg)] text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]'
+            : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+        )}
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <circle cx="6" cy="6" r="1.5" fill="currentColor" />
-          <path d="M6 3V1" />
-          <path d="M6 11V9" />
-          <path d="M3 6H1" />
-          <path d="M11 6H9" />
-          <path d="M9.5 2.5L8 4" />
-          <path d="M4 8L2.5 9.5" />
-          <path d="M2.5 2.5L4 4" />
-          <path d="M8 8L9.5 9.5" />
-        </svg>
+        <Bug className="size-4" aria-hidden="true" />
         Debug
-      </button>
-      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
-      <button
+      </Button>
+      <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
+      <Button
+        variant="ghost"
         onClick={onOpenGoToDate}
-        style={{
-          padding: '5px 10px',
-          background: tokens.colors.hairline.default,
-          color: tokens.colors.ink['1'],
-          border: `1px solid ${tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        className="h-10 px-3 text-sm text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        >
-          <circle cx="6" cy="6" r="4.5" />
-          <polyline points="6,3 6,6 8,7" />
-        </svg>
+        <Clock className="size-4" aria-hidden="true" />
         Go to Date
-      </button>
-      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
+      </Button>
+      <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
       {backendUrl && (
         <>
           <TradingBotControlButton
@@ -242,122 +137,52 @@ export function AppToolbar({
             onToggleDashboard={onToggleBotDashboard}
             dashboardOpen={botDashboardOpen}
           />
-          <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
+          <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
         </>
       )}
-      <div style={{ flex: 1 }} />
-      <button
+      <div className="min-w-1 flex-1" />
+      <Button
         onClick={onExport}
-        style={{
-          padding: '5px 10px',
-          background: tokens.colors.semantic.infoBg,
-          color: '#8bc34a',
-          border: '1px solid #2a4a2a',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        className="h-10 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-3 text-sm text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M6 2v7M3 6l3 3 3-3M2 10h8" />
-        </svg>
+        <Download className="size-4" aria-hidden="true" />
         Export
-      </button>
-      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
-      <button
+      </Button>
+      <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
+      <Button
+        variant={telegramOpen ? 'secondary' : 'ghost'}
         onClick={onToggleTelegram}
-        style={{
-          padding: '5px 10px',
-          background: telegramOpen ? '#3a1a1a' : tokens.colors.hairline.default,
-          color: telegramOpen ? tokens.colors.semantic.error : tokens.colors.ink['1'],
-          border: `1px solid ${telegramOpen ? tokens.colors.semantic.error : tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontSize: '11px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '5px',
-        }}
+        aria-pressed={telegramOpen}
+        className={cn(
+          'h-10 px-3 text-sm',
+          telegramOpen
+            ? 'bg-[var(--pf-semantic-error-bg)] text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]'
+            : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+        )}
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M1 6l9-4-4 9-1-4z" />
-          <path d="M10 8L6 6" />
-        </svg>
+        <Send className="size-4" aria-hidden="true" />
         Telegram
-      </button>
-      <div style={{ width: 1, height: 18, background: '#222', margin: '0 6px' }} />
-      <div style={{ position: 'relative', display: 'inline-flex' }}>
-        <button
+      </Button>
+      <span className="mx-1 h-5 w-px bg-[var(--pf-hairline)]" aria-hidden="true" />
+      <div className="relative inline-flex">
+        <Button
+          variant={errorConsoleOpen ? 'secondary' : 'ghost'}
           onClick={onToggleErrorConsole}
-          style={{
-            padding: '5px 10px',
-          background: errorConsoleOpen ? tokens.colors.semantic.errorBg : tokens.colors.hairline.default,
-          color: errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.ink['1'],
-          border: `1px solid ${errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.hairline.default}`,
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '11px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '5px',
-          }}
+          aria-pressed={errorConsoleOpen}
+          className={cn(
+            'h-10 px-3 text-sm',
+            errors.length > 0
+              ? 'bg-[var(--pf-semantic-error-bg)] text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]'
+              : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+          )}
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M6 1L1 11h10z" />
-            <line x1="6" y1="5" x2="6" y2="7.5" />
-            <circle cx="6" cy="9.5" r="0.5" fill="currentColor" />
-          </svg>
+          <TriangleAlert className="size-4" aria-hidden="true" />
           Errors
-        </button>
+        </Button>
         {errors.length > 0 && (
           <span
-            style={{
-              position: 'absolute',
-              top: '-6px',
-              right: '-6px',
-              backgroundColor: tokens.colors.semantic.error,
-              color: tokens.colors.ink.default,
-              fontSize: '10px',
-              fontWeight: 'bold',
-              borderRadius: '50%',
-              minWidth: '16px',
-              height: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              lineHeight: 1,
-              pointerEvents: 'none',
-            }}
+            className="pointer-events-none absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--pf-semantic-error)] px-1 text-[10px] font-semibold leading-none text-[var(--pf-ink)]"
+            aria-label={`${errors.length} errors`}
           >
             {errors.length}
           </span>

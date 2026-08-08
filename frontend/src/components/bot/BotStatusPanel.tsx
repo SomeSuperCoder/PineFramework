@@ -75,9 +75,9 @@ export function BotStatusPanel({
   const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
 
   return (
-    <div style={{ borderRight: `1px solid ${tokens.colors.surface['1']}`, padding: 12, overflow: 'auto' }}>
-      <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>Status</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="overflow-auto border-r border-[var(--pf-surface-1)] p-3">
+      <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--pf-ink-3)] uppercase">Status</div>
+      <div className="flex flex-col gap-2">
         <MetricValue label="State" value={status.state} color={stateColor} />
         {wallet.publicKey && (
           <MetricValue
@@ -117,10 +117,10 @@ export function BotStatusPanel({
         />
 
         {status.errors.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <span style={{ color: tokens.colors.semantic.error, fontWeight: 600, fontSize: 11 }}>Errors ({status.errors.length}):</span>
+          <div className="mt-2">
+            <span className="text-[11px] font-semibold text-[var(--pf-semantic-error)]">Errors ({status.errors.length}):</span>
             {status.errors.slice(-3).map((err, i) => (
-              <div key={i} style={{ color: tokens.colors.semantic.error, fontSize: 10, marginTop: 2 }}>
+              <div key={i} className="mt-0.5 text-[10px] text-[var(--pf-semantic-error)]">
                 [{err.code}] {err.message}
               </div>
             ))}

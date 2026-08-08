@@ -1,6 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BacktestResultResponse } from '../types';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface BacktestResultsProps {
   result: BacktestResultResponse;
@@ -8,11 +24,32 @@ interface BacktestResultsProps {
   onSelectTrade?: (tradeIndex: number) => void;
 }
 
+/** Small stat tile (§15.2 Card recipe: label caption + tabular-nums value). */
+function StatCard({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <Card size="sm" className="gap-1 text-center">
+      <CardHeader className="items-center gap-0 pb-0">
+        <CardTitle className="text-[11px] font-medium text-muted-foreground">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-1">
+        <div className={`text-base font-semibold tabular-nums ${valueClassName ?? ''}`}>{value}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResultsProps) {
   const equityCanvasRef = useRef<HTMLCanvasElement>(null);
   const [sortField, setSortField] = useState<string>('pnl');
   const [sortAsc, setSortAsc] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const { metrics, trades } = result;
 
@@ -99,7 +136,6 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     a.download = 'backtest-trades.csv';
     a.click();
     URL.revokeObjectURL(url);
-    setShowExportMenu(false);
   };
 
   const toggleSort = (field: string) => {
@@ -117,140 +153,211 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
   };
 
   return (
-    <div
-      className="backtest-results"
-      style={{
-        width: '100%',
-        color: tokens.colors.ink['1'],
-        fontSize: '13px',
-      }}
-    >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Backtest Results</h3>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowExportMenu(!showExportMenu)}
-              style={{ padding: '6px 12px', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: `1px solid ${tokens.colors.brand.blue}`, borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-            >
-              Export
-            </button>
-            {showExportMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0,         background: tokens.colors.canvas,         border: `1px solid ${tokens.colors.hairline.default}`, borderRadius: '4px', zIndex: 10 }}>
-                <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '8px 16px', background: 'none', border: 'none', color: tokens.colors.ink['1'], cursor: 'pointer', textAlign: 'left', fontSize: '12px' }}>
-                  Export CSV
-                </button>
-              </div>
+    <div className="backtest-results flex w-full flex-col gap-4 text-[13px] text-foreground">
+      {/* Header: title + Export dropdown + Close */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-[color:var(--pf-brand-blue)]">Backtest Results</CardTitle>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="sm">
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={exportCSV}>Export CSV</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {onClose && (
+              <Button type="button" variant="destructive" size="sm" onClick={onClose}>
+                Close
+              </Button>
             )}
           </div>
-          {onClose && (
-            <button
-              onClick={onClose}
-              style={{ padding: '6px 12px', background: '#3a1a1a', color: tokens.colors.semantic.error, border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-            >
-              Close
-            </button>
-          )}
-        </div>
-      </div>
+        </CardHeader>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Net Profit</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: metrics.totalPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
-            ${metrics.totalPnl.toFixed(2)}
+        {/* Stat grid */}
+        <CardContent>
+          <div className="grid grid-cols-4 gap-2">
+            <StatCard
+              label="Net Profit"
+              value={`$${metrics.totalPnl.toFixed(2)}`}
+              valueClassName={
+                metrics.totalPnl >= 0
+                  ? 'text-[color:var(--pf-semantic-success)]'
+                  : 'text-[color:var(--pf-semantic-error)]'
+              }
+            />
+            <StatCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} />
+            <StatCard label="Profit Factor" value={`${metrics.profitFactor.toFixed(2)}`} />
+            <StatCard label="Sharpe" value={`${metrics.sharpeRatio.toFixed(2)}`} />
+            <StatCard
+              label="Max DD"
+              value={`${metrics.maxDrawdownPercent.toFixed(1)}%`}
+              valueClassName="text-[color:var(--pf-semantic-error)]"
+            />
+            <StatCard label="Sortino" value={`${metrics.sortinoRatio.toFixed(2)}`} />
+            <StatCard label="Total Trades" value={`${metrics.totalTrades}`} />
+            <StatCard label="Commission" value={`$${metrics.commission.toFixed(2)}`} />
           </div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Win Rate</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.winRate.toFixed(1)}%</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Profit Factor</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.profitFactor.toFixed(2)}</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Sharpe</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.sharpeRatio.toFixed(2)}</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Max DD</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: tokens.colors.semantic.error }}>{metrics.maxDrawdownPercent.toFixed(1)}%</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Sortino</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.sortinoRatio.toFixed(2)}</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Total Trades</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.totalTrades}</div>
-        </div>
-        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
-          <div style={{ fontSize: '11px', color: '#aaa' }}>Commission</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold' }}>${metrics.commission.toFixed(2)}</div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div style={{ marginBottom: '16px' }}>
-        <h4 style={{ margin: '0 0 8px', color: tokens.colors.semantic.warning }}>Equity & Drawdown</h4>
-        <div style={{ width: '100%', height: '200px',         background: tokens.colors.canvas, borderRadius: '6px' }}>
-          <canvas ref={equityCanvasRef} style={{ width: '100%', height: '100%' }} />
-        </div>
-      </div>
+      {/* Equity & drawdown canvas host */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[color:var(--pf-semantic-warning)]">
+            Equity &amp; Drawdown
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[200px] w-full rounded-md bg-[color:var(--pf-canvas)]">
+            <canvas ref={equityCanvasRef} className="h-full w-full" />
+          </div>
+        </CardContent>
+      </Card>
 
-      <div>
-        <h4 style={{ margin: '0 0 8px', color: tokens.colors.semantic.warning }}>
-          Trade List ({sortedTrades.length} trades)
-        </h4>
-        {sortedTrades.length === 0 ? (
-          <div style={{ padding: '16px', textAlign: 'center', color: '#666' }}>No trades</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-              <thead>
-                <tr style={{ background: tokens.colors.hairline.default }}>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('direction')}>Dir{sortIndicator('direction')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('entryPrice')}>Entry{sortIndicator('entryPrice')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('exitPrice')}>Exit{sortIndicator('exitPrice')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('pnl')}>PnL{sortIndicator('pnl')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('pnlPercent')}>Return{sortIndicator('pnlPercent')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('mae')}>MAE{sortIndicator('mae')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('mfe')}>MFE{sortIndicator('mfe')}</th>
-                  <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('barsHeld')}>Bars{sortIndicator('barsHeld')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedTrades.map((t, i) => (
-                  <tr
-                    key={t.id}
-                    onClick={() => onSelectTrade?.(i)}
+      {/* Trade list */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-[color:var(--pf-semantic-warning)]">
+            Trade List ({sortedTrades.length} trades)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {sortedTrades.length === 0 ? (
+            <div className="p-4 text-center text-muted-foreground">No trades</div>
+          ) : (
+            <Table className="font-mono text-[11px]">
+              <TableHeader>
+                <TableRow className="bg-[color:var(--pf-hairline)]">
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('direction')}
                     style={{
-                      borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-                      cursor: onSelectTrade ? 'pointer' : 'default',
-                      background: i % 2 === 0 ? tokens.colors.canvas : tokens.colors.surface['1'],
+                      color: sortField === 'direction' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
                     }}
                   >
-                    <td style={{ padding: '4px 8px', color: t.direction === 'long' ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
+                    Dir{sortIndicator('direction')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('entryPrice')}
+                    style={{
+                      color: sortField === 'entryPrice' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    Entry{sortIndicator('entryPrice')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('exitPrice')}
+                    style={{
+                      color: sortField === 'exitPrice' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    Exit{sortIndicator('exitPrice')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('pnl')}
+                    style={{
+                      color: sortField === 'pnl' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    PnL{sortIndicator('pnl')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('pnlPercent')}
+                    style={{
+                      color: sortField === 'pnlPercent' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    Return{sortIndicator('pnlPercent')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('mae')}
+                    style={{
+                      color: sortField === 'mae' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    MAE{sortIndicator('mae')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('mfe')}
+                    style={{
+                      color: sortField === 'mfe' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    MFE{sortIndicator('mfe')}
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
+                    onClick={() => toggleSort('barsHeld')}
+                    style={{
+                      color: sortField === 'barsHeld' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                    }}
+                  >
+                    Bars{sortIndicator('barsHeld')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedTrades.map((t, i) => (
+                  <TableRow
+                    key={t.id}
+                    onClick={() => onSelectTrade?.(i)}
+                    className="border-b border-[color:var(--pf-hairline)]"
+                    style={{
+                      cursor: onSelectTrade ? 'pointer' : 'default',
+                      background:
+                        i % 2 === 0 ? 'var(--pf-canvas)' : 'var(--pf-surface-1)',
+                    }}
+                  >
+                    <TableCell
+                      className="px-2 py-1"
+                      style={{
+                        color:
+                          t.direction === 'long'
+                            ? 'var(--pf-semantic-success)'
+                            : 'var(--pf-semantic-error)',
+                      }}
+                    >
                       {t.direction === 'long' ? 'L' : 'S'}
-                    </td>
-                    <td style={{ padding: '4px 8px' }}>${t.entryPrice.toFixed(2)}</td>
-                    <td style={{ padding: '4px 8px' }}>${t.exitPrice.toFixed(2)}</td>
-                    <td style={{ padding: '4px 8px', color: t.pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
+                    </TableCell>
+                    <TableCell className="px-2 py-1">${t.entryPrice.toFixed(2)}</TableCell>
+                    <TableCell className="px-2 py-1">${t.exitPrice.toFixed(2)}</TableCell>
+                    <TableCell
+                      className="px-2 py-1"
+                      style={{
+                        color: t.pnl >= 0 ? 'var(--pf-semantic-success)' : 'var(--pf-semantic-error)',
+                      }}
+                    >
                       ${t.pnl.toFixed(2)}
-                    </td>
-                    <td style={{ padding: '4px 8px', color: t.pnlPercent >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
+                    </TableCell>
+                    <TableCell
+                      className="px-2 py-1"
+                      style={{
+                        color:
+                          t.pnlPercent >= 0 ? 'var(--pf-semantic-success)' : 'var(--pf-semantic-error)',
+                      }}
+                    >
                       {t.pnlPercent.toFixed(2)}%
-                    </td>
-                    <td style={{ padding: '4px 8px' }}>{t.mae.toFixed(2)}%</td>
-                    <td style={{ padding: '4px 8px' }}>{t.mfe.toFixed(2)}%</td>
-                    <td style={{ padding: '4px 8px' }}>{t.barsHeld}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="px-2 py-1">{t.mae.toFixed(2)}%</TableCell>
+                    <TableCell className="px-2 py-1">{t.mfe.toFixed(2)}%</TableCell>
+                    <TableCell className="px-2 py-1">{t.barsHeld}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

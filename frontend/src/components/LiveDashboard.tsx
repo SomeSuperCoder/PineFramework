@@ -9,6 +9,9 @@ import { SetupWizard } from './bot/BotControls';
 import { BotStatusPanel } from './bot/BotStatusPanel';
 import { BotMetrics } from './bot/BotMetrics';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Stable empty array references for optional chaos props. A fresh `[]` literal
 // (default parameter or `?? []`) would create a new array every render and,
@@ -68,54 +71,46 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
       flex: 1, gap: 16, padding: 32,
     }}>
       <div style={{ fontSize: 48, opacity: 0.3 }}>🔒</div>
-      <div style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600 }}>Wallet Locked</div>
+      <div className="text-sm font-semibold" style={{ color: tokens.colors.steel.muted }}>Wallet Locked</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 280 }}>
-        <input
+        <Input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
           placeholder="Enter password to unlock"
           autoFocus
-          style={{
-            width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-            border: '1px solid #333', borderRadius: 4, padding: '8px 12px',
-            fontSize: 12, boxSizing: 'border-box',
-          }}
+          className="w-full"
         />
-        <button
+        <Button
           onClick={handleUnlock}
           disabled={loading || !password}
-          style={{
-            padding: '8px 16px', background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success,
-            border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
-            fontSize: 12, fontWeight: 600, opacity: loading || !password ? 0.6 : 1,
-          }}
+          className="border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] text-[color:var(--pf-semantic-success)]"
         >
           {loading ? 'Unlocking...' : 'Unlock'}
-        </button>
-        {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 11, textAlign: 'center' }}>{error}</div>}
-        <button
+        </Button>
+        {error && (
+          <div className="text-center text-[11px] text-[color:var(--pf-semantic-error)]">{error}</div>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
           onClick={() => setShowForgot(!showForgot)}
-          style={{
-            background: 'none', border: 'none', color: '#666',
-            cursor: 'pointer', fontSize: 10, marginTop: 8,
-          }}
+          className="mt-2 h-auto p-0 text-xs"
+          style={{ color: tokens.colors.ink['3'] }}
         >
           Forgot password?
-        </button>
+        </Button>
         {showForgot && (
-          <button
+          <Button
             onClick={handleForgotPassword}
             disabled={loading}
-            style={{
-              padding: '6px 12px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.error,
-              border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 4, cursor: 'pointer',
-              fontSize: 10,
-            }}
+            variant="destructive"
+            size="sm"
+            className="text-xs"
           >
             Erase wallet and start fresh
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -140,28 +135,15 @@ function DashboardTabs({
   ];
   return (
     <div style={{ display: 'flex', padding: '0 16px', borderBottom: `1px solid ${tokens.colors.surface['1']}`, background: tokens.colors.canvas }}>
-      {tabs.map((t) => {
-        const isActive = active === t.id;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => onChange(t.id)}
-            style={{
-              padding: '9px 16px 7px',
-              background: 'transparent',
-              color: isActive ? '#64b5f6' : tokens.colors.steel.muted,
-              border: 'none',
-              borderBottom: `2px solid ${isActive ? '#64b5f6' : 'transparent'}`,
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: isActive ? 600 : 400,
-            }}
-          >
-            {t.label}
-          </button>
-        );
-      })}
+      <Tabs value={active} onValueChange={(v) => onChange(v as DashboardTabId)}>
+        <TabsList variant="line" className="h-10 w-full justify-start gap-2 bg-transparent">
+          {tabs.map((t) => (
+            <TabsTrigger key={t.id} value={t.id} className="h-10 px-3 text-xs">
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
     </div>
   );
 }
@@ -328,7 +310,6 @@ export function LiveDashboard({
   };
 
   const isIdle = status.state === 'Idle' || status.state === 'Stopped';
-  const isRunning = status.state === 'Running';
   const isError = status.state === 'Error';
   const transitioning = status.state === 'Starting' || status.state === 'Stopping';
 
@@ -361,14 +342,13 @@ export function LiveDashboard({
     // Show a minimal loading state while wallet status is being fetched
     if (!walletLoaded) {
       return (
-        <div style={rootStyle}>
+        <div style={rootStyle} aria-busy={true}>
           <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
             <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600 }}>Bot Dashboard</span>
             <div style={{ flex: 1 }} />
-            <button onClick={onClose} style={{
-              padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
-              border: 'none', cursor: 'pointer', fontSize: 14,
-            }}>✕</button>
+            <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close dashboard" className="text-sm">
+              ✕
+            </Button>
           </div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
             Loading wallet status…
@@ -386,30 +366,27 @@ export function LiveDashboard({
               {status.state}
             </span>
             {wallet.hasWallet && (
-              <span
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={walletLocked}
+                onClick={handleLock}
+                aria-pressed={walletLocked}
+                title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
+                className="h-auto px-2 py-0.5 text-[10px]"
                 style={{
-                  padding: '2px 8px', borderRadius: 4, fontSize: 10,
                   background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
                   color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
-                  cursor: 'pointer',
                 }}
-                onClick={walletLocked ? undefined : handleLock}
-                title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
               >
                 {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
-              </span>
+              </Button>
             )}
           </span>
           <div style={{ flex: 1 }} />
-          <button
-            onClick={onClose}
-            style={{
-              padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
-              border: 'none', cursor: 'pointer', fontSize: 14,
-            }}
-          >
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close dashboard" className="text-xs">
             ✕
-          </button>
+          </Button>
         </div>
 
         {/* Tabs — history/stats stay browsable while the bot is stopped */}
@@ -423,26 +400,26 @@ export function LiveDashboard({
             ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
                 <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
-              <SetupWizard
-                backendUrl={backendUrl}
-                initialWallet={wallet}
-                persistedConfig={persistedConfig}
-                onStart={async () => { await sendCommand('start'); }}
-                onClose={onClose}
-                chaosError={chaosError}
-                autoSelectProgress={autoSelectProgress}
-                autoSelectResult={autoSelectResult}
-                onConfigReset={() => setPersistedConfig(null)}
-                onBacktestStarted={() => {
-                  // Re-fetch config after backtest to update persistedConfig with resolved pairs
-                  fetch(`${backendUrl}/api/bot/config`)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(configData => {
-                      if (configData) setPersistedConfig(configData);
-                    })
-                    .catch(() => {});
-                }}
-              />
+                  <SetupWizard
+                    backendUrl={backendUrl}
+                    initialWallet={wallet}
+                    persistedConfig={persistedConfig}
+                    onStart={async () => { await sendCommand('start'); }}
+                    onClose={onClose}
+                    chaosError={chaosError}
+                    autoSelectProgress={autoSelectProgress}
+                    autoSelectResult={autoSelectResult}
+                    onConfigReset={() => setPersistedConfig(null)}
+                    onBacktestStarted={() => {
+                      // Re-fetch config after backtest to update persistedConfig with resolved pairs
+                      fetch(`${backendUrl}/api/bot/config`)
+                        .then(r => r.ok ? r.json() : null)
+                        .then(configData => {
+                          if (configData) setPersistedConfig(configData);
+                        })
+                        .catch(() => {});
+                    }}
+                  />
                 </div>
               </div>
             )}
@@ -492,7 +469,7 @@ export function LiveDashboard({
             <span
               style={{
                 padding: '2px 8px', borderRadius: 4, fontSize: 10,
-                background: tokens.colors.semantic.error, color: tokens.colors.ink.default, fontWeight: 700, cursor: 'help',
+                background: tokens.colors.semantic.error, color: tokens.colors.ink.default, fontWeight: 600, cursor: 'help',
               }}
               title={engineChaosModeTitle}
             >
@@ -502,79 +479,77 @@ export function LiveDashboard({
             </span>
           )}
           {wallet.hasWallet && (
-            <span
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={walletLocked}
+              onClick={handleLock}
+              aria-pressed={walletLocked}
+              title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
+              className="h-auto px-2 py-0.5 text-[10px]"
               style={{
-                padding: '2px 8px', borderRadius: 4, fontSize: 10,
                 background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
                 color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
-                cursor: 'pointer',
               }}
-              onClick={walletLocked ? undefined : handleLock}
-              title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
             >
               {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
-            </span>
+            </Button>
           )}
         </span>
         <div style={{ flex: 1 }} />
         {/* Action buttons */}
-        {isRunning && (
+        {status.state === 'Running' && (
           <>
-            <button
+            <Button
+              type="button"
+              variant="destructive"
               onClick={() => sendCommand('stop')}
               disabled={loading}
-              style={{
-                padding: '5px 12px', background: tokens.colors.semantic.error, color: tokens.colors.ink.default,
-                border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
-                fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}
+              className="text-[11px]"
             >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="mr-1">
                 <rect x="1" y="1" width="8" height="8" rx="1" />
               </svg>
               Stop
-            </button>
-            <button
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
               onClick={() => sendCommand('emergency-stop')}
               disabled={loading}
               title="Emergency Stop"
-              style={{
-                padding: '5px 8px', marginLeft: 4, background: '#ff1744', color: tokens.colors.ink.default,
-                border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
-                fontSize: 11, fontWeight: 700,
-              }}
+              className="ml-1 text-[11px] font-semibold"
             >
               ⚠
-            </button>
+            </Button>
           </>
         )}
         {isError && (
-          <button
+          <Button
+            type="button"
+            variant="destructive"
             onClick={() => sendCommand('reset')}
             disabled={loading}
-            style={{
-              padding: '5px 10px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.warning,
-              border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
-              fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4,
-            }}
+            className="text-[11px]"
           >
             ⟳ Reset
-          </button>
+          </Button>
         )}
         {transitioning && (
           <span style={{ color: tokens.colors.semantic.warning, fontSize: 11, fontStyle: 'italic', marginRight: 8 }}>
             {status.state}...
           </span>
         )}
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           onClick={onClose}
-          style={{
-            padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
-            border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 4,
-          }}
+          aria-label="Close dashboard"
+          className="ml-1 text-xs"
         >
           ✕
-        </button>
+        </Button>
       </div>
 
       {/* Tabs — Overview keeps the 3-column grid byte-identical */}
@@ -583,62 +558,62 @@ export function LiveDashboard({
       {activeTab === 'overview' && (
         // Three-column body (byte-identical to the pre-tabs layout)
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gridTemplateRows: '1fr', gap: 1, overflow: 'hidden' }}>
-        {/* Left: Status Panel */}
-        <BotStatusPanel
-          status={status}
-          stateColor={stateColor}
-          now={now}
-          wallet={wallet}
-          chaosMode={chaosMode}
-          chaosHeartbeat={chaosHeartbeat}
-          totalCandleErrors={totalCandleErrors}
-          lastCandleError={lastCandleError}
-          feedStatus={feedStatus}
-        />
+          {/* Left: Status Panel */}
+          <BotStatusPanel
+            status={status}
+            stateColor={stateColor}
+            now={now}
+            wallet={wallet}
+            chaosMode={chaosMode}
+            chaosHeartbeat={chaosHeartbeat}
+            totalCandleErrors={totalCandleErrors}
+            lastCandleError={lastCandleError}
+            feedStatus={feedStatus}
+          />
 
-        {/* Center: Mini Chart + Metrics + Positions */}
-        <BotMetrics
-          backendUrl={backendUrl}
-          status={status}
-          activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
-          strategySource={persistedConfig?.strategySource ?? null}
-          chaosMode={chaosMode === true}
-          chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
-          chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
-          autoSelectResult={autoSelectResult}
-          now={now}
-        />
+          {/* Center: Mini Chart + Metrics + Positions */}
+          <BotMetrics
+            backendUrl={backendUrl}
+            status={status}
+            activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
+            strategySource={persistedConfig?.strategySource ?? null}
+            chaosMode={chaosMode === true}
+            chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
+            chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
+            autoSelectResult={autoSelectResult}
+            now={now}
+          />
 
-        {/* Right: Logs Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
-          <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
-            Logs ({logs.length})
-          </div>
-          <div ref={logContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, minHeight: 0 }}>
-            {logs.length === 0 && (
-              <span style={{ color: tokens.colors.steel.muted, fontStyle: 'italic' }}>No log entries yet...</span>
-            )}
-            {logs.slice(-500).map((log, i) => (
-              <div key={i} style={{
-                color: log.level === 'error' ? tokens.colors.semantic.error :
-                       log.level === 'warn' ? tokens.colors.semantic.warning :
-                       log.level === 'debug' ? '#666' : '#aaa',
-              }}>
-                <span style={{ color: tokens.colors.steel.disabled }}>
-                  {new Date(log.timestamp).toLocaleTimeString()}
-                </span>
-                {' '}
-                <span style={{ fontWeight: log.level === 'error' ? 600 : 400 }}>
-                  [{log.level.toUpperCase()}]
-                </span>
-                {' '}
-                {log.message}
-              </div>
-            ))}
-            <div ref={logEndRef} />
+          {/* Right: Logs Panel */}
+          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
+            <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
+              Logs ({logs.length})
+            </div>
+            <div ref={logContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, minHeight: 0 }}>
+              {logs.length === 0 && (
+                <span style={{ color: tokens.colors.steel.muted, fontStyle: 'italic' }}>No log entries yet...</span>
+              )}
+              {logs.slice(-500).map((log, i) => (
+                <div key={i} style={{
+                  color: log.level === 'error' ? tokens.colors.semantic.error :
+                         log.level === 'warn' ? tokens.colors.semantic.warning :
+                         log.level === 'debug' ? tokens.colors.ink['3'] : tokens.colors.ink['2'],
+                }}>
+                  <span style={{ color: tokens.colors.steel.disabled }}>
+                    {new Date(log.timestamp).toLocaleTimeString()}
+                  </span>
+                  {' '}
+                  <span style={{ fontWeight: log.level === 'error' ? 600 : 400 }}>
+                    [{log.level.toUpperCase()}]
+                  </span>
+                  {' '}
+                  {log.message}
+                </div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
           </div>
         </div>
-      </div>
       )}
 
       {activeTab === 'history' && (

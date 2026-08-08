@@ -40,7 +40,10 @@ describe('QuickAdderPopup', () => {
   describe('rendering', () => {
     it('renders nothing when closed', () => {
       const { container } = render(<QuickAdderPopup isOpen={false} onClose={() => {}} onAdd={() => {}} />);
-      expect(container.innerHTML).toBe('');
+      // Radix Popover always keeps an invisible positioning anchor; the popup
+      // content itself must not exist when closed.
+      expect(container.querySelector('[data-slot="popover-content"]')).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/Search indicators/i)).not.toBeInTheDocument();
     });
 
     it('renders popup when open', async () => {
@@ -197,24 +200,13 @@ describe('QuickAdderPopup', () => {
     it('calls onClose when clicking backdrop', async () => {
       const onClose = vi.fn();
       mockFetchSuccess();
-      const { container } = render(<QuickAdderPopup isOpen={true} onClose={onClose} onAdd={() => {}} />);
-      await waitFor(() => {
-        expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
-      });
-      const overlay = container.querySelector('.quick-adder-overlay')!;
-      await userEvent.click(overlay);
-      expect(onClose).toHaveBeenCalledOnce();
-    });
-
-    it('calls onClose when clicking X button', async () => {
-      const user = userEvent.setup();
-      const onClose = vi.fn();
-      mockFetchSuccess();
       render(<QuickAdderPopup isOpen={true} onClose={onClose} onAdd={() => {}} />);
       await waitFor(() => {
         expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
       });
-      await user.click(screen.getByText('×'));
+      // The shadcn Popover (Radix) has no bespoke `.quick-adder-overlay`;
+      // clicking outside the popover is the equivalent backdrop interaction.
+      await userEvent.click(document.body);
       expect(onClose).toHaveBeenCalledOnce();
     });
 
@@ -254,9 +246,10 @@ describe('QuickAdderPopup', () => {
       });
       const input = screen.getByPlaceholderText(/Search indicators/i);
       await user.type(input, '{ArrowDown}');
-      // Second item should be highlighted (index 1)
-      const items = document.querySelectorAll('.quick-adder-item');
-      expect(items[1]).toHaveClass('highlighted');
+      // cmdk (CommandList) marks the active option with aria-selected; the
+      // pre-shadcn `.quick-adder-item.highlighted` class no longer exists.
+      const items = screen.getAllByRole('option');
+      expect(items[1]).toHaveAttribute('aria-selected', 'true');
     });
 
     it('highlights previous item on ArrowUp', async () => {
@@ -268,8 +261,8 @@ describe('QuickAdderPopup', () => {
       });
       const input = screen.getByPlaceholderText(/Search indicators/i);
       await user.type(input, '{ArrowDown}{ArrowUp}');
-      const items = document.querySelectorAll('.quick-adder-item');
-      expect(items[0]).toHaveClass('highlighted');
+      const items = screen.getAllByRole('option');
+      expect(items[0]).toHaveAttribute('aria-selected', 'true');
     });
   });
 });

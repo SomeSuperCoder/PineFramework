@@ -1,8 +1,17 @@
 import { useState } from 'react';
-import { NumberInput } from './NumberInput.js';
+import { ChevronDown, ChevronRight, Info } from 'lucide-react';
+import { NumberField } from './BacktestGeneralSettings.js';
 import type { CommissionMethodId } from '../types';
-import { tokens } from '../theme/tokens';
-// NumberInput is used by JupiterBasicConfig and JupiterUltraConfig sub-components
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
   {
@@ -84,6 +93,76 @@ function detectJupiterTier(symbol: string): { tier: string; label: string; bps: 
   return { tier: 'default', label: 'Default', bps: 10 };
 }
 
+/** Shared footnote inside the advanced panels — muted description text. */
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className="mt-1 text-[11px] text-muted-foreground">{children}</p>;
+}
+
+/** Helpable numeric labelled row (label + ⓘ + NumberField + hint). */
+function FeeField({
+  label,
+  title,
+  value,
+  onChange,
+  step,
+  min,
+  max,
+  hint,
+}: {
+  label: string;
+  title: string;
+  value: number;
+  onChange: (v: number) => void;
+  step?: string;
+  min?: number;
+  max?: number;
+  hint: string;
+}) {
+  return (
+    <div className="mt-2">
+      <div title={title}>
+        <Label className="text-sm">
+          {label}
+          <Info
+            className="ml-1 inline-block size-3.5 cursor-help text-muted-foreground"
+            role="img"
+            aria-label="More info"
+          />
+        </Label>
+      </div>
+      <NumberField value={value} onChange={onChange} step={step} min={min} max={max} />
+      <FieldHint>{hint}</FieldHint>
+    </div>
+  );
+}
+
+/** Advanced-settings disclosure (ghost toggle) — keyed by id so each
+ *  sub-config keeps its own open state. */
+function AdvancedToggle({
+  open,
+  onToggle,
+  summary,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  summary?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="-mx-2 mt-2 h-auto px-2 text-xs text-muted-foreground"
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+      Advanced settings
+      {!open && summary && <span className="ml-2 font-normal text-muted-foreground/80">{summary}</span>}
+    </Button>
+  );
+}
+
 // ── Jupiter Basic Swap config sub-component ──
 
 function JupiterBasicConfig({
@@ -99,80 +178,39 @@ function JupiterBasicConfig({
   return (
     <>
       <div
-        style={{
-          padding: '8px 10px',
-          background: '#0a2e1a',
-          border: `1px solid ${tokens.colors.semantic.success}`,
-          borderRadius: '4px',
-          fontSize: '12px',
-          color: tokens.colors.semantic.success,
-        }}
+        role="status"
+        className="rounded-md border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] px-2.5 py-2 text-xs text-[color:var(--pf-semantic-success)]"
       >
         ✓ Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
       </div>
 
-      <div
-        onClick={() => setShowAdvanced(!showAdvanced)}
-        style={{
-          cursor: 'pointer',
-          color: tokens.colors.steel.muted,
-          fontSize: '12px',
-          marginTop: '8px',
-          userSelect: 'none',
-        }}
-      >
-        {showAdvanced ? '▼' : '▶'} Advanced settings
-        {!showAdvanced && (
-          <span style={{ marginLeft: '8px', color: '#666' }}>
-            (DEX fee: {dexFee} bps · SOL: ${solPrice})
-          </span>
-        )}
-      </div>
+      <AdvancedToggle
+        open={showAdvanced}
+        onToggle={() => setShowAdvanced(!showAdvanced)}
+        summary={`(DEX fee: ${dexFee} bps · SOL: $${solPrice})`}
+      />
 
       {showAdvanced && (
         <>
-          <div style={{ marginTop: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-              DEX Swap Fee (bps)
-              <span
-                style={{ marginLeft: '4px', color: '#666', cursor: 'help' }}
-                title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic."
-              >
-                ⓘ
-              </span>
-            </label>
-            <NumberInput
-              value={dexFee}
-              onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
-              step="1"
-              min={0}
-              max={100}
-            />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
-              Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched
-              from Jupiter API before each backtest.
-            </div>
-          </div>
-          <div style={{ marginTop: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-              SOL Price (USD)
-              <span
-                style={{ marginLeft: '4px', color: '#666', cursor: 'help' }}
-                title="SOL/USD price for converting Solana network fees from lamports to USD."
-              >
-                ⓘ
-              </span>
-            </label>
-            <NumberInput
-              value={solPrice}
-              onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
-              step="0.01"
-              min={0}
-            />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
-              SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
-            </div>
-          </div>
+          <FeeField
+            label="DEX Swap Fee (bps)"
+            title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic."
+            value={dexFee}
+            onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
+            step="1"
+            min={0}
+            max={100}
+            hint="Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched from Jupiter API before each backtest."
+          />
+          <FeeField
+            label="SOL Price (USD)"
+            title="SOL/USD price for converting Solana network fees from lamports to USD."
+            value={solPrice}
+            onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
+            step="0.01"
+            min={0}
+            hint="SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee."
+          />
         </>
       )}
     </>
@@ -216,15 +254,8 @@ function JupiterUltraConfig({
     <>
       {tierInfo && !useCustom && (
         <div
-          style={{
-            padding: '8px 10px',
-            background: '#0a2e1a',
-            border: `1px solid ${tokens.colors.semantic.success}`,
-            borderRadius: '4px',
-            fontSize: '12px',
-            color: tokens.colors.semantic.success,
-            marginBottom: '8px',
-          }}
+          role="status"
+          className="mb-2 rounded-md border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] px-2.5 py-2 text-xs text-[color:var(--pf-semantic-success)]"
         >
           Auto-detected:{' '}
           <strong>
@@ -236,132 +267,73 @@ function JupiterUltraConfig({
 
       {!tierInfo && !useCustom && (
         <div
-          style={{
-            padding: '8px 10px',
-            background: tokens.colors.surface['1'],
-            border: '1px solid #333',
-            borderRadius: '4px',
-            fontSize: '12px',
-            color: '#aaa',
-            marginBottom: '8px',
-          }}
+          className="mb-2 rounded-md border border-[color:var(--pf-hairline-strong)] bg-[color:var(--pf-surface-1)] px-2.5 py-2 text-xs text-muted-foreground"
         >
           Default fee tier: 10 bps. Set a symbol to enable auto-detection.
         </div>
       )}
 
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          cursor: 'pointer',
-          marginBottom: useCustom ? '8px' : 0,
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={useCustom}
-          onChange={(e) => handleToggleCustom(e.target.checked)}
-          style={{ cursor: 'pointer' }}
-        />
-        <span style={{ color: '#aaa', fontSize: '12px' }}>Override with custom rate</span>
-      </label>
+      <Label className="mb-2 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+        <Switch checked={useCustom} onCheckedChange={handleToggleCustom} aria-label="Override with custom rate" />
+        Override with custom rate
+      </Label>
 
       {useCustom && (
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-            Custom Rate
-          </label>
-          <NumberInput
+          <Label>Custom Rate</Label>
+          <NumberField
             value={((settings as Record<string, unknown>)?.rate as number) ?? 0.001}
             onChange={(v) => handleRateChange(v)}
             step="0.0001"
             min={0}
             max={1}
           />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
-            Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
-          </div>
+          <FieldHint>Custom fee as decimal fraction (e.g. 0.001 = 0.1%)</FieldHint>
         </div>
       )}
 
-      <div
-        onClick={() => setShowAdvanced(!showAdvanced)}
-        style={{
-          cursor: 'pointer',
-          color: tokens.colors.steel.muted,
-          fontSize: '12px',
-          marginTop: '8px',
-          userSelect: 'none',
-        }}
-      >
-        {showAdvanced ? '▼' : '▶'} Advanced settings
-        {!showAdvanced && (
-          <span style={{ marginLeft: '8px', color: '#666' }}>
-            (DEX fee: {dexFee} bps · SOL: ${solPrice})
-          </span>
-        )}
-      </div>
+      <AdvancedToggle
+        open={showAdvanced}
+        onToggle={() => setShowAdvanced(!showAdvanced)}
+        summary={`(DEX fee: ${dexFee} bps · SOL: $${solPrice})`}
+      />
 
       {showAdvanced && (
         <>
-          <div style={{ marginTop: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-              DEX Swap Fee (bps)
-              <span
-                style={{ marginLeft: '4px', color: '#666', cursor: 'help' }}
-                title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX."
-              >
-                ⓘ
-              </span>
-            </label>
-            <NumberInput
-              value={dexFee}
-              onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
-              step="1"
-              min={0}
-              max={100}
-            />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
-              Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap.
-            </div>
-          </div>
-          <div style={{ marginTop: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-              SOL Price (USD)
-              <span
-                style={{ marginLeft: '4px', color: '#666', cursor: 'help' }}
-                title="SOL/USD price for converting Solana network fees from lamports to USD."
-              >
-                ⓘ
-              </span>
-            </label>
-            <NumberInput
-              value={solPrice}
-              onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
-              step="0.01"
-              min={0}
-            />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
-              SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
-            </div>
-          </div>
+          <FeeField
+            label="DEX Swap Fee (bps)"
+            title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX."
+            value={dexFee}
+            onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
+            step="1"
+            min={0}
+            max={100}
+            hint="Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap."
+          />
+          <FeeField
+            label="SOL Price (USD)"
+            title="SOL/USD price for converting Solana network fees from lamports to USD."
+            value={solPrice}
+            onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
+            step="0.01"
+            min={0}
+            hint="SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee."
+          />
         </>
       )}
 
-      <div style={{ marginTop: '8px', fontSize: '11px', color: tokens.colors.steel.muted }}>
+      <p className="mt-2 text-[11px] text-muted-foreground">
         <strong>Total = DEX fee + Jupiter Ultra fee + network fee.</strong> See{' '}
         <a
           href="https://developers.jup.ag/docs/ultra/fees"
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: tokens.colors.brand.blue }}
+          className="text-[color:var(--pf-brand-blue-hover)]"
         >
           Jupiter docs
         </a>
         .
-      </div>
+      </p>
     </>
   );
 }
@@ -383,41 +355,33 @@ export function BacktestCommissionSettings({
   onCommissionMethodSettingsChange,
   symbol,
 }: BacktestCommissionSettingsProps) {
-  const handleMethodChange = (method: CommissionMethodId) => {
-    onCommissionMethodChange(method);
-    const settings = getDefaultMethodSettings(method);
+  const handleMethodChange = (method: string) => {
+    onCommissionMethodChange(method as CommissionMethodId);
+    const settings = getDefaultMethodSettings(method as CommissionMethodId);
     onCommissionMethodSettingsChange(settings);
   };
 
   return (
     <div>
-      <label style={{ display: 'block', marginBottom: '4px', color: '#aaa' }}>
-        Commission Method
-      </label>
-      <select
-        value={commissionMethod}
-        onChange={(e) => handleMethodChange(e.target.value as CommissionMethodId)}
-        style={{
-          width: '100%',
-          padding: '6px',
-          background: tokens.colors.surface['1'],
-          color: tokens.colors.ink['1'],
-          border: `1px solid ${tokens.colors.hairline.default}`,
-          borderRadius: '4px',
-        }}
-      >
-        {COMMISSION_METHODS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-      </select>
-      <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
+      <Label>Commission Method</Label>
+      <Select value={commissionMethod} onValueChange={handleMethodChange}>
+        <SelectTrigger className="mt-1 w-full" title="Commission model used for the backtest">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {COMMISSION_METHODS.map((m) => (
+            <SelectItem key={m.id} value={m.id}>
+              {m.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="mt-1 text-[11px] text-muted-foreground">
         {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
-      </div>
+      </p>
 
       {commissionMethod === 'jupiter_ultra' && (
-        <div style={{ marginTop: '8px' }}>
+        <div className="mt-2">
           <JupiterUltraConfig
             symbol={symbol}
             settings={(commissionMethodSettings as Record<string, unknown>) ?? {}}
@@ -427,7 +391,7 @@ export function BacktestCommissionSettings({
       )}
 
       {commissionMethod === 'jupiter_manual' && (
-        <div style={{ marginTop: '8px' }}>
+        <div className="mt-2">
           <JupiterBasicConfig
             settings={(commissionMethodSettings as Record<string, unknown>) ?? {}}
             onSettingsChange={(newSettings) => onCommissionMethodSettingsChange(newSettings)}

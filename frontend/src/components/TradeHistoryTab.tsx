@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import type { TradeHistoryMode, TradeHistoryStatus, TradeRecord } from '../types/trade';
 import { useTradeHistory } from '../hooks/useTradeHistory';
 import { DASH, fmtPnl, fmtSize, fmtTimeframe, fmtTimestamp } from '../utils/format';
-import {
-  ErrorState,
-  ModeToggle,
-  StatusSelect,
-  filterControlStyle,
-  pageButtonStyle,
-} from './TradeTabShared';
+import { ErrorState, ModeToggle, StatusSelect } from './TradeTabShared';
 import { tokens } from '../theme/tokens';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface TradeHistoryTabProps {
   backendUrl: string;
@@ -144,42 +147,40 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
 
   const { trades, loading, loadingMore, error, hasMore } = history;
 
+  const filterInputClass =
+    'h-9 border border-[color:var(--pf-hairline-strong)] bg-[color:var(--pf-canvas)] px-2 text-[11px] text-[color:var(--pf-ink-1)] box-border';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="flex flex-col gap-2.5">
       {/* Section label + loaded count */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div className="flex items-center gap-2.5 flex-wrap">
         <span
-          style={{
-            color: tokens.colors.steel.muted,
-            fontWeight: 600,
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: 1,
-          }}
+          className="text-[11px] font-semibold uppercase tracking-[1px]"
+          style={{ color: tokens.colors.steel.muted }}
         >
           Trade History
         </span>
         {!loading && !error && (
-          <span style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>
+          <span className="text-[11px]" style={{ color: tokens.colors.steel.disabled }}>
             {history.totalLoaded} loaded{hasMore ? ' · more available' : ''}
           </span>
         )}
       </div>
 
       {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="flex gap-2 items-center flex-wrap">
         <ModeToggle value={mode} onChange={setMode} />
         <StatusSelect value={status} onChange={setStatus} />
         <input
           value={symbolInput}
           onChange={(e) => setSymbolInput(e.target.value)}
           placeholder="Symbol (e.g. BTCUSDT)"
-          style={{ ...filterControlStyle, width: 150 }}
+          className={`${filterInputClass} w-[150px]`}
         />
         <select
           value={timeframe}
           onChange={(e) => setTimeframe(e.target.value)}
-          style={filterControlStyle}
+          className={filterInputClass}
           title="Timeframe filter"
         >
           <option value="">All timeframes</option>
@@ -194,7 +195,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
           value={strategyInput}
           onChange={(e) => setStrategyInput(e.target.value)}
           placeholder="Strategy"
-          style={{ ...filterControlStyle, width: 170 }}
+          className={`${filterInputClass} w-[170px]`}
         />
         <datalist id="trade-history-strategy-options">
           {strategyOptions.map((s) => (
@@ -207,117 +208,106 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
       {error ? (
         <ErrorState message={error} onRetry={history.reload} />
       ) : loading && trades.length === 0 ? (
-        <div style={{ padding: 24, textAlign: 'center', color: '#666', fontSize: 12 }}>
+        <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
           Loading trade history…
         </div>
       ) : trades.length === 0 ? (
-        <div
-          style={{
-            padding: 32,
-            textAlign: 'center',
-            color: tokens.colors.steel.disabled,
-            fontSize: 12,
-          }}
-        >
+        <div className="p-8 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
           No trades yet{filterActive ? ' matching these filters' : ''}.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: 11,
-              fontFamily: 'monospace',
-            }}
-          >
-            <thead>
-              <tr style={{ background: tokens.colors.hairline.default }}>
+        <div className="overflow-x-auto">
+          <Table className="w-full text-[11px] font-mono">
+            <TableHeader>
+              <TableRow className="bg-[color:var(--pf-hairline)]">
                 {COLUMNS.map((col) => (
-                  <th
+                  <TableHead
                     key={col.field}
-                    onClick={() => toggleSort(col.field)}
+                    aria-sort={
+                      sortField === col.field
+                        ? sortAsc
+                          ? 'ascending'
+                          : 'descending'
+                        : undefined
+                    }
+                    className={`px-2 py-1.5 whitespace-nowrap ${
+                      col.numeric ? 'text-right' : 'text-left'
+                    }`}
                     style={{
-                      padding: '5px 8px',
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      textAlign: col.numeric ? 'right' : 'left',
-                      color: sortField === col.field ? '#64b5f6' : '#aaa',
+                      color:
+                        sortField === col.field
+                          ? tokens.colors.brand.blue
+                          : tokens.colors.ink['2'],
                     }}
                   >
-                    {col.label}
-                    {sortIndicator(col.field)}
-                  </th>
+                    <button
+                      type="button"
+                      onClick={() => toggleSort(col.field)}
+                      className={`inline-flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-inherit ${
+                        col.numeric ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {col.label}
+                      {sortIndicator(col.field)}
+                    </button>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {sortedTrades.map((t, i) => (
-                <tr
+                <TableRow
                   key={t.id}
+                  className="border-b border-[var(--pf-hairline)]"
                   style={{
-                    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
                     background: i % 2 === 0 ? tokens.colors.canvas : tokens.colors.surface['1'],
                   }}
                 >
-                  <td
+                  <TableCell
+                    className="px-2 py-1 font-semibold"
                     style={{
-                      padding: '4px 8px',
                       color:
                         t.side === 'buy'
                           ? tokens.colors.semantic.success
                           : tokens.colors.semantic.error,
-                      fontWeight: 600,
                     }}
                   >
                     {t.side === 'buy' ? 'BUY' : 'SELL'}
-                  </td>
-                  <td
-                    style={{ padding: '4px 8px', color: tokens.colors.ink['1'], fontWeight: 600 }}
-                  >
-                    {t.symbol}
-                  </td>
-                  <td style={{ padding: '4px 8px', color: tokens.colors.steel.muted }}>
+                  </TableCell>
+                  <TableCell className="px-2 py-1 font-semibold">{t.symbol}</TableCell>
+                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.steel.muted }}>
                     {fmtTimeframe(t.timeframe)}
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
+                    className="px-2 py-1 max-w-[180px] truncate whitespace-nowrap"
                     style={{
-                      padding: '4px 8px',
-                      color: t.strategy === 'Chaos Mode' ? tokens.colors.semantic.warning : '#aaa',
-                      maxWidth: 180,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      color: t.strategy === 'Chaos Mode' ? tokens.colors.semantic.warning : tokens.colors.ink['2'],
                     }}
                     title={t.strategy}
                   >
                     {t.strategy ?? DASH}
-                  </td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right', color: '#d0d0d0' }}>
+                  </TableCell>
+                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
                     ${t.entryPrice.toFixed(2)}
-                  </td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right', color: '#d0d0d0' }}>
+                  </TableCell>
+                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
                     ${t.exitPrice.toFixed(2)}
-                  </td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right', color: '#d0d0d0' }}>
+                  </TableCell>
+                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
                     {fmtSize(t.size)}
-                  </td>
-                  <td
-                    style={{
-                      padding: '4px 8px',
-                      textAlign: 'right',
-                      color: fmtPnl(t.realizedPnl).color,
-                      fontWeight: 600,
-                    }}
+                  </TableCell>
+                  <TableCell
+                    className="px-2 py-1 text-right font-semibold"
+                    style={{ color: fmtPnl(t.realizedPnl).color }}
                   >
                     {fmtPnl(t.realizedPnl).text}
-                  </td>
-                  <td style={{ padding: '4px 8px', textAlign: 'right', color: '#aaa' }}>
+                  </TableCell>
+                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
                     ${t.fees.toFixed(2)}
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
+                    className="px-2 py-1"
                     style={{
-                      padding: '4px 8px',
                       color:
                         t.status === 'unknown'
                           ? tokens.colors.semantic.warning
@@ -327,46 +317,46 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
                     }}
                   >
                     {t.status ?? DASH}
-                  </td>
-                  <td style={{ padding: '4px 8px', color: '#777' }}>{fmtTimestamp(t.openedAt)}</td>
-                  <td style={{ padding: '4px 8px', color: '#777' }}>{fmtTimestamp(t.closedAt)}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.ink['3'] }}>
+                    {fmtTimestamp(t.openedAt)}
+                  </TableCell>
+                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.ink['3'] }}>
+                    {fmtTimestamp(t.closedAt)}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
       {/* Pagination — Next loads older pages, Previous re-loads the prior page */}
       {!loading && !error && trades.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
-          <span style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>
+        <div className="flex items-center gap-2.5 justify-end">
+          <span className="text-[11px]" style={{ color: tokens.colors.steel.disabled }}>
             Page {history.page + 1}
           </span>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={history.goBack}
             disabled={!history.canGoBack || loadingMore}
-            style={{
-              ...pageButtonStyle,
-              opacity: !history.canGoBack || loadingMore ? 0.5 : 1,
-              cursor: !history.canGoBack || loadingMore ? 'default' : 'pointer',
-            }}
+            className="h-8 px-2.5 text-[11px]"
           >
             ← Prev
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             onClick={history.goNext}
             disabled={!hasMore || loadingMore}
-            style={{
-              ...pageButtonStyle,
-              opacity: !hasMore || loadingMore ? 0.5 : 1,
-              cursor: !hasMore || loadingMore ? 'default' : 'pointer',
-            }}
+            className="h-8 px-2.5 text-[11px]"
           >
             {loadingMore ? 'Loading…' : 'Next →'}
-          </button>
+          </Button>
         </div>
       )}
     </div>
