@@ -7,6 +7,7 @@ import type {
   ChatLanguage,
 } from '../types';
 import { NOTIFICATION_TYPES } from '../types';
+import { tokens } from '../theme/tokens';
 
 interface TelegramConfigPanelProps {
   alertConditions: AlertConditionData[];
@@ -315,11 +316,11 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
         flexDirection: 'column',
         flex: 1,
         overflow: 'auto',
-        background: '#0f1520',
-        border: '1px solid #111128',
+        background: tokens.colors.surface['1'],
+        border: `1px solid ${tokens.colors.hairline.default}`,
         borderRadius: '8px',
         padding: '20px',
-        color: '#e0e0e0',
+        color: tokens.colors.ink['1'],
         fontSize: '13px',
       }}
     >
@@ -341,10 +342,10 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
             ← Back
           </button>
         )}
-        <h3 style={{ margin: 0, color: '#2196f3' }}>Telegram Configuration</h3>
+        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Telegram Configuration</h3>
       </div>
 
-      {loading && <div style={{ color: '#888' }}>Loading...</div>}
+      {loading && <div style={{ color: tokens.colors.steel.muted }}>Loading...</div>}
 
       {!loading && (
         <>
@@ -359,9 +360,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   flex: 1,
                   padding: '6px',
-                  background: '#0d0d18',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.canvas,
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                 }}
               />
@@ -370,7 +371,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 disabled={saving}
                 style={{
                   padding: '6px 12px',
-                  background: saving ? '#333' : '#2196f3',
+                  background: saving ? '#333' : tokens.colors.brand.blue,
                   color: '#fff',
                   border: 'none',
                   borderRadius: '4px',
@@ -382,10 +383,10 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
               </button>
             </div>
             {saveStatus === 'saved' && (
-              <div style={{ marginTop: '4px', color: '#4caf50', fontSize: '11px' }}>Token saved</div>
+              <div style={{ marginTop: '4px', color: tokens.colors.semantic.success, fontSize: '11px' }}>Token saved</div>
             )}
             {saveStatus === 'error' && (
-              <div style={{ marginTop: '4px', color: '#e94560', fontSize: '11px' }}>Failed to save</div>
+              <div style={{ marginTop: '4px', color: tokens.colors.semantic.error, fontSize: '11px' }}>Failed to save</div>
             )}
           </div>
 
@@ -396,7 +397,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
               disabled={testSending || !botToken}
               style={{
                 padding: '6px 12px',
-                background: testSending ? '#333' : '#4caf50',
+                background: testSending ? '#333' : tokens.colors.semantic.success,
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
@@ -407,7 +408,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
             </button>
           </div>
 
-          <div style={{ marginBottom: '16px', borderTop: '1px solid #111128', paddingTop: '12px' }}>
+          <div style={{ marginBottom: '16px',         borderTop: `1px solid ${tokens.colors.hairline.default}`, paddingTop: '12px' }}>
             <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>
               HTTP Proxy (optional)
             </label>
@@ -420,9 +421,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   flex: 1,
                   padding: '6px',
-                  background: '#0d0d18',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.canvas,
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                   fontSize: '12px',
                 }}
@@ -437,9 +438,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   width: '80px',
                   padding: '6px',
-                  background: '#0d0d18',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.canvas,
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                   fontSize: '12px',
                 }}
@@ -454,9 +455,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   flex: 1,
                   padding: '6px',
-                  background: '#0d0d18',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.canvas,
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                   fontSize: '12px',
                 }}
@@ -471,9 +472,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     width: '100%',
                     padding: '6px',
                     paddingRight: '28px',
-                    background: '#0d0d18',
-                    color: '#e0e0e0',
-                    border: '1px solid #111128',
+                    background: tokens.colors.canvas,
+                    color: tokens.colors.ink['1'],
+                    border: `1px solid ${tokens.colors.hairline.default}`,
                     borderRadius: '4px',
                     fontSize: '12px',
                     boxSizing: 'border-box',
@@ -489,7 +490,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     transform: 'translateY(-50%)',
                     background: 'none',
                     border: 'none',
-                    color: '#888',
+                    color: tokens.colors.steel.muted,
                     cursor: 'pointer',
                     fontSize: '12px',
                     padding: '2px 4px',
@@ -505,7 +506,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 disabled={proxySaving}
                 style={{
                   padding: '6px 12px',
-                  background: proxySaving ? '#333' : '#ff9800',
+                  background: proxySaving ? '#333' : tokens.colors.semantic.warning,
                   color: '#fff',
                   border: 'none',
                   borderRadius: '4px',
@@ -517,10 +518,10 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 {proxySaving ? '...' : 'Save Proxy'}
               </button>
               {proxySaveStatus === 'saved' && (
-                <span style={{ color: '#4caf50', fontSize: '11px' }}>Proxy saved</span>
+                <span style={{ color: tokens.colors.semantic.success, fontSize: '11px' }}>Proxy saved</span>
               )}
               {proxySaveStatus === 'error' && (
-                <span style={{ color: '#e94560', fontSize: '11px' }}>Failed to save</span>
+                <span style={{ color: tokens.colors.semantic.error, fontSize: '11px' }}>Failed to save</span>
               )}
             </div>
           </div>
@@ -534,10 +535,10 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 <div
                   style={{
                     padding: '6px 8px',
-                    background: '#0d0d18',
+                    background: tokens.colors.canvas,
                     borderRadius: '4px',
                     fontSize: '12px',
-                    color: '#e0e0e0',
+                    color: tokens.colors.ink['1'],
                   }}
                 >
                   {'@'}
@@ -545,7 +546,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   <span style={{ color: '#aaa' }}> (ID: {config.admin.userId})</span>
                 </div>
               ) : (
-                <div style={{ color: '#888', fontSize: '12px' }}>Not configured</div>
+                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>Not configured</div>
               )}
               <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
                 <input
@@ -557,9 +558,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   style={{
                     flex: 1,
                     padding: '6px',
-                    background: '#0d0d18',
-                    color: '#e0e0e0',
-                    border: '1px solid #111128',
+                    background: tokens.colors.canvas,
+                    color: tokens.colors.ink['1'],
+                    border: `1px solid ${tokens.colors.hairline.default}`,
                     borderRadius: '4px',
                     fontSize: '12px',
                   }}
@@ -573,9 +574,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   style={{
                     flex: 1.5,
                     padding: '6px',
-                    background: '#0d0d18',
-                    color: '#e0e0e0',
-                    border: '1px solid #111128',
+                    background: tokens.colors.canvas,
+                    color: tokens.colors.ink['1'],
+                    border: `1px solid ${tokens.colors.hairline.default}`,
                     borderRadius: '4px',
                     fontSize: '12px',
                   }}
@@ -585,7 +586,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   disabled={busy['admin'] || !adminUserId.trim()}
                   style={{
                     padding: '6px 10px',
-                    background: busy['admin'] ? '#333' : '#2196f3',
+                    background: busy['admin'] ? '#333' : tokens.colors.brand.blue,
                     color: '#fff',
                     border: 'none',
                     borderRadius: '4px',
@@ -606,7 +607,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 Controller Requests ({config.requests.length})
               </div>
               {config.requests.length === 0 && (
-                <div style={{ color: '#888', fontSize: '12px' }}>
+                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
                   No controller requests pending.
                 </div>
               )}
@@ -616,16 +617,16 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   style={{
                     padding: '8px',
                     marginBottom: '6px',
-                    background: '#0d0d18',
+                    background: tokens.colors.canvas,
                     borderRadius: '4px',
-                    border: '1px solid #111128',
+                    border: `1px solid ${tokens.colors.hairline.default}`,
                   }}
                 >
-                  <div style={{ fontWeight: 'bold', color: '#e0e0e0' }}>
+                  <div style={{ fontWeight: 'bold', color: tokens.colors.ink['1'] }}>
                     @{req.username || req.userId}
-                    {req.firstName && <span style={{ color: '#888', fontWeight: 'normal' }}> · {req.firstName}</span>}
+                    {req.firstName && <span style={{ color: tokens.colors.steel.muted, fontWeight: 'normal' }}> · {req.firstName}</span>}
                   </div>
-                  <div style={{ color: '#888', fontSize: '11px', marginBottom: '6px' }}>
+                  <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '6px' }}>
                     ID: {req.userId}
                     {req.requestedAt ? ` · requested ${new Date(req.requestedAt).toLocaleString()}` : ''}
                   </div>
@@ -635,7 +636,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                       disabled={busy[`approve:${req.userId}`]}
                       style={{
                         padding: '4px 10px',
-                        background: busy[`approve:${req.userId}`] ? '#333' : '#4caf50',
+                        background: busy[`approve:${req.userId}`] ? '#333' : tokens.colors.semantic.success,
                         color: '#fff',
                         border: 'none',
                         borderRadius: '4px',
@@ -650,7 +651,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                       disabled={busy[`deny:${req.userId}`]}
                       style={{
                         padding: '4px 10px',
-                        background: busy[`deny:${req.userId}`] ? '#333' : '#e94560',
+                        background: busy[`deny:${req.userId}`] ? '#333' : tokens.colors.semantic.error,
                         color: '#fff',
                         border: 'none',
                         borderRadius: '4px',
@@ -672,7 +673,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 Controllers ({config.controllers.length})
               </div>
               {config.controllers.length === 0 && (
-                <div style={{ color: '#888', fontSize: '12px' }}>
+                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
                   No controllers yet.
                 </div>
               )}
@@ -685,7 +686,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     alignItems: 'center',
                     padding: '6px 8px',
                     marginTop: '4px',
-                    background: '#0d0d18',
+                    background: tokens.colors.canvas,
                     borderRadius: '4px',
                     fontSize: '12px',
                   }}
@@ -699,7 +700,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     disabled={busy[`remove:${ctrl.userId}`]}
                     style={{
                       padding: '3px 8px',
-                      background: busy[`remove:${ctrl.userId}`] ? '#333' : '#e94560',
+                      background: busy[`remove:${ctrl.userId}`] ? '#333' : tokens.colors.semantic.error,
                       color: '#fff',
                       border: 'none',
                       borderRadius: '4px',
@@ -720,7 +721,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 Chats ({config.chats.length})
               </div>
               {config.chats.length === 0 && (
-                <div style={{ color: '#888', fontSize: '12px' }}>
+                <div style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
                   No chats yet. Start the bot to link chats.
                 </div>
               )}
@@ -735,9 +736,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     style={{
                       padding: '8px',
                       marginBottom: '6px',
-                      background: '#0d0d18',
+                      background: tokens.colors.canvas,
                       borderRadius: '4px',
-                      border: '1px solid #111128',
+                      border: `1px solid ${tokens.colors.hairline.default}`,
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -756,7 +757,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                         >
                           {chat.type === 'group' ? 'Group' : 'Private'}
                         </span>
-                        <span style={{ fontWeight: 'bold', marginLeft: '6px', color: '#e0e0e0' }}>
+                        <span style={{ fontWeight: 'bold', marginLeft: '6px', color: tokens.colors.ink['1'] }}>
                           {chat.title || `Chat ${chat.chatId}`}
                         </span>
                       </div>
@@ -769,10 +770,10 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                             background: chat.linked
                               ? busy[`unlink:${chat.chatId}`]
                                 ? '#333'
-                                : '#e94560'
+                                : tokens.colors.semantic.error
                               : busy[`link:${chat.chatId}`]
                                 ? '#333'
-                                : '#4caf50',
+                                : tokens.colors.semantic.success,
                             color: '#fff',
                             border: 'none',
                             borderRadius: '4px',
@@ -791,7 +792,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                         alignItems: 'center',
                         gap: '8px',
                         marginTop: '6px',
-                        color: '#888',
+                        color: tokens.colors.steel.muted,
                         fontSize: '11px',
                         flexWrap: 'wrap',
                       }}
@@ -806,9 +807,9 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                         aria-label={`Language for chat ${chat.chatId}`}
                         style={{
                           padding: '3px 4px',
-                          background: '#0d0d18',
-                          color: '#e0e0e0',
-                          border: '1px solid #111128',
+                          background: tokens.colors.canvas,
+                          color: tokens.colors.ink['1'],
+                          border: `1px solid ${tokens.colors.hairline.default}`,
                           borderRadius: '4px',
                           fontSize: '11px',
                         }}
@@ -822,7 +823,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     </div>
 
                     {chat.type === 'group' && members.length === 0 && (
-                      <div style={{ color: '#888', fontSize: '11px', marginTop: '6px' }}>
+                      <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginTop: '6px' }}>
                         No members yet.
                       </div>
                     )}
@@ -832,7 +833,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                         <div style={{ color: '#aaa', fontSize: '11px', marginBottom: '4px' }}>
                           {chat.type === 'group' ? `Member ${memberId}` : 'Notifications'}
                         </div>
-                        <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>
+                        <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '4px' }}>
                           Manage via the bot: /subscribe /unsubscribe
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -881,15 +882,15 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   style={{
                     padding: '8px',
                     marginBottom: '6px',
-                    background: '#0d0d18',
+                    background: tokens.colors.canvas,
                     borderRadius: '4px',
-                    border: '1px solid #111128',
+                    border: `1px solid ${tokens.colors.hairline.default}`,
                   }}
                 >
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#e0e0e0' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', color: tokens.colors.ink['1'] }}>
                     {alert.title}
                   </div>
-                  <div style={{ color: '#888', fontSize: '11px', marginBottom: '4px' }}>
+                  <div style={{ color: tokens.colors.steel.muted, fontSize: '11px', marginBottom: '4px' }}>
                     {alert.message}
                   </div>
                   {config.chats.map((chat) => {

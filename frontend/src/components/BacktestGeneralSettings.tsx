@@ -6,6 +6,7 @@ import {
   estimateBars,
   sliderBounds,
 } from '../utils/candleLimit';
+import { tokens } from '../theme/tokens';
 
 const TIMEFRAME_LABELS: Record<string, string> = {
   '1': '1m',
@@ -91,9 +92,9 @@ export function BacktestGeneralSettings({
             onClick={() => onDateRangeModeChange('days_back')}
             style={{
               padding: '4px 12px',
-              background: dateRangeMode === 'days_back' ? '#2196f3' : '#111128',
-              color: '#e0e0e0',
-              border: '1px solid #111128',
+              background: dateRangeMode === 'days_back' ? tokens.colors.brand.blue : tokens.colors.hairline.default,
+              color: tokens.colors.ink['1'],
+              border: `1px solid ${tokens.colors.hairline.default}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '12px',
@@ -105,9 +106,9 @@ export function BacktestGeneralSettings({
             onClick={() => onDateRangeModeChange('traditional')}
             style={{
               padding: '4px 12px',
-              background: dateRangeMode === 'traditional' ? '#2196f3' : '#111128',
-              color: '#e0e0e0',
-              border: '1px solid #111128',
+              background: dateRangeMode === 'traditional' ? tokens.colors.brand.blue : tokens.colors.hairline.default,
+              color: tokens.colors.ink['1'],
+              border: `1px solid ${tokens.colors.hairline.default}`,
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '12px',
@@ -121,14 +122,14 @@ export function BacktestGeneralSettings({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span
                 style={{
-                  color: '#e0e0e0',
+                  color: tokens.colors.ink['1'],
                   fontSize: '13px',
                   fontWeight: 'bold',
                 }}
               >
                 {maxDays}
               </span>
-              <span style={{ color: '#888', fontSize: '12px' }}>
+              <span style={{ color: tokens.colors.steel.muted, fontSize: '12px' }}>
                 day{maxDays !== 1 ? 's' : ''} (only option — slider locked)
               </span>
             </div>
@@ -141,11 +142,11 @@ export function BacktestGeneralSettings({
                 min={minDays}
                 max={maxDays}
                 step={1}
-                style={{ flex: 1, accentColor: '#2196f3' }}
+                style={{ flex: 1, accentColor: tokens.colors.brand.blue }}
               />
               <span
                 style={{
-                  color: '#e0e0e0',
+                  color: tokens.colors.ink['1'],
                   fontSize: '13px',
                   minWidth: '60px',
                   textAlign: 'right',
@@ -171,9 +172,9 @@ export function BacktestGeneralSettings({
                 style={{
                   width: '100%',
                   padding: '6px',
-                  background: '#0f1520',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.surface['1'],
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                 }}
               />
@@ -191,9 +192,9 @@ export function BacktestGeneralSettings({
                 style={{
                   width: '100%',
                   padding: '6px',
-                  background: '#0f1520',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.surface['1'],
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                 }}
               />
@@ -210,8 +211,8 @@ export function BacktestGeneralSettings({
             borderRadius: '4px',
             fontSize: '12px',
             background: exceedsLimit ? '#3a1a1a' : '#1a2a1a',
-            color: exceedsLimit ? '#e94560' : '#4caf50',
-            border: `1px solid ${exceedsLimit ? '#e94560' : '#4caf50'}`,
+            color: exceedsLimit ? tokens.colors.semantic.error : tokens.colors.semantic.success,
+            border: `1px solid ${exceedsLimit ? tokens.colors.semantic.error : tokens.colors.semantic.success}`,
           }}
         >
           {exceedsLimit

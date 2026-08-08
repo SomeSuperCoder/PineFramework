@@ -4,6 +4,7 @@ import type { BacktestConfig, CommissionMethodId, DateRangeMode } from '../types
 import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
 import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
 import { StrategySelector } from './StrategySelector.js';
+import { tokens } from '../theme/tokens';
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -137,36 +138,36 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
         flexDirection: 'column',
         flex: 1,
         overflow: 'auto',
-        background: 'var(--surface-panel)',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        padding: 'var(--space-xl)',
-        color: 'var(--text-primary)',
-        fontSize: 'var(--font-size-md)',
+        background: tokens.colors.surface['1'],
+        border: `1px solid ${tokens.colors.hairline.default}`,
+        borderRadius: tokens.radius.md,
+        padding: tokens.spacing.xl,
+        color: tokens.colors.ink['1'],
+        fontSize: tokens.typography.type.bodySm.size,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', margin: '0 0 var(--space-lg)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: tokens.spacing.sm, margin: `0 0 ${tokens.spacing.lg}` }}>
         <button
           onClick={onClose}
           aria-label="Back to dashboard"
           style={{
             background: 'transparent',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--text-secondary)',
+            border: `1px solid ${tokens.colors.hairline.default}`,
+            borderRadius: tokens.radius.sm,
+            color: tokens.colors.ink['2'],
             cursor: 'pointer',
             padding: '4px 8px',
-            fontSize: 'var(--font-size-md)',
+            fontSize: tokens.typography.type.bodySm.size,
           }}
         >
           ← Back
         </button>
-        <h3 style={{ margin: 0, color: 'var(--accent-info)' }}>Backtest Settings</h3>
+        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Backtest Settings</h3>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)', flex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.spacing.lg, flex: 1 }}>
         {/* §5.3 Config bar: [Strategy Selector ▾] ... [Run Backtest ▼] */}
-        <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: tokens.spacing.md, alignItems: 'flex-end' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <StrategySelector
               backendUrl={backendUrl}
@@ -182,14 +183,14 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
             title={!selectedStrategy ? 'Select a strategy to run the backtest' : undefined}
             style={{
               height: 36,
-              padding: '0 var(--space-lg)',
-              background: !selectedStrategy || barsExceedLimit ? 'var(--surface-elevated)' : 'var(--accent-primary)',
-              color: !selectedStrategy || barsExceedLimit ? 'var(--text-disabled)' : 'white',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
+              padding: `0 ${tokens.spacing.lg}`,
+              background: !selectedStrategy || barsExceedLimit ? tokens.colors.surface['2'] : tokens.colors.brand.blue,
+              color: !selectedStrategy || barsExceedLimit ? tokens.colors.steel.disabled : 'white',
+              border: `1px solid ${tokens.colors.hairline.default}`,
+              borderRadius: tokens.radius.sm,
               cursor: !selectedStrategy || barsExceedLimit ? 'not-allowed' : 'pointer',
-              fontSize: 'var(--font-size-md)',
-              fontWeight: 'var(--font-weight-medium)',
+              fontSize: tokens.typography.type.bodySm.size,
+              fontWeight: tokens.typography.weights.medium,
               whiteSpace: 'nowrap',
             }}
           >
@@ -197,7 +198,7 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
           </button>
         </div>
         {validationError && (
-          <div role="alert" style={{ color: 'var(--accent-danger)', fontSize: 'var(--font-size-sm)', marginTop: '-8px' }}>
+          <div role="alert" style={{ color: tokens.colors.semantic.error, fontSize: tokens.typography.type.caption.size, marginTop: '-8px' }}>
             {validationError}
           </div>
         )}

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { tokens } from '../theme/tokens';
 
 // ─── Storage helpers ─────────────────────────────────────────────────────────
 const STORAGE_PREFIX = 'pine-settings-';
@@ -132,8 +133,8 @@ function Toggle({
       onClick={() => !disabled && onChange(!checked)}
       style={{
         ...toggleStyles.track,
-        background: checked ? '#2196f3' : '#1a1a2e',
-        borderColor: checked ? '#2196f3' : '#333',
+        background: checked ? tokens.colors.brand.blue : '#1a1a2e',
+        borderColor: checked ? tokens.colors.brand.blue : '#333',
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
@@ -278,9 +279,9 @@ function DangerButton({
         onClick={handleClick}
         style={{
           ...dangerBtnStyles.base,
-          background: confirming ? '#e94560' : 'transparent',
-          borderColor: '#e94560',
-          color: confirming ? '#fff' : '#e94560',
+          background: confirming ? tokens.colors.semantic.error : 'transparent',
+          borderColor: tokens.colors.semantic.error,
+          color: confirming ? '#fff' : tokens.colors.semantic.error,
         }}
       >
         {confirming ? 'Confirm' : label}
@@ -493,11 +494,11 @@ const panelStyles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     flex: 1,
     overflow: 'auto',
-    background: '#0f1520',
-    border: '1px solid #111128',
+    background: tokens.colors.surface['1'],
+    border: `1px solid ${tokens.colors.hairline.default}`,
     borderRadius: 8,
     padding: 20,
-    color: '#e0e0e0',
+    color: tokens.colors.ink['1'],
     fontSize: 13,
   },
   header: {
@@ -517,14 +518,14 @@ const panelStyles: Record<string, React.CSSProperties> = {
   },
   title: {
     margin: 0,
-    color: '#2196f3',
+    color: tokens.colors.brand.blue,
     fontSize: 16,
     fontWeight: 600,
   },
   savedBadge: {
     marginLeft: 'auto',
     fontSize: 11,
-    color: '#4caf50',
+    color: tokens.colors.semantic.success,
     fontWeight: 600,
     opacity: 0.8,
   },
@@ -555,7 +556,7 @@ const sectionStyles: Record<string, React.CSSProperties> = {
   label: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#e0e0e0',
+    color: tokens.colors.ink['1'],
     letterSpacing: '0.02em',
   },
 };
@@ -566,7 +567,7 @@ const rowStyles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '10px 0',
-    borderBottom: '1px solid #111128',
+    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
     gap: 16,
   },
   info: {
@@ -575,7 +576,7 @@ const rowStyles: Record<string, React.CSSProperties> = {
   },
   label: {
     fontSize: 13,
-    color: '#e0e0e0',
+    color: tokens.colors.ink['1'],
   },
   description: {
     fontSize: 11,
@@ -610,8 +611,8 @@ const selectStyles: Record<string, React.CSSProperties> = {
     padding: '6px 10px',
     border: '1px solid #1a1a30',
     borderRadius: 4,
-    background: '#0d0d18',
-    color: '#e0e0e0',
+    background: tokens.colors.canvas,
+    color: tokens.colors.ink['1'],
     fontSize: 12,
     cursor: 'pointer',
     minWidth: 140,
@@ -629,8 +630,8 @@ const numberStyles: Record<string, React.CSSProperties> = {
     padding: '6px 8px',
     border: '1px solid #1a1a30',
     borderRadius: 4,
-    background: '#0d0d18',
-    color: '#e0e0e0',
+    background: tokens.colors.canvas,
+    color: tokens.colors.ink['1'],
     fontSize: 12,
     textAlign: 'right',
   },
@@ -647,8 +648,8 @@ const textStyles: Record<string, React.CSSProperties> = {
     padding: '6px 8px',
     border: '1px solid #1a1a30',
     borderRadius: 4,
-    background: '#0d0d18',
-    color: '#e0e0e0',
+    background: tokens.colors.canvas,
+    color: tokens.colors.ink['1'],
     fontSize: 12,
   },
 };
@@ -667,12 +668,12 @@ const dangerBtnStyles: Record<string, React.CSSProperties> = {
     background: 'transparent',
     border: '1px solid #333',
     borderRadius: 4,
-    color: '#888',
+    color: tokens.colors.steel.muted,
     fontSize: 12,
     cursor: 'pointer',
   },
   desc: {
     fontSize: 11,
-    color: '#555',
+    color: tokens.colors.steel.disabled,
   },
 };

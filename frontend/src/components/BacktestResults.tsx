@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BacktestResultResponse } from '../types';
+import { tokens } from '../theme/tokens';
 
 interface BacktestResultsProps {
   result: BacktestResultResponse;
@@ -55,7 +56,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
 
     ctx.clearRect(0, 0, w, h);
 
-    ctx.strokeStyle = '#2196f3';
+    ctx.strokeStyle = tokens.colors.brand.blue;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < points.length; i++) {
@@ -66,11 +67,11 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     }
     ctx.stroke();
 
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = tokens.colors.semantic.success;
     ctx.font = '11px monospace';
     ctx.fillText(`Equity: $${maxEquity.toFixed(0)}`, pad, pad + 12);
 
-    ctx.strokeStyle = '#e94560';
+    ctx.strokeStyle = tokens.colors.semantic.error;
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i < points.length; i++) {
@@ -81,7 +82,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     }
     ctx.stroke();
 
-    ctx.fillStyle = '#ff9800';
+    ctx.fillStyle = tokens.colors.semantic.warning;
     ctx.fillText(`Max DD: $${maxDD.toFixed(0)}`, pad, pad + plotH + pad + 12);
   }, [result]);
 
@@ -120,23 +121,23 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
       className="backtest-results"
       style={{
         width: '100%',
-        color: '#e0e0e0',
+        color: tokens.colors.ink['1'],
         fontSize: '13px',
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, color: '#2196f3' }}>Backtest Results</h3>
+        <h3 style={{ margin: 0, color: tokens.colors.brand.blue }}>Backtest Results</h3>
         <div style={{ display: 'flex', gap: '8px' }}>
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowExportMenu(!showExportMenu)}
-              style={{ padding: '6px 12px', background: '#111128', color: '#e0e0e0', border: '1px solid #2196f3', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+              style={{ padding: '6px 12px', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'], border: `1px solid ${tokens.colors.brand.blue}`, borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
             >
               Export
             </button>
             {showExportMenu && (
-              <div style={{ position: 'absolute', top: '100%', right: 0, background: '#0d0d18', border: '1px solid #111128', borderRadius: '4px', zIndex: 10 }}>
-                <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '8px 16px', background: 'none', border: 'none', color: '#e0e0e0', cursor: 'pointer', textAlign: 'left', fontSize: '12px' }}>
+              <div style={{ position: 'absolute', top: '100%', right: 0,         background: tokens.colors.canvas,         border: `1px solid ${tokens.colors.hairline.default}`, borderRadius: '4px', zIndex: 10 }}>
+                <button onClick={exportCSV} style={{ display: 'block', width: '100%', padding: '8px 16px', background: 'none', border: 'none', color: tokens.colors.ink['1'], cursor: 'pointer', textAlign: 'left', fontSize: '12px' }}>
                   Export CSV
                 </button>
               </div>
@@ -145,7 +146,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
           {onClose && (
             <button
               onClick={onClose}
-              style={{ padding: '6px 12px', background: '#3a1a1a', color: '#e94560', border: '1px solid #e94560', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
+              style={{ padding: '6px 12px', background: '#3a1a1a', color: tokens.colors.semantic.error, border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
             >
               Close
             </button>
@@ -154,51 +155,51 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Net Profit</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: metrics.totalPnl >= 0 ? '#4caf50' : '#e94560' }}>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: metrics.totalPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
             ${metrics.totalPnl.toFixed(2)}
           </div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Win Rate</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.winRate.toFixed(1)}%</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Profit Factor</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.profitFactor.toFixed(2)}</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Sharpe</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.sharpeRatio.toFixed(2)}</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Max DD</div>
-          <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#e94560' }}>{metrics.maxDrawdownPercent.toFixed(1)}%</div>
+          <div style={{ fontSize: '16px', fontWeight: 'bold', color: tokens.colors.semantic.error }}>{metrics.maxDrawdownPercent.toFixed(1)}%</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Sortino</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.sortinoRatio.toFixed(2)}</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Total Trades</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>{metrics.totalTrades}</div>
         </div>
-        <div style={{ background: '#0d0d18', padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
+        <div style={{         background: tokens.colors.canvas, padding: '8px', borderRadius: '6px', textAlign: 'center' }}>
           <div style={{ fontSize: '11px', color: '#aaa' }}>Commission</div>
           <div style={{ fontSize: '16px', fontWeight: 'bold' }}>${metrics.commission.toFixed(2)}</div>
         </div>
       </div>
 
       <div style={{ marginBottom: '16px' }}>
-        <h4 style={{ margin: '0 0 8px', color: '#ff9800' }}>Equity & Drawdown</h4>
-        <div style={{ width: '100%', height: '200px', background: '#0d0d18', borderRadius: '6px' }}>
+        <h4 style={{ margin: '0 0 8px', color: tokens.colors.semantic.warning }}>Equity & Drawdown</h4>
+        <div style={{ width: '100%', height: '200px',         background: tokens.colors.canvas, borderRadius: '6px' }}>
           <canvas ref={equityCanvasRef} style={{ width: '100%', height: '100%' }} />
         </div>
       </div>
 
       <div>
-        <h4 style={{ margin: '0 0 8px', color: '#ff9800' }}>
+        <h4 style={{ margin: '0 0 8px', color: tokens.colors.semantic.warning }}>
           Trade List ({sortedTrades.length} trades)
         </h4>
         {sortedTrades.length === 0 ? (
@@ -207,7 +208,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
               <thead>
-                <tr style={{ background: '#111128' }}>
+                <tr style={{ background: tokens.colors.hairline.default }}>
                   <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('direction')}>Dir{sortIndicator('direction')}</th>
                   <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('entryPrice')}>Entry{sortIndicator('entryPrice')}</th>
                   <th style={{ padding: '4px 8px', cursor: 'pointer' }} onClick={() => toggleSort('exitPrice')}>Exit{sortIndicator('exitPrice')}</th>
@@ -224,20 +225,20 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     key={t.id}
                     onClick={() => onSelectTrade?.(i)}
                     style={{
-                      borderBottom: '1px solid #111128',
+                      borderBottom: `1px solid ${tokens.colors.hairline.default}`,
                       cursor: onSelectTrade ? 'pointer' : 'default',
-                      background: i % 2 === 0 ? '#0d0d18' : '#0f1520',
+                      background: i % 2 === 0 ? tokens.colors.canvas : tokens.colors.surface['1'],
                     }}
                   >
-                    <td style={{ padding: '4px 8px', color: t.direction === 'long' ? '#4caf50' : '#e94560' }}>
+                    <td style={{ padding: '4px 8px', color: t.direction === 'long' ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
                       {t.direction === 'long' ? 'L' : 'S'}
                     </td>
                     <td style={{ padding: '4px 8px' }}>${t.entryPrice.toFixed(2)}</td>
                     <td style={{ padding: '4px 8px' }}>${t.exitPrice.toFixed(2)}</td>
-                    <td style={{ padding: '4px 8px', color: t.pnl >= 0 ? '#4caf50' : '#e94560' }}>
+                    <td style={{ padding: '4px 8px', color: t.pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
                       ${t.pnl.toFixed(2)}
                     </td>
-                    <td style={{ padding: '4px 8px', color: t.pnlPercent >= 0 ? '#4caf50' : '#e94560' }}>
+                    <td style={{ padding: '4px 8px', color: t.pnlPercent >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error }}>
                       {t.pnlPercent.toFixed(2)}%
                     </td>
                     <td style={{ padding: '4px 8px' }}>{t.mae.toFixed(2)}%</td>

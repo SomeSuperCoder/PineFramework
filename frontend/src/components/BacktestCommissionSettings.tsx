@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NumberInput } from './NumberInput.js';
 import type { CommissionMethodId } from '../types';
+import { tokens } from '../theme/tokens';
 // NumberInput is used by JupiterBasicConfig and JupiterUltraConfig sub-components
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
@@ -101,10 +102,10 @@ function JupiterBasicConfig({
         style={{
           padding: '8px 10px',
           background: '#0a2e1a',
-          border: '1px solid #4caf50',
+          border: `1px solid ${tokens.colors.semantic.success}`,
           borderRadius: '4px',
           fontSize: '12px',
-          color: '#4caf50',
+          color: tokens.colors.semantic.success,
         }}
       >
         ✓ Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
@@ -114,7 +115,7 @@ function JupiterBasicConfig({
         onClick={() => setShowAdvanced(!showAdvanced)}
         style={{
           cursor: 'pointer',
-          color: '#888',
+          color: tokens.colors.steel.muted,
           fontSize: '12px',
           marginTop: '8px',
           userSelect: 'none',
@@ -147,7 +148,7 @@ function JupiterBasicConfig({
               min={0}
               max={100}
             />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
               Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched
               from Jupiter API before each backtest.
             </div>
@@ -168,7 +169,7 @@ function JupiterBasicConfig({
               step="0.01"
               min={0}
             />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
               SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
             </div>
           </div>
@@ -218,10 +219,10 @@ function JupiterUltraConfig({
           style={{
             padding: '8px 10px',
             background: '#0a2e1a',
-            border: '1px solid #4caf50',
+            border: `1px solid ${tokens.colors.semantic.success}`,
             borderRadius: '4px',
             fontSize: '12px',
-            color: '#4caf50',
+            color: tokens.colors.semantic.success,
             marginBottom: '8px',
           }}
         >
@@ -279,7 +280,7 @@ function JupiterUltraConfig({
             min={0}
             max={1}
           />
-          <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+          <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
             Custom fee as decimal fraction (e.g. 0.001 = 0.1%)
           </div>
         </div>
@@ -289,7 +290,7 @@ function JupiterUltraConfig({
         onClick={() => setShowAdvanced(!showAdvanced)}
         style={{
           cursor: 'pointer',
-          color: '#888',
+          color: tokens.colors.steel.muted,
           fontSize: '12px',
           marginTop: '8px',
           userSelect: 'none',
@@ -322,7 +323,7 @@ function JupiterUltraConfig({
               min={0}
               max={100}
             />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
               Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap.
             </div>
           </div>
@@ -342,20 +343,20 @@ function JupiterUltraConfig({
               step="0.01"
               min={0}
             />
-            <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+            <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
               SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee.
             </div>
           </div>
         </>
       )}
 
-      <div style={{ marginTop: '8px', fontSize: '11px', color: '#888' }}>
+      <div style={{ marginTop: '8px', fontSize: '11px', color: tokens.colors.steel.muted }}>
         <strong>Total = DEX fee + Jupiter Ultra fee + network fee.</strong> See{' '}
         <a
           href="https://developers.jup.ag/docs/ultra/fees"
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: '#2196f3' }}
+          style={{ color: tokens.colors.brand.blue }}
         >
           Jupiter docs
         </a>
@@ -399,9 +400,9 @@ export function BacktestCommissionSettings({
         style={{
           width: '100%',
           padding: '6px',
-          background: '#0f1520',
-          color: '#e0e0e0',
-          border: '1px solid #111128',
+          background: tokens.colors.surface['1'],
+          color: tokens.colors.ink['1'],
+          border: `1px solid ${tokens.colors.hairline.default}`,
           borderRadius: '4px',
         }}
       >
@@ -411,7 +412,7 @@ export function BacktestCommissionSettings({
           </option>
         ))}
       </select>
-      <div style={{ marginTop: '4px', fontSize: '11px', color: '#888' }}>
+      <div style={{ marginTop: '4px', fontSize: '11px', color: tokens.colors.steel.muted }}>
         {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
       </div>
 
