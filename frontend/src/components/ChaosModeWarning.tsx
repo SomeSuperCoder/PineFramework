@@ -39,7 +39,7 @@ export function ChaosModeWarning({ isActive, onAcknowledge }: ChaosModeWarningPr
       <div style={{
         fontSize: 48,
         fontWeight: 900,
-        color: '#fff',
+        color: tokens.colors.ink['1'],
         textAlign: 'center',
         textShadow: '0 2px 8px rgba(0,0,0,0.3)',
         lineHeight: 1.2,
@@ -48,7 +48,7 @@ export function ChaosModeWarning({ isActive, onAcknowledge }: ChaosModeWarningPr
       </div>
       <div style={{
         fontSize: 20,
-        color: '#fff',
+        color: tokens.colors.ink['1'],
         fontWeight: 600,
         textAlign: 'center',
         opacity: 0.9,
@@ -73,7 +73,7 @@ export function ChaosModeWarning({ isActive, onAcknowledge }: ChaosModeWarningPr
         style={{
           marginTop: 16,
           padding: '12px 32px',
-          background: '#fff',
+          background: tokens.colors.ink['1'],
           color: tokens.colors.semantic.error,
           border: 'none',
           borderRadius: 8,

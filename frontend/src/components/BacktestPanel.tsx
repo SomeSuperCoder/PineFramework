@@ -185,7 +185,7 @@ export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }:
               height: 36,
               padding: `0 ${tokens.spacing.lg}`,
               background: !selectedStrategy || barsExceedLimit ? tokens.colors.surface['2'] : tokens.colors.brand.blue,
-              color: !selectedStrategy || barsExceedLimit ? tokens.colors.steel.disabled : 'white',
+              color: !selectedStrategy || barsExceedLimit ? tokens.colors.steel.disabled : tokens.colors.ink.default,
               border: `1px solid ${tokens.colors.hairline.default}`,
               borderRadius: tokens.radius.sm,
               cursor: !selectedStrategy || barsExceedLimit ? 'not-allowed' : 'pointer',

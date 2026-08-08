@@ -372,7 +372,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   padding: '6px 12px',
                   background: saving ? '#333' : tokens.colors.brand.blue,
-                  color: '#fff',
+                  color: tokens.colors.ink.default,
                   border: 'none',
                   borderRadius: '4px',
                   cursor: saving ? 'not-allowed' : 'pointer',
@@ -398,7 +398,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
               style={{
                 padding: '6px 12px',
                 background: testSending ? '#333' : tokens.colors.semantic.success,
-                color: '#fff',
+                color: tokens.colors.ink.default,
                 border: 'none',
                 borderRadius: '4px',
                 cursor: testSending || !botToken ? 'not-allowed' : 'pointer',
@@ -507,7 +507,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                 style={{
                   padding: '6px 12px',
                   background: proxySaving ? '#333' : tokens.colors.semantic.warning,
-                  color: '#fff',
+                  color: tokens.colors.ink.default,
                   border: 'none',
                   borderRadius: '4px',
                   cursor: proxySaving ? 'not-allowed' : 'pointer',
@@ -587,7 +587,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                   style={{
                     padding: '6px 10px',
                     background: busy['admin'] ? '#333' : tokens.colors.brand.blue,
-                    color: '#fff',
+                    color: tokens.colors.ink.default,
                     border: 'none',
                     borderRadius: '4px',
                     cursor: busy['admin'] || !adminUserId.trim() ? 'not-allowed' : 'pointer',
@@ -637,7 +637,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                       style={{
                         padding: '4px 10px',
                         background: busy[`approve:${req.userId}`] ? '#333' : tokens.colors.semantic.success,
-                        color: '#fff',
+                        color: tokens.colors.ink.default,
                         border: 'none',
                         borderRadius: '4px',
                         cursor: busy[`approve:${req.userId}`] ? 'not-allowed' : 'pointer',
@@ -652,7 +652,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                       style={{
                         padding: '4px 10px',
                         background: busy[`deny:${req.userId}`] ? '#333' : tokens.colors.semantic.error,
-                        color: '#fff',
+                        color: tokens.colors.ink.default,
                         border: 'none',
                         borderRadius: '4px',
                         cursor: busy[`deny:${req.userId}`] ? 'not-allowed' : 'pointer',
@@ -701,7 +701,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                     style={{
                       padding: '3px 8px',
                       background: busy[`remove:${ctrl.userId}`] ? '#333' : tokens.colors.semantic.error,
-                      color: '#fff',
+                      color: tokens.colors.ink.default,
                       border: 'none',
                       borderRadius: '4px',
                       cursor: busy[`remove:${ctrl.userId}`] ? 'not-allowed' : 'pointer',
@@ -749,7 +749,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                             padding: '1px 6px',
                             borderRadius: '3px',
                             background: chat.type === 'group' ? '#5c6bc0' : '#26a69a',
-                            color: '#fff',
+                            color: tokens.colors.ink.default,
                             fontSize: '10px',
                             fontWeight: 'bold',
                             textTransform: 'uppercase',
@@ -774,7 +774,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
                               : busy[`link:${chat.chatId}`]
                                 ? '#333'
                                 : tokens.colors.semantic.success,
-                            color: '#fff',
+                            color: tokens.colors.ink.default,
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',

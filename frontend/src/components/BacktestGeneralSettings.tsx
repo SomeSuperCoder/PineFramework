@@ -210,7 +210,7 @@ export function BacktestGeneralSettings({
             padding: '8px 12px',
             borderRadius: '4px',
             fontSize: '12px',
-            background: exceedsLimit ? '#3a1a1a' : '#1a2a1a',
+            background: exceedsLimit ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
             color: exceedsLimit ? tokens.colors.semantic.error : tokens.colors.semantic.success,
             border: `1px solid ${exceedsLimit ? tokens.colors.semantic.error : tokens.colors.semantic.success}`,
           }}

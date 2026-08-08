@@ -307,7 +307,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
             <span style={{
               padding: '1px 5px',
-              background: currentScript.scriptType === 'strategy' ? '#1a3a2e' : '#2e2a1a',
+              background: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
               color: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
               borderRadius: '3px',
               fontSize: '10px',
@@ -320,7 +320,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
                 <span style={{
                   marginLeft: '6px',
                   padding: '1px 5px',
-                  background: '#1a2a3e',
+                  background: tokens.colors.semantic.infoBg,
                   color: '#64b5f6',
                   borderRadius: '3px',
                   fontSize: '10px',
@@ -338,7 +338,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
             <span style={{
               padding: '1px 5px',
-              background: currentBuiltIn.type === 'strategy' ? '#1a3a2e' : '#2e2a1a',
+              background: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
               color: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
               borderRadius: '3px',
               fontSize: '10px',
@@ -379,7 +379,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
                 style={{
                   padding: '10px 24px',
                   background: tokens.colors.semantic.success,
-                  color: '#fff',
+                  color: tokens.colors.ink.default,
                   border: 'none',
                   borderRadius: '6px',
                   cursor: 'pointer',
@@ -400,7 +400,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
               style={{
                 width: '100%',
                 height: '100%',
-                backgroundColor: isBuiltIn ? '#151520' : '#1e1e1e',
+                backgroundColor: isBuiltIn ? tokens.colors.surface['2'] : tokens.colors.surface['1'],
                 color: isBuiltIn ? '#999' : '#d4d4d4',
                 border: 'none',
                 padding: '16px',
