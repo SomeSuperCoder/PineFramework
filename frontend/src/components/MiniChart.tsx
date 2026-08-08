@@ -13,9 +13,9 @@ import type { ScriptResult } from '../types';
 import { tokens } from '../theme/tokens';
 
 const COLORS = [
-  '#2196f3',
-  '#ff9800',
-  '#4caf50',
+  tokens.colors.brand.blue,
+  tokens.colors.semantic.warning,
+  tokens.colors.semantic.success,
   '#e91e63',
   '#9c27b0',
   '#00bcd4',
@@ -161,7 +161,7 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
           shape: s.type,
-          color: s.color || '#2196f3',
+          color: s.color || tokens.colors.brand.blue,
           text: s.text || undefined,
           textcolor: s.textcolor,
           barIndex: barIdx >= 0 ? barIdx : undefined,
@@ -198,8 +198,8 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
           time: l.time,
           price: l.price,
           text: l.text,
-          color: l.color || '#2196f3',
-          textColor: l.textColor || '#ffffff',
+          color: l.color || tokens.colors.brand.blue,
+          textColor: l.textColor || tokens.colors.ink['1'],
           style: l.style,
           size: l.size,
         });

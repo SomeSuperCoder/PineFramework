@@ -7,6 +7,7 @@
  */
 
 import type { ScriptResult } from '../types';
+import { tokens } from '../theme/tokens';
 import {
   transformShapes,
   transformLines,
@@ -194,9 +195,9 @@ export interface ExecutionResultMessage {
 // ---------------------------------------------------------------------------
 
 export const COLORS = [
-  '#2196f3',
-  '#ff9800',
-  '#4caf50',
+  tokens.colors.brand.blue,
+  tokens.colors.semantic.warning,
+  tokens.colors.semantic.success,
   '#e91e63',
   '#9c27b0',
   '#00bcd4',

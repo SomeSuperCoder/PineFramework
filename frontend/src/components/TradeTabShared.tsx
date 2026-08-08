@@ -115,7 +115,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
     <div
       style={{
         padding: '14px 16px',
-        background: '#2a1520',
+        background: tokens.colors.semantic.errorBg,
         border: `1px solid ${tokens.colors.semantic.error}`,
         borderRadius: 6,
         color: tokens.colors.semantic.error,

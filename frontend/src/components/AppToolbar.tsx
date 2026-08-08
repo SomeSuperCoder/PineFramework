@@ -117,7 +117,7 @@ export function AppToolbar({
           style={{
             padding: '5px 10px',
             background: tokens.colors.brand.blue,
-            color: '#fff',
+            color: tokens.colors.ink.default,
             border: 'none',
             borderRadius: '4px',
             cursor: 'pointer',
@@ -139,7 +139,7 @@ export function AppToolbar({
         onClick={onToggleAutoScale}
         style={{
           padding: '5px 10px',
-          background: autoScale ? '#1a3328' : tokens.colors.hairline.default,
+          background: autoScale ? tokens.colors.semantic.successBg : tokens.colors.hairline.default,
           color: autoScale ? tokens.colors.semantic.success : tokens.colors.ink['1'],
           border: `1px solid ${autoScale ? tokens.colors.semantic.success : tokens.colors.hairline.default}`,
           borderRadius: '4px',
@@ -170,7 +170,7 @@ export function AppToolbar({
         onClick={onToggleDebugMode}
         style={{
           padding: '5px 10px',
-          background: debugMode ? '#2a2a10' : tokens.colors.hairline.default,
+          background: debugMode ? tokens.colors.semantic.warningBg : tokens.colors.hairline.default,
           color: debugMode ? tokens.colors.semantic.warning : tokens.colors.ink['1'],
           border: `1px solid ${debugMode ? tokens.colors.semantic.warning : tokens.colors.hairline.default}`,
           borderRadius: '4px',
@@ -250,7 +250,7 @@ export function AppToolbar({
         onClick={onExport}
         style={{
           padding: '5px 10px',
-          background: '#1a2a1a',
+          background: tokens.colors.semantic.infoBg,
           color: '#8bc34a',
           border: '1px solid #2a4a2a',
           borderRadius: '4px',
@@ -312,7 +312,7 @@ export function AppToolbar({
           onClick={onToggleErrorConsole}
           style={{
             padding: '5px 10px',
-          background: errorConsoleOpen ? '#2a1520' : tokens.colors.hairline.default,
+          background: errorConsoleOpen ? tokens.colors.semantic.errorBg : tokens.colors.hairline.default,
           color: errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.ink['1'],
           border: `1px solid ${errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.hairline.default}`,
             borderRadius: '4px',
@@ -346,7 +346,7 @@ export function AppToolbar({
               top: '-6px',
               right: '-6px',
               backgroundColor: tokens.colors.semantic.error,
-              color: '#fff',
+              color: tokens.colors.ink.default,
               fontSize: '10px',
               fontWeight: 'bold',
               borderRadius: '50%',

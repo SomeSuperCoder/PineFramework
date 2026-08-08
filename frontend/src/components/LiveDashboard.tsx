@@ -8,6 +8,7 @@ import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosM
 import { SetupWizard } from './bot/BotControls';
 import { BotStatusPanel } from './bot/BotStatusPanel';
 import { BotMetrics } from './bot/BotMetrics';
+import { tokens } from '../theme/tokens';
 
 // Stable empty array references for optional chaos props. A fresh `[]` literal
 // (default parameter or `?? []`) would create a new array every render and,
@@ -67,7 +68,7 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
       flex: 1, gap: 16, padding: 32,
     }}>
       <div style={{ fontSize: 48, opacity: 0.3 }}>🔒</div>
-      <div style={{ color: '#888', fontSize: 14, fontWeight: 600 }}>Wallet Locked</div>
+      <div style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600 }}>Wallet Locked</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 280 }}>
         <input
           type="password"
@@ -77,7 +78,7 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
           placeholder="Enter password to unlock"
           autoFocus
           style={{
-            width: '100%', background: '#111128', color: '#e0e0e0',
+            width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
             border: '1px solid #333', borderRadius: 4, padding: '8px 12px',
             fontSize: 12, boxSizing: 'border-box',
           }}
@@ -86,14 +87,14 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
           onClick={handleUnlock}
           disabled={loading || !password}
           style={{
-            padding: '8px 16px', background: '#1a3328', color: '#4caf50',
-            border: '1px solid #4caf50', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+            padding: '8px 16px', background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success,
+            border: `1px solid ${tokens.colors.semantic.success}`, borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
             fontSize: 12, fontWeight: 600, opacity: loading || !password ? 0.6 : 1,
           }}
         >
           {loading ? 'Unlocking...' : 'Unlock'}
         </button>
-        {error && <div style={{ color: '#e94560', fontSize: 11, textAlign: 'center' }}>{error}</div>}
+        {error && <div style={{ color: tokens.colors.semantic.error, fontSize: 11, textAlign: 'center' }}>{error}</div>}
         <button
           onClick={() => setShowForgot(!showForgot)}
           style={{
@@ -108,8 +109,8 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
             onClick={handleForgotPassword}
             disabled={loading}
             style={{
-              padding: '6px 12px', background: '#2a1520', color: '#e94560',
-              border: '1px solid #e94560', borderRadius: 4, cursor: 'pointer',
+              padding: '6px 12px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.error,
+              border: `1px solid ${tokens.colors.semantic.error}`, borderRadius: 4, cursor: 'pointer',
               fontSize: 10,
             }}
           >
@@ -138,7 +139,7 @@ function DashboardTabs({
     { id: 'stats', label: 'Statistics' },
   ];
   return (
-    <div style={{ display: 'flex', padding: '0 16px', borderBottom: '1px solid #1a1a2e', background: '#0d0d18' }}>
+    <div style={{ display: 'flex', padding: '0 16px', borderBottom: `1px solid ${tokens.colors.surface['1']}`, background: tokens.colors.canvas }}>
       {tabs.map((t) => {
         const isActive = active === t.id;
         return (
@@ -149,7 +150,7 @@ function DashboardTabs({
             style={{
               padding: '9px 16px 7px',
               background: 'transparent',
-              color: isActive ? '#64b5f6' : '#888',
+              color: isActive ? '#64b5f6' : tokens.colors.steel.muted,
               border: 'none',
               borderBottom: `2px solid ${isActive ? '#64b5f6' : 'transparent'}`,
               cursor: 'pointer',
@@ -332,9 +333,9 @@ export function LiveDashboard({
   const transitioning = status.state === 'Starting' || status.state === 'Stopping';
 
   const stateColor =
-    status.state === 'Running' ? '#4caf50' :
-    status.state === 'Error' ? '#e94560' :
-    status.state === 'Idle' ? '#888' : '#ff9800';
+    status.state === 'Running' ? tokens.colors.semantic.success :
+    status.state === 'Error' ? tokens.colors.semantic.error :
+    status.state === 'Idle' ? tokens.colors.steel.muted : tokens.colors.semantic.warning;
 
   const engineChaosModeTitle = engineChaosMode?.executionMode
     ? engineChaosMode.executionMode === 'simulated'
@@ -361,15 +362,15 @@ export function LiveDashboard({
     if (!walletLoaded) {
       return (
         <div style={rootStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
-            <span style={{ color: '#888', fontSize: 14, fontWeight: 600 }}>Bot Dashboard</span>
+          <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
+            <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600 }}>Bot Dashboard</span>
             <div style={{ flex: 1 }} />
             <button onClick={onClose} style={{
-              padding: '4px 10px', background: 'transparent', color: '#888',
+              padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
               border: 'none', cursor: 'pointer', fontSize: 14,
             }}>✕</button>
           </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 12 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
             Loading wallet status…
           </div>
         </div>
@@ -378,18 +379,18 @@ export function LiveDashboard({
     return (
       <div style={rootStyle}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
-          <span style={{ color: '#888', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
+          <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
             Bot Dashboard
-            <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11 }}>
+            <span style={{ padding: '2px 8px', background: tokens.colors.hairline.default, borderRadius: 4, fontSize: 11 }}>
               {status.state}
             </span>
             {wallet.hasWallet && (
               <span
                 style={{
                   padding: '2px 8px', borderRadius: 4, fontSize: 10,
-                  background: walletLocked ? '#2a1520' : '#1a3328',
-                  color: walletLocked ? '#e94560' : '#4caf50',
+                  background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
+                  color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
                   cursor: 'pointer',
                 }}
                 onClick={walletLocked ? undefined : handleLock}
@@ -403,7 +404,7 @@ export function LiveDashboard({
           <button
             onClick={onClose}
             style={{
-              padding: '4px 10px', background: 'transparent', color: '#888',
+              padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
               border: 'none', cursor: 'pointer', fontSize: 14,
             }}
           >
@@ -481,17 +482,17 @@ export function LiveDashboard({
       />
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #1a1a2e', padding: '8px 16px' }}>
-        <span style={{ color: '#888', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
+        <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
           Bot Dashboard
-          <span style={{ padding: '2px 8px', background: '#111128', borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
+          <span style={{ padding: '2px 8px', background: tokens.colors.hairline.default, borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
             {status.state}
           </span>
           {chaosMode && (
             <span
               style={{
                 padding: '2px 8px', borderRadius: 4, fontSize: 10,
-                background: '#e94560', color: '#fff', fontWeight: 700, cursor: 'help',
+                background: tokens.colors.semantic.error, color: tokens.colors.ink.default, fontWeight: 700, cursor: 'help',
               }}
               title={engineChaosModeTitle}
             >
@@ -504,8 +505,8 @@ export function LiveDashboard({
             <span
               style={{
                 padding: '2px 8px', borderRadius: 4, fontSize: 10,
-                background: walletLocked ? '#2a1520' : '#1a3328',
-                color: walletLocked ? '#e94560' : '#4caf50',
+                background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
+                color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
                 cursor: 'pointer',
               }}
               onClick={walletLocked ? undefined : handleLock}
@@ -523,7 +524,7 @@ export function LiveDashboard({
               onClick={() => sendCommand('stop')}
               disabled={loading}
               style={{
-                padding: '5px 12px', background: '#e94560', color: '#fff',
+                padding: '5px 12px', background: tokens.colors.semantic.error, color: tokens.colors.ink.default,
                 border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
                 fontSize: 11, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4,
               }}
@@ -538,7 +539,7 @@ export function LiveDashboard({
               disabled={loading}
               title="Emergency Stop"
               style={{
-                padding: '5px 8px', marginLeft: 4, background: '#ff1744', color: '#fff',
+                padding: '5px 8px', marginLeft: 4, background: '#ff1744', color: tokens.colors.ink.default,
                 border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
                 fontSize: 11, fontWeight: 700,
               }}
@@ -552,8 +553,8 @@ export function LiveDashboard({
             onClick={() => sendCommand('reset')}
             disabled={loading}
             style={{
-              padding: '5px 10px', background: '#2a1520', color: '#ff9800',
-              border: '1px solid #ff9800', borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
+              padding: '5px 10px', background: tokens.colors.semantic.errorBg, color: tokens.colors.semantic.warning,
+              border: `1px solid ${tokens.colors.semantic.warning}`, borderRadius: 4, cursor: loading ? 'wait' : 'pointer',
               fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4,
             }}
           >
@@ -561,14 +562,14 @@ export function LiveDashboard({
           </button>
         )}
         {transitioning && (
-          <span style={{ color: '#ff9800', fontSize: 11, fontStyle: 'italic', marginRight: 8 }}>
+          <span style={{ color: tokens.colors.semantic.warning, fontSize: 11, fontStyle: 'italic', marginRight: 8 }}>
             {status.state}...
           </span>
         )}
         <button
           onClick={onClose}
           style={{
-            padding: '4px 10px', background: 'transparent', color: '#888',
+            padding: '4px 10px', background: 'transparent', color: tokens.colors.steel.muted,
             border: 'none', cursor: 'pointer', fontSize: 14, marginLeft: 4,
           }}
         >
@@ -610,20 +611,20 @@ export function LiveDashboard({
 
         {/* Right: Logs Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
-          <div style={{ color: '#888', fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
+          <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
             Logs ({logs.length})
           </div>
           <div ref={logContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, minHeight: 0 }}>
             {logs.length === 0 && (
-              <span style={{ color: '#888', fontStyle: 'italic' }}>No log entries yet...</span>
+              <span style={{ color: tokens.colors.steel.muted, fontStyle: 'italic' }}>No log entries yet...</span>
             )}
             {logs.slice(-500).map((log, i) => (
               <div key={i} style={{
-                color: log.level === 'error' ? '#e94560' :
-                       log.level === 'warn' ? '#ff9800' :
+                color: log.level === 'error' ? tokens.colors.semantic.error :
+                       log.level === 'warn' ? tokens.colors.semantic.warning :
                        log.level === 'debug' ? '#666' : '#aaa',
               }}>
-                <span style={{ color: '#555' }}>
+                <span style={{ color: tokens.colors.steel.disabled }}>
                   {new Date(log.timestamp).toLocaleTimeString()}
                 </span>
                 {' '}
@@ -661,8 +662,8 @@ export function LiveDashboard({
       )}
 
       {/* Footer */}
-      <div style={{ borderTop: '1px solid #1a1a2e', padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: '#555' }}>
-        <span>Connected: <span style={{ color: '#4caf50' }}>●</span></span>
+      <div style={{ borderTop: `1px solid ${tokens.colors.surface['1']}`, padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: tokens.colors.steel.disabled }}>
+        <span>Connected: <span style={{ color: tokens.colors.semantic.success }}>●</span></span>
         <span>Last update: {new Date().toLocaleTimeString()}</span>
       </div>
     </div>

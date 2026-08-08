@@ -51,7 +51,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: '#1a1a2e', border: '1px solid #2a2a4e', borderRadius: '8px',
+          background: tokens.colors.surface['1'], border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '8px',
           padding: '20px 24px', width: 300, color: tokens.colors.ink['1'],
           fontFamily: tokens.typography.fontFamily, fontSize: '13px',
         }}
@@ -68,7 +68,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
               onChange={(e) => setDateStr(e.target.value)}
               style={{
                 width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
-                border: '1px solid #2a2a4e', borderRadius: '4px',
+                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
                 color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -84,7 +84,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
               onChange={(e) => setTimeStr(e.target.value)}
               style={{
                 width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
-                border: '1px solid #2a2a4e', borderRadius: '4px',
+                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
                 color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
                 boxSizing: 'border-box', textAlign: 'center',
                 fontFamily: 'monospace',
@@ -97,7 +97,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
               onClick={onClose}
               style={{
                 padding: '6px 14px', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
-                border: '1px solid #2a2a4e', borderRadius: '4px',
+                border: `1px solid ${tokens.colors.surface['2']}`, borderRadius: '4px',
                 cursor: 'pointer', fontSize: '12px',
               }}
             >
@@ -106,7 +106,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
             <button
               type="submit"
               style={{
-                padding: '6px 14px', background: tokens.colors.brand.blue, color: '#fff',
+                padding: '6px 14px', background: tokens.colors.brand.blue, color: tokens.colors.ink.default,
                 border: 'none', borderRadius: '4px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 600,
               }}

@@ -133,7 +133,7 @@ function Toggle({
       onClick={() => !disabled && onChange(!checked)}
       style={{
         ...toggleStyles.track,
-        background: checked ? tokens.colors.brand.blue : '#1a1a2e',
+        background: checked ? tokens.colors.brand.blue : tokens.colors.surface['1'],
         borderColor: checked ? tokens.colors.brand.blue : '#333',
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -143,7 +143,7 @@ function Toggle({
         style={{
           ...toggleStyles.thumb,
           transform: checked ? 'translateX(16px)' : 'translateX(0)',
-          background: checked ? '#fff' : '#666',
+          background: checked ? tokens.colors.ink.default : '#666',
         }}
       />
     </button>
@@ -281,7 +281,7 @@ function DangerButton({
           ...dangerBtnStyles.base,
           background: confirming ? tokens.colors.semantic.error : 'transparent',
           borderColor: tokens.colors.semantic.error,
-          color: confirming ? '#fff' : tokens.colors.semantic.error,
+          color: confirming ? tokens.colors.ink.default : tokens.colors.semantic.error,
         }}
       >
         {confirming ? 'Confirm' : label}
@@ -547,7 +547,7 @@ const sectionStyles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 8,
     padding: '8px 0',
-    borderBottom: '1px solid #1a1a30',
+    borderBottom: `1px solid ${tokens.colors.surface['1']}`,
     marginBottom: 8,
   },
   icon: {
@@ -609,7 +609,7 @@ const toggleStyles: Record<string, React.CSSProperties> = {
 const selectStyles: Record<string, React.CSSProperties> = {
   select: {
     padding: '6px 10px',
-    border: '1px solid #1a1a30',
+    border: `1px solid ${tokens.colors.surface['2']}`,
     borderRadius: 4,
     background: tokens.colors.canvas,
     color: tokens.colors.ink['1'],
@@ -628,7 +628,7 @@ const numberStyles: Record<string, React.CSSProperties> = {
   input: {
     width: 70,
     padding: '6px 8px',
-    border: '1px solid #1a1a30',
+    border: `1px solid ${tokens.colors.surface['2']}`,
     borderRadius: 4,
     background: tokens.colors.canvas,
     color: tokens.colors.ink['1'],
@@ -646,7 +646,7 @@ const textStyles: Record<string, React.CSSProperties> = {
   input: {
     width: 220,
     padding: '6px 8px',
-    border: '1px solid #1a1a30',
+    border: `1px solid ${tokens.colors.surface['2']}`,
     borderRadius: 4,
     background: tokens.colors.canvas,
     color: tokens.colors.ink['1'],

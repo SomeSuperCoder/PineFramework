@@ -407,7 +407,7 @@ function App() {
               onClick={() => setAutoScale(!autoScale)}
               style={{
                 ...dashboardStyles.actionBtn,
-                background: autoScale ? '#1a3328' : undefined,
+                background: autoScale ? tokens.colors.semantic.successBg : undefined,
                 color: autoScale ? tokens.colors.semantic.success : undefined,
                 borderColor: autoScale ? tokens.colors.semantic.success : undefined,
               }}
@@ -418,7 +418,7 @@ function App() {
               onClick={() => setDebugMode(!debugMode)}
               style={{
                 ...dashboardStyles.actionBtn,
-                background: debugMode ? '#2a2a10' : undefined,
+                background: debugMode ? tokens.colors.semantic.warningBg : undefined,
                 color: debugMode ? tokens.colors.semantic.warning : undefined,
                 borderColor: debugMode ? tokens.colors.semantic.warning : undefined,
               }}
@@ -462,7 +462,7 @@ function App() {
               onClick={() => setErrorConsoleOpen(!errorConsoleOpen)}
               style={{
                 ...dashboardStyles.actionBtn,
-                background: errorConsoleOpen ? '#2a1520' : undefined,
+                background: errorConsoleOpen ? tokens.colors.semantic.errorBg : undefined,
                 color: errors.length > 0 ? tokens.colors.semantic.error : undefined,
                 borderColor: errors.length > 0 ? tokens.colors.semantic.error : undefined,
                 position: 'relative',
@@ -539,7 +539,7 @@ function App() {
               <button
                 onClick={() => window.location.reload()}
                 style={{
-                  padding: '8px 20px', background: '#1a1a2e', color: '#64b5f6',
+                  padding: '8px 20px', background: tokens.colors.surface['1'], color: '#64b5f6',
                   border: '1px solid #64b5f6', borderRadius: 4, cursor: 'pointer',
                   fontSize: 12, marginTop: 8,
                 }}
@@ -564,7 +564,7 @@ function App() {
               <button
                 onClick={() => setActivePanel('dashboard')}
                 style={{
-                  padding: '6px 16px', background: '#1a1a2e', color: tokens.colors.steel.muted,
+                  padding: '6px 16px', background: tokens.colors.surface['1'], color: tokens.colors.steel.muted,
                   border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
                   fontSize: 11, marginTop: 16,
                 }}
@@ -661,8 +661,8 @@ function App() {
           position: 'fixed',
           bottom: 48,
           right: 8,
-          background: chaosMode ? tokens.colors.semantic.error : '#1a1a2e',
-          color: '#fff',
+          background: chaosMode ? tokens.colors.semantic.error : tokens.colors.surface['1'],
+          color: chaosMode ? tokens.colors.ink.default : tokens.colors.ink['1'],
           padding: '8px 16px',
           borderRadius: 6,
           fontSize: 12,
@@ -725,7 +725,7 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
   primaryBtn: {
     padding: '5px 10px',
     background: tokens.colors.brand.blue,
-    color: '#fff',
+    color: tokens.colors.ink.default,
     border: 'none',
     borderRadius: 4,
     cursor: 'pointer',
@@ -740,7 +740,7 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
     top: -6,
     right: -6,
     backgroundColor: tokens.colors.semantic.error,
-    color: '#fff',
+    color: tokens.colors.ink.default,
     fontSize: 10,
     fontWeight: 'bold',
     borderRadius: '50%',

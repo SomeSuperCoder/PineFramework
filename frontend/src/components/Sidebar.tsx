@@ -143,7 +143,7 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
               onClick={() => onPanelChange(item.id)}
               style={{
                 ...styles.navItem,
-                background: isActive ? '#1a1a2e' : 'transparent',
+                background: isActive ? tokens.colors.surface['1'] : 'transparent',
                 color: isActive ? tokens.colors.semantic.error : tokens.colors.steel.muted,
                 borderRight: isActive ? `2px solid ${tokens.colors.semantic.error}` : '2px solid transparent',
               }}

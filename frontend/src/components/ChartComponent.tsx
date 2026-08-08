@@ -295,7 +295,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       }
     }
 
-    const COLORS = ['#2196f3', '#ff9800', '#4caf50', '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
+    const COLORS = [tokens.colors.brand.blue, tokens.colors.semantic.warning, tokens.colors.semantic.success, '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
 
     const currentTitles = new Set<string>();
     let colorIndex = 0;
@@ -389,7 +389,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       }
       for (const l of (result.lines || [])) {
         allDrawingLines.push({
-          points: l.points, color: l.color || '#2196f3',
+          points: l.points, color: l.color || tokens.colors.brand.blue,
           width: l.width || 1, style: l.style || 'dotted',
           extend: l.extend || 'none',
         });
@@ -397,7 +397,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       for (const l of (result.labels || [])) {
         allChartLabels.push({
           time: l.time, price: l.price, text: l.text,
-          color: l.color || '#2196f3', textColor: l.textColor || '#ffffff',
+          color: l.color || tokens.colors.brand.blue, textColor: l.textColor || tokens.colors.ink['1'],
           style: l.style, size: l.size,
         });
       }
@@ -464,7 +464,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
           time: s.time,
           position: (s.location || 'abovebar') as ShapeMarkerData['position'],
           shape: s.type,
-          color: s.color || '#2196f3',
+          color: s.color || tokens.colors.brand.blue,
           text: s.text || undefined,
           textcolor: s.textcolor,
           barIndex: barIdx >= 0 ? barIdx : undefined,
@@ -639,7 +639,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 onClick={() => handleEditIndicator(label.id)}
                 style={labelButtonStyle}
                 title="Edit script"
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = tokens.colors.ink['1']; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
               >
                 &#9998;

@@ -4,6 +4,8 @@
  * identical values — single source of truth, design D6).
  */
 
+import { tokens } from '../theme/tokens';
+
 /** Em-dash placeholder for absent values (house convention). */
 export const DASH = '\u2014';
 
@@ -20,7 +22,7 @@ export function fmtDur(ms: number): string {
 export function fmtPnl(pnl: number): { text: string; color: string } {
   return {
     text: pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`,
-    color: pnl >= 0 ? '#4caf50' : '#e94560',
+    color: pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error,
   };
 }
 

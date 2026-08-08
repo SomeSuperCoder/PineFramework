@@ -238,7 +238,7 @@ function JupiterUltraConfig({
         <div
           style={{
             padding: '8px 10px',
-            background: '#1a1a2e',
+            background: tokens.colors.surface['1'],
             border: '1px solid #333',
             borderRadius: '4px',
             fontSize: '12px',

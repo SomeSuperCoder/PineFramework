@@ -52,7 +52,7 @@ export function TopBar({
           onClick={onOpenSettings}
           style={{
             ...styles.iconButton,
-            background: settingsOpen ? '#1a1a2e' : 'transparent',
+            background: settingsOpen ? tokens.colors.surface['1'] : 'transparent',
             color: settingsOpen ? tokens.colors.semantic.error : tokens.colors.steel.muted,
           }}
           title="Settings (4)"

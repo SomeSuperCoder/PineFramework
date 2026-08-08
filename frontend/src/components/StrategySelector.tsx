@@ -176,7 +176,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
               setRawSource('');
             }}
             style={{
-              padding: '2px 8px', background: '#1a1a2e', color: '#64b5f6',
+              padding: '2px 8px', background: tokens.colors.surface['1'], color: '#64b5f6',
               border: '1px solid #333', borderRadius: 3, cursor: 'pointer',
               fontSize: 10,
             }}
@@ -243,7 +243,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
       {isOpen && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-          background: '#1a1a2e', border: '1px solid #333', borderRadius: 4,
+          background: tokens.colors.surface['1'], border: '1px solid #333', borderRadius: 4,
           boxShadow: '0 4px 12px rgba(0,0,0,0.4)', marginTop: 2, overflow: 'hidden',
         }}>
           <div style={{ padding: '6px', borderBottom: '1px solid #222', ...heightStyle }}>
@@ -279,7 +279,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                 <button
                   onClick={fetchStrategies}
                   style={{
-                    padding: '4px 12px', background: '#1a1a2e', color: '#64b5f6',
+                    padding: '4px 12px', background: tokens.colors.surface['1'], color: '#64b5f6',
                     border: '1px solid #64b5f6', borderRadius: 3, cursor: 'pointer',
                     fontSize: 10,
                   }}
@@ -303,9 +303,9 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                   style={{
                     padding: '6px 8px', cursor: 'pointer', display: 'flex',
                     alignItems: 'center', justifyContent: 'space-between',
-                    background: i === highlightIndex ? '#1a2a3a' : 'transparent',
-                    color: i === highlightIndex ? '#fff' : tokens.colors.ink['1'],
-                    fontSize: 11, borderBottom: '1px solid #1a1a2e',
+                    background: i === highlightIndex ? tokens.colors.semantic.infoBg : 'transparent',
+                    color: tokens.colors.ink['1'],
+                    fontSize: 11, borderBottom: `1px solid ${tokens.colors.surface['1']}`,
                   }}
                 >
                   <span>{s.name}</span>
@@ -313,7 +313,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                     <span className={`badge badge-type badge-${s.type}`}
                       style={{
                         padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
-                        background: s.type === 'strategy' ? '#1a3328' : '#1a2a3a',
+                        background: s.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.infoBg,
                         color: s.type === 'strategy' ? tokens.colors.semantic.success : '#64b5f6',
                       }}
                     >

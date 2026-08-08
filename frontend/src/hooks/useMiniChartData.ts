@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CandlestickData } from '../chart';
 import type { ScriptResult, ChaosSignalRecord, ChaosHeartbeatRecord, StrategyMarkerData } from '../types';
 import { buildScriptResult } from './chart-data-transform';
+import { tokens } from '../theme/tokens';
 
 const DEFAULT_DISPLAY_COUNT = 12;
 const FETCH_LIMIT = 200; // enough for lookback periods
@@ -324,7 +325,7 @@ export function useBotMiniChartData(
         direction: 'flat',
         barIndex: fullIdx,
         timestamp: hb.candleTimestamp,
-        color: hb.outcome === 'error' ? '#e94560' : '#ff9800',
+        color: hb.outcome === 'error' ? tokens.colors.semantic.error : tokens.colors.semantic.warning,
         comment: hb.reason,
         outcome: hb.outcome,
       });
