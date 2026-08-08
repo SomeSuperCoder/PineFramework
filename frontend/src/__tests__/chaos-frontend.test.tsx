@@ -12,6 +12,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useBotWebSocket } from '../components/TradingBotPanel';
 import { useBotMiniChartData } from '../hooks/useMiniChartData';
 import { useChaosMode } from '../hooks/useChaosMode';
+import { tokens } from '../theme/tokens';
 import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosModeSnapshot } from '../types';
 
 // ─── WebSocket stub ───────────────────────────────────────────────
@@ -583,15 +584,15 @@ describe('useBotMiniChartData full-window reindex + heartbeats + filters (fix-ch
 
     const markers = result.current.displayScriptResult?.strategyMarkers ?? [];
 
-    // No-op → distinct heartbeat glyph data (orange).
+    // No-op → distinct heartbeat glyph data (semantic warning).
     const noop = markers.find((m) => m.type === 'heartbeat' && m.outcome === 'noop');
     expect(noop).toBeDefined();
-    expect(noop?.color).toBe('#ff9800');
+    expect(noop?.color).toBe(tokens.colors.semantic.warning);
     expect(noop?.comment).toBe('already long');
-    // Error → distinct heartbeat glyph data (red).
+    // Error → distinct heartbeat glyph data (semantic error).
     const error = markers.find((m) => m.type === 'heartbeat' && m.outcome === 'error');
     expect(error).toBeDefined();
-    expect(error?.color).toBe('#e94560');
+    expect(error?.color).toBe(tokens.colors.semantic.error);
     expect(error?.comment).toBe('rpc boom');
 
     // Signal heartbeat is skipped — heartbeat glyphs only ever carry noop/error,
