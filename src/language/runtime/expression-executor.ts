@@ -679,8 +679,13 @@ export function executeIndexExpression(
   // indicate a programming error and should be surfaced, not silently ignored).
   ensureFinite(index, 'series index expression', context.barIndex);
 
-  // Track runtime lookback: any positive-integer series index (close[1], myVar[70], etc.)
-  // means the script needs at least that many historical bars.
+  // Track runtime lookback: EVERY positive-integer series index (close[1],
+  // myVar[70], hlFlag[x], etc.) is a probe of history the script CAN touch —
+  // loop counter or not. A `for i=1..{close[i]}` demand read and a
+  // `for x=1..{hlFlag[x]}` backward search are indistinguishable at the read
+  // site, and both require that many historical bars for provisioning and
+  // realtime gating (chunk-border-lookback requires runtimeSeriesLookback>=70
+  // for loop-indexed close reads). So count them all — no loop-counter exception.
   const idx = index as number;
   if (Number.isInteger(idx) && idx > 0) {
     eng.runtimeSeriesLookback = Math.max(eng.runtimeSeriesLookback, idx);

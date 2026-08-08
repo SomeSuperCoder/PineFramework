@@ -23,7 +23,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTradeHistoryRouter } from '../src/routes/trade-history.js';
 import { TradeHistoryStore } from '../../src/trading/trade-history-store.js';
-import type { TradeRecord, TradeStats } from '../../src/trading/trade-history-store.js';
+import type { TradeStats } from '../../src/trading/trade-history-store.js';
+import type { TradeRecord } from '../../src/trading/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 

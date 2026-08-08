@@ -312,7 +312,13 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true, json: () => Promise.resolve({ data: barsOlder }),
     });
 
-    const contextBars = bars1k.slice(0, 0); // maxLookback = 0 for this test
+    // The hook re-executes the indicator against the FULL in-scope window:
+    // execBars = [...newBars(barsOlder), ...oldBars.slice(0, contextSize)]
+    // where contextSize = max(maxLookback, newBars.length) = max(0, 500) = 500.
+    // The engine returns one output per bar it was sent, so the mock must
+    // cover all 1000 exec bars (500 new + 500 context) — otherwise plot data
+    // cannot have an entry for every candle.
+    const contextBars = bars1k.slice(0, barsOlder.length);
     const execBars = [...barsOlder, ...contextBars];
     const newSmaValues = execBars.map((_, i) => (i >= 10 ? 200 : null));
 
@@ -331,16 +337,17 @@ describe('useChartData — scroll / indicator lifecycle', () => {
 
     await act(async () => {
       const count = await result.current.fetchOlderOHLCV('BTCUSDT', '1d');
-      expect(count).toBe(500);
+      expect(count).toBe(barsOlder.length);
     });
 
-    // Candles should have 1500 entries
-    expect(result.current.candles.length).toBe(1500);
+    // Derived window size from fixtures: 1000 initial + 500 prepended
+    const expectedCount = bars1k.length + barsOlder.length;
+    expect(result.current.candles.length).toBe(expectedCount);
 
-    // Indicator should have 1500 entries (500 new + 1000 old)
+    // Indicator must stay in sync with the grown window — one plot entry per candle
     const indResult2 = result.current.indicatorResultsRef?.current?.get('ind-1');
     expect(indResult2).toBeDefined();
-    expect(indResult2!.plots[0].data.length).toBe(1500);
+    expect(indResult2!.plots[0].data.length).toBe(expectedCount);
 
     // Candles and plot data should be the same length
     expect(result.current.candles.length).toBe(indResult2!.plots[0].data.length);
@@ -348,7 +355,7 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     // First plot data time should match first candle time
     expect(indResult2!.plots[0].data[0].time).toBe(result.current.candles[0].time);
     // Last plot data time should match last candle time
-    expect(indResult2!.plots[0].data[1499].time).toBe(result.current.candles[1499].time);
+    expect(indResult2!.plots[0].data[expectedCount - 1].time).toBe(result.current.candles[expectedCount - 1].time);
   });
 
   // ── Scenario 5: multiple scrolls — data keeps growing correctly
@@ -605,7 +612,10 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     }
 
     // ── Scroll 1 ──
-    // execBars = [...barsScroll1, ...bars1k.slice(0, maxLookback)] (chronological)
+    // The hook re-executes against execBars = [...newBars, ...oldBars.slice(0, contextSize)]
+    // where contextSize = max(maxLookback=100, newBars.length=500) = 500.
+    // Mock must return an output for ALL 1000 exec bars (500 new + 500 context)
+    // so the merged plot data covers every candle in the grown window.
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
     });
@@ -613,8 +623,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, maxLookback).map(() => 100)] },
-        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, maxLookback).map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, 500).map(() => 100)] },
+        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, 500).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
@@ -627,7 +637,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     verifyAlignment('after scroll 1');
 
     // ── Scroll 2 ──
-    // execBars = [...barsScroll2, ...barsScroll1.slice(0, maxLookback)] (chronological)
+    // contextSize = max(100, 500) = 500; context bars now come from barsScroll1
+    // (the oldest 500 bars in the ref after scroll 1).
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
     });
@@ -635,8 +646,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, maxLookback).map(() => 101)] },
-        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, maxLookback).map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, 500).map(() => 101)] },
+        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, 500).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
@@ -707,7 +718,8 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     });
 
     // Scroll 1
-    // execBars = [...barsScroll1, ...bars1k.slice(0, maxLookback)] (chronological)
+    // contextSize = max(maxLookback=50, newBars.length=500) = 500. Mock returns
+    // one output per bar for ALL 1000 exec bars (500 new + 500 context).
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll1 }),
     });
@@ -715,19 +727,19 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, maxLookback).map(() => 100)] },
-        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, maxLookback).map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll1.map(() => 101), ...bars1k.slice(0, 500).map(() => 100)] },
+        barTimestamps: [...barsScroll1.map(b => b.timestamp), ...bars1k.slice(0, 500).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
     await act(async () => { await result.current.fetchOlderOHLCV('BTCUSDT', '1d'); });
 
-    expect(result.current.candles.length).toBe(1500);
+    const expectedLen1 = bars1k.length + barsScroll1.length; // 1000 + 500
+    expect(result.current.candles.length).toBe(expectedLen1);
     const ind1 = result.current.indicatorResultsRef?.current?.get('ind-1')!;
-    expect(ind1.plots[0].data.length).toBe(1500);
+    expect(ind1.plots[0].data.length).toBe(expectedLen1);
 
-    // Scroll 2
-    // execBars = [...barsScroll2, ...barsScroll1.slice(0, maxLookback)] (chronological)
+    // Scroll 2 — context bars now come from barsScroll1 (oldest 500 in ref)
     fetchMock.mockResolvedValueOnce({
       ok: true, json: () => Promise.resolve({ data: barsScroll2 }),
     });
@@ -735,17 +747,18 @@ describe('useChartData — scroll / indicator lifecycle', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true, overlay: true,
-        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, maxLookback).map(() => 101)] },
-        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, maxLookback).map(b => b.timestamp)],
+        outputs: { sma: [...barsScroll2.map(() => 102), ...barsScroll1.slice(0, 500).map(() => 101)] },
+        barTimestamps: [...barsScroll2.map(b => b.timestamp), ...barsScroll1.slice(0, 500).map(b => b.timestamp)],
         shapes: [], fills: [], strategyMarkers: [],
       }),
     });
     await act(async () => { await result.current.fetchOlderOHLCV('BTCUSDT', '1d'); });
 
-    // Critical: verify 2000 candles and 2000 plot entries
-    expect(result.current.candles.length).toBe(2000);
+    // Derived window: 1000 initial + 500 scroll 1 + 500 scroll 2 = 2000 candles/plots
+    const expectedLen2 = bars1k.length + barsScroll1.length + barsScroll2.length;
+    expect(result.current.candles.length).toBe(expectedLen2);
     const ind2 = result.current.indicatorResultsRef?.current?.get('ind-1')!;
-    expect(ind2.plots[0].data.length).toBe(2000);
+    expect(ind2.plots[0].data.length).toBe(expectedLen2);
 
     // Verify all times are monotonically non-decreasing
     const times = ind2.plots[0].data.map(d => d.time);

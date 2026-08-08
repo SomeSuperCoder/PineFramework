@@ -322,11 +322,15 @@ export class Interpreter {
    * the script's lookback period was not satisfied. This fixes the "labels
    * stacking on the oldest candle" bug.
    *
-   * Only the DECLARED `max_bars_back` (explicitly set in the script's
-   * indicator()/strategy() declaration) is used for filtering. Runtime-
-   * computed lookback is ignored because it can include inflated values
-   * from internal state requirements (e.g., the pivot 1000-bar minimum)
-   * that don't correspond to actual visual output warmup needs.
+   * CONSUMER-ROLE CONTRACT:
+   * - This filter consumes ONLY the DECLARED `max_bars_back` from the script's
+   *   indicator()/strategy() declaration. Runtime-computed lookback
+   *   (getEffectiveMaxBarsBack) is deliberately NOT consulted — it can include
+   *   inflated values from internal state requirements (e.g., the pivot
+   *   1000-bar minimum) that don't correspond to actual visual warmup needs.
+   * - The runtime lookback value serves a DIFFERENT consumer: provisioning and
+   *   realtime-history gating (isLookbackSatisfied()). It must never feed this
+   *   visual warmup filter.
    *
    * When max_bars_back is declared:
    * - Output plot values are nulled for warmup bars
@@ -337,8 +341,13 @@ export class Interpreter {
    * outputs from bar 0 (they have no declared warmup period).
    */
   private applyLookbackFilter(): void {
-    // Use effective lookback (max of declared and runtime-detected from TA functions)
-    const effective = this.eng.getEffectiveMaxBarsBack();
+    // Per the contract documented above: ONLY the DECLARED `max_bars_back`
+    // drives the warmup filter. Runtime-computed lookback (getEffectiveMaxBarsBack)
+    // is deliberately NOT consulted — it can include inflated values from
+    // internal requirements (e.g. the pivot 1000-bar minimum) that must not
+    // null out real outputs. Realtime history gating still uses the runtime
+    // value via isLookbackSatisfied(); this filter is purely visual warmup.
+    const effective = this.eng.compiledScript.maxBarsBack || 0;
     if (effective <= 0) return;
 
     const timestamps = this.eng.barTimestamps;

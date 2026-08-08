@@ -13,7 +13,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { StatsService, type StatsGroupBy } from '../src/services/StatsService.js';
-import { TradeHistoryStore, type TradeRecord } from '../../src/trading/trade-history-store.js';
+import { TradeHistoryStore } from '../../src/trading/trade-history-store.js';
+import type { TradeRecord } from '../../src/trading/types.js';
 
 function makeTrade(overrides: Partial<TradeRecord> & { id: string; closedAt: number }): TradeRecord {
   return {

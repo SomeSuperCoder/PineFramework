@@ -4,7 +4,8 @@
  * Tests each level of the per-bar fill color pipeline.
  */
 
-import { createPineScriptEngine, type Bar } from '../../src/api.js';
+import { createPineScriptEngine } from '../../src/api.js';
+import type { Bar } from '../../src/data/bar.js';
 
 // Helper: generate deterministic-ish bars
 function generateBars(count: number): Bar[] {

@@ -68,16 +68,23 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     }
     const highArr = eng.ohlcHistory.high;
     const len = highArr.length;
-    if (len < leftBars + rightBars + 1) return NA;
-    const candidateIdx = len - 1 - rightBars;
+    // Emission gate (real Pine confirmation semantics): at the current bar the
+    // newest candidate whose right window has just closed is p = len-1-rbBars.
+    // A pivot at p is only KNOWN once the full window [p - leftBars, p + rightBars]
+    // is fully inside executed history. That window spans leftBars+1+rightBars
+    // bars (the pivot bar itself is the +1), so the FIRST leftBars+rightBars+1
+    // output values are null — ta.pivothigh(5,5) yields 11 nulls, then values
+    // (see execution-engine.test.ts 'Runtime lookback filtering').
+    if (len < lb + rb + 2) return NA;
+    const candidateIdx = len - 1 - rb;
     const candidateValue = highArr[candidateIdx];
     if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
-    for (let d = -leftBars; d < 0; d++) {
+    for (let d = -lb; d < 0; d++) {
       const idx = candidateIdx + d;
       const v = highArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v > candidateValue) return NA;
     }
-    for (let d = 1; d <= rightBars; d++) {
+    for (let d = 1; d <= rb; d++) {
       const idx = candidateIdx + d;
       const v = highArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v >= candidateValue) return NA;
@@ -105,16 +112,20 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     }
     const lowArr = eng.ohlcHistory.low;
     const len = lowArr.length;
-    if (len < leftBars + rightBars + 1) return NA;
-    const candidateIdx = len - 1 - rightBars;
+    // Emission gate (real Pine confirmation semantics) — see ta.pivothigh above.
+    // A pivot at p is only KNOWN once the full window [p-lb, p+rb] is fully
+    // inside executed history (window spans lb+1+rb bars; the pivot bar is the
+    // +1). The first lb+rb+1 output values are null.
+    if (len < lb + rb + 2) return NA;
+    const candidateIdx = len - 1 - rb;
     const candidateValue = lowArr[candidateIdx];
     if (typeof candidateValue !== 'number' || isNaN(candidateValue)) return NA;
-    for (let d = -leftBars; d < 0; d++) {
+    for (let d = -lb; d < 0; d++) {
       const idx = candidateIdx + d;
       const v = lowArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v < candidateValue) return NA;
     }
-    for (let d = 1; d <= rightBars; d++) {
+    for (let d = 1; d <= rb; d++) {
       const idx = candidateIdx + d;
       const v = lowArr[idx];
       if (typeof v === 'number' && !isNaN(v) && v <= candidateValue) return NA;

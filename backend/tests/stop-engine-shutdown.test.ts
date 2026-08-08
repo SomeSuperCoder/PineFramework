@@ -115,10 +115,26 @@ vi.mock('../src/store/ScriptFileManager.js', () => ({
 vi.mock('../src/cache/DiskOHLCVCache.js', () => ({ DiskOHLCVCache: class {} }));
 
 // Telegram + logger — keep test output deterministic and silent.
+//
+// The TelegramService mock doubles as the `BotCommandTransport` handed to
+// TelegramBotFeature.install(telegramService) (src/index.ts:126). install()
+// unconditionally calls transport.registerBotCommand (TelegramBotFeature.ts:372)
+// and also consumes registerBotCallback for inline-button prefixes (guarded at
+// :376) — both seams must exist on the stub or importing src/index.js crashes
+// before any test runs. Mirror the sibling suites (telegram-feature.test.ts).
 vi.mock('../src/telegram/TelegramService.js', () => ({
   TelegramService: class {
     start() {}
     stop() {}
+    // The TelegramService mock doubles as the BotCommandTransport handed to
+    // TelegramBotFeature.install(telegramService) (src/index.ts:126). install()
+    // unconditionally calls transport.registerBotCommand (TelegramBotFeature.ts:372)
+    // and also consumes registerBotCallback for inline-button prefixes (guarded
+    // at :376). Both seams must exist on the stub or importing src/index.js
+    // crashes before any test runs. Mirror the sibling suites.
+    // Class-body fields need `=` (not `:` — that would be a type annotation).
+    registerBotCommand = vi.fn();
+    registerBotCallback = vi.fn();
   },
 }));
 vi.mock('../src/utils/logger.js', () => ({
