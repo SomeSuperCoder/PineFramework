@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { tokens } from '../theme/tokens';
 
 interface ScriptEntry {
   id: string;
@@ -168,7 +169,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
     return (
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ color: '#888', fontSize: 11 }}>Paste Pine Script Strategy Source:</span>
+          <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Paste Pine Script Strategy Source:</span>
           <button
             onClick={() => {
               setUseRawPaste(false);
@@ -189,7 +190,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
           placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"
           rows={4}
           style={{
-            width: '100%', background: '#111128', color: '#e0e0e0',
+            width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
             border: '1px solid #333', borderRadius: 4, padding: '6px 8px',
             fontSize: 11, fontFamily: 'monospace', resize: 'vertical',
           }}
@@ -223,7 +224,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
         aria-expanded={isOpen}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '6px 8px', background: '#111128', color: selectedName ? '#e0e0e0' : '#888',
+          padding: '6px 8px', background: tokens.colors.hairline.default, color: selectedName ? tokens.colors.ink['1'] : tokens.colors.steel.muted,
           border: `1px solid ${isOpen ? '#64b5f6' : '#333'}`,
           borderRadius: 4, cursor: 'pointer', fontSize: 11, minHeight: 28,
           ...heightStyle,
@@ -231,9 +232,9 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
       >
         <span>
           {selectedName
-            ? <><span style={{ color: '#4caf50' }}>✓</span> {selectedName}</>
+            ? <><span style={{ color: tokens.colors.semantic.success }}>✓</span> {selectedName}</>
             : sourceLoaded
-              ? <span style={{ color: '#888' }}>{sourceLabel}</span>
+              ? <span style={{ color: tokens.colors.steel.muted }}>{sourceLabel}</span>
               : 'Select a strategy...'}
         </span>
         <span style={{ color: '#666', fontSize: 10 }}>{isOpen ? '▲' : '▼'}</span>
@@ -260,7 +261,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               style={{
-                width: '100%', background: '#111128', color: '#e0e0e0',
+                width: '100%', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
                 border: '1px solid #333', borderRadius: 3, padding: '6px 8px',
                 fontSize: 11, ...heightStyle,
               }}
@@ -269,12 +270,12 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
 
           <div ref={listRef} id={listId} className="quick-adder-list" style={{ maxHeight: 200, overflow: 'auto' }}>
             {loading ? (
-              <div style={{ padding: '12px', color: '#888', fontSize: 11, textAlign: 'center' }}>
+              <div style={{ padding: '12px', color: tokens.colors.steel.muted, fontSize: 11, textAlign: 'center' }}>
                 Loading strategies...
               </div>
             ) : error ? (
               <div style={{ padding: '12px' }}>
-                <div style={{ color: '#e94560', fontSize: 11, marginBottom: 6 }}>{error}</div>
+                <div style={{ color: tokens.colors.semantic.error, fontSize: 11, marginBottom: 6 }}>{error}</div>
                 <button
                   onClick={fetchStrategies}
                   style={{
@@ -287,7 +288,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                 </button>
               </div>
             ) : filtered.length === 0 ? (
-              <div style={{ padding: '12px', color: '#888', fontSize: 11, textAlign: 'center' }}>
+              <div style={{ padding: '12px', color: tokens.colors.steel.muted, fontSize: 11, textAlign: 'center' }}>
                 {search
                   ? `No strategies matching "${search}"`
                   : 'No strategies found. Write one in the editor first.'}
@@ -303,7 +304,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                     padding: '6px 8px', cursor: 'pointer', display: 'flex',
                     alignItems: 'center', justifyContent: 'space-between',
                     background: i === highlightIndex ? '#1a2a3a' : 'transparent',
-                    color: i === highlightIndex ? '#fff' : '#e0e0e0',
+                    color: i === highlightIndex ? '#fff' : tokens.colors.ink['1'],
                     fontSize: 11, borderBottom: '1px solid #1a1a2e',
                   }}
                 >
@@ -313,7 +314,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                       style={{
                         padding: '1px 5px', borderRadius: 3, fontSize: 9, fontWeight: 600,
                         background: s.type === 'strategy' ? '#1a3328' : '#1a2a3a',
-                        color: s.type === 'strategy' ? '#4caf50' : '#64b5f6',
+                        color: s.type === 'strategy' ? tokens.colors.semantic.success : '#64b5f6',
                       }}
                     >
                       {s.type === 'strategy' ? 'STG' : 'IND'}

@@ -1,3 +1,5 @@
+import { tokens } from '../theme/tokens';
+
 export interface StrategyConflictDialogProps {
   isOpen: boolean;
   existingName: string;
@@ -24,25 +26,25 @@ export function StrategyConflictDialog({ isOpen, existingName, incomingName, onR
     }} onClick={onCancel}>
       <div style={{
         width: 380,
-        backgroundColor: '#0d0d18',
-        border: '1px solid #111128',
+        backgroundColor: tokens.colors.canvas,
+        border: `1px solid ${tokens.colors.hairline.default}`,
         borderRadius: 8,
         padding: '20px 24px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)',
       }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: '0 0 12px', color: '#ff9800', fontSize: '14px' }}>
+        <h3 style={{ margin: '0 0 12px', color: tokens.colors.semantic.warning, fontSize: '14px' }}>
           Strategy Conflict
         </h3>
-        <p style={{ margin: '0 0 8px', color: '#e0e0e0', fontSize: '13px', lineHeight: '1.5' }}>
+        <p style={{ margin: '0 0 8px', color: tokens.colors.ink['1'], fontSize: '13px', lineHeight: '1.5' }}>
           A strategy is already running on the chart:
         </p>
-        <p style={{ margin: '0 0 12px', color: '#ff9800', fontSize: '13px', fontWeight: 'bold' }}>
+        <p style={{ margin: '0 0 12px', color: tokens.colors.semantic.warning, fontSize: '13px', fontWeight: 'bold' }}>
           {existingName}
         </p>
-        <p style={{ margin: '0 0 8px', color: '#e0e0e0', fontSize: '13px', lineHeight: '1.5' }}>
+        <p style={{ margin: '0 0 8px', color: tokens.colors.ink['1'], fontSize: '13px', lineHeight: '1.5' }}>
           You are trying to add:
         </p>
-        <p style={{ margin: '0 0 16px', color: '#2196f3', fontSize: '13px', fontWeight: 'bold' }}>
+        <p style={{ margin: '0 0 16px', color: tokens.colors.brand.blue, fontSize: '13px', fontWeight: 'bold' }}>
           {incomingName}
         </p>
         <p style={{ margin: '0 0 16px', color: '#aaa', fontSize: '12px', lineHeight: '1.5' }}>
@@ -51,8 +53,8 @@ export function StrategyConflictDialog({ isOpen, existingName, incomingName, onR
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{
             padding: '6px 16px',
-            background: '#111128',
-            color: '#e0e0e0',
+            background: tokens.colors.hairline.default,
+            color: tokens.colors.ink['1'],
             border: '1px solid #333',
             borderRadius: 4,
             cursor: 'pointer',
@@ -62,7 +64,7 @@ export function StrategyConflictDialog({ isOpen, existingName, incomingName, onR
           </button>
           <button onClick={onReplace} style={{
             padding: '6px 16px',
-            background: '#ff9800',
+            background: tokens.colors.semantic.warning,
             color: '#000',
             border: 'none',
             borderRadius: 4,

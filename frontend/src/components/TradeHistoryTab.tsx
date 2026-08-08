@@ -9,6 +9,7 @@ import {
   filterControlStyle,
   pageButtonStyle,
 } from './TradeTabShared';
+import { tokens } from '../theme/tokens';
 
 interface TradeHistoryTabProps {
   backendUrl: string;
@@ -149,7 +150,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span
           style={{
-            color: '#888',
+            color: tokens.colors.steel.muted,
             fontWeight: 600,
             fontSize: 11,
             textTransform: 'uppercase',
@@ -159,7 +160,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
           Trade History
         </span>
         {!loading && !error && (
-          <span style={{ color: '#555', fontSize: 11 }}>
+          <span style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>
             {history.totalLoaded} loaded{hasMore ? ' · more available' : ''}
           </span>
         )}
@@ -210,7 +211,14 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
           Loading trade history…
         </div>
       ) : trades.length === 0 ? (
-        <div style={{ padding: 32, textAlign: 'center', color: '#555', fontSize: 12 }}>
+        <div
+          style={{
+            padding: 32,
+            textAlign: 'center',
+            color: tokens.colors.steel.disabled,
+            fontSize: 12,
+          }}
+        >
           No trades yet{filterActive ? ' matching these filters' : ''}.
         </div>
       ) : (
@@ -224,7 +232,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
             }}
           >
             <thead>
-              <tr style={{ background: '#111128' }}>
+              <tr style={{ background: tokens.colors.hairline.default }}>
                 {COLUMNS.map((col) => (
                   <th
                     key={col.field}
@@ -248,27 +256,34 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
                 <tr
                   key={t.id}
                   style={{
-                    borderBottom: '1px solid #111128',
-                    background: i % 2 === 0 ? '#0d0d18' : '#0f1520',
+                    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
+                    background: i % 2 === 0 ? tokens.colors.canvas : tokens.colors.surface['1'],
                   }}
                 >
                   <td
                     style={{
                       padding: '4px 8px',
-                      color: t.side === 'buy' ? '#4caf50' : '#e94560',
+                      color:
+                        t.side === 'buy'
+                          ? tokens.colors.semantic.success
+                          : tokens.colors.semantic.error,
                       fontWeight: 600,
                     }}
                   >
                     {t.side === 'buy' ? 'BUY' : 'SELL'}
                   </td>
-                  <td style={{ padding: '4px 8px', color: '#e0e0e0', fontWeight: 600 }}>
+                  <td
+                    style={{ padding: '4px 8px', color: tokens.colors.ink['1'], fontWeight: 600 }}
+                  >
                     {t.symbol}
                   </td>
-                  <td style={{ padding: '4px 8px', color: '#888' }}>{fmtTimeframe(t.timeframe)}</td>
+                  <td style={{ padding: '4px 8px', color: tokens.colors.steel.muted }}>
+                    {fmtTimeframe(t.timeframe)}
+                  </td>
                   <td
                     style={{
                       padding: '4px 8px',
-                      color: t.strategy === 'Chaos Mode' ? '#ff9800' : '#aaa',
+                      color: t.strategy === 'Chaos Mode' ? tokens.colors.semantic.warning : '#aaa',
                       maxWidth: 180,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -305,10 +320,10 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
                       padding: '4px 8px',
                       color:
                         t.status === 'unknown'
-                          ? '#ff9800'
+                          ? tokens.colors.semantic.warning
                           : t.status === 'confirmed'
-                            ? '#4caf50'
-                            : '#888',
+                            ? tokens.colors.semantic.success
+                            : tokens.colors.steel.muted,
                     }}
                   >
                     {t.status ?? DASH}
@@ -325,7 +340,9 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
       {/* Pagination — Next loads older pages, Previous re-loads the prior page */}
       {!loading && !error && trades.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end' }}>
-          <span style={{ color: '#555', fontSize: 11 }}>Page {history.page + 1}</span>
+          <span style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>
+            Page {history.page + 1}
+          </span>
           <button
             type="button"
             onClick={history.goBack}

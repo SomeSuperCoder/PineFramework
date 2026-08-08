@@ -1,10 +1,11 @@
 import type { CSSProperties } from 'react';
 import type { TradeHistoryMode, TradeHistoryStatus } from '../types/trade';
+import { tokens } from '../theme/tokens';
 
-/** Shared filter-control styles — house palette (#111128 field, #333 border). */
+/** Shared filter-control styles — house palette (hairline field, steel border). */
 export const filterControlStyle: CSSProperties = {
-  background: '#111128',
-  color: '#e0e0e0',
+  background: tokens.colors.hairline.default,
+  color: tokens.colors.ink['1'],
   border: '1px solid #333',
   borderRadius: 3,
   padding: '4px 8px',
@@ -14,7 +15,7 @@ export const filterControlStyle: CSSProperties = {
 
 export const pageButtonStyle: CSSProperties = {
   padding: '4px 10px',
-  background: '#111128',
+  background: tokens.colors.hairline.default,
   color: '#64b5f6',
   border: '1px solid #333',
   borderRadius: 4,
@@ -40,10 +41,15 @@ export function ModeToggle({
     {
       value: 'live',
       label: 'Live',
-      activeColor: '#4caf50',
+      activeColor: tokens.colors.semantic.success,
       title: 'Live (real execution) trades only',
     },
-    { value: 'chaos', label: 'Chaos', activeColor: '#ff9800', title: 'Chaos-mode trades only' },
+    {
+      value: 'chaos',
+      label: 'Chaos',
+      activeColor: tokens.colors.semantic.warning,
+      title: 'Chaos-mode trades only',
+    },
   ];
   return (
     <div
@@ -64,8 +70,8 @@ export function ModeToggle({
             title={o.title}
             style={{
               padding: '4px 12px',
-              background: active ? '#111128' : 'transparent',
-              color: active ? o.activeColor : '#888',
+              background: active ? tokens.colors.hairline.default : 'transparent',
+              color: active ? o.activeColor : tokens.colors.steel.muted,
               border: 'none',
               borderRight: i < options.length - 1 ? '1px solid #333' : 'none',
               cursor: 'pointer',
@@ -110,9 +116,9 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
       style={{
         padding: '14px 16px',
         background: '#2a1520',
-        border: '1px solid #e94560',
+        border: `1px solid ${tokens.colors.semantic.error}`,
         borderRadius: 6,
-        color: '#e94560',
+        color: tokens.colors.semantic.error,
         fontSize: 12,
         display: 'flex',
         alignItems: 'center',
@@ -128,8 +134,8 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
           style={{
             padding: '4px 10px',
             background: 'transparent',
-            color: '#e94560',
-            border: '1px solid #e94560',
+            color: tokens.colors.semantic.error,
+            border: `1px solid ${tokens.colors.semantic.error}`,
             borderRadius: 4,
             cursor: 'pointer',
             fontSize: 11,

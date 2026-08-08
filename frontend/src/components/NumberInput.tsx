@@ -1,4 +1,5 @@
 import { useState, useEffect, type InputHTMLAttributes } from 'react';
+import { tokens } from '../theme/tokens';
 
 /** Text input that accepts numeric keystrokes but shows empty while editing.
  *
@@ -49,9 +50,9 @@ export function NumberInput({
       style={{
         width: '100%',
         padding: '6px',
-        background: '#0f1520',
-        color: '#e0e0e0',
-        border: '1px solid #111128',
+        background: tokens.colors.surface['1'],
+        color: tokens.colors.ink['1'],
+        border: `1px solid ${tokens.colors.hairline.default}`,
         borderRadius: '4px',
         ...style,
       }}

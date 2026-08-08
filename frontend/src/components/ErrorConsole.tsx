@@ -1,4 +1,5 @@
 import type { PineScriptError } from '../types';
+import { tokens } from '../theme/tokens';
 
 interface ErrorConsoleProps {
   errors: PineScriptError[];
@@ -26,8 +27,8 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
       <div style={{
         width: 520,
         maxHeight: '60vh',
-        backgroundColor: '#0d0d18',
-        border: '1px solid #111128',
+        backgroundColor: tokens.colors.canvas,
+        border: `1px solid ${tokens.colors.hairline.default}`,
         borderRadius: 8,
         display: 'flex',
         flexDirection: 'column',
@@ -39,9 +40,9 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '10px 14px',
-          borderBottom: '1px solid #111128',
+          borderBottom: `1px solid ${tokens.colors.hairline.default}`,
         }}>
-          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#e94560' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: tokens.colors.semantic.error }}>
             Errors ({errors.length})
           </h3>
           <div style={{ display: 'flex', gap: 6 }}>
@@ -51,8 +52,8 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
                 padding: '4px 10px',
                 border: '1px solid #333',
                 borderRadius: 4,
-                backgroundColor: '#111128',
-                color: '#e0e0e0',
+                backgroundColor: tokens.colors.hairline.default,
+                color: tokens.colors.ink['1'],
                 fontSize: '12px',
                 cursor: 'pointer',
               }}
@@ -65,8 +66,8 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
                 padding: '4px 10px',
                 border: 'none',
                 borderRadius: 4,
-                backgroundColor: '#111128',
-                color: '#e0e0e0',
+                backgroundColor: tokens.colors.hairline.default,
+                color: tokens.colors.ink['1'],
                 fontSize: '14px',
                 cursor: 'pointer',
                 lineHeight: 1,
@@ -82,7 +83,7 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
           padding: '8px 14px',
         }}>
           {errors.length === 0 ? (
-            <div style={{ padding: '8px 0', fontSize: '12px', color: '#4caf50', fontFamily: 'monospace' }}>
+            <div style={{ padding: '8px 0', fontSize: '12px', color: tokens.colors.semantic.success, fontFamily: 'monospace' }}>
               No errors
             </div>
           ) : (
@@ -93,7 +94,7 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
                   padding: '4px 0',
                   fontSize: '12px',
                   fontFamily: "'Monaco', 'Menlo', monospace",
-                  color: error.type === 'error' ? '#e94560' : error.type === 'warning' ? '#ffc107' : '#4caf50',
+                  color: error.type === 'error' ? tokens.colors.semantic.error : error.type === 'warning' ? '#ffc107' : tokens.colors.semantic.success,
                 }}
               >
                 {error.line && error.column

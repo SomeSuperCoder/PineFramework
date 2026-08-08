@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 
 import { PineChart, createChart } from '../chart';
 import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
 import type { ScriptResult } from '../types';
+import { tokens } from '../theme/tokens';
 
 interface IndicatorLabel {
   id: string;
@@ -48,10 +49,10 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      background: '#0d0d18',
-      textColor: '#e0e0e0',
-      gridColor: '#181830',
-      borderColor: '#111128',
+      background: tokens.colors.canvas,
+      textColor: tokens.colors.ink['1'],
+      gridColor: tokens.chart.grid,
+      borderColor: tokens.colors.hairline.default,
       barSpacing: 8,
     });
 
@@ -597,11 +598,11 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 gap: '4px',
                 padding: '3px 8px',
                 background: 'rgba(12, 15, 30, 0.9)',
-                border: `1px solid ${label.overlay ? '#2196f3' : '#ff9800'}`,
+                border: `1px solid ${label.overlay ? tokens.colors.brand.blue : tokens.colors.semantic.warning}`,
                 borderRadius: '6px',
                 fontSize: '13px',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                color: '#e0e0e0',
+                fontFamily: tokens.typography.fontFamily,
+                color: tokens.colors.ink['1'],
                 cursor: 'default',
                 whiteSpace: 'nowrap',
                 pointerEvents: 'auto',
@@ -611,7 +612,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                background: label.overlay ? '#2196f3' : '#ff9800',
+                background: label.overlay ? tokens.colors.brand.blue : tokens.colors.semantic.warning,
                 flexShrink: 0,
               }} />
               <span style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -631,7 +632,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 <span title="Ready" style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   width: '14px', height: '14px', fontSize: '8px', flexShrink: 0,
-                  color: '#4caf50',
+                  color: tokens.colors.semantic.success,
                 }}>✓</span>
               )}
               <button
@@ -647,7 +648,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 onClick={() => handleRemoveIndicator(label.id)}
                 style={labelButtonStyle}
                 title="Remove indicator"
-                onMouseEnter={(e) => { e.currentTarget.style.color = '#e94560'; e.currentTarget.style.background = 'rgba(233,69,96,0.15)'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = tokens.colors.semantic.error; e.currentTarget.style.background = 'rgba(233,69,96,0.15)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.background = 'none'; }}
               >
                 ×

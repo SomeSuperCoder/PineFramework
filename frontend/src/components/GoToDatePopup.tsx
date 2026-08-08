@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatTime, parseMsk, now } from 'pine-framework/utils/time';
+import { tokens } from '../theme/tokens';
 
 interface GoToDatePopupProps {
   isOpen: boolean;
@@ -51,8 +52,8 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
         onClick={(e) => e.stopPropagation()}
         style={{
           background: '#1a1a2e', border: '1px solid #2a2a4e', borderRadius: '8px',
-          padding: '20px 24px', width: 300, color: '#e0e0e0',
-          fontFamily: "'Segoe UI', Arial, sans-serif", fontSize: '13px',
+          padding: '20px 24px', width: 300, color: tokens.colors.ink['1'],
+          fontFamily: tokens.typography.fontFamily, fontSize: '13px',
         }}
       >
         <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: 16 }}>
@@ -60,21 +61,21 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
         </div>
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: 10 }}>
-            <label style={{ display: 'block', marginBottom: 4, color: '#888' }}>Date</label>
+            <label style={{ display: 'block', marginBottom: 4, color: tokens.colors.steel.muted }}>Date</label>
             <input
               type="date"
               value={dateStr}
               onChange={(e) => setDateStr(e.target.value)}
               style={{
-                width: '100%', padding: '8px 10px', background: '#0d0d18',
+                width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
                 border: '1px solid #2a2a4e', borderRadius: '4px',
-                color: '#e0e0e0', fontSize: '13px', outline: 'none',
+                color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
                 boxSizing: 'border-box',
               }}
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 4, color: '#888' }}>Time (MSK, HH:MM)</label>
+            <label style={{ display: 'block', marginBottom: 4, color: tokens.colors.steel.muted }}>Time (MSK, HH:MM)</label>
             <input
               ref={inputRef}
               type="text"
@@ -82,9 +83,9 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
               value={timeStr}
               onChange={(e) => setTimeStr(e.target.value)}
               style={{
-                width: '100%', padding: '8px 10px', background: '#0d0d18',
+                width: '100%', padding: '8px 10px', background: tokens.colors.canvas,
                 border: '1px solid #2a2a4e', borderRadius: '4px',
-                color: '#e0e0e0', fontSize: '13px', outline: 'none',
+                color: tokens.colors.ink['1'], fontSize: '13px', outline: 'none',
                 boxSizing: 'border-box', textAlign: 'center',
                 fontFamily: 'monospace',
               }}
@@ -95,7 +96,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
               type="button"
               onClick={onClose}
               style={{
-                padding: '6px 14px', background: '#111128', color: '#e0e0e0',
+                padding: '6px 14px', background: tokens.colors.hairline.default, color: tokens.colors.ink['1'],
                 border: '1px solid #2a2a4e', borderRadius: '4px',
                 cursor: 'pointer', fontSize: '12px',
               }}
@@ -105,7 +106,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
             <button
               type="submit"
               style={{
-                padding: '6px 14px', background: '#2196f3', color: '#fff',
+                padding: '6px 14px', background: tokens.colors.brand.blue, color: '#fff',
                 border: 'none', borderRadius: '4px', cursor: 'pointer',
                 fontSize: '12px', fontWeight: 600,
               }}

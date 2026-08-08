@@ -1,3 +1,5 @@
+import { tokens } from '../theme/tokens';
+
 interface ProgressBarProps {
   progress: number;
   phase?: string;
@@ -23,7 +25,7 @@ export function ProgressBar({
         padding: '12px',
         background: '#3a1a1a',
         borderRadius: '4px',
-        color: '#e94560',
+        color: tokens.colors.semantic.error,
         fontSize: '12px',
         textAlign: 'center',
       }}>
@@ -34,12 +36,12 @@ export function ProgressBar({
 
   if (variant === 'modal') {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#888' }}>
+      <div style={{ padding: '40px', textAlign: 'center', color: tokens.colors.steel.muted }}>
         <div style={{
           width: '60%',
           margin: '0 auto 12px',
           height: '8px',
-          background: '#0d0d18',
+          background: tokens.colors.canvas,
           borderRadius: '4px',
           overflow: 'hidden',
         }}>
@@ -47,7 +49,7 @@ export function ProgressBar({
             <div style={{
               width: '30%',
               height: '100%',
-              background: '#2196f3',
+              background: tokens.colors.brand.blue,
               borderRadius: '4px',
               animation: 'backtest-indeterminate 1.5s ease-in-out infinite',
             }} />
@@ -55,7 +57,7 @@ export function ProgressBar({
             <div style={{
               width: `${displayProgress}%`,
               height: '100%',
-              background: '#2196f3',
+              background: tokens.colors.brand.blue,
               borderRadius: '4px',
               transition: 'width 0.3s ease',
             }} />
@@ -74,7 +76,7 @@ export function ProgressBar({
       <div style={{
         width: '100%',
         height: '8px',
-        background: '#0d0d18',
+        background: tokens.colors.canvas,
         borderRadius: '4px',
         overflow: 'hidden',
       }}>
@@ -82,7 +84,7 @@ export function ProgressBar({
           <div style={{
             width: '30%',
             height: '100%',
-            background: '#2196f3',
+            background: tokens.colors.brand.blue,
             borderRadius: '4px',
             animation: 'backtest-indeterminate 1.5s ease-in-out infinite',
           }} />
@@ -90,7 +92,7 @@ export function ProgressBar({
           <div style={{
             width: `${displayProgress}%`,
             height: '100%',
-            background: '#2196f3',
+            background: tokens.colors.brand.blue,
             borderRadius: '4px',
             transition: 'width 0.3s ease',
           }} />

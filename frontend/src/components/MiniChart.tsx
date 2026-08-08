@@ -10,6 +10,7 @@ import type {
   StrategyMarkerData,
 } from '../chart';
 import type { ScriptResult } from '../types';
+import { tokens } from '../theme/tokens';
 
 const COLORS = [
   '#2196f3',
@@ -42,10 +43,10 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
     if (!containerRef.current) return;
 
     const chart = createChart(containerRef.current, {
-      background: '#0d0d18',
-      textColor: '#c8c8d0',
-      gridColor: '#181830',
-      borderColor: '#151530',
+      background: tokens.colors.canvas,
+      textColor: tokens.colors.ink['2'],
+      gridColor: tokens.chart.grid,
+      borderColor: tokens.chart.border,
       barSpacing: 6,
       priceScaleWidth: 0,
       timeScaleHeight: 0,
@@ -264,7 +265,7 @@ export const MiniChart = forwardRef<HTMLDivElement, MiniChartProps>(function Min
       style={{
         width: '100%',
         height: `${height}px`,
-        background: '#0d0d18',
+        background: tokens.colors.canvas,
         borderRadius: 4,
         overflow: 'hidden',
       }}

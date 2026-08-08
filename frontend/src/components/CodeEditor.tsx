@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { extractScriptName as extractName } from 'pine-framework/utils/script-name';
+import { tokens } from '../theme/tokens';
 
 interface ScriptEntry {
   id: string;
@@ -260,9 +261,9 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
                 style={{
                   flex: 1,
                   padding: '4px 8px',
-                  background: '#0d0d18',
-                  color: '#e0e0e0',
-                  border: '1px solid #111128',
+                  background: tokens.colors.canvas,
+                  color: tokens.colors.ink['1'],
+                  border: `1px solid ${tokens.colors.hairline.default}`,
                   borderRadius: '4px',
                   fontSize: '13px',
                   minWidth: 0,
@@ -303,11 +304,11 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           </div>
         </div>
         {currentScript && (
-          <div style={{ padding: '4px 16px', background: '#0d0d18', fontSize: '11px', color: '#888', borderBottom: '1px solid #111128' }}>
+          <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
             <span style={{
               padding: '1px 5px',
               background: currentScript.scriptType === 'strategy' ? '#1a3a2e' : '#2e2a1a',
-              color: currentScript.scriptType === 'strategy' ? '#4caf50' : '#ff9800',
+              color: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
               borderRadius: '3px',
               fontSize: '10px',
             }}>
@@ -334,11 +335,11 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           </div>
         )}
         {currentBuiltIn && (
-          <div style={{ padding: '4px 16px', background: '#0d0d18', fontSize: '11px', color: '#888', borderBottom: '1px solid #111128' }}>
+          <div style={{ padding: '4px 16px', background: tokens.colors.canvas, fontSize: '11px', color: tokens.colors.steel.muted, borderBottom: `1px solid ${tokens.colors.hairline.default}` }}>
             <span style={{
               padding: '1px 5px',
               background: currentBuiltIn.type === 'strategy' ? '#1a3a2e' : '#2e2a1a',
-              color: currentBuiltIn.type === 'strategy' ? '#4caf50' : '#ff9800',
+              color: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
               borderRadius: '3px',
               fontSize: '10px',
             }}>
@@ -358,7 +359,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
         )}
         <div className="editor-content">
           {loading ? (
-            <div style={{ padding: '16px', color: '#888' }}>Loading scripts...</div>
+            <div style={{ padding: '16px', color: tokens.colors.steel.muted }}>Loading scripts...</div>
           ) : scripts.length === 0 && builtInScripts.length === 0 ? (
             <div style={{
               display: 'flex',
@@ -367,9 +368,9 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
               justifyContent: 'center',
               height: '100%',
               gap: '16px',
-              color: '#888',
+              color: tokens.colors.steel.muted,
             }}>
-              <div style={{ fontSize: '15px', color: '#e0e0e0' }}>No scripts yet</div>
+              <div style={{ fontSize: '15px', color: tokens.colors.ink['1'] }}>No scripts yet</div>
               <div style={{ fontSize: '13px', maxWidth: '320px', textAlign: 'center', lineHeight: '1.5' }}>
                 Create your first Pine Script to get started. You can write indicators and strategies, then run them on the chart.
               </div>
@@ -377,7 +378,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
                 onClick={handleNewScript}
                 style={{
                   padding: '10px 24px',
-                  background: '#4caf50',
+                  background: tokens.colors.semantic.success,
                   color: '#fff',
                   border: 'none',
                   borderRadius: '6px',

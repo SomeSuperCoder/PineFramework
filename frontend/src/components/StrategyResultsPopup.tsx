@@ -1,6 +1,7 @@
 import { BacktestResults } from './BacktestResults';
 import { ProgressBar } from './ProgressBar';
 import type { BacktestStatusResponse, BacktestResultResponse } from '../types';
+import { tokens } from '../theme/tokens';
 
 interface StrategyResultsPopupProps {
   isOpen: boolean;
@@ -35,13 +36,13 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
       <div className="strategy-popup" onClick={(e) => e.stopPropagation()} style={{
         width: '90vw',
         height: '90vh',
-        background: '#0f1520',
-        border: '1px solid #111128',
+        background: tokens.colors.surface['1'],
+        border: `1px solid ${tokens.colors.hairline.default}`,
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        color: '#e0e0e0',
+        color: tokens.colors.ink['1'],
         fontSize: '13px',
       }}>
         <div className="strategy-popup-header" style={{
@@ -49,13 +50,13 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '16px 20px',
-          borderBottom: '1px solid #111128',
+          borderBottom: `1px solid ${tokens.colors.hairline.default}`,
           flexShrink: 0,
         }}>
-          <h2 style={{ margin: 0, color: '#2196f3', fontSize: '18px' }}>Backtest Results</h2>
+          <h2 style={{ margin: 0, color: tokens.colors.brand.blue, fontSize: '18px' }}>Backtest Results</h2>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {status === 'running' && (
-              <span style={{ fontSize: '12px', color: '#ff9800' }}>{displayProgress}%</span>
+              <span style={{ fontSize: '12px', color: tokens.colors.semantic.warning }}>{displayProgress}%</span>
             )}
             <button
               onClick={onOpenSettings}
@@ -63,8 +64,8 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
               style={{
                 padding: '6px 10px',
                 background: 'transparent',
-                color: '#e0e0e0',
-                border: '1px solid #111128',
+                color: tokens.colors.ink['1'],
+                border: `1px solid ${tokens.colors.hairline.default}`,
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '16px',
@@ -78,8 +79,8 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
               style={{
                 padding: '6px 12px',
                 background: '#3a1a1a',
-                color: '#e94560',
-                border: '1px solid #e94560',
+                color: tokens.colors.semantic.error,
+                border: `1px solid ${tokens.colors.semantic.error}`,
                 borderRadius: '4px',
                 cursor: 'pointer',
                 fontSize: '14px',
@@ -105,7 +106,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             />
           )}
           {status === 'failed' && error && (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#e94560' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: tokens.colors.semantic.error }}>
               Backtest failed: {error}
             </div>
           )}

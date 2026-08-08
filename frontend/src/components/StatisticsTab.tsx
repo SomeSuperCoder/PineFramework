@@ -11,6 +11,7 @@ import { useTradeStats } from '../hooks/useTradeStats';
 import { matchesTradeFilter } from '../hooks/useTradeHistory';
 import { fmtAmount, fmtSignedUsd } from '../utils/format';
 import { ErrorState, ModeToggle, StatusSelect, filterControlStyle } from './TradeTabShared';
+import { tokens } from '../theme/tokens';
 
 interface StatisticsTabProps {
   backendUrl: string;
@@ -85,7 +86,7 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
     ctx.setLineDash([]);
 
     // Cumulative PnL line
-    ctx.strokeStyle = '#2196f3';
+    ctx.strokeStyle = tokens.colors.brand.blue;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     points.forEach((p, i) => {
@@ -96,9 +97,9 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
 
     ctx.font = '10px monospace';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = '#4caf50';
+    ctx.fillStyle = tokens.colors.semantic.success;
     ctx.fillText(`max ${fmtSignedUsd(maxE)}`, pad.left + 4, 2);
-    ctx.fillStyle = '#e94560';
+    ctx.fillStyle = tokens.colors.semantic.error;
     ctx.textBaseline = 'bottom';
     ctx.fillText(`min ${fmtSignedUsd(minE)}`, pad.left + 4, h - 2);
   }, [points]);
@@ -109,9 +110,9 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
       style={{
         width: '100%',
         height: 220,
-        background: '#0d0d18',
+        background: tokens.colors.canvas,
         borderRadius: 6,
-        border: '1px solid #111128',
+        border: `1px solid ${tokens.colors.hairline.default}`,
       }}
     >
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
@@ -164,11 +165,11 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
       const y = 10 + i * 28;
       const pnl = g.stats.totalPnl;
       const barW = Math.max(scale(pnl), 2);
-      const color = pnl >= 0 ? '#4caf50' : '#e94560';
+      const color = pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error;
       const x0 = pnl >= 0 ? midX : midX - barW;
 
       // Label (group key)
-      ctx.fillStyle = g.key === 'Chaos Mode' ? '#ff9800' : '#aaa';
+      ctx.fillStyle = g.key === 'Chaos Mode' ? tokens.colors.semantic.warning : '#aaa';
       const label = g.key.length > 24 ? `${g.key.slice(0, 24)}…` : g.key;
       ctx.fillText(label, 10, y + 7);
 
@@ -195,9 +196,9 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
         width: '100%',
         maxHeight: 400,
         overflow: 'auto',
-        background: '#0d0d18',
+        background: tokens.colors.canvas,
         borderRadius: 6,
-        border: '1px solid #111128',
+        border: `1px solid ${tokens.colors.hairline.default}`,
       }}
     >
       <canvas ref={canvasRef} style={{ width: '100%', display: 'block' }} />
@@ -219,8 +220,8 @@ function StatCard({
   return (
     <div
       style={{
-        background: '#0d0d18',
-        border: '1px solid #111128',
+        background: tokens.colors.canvas,
+        border: `1px solid ${tokens.colors.hairline.default}`,
         padding: '10px 12px',
         borderRadius: 6,
         textAlign: 'center',
@@ -230,7 +231,7 @@ function StatCard({
       <div
         style={{
           fontSize: 10,
-          color: '#888',
+          color: tokens.colors.steel.muted,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
           marginBottom: 4,
@@ -242,7 +243,7 @@ function StatCard({
         style={{
           fontSize: 15,
           fontWeight: 700,
-          color: color ?? '#e0e0e0',
+          color: color ?? tokens.colors.ink['1'],
           fontFamily: 'monospace',
         }}
       >
@@ -253,7 +254,7 @@ function StatCard({
 }
 
 const NO_TRADES = (
-  <div style={{ padding: 32, textAlign: 'center', color: '#555', fontSize: 12 }}>
+  <div style={{ padding: 32, textAlign: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
     No trades yet.
   </div>
 );
@@ -358,7 +359,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
         <ModeToggle value={mode} onChange={setMode} />
         <StatusSelect value={status} onChange={setStatus} />
         <div style={{ flex: 1 }} />
-        <span style={{ color: '#888', fontSize: 11 }}>Group by:</span>
+        <span style={{ color: tokens.colors.steel.muted, fontSize: 11 }}>Group by:</span>
         <select
           value={groupBy}
           onChange={(e) => setGroupBy(e.target.value as Exclude<TradeGroupBy, 'global'>)}
@@ -375,7 +376,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       <div>
         <div
           style={{
-            color: '#888',
+            color: tokens.colors.steel.muted,
             fontWeight: 600,
             marginBottom: 8,
             fontSize: 11,
@@ -404,13 +405,13 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
             <StatCard
               label="Gross PnL"
               value={fmtSignedUsd(summary.totalPnl)}
-              color={summary.totalPnl >= 0 ? '#4caf50' : '#e94560'}
+              color={summary.totalPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
               title="Realized PnL before fees (expected-price based — estimate)"
             />
             <StatCard
               label="Net PnL"
               value={fmtSignedUsd(summary.netPnl)}
-              color={summary.netPnl >= 0 ? '#4caf50' : '#e94560'}
+              color={summary.netPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
               title="Gross PnL minus fees (fees are 0 in this version — equals gross PnL)"
             />
             <StatCard label="Fees" value={fmtAmount(summary.totalFees)} title="Fees are not included in this version — always 0 (real fee parsing deferred)" />
@@ -423,26 +424,26 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
               }
               color={
                 summary.profitFactor >= 1.5
-                  ? '#4caf50'
+                  ? tokens.colors.semantic.success
                   : summary.profitFactor >= 1
-                    ? '#ff9800'
-                    : '#e94560'
+                    ? tokens.colors.semantic.warning
+                    : tokens.colors.semantic.error
               }
             />
-            <StatCard label="Avg Win" value={fmtSignedUsd(summary.averageWin)} color="#4caf50" />
-            <StatCard label="Avg Loss" value={fmtSignedUsd(summary.averageLoss)} color="#e94560" />
-            <StatCard label="Best Trade" value={fmtSignedUsd(summary.bestTrade)} color="#4caf50" />
+            <StatCard label="Avg Win" value={fmtSignedUsd(summary.averageWin)} color={tokens.colors.semantic.success} />
+            <StatCard label="Avg Loss" value={fmtSignedUsd(summary.averageLoss)} color={tokens.colors.semantic.error} />
+            <StatCard label="Best Trade" value={fmtSignedUsd(summary.bestTrade)} color={tokens.colors.semantic.success} />
             <StatCard
               label="Worst Trade"
               value={fmtSignedUsd(summary.worstTrade)}
-              color="#e94560"
+              color={tokens.colors.semantic.error}
             />
             <StatCard
               label="Avg Trade"
               value={fmtSignedUsd(summary.avgTrade)}
-              color={summary.avgTrade >= 0 ? '#4caf50' : '#e94560'}
+              color={summary.avgTrade >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
             />
-            <StatCard label="Max Drawdown" value={fmtAmount(summary.maxDrawdown)} color="#e94560" />
+            <StatCard label="Max Drawdown" value={fmtAmount(summary.maxDrawdown)} color={tokens.colors.semantic.error} />
           </div>
         ) : (
           NO_TRADES
@@ -453,7 +454,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       <div>
         <div
           style={{
-            color: '#888',
+            color: tokens.colors.steel.muted,
             fontWeight: 600,
             marginBottom: 8,
             fontSize: 11,
@@ -477,9 +478,9 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
               justifyContent: 'center',
               color: '#666',
               fontSize: 12,
-              background: '#0d0d18',
+              background: tokens.colors.canvas,
               borderRadius: 6,
-              border: '1px solid #111128',
+              border: `1px solid ${tokens.colors.hairline.default}`,
             }}
           >
             Loading equity curve…
@@ -491,11 +492,11 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#555',
+              color: tokens.colors.steel.disabled,
               fontSize: 12,
-              background: '#0d0d18',
+              background: tokens.colors.canvas,
               borderRadius: 6,
-              border: '1px solid #111128',
+              border: `1px solid ${tokens.colors.hairline.default}`,
             }}
           >
             No trades to chart.
@@ -509,7 +510,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       <div>
         <div
           style={{
-            color: '#888',
+            color: tokens.colors.steel.muted,
             fontWeight: 600,
             marginBottom: 8,
             fontSize: 11,
@@ -528,7 +529,7 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
         ) : groups && groups.length > 0 ? (
           <GroupedPnlChart groups={groups} />
         ) : (
-          <div style={{ padding: 24, textAlign: 'center', color: '#555', fontSize: 12 }}>
+          <div style={{ padding: 24, textAlign: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
             No groups to chart.
           </div>
         )}

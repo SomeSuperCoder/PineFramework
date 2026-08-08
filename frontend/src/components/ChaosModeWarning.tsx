@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import { tokens } from '../theme/tokens';
 
 interface ChaosModeWarningProps {
   /** Whether chaos mode is active. */
@@ -73,7 +74,7 @@ export function ChaosModeWarning({ isActive, onAcknowledge }: ChaosModeWarningPr
           marginTop: 16,
           padding: '12px 32px',
           background: '#fff',
-          color: '#e94560',
+          color: tokens.colors.semantic.error,
           border: 'none',
           borderRadius: 8,
           fontSize: 16,
