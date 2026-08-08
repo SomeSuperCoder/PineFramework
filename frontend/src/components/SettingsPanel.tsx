@@ -27,11 +27,8 @@ export interface SettingsPanelProps {
   onClose?: () => void;
 }
 
-type Theme = 'dark' | 'light';
-
 interface Settings {
   // Display
-  theme: Theme;
   chartAnimations: boolean;
   crosshairEnabled: boolean;
   showGridLines: boolean;
@@ -48,7 +45,6 @@ interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  theme: 'dark',
   chartAnimations: true,
   crosshairEnabled: true,
   showGridLines: true,
@@ -300,7 +296,6 @@ function DangerButton({
 
 export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [settings, setSettings] = useState<Settings>(() => ({
-    theme: loadSetting('theme', DEFAULTS.theme),
     chartAnimations: loadSetting('chartAnimations', DEFAULTS.chartAnimations),
     crosshairEnabled: loadSetting('crosshairEnabled', DEFAULTS.crosshairEnabled),
     showGridLines: loadSetting('showGridLines', DEFAULTS.showGridLines),
@@ -371,16 +366,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
         {/* ── Display ── */}
         <div style={panelStyles.section}>
           <SectionHeader icon="🎨" label="Display" />
-          <SettingRow label="Theme" description="Interface color scheme">
-            <Select
-              value={settings.theme}
-              onChange={(v) => update('theme', v as Theme)}
-              options={[
-                { value: 'dark', label: 'Dark' },
-                { value: 'light', label: 'Light' },
-              ]}
-            />
-          </SettingRow>
           <SettingRow label="Chart Animations" description="Smooth transitions on data updates">
             <Toggle
               checked={settings.chartAnimations}
