@@ -1,3 +1,5 @@
+import { tokens } from '../theme/tokens';
+
 export interface ContentAreaProps {
   /** Breadcrumb segments (optional — if not provided, no breadcrumb shown) */
   breadcrumb?: string[];
@@ -20,7 +22,7 @@ export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaPro
               <span
                 style={{
                   ...styles.crumb,
-                  color: i === segments.length - 1 ? '#e0e0e0' : '#555',
+                  color: i === segments.length - 1 ? tokens.colors.ink['1'] : tokens.colors.steel.disabled,
                 }}
               >
                 {segment}
@@ -42,16 +44,16 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     flex: 1,
     overflow: 'hidden',
-    background: '#0a0a14',
+    background: tokens.colors.surface['0'],
   },
   breadcrumbBar: {
     display: 'flex',
     alignItems: 'center',
     padding: '6px 16px',
     fontSize: 11,
-    color: '#555',
-    borderBottom: '1px solid #111128',
-    background: '#0f1520',
+    color: tokens.colors.steel.disabled,
+    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
+    background: tokens.colors.surface['1'],
     flexShrink: 0,
     gap: 4,
   },
@@ -60,7 +62,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#333',
   },
   crumb: {
-    color: '#555',
+    color: tokens.colors.steel.disabled,
   },
   scrollContainer: {
     flex: 1,

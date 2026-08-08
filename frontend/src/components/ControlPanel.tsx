@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { ContentArea } from './ContentArea';
+import { tokens } from '../theme/tokens';
 
 export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'settings' | 'bot';
 
@@ -99,7 +100,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     width: '100vw',
     height: '100vh',
-    background: '#0d0d18',
+    background: tokens.colors.canvas,
     overflow: 'hidden',
   },
   body: {

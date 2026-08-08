@@ -1,3 +1,4 @@
+import { tokens } from '../theme/tokens';
 import type { PanelId } from './ControlPanel';
 
 interface NavItem {
@@ -143,8 +144,8 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
               style={{
                 ...styles.navItem,
                 background: isActive ? '#1a1a2e' : 'transparent',
-                color: isActive ? '#e94560' : '#888',
-                borderRight: isActive ? '2px solid #e94560' : '2px solid transparent',
+                color: isActive ? tokens.colors.semantic.error : tokens.colors.steel.muted,
+                borderRight: isActive ? `2px solid ${tokens.colors.semantic.error}` : '2px solid transparent',
               }}
               title={`${item.label} (${item.shortcut})`}
               aria-label={`${item.label} panel`}
@@ -182,8 +183,8 @@ const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     display: 'flex',
     flexDirection: 'column',
-    background: '#0f1520',
-    borderRight: '1px solid #111128',
+    background: tokens.colors.surface['1'],
+    borderRight: `1px solid ${tokens.colors.hairline.default}`,
     flexShrink: 0,
     overflow: 'hidden',
     transition: 'width 0.2s ease',

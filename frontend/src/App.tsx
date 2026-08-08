@@ -18,6 +18,7 @@ import { useChaosMode } from './hooks/useChaosMode';
 import type { ScriptResult, BacktestConfig } from './types';
 import { TRADABLE_PAIRS } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
+import { tokens } from './theme/tokens';
 
 const SYMBOLS = [...TRADABLE_PAIRS];
 const INTERVALS = [
@@ -370,7 +371,7 @@ function App() {
 
             <span style={{
               fontSize: 12,
-              color: isConnected ? '#4caf50' : '#e94560',
+              color: isConnected ? tokens.colors.semantic.success : tokens.colors.semantic.error,
             }}>
               {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
             </span>
@@ -407,8 +408,8 @@ function App() {
               style={{
                 ...dashboardStyles.actionBtn,
                 background: autoScale ? '#1a3328' : undefined,
-                color: autoScale ? '#4caf50' : undefined,
-                borderColor: autoScale ? '#4caf50' : undefined,
+                color: autoScale ? tokens.colors.semantic.success : undefined,
+                borderColor: autoScale ? tokens.colors.semantic.success : undefined,
               }}
             >
               {autoScale ? 'Auto Scale' : 'Manual'}
@@ -418,8 +419,8 @@ function App() {
               style={{
                 ...dashboardStyles.actionBtn,
                 background: debugMode ? '#2a2a10' : undefined,
-                color: debugMode ? '#ff9800' : undefined,
-                borderColor: debugMode ? '#ff9800' : undefined,
+                color: debugMode ? tokens.colors.semantic.warning : undefined,
+                borderColor: debugMode ? tokens.colors.semantic.warning : undefined,
               }}
             >
               Debug
@@ -462,8 +463,8 @@ function App() {
               style={{
                 ...dashboardStyles.actionBtn,
                 background: errorConsoleOpen ? '#2a1520' : undefined,
-                color: errors.length > 0 ? '#e94560' : undefined,
-                borderColor: errors.length > 0 ? '#e94560' : undefined,
+                color: errors.length > 0 ? tokens.colors.semantic.error : undefined,
+                borderColor: errors.length > 0 ? tokens.colors.semantic.error : undefined,
                 position: 'relative',
               }}
             >
@@ -504,7 +505,7 @@ function App() {
 
       {/* === Bot Dashboard Panel === */}
       {activePanel === 'bot' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#0d0d18', minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: tokens.colors.canvas, minHeight: 0, overflow: 'hidden' }}>
           {botStatus ? (
             <LiveDashboard
               backendUrl={backendUrl}
@@ -527,12 +528,12 @@ function App() {
             />
           ) : botConnectionFailed ? (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-              <div style={{ color: '#e94560', fontSize: 16, fontWeight: 600 }}>Cannot Connect to Bot Backend</div>
-              <div style={{ color: '#888', fontSize: 12, textAlign: 'center', maxWidth: 400 }}>
+              <div style={{ color: tokens.colors.semantic.error, fontSize: 16, fontWeight: 600 }}>Cannot Connect to Bot Backend</div>
+              <div style={{ color: tokens.colors.steel.muted, fontSize: 12, textAlign: 'center', maxWidth: 400 }}>
                 The WebSocket connection to the backend server failed.
                 Make sure the backend is running on port 8081.
               </div>
-              <div style={{ color: '#555', fontSize: 11, fontFamily: 'monospace' }}>
+              <div style={{ color: tokens.colors.steel.disabled, fontSize: 11, fontFamily: 'monospace' }}>
                 {backendUrl}/ws/bot
               </div>
               <button
@@ -548,7 +549,7 @@ function App() {
               <button
                 onClick={() => setActivePanel('dashboard')}
                 style={{
-                  padding: '6px 16px', background: 'transparent', color: '#888',
+                  padding: '6px 16px', background: 'transparent', color: tokens.colors.steel.muted,
                   border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
                   fontSize: 11, marginTop: 8,
                 }}
@@ -558,12 +559,12 @@ function App() {
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-              <div style={{ color: '#888', fontSize: 14 }}>Connecting to bot...</div>
-              <div style={{ color: '#555', fontSize: 11 }}>Waiting for WebSocket connection</div>
+              <div style={{ color: tokens.colors.steel.muted, fontSize: 14 }}>Connecting to bot...</div>
+              <div style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>Waiting for WebSocket connection</div>
               <button
                 onClick={() => setActivePanel('dashboard')}
                 style={{
-                  padding: '6px 16px', background: '#1a1a2e', color: '#888',
+                  padding: '6px 16px', background: '#1a1a2e', color: tokens.colors.steel.muted,
                   border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
                   fontSize: 11, marginTop: 16,
                 }}
@@ -637,7 +638,7 @@ function App() {
         lastTeleport={lastTeleport}
         onGoToDate={(ts, dateStr, timeStr) => {
           chartRef.current?.scrollToDate(ts);
-          chartRef.current?.setTeleportLine(ts, { color: '#2196f3', label: 'Teleport' });
+          chartRef.current?.setTeleportLine(ts, { color: tokens.colors.brand.blue, label: 'Teleport' });
           setLastTeleport({ date: dateStr, time: timeStr });
           localStorage.setItem('pine-last-teleport', JSON.stringify({ date: dateStr, time: timeStr }));
         }}
@@ -660,7 +661,7 @@ function App() {
           position: 'fixed',
           bottom: 48,
           right: 8,
-          background: chaosMode ? '#e94560' : '#1a1a2e',
+          background: chaosMode ? tokens.colors.semantic.error : '#1a1a2e',
           color: '#fff',
           padding: '8px 16px',
           borderRadius: 6,
@@ -689,17 +690,17 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     padding: '6px 12px',
-    background: '#0f1520',
-    borderBottom: '1px solid #111128',
+    background: tokens.colors.surface['1'],
+    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
     gap: 6,
     flexShrink: 0,
   },
   select: {
     padding: '5px 10px',
-    border: '1px solid #111128',
+    border: `1px solid ${tokens.colors.hairline.default}`,
     borderRadius: 4,
-    background: '#0d0d18',
-    color: '#e0e0e0',
+    background: tokens.colors.canvas,
+    color: tokens.colors.ink['1'],
     fontSize: 12,
     cursor: 'pointer',
   },
@@ -711,9 +712,9 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
   },
   actionBtn: {
     padding: '5px 10px',
-    background: '#111128',
-    color: '#e0e0e0',
-    border: '1px solid #111128',
+    background: tokens.colors.hairline.default,
+    color: tokens.colors.ink['1'],
+    border: `1px solid ${tokens.colors.hairline.default}`,
     borderRadius: 4,
     cursor: 'pointer',
     fontSize: 11,
@@ -723,7 +724,7 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
   },
   primaryBtn: {
     padding: '5px 10px',
-    background: '#2196f3',
+    background: tokens.colors.brand.blue,
     color: '#fff',
     border: 'none',
     borderRadius: 4,
@@ -738,7 +739,7 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
     position: 'absolute',
     top: -6,
     right: -6,
-    backgroundColor: '#e94560',
+    backgroundColor: tokens.colors.semantic.error,
     color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',

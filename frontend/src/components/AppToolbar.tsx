@@ -1,3 +1,4 @@
+import { tokens } from '../theme/tokens';
 import type { PineScriptError } from '../types';
 import { TradingBotControlButton, type BotStateT } from './TradingBotPanel';
 
@@ -55,9 +56,9 @@ export function AppToolbar({
         onClick={onOpenQuickAdder}
         style={{
           padding: '5px 10px',
-          background: '#111128',
-          color: '#e0e0e0',
-          border: '1px solid #111128',
+          background: tokens.colors.hairline.default,
+          color: tokens.colors.ink['1'],
+          border: `1px solid ${tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -84,9 +85,9 @@ export function AppToolbar({
         onClick={onOpenEditor}
         style={{
           padding: '5px 10px',
-          background: '#111128',
-          color: '#e0e0e0',
-          border: '1px solid #111128',
+          background: tokens.colors.hairline.default,
+          color: tokens.colors.ink['1'],
+          border: `1px solid ${tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -115,7 +116,7 @@ export function AppToolbar({
           onClick={onOpenBacktest}
           style={{
             padding: '5px 10px',
-            background: '#2196f3',
+            background: tokens.colors.brand.blue,
             color: '#fff',
             border: 'none',
             borderRadius: '4px',
@@ -138,9 +139,9 @@ export function AppToolbar({
         onClick={onToggleAutoScale}
         style={{
           padding: '5px 10px',
-          background: autoScale ? '#1a3328' : '#111128',
-          color: autoScale ? '#4caf50' : '#e0e0e0',
-          border: `1px solid ${autoScale ? '#4caf50' : '#111128'}`,
+          background: autoScale ? '#1a3328' : tokens.colors.hairline.default,
+          color: autoScale ? tokens.colors.semantic.success : tokens.colors.ink['1'],
+          border: `1px solid ${autoScale ? tokens.colors.semantic.success : tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -169,9 +170,9 @@ export function AppToolbar({
         onClick={onToggleDebugMode}
         style={{
           padding: '5px 10px',
-          background: debugMode ? '#2a2a10' : '#111128',
-          color: debugMode ? '#ff9800' : '#e0e0e0',
-          border: `1px solid ${debugMode ? '#ff9800' : '#111128'}`,
+          background: debugMode ? '#2a2a10' : tokens.colors.hairline.default,
+          color: debugMode ? tokens.colors.semantic.warning : tokens.colors.ink['1'],
+          border: `1px solid ${debugMode ? tokens.colors.semantic.warning : tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -206,9 +207,9 @@ export function AppToolbar({
         onClick={onOpenGoToDate}
         style={{
           padding: '5px 10px',
-          background: '#111128',
-          color: '#e0e0e0',
-          border: '1px solid #111128',
+          background: tokens.colors.hairline.default,
+          color: tokens.colors.ink['1'],
+          border: `1px solid ${tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -279,9 +280,9 @@ export function AppToolbar({
         onClick={onToggleTelegram}
         style={{
           padding: '5px 10px',
-          background: telegramOpen ? '#3a1a1a' : '#111128',
-          color: telegramOpen ? '#e94560' : '#e0e0e0',
-          border: `1px solid ${telegramOpen ? '#e94560' : '#111128'}`,
+          background: telegramOpen ? '#3a1a1a' : tokens.colors.hairline.default,
+          color: telegramOpen ? tokens.colors.semantic.error : tokens.colors.ink['1'],
+          border: `1px solid ${telegramOpen ? tokens.colors.semantic.error : tokens.colors.hairline.default}`,
           borderRadius: '4px',
           cursor: 'pointer',
           fontSize: '11px',
@@ -311,9 +312,9 @@ export function AppToolbar({
           onClick={onToggleErrorConsole}
           style={{
             padding: '5px 10px',
-            background: errorConsoleOpen ? '#2a1520' : '#111128',
-            color: errors.length > 0 ? '#e94560' : '#e0e0e0',
-            border: `1px solid ${errors.length > 0 ? '#e94560' : '#111128'}`,
+          background: errorConsoleOpen ? '#2a1520' : tokens.colors.hairline.default,
+          color: errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.ink['1'],
+          border: `1px solid ${errors.length > 0 ? tokens.colors.semantic.error : tokens.colors.hairline.default}`,
             borderRadius: '4px',
             cursor: 'pointer',
             fontSize: '11px',
@@ -344,7 +345,7 @@ export function AppToolbar({
               position: 'absolute',
               top: '-6px',
               right: '-6px',
-              backgroundColor: '#e94560',
+              backgroundColor: tokens.colors.semantic.error,
               color: '#fff',
               fontSize: '10px',
               fontWeight: 'bold',

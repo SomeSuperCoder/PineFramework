@@ -1,3 +1,5 @@
+import { tokens } from '../theme/tokens';
+
 export interface TopBarProps {
   botConnected: boolean;
   botState: string;
@@ -19,10 +21,10 @@ export function TopBar({
       <div style={styles.leftSection}>
         <div style={styles.logo}>
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <rect x="2" y="10" width="3" height="8" rx="1" fill="#e94560" />
-            <rect x="6" y="6" width="3" height="12" rx="1" fill="#e94560" />
-            <rect x="10" y="3" width="3" height="15" rx="1" fill="#e94560" />
-            <rect x="14" y="1" width="3" height="17" rx="1" fill="#e94560" />
+            <rect x="2" y="10" width="3" height="8" rx="1" fill={tokens.colors.semantic.error} />
+            <rect x="6" y="6" width="3" height="12" rx="1" fill={tokens.colors.semantic.error} />
+            <rect x="10" y="3" width="3" height="15" rx="1" fill={tokens.colors.semantic.error} />
+            <rect x="14" y="1" width="3" height="17" rx="1" fill={tokens.colors.semantic.error} />
           </svg>
           <span style={styles.appName}>Pine Framework</span>
         </div>
@@ -51,7 +53,7 @@ export function TopBar({
           style={{
             ...styles.iconButton,
             background: settingsOpen ? '#1a1a2e' : 'transparent',
-            color: settingsOpen ? '#e94560' : '#888',
+            color: settingsOpen ? tokens.colors.semantic.error : tokens.colors.steel.muted,
           }}
           title="Settings (4)"
           aria-label="Open settings"
@@ -101,8 +103,10 @@ function StatusDot({ connected }: { connected: boolean }) {
         width: 8,
         height: 8,
         borderRadius: '50%',
-        background: connected ? '#4caf50' : '#e94560',
-        boxShadow: connected ? '0 0 6px #4caf5066' : '0 0 6px #e9456066',
+        background: connected ? tokens.colors.semantic.success : tokens.colors.semantic.error,
+        boxShadow: connected
+          ? `0 0 6px ${tokens.colors.semantic.success}66`
+          : `0 0 6px ${tokens.colors.semantic.error}66`,
       }}
       title={connected ? 'Connected' : 'Disconnected'}
     />
@@ -115,8 +119,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     height: 48,
     padding: '0 16px',
-    background: '#0f1520',
-    borderBottom: '1px solid #111128',
+    background: tokens.colors.surface['1'],
+    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
     flexShrink: 0,
     gap: 12,
   },
@@ -133,7 +137,7 @@ const styles: Record<string, React.CSSProperties> = {
   appName: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#e94560',
+    color: tokens.colors.semantic.error,
     letterSpacing: '-0.01em',
   },
   centerSection: {
@@ -145,16 +149,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statusText: {
     fontSize: 12,
-    color: '#888',
+    color: tokens.colors.steel.muted,
   },
   divider: {
     width: 1,
     height: 16,
-    background: '#111128',
+    background: tokens.colors.hairline.default,
   },
   errorBadge: {
     fontSize: 11,
-    color: '#e94560',
+    color: tokens.colors.semantic.error,
     fontWeight: 600,
   },
   rightSection: {
@@ -174,7 +178,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: 'pointer',
     background: 'transparent',
-    color: '#888',
+    color: tokens.colors.steel.muted,
     transition: 'background 0.15s, color 0.15s',
   },
 };
