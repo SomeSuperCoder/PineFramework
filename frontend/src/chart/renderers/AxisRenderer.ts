@@ -1,3 +1,4 @@
+import { tokens } from '../../theme/tokens.js';
 import type { CandlestickData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
@@ -14,7 +15,7 @@ export class AxisRenderer {
     const { priceScale, chartArea, volumeArea, indicatorPanes } = regions;
     const mainHeight = chartArea.height + volumeArea.height;
 
-    ctx.fillStyle = '#0d0d18';
+    ctx.fillStyle = tokens.colors.canvas;
     ctx.fillRect(priceScale.x, priceScale.y, priceScale.width, priceScale.height);
 
     // Main chart + volume price labels
@@ -30,7 +31,7 @@ export class AxisRenderer {
     const startTick = Math.ceil(priceRange.min / tickSpacing) * tickSpacing;
 
     ctx.fillStyle = textColor;
-    ctx.font = '11px Arial, sans-serif';
+    ctx.font = `11px ${tokens.typography.fontFamily}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
 
@@ -57,7 +58,7 @@ export class AxisRenderer {
 
       // Pane price labels
       ctx.fillStyle = textColor;
-      ctx.font = '11px Arial, sans-serif';
+      ctx.font = `11px ${tokens.typography.fontFamily}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
 
@@ -81,7 +82,7 @@ export class AxisRenderer {
     const regions = layout.getRegions();
     const { timeScale, chartArea } = regions;
 
-    ctx.fillStyle = '#0d0d18';
+    ctx.fillStyle = tokens.colors.canvas;
     ctx.fillRect(timeScale.x, timeScale.y, timeScale.width, timeScale.height);
 
     ctx.strokeStyle = borderColor;
@@ -95,7 +96,7 @@ export class AxisRenderer {
     const barSpacing = viewport.getBarSpacing();
 
     ctx.fillStyle = textColor;
-    ctx.font = '11px Arial, sans-serif';
+    ctx.font = `11px ${tokens.typography.fontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 

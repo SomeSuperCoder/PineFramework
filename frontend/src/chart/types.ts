@@ -1,3 +1,5 @@
+import { tokens } from '../theme/tokens.js';
+
 export interface CandlestickData {
   time: number;
   open: number;
@@ -126,12 +128,12 @@ export interface ChartOptions {
 }
 
 export const DEFAULT_OPTIONS: Required<ChartOptions> = {
-  background: '#0d0d18',
-  textColor: '#c8c8d0',
-  gridColor: '#181830',
-  borderColor: '#151530',
+  background: tokens.colors.canvas,
+  textColor: tokens.colors.ink['2'],
+  gridColor: tokens.chart.grid,
+  borderColor: tokens.chart.border,
   fontSize: 12,
-  fontFamily: 'Arial, sans-serif',
+  fontFamily: tokens.typography.fontFamily,
   barSpacing: 8,
   minBarSpacing: 2,
   maxBarSpacing: 100,

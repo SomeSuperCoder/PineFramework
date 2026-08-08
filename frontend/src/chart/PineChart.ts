@@ -30,6 +30,7 @@ import { CrosshairRenderer } from './renderers/CrosshairRenderer.js';
 import { PlotSeriesManager } from './plot-series-manager.js';
 import type { PlotSeriesHandle } from './plot-series-manager.js';
 import { ViewportManager } from './viewport-manager.js';
+import { tokens } from '../theme/tokens.js';
 
 export type { PlotSeriesHandle };
 
@@ -276,12 +277,16 @@ export class PineChart {
     ctx.rect(regions.chartArea.x, regions.chartArea.y, regions.chartArea.width, regions.chartArea.height);
     ctx.clip();
 
-    // Debug mode: highlight the last (forming) candle in blue (#2196f3)
+    // Debug mode: highlight the last (forming) candle in brand blue
     // so the live-updating bar is visually distinct at a glance.
     let renderCandleColors: Map<number, CandleColorData>;
     if (this.debugMode && this.candles.length > 0) {
       renderCandleColors = new Map(this.candleColors);
-      renderCandleColors.set(this.candles.length - 1, { body: '#2196f3', wick: '#2196f3', border: '#2196f3' });
+      renderCandleColors.set(this.candles.length - 1, {
+        body: tokens.colors.brand.blue,
+        wick: tokens.colors.brand.blue,
+        border: tokens.colors.brand.blue,
+      });
     } else {
       renderCandleColors = this.candleColors;
     }
@@ -410,14 +415,14 @@ export class PineChart {
     const frameWidth = table.frame_width || 1;
     const bgcolor = table.bgcolor || 'transparent';
 
-    let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: Arial, sans-serif;">`;
+    let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: ${tokens.typography.fontFamily};">`;
 
     for (let row = 0; row < table.rows; row++) {
       html += '<tr>';
       for (let col = 0; col < table.columns; col++) {
         const cell = table.cells[`${col},${row}`];
         if (cell) {
-          const textColor = cell.text_color || '#FFFFFF';
+          const textColor = cell.text_color || tokens.colors.ink['1'];
           const cellBg = cell.bgcolor || 'transparent';
           const halign = cell.text_halign || 'center';
           const valign = cell.text_valign || 'center';
@@ -480,7 +485,7 @@ export class PineChart {
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
       }
-      ctx.strokeStyle = this.cssColor(line.color || '#2196f3');
+      ctx.strokeStyle = this.cssColor(line.color || tokens.colors.brand.blue);
       ctx.lineWidth = line.width || 1;
       if (line.style === 'dotted') {
         ctx.setLineDash([4, 4]);
@@ -501,7 +506,7 @@ export class PineChart {
     const bi = this.findBarIndex(this.teleportLine.timestamp);
     const x = this.viewport.barIndexToPixel(bi);
     ctx.save();
-    ctx.strokeStyle = this.cssColor(this.teleportLine.color || '#2196f3');
+    ctx.strokeStyle = this.cssColor(this.teleportLine.color || tokens.colors.brand.blue);
     ctx.lineWidth = 2;
     ctx.setLineDash([8, 4]);
     ctx.beginPath();
@@ -510,7 +515,7 @@ export class PineChart {
     ctx.stroke();
     ctx.setLineDash([]);
     if (this.teleportLine.label) {
-      ctx.font = 'bold 11px Arial';
+      ctx.font = `bold 11px ${tokens.typography.fontFamily}`;
       const text = this.teleportLine.label;
       const metrics = ctx.measureText(text);
       const padX = 6;
@@ -518,11 +523,11 @@ export class PineChart {
       const bh = 18;
       const bx = x - bw / 2;
       const by = chartArea.y + 4;
-      ctx.fillStyle = this.cssColor(this.teleportLine.color || '#2196f3');
+      ctx.fillStyle = this.cssColor(this.teleportLine.color || tokens.colors.brand.blue);
       ctx.beginPath();
       ctx.roundRect(bx, by, bw, bh, 4);
       ctx.fill();
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = tokens.colors.ink['1'];
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, x, by + bh / 2);
@@ -552,7 +557,7 @@ export class PineChart {
       const fontSize = sizeMap[label.size || 'size.normal'] || 12;
 
       ctx.save();
-      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.font = `bold ${fontSize}px ${tokens.typography.fontFamily}`;
       const metrics = ctx.measureText(text);
       const pad = 4;
       const bw = metrics.width + pad * 2;
@@ -572,7 +577,7 @@ export class PineChart {
       }
 
       // Draw arrow triangle + rounded rect background
-      ctx.fillStyle = this.cssColor(label.color || '#2196f3');
+      ctx.fillStyle = this.cssColor(label.color || tokens.colors.brand.blue);
 
       if (isUp || isDown) {
         // Draw arrow triangle
@@ -600,7 +605,7 @@ export class PineChart {
       ctx.fill();
 
       // Draw text
-      ctx.fillStyle = label.textColor || '#ffffff';
+      ctx.fillStyle = label.textColor || tokens.colors.ink['1'];
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, x, by + bh / 2);
@@ -665,7 +670,7 @@ export class PineChart {
       const mm = date.getMinutes().toString().padStart(2, '0');
       const label = `📦 ${hh}:${mm} (+${border.addedCount})`;
 
-      ctx.font = '10px monospace';
+      ctx.font = `10px ${tokens.typography.fontFamily}`;
       const metrics = ctx.measureText(label);
       const padX = 4;
       const bw = metrics.width + padX * 2;
@@ -686,7 +691,7 @@ export class PineChart {
       ctx.fill();
 
       // Text
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = tokens.colors.ink['1'];
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, lx + padX, ly + bh / 2);

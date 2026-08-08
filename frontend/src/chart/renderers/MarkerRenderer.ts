@@ -1,3 +1,4 @@
+import { tokens } from '../../theme/tokens.js';
 import type { ShapeMarkerData, StrategyMarkerData, AlertTriggerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager, PaneRegion } from '../LayoutManager.js';
@@ -43,7 +44,7 @@ export class MarkerRenderer {
 
         if (marker.text) {
           ctx.fillStyle = marker.textcolor || marker.color;
-          ctx.font = `${Math.max(9, barSpacing * 1.2)}px Arial`;
+          ctx.font = `${Math.max(9, barSpacing * 1.2)}px ${tokens.typography.fontFamily}`;
           ctx.textAlign = 'center';
           ctx.fillText(marker.text, x, y + (marker.position === 'belowbar' ? 12 : -6));
         }
@@ -79,7 +80,7 @@ export class MarkerRenderer {
       if (marker.type === 'heartbeat') {
         const y = layout.priceToPixel(candles[barIdx].high, chartArea.y, chartArea.height) - margin;
         const isError = marker.outcome === 'error';
-        const color = marker.color || (isError ? '#e94560' : '#ff9800');
+        const color = marker.color || (isError ? tokens.colors.semantic.error : tokens.colors.semantic.warning);
         this.drawShape(ctx, x, y, isError ? 'xcross' : 'square', color, barSpacing, 0.55);
         continue;
       }
@@ -93,11 +94,11 @@ export class MarkerRenderer {
 
       if (isEntry) {
         y = layout.priceToPixel(candles[barIdx].low, chartArea.y, chartArea.height) + margin;
-        color = marker.color || (isLong ? '#4caf50' : '#e91e63');
+        color = marker.color || (isLong ? tokens.colors.semantic.success : '#e91e63');
         shape = isLong ? 'arrowUp' : 'arrowDown';
       } else {
         y = layout.priceToPixel(candles[barIdx].high, chartArea.y, chartArea.height) - margin;
-        color = marker.color || (isLong ? '#f44336' : '#2196f3');
+        color = marker.color || (isLong ? tokens.colors.semantic.error : tokens.colors.brand.blue);
         shape = isLong ? 'arrowDown' : 'arrowUp';
       }
 
@@ -106,7 +107,7 @@ export class MarkerRenderer {
       const label = marker.name || (marker.comment && marker.comment !== 'reverse' ? marker.comment : undefined);
       if (label) {
         ctx.fillStyle = color;
-        ctx.font = `bold ${Math.max(9, barSpacing * 1.1)}px Arial`;
+        ctx.font = `bold ${Math.max(9, barSpacing * 1.1)}px ${tokens.typography.fontFamily}`;
         ctx.textAlign = 'center';
         ctx.fillText(label, x, y + (isEntry ? 14 : -8));
       }
@@ -153,8 +154,8 @@ export class MarkerRenderer {
     const { chartArea } = regions;
     const barSpacing = viewport.getBarSpacing();
     const size = Math.max(3, barSpacing * 0.35);
-    ctx.fillStyle = '#ff9800';
-    ctx.strokeStyle = '#ff9800';
+    ctx.fillStyle = tokens.colors.semantic.warning;
+    ctx.strokeStyle = tokens.colors.semantic.warning;
     ctx.lineWidth = 1;
     ctx.globalAlpha = 0.7;
 
@@ -274,7 +275,7 @@ export class MarkerRenderer {
   ): void {
     if (!text) return;
     const fontSize = Math.max(9, barSpacing * 1.1);
-    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.font = `bold ${fontSize}px ${tokens.typography.fontFamily}`;
     const metrics = ctx.measureText(text);
     const padX = Math.max(4, barSpacing * 0.4);
     const padY = Math.max(3, barSpacing * 0.25);
@@ -312,7 +313,7 @@ export class MarkerRenderer {
     ctx.closePath();
     ctx.fill();
 
-    ctx.fillStyle = textColor || '#ffffff';
+    ctx.fillStyle = textColor || tokens.colors.ink['1'];
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, rectY + bh / 2);

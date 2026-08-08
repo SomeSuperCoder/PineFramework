@@ -6,6 +6,7 @@
  * notifications when indicator panes change.
  */
 
+import { tokens } from '../theme/tokens.js';
 import type { PlotSeriesData } from './types.js';
 import type { PlotRenderOptions } from './renderers/LineRenderer.js';
 
@@ -40,7 +41,7 @@ export class PlotSeriesManager {
     const handle: PlotSeriesHandle = {
       name,
       options: {
-        color: options.color ?? '#2196f3',
+        color: options.color ?? tokens.colors.brand.blue,
         lineWidth: options.lineWidth ?? 1,
         style: options.style ?? 'line',
         histbase: options.histbase,

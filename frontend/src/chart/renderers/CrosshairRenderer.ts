@@ -1,3 +1,4 @@
+import { tokens } from '../../theme/tokens.js';
 import type { CandlestickData, PlotSeriesData, AlertTriggerData, StrategyMarkerData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
@@ -23,10 +24,10 @@ function getMarkerLineStyle(type: string, direction?: string): MarkerTooltipStyl
 
 function getMarkerColor(style: MarkerTooltipStyle): string {
   switch (style) {
-    case 'entryLong': return '#4caf50';
+    case 'entryLong': return tokens.colors.semantic.success;
     case 'entryShort': return '#e91e63';
-    case 'exit': return '#ff9800';
-    case 'close': return '#f44336';
+    case 'exit': return tokens.colors.semantic.warning;
+    case 'close': return tokens.colors.semantic.error;
     case 'order': return '#ffeb3b';
     case 'cancel': return '#999999';
     case 'markerCap': return '#888888';
@@ -105,7 +106,7 @@ export class CrosshairRenderer {
     ctx.fillStyle = 'rgba(15,15,35,0.95)';
     ctx.fillRect(priceScale.x + 2, this.mouseY - 10, priceScale.width - 4, 20);
     ctx.fillStyle = textColor;
-    ctx.font = '11px Arial, sans-serif';
+    ctx.font = `11px ${tokens.typography.fontFamily}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(this.formatPrice(price), priceScale.x + 6, this.mouseY);
@@ -223,7 +224,7 @@ export class CrosshairRenderer {
     const lineHeight = 16;
     const padding = 6;
     // Measure text width so the tooltip fits its content
-    ctx.font = '11px monospace';
+    ctx.font = `11px ${tokens.typography.fontFamily}`;
     let maxTextWidth = 155;
     for (const { text } of lines) {
       const w = ctx.measureText(text).width;
@@ -254,7 +255,7 @@ export class CrosshairRenderer {
           ctx.fillStyle = '#8888aa';
           break;
         case 'ohlc':
-          ctx.fillStyle = candle.close >= candle.open ? '#4caf50' : '#e94560';
+          ctx.fillStyle = candle.close >= candle.open ? tokens.colors.semantic.success : tokens.colors.semantic.error;
           break;
         case 'alert':
           ctx.fillStyle = '#ffaa44';

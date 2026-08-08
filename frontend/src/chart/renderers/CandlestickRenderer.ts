@@ -1,3 +1,4 @@
+import { tokens } from '../../theme/tokens.js';
 import type { CandlestickData, CandleColorData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
 import type { LayoutManager } from '../LayoutManager.js';
@@ -27,7 +28,7 @@ export class CandlestickRenderer {
       const lowY = layout.priceToPixel(candle.low, chartArea.y, chartArea.height);
 
       const isBullish = candle.close >= candle.open;
-      const defaultColor = isBullish ? '#4caf50' : '#e94560';
+      const defaultColor = isBullish ? tokens.colors.semantic.success : tokens.colors.semantic.error;
       const override = candleColors?.get(i);
 
       // Resolve colors with fallback chain: element-specific → body → default
