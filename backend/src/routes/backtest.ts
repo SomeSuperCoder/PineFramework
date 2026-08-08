@@ -246,6 +246,13 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
         res.status(400).json({ error: 'Missing or invalid "timeframe" field' });
         return;
       }
+      // Validate script at request time so a missing/empty/non-string script
+      // gets an immediate 400 instead of failing the async job later.
+      // (runBacktest keeps its own async guard for non-HTTP callers — defense-in-depth.)
+      if (!script || typeof script !== 'string') {
+        res.status(400).json({ error: 'Missing or invalid "script" field' });
+        return;
+      }
 
       let effectiveStartDate = startDate as string | undefined;
       let effectiveEndDate = endDate as string | undefined;

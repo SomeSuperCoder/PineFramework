@@ -3,6 +3,7 @@ import { extractStrategyParams } from '../utils/extractStrategyParams';
 import type { BacktestConfig, CommissionMethodId, DateRangeMode } from '../types';
 import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
 import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
+import { StrategySelector } from './StrategySelector.js';
 
 const defaultConfig: BacktestConfig = {
   initialCapital: 10000,
@@ -59,17 +60,25 @@ function buildConfig(scriptParams: Partial<BacktestConfig>, user: UserSettings):
   };
 }
 
-export interface BacktestPanelProps {
-  onRun: (config: BacktestConfig, startDate?: string, endDate?: string) => void;
-  onClose: () => void;
-  scriptSource: string;
-  timeframe: string;
-  symbol?: string;
+export interface SelectedBacktestStrategy {
+  id: string;
+  name: string;
+  source: string;
 }
 
-export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol }: BacktestPanelProps) {
+export interface BacktestPanelProps {
+  onRun: (config: BacktestConfig, strategy: SelectedBacktestStrategy, startDate?: string, endDate?: string) => void;
+  onClose: () => void;
+  timeframe: string;
+  symbol?: string;
+  backendUrl: string;
+}
+
+export function BacktestPanel({ onRun, onClose, timeframe, symbol, backendUrl }: BacktestPanelProps) {
   const saved = loadUserSettings();
-  const scriptParams = extractStrategyParams(scriptSource);
+  const [selectedStrategy, setSelectedStrategy] = useState<SelectedBacktestStrategy | null>(null);
+  const [validationError, setValidationError] = useState('');
+  const scriptParams = extractStrategyParams(selectedStrategy?.source ?? '');
 
   const [initialCapital, setInitialCapital] = useState<number>(() => saved?.initialCapital ?? scriptParams.initialCapital ?? defaultConfig.initialCapital);
   const [daysBack, setDaysBack] = useState<number>(() => saved?.daysBack ?? 30);
@@ -96,6 +105,12 @@ export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol 
   }, [initialCapital, daysBack, dateRangeMode, startDate, endDate, commissionMethod, commissionMethodSettings]);
 
   const handleRun = useCallback(() => {
+    if (!selectedStrategy?.source) {
+      setValidationError('Select a strategy to backtest.');
+      return;
+    }
+    setValidationError('');
+
     let effectiveStartDate = startDate || undefined;
     let effectiveEndDate = endDate || undefined;
 
@@ -111,8 +126,8 @@ export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol 
       initialCapital, daysBack, dateRangeMode, startDate, endDate,
       commissionMethod, commissionMethodSettings,
     });
-    onRun(config, effectiveStartDate, effectiveEndDate);
-  }, [scriptParams, initialCapital, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
+    onRun(config, selectedStrategy, effectiveStartDate, effectiveEndDate);
+  }, [selectedStrategy, scriptParams, initialCapital, startDate, endDate, dateRangeMode, daysBack, commissionMethod, commissionMethodSettings, onRun]);
 
   return (
     <div
@@ -122,34 +137,71 @@ export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol 
         flexDirection: 'column',
         flex: 1,
         overflow: 'auto',
-        background: '#0f1520',
-        border: '1px solid #111128',
-        borderRadius: '8px',
-        padding: '20px',
-        color: '#e0e0e0',
-        fontSize: '13px',
+        background: 'var(--surface-panel)',
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-md)',
+        padding: 'var(--space-xl)',
+        color: 'var(--text-primary)',
+        fontSize: 'var(--font-size-md)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', margin: '0 0 var(--space-lg)' }}>
         <button
           onClick={onClose}
           aria-label="Back to dashboard"
           style={{
-            background: 'none',
-            border: '1px solid #333',
-            borderRadius: '4px',
-            color: '#aaa',
+            background: 'transparent',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-sm)',
+            color: 'var(--text-secondary)',
             cursor: 'pointer',
             padding: '4px 8px',
-            fontSize: '13px',
+            fontSize: 'var(--font-size-md)',
           }}
         >
           ← Back
         </button>
-        <h3 style={{ margin: 0, color: '#2196f3' }}>Backtest Settings</h3>
+        <h3 style={{ margin: 0, color: 'var(--accent-info)' }}>Backtest Settings</h3>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)', flex: 1 }}>
+        {/* §5.3 Config bar: [Strategy Selector ▾] ... [Run Backtest ▼] */}
+        <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <StrategySelector
+              backendUrl={backendUrl}
+              value={selectedStrategy?.source ?? ''}
+              onChange={(source, name, id) => { setSelectedStrategy({ id, name, source }); setValidationError(''); }}
+              label="Strategy"
+              height={36}
+            />
+          </div>
+          <button
+            onClick={handleRun}
+            disabled={!selectedStrategy || barsExceedLimit}
+            title={!selectedStrategy ? 'Select a strategy to run the backtest' : undefined}
+            style={{
+              height: 36,
+              padding: '0 var(--space-lg)',
+              background: !selectedStrategy || barsExceedLimit ? 'var(--surface-elevated)' : 'var(--accent-primary)',
+              color: !selectedStrategy || barsExceedLimit ? 'var(--text-disabled)' : 'white',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              cursor: !selectedStrategy || barsExceedLimit ? 'not-allowed' : 'pointer',
+              fontSize: 'var(--font-size-md)',
+              fontWeight: 'var(--font-weight-medium)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Run Backtest
+          </button>
+        </div>
+        {validationError && (
+          <div role="alert" style={{ color: 'var(--accent-danger)', fontSize: 'var(--font-size-sm)', marginTop: '-8px' }}>
+            {validationError}
+          </div>
+        )}
+
         <BacktestGeneralSettings
           initialCapital={initialCapital}
           onInitialCapitalChange={(v) => { setInitialCapital(v); persist({ initialCapital: v }); }}
@@ -172,25 +224,6 @@ export function BacktestPanel({ onRun, onClose, scriptSource, timeframe, symbol 
           onCommissionMethodSettingsChange={setCommissionMethodSettings}
           symbol={symbol}
         />
-
-        <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-          <button
-            onClick={handleRun}
-            disabled={barsExceedLimit}
-            style={{
-              padding: '8px 24px',
-              background: barsExceedLimit ? '#555' : '#2196f3',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: barsExceedLimit ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: 'bold',
-            }}
-          >
-            Run Backtest
-          </button>
-        </div>
       </div>
     </div>
   );

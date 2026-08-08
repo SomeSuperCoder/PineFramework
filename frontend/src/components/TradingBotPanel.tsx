@@ -862,7 +862,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
         <StrategySelector
           backendUrl={backendUrl}
           value={strategySource}
-          onChange={(src) => { setStrategySource(src); }}
+          onChange={(src, _name, _id) => { setStrategySource(src); }}
         />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label style={{ color: '#888', fontSize: 11 }}>

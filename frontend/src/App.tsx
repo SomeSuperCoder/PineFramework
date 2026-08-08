@@ -4,8 +4,7 @@ import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { GoToDatePopup } from './components/GoToDatePopup';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
-import { BacktestSettingsPopup } from './components/BacktestSettingsPopup';
-import { BacktestPanel } from './components/BacktestPanel';
+import { BacktestPanel, type SelectedBacktestStrategy } from './components/BacktestPanel';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
@@ -44,9 +43,7 @@ function App() {
     return saved && (SYMBOLS as readonly string[]).includes(saved) ? saved : 'BTCUSDT';
   });
   const [dataVersion, setDataVersion] = useState(0);
-  const [showSettingsPopup, setShowSettingsPopup] = useState(false);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
-  const [isStrategy, setIsStrategy] = useState(false);
   const [autoScale, setAutoScale] = useState(true);
   const [debugMode, setDebugMode] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
@@ -121,10 +118,8 @@ function App() {
     fetchOlderOHLCV,
     subscribe,
     setErrors,
-    lastCodeRef,
     registerOnIndicatorRemoved,
     removeIndicatorData,
-    indicatorSourcesRef,
     wsRef,
     exportChartData,
   } = useChartData(onIndicatorResult);
@@ -184,11 +179,7 @@ function App() {
         (r) => r.strategyMarkers && r.strategyMarkers.length > 0,
       );
 
-    if (hasStrategyMarkers) {
-      setIsStrategy(true);
-    } else {
-      setIsStrategy(false);
-      setShowSettingsPopup(false);
+    if (!hasStrategyMarkers) {
       setShowResultsPopup(false);
     }
   }, [scriptResult, indicatorResults]);
@@ -317,45 +308,20 @@ function App() {
     await indicatorManager.removeIndicator(indicatorId);
   };
 
-  const strategySource = (() => {
-    const fromMain = scriptResult?.strategyMarkers && scriptResult.strategyMarkers.length > 0;
-    if (fromMain) return lastCodeRef.current || '';
-    for (const [id, res] of indicatorResults) {
-      if (res.strategyMarkers && res.strategyMarkers.length > 0) {
-        const fromRef = indicatorSourcesRef.current.get(id);
-        if (fromRef?.source) return fromRef.source;
-        const ind = indicatorManager.indicators.find((i) => i.id === id);
-        if (ind?.source) return ind.source;
-        console.error('[strategySource] MISS: id=%s has strategyMarkers but source not in sourcesRef (%d entries) or indicators (%d entries)',
-          id, indicatorSourcesRef.current.size, indicatorManager.indicators.length);
-        return '';
-      }
-    }
-    return '';
-  })();
-
   const overlayIndicatorLabels = indicatorManager.getOverlayIndicators().map((i) => ({
     id: i.id,
     name: i.name,
     overlay: true,
   }));
 
-  const handleRunBacktest = useCallback((config: BacktestConfig, startDate?: string, endDate?: string) => {
-    setShowSettingsPopup(false);
+  const handleRunBacktest = useCallback((config: BacktestConfig, strategy: SelectedBacktestStrategy, startDate?: string, endDate?: string) => {
+    if (!strategy?.source) {
+      // Defensive — the panel already blocks this; never POST an empty script.
+      return;
+    }
     setShowResultsPopup(true);
-    submitBacktest(
-      symbol,
-      timeframe,
-      { ...config, script: strategySource },
-      startDate,
-      endDate,
-    );
-  }, [symbol, timeframe, strategySource, submitBacktest]);
-
-  const handleOpenSettings = useCallback(() => {
-    setShowResultsPopup(false);
-    setShowSettingsPopup(true);
-  }, []);
+    submitBacktest(symbol, timeframe, { ...config, script: strategy.source }, startDate, endDate);
+  }, [symbol, timeframe, submitBacktest]);
 
   const handleCloseResults = useCallback(() => {
     setShowResultsPopup(false);
@@ -426,17 +392,13 @@ function App() {
               Editor
             </button>
 
-            {isStrategy && (
-              <>
-                <div style={dashboardStyles.divider} />
-                <button onClick={() => setShowSettingsPopup(true)} style={dashboardStyles.primaryBtn}>
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
-                    <polygon points="2,0 10,5.5 2,11" />
-                  </svg>
-                  Backtest
-                </button>
-              </>
-            )}
+            <div style={dashboardStyles.divider} />
+            <button onClick={() => setActivePanel('backtest')} style={dashboardStyles.primaryBtn}>
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
+                <polygon points="2,0 10,5.5 2,11" />
+              </svg>
+              Backtest
+            </button>
 
             <div style={dashboardStyles.divider} />
 
@@ -626,9 +588,9 @@ function App() {
         <BacktestPanel
           onRun={handleRunBacktest}
           onClose={() => setActivePanel('dashboard')}
-          scriptSource={strategySource}
           timeframe={timeframe}
           symbol={symbol}
+          backendUrl={backendUrl}
         />
       )}
 
@@ -658,19 +620,10 @@ function App() {
         onAdd={handleAddIndicator}
       />
 
-      <BacktestSettingsPopup
-        isOpen={showSettingsPopup}
-        onClose={() => setShowSettingsPopup(false)}
-        onRun={handleRunBacktest}
-        scriptSource={strategySource}
-        timeframe={timeframe}
-        symbol={symbol}
-      />
-
       <StrategyResultsPopup
         isOpen={showResultsPopup}
         onClose={handleCloseResults}
-        onOpenSettings={handleOpenSettings}
+        onOpenSettings={() => { setShowResultsPopup(false); setActivePanel('backtest'); }}
         status={status}
         progress={progress}
         phase={phase}

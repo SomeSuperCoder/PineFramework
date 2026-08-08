@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 
 interface ScriptEntry {
   id: string;
@@ -25,10 +25,19 @@ interface MergedStrategy {
 interface StrategySelectorProps {
   backendUrl: string;
   value: string;
-  onChange: (source: string, name: string) => void;
+  onChange: (source: string, name: string, id: string) => void;
+  /** Optional visible label; renders a real <label htmlFor> when provided (config-bar a11y). */
+  label?: string;
+  /** Optional search-input placeholder; defaults to the current text. */
+  placeholder?: string;
+  /** Optional fixed height for the control (config-bar sizing). */
+  height?: number;
 }
 
-export function StrategySelector({ backendUrl, value, onChange }: StrategySelectorProps) {
+export function StrategySelector({ backendUrl, value, onChange, label, placeholder = 'Search strategies...', height }: StrategySelectorProps) {
+  const inputId = useId();
+  const listId = useId();
+  const heightStyle = height !== undefined ? { height } : undefined;
   const [strategies, setStrategies] = useState<MergedStrategy[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -130,7 +139,7 @@ export function StrategySelector({ backendUrl, value, onChange }: StrategySelect
     setSelectedName(s.name);
     setSearch(s.name);
     setIsOpen(false);
-    onChange(s.source, s.name);
+    onChange(s.source, s.name, s.id);
     setUseRawPaste(false);
   }, [onChange]);
 
@@ -176,7 +185,7 @@ export function StrategySelector({ backendUrl, value, onChange }: StrategySelect
         </div>
         <textarea
           value={rawSource}
-          onChange={(e) => { setRawSource(e.target.value); onChange(e.target.value, ''); }}
+          onChange={(e) => { setRawSource(e.target.value); onChange(e.target.value, '', ''); }}
           placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"
           rows={4}
           style={{
@@ -191,16 +200,33 @@ export function StrategySelector({ backendUrl, value, onChange }: StrategySelect
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
-      <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 6, fontSize: 12 }}>
-        Strategy
-      </div>
+      {label !== undefined ? (
+        <label htmlFor={inputId} style={{ color: '#aaa', fontWeight: 600, marginBottom: 6, fontSize: 12, display: 'block' }}>
+          {label}
+        </label>
+      ) : (
+        <div style={{ color: '#aaa', fontWeight: 600, marginBottom: 6, fontSize: 12 }}>
+          Strategy
+        </div>
+      )}
       <div
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(e) => {
+          if (!isOpen && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setIsOpen(true);
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '6px 8px', background: '#111128', color: selectedName ? '#e0e0e0' : '#888',
           border: `1px solid ${isOpen ? '#64b5f6' : '#333'}`,
           borderRadius: 4, cursor: 'pointer', fontSize: 11, minHeight: 28,
+          ...heightStyle,
         }}
       >
         <span>
@@ -219,24 +245,29 @@ export function StrategySelector({ backendUrl, value, onChange }: StrategySelect
           background: '#1a1a2e', border: '1px solid #333', borderRadius: 4,
           boxShadow: '0 4px 12px rgba(0,0,0,0.4)', marginTop: 2, overflow: 'hidden',
         }}>
-          <div style={{ padding: '6px', borderBottom: '1px solid #222' }}>
+          <div style={{ padding: '6px', borderBottom: '1px solid #222', ...heightStyle }}>
             <input
               ref={inputRef}
+              id={inputId}
               type="text"
               className="quick-adder-search"
-              placeholder="Search strategies..."
+              role="combobox"
+              aria-expanded={isOpen}
+              aria-controls={listId}
+              aria-autocomplete="list"
+              placeholder={placeholder}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               style={{
                 width: '100%', background: '#111128', color: '#e0e0e0',
                 border: '1px solid #333', borderRadius: 3, padding: '6px 8px',
-                fontSize: 11, outline: 'none',
+                fontSize: 11, ...heightStyle,
               }}
             />
           </div>
 
-          <div ref={listRef} style={{ maxHeight: 200, overflow: 'auto' }}>
+          <div ref={listRef} id={listId} className="quick-adder-list" style={{ maxHeight: 200, overflow: 'auto' }}>
             {loading ? (
               <div style={{ padding: '12px', color: '#888', fontSize: 11, textAlign: 'center' }}>
                 Loading strategies...

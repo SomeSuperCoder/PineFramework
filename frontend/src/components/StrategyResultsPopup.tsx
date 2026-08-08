@@ -59,7 +59,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             )}
             <button
               onClick={onOpenSettings}
-              title="Backtest Settings"
+              title="Open Backtest"
               style={{
                 padding: '6px 10px',
                 background: 'transparent',
