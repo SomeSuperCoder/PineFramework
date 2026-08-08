@@ -59,7 +59,7 @@ export function ProgressBar({
               height: '100%',
               background: tokens.colors.brand.blue,
               borderRadius: '4px',
-              transition: 'width 0.3s ease',
+              transition: `width ${tokens.motion.base} ${tokens.motion.ease}`,
             }} />
           )}
         </div>
@@ -94,7 +94,7 @@ export function ProgressBar({
             height: '100%',
             background: tokens.colors.brand.blue,
             borderRadius: '4px',
-            transition: 'width 0.3s ease',
+            transition: `width ${tokens.motion.base} ${tokens.motion.ease}`,
           }} />
         )}
       </div>

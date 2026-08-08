@@ -95,7 +95,7 @@ export function AutoSelectGrid({
                     <div style={{
                       width: `${(candleProgress.fetched / Math.max(candleProgress.total, 1)) * 100}%`,
                       height: '100%', background: tokens.colors.semantic.info, borderRadius: 2,
-                      transition: 'width 0.2s ease',
+                      transition: `width ${tokens.motion.base} ${tokens.motion.ease}`,
                     }} />
                   </div>
                 </div>

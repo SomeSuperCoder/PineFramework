@@ -581,13 +581,13 @@ const toggleStyles: Record<string, React.CSSProperties> = {
     borderRadius: 10,
     border: '1px solid',
     padding: 2,
-    transition: 'background 0.2s, border-color 0.2s',
+    transition: `background ${tokens.motion.base} ${tokens.motion.ease}, border-color ${tokens.motion.base} ${tokens.motion.ease}`,
   },
   thumb: {
     width: 14,
     height: 14,
     borderRadius: '50%',
-    transition: 'transform 0.2s, background 0.2s',
+    transition: `transform ${tokens.motion.base} ${tokens.motion.ease}, background ${tokens.motion.base} ${tokens.motion.ease}`,
   },
 };
 

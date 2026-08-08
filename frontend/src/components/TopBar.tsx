@@ -179,6 +179,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     background: 'transparent',
     color: tokens.colors.steel.muted,
-    transition: 'background 0.15s, color 0.15s',
+    transition: `background ${tokens.motion.fast} ${tokens.motion.ease}, color ${tokens.motion.fast} ${tokens.motion.ease}`,
   },
 };

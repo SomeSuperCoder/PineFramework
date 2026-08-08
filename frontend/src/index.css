@@ -304,6 +304,27 @@ body {
   box-shadow: var(--pf-shadow-3);
 }
 
+/* §15.4 Popup motion — enter: fade + translateY(4px) on --pf-motion-base/--pf-motion-ease.
+   Offset mirrors tokens.recipes.modalMotionOffset (TS-only, no --pf-* name by design).
+   Covered by the global prefers-reduced-motion guard (§13): animation-duration 0.01ms. */
+.quick-adder-overlay {
+  animation: pf-overlay-in var(--pf-motion-base) var(--pf-motion-ease);
+}
+
+.quick-adder-modal {
+  animation: pf-popup-in var(--pf-motion-base) var(--pf-motion-ease);
+}
+
+@keyframes pf-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pf-popup-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .quick-adder-header {
   display: flex;
   align-items: center;

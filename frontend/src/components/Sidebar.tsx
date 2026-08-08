@@ -187,7 +187,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRight: `1px solid ${tokens.colors.hairline.default}`,
     flexShrink: 0,
     overflow: 'hidden',
-    transition: 'width 0.2s ease',
+    transition: `width ${tokens.motion.base} ${tokens.motion.ease}`,
   },
   navList: {
     display: 'flex',
@@ -207,7 +207,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'inherit',
     textAlign: 'left',
     width: '100%',
-    transition: 'background 0.15s, color 0.15s',
+    transition: `background ${tokens.motion.fast} ${tokens.motion.ease}, color ${tokens.motion.fast} ${tokens.motion.ease}`,
   },
   navIcon: {
     display: 'flex',
@@ -218,12 +218,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   navLabel: {
     fontWeight: 500,
-    transition: 'opacity 0.15s',
+    transition: `opacity ${tokens.motion.fast} ${tokens.motion.ease}`,
   },
   shortcutHint: {
     marginLeft: 'auto',
     fontSize: 10,
     fontFamily: 'monospace',
-    transition: 'opacity 0.15s',
+    transition: `opacity ${tokens.motion.fast} ${tokens.motion.ease}`,
   },
 };

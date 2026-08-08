@@ -670,7 +670,7 @@ function App() {
           zIndex: 10000,
           boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
           cursor: 'pointer',
-          transition: 'opacity 0.3s',
+          transition: `opacity ${tokens.motion.base} ${tokens.motion.ease}`,
         }} onClick={dismissToast}>
           {chaosMode ? '⚡ Chaos Mode Enabled' : 'Chaos Mode Disabled'}
         </div>
