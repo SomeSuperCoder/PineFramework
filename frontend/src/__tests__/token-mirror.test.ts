@@ -1,7 +1,7 @@
 /**
  * Design-token mirror consistency test.
  *
- * Enforces the DESIGN-MIRO-DARK.md law at the CSS layer:
+ * Enforces the DESIGN.md law at the CSS layer:
  *   1. EVERY `--pf-*` token in `frontend/src/theme/tokens.ts` (the single
  *      source of truth) must be declared in `index.css` `:root` with the
  *      EXACT same value (string compare).
@@ -94,7 +94,7 @@ const LEGACY_TOKEN_NAMES = [
 ];
 
 /**
- * Legacy VALUES from DESIGN-MIRO-DARK.md §17 that are NOT also new token
+ * Legacy VALUES from DESIGN.md §17 that are NOT also new token
  * values — their presence anywhere in index.css is a violation.
  */
 const LEGACY_VALUES = [

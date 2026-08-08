@@ -1,5 +1,5 @@
 /* ============================================================
-   PineFramework — Miro-Dark design system (DESIGN-MIRO-DARK.md v1.0)
+   PineFramework — Miro-Dark design system (DESIGN.md v1.1)
    SINGLE SOURCE OF TRUTH: frontend/src/theme/tokens.ts
    The :root block below is a byte-level mirror of tokens.ts (cssVars map);
    frontend/src/__tests__/token-mirror.test.ts enforces equality.
@@ -140,7 +140,7 @@
   --pf-chart-volume: rgba(194, 194, 208, 0.18);
 }
 
-/* Reduced motion — mandatory (DESIGN-MIRO-DARK.md §13) */
+/* Reduced motion — mandatory (DESIGN.md §13) */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

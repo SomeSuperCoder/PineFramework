@@ -1,7 +1,7 @@
 /**
  * PineFramework — Miro-Dark design tokens (SINGLE SOURCE OF TRUTH)
  *
- * LAW: `frontend/src/DESIGN-MIRO-DARK.md` v1.0. Every value below is copied
+ * LAW: `DESIGN.md` (project root) v1.1. Every value below is copied
  * verbatim from that document. Nothing here is invented; nothing here may be
  * edited without a spec change. The CSS mirror lives in `frontend/src/index.css`
  * (`:root` custom properties) and is enforced byte-equal to this file by
