@@ -38,4 +38,8 @@
   - **Date:** 2026-08-09
 
 ## 6. Tech Lead commit
-- [ ] (tech-lead — this task, being executed now)
+- [x] Committed at feature boundary (e4fff11).
+  - **Agent:** tech-lead
+  - **Verdict:** ✅ DONE
+  - **Evidence:** commit e4fff11, 28 files, +2926/-719; gates: TE GREEN 78/78 + QA GO-WITH-NOTES + tsc/build clean
+  - **Date:** 2026-08-09
