@@ -1,56 +1,82 @@
 /**
- * PineFramework — Minimal chart-only tokens.
+ * PineFramework — Chart + color tokens.
  *
- * All component styling uses shadcn/Tailwind classes.
- * This file exists ONLY to keep chart renderers and existing callers working.
- * Every value maps to a shadcn CSS variable — no hardcoded colors.
+ * Component styling uses shadcn/Tailwind classes.
+ * This file exists for chart renderers (canvas needs hardcoded hex)
+ * and any caller that needs a raw color value.
  */
 
 export const tokens = {
   colors: {
-    canvas: 'var(--color-background)',
+    // §1 Canvas
+    canvas: '#0d0d18',
+    // §2 Surfaces
     surface: {
-      '0': 'var(--color-background)',
-      '1': 'var(--color-card)',
-      '2': 'var(--color-secondary)',
-      '3': 'var(--color-muted)',
+      '0': '#0d0d18',
+      '1': '#12121f',
+      '2': '#171725',
+      '3': '#1e1e2e',
     },
+    // §3 Hairlines
     hairline: {
-      soft: 'var(--color-border)',
-      default: 'var(--color-border)',
-      strong: 'var(--color-input)',
+      soft: '#1a1a27',
+      default: '#262636',
+      strong: '#35354a',
     },
+    // §4 Ink
     ink: {
-      '1': 'var(--color-foreground)',
-      '2': 'var(--color-muted-foreground)',
-      '3': 'var(--color-muted-foreground)',
-      default: 'var(--color-primary-foreground)',
-      deep: 'var(--color-primary-foreground)',
+      '1': '#ededf5',
+      '2': '#c2c2d0',
+      '3': '#8f8fa3',
+      default: '#1c1c1e',
+      deep: '#050038',
     },
+    // §5 Steel
     steel: {
-      icon: 'var(--color-muted-foreground)',
-      placeholder: 'var(--color-muted-foreground)',
-      muted: 'var(--color-muted-foreground)',
-      disabled: 'var(--color-muted-foreground)',
+      icon: '#9a9aad',
+      placeholder: '#7a7a90',
+      muted: '#71718a',
+      disabled: '#5a5a70',
     },
+    // §7 Accents
     brand: {
-      blue: 'var(--color-primary)',
+      yellow: '#ffd02f',
+      yellowHover: '#fcb900',
+      yellowActive: '#d49c00',
+      blue: '#4262ff',
+      blueHover: '#5b76fe',
+      blueActive: '#2a41b6',
+      coral: '#ff9999',
+      rose: '#ffd8f4',
+      teal: '#0fbcb0',
     },
+    // §8 Pastel tints
+    pastel: {
+      yellow: 'rgba(255, 208, 47, 0.35)',
+      coral: 'rgba(255, 153, 153, 0.50)',
+      rose: 'rgba(255, 216, 244, 0.32)',
+      teal: 'rgba(195, 250, 245, 0.30)',
+      violet: 'rgba(245, 243, 255, 0.26)',
+    },
+    // §9 Semantic
     semantic: {
-      success: '#22c55e',
-      error: '#ef4444',
-      warning: '#eab308',
-      info: 'var(--color-primary)',
-      successBg: 'rgba(34, 197, 94, 0.12)',
-      errorBg: 'rgba(239, 68, 68, 0.12)',
-      warningBg: 'rgba(234, 179, 8, 0.12)',
-      infoBg: 'rgba(var(--color-primary), 0.12)',
+      success: '#00b473',
+      successHover: '#00cc84',
+      error: '#ff5c5c',
+      errorHover: '#ff7373',
+      warning: '#ffb020',
+      warningHover: '#ffc24d',
+      info: '#4262ff',
+      successBg: 'rgba(0, 180, 115, 0.12)',
+      errorBg: 'rgba(255, 92, 92, 0.12)',
+      warningBg: 'rgba(255, 176, 32, 0.12)',
+      infoBg: 'rgba(66, 98, 255, 0.12)',
     },
   },
 
   chart: {
-    grid: 'var(--color-border)',
-    border: 'var(--color-border)',
+    grid: '#262636',
+    border: '#35354a',
   },
 
   typography: {
@@ -63,31 +89,3 @@ export const tokens = {
     ease: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
   },
 } as const;
-
-/**
- * Flat CSS custom-property map for tests (token-mirror.test.ts).
- * Points at shadcn variables — the old `--pf-*` mirror test is obsolete,
- * but this export keeps the import from breaking.
- */
-export const cssVars = {
-  '--pf-canvas': 'var(--color-background)',
-  '--pf-surface-1': 'var(--color-card)',
-  '--pf-surface-2': 'var(--color-secondary)',
-  '--pf-surface-3': 'var(--color-muted)',
-  '--pf-hairline': 'var(--color-border)',
-  '--pf-hairline-strong': 'var(--color-input)',
-  '--pf-ink-1': 'var(--color-foreground)',
-  '--pf-ink-2': 'var(--color-muted-foreground)',
-  '--pf-ink': 'var(--color-primary-foreground)',
-  '--pf-steel-muted': 'var(--color-muted-foreground)',
-  '--pf-brand-blue': 'var(--color-primary)',
-  '--pf-semantic-success': '#22c55e',
-  '--pf-semantic-error': '#ef4444',
-  '--pf-semantic-warning': '#eab308',
-  '--pf-font-family': "'Inter', system-ui, sans-serif",
-  '--pf-chart-grid': 'var(--color-border)',
-  '--pf-chart-border': 'var(--color-border)',
-  '--pf-motion-fast': '150ms',
-  '--pf-motion-base': '200ms',
-  '--pf-motion-ease': 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-} satisfies Record<string, string>;
