@@ -5,7 +5,7 @@ Statistics dashboards in the bot UI that visualize global PnL and trading metric
 ## Requirements
 ### Requirement: Trade history view
 
-The bot dashboard SHALL provide a browsable trade-history view listing persisted closed trades with columns for direction, symbol/asset, timeframe, strategy, entry price, exit price, size, PnL, fees, status, open time, and close time. The view SHALL support sorting by column, filtering by strategy, timeframe, asset, and mode (live/chaos/all), and paging through history using the API's cursor pagination. The view SHALL render the same data the history API returns.
+The bot dashboard SHALL provide a browsable trade-history view listing persisted closed trades with columns for direction, symbol/asset, timeframe, strategy, entry price, exit price, size, PnL, fees, status, open time, and close time. The view SHALL render the NET PnL (`realizedPnl` = gross minus fees) as the PnL column, SHALL render the fee breakdown when available, and SHALL indicate trades flagged `feesUnknown` rather than showing a misleading zero fee. The view SHALL support sorting by column, filtering by strategy, timeframe, asset, and mode (live/chaos/all), and paging through history using the API's cursor pagination. The view SHALL render the same data the history API returns.
 
 #### Scenario: Browse recent trades
 WHEN a user opens the trade-history view
@@ -27,9 +27,13 @@ THEN chaos trades are hidden from the list
 WHEN a user clicks the next-page control
 THEN the next page of trades is fetched and displayed without duplicating or skipping trades
 
+#### Scenario: Unknown-fee trade displayed honestly
+WHEN a trade has `feesUnknown: true`
+THEN the view SHALL display a fee indicator of unknown rather than a zero fee amount
+
 ### Requirement: Statistics dashboard
 
-The bot dashboard SHALL provide a statistics view showing global trading metrics as cards: total trades, win rate, total realized PnL (gross), total fees, net PnL, profit factor, average win, average loss, best trade, worst trade, average trade, and max drawdown. The view SHALL include an equity curve chart of cumulative PnL over time and SHALL support viewing the same metrics grouped by strategy script, by timeframe, and by asset with a PnL comparison chart per group. Chaos mode SHALL be visible as a distinct strategy group ("Chaos Mode") and SHALL be excluded when the user selects live-only mode.
+The bot dashboard SHALL provide a statistics view showing global trading metrics as cards: total trades, win rate, total realized PnL (NET), total fees, net PnL, profit factor, average win, average loss, best trade, worst trade, average trade, and max drawdown. The view SHALL include an equity curve chart of cumulative PnL over time and SHALL support viewing the same metrics grouped by strategy script, by timeframe, and by asset with a PnL comparison chart per group. Chaos mode SHALL be visible as a distinct strategy group ("Chaos Mode") and SHALL be excluded when the user selects live-only mode.
 
 #### Scenario: Global metrics cards render
 WHEN a user opens the statistics view

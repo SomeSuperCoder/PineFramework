@@ -4,7 +4,7 @@ Implement and verify Strategy Backtest Engine functionality for the strategy-bac
 ## Requirements
 
 ### Requirement: Strategy Backtest Engine
-The system SHALL provide a backtest engine within the backend that processes historical data, executes strategy scripts, computes performance metrics, and respects OCA order semantics.
+The system SHALL provide a backtest engine within the backend that processes historical data, executes strategy scripts, computes performance metrics, and respects OCA order semantics. Realized PnL and fee totals SHALL be computed by the shared `pnl-calculation` module from a tagged modeled fee input, so the backtest uses the SAME math as the live bot.
 
 #### Scenario: Historical Backtest
 - **WHEN** a strategy backtest is requested with historical data
@@ -17,6 +17,10 @@ The system SHALL provide a backtest engine within the backend that processes his
 #### Scenario: Trade Logging
 - **WHEN** a backtest executes trades
 - **THEN** each trade SHALL be logged with entry/exit timestamps, prices, and P&L
+
+#### Scenario: Backtest PnL uses shared module
+- **WHEN** a backtest closes a position
+- **THEN** net PnL SHALL be computed by `pnl-calculation` as `gross - totalFees` using the same function the live bot uses, from a modeled fee input
 
 ### Requirement: CLI Backtest Tool
 The system SHALL provide a CLI-based backtesting tool for running strategies from the command line.
@@ -85,3 +89,18 @@ The backtest API SHALL require a `script` string in the request body when creati
 #### Scenario: Backtest accepted when script provided
 - **WHEN** a client sends `POST /api/backtest` with a non-empty Pine Script `source` as `script`
 - **THEN** the API creates a backtest job and returns the job id (existing behavior unchanged)
+
+### Requirement: Backtest Fee Model Tagged and Configurable
+The backtest engine SHALL accept a fee model configuration (venue bps or flat bps, platform bps, priority lamports, base lamports, and a SOL price basis) that feeds the shared `pnl-calculation` module. The engine SHALL record the fee model tag (`constant-tier` | `flat-bps` | `quote`) on each backtest result so the run's fee assumptions are auditable. The engine SHALL NOT use a hardcoded SOL/USD price for fee conversion.
+
+#### Scenario: Fee model drives backtest fees
+- **WHEN** a backtest run is configured with a fee model
+- **THEN** the engine SHALL pass the model's fee inputs to `pnl-calculation` and the reported fees SHALL equal the model-derived total
+
+#### Scenario: Fee model tag persisted
+- **WHEN** a backtest completes
+- **THEN** the result SHALL carry the `backtestFeeModel` tag identifying which model produced the fees
+
+#### Scenario: No hardcoded SOL price
+- **WHEN** the backtest converts lamport-based fees to quote
+- **THEN** the conversion SHALL use the configured model SOL price basis, not a hardcoded constant
