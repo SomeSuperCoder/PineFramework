@@ -26,15 +26,15 @@ export function ChaosModeWarning({ isActive, onAcknowledge }: ChaosModeWarningPr
 
   return (
     <div className="absolute inset-0 z-[100] flex items-center justify-center bg-destructive/95 p-4">
-      <Alert variant="destructive" className="w-full max-w-md gap-3 rounded-lg border-0 bg-[var(--pf-surface-1)]/95 p-6">
-        <AlertTitle className="text-2xl font-semibold tracking-tight text-[var(--pf-ink-1)]">
+      <Alert variant="destructive" className="w-full max-w-md gap-3 rounded-lg border-0 bg-card/95 p-6">
+        <AlertTitle className="text-2xl font-semibold tracking-tight text-foreground">
           ⚠️ CHAOS MODE ACTIVE
         </AlertTitle>
         <AlertDescription className="flex flex-col gap-3">
-          <span className="text-base font-semibold text-[var(--pf-ink-1)]">
+          <span className="text-base font-semibold text-foreground">
             RANDOM SIGNALS — NOT A STRATEGY
           </span>
-          <span className="text-sm leading-relaxed text-[var(--pf-steel-muted)]">
+          <span className="text-sm leading-relaxed text-muted-foreground">
             The bot will generate random long/short/exit signals on every candle close.
             Position sizing is fixed at 10% of equity. This is for stress testing only.
           </span>

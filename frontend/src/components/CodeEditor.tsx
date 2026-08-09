@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { extractScriptName as extractName } from 'pine-framework/utils/script-name';
-import { tokens } from '../theme/tokens';
+
 import {
   Dialog,
   DialogContent,
@@ -264,7 +264,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
             <select
               value={currentScriptId || ''}
               onChange={handleDropdownChange}
-              className="min-w-0 flex-1 rounded-md border border-border bg-[var(--pf-canvas)] px-2 py-1.5 text-[13px] text-foreground outline-none"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-foreground outline-none"
             >
               {scripts.length > 0 && (
                 <optgroup label="My Scripts">
@@ -306,13 +306,13 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           </div>
         </DialogHeader>
         {currentScript && (
-          <div className="flex items-center gap-1.5 border-b border-border bg-[var(--pf-canvas)] px-4 py-1 text-[11px] text-[var(--pf-steel-muted)]">
+          <div className="flex items-center gap-1.5 border-b border-border bg-background px-4 py-1 text-[11px] text-muted-foreground">
             <span
-              className="rounded px-1.5 py-0.5 text-[10px]"
-              style={{
-                background: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
-                color: currentScript.scriptType === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
-              }}
+              className={`rounded px-1.5 py-0.5 text-[10px] ${
+                currentScript.scriptType === 'strategy'
+                  ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e]'
+                  : 'bg-[rgba(234,179,8,0.12)] text-[#eab308]'
+              }`}
             >
               {currentScript.scriptType}
             </span>
@@ -320,11 +320,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
               const pineVersion = extractVersion(source);
               return pineVersion ? (
                 <span
-                  className="rounded px-1.5 py-0.5 text-[10px]"
-                  style={{
-                    background: tokens.colors.semantic.infoBg,
-                    color: tokens.colors.semantic.info,
-                  }}
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(var(--color-primary),0.12)] text-primary"
                 >
                   v{pineVersion}
                 </span>
@@ -336,22 +332,18 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
           </div>
         )}
         {currentBuiltIn && (
-          <div className="flex items-center gap-1.5 border-b border-border bg-[var(--pf-canvas)] px-4 py-1 text-[11px] text-[var(--pf-steel-muted)]">
+          <div className="flex items-center gap-1.5 border-b border-border bg-background px-4 py-1 text-[11px] text-muted-foreground">
             <span
-              className="rounded px-1.5 py-0.5 text-[10px]"
-              style={{
-                background: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.successBg : tokens.colors.semantic.warningBg,
-                color: currentBuiltIn.type === 'strategy' ? tokens.colors.semantic.success : tokens.colors.semantic.warning,
-              }}
+              className={`rounded px-1.5 py-0.5 text-[10px] ${
+                currentBuiltIn.type === 'strategy'
+                  ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e]'
+                  : 'bg-[rgba(234,179,8,0.12)] text-[#eab308]'
+              }`}
             >
               {currentBuiltIn.type}
             </span>
             <span
-              className="rounded px-1.5 py-0.5 text-[10px]"
-              style={{
-                background: tokens.colors.semantic.warningBg,
-                color: tokens.colors.semantic.warning,
-              }}
+              className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(234,179,8,0.12)] text-[#eab308]"
             >
               Built-In
             </span>
@@ -359,16 +351,16 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
         )}
         <div className="min-h-0 flex-1 overflow-hidden">
           {loading ? (
-            <div className="p-4 text-[var(--pf-steel-muted)]">Loading scripts...</div>
+            <div className="p-4 text-muted-foreground">Loading scripts...</div>
           ) : scripts.length === 0 && builtInScripts.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-[var(--pf-steel-muted)]">
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
               <div className="text-[15px] text-foreground">No scripts yet</div>
               <div className="max-w-[320px] text-center text-[13px] leading-6">
                 Create your first Pine Script to get started. You can write indicators and strategies, then run them on the chart.
               </div>
               <Button
                 onClick={handleNewScript}
-                className="bg-[var(--pf-semantic-success)] text-[var(--pf-ink)] hover:bg-[var(--pf-semantic-success-hover)]"
+                className="bg-[#22c55e] text-primary-foreground hover:bg-[#22c55e]/90"
               >
                 Create Your First Script
               </Button>
@@ -380,21 +372,9 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
               onChange={(e) => handleSourceChange(e.target.value)}
               onKeyDown={handleKeyDown}
               readOnly={isBuiltIn}
-              style={{
-                width: '100%',
-                height: '100%',
-                backgroundColor: isBuiltIn ? tokens.colors.surface['2'] : tokens.colors.surface['1'],
-                color: isBuiltIn ? tokens.colors.ink['2'] : tokens.colors.ink['1'],
-                border: 'none',
-                padding: '16px',
-                fontFamily: "'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace",
-                fontSize: '14px',
-                lineHeight: '1.5',
-                resize: 'none',
-                outline: 'none',
-                tabSize: 2,
-                cursor: isBuiltIn ? 'not-allowed' : 'text',
-              }}
+              className={`w-full h-full border-none p-4 font-mono text-sm leading-relaxed resize-none outline-none tabsize-2 ${
+                isBuiltIn ? 'bg-secondary text-muted-foreground cursor-not-allowed' : 'bg-card text-foreground'
+              }`}
               spellCheck={false}
             />
           )}

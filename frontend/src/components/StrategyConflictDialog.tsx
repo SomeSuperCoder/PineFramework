@@ -27,14 +27,14 @@ export function StrategyConflictDialog({ isOpen, existingName, incomingName, onR
     >
       <AlertDialogContent className="max-w-[380px] gap-4 p-5">
         <AlertDialogHeader className="gap-2">
-          <AlertDialogTitle className="text-sm text-[var(--pf-semantic-warning)]">
+          <AlertDialogTitle className="text-sm text-[#eab308]">
             Strategy Conflict
           </AlertDialogTitle>
           <AlertDialogDescription className="flex flex-col gap-1 text-[13px] leading-5 text-foreground">
             <span>A strategy is already running on the chart:</span>
-            <span className="font-semibold text-[var(--pf-semantic-warning)]">{existingName}</span>
+            <span className="font-semibold text-[#eab308]">{existingName}</span>
             <span className="mt-1">You are trying to add:</span>
-            <span className="font-semibold text-[var(--pf-brand-blue-hover)]">{incomingName}</span>
+            <span className="font-semibold text-primary">{incomingName}</span>
             <span className="mt-1 text-xs text-muted-foreground">
               Only one strategy can run at a time. Replace the existing strategy?
             </span>

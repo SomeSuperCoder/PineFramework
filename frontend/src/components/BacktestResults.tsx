@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BacktestResultResponse } from '../types';
-import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -93,7 +92,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
 
     ctx.clearRect(0, 0, w, h);
 
-    ctx.strokeStyle = tokens.colors.brand.blue;
+    ctx.strokeStyle = 'var(--color-primary)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     for (let i = 0; i < points.length; i++) {
@@ -104,11 +103,11 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     }
     ctx.stroke();
 
-    ctx.fillStyle = tokens.colors.semantic.success;
+    ctx.fillStyle = '#22c55e';
     ctx.font = '11px monospace';
     ctx.fillText(`Equity: $${maxEquity.toFixed(0)}`, pad, pad + 12);
 
-    ctx.strokeStyle = tokens.colors.semantic.error;
+    ctx.strokeStyle = '#ef4444';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i < points.length; i++) {
@@ -119,7 +118,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     }
     ctx.stroke();
 
-    ctx.fillStyle = tokens.colors.semantic.warning;
+    ctx.fillStyle = '#eab308';
     ctx.fillText(`Max DD: $${maxDD.toFixed(0)}`, pad, pad + plotH + pad + 12);
   }, [result]);
 
@@ -157,7 +156,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
       {/* Header: title + Export dropdown + Close */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-[color:var(--pf-brand-blue)]">Backtest Results</CardTitle>
+          <CardTitle className="text-primary">Backtest Results</CardTitle>
           <div className="flex items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -185,8 +184,8 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
               value={`$${metrics.totalPnl.toFixed(2)}`}
               valueClassName={
                 metrics.totalPnl >= 0
-                  ? 'text-[color:var(--pf-semantic-success)]'
-                  : 'text-[color:var(--pf-semantic-error)]'
+                  ? 'text-[#22c55e]'
+                  : 'text-destructive'
               }
             />
             <StatCard label="Win Rate" value={`${metrics.winRate.toFixed(1)}%`} />
@@ -195,7 +194,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
             <StatCard
               label="Max DD"
               value={`${metrics.maxDrawdownPercent.toFixed(1)}%`}
-              valueClassName="text-[color:var(--pf-semantic-error)]"
+              valueClassName="text-destructive"
             />
             <StatCard label="Sortino" value={`${metrics.sortinoRatio.toFixed(2)}`} />
             <StatCard label="Total Trades" value={`${metrics.totalTrades}`} />
@@ -207,12 +206,12 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
       {/* Equity & drawdown canvas host */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-[color:var(--pf-semantic-warning)]">
+          <CardTitle className="text-[#eab308]">
             Equity &amp; Drawdown
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[200px] w-full rounded-md bg-[color:var(--pf-canvas)]">
+          <div className="h-[200px] w-full rounded-md bg-background">
             <canvas ref={equityCanvasRef} className="h-full w-full" />
           </div>
         </CardContent>
@@ -221,7 +220,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
       {/* Trade list */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-[color:var(--pf-semantic-warning)]">
+          <CardTitle className="text-[#eab308]">
             Trade List ({sortedTrades.length} trades)
           </CardTitle>
         </CardHeader>
@@ -231,12 +230,12 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
           ) : (
             <Table className="font-mono text-[11px]">
               <TableHeader>
-                <TableRow className="bg-[color:var(--pf-hairline)]">
+                <TableRow className="bg-border">
                   <TableHead
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('direction')}
                     style={{
-                      color: sortField === 'direction' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'direction' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     Dir{sortIndicator('direction')}
@@ -245,7 +244,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('entryPrice')}
                     style={{
-                      color: sortField === 'entryPrice' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'entryPrice' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     Entry{sortIndicator('entryPrice')}
@@ -254,7 +253,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('exitPrice')}
                     style={{
-                      color: sortField === 'exitPrice' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'exitPrice' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     Exit{sortIndicator('exitPrice')}
@@ -263,7 +262,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('pnl')}
                     style={{
-                      color: sortField === 'pnl' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'pnl' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     PnL{sortIndicator('pnl')}
@@ -272,7 +271,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('pnlPercent')}
                     style={{
-                      color: sortField === 'pnlPercent' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'pnlPercent' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     Return{sortIndicator('pnlPercent')}
@@ -281,7 +280,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('mae')}
                     style={{
-                      color: sortField === 'mae' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'mae' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     MAE{sortIndicator('mae')}
@@ -290,7 +289,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('mfe')}
                     style={{
-                      color: sortField === 'mfe' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'mfe' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     MFE{sortIndicator('mfe')}
@@ -299,7 +298,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     className="cursor-pointer px-2 py-1.5 whitespace-nowrap"
                     onClick={() => toggleSort('barsHeld')}
                     style={{
-                      color: sortField === 'barsHeld' ? 'var(--pf-brand-blue)' : 'var(--pf-steel-muted)',
+                      color: sortField === 'barsHeld' ? 'var(--color-primary)' : 'var(--color-muted-foreground)',
                     }}
                   >
                     Bars{sortIndicator('barsHeld')}
@@ -311,11 +310,11 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                   <TableRow
                     key={t.id}
                     onClick={() => onSelectTrade?.(i)}
-                    className="border-b border-[color:var(--pf-hairline)]"
+                    className="border-b border-border"
                     style={{
                       cursor: onSelectTrade ? 'pointer' : 'default',
                       background:
-                        i % 2 === 0 ? 'var(--pf-canvas)' : 'var(--pf-surface-1)',
+                        i % 2 === 0 ? 'var(--color-background)' : 'var(--color-card)',
                     }}
                   >
                     <TableCell
@@ -323,8 +322,8 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                       style={{
                         color:
                           t.direction === 'long'
-                            ? 'var(--pf-semantic-success)'
-                            : 'var(--pf-semantic-error)',
+                            ? '#22c55e'
+                            : 'var(--color-destructive)',
                       }}
                     >
                       {t.direction === 'long' ? 'L' : 'S'}
@@ -334,7 +333,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                     <TableCell
                       className="px-2 py-1"
                       style={{
-                        color: t.pnl >= 0 ? 'var(--pf-semantic-success)' : 'var(--pf-semantic-error)',
+                        color: t.pnl >= 0 ? '#22c55e' : 'var(--color-destructive)',
                       }}
                     >
                       ${t.pnl.toFixed(2)}
@@ -343,7 +342,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
                       className="px-2 py-1"
                       style={{
                         color:
-                          t.pnlPercent >= 0 ? 'var(--pf-semantic-success)' : 'var(--pf-semantic-error)',
+                          t.pnlPercent >= 0 ? '#22c55e' : 'var(--color-destructive)',
                       }}
                     >
                       {t.pnlPercent.toFixed(2)}%

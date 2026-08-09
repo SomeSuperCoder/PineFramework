@@ -3,7 +3,7 @@ import type { TradeHistoryMode, TradeHistoryStatus, TradeRecord } from '../types
 import { useTradeHistory } from '../hooks/useTradeHistory';
 import { DASH, fmtPnl, fmtSize, fmtTimeframe, fmtTimestamp } from '../utils/format';
 import { ErrorState, ModeToggle, StatusSelect } from './TradeTabShared';
-import { tokens } from '../theme/tokens';
+
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -148,20 +148,19 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
   const { trades, loading, loadingMore, error, hasMore } = history;
 
   const filterInputClass =
-    'h-9 border border-[color:var(--pf-hairline-strong)] bg-[color:var(--pf-canvas)] px-2 text-[11px] text-[color:var(--pf-ink-1)] box-border';
+    'h-9 border border-input bg-background px-2 text-[11px] text-foreground box-border';
 
   return (
     <div className="flex flex-col gap-2.5">
       {/* Section label + loaded count */}
       <div className="flex items-center gap-2.5 flex-wrap">
         <span
-          className="text-[11px] font-semibold uppercase tracking-[1px]"
-          style={{ color: tokens.colors.steel.muted }}
+          className="text-[11px] font-semibold uppercase tracking-[1px] text-muted-foreground"
         >
           Trade History
         </span>
         {!loading && !error && (
-          <span className="text-[11px]" style={{ color: tokens.colors.steel.disabled }}>
+          <span className="text-[11px] text-muted-foreground">
             {history.totalLoaded} loaded{hasMore ? ' · more available' : ''}
           </span>
         )}
@@ -208,18 +207,18 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
       {error ? (
         <ErrorState message={error} onRetry={history.reload} />
       ) : loading && trades.length === 0 ? (
-        <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
+        <div className="p-6 text-center text-[12px] text-muted-foreground">
           Loading trade history…
         </div>
       ) : trades.length === 0 ? (
-        <div className="p-8 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
+        <div className="p-8 text-center text-[12px] text-muted-foreground">
           No trades yet{filterActive ? ' matching these filters' : ''}.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <Table className="w-full text-[11px] font-mono">
             <TableHeader>
-              <TableRow className="bg-[color:var(--pf-hairline)]">
+              <TableRow className="bg-border">
                 {COLUMNS.map((col) => (
                   <TableHead
                     key={col.field}
@@ -232,13 +231,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
                     }
                     className={`px-2 py-1.5 whitespace-nowrap ${
                       col.numeric ? 'text-right' : 'text-left'
-                    }`}
-                    style={{
-                      color:
-                        sortField === col.field
-                          ? tokens.colors.brand.blue
-                          : tokens.colors.ink['2'],
-                    }}
+                    } ${sortField === col.field ? 'text-primary' : 'text-muted-foreground'}`}
                   >
                     <button
                       type="button"
@@ -258,42 +251,30 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
               {sortedTrades.map((t, i) => (
                 <TableRow
                   key={t.id}
-                  className="border-b border-[var(--pf-hairline)]"
-                  style={{
-                    background: i % 2 === 0 ? tokens.colors.canvas : tokens.colors.surface['1'],
-                  }}
+                  className={`border-b border-border ${i % 2 === 0 ? 'bg-background' : 'bg-card'}`}
                 >
                   <TableCell
-                    className="px-2 py-1 font-semibold"
-                    style={{
-                      color:
-                        t.side === 'buy'
-                          ? tokens.colors.semantic.success
-                          : tokens.colors.semantic.error,
-                    }}
+                    className={`px-2 py-1 font-semibold ${t.side === 'buy' ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}
                   >
                     {t.side === 'buy' ? 'BUY' : 'SELL'}
                   </TableCell>
                   <TableCell className="px-2 py-1 font-semibold">{t.symbol}</TableCell>
-                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.steel.muted }}>
+                  <TableCell className="px-2 py-1 text-muted-foreground">
                     {fmtTimeframe(t.timeframe)}
                   </TableCell>
                   <TableCell
-                    className="px-2 py-1 max-w-[180px] truncate whitespace-nowrap"
-                    style={{
-                      color: t.strategy === 'Chaos Mode' ? tokens.colors.semantic.warning : tokens.colors.ink['2'],
-                    }}
+                    className={`px-2 py-1 max-w-[180px] truncate whitespace-nowrap ${t.strategy === 'Chaos Mode' ? 'text-[#eab308]' : 'text-muted-foreground'}`}
                     title={t.strategy}
                   >
                     {t.strategy ?? DASH}
                   </TableCell>
-                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
+                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
                     ${t.entryPrice.toFixed(2)}
                   </TableCell>
-                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
+                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
                     ${t.exitPrice.toFixed(2)}
                   </TableCell>
-                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
+                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
                     {fmtSize(t.size)}
                   </TableCell>
                   <TableCell
@@ -302,26 +283,24 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
                   >
                     {fmtPnl(t.realizedPnl).text}
                   </TableCell>
-                  <TableCell className="px-2 py-1 text-right" style={{ color: tokens.colors.ink['2'] }}>
+                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
                     ${t.fees.toFixed(2)}
                   </TableCell>
                   <TableCell
-                    className="px-2 py-1"
-                    style={{
-                      color:
-                        t.status === 'unknown'
-                          ? tokens.colors.semantic.warning
-                          : t.status === 'confirmed'
-                            ? tokens.colors.semantic.success
-                            : tokens.colors.steel.muted,
-                    }}
+                    className={`px-2 py-1 ${
+                      t.status === 'unknown'
+                        ? 'text-[#eab308]'
+                        : t.status === 'confirmed'
+                          ? 'text-[#22c55e]'
+                          : 'text-muted-foreground'
+                    }`}
                   >
                     {t.status ?? DASH}
                   </TableCell>
-                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.ink['3'] }}>
+                  <TableCell className="px-2 py-1 text-muted-foreground">
                     {fmtTimestamp(t.openedAt)}
                   </TableCell>
-                  <TableCell className="px-2 py-1" style={{ color: tokens.colors.ink['3'] }}>
+                  <TableCell className="px-2 py-1 text-muted-foreground">
                     {fmtTimestamp(t.closedAt)}
                   </TableCell>
                 </TableRow>
@@ -334,7 +313,7 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
       {/* Pagination — Next loads older pages, Previous re-loads the prior page */}
       {!loading && !error && trades.length > 0 && (
         <div className="flex items-center gap-2.5 justify-end">
-          <span className="text-[11px]" style={{ color: tokens.colors.steel.disabled }}>
+          <span className="text-[11px] text-muted-foreground">
             Page {history.page + 1}
           </span>
           <Button

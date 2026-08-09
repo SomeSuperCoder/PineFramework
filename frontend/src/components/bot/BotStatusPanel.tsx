@@ -2,7 +2,6 @@ import type { BotStatusSnapshot, WalletInfo } from '../../types/bot';
 import type { ChaosHeartbeatRecord, CandleErrorRecord, FeedStatus } from '../../types';
 import { MetricValue } from './MetricValue';
 import { DASH, fmtDur, fmtPnl } from '../../utils/format';
-import { tokens } from '../../theme/tokens';
 
 // ---- Chaos observability helpers ----
 
@@ -21,9 +20,9 @@ function formatChaosHeartbeat(h: ChaosHeartbeatRecord | null | undefined): strin
 
 function chaosHeartbeatColor(h: ChaosHeartbeatRecord | null | undefined): string | undefined {
   if (!h) return undefined;
-  if (h.outcome === 'signal') return tokens.colors.semantic.success;
-  if (h.outcome === 'noop') return tokens.colors.semantic.warning;
-  return tokens.colors.semantic.error;
+  if (h.outcome === 'signal') return '#22c55e';
+  if (h.outcome === 'noop') return '#eab308';
+  return 'var(--color-destructive)';
 }
 
 /** Human-readable feed status for the dashboard: connected / disconnected /
@@ -39,12 +38,12 @@ function formatFeedStatus(feed: FeedStatus | null | undefined): { text: string; 
     parts.push(`silent since ${new Date(feed.silentSince).toLocaleTimeString()}`);
   }
   if (!feed.connected) {
-    return { text: 'Disconnected', color: tokens.colors.semantic.error, title: parts.join(' · ') };
+    return { text: 'Disconnected', color: 'var(--color-destructive)', title: parts.join(' · ') };
   }
   if (feed.silentSince != null) {
-    return { text: 'Connected · silent', color: tokens.colors.semantic.warning, title: parts.join(' · ') };
+    return { text: 'Connected · silent', color: '#eab308', title: parts.join(' · ') };
   }
-  return { text: 'Connected', color: tokens.colors.semantic.success, title: parts.join(' · ') };
+  return { text: 'Connected', color: '#22c55e', title: parts.join(' · ') };
 }
 
 // ---- Left: Status Panel ----
@@ -75,15 +74,15 @@ export function BotStatusPanel({
   const feedDisplay = formatFeedStatus(feedStatus ?? status.feedState);
 
   return (
-    <div className="overflow-auto border-r border-[var(--pf-surface-1)] p-3">
-      <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--pf-ink-3)] uppercase">Status</div>
+    <div className="overflow-auto border-r border-[var(--color-card)] p-3">
+      <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--color-muted-foreground)] uppercase">Status</div>
       <div className="flex flex-col gap-2">
         <MetricValue label="State" value={status.state} color={stateColor} />
         {wallet.publicKey && (
           <MetricValue
             label="Wallet"
             value={`${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}`}
-            color={tokens.colors.semantic.success}
+            color="#22c55e"
           />
         )}
         <MetricValue label="Strategy" value={status.strategyName} />
@@ -104,7 +103,7 @@ export function BotStatusPanel({
         <MetricValue
           label="Candle Errors"
           value={String(totalCandleErrors)}
-          color={totalCandleErrors > 0 ? tokens.colors.semantic.error : undefined}
+          color={totalCandleErrors > 0 ? 'var(--color-destructive)' : undefined}
           title={lastCandleError
             ? `${lastCandleError.pair} ${lastCandleError.timeframe}: ${lastCandleError.message}`
             : undefined}
@@ -118,9 +117,9 @@ export function BotStatusPanel({
 
         {status.errors.length > 0 && (
           <div className="mt-2">
-            <span className="text-[11px] font-semibold text-[var(--pf-semantic-error)]">Errors ({status.errors.length}):</span>
+            <span className="text-[11px] font-semibold text-[var(--color-destructive)]">Errors ({status.errors.length}):</span>
             {status.errors.slice(-3).map((err, i) => (
-              <div key={i} className="mt-0.5 text-[10px] text-[var(--pf-semantic-error)]">
+              <div key={i} className="mt-0.5 text-[10px] text-[var(--color-destructive)]">
                 [{err.code}] {err.message}
               </div>
             ))}

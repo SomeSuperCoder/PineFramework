@@ -32,12 +32,12 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
         className="flex h-[90vh] w-[90vw] max-w-[90vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[90vw]"
       >
         <DialogHeader className="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
-          <DialogTitle className="text-lg text-[var(--pf-brand-blue-hover)]">
+          <DialogTitle className="text-lg text-primary">
             Backtest Results
           </DialogTitle>
           <div className="flex items-center gap-2">
             {status === 'running' && (
-              <span className="text-xs text-[var(--pf-semantic-warning)]">{displayProgress}%</span>
+              <span className="text-xs text-yellow-500">{displayProgress}%</span>
             )}
             <Button
               variant="ghost"
@@ -73,7 +73,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             </div>
           )}
           {status === 'failed' && error && (
-            <div className="py-10 text-center text-[var(--pf-semantic-error)]">
+            <div className="py-10 text-center text-destructive">
               Backtest failed: {error}
             </div>
           )}

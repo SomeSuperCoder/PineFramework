@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useId } from 'react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
-import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -132,7 +131,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
     return (
       <div>
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[11px]" style={{ color: tokens.colors.steel.muted }}>
+          <span className="text-[11px] text-muted-foreground">
             Paste Pine Script Strategy Source:
           </span>
           <Button
@@ -153,7 +152,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
           onChange={(e) => { setRawSource(e.target.value); onChange(e.target.value, '', ''); }}
           placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"
           rows={4}
-          className="w-full resize-y border border-[var(--pf-hairline-strong)] bg-[color:var(--pf-canvas)] p-1.5 font-mono text-[11px] text-[color:var(--pf-ink-1)] rounded-md"
+          className="w-full resize-y border border-input bg-background p-1.5 font-mono text-[11px] text-foreground rounded-md"
         />
       </div>
     );
@@ -161,11 +160,11 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
 
   const triggerContent = selectedName ? (
     <>
-      <Check className="size-3.5" style={{ color: tokens.colors.semantic.success }} />
+      <Check className="size-3.5 text-[#22c55e]" />
       {selectedName}
     </>
   ) : sourceLoaded ? (
-    <span className="text-[color:var(--pf-steel-muted)]">{sourceLabel}</span>
+    <span className="text-muted-foreground">{sourceLabel}</span>
   ) : (
     'Select a strategy...'
   );
@@ -175,13 +174,12 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
       {label !== undefined ? (
         <label
           htmlFor={inputId}
-          className="text-[12px] font-semibold mb-1.5 block"
-          style={{ color: tokens.colors.steel.muted }}
+          className="text-[12px] font-semibold mb-1.5 block text-muted-foreground"
         >
           {label}
         </label>
       ) : (
-        <div className="text-[12px] font-semibold mb-1.5" style={{ color: tokens.colors.steel.muted }}>
+        <div className="text-[12px] font-semibold mb-1.5 text-muted-foreground">
           Strategy
         </div>
       )}
@@ -198,18 +196,18 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-controls={listId}
-            className="w-full justify-between border-[var(--pf-hairline-strong)] text-[11px]"
+            className="w-full justify-between border-input text-[11px]"
             style={{
               ...heightStyle,
               minHeight: height ?? 40,
-              color: selectedName ? tokens.colors.ink['1'] : tokens.colors.steel.muted,
+              color: selectedName ? 'var(--color-foreground)' : 'var(--color-muted-foreground)',
             }}
           >
             <span className="inline-flex items-center gap-1.5 truncate">{triggerContent}</span>
             {isOpen ? (
-              <ChevronUp className="size-3.5 shrink-0" style={{ color: tokens.colors.steel.muted }} />
+              <ChevronUp className="size-3.5 shrink-0 text-muted-foreground" />
             ) : (
-              <ChevronDown className="size-3.5 shrink-0" style={{ color: tokens.colors.steel.muted }} />
+              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
             )}
           </Button>
         </PopoverTrigger>
@@ -220,7 +218,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
           style={{ width: 'var(--radix-popover-trigger-width)' }}
         >
           <Command
-            className="rounded-md border border-[var(--pf-hairline-strong)] bg-[color:var(--pf-surface-1)]"
+            className="rounded-md border border-input bg-card"
             shouldFilter={false}
           >
             <CommandInput
@@ -236,7 +234,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                 </CommandEmpty>
               ) : error ? (
                 <div className="p-3">
-                  <div className="text-[11px] mb-1.5" style={{ color: tokens.colors.semantic.error }}>
+                  <div className="text-[11px] mb-1.5 text-destructive">
                     {error}
                   </div>
                   <Button
@@ -267,11 +265,10 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                       <span className="flex gap-1 ml-2 shrink-0">
                         <Badge
                           variant="secondary"
-                          className="h-[14px] px-1 text-[9px] font-semibold"
-                          style={
+                          className={
                             s.type === 'strategy'
-                              ? { background: tokens.colors.semantic.successBg, color: tokens.colors.semantic.success }
-                              : { background: tokens.colors.semantic.infoBg, color: tokens.colors.semantic.info }
+                              ? 'h-[14px] px-1 text-[9px] font-semibold bg-[#22c55e]/10 text-[#22c55e]'
+                              : 'h-[14px] px-1 text-[9px] font-semibold bg-primary/10 text-primary'
                           }
                         >
                           {s.type === 'strategy' ? 'STG' : 'IND'}
@@ -279,8 +276,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                         {s.isBuiltIn && (
                           <Badge
                             variant="secondary"
-                            className="h-[14px] px-1 text-[9px] font-semibold"
-                            style={{ background: tokens.colors.semantic.infoBg, color: tokens.colors.semantic.info }}
+                            className="h-[14px] px-1 text-[9px] font-semibold bg-primary/10 text-primary"
                           >
                             Built-In
                           </Badge>
@@ -302,7 +298,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
           variant="ghost"
           size="sm"
           onClick={() => setUseRawPaste(true)}
-          className="h-10 px-3 text-[11px] text-[var(--pf-steel-muted)]"
+          className="h-10 px-3 text-[11px] text-muted-foreground"
           title="Paste raw Pine Script code instead"
         >
           Paste raw source

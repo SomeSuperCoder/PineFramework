@@ -71,7 +71,7 @@ export function ControlPanel({
 
   return (
     <div
-      className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--pf-canvas)]"
+      className="flex h-screen w-screen flex-col overflow-hidden bg-background"
     >
       <TopBar
         botConnected={botConnected}

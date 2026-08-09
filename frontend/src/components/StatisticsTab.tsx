@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceLine, BarChart, Bar, Cell } from 'recharts';
+import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import type {
   TradeGroupBy,
   TradeHistoryMode,
@@ -11,8 +13,8 @@ import { useTradeStats } from '../hooks/useTradeStats';
 import { matchesTradeFilter } from '../hooks/useTradeHistory';
 import { fmtAmount, fmtSignedUsd } from '../utils/format';
 import { ErrorState, ModeToggle, StatusSelect } from './TradeTabShared';
-import { tokens } from '../theme/tokens';
-import { Card, CardContent } from '@/components/ui/card';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -47,198 +49,62 @@ const GROUP_BY_LABEL: Record<Exclude<TradeGroupBy, 'global'>, string> = {
   asset: 'Asset',
 };
 
-/** Equity curve canvas — hand-rolled 2D polyline (pennant precedent,
- *  DPR-aware), x = close time, y = cumulative PnL, zero line dashed. */
+/** Equity curve — Recharts AreaChart replacing the hand-rolled canvas. */
 function EquityCurveChart({ points }: { points: Array<{ time: number; equity: number }> }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || points.length === 0) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (!rect) return;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    ctx.scale(dpr, dpr);
-    const w = rect.width;
-    const h = rect.height;
-
-    const pad = { top: 16, right: 10, bottom: 8, left: 10 };
-    const plotW = w - pad.left - pad.right;
-    const plotH = h - pad.top - pad.bottom;
-
-    ctx.clearRect(0, 0, w, h);
-
-    const minT = points[0].time;
-    const maxT = points[points.length - 1].time;
-    const equities = points.map((p) => p.equity);
-    const minE = Math.min(0, ...equities);
-    const maxE = Math.max(0, ...equities);
-    const rangeE = maxE - minE || 1;
-    const tRange = maxT - minT || 1;
-    const x = (t: number) => pad.left + ((t - minT) / tRange) * plotW;
-    const y = (e: number) => pad.top + (1 - (e - minE) / rangeE) * plotH;
-
-    // Zero line
-    ctx.strokeStyle = tokens.chart.grid;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pad.left, y(0));
-    ctx.lineTo(w - pad.right, y(0));
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Cumulative PnL line
-    ctx.strokeStyle = tokens.colors.brand.blue;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    points.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(x(p.time), y(p.equity));
-      else ctx.lineTo(x(p.time), y(p.equity));
-    });
-    ctx.stroke();
-
-    ctx.font = '10px monospace';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = tokens.colors.semantic.success;
-    ctx.fillText(`max ${fmtSignedUsd(maxE)}`, pad.left + 4, 2);
-    ctx.fillStyle = tokens.colors.semantic.error;
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(`min ${fmtSignedUsd(minE)}`, pad.left + 4, h - 2);
-  }, [points]);
-
   if (points.length === 0) return null;
+
+  const data = points.map((p) => ({
+    time: new Date(p.time).toLocaleDateString(),
+    equity: p.equity,
+  }));
+
   return (
-    <div
-      className="w-full h-[220px] rounded-md border bg-[color:var(--pf-canvas)]"
-      style={{ borderColor: tokens.colors.hairline.default }}
-    >
-      <canvas ref={canvasRef} className="block w-full h-full" />
+    <div className="w-full h-[220px]">
+      <ChartContainer config={{ equity: { label: 'Equity', color: 'var(--color-primary)' } }}>
+        <AreaChart data={data} margin={{ top: 16, right: 10, bottom: 8, left: 10 }}>
+          <CartesianGrid strokeDasharray="4 4" stroke="var(--color-border)" />
+          <XAxis dataKey="time" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${v}`} />
+          <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 4" />
+          <ChartTooltipContent />
+          <Area type="monotone" dataKey="equity" stroke="var(--color-primary)" fill="var(--color-primary)" fillOpacity={0.1} />
+        </AreaChart>
+      </ChartContainer>
     </div>
   );
 }
 
-/** Grouped total-PnL comparison — horizontal bars diverging around a central
- *  zero axis, green/red by sign, group key as label ("Chaos Mode" highlighted). */
+/** Grouped PnL comparison — Recharts horizontal BarChart replacing the hand-rolled canvas. */
 function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx || groups.length === 0) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (!rect) return;
-    const h = groups.length * 28 + 16;
-    canvas.width = rect.width * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${h}px`;
-    ctx.scale(dpr, dpr);
-    const w = rect.width;
-
-    ctx.clearRect(0, 0, w, h);
-    ctx.font = '11px monospace';
-    ctx.textBaseline = 'middle';
-
-    const labelW = Math.min(150, w * 0.28);
-    const plotLeft = 10 + labelW;
-    const plotRight = w - 10;
-    const plotW = plotRight - plotLeft;
-    const midX = plotLeft + plotW / 2;
-    const halfW = plotW / 2;
-    const maxAbs = Math.max(1, ...groups.map((g) => Math.abs(g.stats.totalPnl)));
-    const scale = (v: number) => (Math.abs(v) / maxAbs) * halfW;
-
-    // Central zero axis
-    ctx.strokeStyle = tokens.chart.grid;
-    ctx.beginPath();
-    ctx.moveTo(midX, 6);
-    ctx.lineTo(midX, h - 6);
-    ctx.stroke();
-
-    groups.forEach((g, i) => {
-      const y = 10 + i * 28;
-      const pnl = g.stats.totalPnl;
-      const barW = Math.max(scale(pnl), 2);
-      const color = pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error;
-      const x0 = pnl >= 0 ? midX : midX - barW;
-
-      // Label (group key)
-      ctx.fillStyle = g.key === 'Chaos Mode' ? tokens.colors.semantic.warning : tokens.colors.ink['2'];
-      const label = g.key.length > 24 ? `${g.key.slice(0, 24)}…` : g.key;
-      ctx.fillText(label, 10, y + 7);
-
-      // Bar
-      ctx.fillStyle = color;
-      ctx.fillRect(x0, y, barW, 14);
-
-      // Value at the bar end
-      ctx.fillStyle = color;
-      const val = fmtSignedUsd(pnl);
-      if (pnl >= 0) {
-        ctx.fillText(val, midX + barW + 4, y + 7);
-      } else {
-        const valW = ctx.measureText(val).width;
-        ctx.fillText(val, Math.max(10, x0 - valW - 4), y + 7);
-      }
-    });
-  }, [groups]);
-
   if (groups.length === 0) return null;
-  return (
-    <div
-      className="w-full max-h-[400px] overflow-auto rounded-md border bg-[color:var(--pf-canvas)]"
-      style={{ borderColor: tokens.colors.hairline.default }}
-    >
-      <canvas ref={canvasRef} className="block w-full" />
-    </div>
-  );
-}
 
-function StatCard({
-  label,
-  value,
-  color,
-  title,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  title?: string;
-}) {
+  const data = groups.map((g) => ({
+    name: g.key.length > 24 ? `${g.key.slice(0, 24)}…` : g.key,
+    pnl: g.stats.totalPnl,
+  }));
+
   return (
-    <Card
-      className="p-2.5 text-center rounded-md border bg-[color:var(--pf-canvas)]"
-      title={title}
-    >
-      <CardContent className="p-0">
-        <div
-          className="text-[10px] uppercase tracking-[0.5px] mb-1"
-          style={{ color: tokens.colors.steel.muted }}
-        >
-          {label}
-        </div>
-        <div
-          className="text-[15px] font-semibold font-mono"
-          style={{ color: color ?? tokens.colors.ink['1'] }}
-        >
-          {value}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="w-full max-h-[400px]">
+      <ChartContainer config={{ pnl: { label: 'PnL', color: 'var(--color-primary)' } }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+          <CartesianGrid strokeDasharray="4 4" stroke="var(--color-border)" horizontal={false} />
+          <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${v}`} />
+          <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={150} />
+          <ReferenceLine x={0} stroke="var(--color-border)" />
+          <ChartTooltipContent />
+          <Bar dataKey="pnl" radius={[0, 4, 4, 0]}>
+            {data.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ChartContainer>
+    </div>
   );
 }
 
 const NO_TRADES = (
-  <div className="p-8 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
+  <div className="p-8 text-center text-[12px] text-muted-foreground">
     No trades yet.
   </div>
 );
@@ -337,13 +203,13 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
   const groupLabel = GROUP_BY_LABEL[groupBy];
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div className="space-y-4">
       {/* Controls */}
       <div className="flex gap-2 items-center flex-wrap">
         <ModeToggle value={mode} onChange={setMode} />
         <StatusSelect value={status} onChange={setStatus} />
         <div className="flex-1" />
-        <span className="text-[11px]" style={{ color: tokens.colors.steel.muted }}>
+        <span className="text-xs text-muted-foreground">
           Group by:
         </span>
         <Select
@@ -366,125 +232,132 @@ export function StatisticsTab({ backendUrl, liveTrades, reconnectEpoch }: Statis
       </div>
 
       {/* Global metric cards */}
-      <div>
-        <div
-          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
-          style={{ color: tokens.colors.steel.muted }}
-        >
-          Global Metrics
-        </div>
-        {error && !summary ? (
-          <ErrorState message={error} onRetry={refresh} />
-        ) : loading && !summary ? (
-          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
-            Loading statistics…
-          </div>
-        ) : summary && summary.totalTrades > 0 ? (
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-            <StatCard label="Total Trades" value={String(summary.totalTrades)} />
-            <StatCard label="Win Rate" value={`${(summary.winRate * 100).toFixed(1)}%`} />
-            <StatCard
-              label="Gross PnL"
-              value={fmtSignedUsd(summary.totalPnl)}
-              color={summary.totalPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
-              title="Realized PnL before fees (expected-price based — estimate)"
-            />
-            <StatCard
-              label="Net PnL"
-              value={fmtSignedUsd(summary.netPnl)}
-              color={summary.netPnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
-              title="Gross PnL minus fees (fees are 0 in this version — equals gross PnL)"
-            />
-            <StatCard label="Fees" value={fmtAmount(summary.totalFees)} title="Fees are not included in this version -- always 0 (real fee parsing deferred)" />
-            <StatCard
-              label="Profit Factor"
-              value={
-                summary.profitFactor >= Number.MAX_SAFE_INTEGER
-                  ? '∞'
-                  : summary.profitFactor.toFixed(2)
-              }
-              color={
-                summary.profitFactor >= 1.5
-                  ? tokens.colors.semantic.success
-                  : summary.profitFactor >= 1
-                    ? tokens.colors.semantic.warning
-                    : tokens.colors.semantic.error
-              }
-            />
-            <StatCard label="Avg Win" value={fmtSignedUsd(summary.averageWin)} color={tokens.colors.semantic.success} />
-            <StatCard label="Avg Loss" value={fmtSignedUsd(summary.averageLoss)} color={tokens.colors.semantic.error} />
-            <StatCard label="Best Trade" value={fmtSignedUsd(summary.bestTrade)} color={tokens.colors.semantic.success} />
-            <StatCard
-              label="Worst Trade"
-              value={fmtSignedUsd(summary.worstTrade)}
-              color={tokens.colors.semantic.error}
-            />
-            <StatCard
-              label="Avg Trade"
-              value={fmtSignedUsd(summary.avgTrade)}
-              color={summary.avgTrade >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error}
-            />
-            <StatCard label="Max Drawdown" value={fmtAmount(summary.maxDrawdown)} color={tokens.colors.semantic.error} />
-          </div>
-        ) : (
-          NO_TRADES
-        )}
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">Trade Statistics</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && !summary ? (
+            <ErrorState message={error} onRetry={refresh} />
+          ) : loading && !summary ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Loading statistics…
+            </div>
+          ) : summary && summary.totalTrades > 0 ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Total Trades</div>
+                <div className="font-mono text-sm">{String(summary.totalTrades)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Win Rate</div>
+                <div className="font-mono text-sm">{`${(summary.winRate * 100).toFixed(1)}%`}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Gross PnL</div>
+                <div className="font-mono text-sm" title="Realized PnL before fees (expected-price based — estimate)">
+                  {fmtSignedUsd(summary.totalPnl)}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Net PnL</div>
+                <div className="font-mono text-sm" title="Gross PnL minus fees (fees are 0 in this version — equals gross PnL)">
+                  {fmtSignedUsd(summary.netPnl)}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Fees</div>
+                <div className="font-mono text-sm" title="Fees are not included in this version -- always 0 (real fee parsing deferred)">
+                  {fmtAmount(summary.totalFees)}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Profit Factor</div>
+                <div className="font-mono text-sm">
+                  {summary.profitFactor >= Number.MAX_SAFE_INTEGER
+                    ? '∞'
+                    : summary.profitFactor.toFixed(2)}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Avg Win</div>
+                <div className="font-mono text-sm">{fmtSignedUsd(summary.averageWin)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Avg Loss</div>
+                <div className="font-mono text-sm">{fmtSignedUsd(summary.averageLoss)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Best Trade</div>
+                <div className="font-mono text-sm">{fmtSignedUsd(summary.bestTrade)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Worst Trade</div>
+                <div className="font-mono text-sm">{fmtSignedUsd(summary.worstTrade)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Avg Trade</div>
+                <div className="font-mono text-sm">{fmtSignedUsd(summary.avgTrade)}</div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Max Drawdown</div>
+                <div className="font-mono text-sm">{fmtAmount(summary.maxDrawdown)}</div>
+              </div>
+            </div>
+          ) : (
+            NO_TRADES
+          )}
+        </CardContent>
+      </Card>
 
       {/* Equity curve */}
-      <div>
-        <div
-          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
-          style={{ color: tokens.colors.steel.muted }}
-        >
-          Equity Curve{' '}
-          <span className="text-[color:var(--pf-ink-3)] font-normal tracking-normal">
-            — cumulative realized PnL over close time (est.)
-          </span>
-        </div>
-        {equityError ? (
-          <ErrorState message={equityError} />
-        ) : equityLoading && equityTrades.length === 0 ? (
-          <div
-            className="h-[220px] flex items-center justify-center rounded-md border bg-[color:var(--pf-canvas)]"
-            style={{ color: tokens.colors.ink['3'], fontSize: 12, borderColor: tokens.colors.hairline.default }}
-          >
-            Loading equity curve…
-          </div>
-        ) : equityPoints.length === 0 ? (
-          <div
-            className="h-[100px] flex items-center justify-center rounded-md border bg-[color:var(--pf-canvas)]"
-            style={{ color: tokens.colors.steel.disabled, fontSize: 12, borderColor: tokens.colors.hairline.default }}
-          >
-            No trades to chart.
-          </div>
-        ) : (
-          <EquityCurveChart points={equityPoints} />
-        )}
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">
+            Equity Curve{' '}
+            <span className="text-xs font-normal text-muted-foreground">
+              — cumulative realized PnL over close time (est.)
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {equityError ? (
+            <ErrorState message={equityError} />
+          ) : equityLoading && equityTrades.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center rounded-md border bg-muted/20 text-sm text-muted-foreground">
+              Loading equity curve…
+            </div>
+          ) : equityPoints.length === 0 ? (
+            <div className="h-[100px] flex items-center justify-center rounded-md border bg-muted/20 text-sm text-muted-foreground">
+              No trades to chart.
+            </div>
+          ) : (
+            <EquityCurveChart points={equityPoints} />
+          )}
+        </CardContent>
+      </Card>
 
       {/* Grouped PnL comparison */}
-      <div>
-        <div
-          className="text-[11px] font-semibold uppercase tracking-[1px] mb-2"
-          style={{ color: tokens.colors.steel.muted }}
-        >
-          PnL by {groupLabel}
-        </div>
-        {error && !groups ? (
-          <ErrorState message={error} onRetry={refresh} />
-        ) : loading && !groups ? (
-          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.ink['3'] }}>
-            Loading groups…
-          </div>
-        ) : groups && groups.length > 0 ? (
-          <GroupedPnlChart groups={groups} />
-        ) : (
-          <div className="p-6 text-center text-[12px]" style={{ color: tokens.colors.steel.muted }}>
-            No groups to chart.
-          </div>
-        )}
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold">PnL by {groupLabel}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && !groups ? (
+            <ErrorState message={error} onRetry={refresh} />
+          ) : loading && !groups ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              Loading groups…
+            </div>
+          ) : groups && groups.length > 0 ? (
+            <GroupedPnlChart groups={groups} />
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">
+              No groups to chart.
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

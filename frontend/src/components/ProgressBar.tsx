@@ -9,11 +9,11 @@ interface ProgressBarProps {
   error?: string | null;
 }
 
-const FILL_BLUE = "[&_[data-slot='progress-indicator']]:bg-[var(--pf-brand-blue)]";
+const FILL_BLUE = "[&_[data-slot='progress-indicator']]:bg-primary";
 const FILL_SUCCESS =
-  "[&_[data-slot='progress-indicator']]:bg-[var(--pf-semantic-success)]";
+  "[&_[data-slot='progress-indicator']]:bg-[#22c55e]";
 const FILL_ERROR =
-  "[&_[data-slot='progress-indicator']]:bg-[var(--pf-semantic-error)]";
+  "[&_[data-slot='progress-indicator']]:bg-destructive";
 
 export function ProgressBar({
   progress,
@@ -37,7 +37,7 @@ export function ProgressBar({
     return (
       <div
         role="alert"
-        className="rounded-md bg-[var(--pf-semantic-error-bg)] px-3 py-3 text-center text-xs text-[var(--pf-semantic-error)]"
+        className="rounded-md bg-[rgba(239,68,68,0.12)] px-3 py-3 text-center text-xs text-destructive"
       >
         {error}
       </div>
@@ -46,24 +46,24 @@ export function ProgressBar({
 
   if (variant === 'modal') {
     return (
-      <div className="px-10 pt-10 pb-10 text-center text-[var(--pf-steel-muted)]">
+      <div className="px-10 pt-10 pb-10 text-center text-muted-foreground">
         <div className="relative mx-auto mb-3 h-[6px] w-3/5 overflow-hidden rounded-full">
           <Progress
             value={isIndeterminate ? null : displayProgress}
             aria-busy={isIndeterminate}
             className={cn(
-              'h-[6px] w-full rounded-full bg-[var(--pf-surface-2)]',
+              'h-[6px] w-full rounded-full bg-secondary',
               fillClass,
             )}
           />
           {isIndeterminate && (
             <div
               aria-hidden="true"
-              className="absolute inset-y-0 left-0 w-[30%] rounded-full bg-[var(--pf-brand-blue)] transition-transform animate-[backtest-indeterminate_1.5s_ease-in-out_infinite] motion-reduce:animate-none"
+              className="absolute inset-y-0 left-0 w-[30%] rounded-full bg-primary transition-transform animate-[backtest-indeterminate_1.5s_ease-in-out_infinite] motion-reduce:animate-none"
             />
           )}
         </div>
-        <div className="text-sm text-[var(--pf-steel-muted)]">
+        <div className="text-sm text-muted-foreground">
           {isRunning ? `${phase}... ${displayProgress}%` : `${phase || 'Starting'}...`}
         </div>
       </div>
@@ -78,18 +78,18 @@ export function ProgressBar({
           value={isIndeterminate ? null : displayProgress}
           aria-busy={isIndeterminate}
           className={cn(
-            'h-[6px] w-full rounded-full bg-[var(--pf-surface-2)]',
+            'h-[6px] w-full rounded-full bg-secondary',
             fillClass,
           )}
         />
         {isIndeterminate && (
           <div
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-[30%] rounded-full bg-[var(--pf-brand-blue)] transition-transform duration-[var(--pf-motion-base)] animate-[backtest-indeterminate_1.5s_ease-in-out_infinite] motion-reduce:animate-none"
+            className="absolute inset-y-0 left-0 w-[30%] rounded-full bg-primary transition-transform duration-200 animate-[backtest-indeterminate_1.5s_ease-in-out_infinite] motion-reduce:animate-none"
           />
         )}
       </div>
-      <div className="mt-1 text-center text-[13px] tabular-nums text-[var(--pf-ink-3)]">
+      <div className="mt-1 text-center text-[13px] tabular-nums text-muted-foreground">
         {isRunning ? `Processing... ${Math.round(displayProgress)}%` : `${phase || 'Starting'}...`}
       </div>
     </div>

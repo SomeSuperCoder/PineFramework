@@ -11,9 +11,9 @@
 export function MetricValue({ label, value, color, title }: { label: string; value: string; color?: string; title?: string }) {
   return (
     <div title={title} className="min-w-0">
-      <span className="text-[var(--pf-ink-2)]">{label}: </span>
+      <span className="text-[var(--color-muted-foreground)]">{label}: </span>
       <span
-        className="font-semibold tabular-nums text-[var(--pf-ink-1)]"
+        className="font-semibold tabular-nums text-[var(--color-foreground)]"
         style={color ? { color } : undefined}
       >
         {value}

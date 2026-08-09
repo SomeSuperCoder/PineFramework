@@ -574,31 +574,31 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                 title={label.name}
                 variant="outline"
                 className={cn(
-                  'h-auto! gap-1.5 py-1 pr-1 pl-2 text-[13px] font-medium text-[var(--pf-ink-1)]',
-                  'bg-[var(--pf-canvas)]/90',
+                  'h-auto! gap-1.5 py-1 pr-1 pl-2 text-[13px] font-medium text-[var(--color-foreground)]',
+                  'bg-[var(--color-background)]/90',
                   label.overlay
-                    ? 'border-[var(--pf-brand-blue)]/70'
-                    : 'border-[var(--pf-semantic-warning)]/70',
+                    ? 'border-[var(--color-primary)]/70'
+                    : 'border-[#eab308]/70',
                 )}
               >
                 <span
                   aria-hidden="true"
                   className={cn(
                     'size-2 shrink-0 rounded-full',
-                    label.overlay ? 'bg-[var(--pf-brand-blue)]' : 'bg-[var(--pf-semantic-warning)]',
+                    label.overlay ? 'bg-[var(--color-primary)]' : 'bg-[#eab308]',
                   )}
                 />
                 <span className="max-w-[140px] truncate">{label.name}</span>
                 {computingIndicators.has(label.id) ? (
                   <span title="Computing..." className="inline-flex shrink-0 items-center justify-center">
                     <Loader2
-                      className="size-3 animate-spin text-[var(--pf-semantic-warning)] motion-reduce:animate-none"
+                      className="size-3 animate-spin text-[#eab308] motion-reduce:animate-none"
                       aria-hidden="true"
                     />
                     <span className="sr-only">Computing…</span>
                   </span>
                 ) : (
-                  <span title="Ready" className="inline-flex shrink-0 items-center justify-center text-[var(--pf-semantic-success)]">
+                    <span title="Ready" className="inline-flex shrink-0 items-center justify-center text-[#22c55e]">
                     <Check className="size-3" aria-hidden="true" />
                     <span className="sr-only">Ready</span>
                   </span>
@@ -611,7 +611,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                       size="icon-sm"
                       onClick={() => handleEditIndicator(label.id)}
                       aria-label={`Edit ${label.name}`}
-                      className="text-[var(--pf-steel-icon)] hover:bg-[var(--pf-surface-2)] hover:text-[var(--pf-ink-1)]"
+                      className="text-[var(--color-muted-foreground)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-foreground)]"
                     >
                       <Pencil className="size-3.5" aria-hidden="true" />
                     </Button>
@@ -626,7 +626,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                       size="icon-sm"
                       onClick={() => handleRemoveIndicator(label.id)}
                       aria-label={`Remove ${label.name}`}
-                      className="text-[var(--pf-steel-icon)] hover:bg-[var(--pf-semantic-error-bg)] hover:text-[var(--pf-semantic-error)]"
+                      className="text-[var(--color-muted-foreground)] hover:bg-[rgba(239,68,68,0.12)] hover:text-[#ef4444]"
                     >
                       <X className="size-3.5" aria-hidden="true" />
                     </Button>

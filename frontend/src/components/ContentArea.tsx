@@ -14,12 +14,12 @@ export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaPro
   const segments = breadcrumb ?? (panelLabel ? [panelLabel] : []);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-[var(--pf-surface-0)]">
+    <div className="flex flex-1 flex-col overflow-hidden bg-background">
       {/* Breadcrumb bar */}
       {segments.length > 0 && (
         <nav
           aria-label="Breadcrumb"
-          className="flex shrink-0 items-center gap-1 border-b border-[var(--pf-hairline)] bg-[var(--pf-surface-1)] px-4 py-1.5"
+          className="flex shrink-0 items-center gap-1 border-b border-border bg-card px-4 py-1.5"
         >
           {segments.map((segment, i) => {
             const isLast = i === segments.length - 1;
@@ -27,7 +27,7 @@ export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaPro
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && (
                   <ChevronRight
-                    className="size-3 text-[var(--pf-steel-muted)]"
+                    className="size-3 text-muted-foreground"
                     aria-hidden="true"
                   />
                 )}
@@ -39,8 +39,8 @@ export function ContentArea({ breadcrumb, panelLabel, children }: ContentAreaPro
                   className={cn(
                     'h-7 rounded-full px-2 text-sm no-underline',
                     isLast
-                      ? 'font-medium text-[var(--pf-ink-1)]'
-                      : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)] hover:underline',
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:underline',
                   )}
                 >
                   {segment}

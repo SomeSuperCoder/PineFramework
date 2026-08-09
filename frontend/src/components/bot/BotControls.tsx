@@ -240,19 +240,19 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
 
   return (
     <div className="mb-4">
-      <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
+      <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
         Wallet {wallet.hasWallet ? '✓ Imported' : '— Not Imported'}
       </div>
       {wallet.hasWallet ? (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="font-mono text-[11px] text-[var(--pf-semantic-success)]">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-[#22c55e]">
             {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-4)}
           </span>
-          <span className="text-[11px] text-[var(--pf-steel-muted)]">
+          <span className="text-[11px] text-[var(--color-muted-foreground)]">
             {importedBalanceLoading ? (
               'Loading balance...'
             ) : importedBalance !== null ? (
-              <span className="text-[var(--pf-brand-blue)]">
+              <span className="text-[var(--color-primary)]">
                 USDC: {importedBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             ) : null}
@@ -262,7 +262,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             variant="ghost"
             onClick={handleRemove}
             disabled={importing}
-            className="h-9 border border-[var(--pf-semantic-error)]/40 px-3 text-xs text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]"
+            className="h-9 border border-[var(--color-destructive)]/40 px-3 text-xs text-[var(--color-destructive)] hover:bg-[rgba(239,68,68,0.12)]"
           >
             Remove
           </Button>
@@ -279,20 +279,20 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             }}
             placeholder="Paste 12 or 24 word seed phrase..."
             rows={2}
-            className="w-full resize-y rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-2)] p-2 font-mono text-[11px] text-[var(--pf-ink-1)]"
+            className="w-full resize-y rounded-md border border-[var(--color-border)] bg-[var(--color-secondary)] p-2 font-mono text-[11px] text-[var(--color-foreground)]"
           />
 
           {/* Balance preview — shown after valid seed phrase */}
           {(previewLoading || previewPublicKey) && (
-            <div className="rounded-md border border-[var(--pf-border)] bg-[var(--pf-semantic-success-bg)] p-2">
+            <div className="rounded-md border border-[var(--color-border)] bg-[rgba(34,197,94,0.12)] p-2">
               {previewLoading ? (
-                <span className="text-[11px] text-[var(--pf-steel-muted)]">Checking wallet...</span>
+                <span className="text-[11px] text-[var(--color-muted-foreground)]">Checking wallet...</span>
               ) : (
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-mono text-[11px] text-[var(--pf-semantic-success)]">
+                  <span className="font-mono text-[11px] text-[#22c55e]">
                     {previewPublicKey?.slice(0, 8)}...{previewPublicKey?.slice(-4)}
                   </span>
-                  <span className="text-[11px] text-[var(--pf-brand-blue)]">
+                  <span className="text-[11px] text-[var(--color-primary)]">
                     USDC: {(previewBalance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -305,7 +305,7 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Set encryption password (min 8 chars)"
-            className="w-full box-border rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-2)] p-2 text-[11px] text-[var(--pf-ink-1)]"
+            className="w-full box-border rounded-md border border-[var(--color-border)] bg-[var(--color-secondary)] p-2 text-[11px] text-[var(--color-foreground)]"
           />
           <div className="flex items-center gap-2">
             <Button
@@ -313,12 +313,12 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
               variant="outline"
               onClick={handleImport}
               disabled={importing || !seedPhrase.trim() || !password}
-              className="h-10 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-3 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
+              className="h-10 border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-3 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]"
             >
               {importing ? 'Importing...' : 'Import Wallet'}
             </Button>
           </div>
-          {error && <div className="text-[10px] text-[var(--pf-semantic-error)]">{error}</div>}
+          {error && <div className="text-[10px] text-[var(--color-destructive)]">{error}</div>}
         </div>
       )}
     </div>
@@ -437,7 +437,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
 
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
+      <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
         Configuration
       </div>
       <div className="flex flex-col gap-2">
@@ -447,29 +447,29 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           onChange={(src, _name, _id) => { setStrategySource(src); }}
         />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label className="text-[11px] text-[var(--pf-steel-muted)]">
+          <label className="text-[11px] text-[var(--color-muted-foreground)]">
             DEX:{' '}
             <select
               value={dex}
               onChange={(e) => setDex(e.target.value as 'jupiter-swap' | 'jupiter-ultra')}
-              className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
+              className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
             >
               <option value="jupiter-swap">Jupiter Swap</option>
               <option value="jupiter-ultra">Jupiter Ultra</option>
             </select>
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <label className="flex items-center gap-1 text-[11px] text-[var(--pf-steel-muted)]">
+            <label className="flex items-center gap-1 text-[11px] text-[var(--color-muted-foreground)]">
               <input
                 type="checkbox"
                 checked={manualOverride}
                 onChange={(e) => setManualOverride(e.target.checked)}
-                className="accent-[var(--pf-brand-blue)]"
+                className="accent-[var(--color-primary)]"
               />
               Manual Override
             </label>
             {manualOverride ? (
-              <label className="text-[11px] text-[var(--pf-steel-muted)]">
+              <label className="text-[11px] text-[var(--color-muted-foreground)]">
                 Max Daily Loss ($):{' '}
                 <input
                   type="number"
@@ -477,34 +477,34 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
                   onChange={(e) => setManualMaxDailyLoss(e.target.value)}
                   min="0"
                   step="0.01"
-                  className="ml-1 w-[70px] rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
+                  className="ml-1 w-[70px] rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
                 />
               </label>
             ) : (
-              <span className="text-[11px] text-[var(--pf-steel-muted)]">
+              <span className="text-[11px] text-[var(--color-muted-foreground)]">
                 Max Daily Loss:{' '}
-                <span className="font-semibold text-[var(--pf-brand-blue)]">
+                <span className="font-semibold text-[var(--color-primary)]">
                   ${maxDailyLoss.toFixed(2)}
                 </span>
-                <span className="ml-1 text-[10px] text-[var(--pf-steel-disabled)]">
+                <span className="ml-1 text-[10px] text-[var(--color-muted-foreground)]">
                   (10% × ${usdcBalance?.toFixed(2) ?? '0.00'})
                 </span>
               </span>
             )}
           </div>
-          <label className="flex items-center gap-1 text-[11px] text-[var(--pf-steel-muted)]">
+          <label className="flex items-center gap-1 text-[11px] text-[var(--color-muted-foreground)]">
             Timezone:{' '}
             <input
               type="text"
               placeholder="Filter..."
               value={timezoneFilter}
               onChange={(e) => setTimezoneFilter(e.target.value)}
-              className="ml-1 w-20 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[10px] text-[var(--pf-ink-1)]"
+              className="ml-1 w-20 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[10px] text-[var(--color-foreground)]"
             />
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
+              className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
             >
               {TIMEZONE_GROUPS.map((group) => {
                 const filtered = timezoneFilter
@@ -522,14 +522,14 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
             </select>
           </label>
         </div>
-        {error && <div className="text-[10px] text-[var(--pf-semantic-error)]">{error}</div>}
+        {error && <div className="text-[10px] text-[var(--color-destructive)]">{error}</div>}
         {compatibilityWarnings.length > 0 && (
-          <div className="mt-1 rounded border border-[var(--pf-semantic-warning)] bg-[var(--pf-semantic-warning-bg)] px-2.5 py-1.5">
-            <div className="mb-0.5 text-[10px] font-semibold text-[var(--pf-semantic-warning)]">
+          <div className="mt-1 rounded border border-[#eab308] bg-[rgba(234,179,8,0.12)] px-2.5 py-1.5">
+            <div className="mb-0.5 text-[10px] font-semibold text-[#eab308]">
               ⚠ Live Trading Compatibility Notes
             </div>
             {compatibilityWarnings.map((w, i) => (
-              <div key={i} className="text-[10px] text-[var(--pf-semantic-warning)]">{w}</div>
+              <div key={i} className="text-[10px] text-[#eab308]">{w}</div>
             ))}
           </div>
         )}
@@ -538,7 +538,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           variant="outline"
           onClick={handleConfigure}
           disabled={configuring}
-          className="h-11 self-start border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-4 text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
+          className="h-11 self-start border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-4 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
         >
           {configuring ? 'Configuring...' : 'Apply Configuration'}
         </Button>
@@ -588,8 +588,8 @@ export function TradingBotControlButton({
         className={cn(
           'h-10 px-3 text-sm',
           dashboardOpen
-            ? 'bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]'
-            : 'text-[var(--pf-ink-2)] hover:text-[var(--pf-ink-1)]',
+            ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]'
+            : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
         )}
       >
         {isStopped && dashboardOpen ? (
@@ -633,17 +633,17 @@ export function TradingBotControlButton({
           onClick={() => sendCommand('reset')}
           disabled={loading}
           title="Reset Bot"
-          className="h-10 border-[var(--pf-semantic-warning)]/50 px-3 text-sm text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
+          className="h-10 border-[#eab308]/50 px-3 text-sm text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
         >
           <RotateCcw className="size-3.5" aria-hidden="true" />
           Reset
         </Button>
       )}
       {transitioning && (
-        <span className="text-[11px] font-medium italic text-[var(--pf-semantic-warning)]">{botState}...</span>
+        <span className="text-[11px] font-medium italic text-[#eab308]">{botState}...</span>
       )}
       {!connected && (botState !== 'Idle' || dashboardOpen) && (
-        <span className="ml-0.5 text-[10px] text-[var(--pf-semantic-warning)]" title="Reconnecting...">
+        <span className="ml-0.5 text-[10px] text-[#eab308]" title="Reconnecting...">
           ○
         </span>
       )}
@@ -831,20 +831,20 @@ export function SetupWizard({
         className={cn(
           'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]',
           active
-            ? 'font-semibold text-[var(--pf-ink-1)]'
+            ? 'font-semibold text-[var(--color-foreground)]'
             : done
-              ? 'cursor-pointer text-[var(--pf-semantic-success)]'
-              : 'text-[var(--pf-steel-disabled)]',
+              ? 'cursor-pointer text-[#22c55e]'
+              : 'text-[var(--color-muted-foreground)]',
         )}
       >
         <span
           className={cn(
             'inline-flex size-[18px] items-center justify-center rounded-full border font-semibold',
             active
-              ? 'border-[var(--pf-brand-blue)] bg-[var(--pf-semantic-info-bg)] text-[var(--pf-brand-blue)]'
+              ? 'border-[var(--color-primary)] bg-[rgba(var(--color-primary),0.12)] text-[var(--color-primary)]'
               : done
-                ? 'border-[var(--pf-semantic-success)] bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)]'
-                : 'border-[var(--pf-hairline-strong)] bg-[var(--pf-surface-3)] text-[var(--pf-steel-disabled)]',
+                ? 'border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]'
+                : 'border-[var(--color-input)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]',
           )}
         >
           {done ? '✓' : idx}
@@ -875,13 +875,13 @@ export function SetupWizard({
   return (
     <div className="flex flex-col gap-3">
       {/* Step indicator */}
-      <div className="flex items-center border-b border-[var(--pf-surface-1)] pb-2">
+      <div className="flex items-center border-b border-[var(--color-card)] pb-2">
         <StepDot s="wallet" label="Wallet" />
-        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
+        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
         <StepDot s="config" label="Config" />
-        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
+        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
         <StepDot s="backtest-choice" label="Backtest" />
-        <span className="mx-0.5 text-[var(--pf-steel-disabled)]">→</span>
+        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
         <StepDot s="review" label="Review" />
         <div className="flex-1" />
         <Button
@@ -890,7 +890,7 @@ export function SetupWizard({
           size="icon"
           onClick={onClose}
           aria-label="Close"
-          className="h-9 w-9 text-[var(--pf-steel-muted)]"
+          className="h-9 w-9 text-[var(--color-muted-foreground)]"
         >
           <X className="size-4" aria-hidden="true" />
         </Button>
@@ -906,7 +906,7 @@ export function SetupWizard({
               variant="outline"
               onClick={() => setStep('config')}
               disabled={!wallet.hasWallet}
-              className="h-11 border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-5 text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
+              className="h-11 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-5 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
             >
               Next →
             </Button>
@@ -928,7 +928,7 @@ export function SetupWizard({
               type="button"
               variant="outline"
               onClick={() => setStep('wallet')}
-              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
+              className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >
               ← Back
             </Button>
@@ -939,10 +939,10 @@ export function SetupWizard({
       {/* Step 3: Backtest Choice */}
       {step === 'backtest-choice' && (
         <div>
-          <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
+          <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
             Backtest Selection
           </div>
-          <div className="mb-3 text-[11px] text-[var(--pf-steel-muted)]">
+          <div className="mb-3 text-[11px] text-[var(--color-muted-foreground)]">
             How would you like to select your trading pair?
           </div>
           <div className="flex flex-col gap-2">
@@ -950,10 +950,10 @@ export function SetupWizard({
               type="button"
               variant="outline"
               onClick={() => handleBacktestChoice('auto')}
-              className="h-auto flex-col items-start gap-1 border-[var(--pf-brand-blue)]/50 bg-[var(--pf-semantic-info-bg)] px-4 py-3 text-left text-xs font-semibold text-[var(--pf-brand-blue)] hover:bg-[var(--pf-semantic-info-bg)]"
+              className="h-auto flex-col items-start gap-1 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-4 py-3 text-left text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
             >
               <span>🚀 Run Auto-Select Backtest</span>
-              <span className="text-[10px] font-normal text-[var(--pf-steel-muted)]">
+              <span className="text-[10px] font-normal text-[var(--color-muted-foreground)]">
                 Automatically evaluate multiple pairs and timeframes to find the best performer
               </span>
             </Button>
@@ -961,10 +961,10 @@ export function SetupWizard({
               type="button"
               variant="outline"
               onClick={() => handleBacktestChoice('manual')}
-              className="h-auto flex-col items-start gap-1 border-[var(--pf-semantic-warning)]/60 bg-[var(--pf-semantic-warning-bg)] px-4 py-3 text-left text-xs font-semibold text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
+              className="h-auto flex-col items-start gap-1 border-[#eab308]/60 bg-[rgba(234,179,8,0.12)] px-4 py-3 text-left text-xs font-semibold text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
             >
               <span>✋ Manually Select Pair & Timeframe</span>
-              <span className="text-[10px] font-normal text-[var(--pf-steel-muted)]">
+              <span className="text-[10px] font-normal text-[var(--color-muted-foreground)]">
                 Choose your own pair and timeframe — you take full responsibility for the selection
               </span>
             </Button>
@@ -974,7 +974,7 @@ export function SetupWizard({
               type="button"
               variant="outline"
               onClick={() => setStep('config')}
-              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
+              className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >
               ← Back
             </Button>
@@ -987,16 +987,16 @@ export function SetupWizard({
         <div>
           {/* Manual Selection Mode */}
           {backtestMode === 'manual' && (
-            <div className="mb-3 rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-semantic-warning-bg)] p-3">
-              <div className="mb-1 text-[11px] font-semibold text-[var(--pf-semantic-warning)]">
+            <div className="mb-3 rounded-md border border-[#eab308] bg-[rgba(234,179,8,0.12)] p-3">
+              <div className="mb-1 text-[11px] font-semibold text-[#eab308]">
                 ⚠ Manual Selection Mode
               </div>
-              <div className="mb-2 text-[10px] text-[var(--pf-semantic-warning)]">
+              <div className="mb-2 text-[10px] text-[#eab308]">
                 Auto-select was skipped. You are fully responsible for your pair/timeframe choice.
                 The bot will only trade the pair you select — no automated evaluation was performed.
               </div>
                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <label className="text-[11px] text-[var(--pf-steel-muted)]">
+                <label className="text-[11px] text-[var(--color-muted-foreground)]">
                   Pair:{' '}
                   <select
                     value={manualPair?.symbol ?? ''}
@@ -1004,7 +1004,7 @@ export function SetupWizard({
                       symbol: e.target.value,
                       timeframe: prev?.timeframe ?? '60',
                     }))}
-                    className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
+                    className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
                   >
                     <option value="">Select pair...</option>
                     {TRADABLE_PAIRS.map(pair => {
@@ -1014,7 +1014,7 @@ export function SetupWizard({
                     })}
                   </select>
                 </label>
-                <label className="text-[11px] text-[var(--pf-steel-muted)]">
+                <label className="text-[11px] text-[var(--color-muted-foreground)]">
                   Timeframe:{' '}
                   <select
                     value={manualPair?.timeframe ?? '60'}
@@ -1022,7 +1022,7 @@ export function SetupWizard({
                       symbol: prev?.symbol ?? '',
                       timeframe: e.target.value,
                     }))}
-                    className="ml-1 rounded border border-[var(--pf-border)] bg-[var(--pf-surface-2)] px-1.5 py-1 text-[11px] text-[var(--pf-ink-1)]"
+                    className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
                   >
                     <option value="1">1m</option>
                     <option value="5">5m</option>
@@ -1036,7 +1036,7 @@ export function SetupWizard({
               </div>
               {/* Validation: empty check */}
               {manualPair && (!manualPair.symbol || !manualPair.timeframe) && (
-                <div className="mt-2 text-[10px] text-[var(--pf-semantic-error)]">
+                <div className="mt-2 text-[10px] text-[var(--color-destructive)]">
                   Both pair and timeframe are required
                 </div>
               )}
@@ -1046,17 +1046,17 @@ export function SetupWizard({
           {/* Auto-Select Mode */}
           {backtestMode === 'auto' && (
             <>
-              <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
+              <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
                 Auto-Select Backtest
               </div>
-              <div className="mb-2 text-[11px] text-[var(--pf-steel-muted)]">
+              <div className="mb-2 text-[11px] text-[var(--color-muted-foreground)]">
                 Evaluating candidate pairs sequentially...
               </div>
 
               {/* Timeframe Selection */}
               {!autoSelectProgress && (
                 <div className="mb-3">
-                  <div className="mb-1.5 text-[11px] text-[var(--pf-ink-3)]">Select Timeframes:</div>
+                  <div className="mb-1.5 text-[11px] text-[var(--color-muted-foreground)]">Select Timeframes:</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {['5', '15', '60', '240'].map(tf => (
                       <label key={tf} className="flex cursor-pointer items-center gap-1">
@@ -1070,9 +1070,9 @@ export function SetupWizard({
                               setSelectedTimeframes(prev => prev.filter(t => t !== tf));
                             }
                           }}
-                          className="accent-[var(--pf-brand-blue)]"
+                          className="accent-[var(--color-primary)]"
                         />
-                        <span className="text-[11px] text-[var(--pf-ink-2)]">
+                        <span className="text-[11px] text-[var(--color-muted-foreground)]">
                           {tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : '4h'}
                         </span>
                       </label>
@@ -1083,7 +1083,7 @@ export function SetupWizard({
 
               {/* Auto-Select Progress */}
               {autoSelectProgress && (
-            <div className="rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-surface-2)]/60 p-3">
+            <div className="rounded-md border border-[#eab308] bg-[var(--color-secondary)]/60 p-3">
               <ProgressBar
                 progress={(autoSelectProgress.current / Math.max(autoSelectProgress.total, 1)) * 100}
                 phase="Evaluating"
@@ -1103,11 +1103,11 @@ export function SetupWizard({
 
           {/* Auto-Select Results */}
           {autoSelectResult && (
-            <div className="mt-3 rounded-md border border-[var(--pf-semantic-success)] bg-[var(--pf-semantic-success-bg)] p-3">
-              <div className="mb-1 text-[11px] font-semibold text-[var(--pf-semantic-success)]">
+            <div className="mt-3 rounded-md border border-[#22c55e] bg-[rgba(34,197,94,0.12)] p-3">
+              <div className="mb-1 text-[11px] font-semibold text-[#22c55e]">
                 Auto-Select Complete
               </div>
-              <div className="mb-1 text-[11px] text-[var(--pf-ink-3)]">
+              <div className="mb-1 text-[11px] text-[var(--color-muted-foreground)]">
                 Evaluated {autoSelectResult.evaluatedCount} pair
                 {autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
                 {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
@@ -1118,11 +1118,11 @@ export function SetupWizard({
                 )}
                 ranking={autoSelectResult.ranking}
               />
-              <div className="mt-2 rounded bg-[var(--pf-semantic-success-bg)] px-2 py-1.5">
-                <span className="text-[11px] font-semibold text-[var(--pf-semantic-success)]">
+              <div className="mt-2 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
+                <span className="text-[11px] font-semibold text-[#22c55e]">
                   ★ Best: {autoSelectResult.best.label}
                 </span>
-                <span className="ml-2 text-[10px] text-[var(--pf-steel-muted)]">
+                <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
                   PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                   {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                 </span>
@@ -1133,7 +1133,7 @@ export function SetupWizard({
           )}
 
           {configureError && (
-            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">
+            <div className="mt-2 text-[11px] text-[var(--color-destructive)]">
               ⚠ {configureError}
             </div>
           )}
@@ -1143,7 +1143,7 @@ export function SetupWizard({
               variant="outline"
               onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
               disabled={!!autoSelectProgress}
-              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
+              className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >
               ← Back
             </Button>
@@ -1153,7 +1153,7 @@ export function SetupWizard({
                 variant="outline"
                 onClick={() => setStep('review')}
                 disabled={!autoSelectResult}
-                className="h-11 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
+                className="h-11 border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-6 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]"
               >
                 Next →
               </Button>
@@ -1193,7 +1193,7 @@ export function SetupWizard({
                   }
                 }}
                 disabled={!manualPair?.symbol}
-                className="h-11 border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
+                className="h-11 border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-6 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]"
               >
                 Next →
               </Button>
@@ -1205,79 +1205,79 @@ export function SetupWizard({
       {/* Step 4: Review & Start */}
       {step === 'review' && (
         <div>
-          <div className="mb-2 text-xs font-semibold text-[var(--pf-ink-3)]">
+          <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
             Review & Start
           </div>
           <div className="flex flex-col gap-1.5 text-[11px]">
             <div>
-              <span className="text-[var(--pf-steel-muted)]">Wallet: </span>
-              <span className="text-[var(--pf-semantic-success)]">
+              <span className="text-[var(--color-muted-foreground)]">Wallet: </span>
+              <span className="text-[#22c55e]">
                 {wallet.publicKey ? `${wallet.publicKey.slice(0, 8)}...${wallet.publicKey.slice(-4)}` : '(none)'}
               </span>
             </div>
             {configValues && (
               <>
                 <div>
-                  <span className="text-[var(--pf-steel-muted)]">Strategy: </span>
-                  <span className="text-[var(--pf-ink-1)]">
+                  <span className="text-[var(--color-muted-foreground)]">Strategy: </span>
+                  <span className="text-[var(--color-foreground)]">
                     {extractScriptName(configValues.strategySource) ?? '(unnamed strategy)'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[var(--pf-steel-muted)]">DEX: </span>
-                  <span className="text-[var(--pf-ink-1)]">{configValues.dex}</span>
+                  <span className="text-[var(--color-muted-foreground)]">DEX: </span>
+                  <span className="text-[var(--color-foreground)]">{configValues.dex}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--pf-steel-muted)]">Selected Pair: </span>
-                  <span className="font-semibold text-[var(--pf-semantic-success)]">
+                  <span className="text-[var(--color-muted-foreground)]">Selected Pair: </span>
+                  <span className="font-semibold text-[#22c55e]">
                     {backtestMode === 'manual' && manualPair
                       ? `${manualPair.symbol} (${manualPair.timeframe === '5' ? '5m' : manualPair.timeframe === '15' ? '15m' : manualPair.timeframe === '60' ? '1h' : '4h'})`
                       : autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
                   </span>
                 </div>
                 {backtestMode === 'manual' && (
-                  <div className="ml-[60px] text-[10px] text-[var(--pf-semantic-warning)]">
+                  <div className="ml-[60px] text-[10px] text-[#eab308]">
                     Manual selection — no auto-select evaluation performed
                   </div>
                 )}
                 {autoSelectResult && backtestMode === 'auto' && (
-                  <div className="ml-[60px] text-[10px] text-[var(--pf-steel-muted)]">
+                  <div className="ml-[60px] text-[10px] text-[var(--color-muted-foreground)]">
                     PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
                     {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
                   </div>
                 )}
                 <div>
-                  <span className="text-[var(--pf-steel-muted)]">Max Daily Loss: </span>
-                  <span className="text-[var(--pf-ink-1)]">${configValues.maxDailyLoss}</span>
+                  <span className="text-[var(--color-muted-foreground)]">Max Daily Loss: </span>
+                  <span className="text-[var(--color-foreground)]">${configValues.maxDailyLoss}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--pf-steel-muted)]">Timezone: </span>
-                  <span className="text-[var(--pf-ink-1)]">{getTimezoneLabel(configValues.timezone)}</span>
+                  <span className="text-[var(--color-muted-foreground)]">Timezone: </span>
+                  <span className="text-[var(--color-foreground)]">{getTimezoneLabel(configValues.timezone)}</span>
                 </div>
               </>
             )}
           </div>
 
           {startError && (
-            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">{startError}</div>
+            <div className="mt-2 text-[11px] text-[var(--color-destructive)]">{startError}</div>
           )}
           {resetError && (
-            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">{resetError}</div>
+            <div className="mt-2 text-[11px] text-[var(--color-destructive)]">{resetError}</div>
           )}
           {chaosError && (
-            <div className="mt-2 text-[11px] text-[var(--pf-semantic-error)]">
+            <div className="mt-2 text-[11px] text-[var(--color-destructive)]">
               ⚠ Chaos mode toggle failed: {chaosError}. Start is blocked until chaos mode matches the engine.
             </div>
           )}
 
           {/* Reset buttons */}
-          <div className="mt-3 flex gap-2 border-t border-[var(--pf-surface-1)] pt-3">
+          <div className="mt-3 flex gap-2 border-t border-[var(--color-card)] pt-3">
             <Button
               type="button"
               variant="outline"
               onClick={() => handleResetConfig(false)}
               disabled={resetting}
-              className="h-9 border-[var(--pf-semantic-warning)]/50 px-2.5 text-[10px] text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
+              className="h-9 border-[#eab308]/50 px-2.5 text-[10px] text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
             >
               {resetting ? 'Resetting...' : 'Reset Config'}
             </Button>
@@ -1286,7 +1286,7 @@ export function SetupWizard({
               variant="outline"
               onClick={() => handleResetConfig(true)}
               disabled={resetting}
-              className="h-9 border-[var(--pf-semantic-error)]/50 px-2.5 text-[10px] text-[var(--pf-semantic-error)] hover:bg-[var(--pf-semantic-error-bg)]"
+              className="h-9 border-[var(--color-destructive)]/50 px-2.5 text-[10px] text-[var(--color-destructive)] hover:bg-[rgba(239,68,68,0.12)]"
             >
               Reset Everything
             </Button>
@@ -1294,8 +1294,8 @@ export function SetupWizard({
 
           {/* Re-run backtest button when config has autoSelect but hasn't been run this session */}
           {persistedConfig?.autoSelect === true && !backtestRunThisSession && !autoSelectResult && (
-            <div className="mt-3 rounded-md border border-[var(--pf-semantic-warning)] bg-[var(--pf-surface-1)] p-2">
-              <div className="mb-1.5 text-[11px] text-[var(--pf-semantic-warning)]">
+            <div className="mt-3 rounded-md border border-[#eab308] bg-[var(--color-card)] p-2">
+              <div className="mb-1.5 text-[11px] text-[#eab308]">
                 Auto-select backtest hasn't been run since page reload.
               </div>
               <Button
@@ -1303,7 +1303,7 @@ export function SetupWizard({
                 variant="outline"
                 onClick={handleRerunBacktest}
                 disabled={!!autoSelectProgress}
-                className="h-10 border-[var(--pf-semantic-warning)]/60 bg-[var(--pf-semantic-warning-bg)] px-3.5 text-[11px] font-semibold text-[var(--pf-semantic-warning)] hover:bg-[var(--pf-semantic-warning-bg)]"
+                className="h-10 border-[#eab308]/60 bg-[rgba(234,179,8,0.12)] px-3.5 text-[11px] font-semibold text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
               >
                 {autoSelectProgress ? 'Running...' : 'Re-run Backtest'}
               </Button>
@@ -1316,7 +1316,7 @@ export function SetupWizard({
               variant="outline"
               onClick={() => setStep('config')}
               disabled={!!autoSelectProgress}
-              className="h-10 px-3.5 text-[11px] text-[var(--pf-steel-muted)]"
+              className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >
               ← Back
             </Button>
@@ -1325,11 +1325,11 @@ export function SetupWizard({
               onClick={handleStart}
               disabled={starting || !!autoSelectProgress || !!chaosError}
               title={chaosError ? 'Cannot start — chaos mode is in a failed state' : undefined}
-              className="h-11 border border-[var(--pf-semantic-success)]/50 bg-[var(--pf-semantic-success-bg)] px-6 text-xs font-semibold text-[var(--pf-semantic-success)] hover:bg-[var(--pf-semantic-success-bg)]"
+              className="h-11 border border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-6 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]"
             >
               {starting ? 'Starting...' : (
                 <>
-                  <Play className="size-3.5 text-[var(--pf-semantic-success)]" aria-hidden="true" />
+                  <Play className="size-3.5 text-[#22c55e]" aria-hidden="true" />
                   Start Bot
                 </>
               )}

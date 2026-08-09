@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import type { PineScriptError } from '../types';
-import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
 
 interface ErrorConsoleProps {
@@ -58,47 +57,17 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
       role="dialog"
       aria-modal="true"
       aria-label={`Errors (${errors.length})`}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'var(--pf-scrim)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 300,
-      }}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
         ref={panelRef}
         tabIndex={-1}
-        style={{
-          width: 520,
-          maxHeight: '60vh',
-          backgroundColor: tokens.colors.canvas,
-          border: `1px solid ${tokens.colors.hairline.default}`,
-          borderRadius: 'var(--pf-radius-lg)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          boxShadow: 'var(--pf-shadow-4)',
-          outline: 'none',
-        }}
+        className="flex w-[520px] max-h-[60vh] flex-col overflow-hidden rounded-preflight border border-border bg-background shadow-lg outline-none"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '10px 14px',
-            borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-          }}
-        >
-          <h3 className="m-0 text-sm font-semibold" style={{ color: tokens.colors.semantic.error }}>
+        <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
+          <h3 className="m-0 text-sm font-semibold text-destructive">
             Errors ({errors.length})
           </h3>
           <div className="flex gap-1.5">
@@ -120,30 +89,24 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
         <div
           role="log"
           aria-live="polite"
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: '8px 14px',
-          }}
+          className="flex-1 overflow-y-auto px-3.5 py-2"
         >
           {errors.length === 0 ? (
-            <div className="py-2 text-[12px] font-mono" style={{ color: tokens.colors.semantic.success }}>
+            <div className="py-2 text-[12px] font-mono text-[#22c55e]">
               No errors
             </div>
           ) : (
             errors.map((error, index) => (
               <div
                 key={index}
+                className="py-1 text-[12px] font-mono"
                 style={{
-                  padding: '4px 0',
-                  fontSize: '12px',
-                  fontFamily: "'Monaco', 'Menlo', monospace",
                   color:
                     error.type === 'error'
-                      ? tokens.colors.semantic.error
+                      ? 'var(--color-destructive)'
                       : error.type === 'warning'
-                        ? tokens.colors.semantic.warning
-                        : tokens.colors.semantic.success,
+                        ? '#eab308'
+                        : '#22c55e',
                 }}
               >
                 {error.line && error.column

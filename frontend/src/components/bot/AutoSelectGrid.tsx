@@ -14,7 +14,7 @@ export function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
   switch (status) {
     case 'pending':
       return (
-        <Badge variant="ghost" className="text-[11px] font-normal text-[var(--pf-steel-muted)]">
+        <Badge variant="ghost" className="text-[11px] font-normal text-[var(--color-muted-foreground)]">
           {'\u2014'}
         </Badge>
       );
@@ -27,7 +27,7 @@ export function StatusIcon({ status }: { status: CandidateStatus['status'] }) {
       );
     case 'done':
       return (
-        <Badge variant="secondary" className="text-[11px] font-normal text-[var(--pf-semantic-success)]">
+        <Badge variant="secondary" className="text-[11px] font-normal text-[#22c55e]">
           {'\u2713'}
         </Badge>
       );
@@ -70,15 +70,15 @@ export function AutoSelectGrid({
   const entries = Object.entries(statuses);
 
   return (
-    <div className="mt-2 max-h-[200px] overflow-auto rounded-md border border-[var(--pf-border)] bg-[var(--pf-surface-1)]/40 p-2">
+    <div className="mt-2 max-h-[200px] overflow-auto rounded-md border border-[var(--color-border)] bg-[var(--color-card)]/40 p-2">
       <div
         className="grid items-center gap-x-2 gap-y-0.5 text-[10px]"
         style={{ gridTemplateColumns: '1fr 80px 60px 60px' }}
       >
-        <div className="font-semibold text-[var(--pf-ink-3)]">Pair</div>
-        <div className="font-semibold text-[var(--pf-ink-3)]">Phase</div>
-        <div className="font-semibold text-[var(--pf-ink-3)]">Status</div>
-        <div className="font-semibold text-[var(--pf-ink-3)]">PnL</div>
+        <div className="font-semibold text-[var(--color-muted-foreground)]">Pair</div>
+        <div className="font-semibold text-[var(--color-muted-foreground)]">Phase</div>
+        <div className="font-semibold text-[var(--color-muted-foreground)]">Status</div>
+        <div className="font-semibold text-[var(--color-muted-foreground)]">PnL</div>
         {entries.map(([key, st]) => {
           const rankEntry = ranking?.find(r => r.label === key);
           const isCurrentPair = currentPair === key && st.status === 'active';
@@ -87,8 +87,8 @@ export function AutoSelectGrid({
 
           return (
             <div key={key} className="contents">
-              <div className="truncate text-[11px] text-[var(--pf-ink-1)]">{formatPairLabel(key)}</div>
-              <div className="text-[11px] text-[var(--pf-steel-muted)]">
+              <div className="truncate text-[11px] text-[var(--color-foreground)]">{formatPairLabel(key)}</div>
+              <div className="text-[11px] text-[var(--color-muted-foreground)]">
                 {showCandleProgress
                   ? `${candleProgress.fetched}/${candleProgress.total}`
                   : displayPhase}
@@ -101,8 +101,8 @@ export function AutoSelectGrid({
                 style={{
                   color:
                     rankEntry?.metrics.totalPnlPercent != null && rankEntry.metrics.totalPnlPercent >= 0
-                      ? 'var(--pf-semantic-success)'
-                      : 'var(--pf-semantic-error)',
+                      ? '#22c55e'
+                      : 'var(--color-destructive)',
                 }}
               >
                 {rankEntry?.metrics.totalPnlPercent != null
@@ -111,19 +111,19 @@ export function AutoSelectGrid({
               </div>
               {st.error && st.status === 'failed' && (
                 <div
-                  className="col-span-4 mt-0.5 text-[9px] opacity-80 text-[var(--pf-semantic-error)]"
+                  className="col-span-4 mt-0.5 text-[9px] opacity-80 text-[var(--color-destructive)]"
                 >
                   {st.error.length > 80 ? `${st.error.slice(0, 80)}...` : st.error}
                 </div>
               )}
               {showCandleProgress && (
                 <div className="col-span-4 mt-1">
-                  <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--pf-surface-2)]">
+                  <div className="h-1 w-full overflow-hidden rounded-full bg-[var(--color-secondary)]">
                     <div
-                      className="h-full rounded-full bg-[var(--pf-semantic-info)]"
+                      className="h-full rounded-full bg-[var(--color-primary)]"
                       style={{
                         width: `${(candleProgress.fetched / Math.max(candleProgress.total, 1)) * 100}%`,
-                        transition: `width var(--pf-motion-base) var(--pf-motion-ease)`,
+                        transition: `width 200ms cubic-bezier(0.25, 0.1, 0.25, 1)`,
                       }}
                     />
                   </div>

@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { tokens } from '../theme/tokens';
 
 const TIMEFRAME_LABELS: Record<string, string> = {
   '1': '1m',
@@ -208,7 +207,7 @@ export function BacktestGeneralSettings({
                 max={maxDays}
                 step={1}
                 className="flex-1"
-                style={{ accentColor: tokens.colors.brand.blue }}
+                style={{ accentColor: 'var(--color-primary)' }}
               />
               <span className="min-w-[60px] text-right text-[13px] text-foreground">
                 {daysBack}
@@ -251,8 +250,8 @@ export function BacktestGeneralSettings({
           role="status"
           className={
             exceedsLimit
-              ? 'mt-3 rounded-md border border-[color:var(--pf-semantic-error)] bg-[color:var(--pf-semantic-error-bg)] px-3 py-2 text-xs text-[color:var(--pf-semantic-error)]'
-              : 'mt-3 rounded-md border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] px-3 py-2 text-xs text-[color:var(--pf-semantic-success)]'
+              ? 'mt-3 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive'
+              : 'mt-3 rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-3 py-2 text-xs text-[#22c55e]'
           }
         >
           {exceedsLimit

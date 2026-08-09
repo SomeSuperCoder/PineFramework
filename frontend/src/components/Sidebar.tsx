@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import type { PanelId } from './ControlPanel';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface NavItem {
   id: PanelId;
@@ -63,7 +64,7 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
         width: expanded ? '13.75rem' : '4rem', // 220 ↔ 64
         transition: 'width 200ms cubic-bezier(0.25, 0.1, 0.25, 1)',
       }}
-      className="flex shrink-0 flex-col overflow-hidden border-r border-[var(--pf-hairline)] bg-[var(--pf-surface-1)]"
+      className="flex shrink-0 flex-col overflow-hidden border-r border-border bg-card"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       role="navigation"
@@ -74,14 +75,15 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
         {NAV_ITEMS.map((item) => {
           const isActive = activePanel === item.id;
           return (
-            <button
+            <Button
               key={item.id}
+              variant="ghost"
               onClick={() => onPanelChange(item.id)}
               className={cn(
-                'relative flex h-10 w-full items-center gap-2.5 px-5 text-left transition-colors',
-                'text-[var(--pf-steel-muted)] hover:bg-[var(--pf-surface-2)]/60 hover:text-[var(--pf-ink-1)]',
+                'relative flex h-10 w-full items-center gap-2.5 px-5 text-left justify-start',
+                'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
                 isActive &&
-                  'bg-[var(--pf-surface-2)] text-[var(--pf-ink-1)]',
+                  'bg-accent text-foreground',
               )}
               title={`${item.label} (${item.shortcut})`}
               aria-label={`${item.label} panel`}
@@ -91,7 +93,7 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
               {isActive && (
                 <span
                   aria-hidden="true"
-                  className="absolute inset-y-1 left-0 w-[3px] rounded-full bg-[var(--pf-brand-blue)]"
+                  className="absolute inset-y-1 left-0 w-[3px] rounded-full bg-primary"
                 />
               )}
               <span className="flex w-6 shrink-0 items-center justify-center">{item.icon}</span>
@@ -111,7 +113,7 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
               >
                 {item.shortcut}
               </span>
-            </button>
+            </Button>
           );
         })}
       </div>

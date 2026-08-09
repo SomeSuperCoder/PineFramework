@@ -8,10 +8,11 @@ import type { ChaosSignalRecord, ChaosHeartbeatRecord, CandleErrorRecord, ChaosM
 import { SetupWizard } from './bot/BotControls';
 import { BotStatusPanel } from './bot/BotStatusPanel';
 import { BotMetrics } from './bot/BotMetrics';
-import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 // Stable empty array references for optional chaos props. A fresh `[]` literal
 // (default parameter or `?? []`) would create a new array every render and,
@@ -71,7 +72,7 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
       flex: 1, gap: 16, padding: 32,
     }}>
       <div style={{ fontSize: 48, opacity: 0.3 }}>🔒</div>
-      <div className="text-sm font-semibold" style={{ color: tokens.colors.steel.muted }}>Wallet Locked</div>
+      <div className="text-sm font-semibold text-[var(--color-muted-foreground)]">Wallet Locked</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 280 }}>
         <Input
           type="password"
@@ -85,19 +86,18 @@ function UnlockScreen({ backendUrl, onUnlock }: { backendUrl: string; onUnlock: 
         <Button
           onClick={handleUnlock}
           disabled={loading || !password}
-          className="border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] text-[color:var(--pf-semantic-success)]"
+          className="border border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]"
         >
           {loading ? 'Unlocking...' : 'Unlock'}
         </Button>
         {error && (
-          <div className="text-center text-[11px] text-[color:var(--pf-semantic-error)]">{error}</div>
+          <div className="text-center text-[11px] text-[var(--color-destructive)]">{error}</div>
         )}
         <Button
           type="button"
           variant="ghost"
           onClick={() => setShowForgot(!showForgot)}
-          className="mt-2 h-auto p-0 text-xs"
-          style={{ color: tokens.colors.ink['3'] }}
+          className="mt-2 h-auto p-0 text-xs text-[var(--color-muted-foreground)]"
         >
           Forgot password?
         </Button>
@@ -134,7 +134,7 @@ function DashboardTabs({
     { id: 'stats', label: 'Statistics' },
   ];
   return (
-    <div style={{ display: 'flex', padding: '0 16px', borderBottom: `1px solid ${tokens.colors.surface['1']}`, background: tokens.colors.canvas }}>
+    <div className="flex items-center border-b border-[var(--color-card)] px-4 bg-[var(--color-background)]">
       <Tabs value={active} onValueChange={(v) => onChange(v as DashboardTabId)}>
         <TabsList variant="line" className="h-10 w-full justify-start gap-2 bg-transparent">
           {tabs.map((t) => (
@@ -314,9 +314,9 @@ export function LiveDashboard({
   const transitioning = status.state === 'Starting' || status.state === 'Stopping';
 
   const stateColor =
-    status.state === 'Running' ? tokens.colors.semantic.success :
-    status.state === 'Error' ? tokens.colors.semantic.error :
-    status.state === 'Idle' ? tokens.colors.steel.muted : tokens.colors.semantic.warning;
+    status.state === 'Running' ? '#22c55e' :
+    status.state === 'Error' ? 'var(--color-destructive)' :
+    status.state === 'Idle' ? 'var(--color-muted-foreground)' : '#eab308';
 
   const engineChaosModeTitle = engineChaosMode?.executionMode
     ? engineChaosMode.executionMode === 'simulated'
@@ -343,14 +343,14 @@ export function LiveDashboard({
     if (!walletLoaded) {
       return (
         <div style={rootStyle} aria-busy={true}>
-          <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
-            <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600 }}>Bot Dashboard</span>
-            <div style={{ flex: 1 }} />
+          <div className="flex items-center border-b border-[var(--color-card)] px-4 py-2">
+            <span className="text-[var(--color-muted-foreground)] text-sm font-semibold">Bot Dashboard</span>
+        <div className="flex-1" />
             <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close dashboard" className="text-sm">
               ✕
             </Button>
           </div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: tokens.colors.steel.disabled, fontSize: 12 }}>
+          <div className="flex flex-1 items-center justify-center text-[var(--color-muted-foreground)] text-xs">
             Loading wallet status…
           </div>
         </div>
@@ -359,12 +359,12 @@ export function LiveDashboard({
     return (
       <div style={rootStyle}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
-          <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex items-center border-b border-[var(--color-card)] px-4 py-2">
+          <span className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-sm font-semibold">
             Bot Dashboard
-            <span style={{ padding: '2px 8px', background: tokens.colors.hairline.default, borderRadius: 4, fontSize: 11 }}>
+            <Badge variant="secondary" className="text-[11px]">
               {status.state}
-            </span>
+            </Badge>
             {wallet.hasWallet && (
               <Button
                 type="button"
@@ -375,15 +375,15 @@ export function LiveDashboard({
                 title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
                 className="h-auto px-2 py-0.5 text-[10px]"
                 style={{
-                  background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
-                  color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
+                  background: walletLocked ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+                  color: walletLocked ? 'var(--color-destructive)' : '#22c55e',
                 }}
               >
                 {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
               </Button>
             )}
           </span>
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
           <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close dashboard" className="text-xs">
             ✕
           </Button>
@@ -398,8 +398,8 @@ export function LiveDashboard({
             {wallet.hasWallet && walletLocked ? (
               <UnlockScreen backendUrl={backendUrl} onUnlock={handleUnlock} />
             ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
-                <div style={{ maxWidth: 600, width: '100%', padding: 16 }}>
+              <div className="flex flex-1 items-center justify-center overflow-auto">
+                <div className="w-full max-w-[600px] p-4">
                   <SetupWizard
                     backendUrl={backendUrl}
                     initialWallet={wallet}
@@ -427,7 +427,7 @@ export function LiveDashboard({
         )}
 
         {activeTab === 'history' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          <div className="flex-1 overflow-auto p-4">
             <TradeHistoryTab
               backendUrl={backendUrl}
               liveTrades={liveTrades}
@@ -437,7 +437,7 @@ export function LiveDashboard({
         )}
 
         {activeTab === 'stats' && (
-          <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+          <div className="flex-1 overflow-auto p-4">
             <StatisticsTab
               backendUrl={backendUrl}
               liveTrades={liveTrades}
@@ -459,24 +459,25 @@ export function LiveDashboard({
       />
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `1px solid ${tokens.colors.surface['1']}`, padding: '8px 16px' }}>
-        <span style={{ color: tokens.colors.steel.muted, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="flex items-center border-b border-[var(--color-card)] px-4 py-2">
+        <span className="flex items-center gap-2 text-[var(--color-muted-foreground)] text-sm font-semibold">
           Bot Dashboard
-          <span style={{ padding: '2px 8px', background: tokens.colors.hairline.default, borderRadius: 4, fontSize: 11, color: stateColor, fontWeight: 600 }}>
+          <Badge
+            variant={status.state === 'Error' ? 'destructive' : status.state === 'Running' ? 'default' : 'secondary'}
+            className="text-[11px] font-semibold"
+          >
             {status.state}
-          </span>
+          </Badge>
           {chaosMode && (
-            <span
-              style={{
-                padding: '2px 8px', borderRadius: 4, fontSize: 10,
-                background: tokens.colors.semantic.error, color: tokens.colors.ink.default, fontWeight: 600, cursor: 'help',
-              }}
+            <Badge
+              variant="destructive"
+              className="text-[10px] font-semibold cursor-help"
               title={engineChaosModeTitle}
             >
               ⚡ CHAOS{engineChaosMode?.executionMode
                 ? ` · ${engineChaosMode.executionMode === 'simulated' ? 'SIM' : 'LIVE'}`
                 : ''}
-            </span>
+            </Badge>
           )}
           {wallet.hasWallet && (
             <Button
@@ -488,8 +489,8 @@ export function LiveDashboard({
               title={walletLocked ? 'Wallet is locked' : 'Click to lock wallet'}
               className="h-auto px-2 py-0.5 text-[10px]"
               style={{
-                background: walletLocked ? tokens.colors.semantic.errorBg : tokens.colors.semantic.successBg,
-                color: walletLocked ? tokens.colors.semantic.error : tokens.colors.semantic.success,
+                background: walletLocked ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
+                color: walletLocked ? 'var(--color-destructive)' : '#22c55e',
               }}
             >
               {walletLocked ? '🔒 Locked' : '🔓 Unlocked'}
@@ -536,7 +537,7 @@ export function LiveDashboard({
           </Button>
         )}
         {transitioning && (
-          <span style={{ color: tokens.colors.semantic.warning, fontSize: 11, fontStyle: 'italic', marginRight: 8 }}>
+          <span className="text-[#eab308] text-[11px] italic mr-2">
             {status.state}...
           </span>
         )}
@@ -556,64 +557,69 @@ export function LiveDashboard({
       <DashboardTabs active={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'overview' && (
-        // Three-column body (byte-identical to the pre-tabs layout)
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '240px 1fr minmax(300px, 400px)', gridTemplateRows: '1fr', gap: 1, overflow: 'hidden' }}>
-          {/* Left: Status Panel */}
-          <BotStatusPanel
-            status={status}
-            stateColor={stateColor}
-            now={now}
-            wallet={wallet}
-            chaosMode={chaosMode}
-            chaosHeartbeat={chaosHeartbeat}
-            totalCandleErrors={totalCandleErrors}
-            lastCandleError={lastCandleError}
-            feedStatus={feedStatus}
-          />
+        // Three-column body wrapped in Card
+        <Card className="flex-1 flex flex-col overflow-hidden border-0 rounded-none ring-0">
+          <CardHeader className="px-4 py-3 border-b">
+            <CardTitle className="text-sm font-semibold">Bot Cluster</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 grid grid-cols-[240px_1fr_minmax(300px,400px)] gap-0 overflow-hidden p-0">
+            {/* Left: Status Panel */}
+            <BotStatusPanel
+              status={status}
+              stateColor={stateColor}
+              now={now}
+              wallet={wallet}
+              chaosMode={chaosMode}
+              chaosHeartbeat={chaosHeartbeat}
+              totalCandleErrors={totalCandleErrors}
+              lastCandleError={lastCandleError}
+              feedStatus={feedStatus}
+            />
 
-          {/* Center: Mini Chart + Metrics + Positions */}
-          <BotMetrics
-            backendUrl={backendUrl}
-            status={status}
-            activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
-            strategySource={persistedConfig?.strategySource ?? null}
-            chaosMode={chaosMode === true}
-            chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
-            chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
-            autoSelectResult={autoSelectResult}
-            now={now}
-          />
+            {/* Center: Mini Chart + Metrics + Positions */}
+            <BotMetrics
+              backendUrl={backendUrl}
+              status={status}
+              activePair={status.pairs?.[0] ?? persistedConfig?.pairs?.[0] ?? null}
+              strategySource={persistedConfig?.strategySource ?? null}
+              chaosMode={chaosMode === true}
+              chaosSignals={chaosSignals ?? EMPTY_CHAOS_SIGNALS}
+              chaosHeartbeats={chaosHeartbeats ?? EMPTY_CHAOS_HEARTBEATS}
+              autoSelectResult={autoSelectResult}
+              now={now}
+            />
 
-          {/* Right: Logs Panel */}
-          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%', minHeight: 0 }}>
-            <div style={{ color: tokens.colors.steel.muted, fontWeight: 600, padding: '12px 12px 8px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 }}>
-              Logs ({logs.length})
+            {/* Right: Logs Panel */}
+            <div className="flex flex-col overflow-hidden h-full min-h-0 border-l border-[var(--color-card)]">
+              <div className="text-[var(--color-muted-foreground)] font-semibold px-3 py-3 text-[11px] uppercase tracking-wider shrink-0">
+                Logs ({logs.length})
+              </div>
+              <div ref={logContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3 font-mono text-[11px] leading-relaxed min-h-0">
+                {logs.length === 0 && (
+                  <span className="text-[var(--color-muted-foreground)] italic">No log entries yet...</span>
+                )}
+                {logs.slice(-500).map((log, i) => (
+                  <div key={i} style={{
+                    color: log.level === 'error' ? 'var(--color-destructive)' :
+                           log.level === 'warn' ? '#eab308' :
+                           log.level === 'debug' ? 'var(--color-muted-foreground)' : 'var(--color-muted-foreground)',
+                  }}>
+                    <span className="text-[var(--color-muted-foreground)]">
+                      {new Date(log.timestamp).toLocaleTimeString()}
+                    </span>
+                    {' '}
+                    <span className={log.level === 'error' ? 'font-semibold' : 'font-normal'}>
+                      [{log.level.toUpperCase()}]
+                    </span>
+                    {' '}
+                    {log.message}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
             </div>
-            <div ref={logContainerRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '0 12px 12px', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, minHeight: 0 }}>
-              {logs.length === 0 && (
-                <span style={{ color: tokens.colors.steel.muted, fontStyle: 'italic' }}>No log entries yet...</span>
-              )}
-              {logs.slice(-500).map((log, i) => (
-                <div key={i} style={{
-                  color: log.level === 'error' ? tokens.colors.semantic.error :
-                         log.level === 'warn' ? tokens.colors.semantic.warning :
-                         log.level === 'debug' ? tokens.colors.ink['3'] : tokens.colors.ink['2'],
-                }}>
-                  <span style={{ color: tokens.colors.steel.disabled }}>
-                    {new Date(log.timestamp).toLocaleTimeString()}
-                  </span>
-                  {' '}
-                  <span style={{ fontWeight: log.level === 'error' ? 600 : 400 }}>
-                    [{log.level.toUpperCase()}]
-                  </span>
-                  {' '}
-                  {log.message}
-                </div>
-              ))}
-              <div ref={logEndRef} />
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'history' && (
@@ -637,8 +643,8 @@ export function LiveDashboard({
       )}
 
       {/* Footer */}
-      <div style={{ borderTop: `1px solid ${tokens.colors.surface['1']}`, padding: '4px 16px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 10, color: tokens.colors.steel.disabled }}>
-        <span>Connected: <span style={{ color: tokens.colors.semantic.success }}>●</span></span>
+      <div className="flex items-center gap-3 border-t border-[var(--color-card)] px-4 py-1 text-[10px] text-[var(--color-muted-foreground)]">
+        <span>Connected: <span className="text-[#22c55e]">●</span></span>
         <span>Last update: {new Date().toLocaleTimeString()}</span>
       </div>
     </div>

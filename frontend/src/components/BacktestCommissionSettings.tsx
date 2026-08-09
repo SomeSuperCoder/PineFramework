@@ -179,7 +179,7 @@ function JupiterBasicConfig({
     <>
       <div
         role="status"
-        className="rounded-md border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] px-2.5 py-2 text-xs text-[color:var(--pf-semantic-success)]"
+        className="rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-2.5 py-2 text-xs text-[#22c55e]"
       >
         ✓ Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
       </div>
@@ -255,7 +255,7 @@ function JupiterUltraConfig({
       {tierInfo && !useCustom && (
         <div
           role="status"
-          className="mb-2 rounded-md border border-[color:var(--pf-semantic-success)] bg-[color:var(--pf-semantic-success-bg)] px-2.5 py-2 text-xs text-[color:var(--pf-semantic-success)]"
+          className="mb-2 rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-2.5 py-2 text-xs text-[#22c55e]"
         >
           Auto-detected:{' '}
           <strong>
@@ -267,7 +267,7 @@ function JupiterUltraConfig({
 
       {!tierInfo && !useCustom && (
         <div
-          className="mb-2 rounded-md border border-[color:var(--pf-hairline-strong)] bg-[color:var(--pf-surface-1)] px-2.5 py-2 text-xs text-muted-foreground"
+          className="mb-2 rounded-md border border-input bg-card px-2.5 py-2 text-xs text-muted-foreground"
         >
           Default fee tier: 10 bps. Set a symbol to enable auto-detection.
         </div>
@@ -328,7 +328,7 @@ function JupiterUltraConfig({
           href="https://developers.jup.ag/docs/ultra/fees"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[color:var(--pf-brand-blue-hover)]"
+          className="text-primary"
         >
           Jupiter docs
         </a>

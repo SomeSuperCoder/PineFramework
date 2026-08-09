@@ -142,14 +142,14 @@ export function QuickAdderPopup({ isOpen, onClose, onAdd }: QuickAdderPopupProps
                     <Badge
                       className={
                         s.type === 'strategy'
-                          ? 'bg-[var(--pf-semantic-success-bg)] text-[var(--pf-semantic-success)]'
-                          : 'bg-[var(--pf-semantic-warning-bg)] text-[var(--pf-semantic-warning)]'
+                          ? 'bg-green-500/12 text-[#22c55e]'
+                          : 'bg-yellow-500/12 text-yellow-500'
                       }
                     >
                       {s.type === 'strategy' ? 'STG' : 'IND'}
                     </Badge>
                     {s.isBuiltIn && (
-                      <Badge variant="outline" className="border-border text-[var(--pf-ink-2)]">
+                      <Badge variant="outline" className="border-border text-muted-foreground">
                         Built-In
                       </Badge>
                     )}

@@ -1,303 +1,31 @@
-/* ============================================================
-   PineFramework — Miro-Dark design system (DESIGN.md v1.1)
-   SINGLE SOURCE OF TRUTH: frontend/src/theme/tokens.ts
-   The :root block below is a byte-level mirror of tokens.ts (cssVars map);
-   frontend/src/__tests__/token-mirror.test.ts enforces equality.
-   NEVER edit token values here in isolation — change tokens.ts, re-mirror.
-   ============================================================ */
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-/* ─── 1. Design tokens (Miro-Dark) ─── */
-:root {
-  color-scheme: dark; /* §0 native chrome renders dark */
-
-  /* §1 Canvas */
-  --pf-canvas: #0d0d18;
-
-  /* §2 Surfaces (0/1/2/3) */
-  --pf-surface-0: #0d0d18;
-  --pf-surface-1: #12121f;
-  --pf-surface-2: #171725;
-  --pf-surface-3: #1e1e2e;
-
-  /* §3 Hairlines */
-  --pf-hairline-soft: #1a1a27;
-  --pf-hairline: #262636;
-  --pf-hairline-strong: #35354a;
-
-  /* §4 Ink */
-  --pf-ink-1: #ededf5;
-  --pf-ink-2: #c2c2d0;
-  --pf-ink-3: #8f8fa3;
-  --pf-ink: #1c1c1e;
-  --pf-ink-deep: #050038;
-
-  /* §5 Steel */
-  --pf-steel-icon: #9a9aad;
-  --pf-steel-placeholder: #7a7a90;
-  --pf-steel-muted: #71718a;
-  --pf-steel-disabled: #5a5a70;
-
-  /* §6 Type — family + nested scale (serialized `weight size/line-height letter-spacing`) */
-  --pf-font-family: -apple-system, 'Segoe UI', Roboto, Inter, sans-serif;
-  --pf-type-hero: 500 80px/1.05 -2px;
-  --pf-type-display-lg: 500 60px/1.10 -1.5px;
-  --pf-type-h1: 500 48px/1.15 -1px;
-  --pf-type-h2: 500 36px/1.20 -0.5px;
-  --pf-type-h3: 500 28px/1.25 0;
-  --pf-type-h4: 500 22px/1.30 0;
-  --pf-type-h5: 500 18px/1.40 0;
-  --pf-type-subtitle: 400 18px/1.50 0;
-  --pf-type-body-md: 400 16px/1.50 0;
-  --pf-type-body-md-medium: 500 16px/1.50 0;
-  --pf-type-body-sm: 400 14px/1.50 0;
-  --pf-type-body-sm-medium: 500 14px/1.50 0;
-  --pf-type-caption: 400 13px/1.40 0;
-  --pf-type-caption-bold: 600 13px/1.40 0;
-  --pf-type-micro: 500 12px/1.40 0;
-  --pf-type-micro-uppercase: 600 11px/1.40 0.5px;
-  --pf-type-button-md: 500 14px/1.30 0;
-  --pf-type-stat: 500 64px/1.10 -1.5px;
-
-  /* §7 Accents */
-  --pf-brand-yellow: #ffd02f;
-  --pf-brand-yellow-hover: #fcb900;
-  --pf-brand-yellow-active: #d49c00;
-  --pf-brand-blue: #4262ff;
-  --pf-brand-blue-hover: #5b76fe;
-  --pf-brand-blue-active: #2a41b6;
-  --pf-brand-coral: #ff9999;
-  --pf-brand-rose: #ffd8f4;
-  --pf-brand-teal: #0fbcb0;
-
-  /* §8 Pastel card tints */
-  --pf-pastel-yellow: rgba(255, 208, 47, 0.35);
-  --pf-pastel-coral: rgba(255, 153, 153, 0.50);
-  --pf-pastel-rose: rgba(255, 216, 244, 0.32);
-  --pf-pastel-teal: rgba(195, 250, 245, 0.30);
-  --pf-pastel-violet: rgba(245, 243, 255, 0.26);
-
-  /* §9 Semantic */
-  --pf-semantic-success: #00b473;
-  --pf-semantic-success-hover: #00cc84;
-  --pf-semantic-error: #ff5c5c;
-  --pf-semantic-error-hover: #ff7373;
-  --pf-semantic-warning: #ffb020;
-  --pf-semantic-warning-hover: #ffc24d;
-  --pf-semantic-info: #5b76fe;
-  --pf-semantic-success-bg: rgba(0, 180, 115, 0.12);
-  --pf-semantic-error-bg: rgba(255, 92, 92, 0.12);
-  --pf-semantic-warning-bg: rgba(255, 176, 32, 0.12);
-  --pf-semantic-info-bg: rgba(91, 118, 254, 0.12);
-
-  /* §10 Radius */
-  --pf-radius-xs: 4px;
-  --pf-radius-sm: 6px;
-  --pf-radius-md: 8px;
-  --pf-radius-lg: 12px;
-  --pf-radius-xl: 16px;
-  --pf-radius-xxl: 20px;
-  --pf-radius-xxxl: 28px;
-  --pf-radius-feature: 32px;
-  --pf-radius-full: 9999px;
-
-  /* §11 Spacing */
-  --pf-space-xxs: 4px;
-  --pf-space-xs: 8px;
-  --pf-space-sm: 12px;
-  --pf-space-md: 16px;
-  --pf-space-lg: 20px;
-  --pf-space-xl: 24px;
-  --pf-space-xxl: 32px;
-  --pf-space-xxxl: 40px;
-  --pf-space-section-sm: 48px;
-  --pf-space-section: 64px;
-  --pf-space-section-lg: 96px;
-  --pf-space-hero: 120px;
-
-  /* §12 Elevation */
-  --pf-shadow-0: none;
-  --pf-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.24);
-  --pf-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.32);
-  --pf-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.44);
-  --pf-shadow-4: 0 16px 48px rgba(0, 0, 0, 0.52);
-  --pf-scrim: rgba(0, 0, 0, 0.60);
-  --pf-focus-ring: 0 0 0 2px var(--pf-canvas), 0 0 0 4px var(--pf-brand-blue);
-
-  /* §13 Motion */
-  --pf-motion-fast: 150ms;
-  --pf-motion-base: 200ms;
-  --pf-motion-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-
-  /* §14 Chart palette (canvas contract) */
-  --pf-chart-grid: #232338;
-  --pf-chart-border: #2e2e42;
-  --pf-chart-volume: rgba(194, 194, 208, 0.18);
-}
-
-/* Reduced motion — mandatory (DESIGN.md §13) */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-}
-
-/* ─── 2. Layout ─── */
 body {
-  font-family: var(--pf-font-family);
-  background-color: var(--pf-canvas);
-  color: var(--pf-ink-1);
-  overflow: hidden;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
 }
 
 #root {
-  width: 100vw;
   height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .app {
   display: flex;
-  flex-direction: column;
-  height: 100vh;
+  flex: 1;
+  overflow: hidden;
 }
 
 .chart-panel {
   flex: 1;
-  position: relative;
-}
-
-/* ─── 3. Components ─── */
-
-/* Editor overlay/modal (§15.4 Modal recipe) */
-.editor-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--pf-scrim);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 200;
-}
-
-.editor-modal {
-  width: 90%;
-  height: 80%;
-  background-color: var(--pf-surface-3);
-  border: 1px solid var(--pf-hairline);
-  border-radius: var(--pf-radius-lg);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-.editor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: var(--pf-surface-1);
-  border-bottom: 1px solid var(--pf-hairline);
-}
-
-.editor-header h2 {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.editor-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.editor-actions button {
-  padding: 6px 16px;
-  border: 1px solid var(--pf-hairline);
-  border-radius: var(--pf-radius-xs);
-  background-color: var(--pf-canvas);
-  color: var(--pf-ink-1);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.editor-actions button.primary {
-  background-color: var(--pf-ink-1);
-  border-color: var(--pf-ink-1);
-  color: var(--pf-ink);
-}
-
-.editor-actions button.primary:hover {
-  background-color: #ffffff; /* §15.1 primary hover (white pill) */
-  border-color: #ffffff;
-}
-
-.editor-content {
-  flex: 1;
   overflow: hidden;
 }
 
-/* Chart legend overlay (chart chrome uses surface-3 per §14 tooltip recipe) */
-.legend {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  background-color: var(--pf-surface-3);
-  padding: 8px 12px;
-  border-radius: var(--pf-radius-xs);
-  font-size: 12px;
-  z-index: 10;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.legend-color {
-  width: 12px;
-  height: 3px;
-  border-radius: 2px;
-}
-
-@keyframes backtest-indeterminate {
-  0% { transform: translateX(-100%); }
-  50% { transform: translateX(250%); }
-  100% { transform: translateX(-100%); }
-}
-
-/* §15.4 Popup motion — enter: fade + translateY(4px) on --pf-motion-base/--pf-motion-ease.
-   Offset mirrors tokens.recipes.modalMotionOffset (TS-only, no --pf-* name by design).
-   Covered by the global prefers-reduced-motion guard (§13): animation-duration 0.01ms. */
-@keyframes pf-overlay-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes pf-popup-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ─── 4. Focus states (§12 focus ring — mandatory on interactive elements) ─── */
-.backtest-panel button:focus-visible {
-  outline: none;
-  box-shadow: var(--pf-focus-ring);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -329,7 +329,7 @@ describe('DashboardTabs (LiveDashboard) — task 4.7', () => {
     expect(screen.getByText('Test strategy')).toBeInTheDocument();
     // No history/stats panel is mounted yet.
     expect(screen.queryByPlaceholderText('Symbol (e.g. BTCUSDT)')).not.toBeInTheDocument();
-    expect(screen.queryByText('Global Metrics')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trade Statistics')).not.toBeInTheDocument();
   });
 
   it('switches to Trade History, then Statistics, then back — Overview stays intact', async () => {
@@ -346,14 +346,14 @@ describe('DashboardTabs (LiveDashboard) — task 4.7', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Statistics' }));
     // Wait on a data-dependent element so the mocked stats fetch has resolved.
     await waitFor(() => expect(screen.getByText('Total Trades')).toBeInTheDocument());
-    expect(screen.getByText('Global Metrics')).toBeInTheDocument();
+    expect(screen.getByText('Trade Statistics')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Symbol (e.g. BTCUSDT)')).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));
     // Overview panel is back, byte-identical content.
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('Test strategy')).toBeInTheDocument();
-    expect(screen.queryByText('Global Metrics')).not.toBeInTheDocument();
+    expect(screen.queryByText('Trade Statistics')).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Symbol (e.g. BTCUSDT)')).not.toBeInTheDocument();
   });
 });
@@ -574,11 +574,11 @@ describe('StatisticsTab — task 4.7', () => {
 
   it('renders the global metric cards from the mocked summary', async () => {
     installStatsFetch();
-    const { container } = renderTab();
+    renderTab();
 
     // Wait on a data-dependent card so the mocked stats fetch has resolved.
     await waitFor(() => expect(screen.getByText('Total Trades')).toBeInTheDocument());
-    expect(screen.getByText('Global Metrics')).toBeInTheDocument();
+    expect(screen.getByText('Trade Statistics')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('Win Rate')).toBeInTheDocument();
     expect(screen.getByText('58.3%')).toBeInTheDocument();
@@ -592,14 +592,15 @@ describe('StatisticsTab — task 4.7', () => {
     expect(screen.getByText('Max Drawdown')).toBeInTheDocument();
     expect(screen.getByText('$22.00')).toBeInTheDocument();
 
-    // Equity curve + grouped PnL canvases both render.
-    await waitFor(() => expect(container.querySelectorAll('canvas')).toHaveLength(2));
+    // Equity curve + grouped PnL chart sections render (Recharts renders in real browser, not jsdom).
+    await waitFor(() => expect(screen.getByText('Equity Curve')).toBeInTheDocument());
+    expect(screen.getByText('PnL by Strategy')).toBeInTheDocument();
   });
 
   it('groupBy toggle refetches stats with the new groupBy', async () => {
     const statsCalls = installStatsFetch();
     renderTab();
-    await waitFor(() => expect(screen.getByText('Global Metrics')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Trade Statistics')).toBeInTheDocument());
     expect(screen.getByText('PnL by Strategy')).toBeInTheDocument();
 
     // The groupBy control is now a shadcn Select (Radix): open the combobox
@@ -617,13 +618,12 @@ describe('StatisticsTab — task 4.7', () => {
 
   it('renders empty states when the mocked summary has zero trades', async () => {
     installStatsFetch({ empty: true });
-    const { container } = renderTab();
+    renderTab();
 
     await waitFor(() => expect(screen.getByText('No trades yet.')).toBeInTheDocument());
     expect(screen.getByText('No trades to chart.')).toBeInTheDocument();
     expect(screen.getByText('No groups to chart.')).toBeInTheDocument();
-    // No canvases when there is nothing to chart — and no crash.
-    expect(container.querySelectorAll('canvas')).toHaveLength(0);
+    // No chart data rendered when there are no trades — and no crash.
   });
 
   it('renders the error state when the stats fetch rejects', async () => {

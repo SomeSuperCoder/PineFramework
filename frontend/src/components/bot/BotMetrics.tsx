@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { MetricValue } from './MetricValue';
 import { AutoSelectGrid } from './AutoSelectGrid';
 import { DASH, fmtBaseSymbol, fmtDur, fmtPnl, fmtSize, fmtUsd } from '../../utils/format';
-import { tokens } from '../../theme/tokens';
 
 function LiveBotView({
   backendUrl,
@@ -40,12 +39,12 @@ function LiveBotView({
   if (!activePair) return null;
 
   return (
-    <div className="mb-3 border-b border-[var(--pf-surface-1)] pb-3">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-[var(--pf-steel-muted)] uppercase">
+    <div className="mb-3 border-b border-[var(--color-card)] pb-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-[var(--color-muted-foreground)] uppercase">
         <span>{activePair.symbol}</span>
-        <span className="font-normal text-[var(--pf-steel-disabled)]">{activePair.timeframe}</span>
+        <span className="font-normal text-[var(--color-muted-foreground)]">{activePair.timeframe}</span>
         {miniChartData.loading && (
-          <span className="text-[10px] font-normal text-[var(--pf-semantic-warning)]">loading…</span>
+          <span className="text-[10px] font-normal text-[#eab308]">loading…</span>
         )}
       </div>
       <MiniChart
@@ -87,7 +86,7 @@ export function BotMetrics({
   now: number;
 }) {
   return (
-    <div className="overflow-auto border-r border-[var(--pf-surface-1)] p-3">
+    <div className="overflow-auto border-r border-[var(--color-card)] p-3">
       {/* Mini Chart — only mounted in running states; never while Idle/Stopped */}
       <LiveBotView
         backendUrl={backendUrl}
@@ -98,33 +97,33 @@ export function BotMetrics({
         chaosHeartbeats={chaosHeartbeats}
       />
 
-      <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--pf-ink-3)] uppercase">Metrics</div>
+      <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--color-muted-foreground)] uppercase">Metrics</div>
       <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2">
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
           <MetricValue label="Total Trades" value={status.totalTrades != null ? String(status.totalTrades) : DASH} />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
-          <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : DASH} color={tokens.colors.semantic.success} />
+          <MetricValue label="Winning" value={status.winningTrades != null ? String(status.winningTrades) : DASH} color="#22c55e" />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
-          <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : DASH} color={tokens.colors.semantic.error} />
+          <MetricValue label="Losing" value={status.losingTrades != null ? String(status.losingTrades) : DASH} color="var(--color-destructive)" />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
           <MetricValue label="Win Rate" value={status.winRate != null ? `${(status.winRate * 100).toFixed(1)}%` : DASH} />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
-          <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : DASH} color={status.avgWin != null && status.avgWin > 0 ? tokens.colors.semantic.success : undefined} />
+          <MetricValue label="Avg Win" value={status.avgWin != null ? `$${status.avgWin.toFixed(2)}` : DASH} color={status.avgWin != null && status.avgWin > 0 ? '#22c55e' : undefined} />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
-          <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : DASH} color={status.avgLoss != null && status.avgLoss < 0 ? tokens.colors.semantic.error : undefined} />
+          <MetricValue label="Avg Loss" value={status.avgLoss != null ? `-$${Math.abs(status.avgLoss).toFixed(2)}` : DASH} color={status.avgLoss != null && status.avgLoss < 0 ? 'var(--color-destructive)' : undefined} />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
           <MetricValue label="Profit Factor" value={status.profitFactor != null ? status.profitFactor.toFixed(2) : DASH}
-            color={status.profitFactor != null ? status.profitFactor >= 1.5 ? tokens.colors.semantic.success : status.profitFactor >= 1 ? tokens.colors.semantic.warning : tokens.colors.semantic.error : undefined}
+            color={status.profitFactor != null ? status.profitFactor >= 1.5 ? '#22c55e' : status.profitFactor >= 1 ? '#eab308' : 'var(--color-destructive)' : undefined}
           />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
-          <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : DASH} color={tokens.colors.semantic.error} />
+          <MetricValue label="Max Drawdown" value={status.maxDrawdown != null ? `${(status.maxDrawdown * 100).toFixed(1)}%` : DASH} color="var(--color-destructive)" />
         </Card>
         <Card size="sm" className="gap-1 rounded-lg px-3 py-2">
           <MetricValue label="Total Fees" value={status.totalFees != null ? `$${status.totalFees.toFixed(2)}` : DASH} />
@@ -136,10 +135,10 @@ export function BotMetrics({
 
       {/* Positions */}
       <>
-          <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--pf-ink-3)] uppercase">Positions</div>
+          <div className="mb-2 text-[11px] font-semibold tracking-wider text-[var(--color-muted-foreground)] uppercase">Positions</div>
           <div className="flex flex-col gap-1.5">
             {status.positions.length === 0 && (
-              <div className="rounded bg-[var(--pf-surface-2)]/60 px-3 py-2 text-[11px] italic text-[var(--pf-steel-muted)]">
+              <div className="rounded bg-[var(--color-secondary)]/60 px-3 py-2 text-[11px] italic text-[var(--color-muted-foreground)]">
                 No open positions
               </div>
             )}
@@ -148,39 +147,39 @@ export function BotMetrics({
               const pnlPercent = pos.entryPrice > 0 && pos.quantity > 0
                 ? (pnl / (pos.entryPrice * pos.quantity)) * 100
                 : 0;
-              const pnlColor = pnl >= 0 ? tokens.colors.semantic.success : tokens.colors.semantic.error;
+              const pnlColor = pnl >= 0 ? '#22c55e' : 'var(--color-destructive)';
               const duration = now - pos.entryTime;
               const isLong = pos.direction !== 'flat';
               return (
-                <div key={i} className="flex flex-col gap-1 rounded bg-[var(--pf-surface-2)]/60 px-3 py-2">
+                <div key={i} className="flex flex-col gap-1 rounded bg-[var(--color-secondary)]/60 px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-[12px] font-semibold text-[var(--pf-ink-1)]">{pos.symbol}</span>
+                    <span className="text-[12px] font-semibold text-[var(--color-foreground)]">{pos.symbol}</span>
                     {pos.timeframe && (
-                      <span className="text-[10px] text-[var(--pf-steel-disabled)]">{pos.timeframe}</span>
+                      <span className="text-[10px] text-[var(--color-muted-foreground)]">{pos.timeframe}</span>
                     )}
-                    <span className={`text-[11px] font-semibold ${isLong ? 'text-[var(--pf-semantic-success)]' : 'text-[var(--pf-steel-muted)]'}`}>
+                    <span className={`text-[11px] font-semibold ${isLong ? 'text-[#22c55e]' : 'text-[var(--color-muted-foreground)]'}`}>
                       {isLong ? 'LONG' : 'FLAT'}
                     </span>
                     {pos.direction === 'flat' ||
                     !isFinite(pos.quantity) ||
                     pos.quantity <= 0 ||
                     !isFinite(pos.entryPrice) ? (
-                      <span className="text-[11px] text-[var(--pf-steel-disabled)]">{'\u2014'}</span>
+                      <span className="text-[11px] text-[var(--color-muted-foreground)]">{'\u2014'}</span>
                     ) : (
                       <>
-                        <span className="text-[12px] font-semibold text-[var(--pf-ink-2)]">
+                        <span className="text-[12px] font-semibold text-[var(--color-muted-foreground)]">
                           {fmtSize(pos.quantity)} {fmtBaseSymbol(pos.symbol)}
                         </span>
                         {/* Notional = entry size in USD (qty × entry price, not live mark). */}
-                        <span className="text-[11px] text-[var(--pf-ink-3)]">
+                        <span className="text-[11px] text-[var(--color-muted-foreground)]">
                           {'\u2248'} {fmtUsd(pos.quantity * pos.entryPrice)}
                         </span>
-                        <span className="text-[11px] text-[var(--pf-steel-muted)]">
+                        <span className="text-[11px] text-[var(--color-muted-foreground)]">
                           @ ${pos.entryPrice.toFixed(2)}
                         </span>
                       </>
                     )}
-                    <span className="ml-auto text-[11px] text-[var(--pf-steel-muted)]">
+                    <span className="ml-auto text-[11px] text-[var(--color-muted-foreground)]">
                       {pos.unrealizedPnl != null ? `$${pos.unrealizedPnl.toFixed(2)}` : '\u2014'}
                     </span>
                   </div>
@@ -191,7 +190,7 @@ export function BotMetrics({
                     <span style={{ color: pnlColor }} className="font-semibold">
                       ({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)
                     </span>
-                    <span className="ml-auto text-[var(--pf-steel-disabled)]">
+                    <span className="ml-auto text-[var(--color-muted-foreground)]">
                       {fmtDur(duration)}
                     </span>
                   </div>
@@ -204,8 +203,8 @@ export function BotMetrics({
       {/* Auto-Select Results */}
       {autoSelectResult && (
         <div className="mt-4">
-          <div className="mb-1 text-[11px] font-semibold tracking-wider text-[var(--pf-semantic-success)] uppercase">Auto-Select Results</div>
-          <div className="mb-1 text-[11px] text-[var(--pf-ink-3)]">
+          <div className="mb-1 text-[11px] font-semibold tracking-wider text-[#22c55e] uppercase">Auto-Select Results</div>
+          <div className="mb-1 text-[11px] text-[var(--color-muted-foreground)]">
             Evaluated {autoSelectResult.evaluatedCount} pair{autoSelectResult.evaluatedCount !== 1 ? 's' : ''}
             {autoSelectResult.failedCount > 0 && `, ${autoSelectResult.failedCount} failed`}
           </div>
@@ -215,11 +214,11 @@ export function BotMetrics({
             )}
             ranking={autoSelectResult.ranking}
           />
-          <div className="mt-1.5 rounded bg-[var(--pf-semantic-success-bg)] px-2 py-1.5">
-            <span className="text-[11px] font-semibold text-[var(--pf-semantic-success)]">
+          <div className="mt-1.5 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
+            <span className="text-[11px] font-semibold text-[#22c55e]">
               ★ Best: {autoSelectResult.best.label}
             </span>
-            <span className="ml-2 text-[10px] text-[var(--pf-steel-muted)]">
+            <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
               PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
             </span>
           </div>

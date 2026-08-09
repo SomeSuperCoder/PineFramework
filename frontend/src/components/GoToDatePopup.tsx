@@ -50,7 +50,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
         </div>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <Label htmlFor="goto-date" className="text-[13px] text-[var(--pf-steel-muted)]">
+            <Label htmlFor="goto-date" className="text-[13px] text-muted-foreground">
               Date
             </Label>
             <Input
@@ -62,7 +62,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor="goto-time" className="text-[13px] text-[var(--pf-steel-muted)]">
+            <Label htmlFor="goto-time" className="text-[13px] text-muted-foreground">
               Time (MSK, HH:MM)
             </Label>
             <Input
@@ -79,7 +79,7 @@ export function GoToDatePopup({ isOpen, onClose, onGoToDate, lastTeleport }: GoT
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button type="submit" className="bg-[var(--pf-brand-blue)] text-white hover:bg-[var(--pf-brand-blue-hover)]">
+            <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90">
               Go
             </Button>
           </div>
