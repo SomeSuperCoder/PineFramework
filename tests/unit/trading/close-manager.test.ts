@@ -56,6 +56,8 @@ function makeSwapResult(overrides: Partial<SwapResult> = {}): SwapResult {
     inputAmount: '0',
     outputAmount: '0',
     fee: '0',
+    // M4: SwapResult now requires canonical fee components (empty when none observable).
+    feeComponents: [],
     ...overrides,
   };
 }

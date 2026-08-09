@@ -90,6 +90,9 @@ export interface Trade {
   quantity: number;
   pnl: number;
   pnlPercent: number;
+  /** Sum of fees charged for this trade. For jupiter commission methods this
+   *  is the modeled round-trip fee total from src/pnl (venue+platform+SOL fees,
+   *  quote units); for legacy commissionTypes it is the exit-fill commission. */
   commission: number;
   entryName: string;
   exitName: string;

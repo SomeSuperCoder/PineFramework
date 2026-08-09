@@ -81,8 +81,10 @@ describe('JupiterUltraAdapter', () => {
     it('should have correct name and commission model', () => {
       expect(adapter.name).toBe('jupiter-ultra');
       expect(adapter.commissionModel.name).toBe('jupiter-ultra');
-      expect(adapter.commissionModel.feeBps).toBe(5);
-      expect(adapter.commissionModel.variable).toBe(false);
+      // M4: no fixed rate is assumed — fees are OBSERVED from the API at
+      // execution (captureSwapFeeComponents), so feeBps is 0 and variable.
+      expect(adapter.commissionModel.feeBps).toBe(0);
+      expect(adapter.commissionModel.variable).toBe(true);
     });
 
     it('should have correct slippage config', () => {
@@ -283,8 +285,11 @@ describe('JupiterUltraAdapter', () => {
       expect(result.signature).toBe(swapTx.substring(0, 64));
       expect(result.inputAmount).toBe('1000000');
       expect(result.outputAmount).toBe('5000000');
-      // 5 bps commission on the input amount: 1_000_000 * (5 / 10000) = 500.
-      expect(result.fee).toBe('500');
+      // M4: the legacy display fee is OMITTED (never fabricated) when no
+      // input-token VENUE/PLATFORM fee was observable — the manual quote has
+      // no routePlan leg fees / platformFee, so feeUnknown flags the swap.
+      expect(result.fee).toBeUndefined();
+      expect(result.feeUnknown).toBe(true);
     });
 
     it('returns success:false with the API error text when the swap POST fails', async () => {
@@ -296,7 +301,9 @@ describe('JupiterUltraAdapter', () => {
       expect(result.success).toBe(false);
       expect(result.inputAmount).toBe('1000000');
       expect(result.outputAmount).toBe('0');
-      expect(result.fee).toBe('0');
+      // M4: a failed swap carries no fee claim at all — never a fabricated '0'.
+      expect(result.fee).toBeUndefined();
+      expect(result.feeUnknown).toBe(true);
       expect(result.error).toContain('Ultra swap API error: 400');
       expect(result.error).toContain('mocked failure');
     });

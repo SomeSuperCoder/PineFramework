@@ -17,7 +17,7 @@ import { DexAdapter, type SwapResult } from './dex/dex-adapter.js';
 import { ClosedCandle, PairId } from './scheduler.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
 import { USDC_MINT } from './solana-wallet.js';
-import { getTokenInfo, isValidPairSymbol } from './token-registry.js';
+import { getTokenInfo, isValidPairSymbol, TOKEN_MINTS } from './token-registry.js';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -31,6 +31,62 @@ import type {
   DexKind,
   TradeRecord,
 } from './types.js';
+import {
+  aggregateRealizedPnl,
+  SOL_MINT,
+  type DecimalStr,
+  type FeeKind,
+  type Fill,
+  type RealizedPnl,
+  type TokenPrice,
+} from '../pnl/index.js';
+import { dAdd, ZERO } from '../pnl/decimal.js';
+import { DEFAULT_SOL_USD_PRICE } from '../strategy/commission-methods/config.js';
+
+/**
+ * Convert the SSOT module's per-kind fee breakdown (DecimalStr quote units,
+ * keyed by FeeKind) into the TradeRecord's numeric breakdown map. Money
+ * precision lives in the pnl module (strings); the record's historic contract
+ * is numeric, so the conversion happens exactly once at the persistence edge.
+ */
+function feeBreakdownToNumbers(
+  breakdown: Partial<Record<FeeKind, DecimalStr>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [kind, amount] of Object.entries(breakdown)) {
+    if (amount === undefined) continue;
+    const n = Number(amount);
+    // Security F2c: never persist a non-finite quote amount — omit the kind
+    // rather than writing Infinity/NaN into the numeric record.
+    if (Number.isFinite(n)) out[kind] = n;
+  }
+  return out;
+}
+
+/**
+ * The fee total that was ACTUALLY subtracted from net (Σ feeBreakdown[kind]
+ * for kind ∈ subtractedFromNet), in quote units. The persisted `fees` MUST
+ * equal this so the TradeStats identity reconciles PER RECORD:
+ * realizedPnl === gross − fees exactly (M9-FIX MAJOR-3). This is NOT
+ * `feesTotal` of all kinds — `feeBreakdown` below keeps the full display.
+ * Summed as DecimalStr (exact string math); Number() only at the edge.
+ */
+function subtractedFeesToNumber(realizedPnl: RealizedPnl): number {
+  let total: DecimalStr = ZERO;
+  for (const kind of realizedPnl.subtractedFromNet) {
+    const amount = realizedPnl.feeBreakdown[kind];
+    if (amount !== undefined) total = dAdd(total, amount);
+  }
+  const n = Number(total);
+  // Security F2c: a corrupt upstream value never persists as Infinity/NaN.
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Number() at the persistence edge, guarded against non-finite (Security F2c). */
+function finiteNumber(value: DecimalStr): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
 
 // ---- Constants ----
 
@@ -45,6 +101,9 @@ import type {
 const CHAOS_FALLBACK_EQUITY = 10_000_000_000;
 /** CHAOS_FALLBACK_EQUITY in whole USDC, for log messages. */
 const CHAOS_FALLBACK_EQUITY_USDC = CHAOS_FALLBACK_EQUITY / 1e6;
+
+/** SOL decimals on-chain — lamport→SOL conversion needs the exact scale (9). */
+const SOL_DECIMALS = 9;
 
 /**
  * Convert a strategy marker entry (from the ExecutionEngine runtime) into a
@@ -1408,7 +1467,7 @@ export class LiveStrategyExecutor {
     const riskManager = this.config.riskManager;
 
     if (signal.action === 'sell' || signal.action === 'close') {
-      const realizedPnl = this.resolveClosedTradeRealizedPnl(signal);
+      const realizedPnl = this.resolveClosedTradeRealizedPnl(signal, swapResult);
 
       // Fail-safe (D6, Code-Review FIX 2): the risk feed must never propagate
       // to the caller. A throw here would land in the outer close catch and
@@ -1416,7 +1475,10 @@ export class LiveStrategyExecutor {
       // already succeeded on-chain.
       try {
         if (realizedPnl !== undefined) {
-          riskManager?.recordTrade(realizedPnl);
+          // Feed NET realized PnL (fees subtracted) — the honest realized
+          // result (M5). When fees are unknown, net === gross, so the guards
+          // see the same value the gross formula always produced.
+          riskManager?.recordTrade(Number(realizedPnl.net));
         }
       } catch (err) {
         console.error('[LiveStrategyExecutor] Risk feed failed after completed trade', {
@@ -1446,34 +1508,154 @@ export class LiveStrategyExecutor {
   }
 
   /**
-   * Resolve the realized PnL of a closing trade — (exit − entry) × quantity —
-   * with the B1 entry-price snapshot attached at signal generation time, and
-   * the executor's per-pair state as fallback (verbatim from the original
-   * risk-feed computation; do NOT alter). Returns undefined when the closed
-   * position's entry is unknown — callers fail safe (skip / zero).
+   * Resolve the realized PnL of a closing trade through the SSOT pnl module
+   * (aggregateRealizedPnl, anchor 'fills' — the gross derives from fill/ideal
+   * prices that embed NO fee, so every observed kind VENUE/PLATFORM/PRIORITY/
+   * BASE/JITO reduces net; MAJOR-2). Entry price uses the B1 snapshot attached
+   * at signal
+   * generation time, with the per-pair state as fallback (the same preference
+   * the risk feed used). Fees come from the executed swap result's canonical
+   * feeComponents (M4) — used as-is when they form a complete observation;
+   * otherwise 'none' → feesUnknown.
+   *
+   * NEVER throws: a missing mint→quote price (e.g. no SOL/USD price at this
+   * layer — hardcoding one is banned) degrades through the module with
+   * feesSource 'none': gross stays module-exact, net === gross, fees flagged
+   * unknown. The trade record is always kept; a fee conversion failure can
+   * never crash trading. Returns undefined when the closed position's entry
+   * is unknown — callers fail safe (skip / zero).
    */
-  private resolveClosedTradeRealizedPnl(signal: TradeSignal): number | undefined {
+  private resolveClosedTradeRealizedPnl(
+    signal: TradeSignal,
+    swapResult?: SwapResult,
+  ): RealizedPnl | undefined {
     // B1: prefer the entry price snapshot attached at generation time — it is
     // exact for the state the signal was produced from. The state scan below
     // is only a fallback for signals that never carried one (e.g. chaos
     // path), and still fails safe (skip) when unknown.
-    if (
-      signal.positionEntryPrice !== undefined &&
-      signal.positionEntryPrice > 0 &&
-      signal.quantity > 0
-    ) {
-      // Spot DEX closes are long exits: realized PnL = (exit − entry) × qty.
-      return (signal.expectedPrice - signal.positionEntryPrice) * signal.quantity;
+    let entryPrice: number | undefined;
+    if (signal.positionEntryPrice !== undefined && signal.positionEntryPrice > 0) {
+      entryPrice = signal.positionEntryPrice;
+    } else {
+      const state = this.getStateForSignal(signal);
+      if (state?.position.direction === 'long' && state.position.entryPrice > 0) {
+        entryPrice = state.position.entryPrice;
+      }
     }
-    const state = this.getStateForSignal(signal);
-    if (
-      state?.position.direction === 'long' &&
-      state.position.entryPrice > 0 &&
-      state.position.quantity > 0
-    ) {
-      return (signal.expectedPrice - state.position.entryPrice) * state.position.quantity;
+    if (entryPrice === undefined || signal.quantity <= 0 || signal.expectedPrice <= 0) {
+      return undefined;
     }
-    return undefined;
+
+    // Spot DEX closes are long exits — the fills anchor the gross exactly as
+    // the old (exit − entry) × qty formula, but computed by the SSOT module.
+    const entryFill: Fill = {
+      side: 'BUY',
+      qty: String(signal.quantity),
+      fillPrice: String(entryPrice),
+      ts: String(signal.timestamp),
+    };
+    const exitFill: Fill = {
+      side: 'SELL',
+      qty: String(signal.quantity),
+      fillPrice: String(signal.expectedPrice),
+      ts: String(signal.timestamp),
+    };
+
+    // Fees: the executed swap's canonical components are used as-is when they
+    // represent a complete observation. When the swap result is missing, the
+    // adapter flagged feeUnknown (BASE-only — the variable fee layers were
+    // never observed), or feeComponents is absent (a swap result from a
+    // pre-M4 adapter/partial observation — the B1 round-trip mock shape), the
+    // fee picture is incomplete: pass 'none' so the module flags feesUnknown
+    // instead of reporting BASE alone as the total. MUST never throw here:
+    // this read is outside the try below, and a throw would propagate to the
+    // executeSignal outer catch, misclassifying a CONFIRMED close as 'unknown'
+    // and silently starving the risk feed (B1 regression).
+    const feesComplete =
+      swapResult !== undefined &&
+      swapResult.feeUnknown !== true &&
+      (swapResult.feeComponents?.length ?? 0) > 0;
+    const feesSource = feesComplete ? { components: swapResult!.feeComponents } : ('none' as const);
+
+    try {
+      return aggregateRealizedPnl({
+        side: 'LONG',
+        entryFill,
+        exitFill,
+        feesSource,
+        prices: this.buildCloseFeePrices(signal),
+        // MAJOR-2: anchor 'fills' — the gross here is IDEAL-price-derived
+        // (entryFill/exitFill from signal.positionEntryPrice/expectedPrice),
+        // so it embeds NO fee. EVERY observed kind (VENUE/PLATFORM/PRIORITY/
+        // BASE/JITO) reduces net; there is nothing to double-count. The old
+        // 'outAmount' anchor was a conflation — no outAmount flows into this
+        // gross (adapters' quote.outAmount feeds swap execution only).
+        anchor: 'fills',
+      });
+    } catch (err) {
+      // A missing price conversion (e.g. an unexpected fee mint with no price
+      // at this layer — SOL itself is ALWAYS priced since M9-FIX) must never
+      // crash the executor: degrade through the module with no fees — gross
+      // stays module-exact, net === gross, fees flagged unknown.
+      console.error('[LiveStrategyExecutor] PnL fee conversion degraded (feesUnknown)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return aggregateRealizedPnl({
+        side: 'LONG',
+        entryFill,
+        exitFill,
+        feesSource: 'none',
+        prices: {},
+        anchor: 'fills',
+      });
+    }
+  }
+
+  /**
+   * Best-available mint→quote prices for fee conversion at this layer.
+   *
+   * The executor has no price feed, so it can only price what it observes:
+   * the quote currency (USDC, pegged 1 USDC = $1 — the unit every PnL number
+   * in the bot is denominated in) and the traded base token at the executed
+   * close price (signal.expectedPrice — the executor's best knowledge of the
+   * price the fee was charged at). SOL is ALWAYS priced (MAJOR-1 fix):
+   * BASE/PRIORITY/JITO lamport fees convert through the one canonical SOL
+   * entry. Before the fix a missing prices['SOL'] threw in feeToQuote and
+   * degraded EVERY live close to feesUnknown (fees 0 on every trade).
+   */
+  private buildCloseFeePrices(signal: TradeSignal): TokenPrice {
+    const prices: TokenPrice = {
+      [USDC_MINT]: { priceUsd: '1', decimals: 6 },
+      [SOL_MINT]: this.solPriceFor(signal),
+    };
+    // The base token is only priced when it is NOT the quote mint — an
+    // unknown symbol falls back to USDC in getTokenInfoForSymbol, and pricing
+    // USDC at the trade's exit price would be wrong.
+    const token = this.getTokenInfoForSymbol(signal.symbol);
+    if (token.mint !== USDC_MINT && signal.expectedPrice > 0) {
+      prices[token.mint] = { priceUsd: String(signal.expectedPrice), decimals: token.decimals };
+    }
+    return prices;
+  }
+
+  /**
+   * Best-available SOL/USD price for lamport→quote conversion, in priority
+   * order: (1) the signal's own exit price when the traded pair IS SOL (fresh
+   * and exact for this trade); (2) an explicit SOL_USD_PRICE env override;
+   * (3) the config default DEFAULT_SOL_USD_PRICE — non-empty BY CONSTRUCTION,
+   * so a lamport fee can never silently degrade to feesUnknown for lack of a
+   * SOL price. SOL has 9 decimals on-chain.
+   */
+  private solPriceFor(signal: TradeSignal): { priceUsd: DecimalStr; decimals: number } {
+    const token = this.getTokenInfoForSymbol(signal.symbol);
+    if (token.mint === TOKEN_MINTS.SOL && signal.expectedPrice > 0) {
+      return { priceUsd: String(signal.expectedPrice), decimals: SOL_DECIMALS };
+    }
+    const envPrice = Number(process.env.SOL_USD_PRICE);
+    if (Number.isFinite(envPrice) && envPrice > 0) {
+      return { priceUsd: String(envPrice), decimals: SOL_DECIMALS };
+    }
+    return { priceUsd: String(DEFAULT_SOL_USD_PRICE), decimals: SOL_DECIMALS };
   }
 
   /**
@@ -1499,7 +1681,7 @@ export class LiveStrategyExecutor {
     signal: TradeSignal,
     opts: {
       status: 'confirmed' | 'unknown';
-      realizedPnl?: number;
+      realizedPnl?: RealizedPnl;
       swapResult?: SwapResult;
     },
   ): void {
@@ -1547,10 +1729,17 @@ export class LiveStrategyExecutor {
       entryPrice,
       exitPrice: signal.expectedPrice,
       size: signal.quantity,
-      // No reliable fee source: the swap result's fee value is not
-      // consistently populated, so fees stay 0 rather than inventing one.
-      fees: 0,
-      realizedPnl: opts.realizedPnl ?? 0,
+      // Fees from the SSOT pnl module — the ANCHOR-SUBTRACTED total
+      // (Σ feeBreakdown[kind] for kind ∈ subtractedFromNet), NOT feesTotal of
+      // all kinds (M9-FIX MAJOR-3). TradeStats identity requires per-record
+      // realizedPnl === gross − fees exactly, so the persisted fees MUST equal
+      // what was subtracted from net. feeBreakdown below carries the full
+      // display of ALL kinds. 0 when none were subtracted or when fees are
+      // unknown (feesUnknown then flags the record); never fabricated.
+      fees: opts.realizedPnl ? subtractedFeesToNumber(opts.realizedPnl) : 0,
+      // NET realized PnL (fees subtracted) since M5; legacy records wrote
+      // gross here (no grossPnl field — readers fall back to realizedPnl).
+      realizedPnl: opts.realizedPnl ? finiteNumber(opts.realizedPnl.net) : 0,
       // DexAdapter.name is the same vocabulary as DexKind ('jupiter-swap' /
       // 'jupiter-ultra') — narrow it for the record's typed field.
       dex: this.config.dex.name as DexKind,
@@ -1561,6 +1750,11 @@ export class LiveStrategyExecutor {
       ...(signal.timeframe ? { timeframe: signal.timeframe } : {}),
       mode,
       status: opts.status,
+      ...(opts.realizedPnl ? { grossPnl: finiteNumber(opts.realizedPnl.gross) } : {}),
+      ...(opts.realizedPnl && Object.keys(opts.realizedPnl.feeBreakdown).length > 0
+        ? { feeBreakdown: feeBreakdownToNumbers(opts.realizedPnl.feeBreakdown) }
+        : {}),
+      ...(opts.realizedPnl?.feeSource.feesUnknown ? { feesUnknown: true } : {}),
     };
 
     // Append-first contract (Code-Review FIX 3): recordTrade writes to disk

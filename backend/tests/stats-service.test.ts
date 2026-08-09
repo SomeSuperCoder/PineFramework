@@ -108,4 +108,46 @@ describe('StatsService', () => {
     expect(grouped!['alpha']!.totalTrades).toBe(2);
     expect(grouped!['beta']!.totalTrades).toBe(1);
   });
+
+  // ── M7 — new-style (post-M5) records: explicit grossPnl + net realizedPnl + fees ──
+
+  it('net identity: totalGrossPnl − totalFees === netPnl for new-style records', () => {
+    // Post-M5 rows carry grossPnl (gross), realizedPnl (net), and the real fees.
+    store.recordTrade(makeTrade({ id: 'n1', closedAt: 100, grossPnl: 12, realizedPnl: 11, fees: 1 }));
+    store.recordTrade(makeTrade({ id: 'n2', closedAt: 200, grossPnl: 8, realizedPnl: 7.5, fees: 0.5 }));
+
+    const s = stats.getStats();
+    expect(s.totalGrossPnl).toBe(20); // Σ grossPnl
+    expect(s.totalFees).toBe(1.5); // Σ recorded fees
+    expect(s.netPnl).toBe(18.5);
+    expect(s.netPnl).toBe(s.totalGrossPnl - s.totalFees); // THE identity
+    expect(s.totalPnl).toBe(s.totalGrossPnl); // totalPnl is the gross alias
+    expect(s.feesUnknownTrades).toBe(0);
+  });
+
+  it('legacy fallback: grossPnl absent → realizedPnl used as gross; no invented fees', () => {
+    // Pre-M5 rows wrote gross into realizedPnl and lack grossPnl/fees entirely.
+    store.recordTrade(makeTrade({ id: 'l1', closedAt: 100, realizedPnl: 10 }));
+    store.recordTrade(makeTrade({ id: 'l2', closedAt: 200, realizedPnl: -3 }));
+
+    const s = stats.getStats();
+    expect(s.totalGrossPnl).toBe(7); // Σ realizedPnl (fallback)
+    expect(s.totalFees).toBe(0); // never invented
+    expect(s.netPnl).toBe(7);
+    expect(s.totalPnl).toBe(7);
+    expect(s.feesUnknownTrades).toBe(0);
+  });
+
+  it('feesUnknownTrades counts records flagged feesUnknown; unknown fees are never invented', () => {
+    store.recordTrade(makeTrade({ id: 'u1', closedAt: 100, grossPnl: 10, realizedPnl: 10, fees: 0, feesUnknown: true }));
+    store.recordTrade(makeTrade({ id: 'u2', closedAt: 200, grossPnl: 5, realizedPnl: 5, fees: 0 }));
+    store.recordTrade(makeTrade({ id: 'u3', closedAt: 300, realizedPnl: 1 })); // legacy — no flag
+
+    const s = stats.getStats();
+    expect(s.feesUnknownTrades).toBe(1);
+    // Flagged rows still count toward gross with fees 0 (never fabricated).
+    expect(s.totalGrossPnl).toBe(16);
+    expect(s.totalFees).toBe(0);
+    expect(s.netPnl).toBe(16);
+  });
 });

@@ -1,16 +1,17 @@
 /**
  * Pluggable Commission Calculation Methods
  *
- * Thin orchestrator that composes the registry and public API from the
- * individual calculator implementations in commission-methods/.
+ * Public API surface + UI metadata for backtest commission methods. The
+ * per-fill jupiter CALCULATOR classes were DELETED (D6/D7): the backtest now
+ * models jupiter fees ONCE per round trip through the shared src/pnl module
+ * (`buildBacktestFeeModel` → `modelFees` → `aggregateRealizedPnl`, wired in
+ * StrategyEngine). The canonical Jupiter tier table lives in
+ * `src/pnl/fee-tiers.ts` — there is no registry of fee calculators here.
  *
- * All type definitions, utilities, and calculator classes live in the
- * commission-methods/ directory and are re-exported here for backward
- * compatibility with existing import paths.
- *
- * The StrategyEngine delegates commission calculation to the active calculator
- * when one is configured via commissionMethod. Legacy commission_type /
- * commission_value from strategy() declarations remain supported as fallback.
+ * `getCommissionCalculator`/`computeCommission` are retained as API-compatible
+ * shims that now return undefined/0 — jupiter fee math lives in src/pnl.
+ * Legacy commission_type / commission_value from strategy() declarations
+ * remain supported (calculated per fill by the StrategyEngine itself).
  *
  * ── Jupiter Fee Reality (from official Jupiter docs) ──
  *
@@ -77,11 +78,10 @@ export type {
 export { parsePairSymbol, detectJupiterPairCategory } from './commission-methods/utils.js';
 
 // ---------------------------------------------------------------------------
-// Import calculator classes
+// Imports
 // ---------------------------------------------------------------------------
 
-import { JupiterUltraCalculator } from './commission-methods/jupiter-ultra.js';
-import { JupiterManualCalculator } from './commission-methods/jupiter-manual.js';
+import { DEFAULT_SOL_USD_PRICE } from './commission-methods/config.js';
 
 import type {
   CommissionMethodId,
@@ -97,10 +97,10 @@ import type {
 // Registry
 // ---------------------------------------------------------------------------
 
-const CALCULATORS: Record<CommissionMethodId, CommissionCalculator> = {
-  jupiter_ultra: new JupiterUltraCalculator(),
-  jupiter_manual: new JupiterManualCalculator(),
-};
+// NOTE: the per-fill calculator registry was removed (D6/D7). Jupiter fee math
+// now lives in src/pnl and is applied at trade close by the StrategyEngine;
+// getCommissionCalculator/computeCommission are compat shims returning
+// undefined/0.
 
 // ---------------------------------------------------------------------------
 // Method descriptors (UI metadata)
@@ -116,7 +116,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
     defaultSettings: {
       pairCategory: 'default',
       dexFeeBps: 25,
-      solPriceUsd: 150,
+      solPriceUsd: DEFAULT_SOL_USD_PRICE,
     } as JupiterUltraSettings,
     settingsFields: [
       {
@@ -189,7 +189,7 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
     enforceLongOnly: true,
     defaultSettings: {
       dexFeeBps: 25,
-      solPriceUsd: 150,
+      solPriceUsd: DEFAULT_SOL_USD_PRICE,
     } as JupiterManualSettings,
     settingsFields: [
       {
@@ -227,12 +227,15 @@ const DESCRIPTOR_MAP = new Map<CommissionMethodId, CommissionMethodDescriptor>(
 
 /**
  * Get the CommissionCalculator for the given method ID.
- * Returns undefined if the method ID is not recognized.
+ *
+ * Compat shim: the per-fill calculator registry was removed (D6/D7) — jupiter
+ * fees are modeled via src/pnl at trade close. Always returns undefined.
  */
 export function getCommissionCalculator(
   methodId: CommissionMethodId,
 ): CommissionCalculator | undefined {
-  return CALCULATORS[methodId];
+  void methodId;
+  return undefined;
 }
 
 /**
@@ -260,13 +263,15 @@ export function isLongOnlyEnforced(methodId: CommissionMethodId): boolean {
 
 /**
  * Compute commission using the pluggable system.
- * This is the main entry point that the StrategyEngine should call
- * when a commissionMethod is configured. Falls back to 0 for unknown methods.
+ *
+ * Compat shim: the per-fill calculator registry was removed (D6/D7) — jupiter
+ * fees are modeled via src/pnl (`modelFees`/`aggregateRealizedPnl`) at trade
+ * close. Always returns 0.
  */
 export function computeCommission(context: TradeContext, config: CommissionConfig): number {
-  const calculator = CALCULATORS[config.method];
-  if (!calculator) return 0;
-  return calculator.calculate(context, config);
+  void context;
+  void config;
+  return 0;
 }
 
 /**

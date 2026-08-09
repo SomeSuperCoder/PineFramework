@@ -7,7 +7,7 @@
  * @module trading
  */
 
-import { DexAdapter } from './dex-adapter.js';
+import { captureSwapFeeComponents, DexAdapter } from './dex-adapter.js';
 import type {
   Quote,
   SwapResult,
@@ -61,9 +61,11 @@ export class JupiterUltraAdapter extends DexAdapter {
   readonly name = 'jupiter-ultra';
   readonly commissionModel: CommissionModel = {
     name: 'jupiter-ultra',
-    feeBps: 5,
-    variable: false,
-    description: 'Jupiter Ultra — fixed 5 bps fee for premium routing and execution',
+    // M4: no fixed rate is assumed — fees are OBSERVED from the API at
+    // execution (captureSwapFeeComponents) instead of a fabricated 5 bps.
+    feeBps: 0,
+    variable: true,
+    description: 'Jupiter Ultra — fees observed from the API at execution; no fixed rate assumed',
   };
   readonly slippageConfig: SlippageConfig = {
     bps: DEFAULT_SLIPPAGE_BPS,
@@ -112,6 +114,9 @@ export class JupiterUltraAdapter extends DexAdapter {
         otherAmountThreshold?: string;
         swapMode?: string;
         route?: string;
+        // M4: real fee data is preserved verbatim in rawQuoteResponse and
+        // captured into FeeComponent[] by swap(); the bps is surfaced here.
+        platformFee?: { amount?: string; feeBps?: number | string };
       };
 
       return {
@@ -122,7 +127,9 @@ export class JupiterUltraAdapter extends DexAdapter {
         priceImpactPct: Number(d.priceImpactPct ?? 0), // API may return string or number; Number() handles both
         route: d.route ?? 'ultra-optimized',
         slippageBps,
-        feeBps: this.commissionModel.feeBps,
+        // M4: real platform fee bps when the quote surfaces one (absent → 0 —
+        // never a fabricated rate).
+        feeBps: Number(d.platformFee?.feeBps ?? 0) || 0,
         // Raw passthrough: /swap expects the exact quoteResponse from /quote.
         // Prefer this over any local reconstruction (the verbatim body → HTTP 200).
         rawQuoteResponse: data,
@@ -171,21 +178,48 @@ export class JupiterUltraAdapter extends DexAdapter {
             success: false,
             inputAmount: quote.inAmount,
             outputAmount: '0',
-            fee: '0',
+            feeComponents: [],
+            feeUnknown: true,
             error: `Ultra swap API error: ${swapResponse.status} — ${errorText}`,
           };
         }
 
         const swapData = (await swapResponse.json()) as {
           swapTransaction: string;
+          // M4: /swap may echo the priority fee paid (we send
+          // prioritizationFeeLamports: 'auto'); parse defensively.
+          prioritizationFeeLamports?: number | string;
         };
+
+        // M4: capture the REAL fees — venue/platform from the quote body
+        // (routePlan leg fees + platformFee), priority echoed by /swap (when
+        // present), base from the Solana protocol constant. Ultra may not echo
+        // fees identically — capture what is present and flag feeUnknown when
+        // nothing observable came back; never fabricate a rate.
+        const quoteBody =
+          (quote.rawQuoteResponse as { routePlan?: unknown; platformFee?: unknown } | undefined) ??
+          {};
+        const feeCapture = captureSwapFeeComponents({
+          routePlan: quoteBody.routePlan,
+          platformFee: quoteBody.platformFee,
+          prioritizationFeeLamports: swapData.prioritizationFeeLamports,
+          inputMint: quote.inputMint,
+          // Swap-size context for the Security-F2 amount clamps.
+          outputMint: quote.outputMint,
+          inAmount: quote.inAmount,
+          outAmount: quote.outAmount,
+        });
 
         return {
           success: true,
           signature: swapData.swapTransaction.substring(0, 64),
           inputAmount: quote.inAmount,
           outputAmount: quote.outAmount,
-          fee: String(Number(quote.inAmount) * (this.commissionModel.feeBps / 10000)),
+          feeComponents: feeCapture.components,
+          // Legacy display fee — present only when the input-token fee was
+          // actually observed (never a fabricated '0').
+          ...(feeCapture.inputTokenFee !== undefined ? { fee: feeCapture.inputTokenFee } : {}),
+          ...(feeCapture.feeUnknown ? { feeUnknown: true } : {}),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -193,7 +227,8 @@ export class JupiterUltraAdapter extends DexAdapter {
           success: false,
           inputAmount: quote.inAmount,
           outputAmount: '0',
-          fee: '0',
+          feeComponents: [],
+          feeUnknown: true,
           error: message,
         };
       }

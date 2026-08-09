@@ -235,7 +235,27 @@ export interface TradeRecord {
   entryPrice: number;
   exitPrice: number;
   size: number;
+  /**
+   * Total fees in quote units (USDC) — the ANCHOR-SUBTRACTED total: the sum
+   * of the fee kinds in pnl module `RealizedPnl.subtractedFromNet` (NOT
+   * `RealizedPnl.feesTotal`, the sum of ALL kinds). This is the value that
+   * reconciles `realizedPnl === gross − fees` with the TradeStats identity;
+   * `feeBreakdown` carries the full per-kind display of all kinds. 0 when
+   * none were subtracted or when fees are unknown (`feesUnknown` then flags
+   * the record); legacy records carry the old locked 0.
+   */
   fees: number;
+  /**
+   * NET realized PnL in quote units (USDC): gross minus the fee kinds the
+   * anchor subtracted (pnl module `RealizedPnl.net`). The anchor follows the
+   * gross source, not runtime — 'fills' for ideal-price-derived gross (all
+   * kinds reduce net); 'outAmount' only when gross is literally anchored on
+   * Jupiter's executed outAmount (venue/platform already inside, SOL-side
+   * fees only). Since M5 the live executor persists NET here; legacy
+   * (pre-M5) rows wrote GROSS and have no `grossPnl` field — readers
+   * needing gross fall back to `realizedPnl` when `grossPnl` is absent
+   * (backward compatible).
+   */
   realizedPnl: number;
   dex: DexKind;
   transactionSignature?: string;
@@ -249,4 +269,16 @@ export interface TradeRecord {
   mode?: 'live' | 'chaos';
   /** Whether the on-chain swap outcome was confirmed. */
   status?: 'confirmed' | 'unknown';
+  /** GROSS realized PnL in quote units (USDC), before fees (pnl module
+   *  `RealizedPnl.gross`). Absent on legacy (pre-M5) records — those wrote
+   *  gross into `realizedPnl`. */
+  grossPnl?: number;
+  /** Per-kind fee amounts in quote units (USDC), keyed by pnl FeeKind
+   *  ('VENUE', 'PLATFORM', 'PRIORITY', 'BASE', 'JITO'). Absent when no fee
+   *  was convertible/observed or on legacy records. */
+  feeBreakdown?: Record<string, number>;
+  /** True when the fee numbers could not be fully determined (no observed
+   *  fee source, adapter feeUnknown, or a needed mint→quote price missing).
+   *  Absent (false) on legacy records. */
+  feesUnknown?: boolean;
 }

@@ -7,8 +7,9 @@ import {
   listDexAdapters,
   getDexAdapterInfo,
 } from '../../../src/trading/dex/dex-registry.js';
-import { DexAdapter } from '../../../src/trading/dex/dex-adapter.js';
+import { DexAdapter, captureSwapFeeComponents } from '../../../src/trading/dex/dex-adapter.js';
 import { openLongPosition, closeLongPosition } from '../../../src/trading/dex/spot-trading.js';
+import { USDC_MINT } from '../../../src/trading/token-registry.js';
 import type {
   Quote,
   SwapResult,
@@ -31,7 +32,9 @@ describe('DexAdapter contract', () => {
     const adapter = new JupiterUltraAdapter();
     expect(adapter.name).toBe('jupiter-ultra');
     expect(adapter.commissionModel.name).toBe('jupiter-ultra');
-    expect(adapter.commissionModel.feeBps).toBe(5);
+    // M4: no fixed rate is assumed — fees are observed from the API at
+    // execution (captureSwapFeeComponents), so the commission model carries 0.
+    expect(adapter.commissionModel.feeBps).toBe(0);
     expect(adapter.slippageConfig.configurable).toBe(true);
   });
 
@@ -145,7 +148,7 @@ describe('DEX Registry', () => {
         slippageBps: 100,
         feeBps: 10,
       }),
-      swap: async () => ({ success: true, inputAmount: '0', outputAmount: '0', fee: '0' }),
+      swap: async () => ({ success: true, inputAmount: '0', outputAmount: '0', feeComponents: [] }),
       getBalance: async () => ({ mint: '', amount: '0', decimals: 6 }),
       getTransactionStatus: async () => 'confirmed' as TxStatus,
     } as DexAdapter;
@@ -202,7 +205,8 @@ describe('Spot Trading', () => {
       signature: 'tx123',
       inputAmount: '1000000',
       outputAmount: '500000',
-      fee: '0',
+      // M9: the adapter never fabricates fee '0' — no fee claim at all.
+      feeComponents: [],
     });
 
     const result = await openLongPosition(mockDex, {
@@ -215,8 +219,48 @@ describe('Spot Trading', () => {
 
     expect(result.success).toBe(true);
     expect(result.signature).toBe('tx123');
+    // SpotTradeResult.fee is OPTIONAL — omitted when the swap carried no fee.
+    expect(result.fee).toBeUndefined();
     expect(mockDex.quote).toHaveBeenCalled();
     expect(mockDex.swap).toHaveBeenCalled();
+  });
+
+  it("openLongPosition forwards an OBSERVED input-token fee (never '0' fabrication)", async () => {
+    vi.mocked(mockDex.getBalance).mockResolvedValue({
+      mint: 'USDC',
+      amount: '10000000',
+      decimals: 6,
+    });
+    vi.mocked(mockDex.quote).mockResolvedValue({
+      inputMint: 'USDC_MINT',
+      outputMint: 'ASSET_MINT',
+      inAmount: '1000000',
+      outAmount: '500000',
+      priceImpactPct: 0.05,
+      route: 'direct',
+      slippageBps: 50,
+      feeBps: 0,
+    });
+    vi.mocked(mockDex.swap).mockResolvedValue({
+      success: true,
+      signature: 'tx-fee',
+      inputAmount: '1000000',
+      outputAmount: '500000',
+      fee: '2500',
+      feeComponents: [],
+    });
+
+    const result = await openLongPosition(mockDex, {
+      assetMint: 'ASSET_MINT',
+      amount: BigInt(1000000),
+      slippageBps: 50,
+      privateKey: new Uint8Array(32),
+      publicKey: 'pubkey123',
+    });
+
+    expect(result.success).toBe(true);
+    // The observed fee is forwarded verbatim (present because observed, not '0').
+    expect(result.fee).toBe('2500');
   });
 
   it('openLongPosition should fail with insufficient balance', async () => {
@@ -275,7 +319,8 @@ describe('Spot Trading', () => {
       signature: 'tx456',
       inputAmount: '500000',
       outputAmount: '1000000',
-      fee: '0',
+      // M9: no fabricated fee — omitted entirely.
+      feeComponents: [],
     });
 
     const result = await closeLongPosition(mockDex, {
@@ -288,6 +333,8 @@ describe('Spot Trading', () => {
 
     expect(result.success).toBe(true);
     expect(result.signature).toBe('tx456');
+    // SpotTradeResult.fee is OPTIONAL — omitted when the swap carried no fee.
+    expect(result.fee).toBeUndefined();
   });
 
   it('closeLongPosition should fail with insufficient asset balance', async () => {
@@ -307,5 +354,144 @@ describe('Spot Trading', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Insufficient');
+  });
+});
+
+// ---- captureSwapFeeComponents — Security-F2 sanitization (M9) ----
+
+describe('captureSwapFeeComponents — sanitization (mint whitelist + amount clamps)', () => {
+  // The canonical USDC input-mint swap context shared by the cases below.
+  const SWAP_CTX = {
+    routePlan: undefined,
+    platformFee: undefined,
+    prioritizationFeeLamports: undefined,
+    inputMint: USDC_MINT,
+    outputMint: 'ASSET_MINT',
+    inAmount: '1000000',
+    outAmount: '5000000',
+  };
+
+  /** The protocol BASE component that is ALWAYS recorded (2 × 5_000 lamports SOL). */
+  const BASE_ONLY = [{ kind: 'BASE', tokenMint: 'SOL', amountAtomic: '10000' }];
+
+  it('keeps a valid input-mint VENUE within the swap size; feeUnknown false; legacy fee set', () => {
+    const result = captureSwapFeeComponents({
+      ...SWAP_CTX,
+      routePlan: [
+        {
+          swapInfo: {
+            ammKey: 'amm1',
+            label: 'Orca',
+            inputMint: USDC_MINT,
+            outputMint: 'ASSET_MINT',
+            inAmount: '1000000',
+            outAmount: '5000000',
+            feeAmount: '250000',
+            feeMint: USDC_MINT,
+          },
+          percent: 100,
+          bps: 10000,
+        },
+      ],
+    });
+
+    expect(result.components).toEqual([
+      { kind: 'VENUE', tokenMint: USDC_MINT, amountAtomic: '250000' },
+      ...BASE_ONLY,
+    ]);
+    expect(result.feeUnknown).toBe(false);
+    // input-token VENUE observed → legacy display fee present (never '0').
+    expect(result.inputTokenFee).toBe('250000');
+  });
+
+  it('drops an absurd input-mint fee (fee > inAmount) and flags feeUnknown', () => {
+    const result = captureSwapFeeComponents({
+      ...SWAP_CTX,
+      routePlan: [
+        {
+          swapInfo: {
+            ammKey: 'amm1',
+            label: 'Orca',
+            inputMint: USDC_MINT,
+            outputMint: 'ASSET_MINT',
+            inAmount: '1000000',
+            outAmount: '5000000',
+            // > 1_000_000 inAmount — a corrupt/absurd response.
+            feeAmount: '99999999999999999999',
+            feeMint: USDC_MINT,
+          },
+          percent: 100,
+          bps: 10000,
+        },
+      ],
+    });
+
+    // The absurd VENUE is dropped — only the protocol BASE remains.
+    expect(result.components).toEqual(BASE_ONLY);
+    expect(result.feeUnknown).toBe(true);
+    expect(result.inputTokenFee).toBeUndefined();
+  });
+
+  it('drops an unknown/foreign fee mint (whitelist) and flags feeUnknown', () => {
+    const result = captureSwapFeeComponents({
+      ...SWAP_CTX,
+      routePlan: [
+        {
+          swapInfo: {
+            ammKey: 'amm1',
+            label: 'Orca',
+            inputMint: USDC_MINT,
+            outputMint: 'ASSET_MINT',
+            inAmount: '1000000',
+            outAmount: '5000000',
+            feeAmount: '5000',
+            feeMint: 'FakeMint1111111111111111111111111111111111',
+          },
+          percent: 100,
+          bps: 10000,
+        },
+      ],
+    });
+
+    // A raw foreign address never flows into PnL — dropped.
+    expect(result.components).toEqual(BASE_ONLY);
+    expect(result.feeUnknown).toBe(true);
+    expect(result.inputTokenFee).toBeUndefined();
+  });
+
+  it('clamps an output-mint fee to the output amount (fee > outAmount is dropped)', () => {
+    const result = captureSwapFeeComponents({
+      ...SWAP_CTX,
+      routePlan: [
+        {
+          swapInfo: {
+            ammKey: 'amm1',
+            label: 'Orca',
+            inputMint: USDC_MINT,
+            outputMint: 'ASSET_MINT',
+            inAmount: '1000000',
+            outAmount: '5000000',
+            feeAmount: '999999999999',
+            feeMint: 'ASSET_MINT',
+          },
+          percent: 100,
+          bps: 10000,
+        },
+      ],
+    });
+
+    expect(result.components).toEqual(BASE_ONLY);
+    expect(result.feeUnknown).toBe(true);
+  });
+
+  it('caps SOL-side lamport fees at 10 SOL when SOL is on neither side of the swap', () => {
+    // USDC → ASSET (no SOL on either side): a 20 SOL priority fee is absurd.
+    const result = captureSwapFeeComponents({
+      ...SWAP_CTX,
+      prioritizationFeeLamports: '20000000000',
+    });
+
+    expect(result.components).toEqual(BASE_ONLY);
+    expect(result.feeUnknown).toBe(true);
   });
 });

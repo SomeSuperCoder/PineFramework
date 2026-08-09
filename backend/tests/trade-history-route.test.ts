@@ -500,6 +500,47 @@ describe('GET /api/bot/stats — global summary', () => {
   });
 });
 
+describe('GET /api/bot/stats — new-style gross/fee fields (M7)', () => {
+  let server: Server;
+  let baseUrl: string;
+  let store: TradeHistoryStore;
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
+    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    ({ server, baseUrl } = await startServer(() => store));
+  });
+
+  afterEach(async () => {
+    await stopServer(server);
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('summary exposes the net identity + feesUnknownTrades for new-style records through the API', async () => {
+    // Mixed set: one new-style row (grossPnl + net realizedPnl + fees) and one
+    // fees-unknown row (fees not fully determined → flagged, never invented).
+    store.recordTrade(
+      makeTrade({ id: 'n1', closedAt: 100, grossPnl: 12, realizedPnl: 11, fees: 1 }),
+    );
+    store.recordTrade(
+      makeTrade({ id: 'n2', closedAt: 200, grossPnl: 9, realizedPnl: 9, fees: 0, feesUnknown: true }),
+    );
+
+    const res = await fetch(`${baseUrl}/bot/stats`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const s = body.summary;
+    expect(s.totalGrossPnl).toBe(21); // Σ grossPnl
+    expect(s.totalFees).toBe(1); // Σ recorded fees
+    expect(s.netPnl).toBe(20);
+    expect(s.netPnl).toBe(s.totalGrossPnl - s.totalFees); // the identity
+    expect(s.feesUnknownTrades).toBe(1);
+    // The route never re-derives stats — parity with the store holds.
+    expect(body.summary).toEqual(store.getStats());
+  });
+});
+
 describe('GET /api/bot/stats — grouped', () => {
   let server: Server;
   let baseUrl: string;

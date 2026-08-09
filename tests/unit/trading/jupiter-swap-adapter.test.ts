@@ -613,6 +613,15 @@ describe('JupiterSwapAdapter', () => {
       expect(result.outputAmount).toBe('23801');
       expect(result.error ?? '').not.toContain('Versioned messages');
 
+      // M9 fee contract: the real captured components (quote routePlan has no
+      // feeAmount → BASE protocol fee only), feeUnknown because no observable
+      // variable fee layer came back, and NO fabricated '0' fee.
+      expect(result.feeComponents).toEqual([
+        { kind: 'BASE', tokenMint: 'SOL', amountAtomic: '10000' },
+      ]);
+      expect(result.feeUnknown).toBe(true);
+      expect(result.fee).toBeUndefined();
+
       // The pipeline reached simulate + send — the REAL deserialize+sign ran
       // first; a v0 deserialize failure would have short-circuited before these.
       expect(mockSimulateTransaction).toHaveBeenCalledTimes(1);
@@ -647,7 +656,9 @@ describe('JupiterSwapAdapter', () => {
         success: false,
         inputAmount: '452571',
         outputAmount: '0',
-        fee: '0',
+        // M9: the failure path never fabricates fee '0' — no fee claim, feeUnknown.
+        feeComponents: [],
+        feeUnknown: true,
         error: 'Swap API error: 400 — mocked failure',
       });
       // Never reached the transaction pipeline.
@@ -687,6 +698,56 @@ describe('JupiterSwapAdapter', () => {
       expect(result.outputAmount).toBe('0');
       expect(mockSimulateTransaction).toHaveBeenCalledTimes(1);
       expect(mockSendAndConfirm).toHaveBeenCalledTimes(1);
+    });
+
+    it('swap() sanitizes an absurd input-mint venue fee — dropped, feeUnknown, no fabricated fee (Security F2)', async () => {
+      mockSimulateTransaction.mockResolvedValue({ success: true });
+      mockSendAndConfirm.mockResolvedValue({ success: true, signature: 'mock-v0-signature' });
+      const signer = Keypair.fromSecretKey(Buffer.from(V0_SIGNER_SECRET_B64, 'base64'));
+
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue(
+            quoteResponse({
+              routePlan: [
+                {
+                  swapInfo: {
+                    ammKey: 'amm1',
+                    label: 'Orca',
+                    inputMint: USDC_MINT,
+                    outputMint: V0_OUTPUT_MINT,
+                    inAmount: '452571',
+                    outAmount: '23801',
+                    // Absurd: exceeds the swap's own inAmount (452571).
+                    feeAmount: '99999999999999999999',
+                    feeMint: USDC_MINT,
+                  },
+                  percent: 100,
+                  bps: 10000,
+                },
+              ],
+            }),
+          ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: vi.fn().mockResolvedValue({ swapTransaction: V0_SWAP_TRANSACTION_B64 }),
+        });
+      global.fetch = mockFetch;
+
+      const quote = await adapter.quote(USDC_MINT, V0_OUTPUT_MINT, BigInt(452571));
+      const result = await adapter.swap(quote, signer.secretKey);
+
+      expect(result.success).toBe(true);
+      // The absurd VENUE was dropped at the trust boundary — BASE protocol fee
+      // only, feeUnknown (no observable layer survived), no fabricated '0'.
+      expect(result.feeComponents).toEqual([
+        { kind: 'BASE', tokenMint: 'SOL', amountAtomic: '10000' },
+      ]);
+      expect(result.feeUnknown).toBe(true);
+      expect(result.fee).toBeUndefined();
     });
   });
 });

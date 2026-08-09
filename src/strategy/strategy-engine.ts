@@ -1,9 +1,7 @@
-import type { CommissionCalculator, CommissionConfig } from './commission-calculator.js';
-import {
-  getCommissionCalculator,
-  isLongOnlyEnforced,
-  buildTradeContextFromFill,
-} from './commission-calculator.js';
+import type { CommissionConfig } from './commission-calculator.js';
+import { isLongOnlyEnforced } from './commission-calculator.js';
+import { buildBacktestFeeModel } from './commission-methods/backtest-model.js';
+import { aggregateRealizedPnl, modelFees } from '../pnl/index.js';
 import { computeMetrics } from './strategy-metrics.js';
 import {
   DEFAULT_STRATEGY_CONFIG,
@@ -39,6 +37,16 @@ export type {
   MarketFillPrice,
 } from './strategy-types.js';
 
+/**
+ * Convert the src/pnl exact DecimalStr to the engine's float API. The module's
+ * money policy (no floats) applies INSIDE src/pnl; this is the single
+ * conversion point at the boundary where the legacy number-typed Trade/equity
+ * API lives.
+ */
+function decimalStrToNumber(value: string): number {
+  return Number(value);
+}
+
 export class StrategyEngine {
   private config: StrategyConfig;
   private position: Position;
@@ -53,7 +61,6 @@ export class StrategyEngine {
   private timestamp: number;
   private currentPrice: number;
   private entries: number;
-  private commissionCalculator: CommissionCalculator | undefined;
   private commissionConfig: CommissionConfig | undefined;
   private _lastMarkerCount: number = 0;
   private _nextOrderId: number = 0;
@@ -69,9 +76,10 @@ export class StrategyEngine {
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
 
-    // Initialize pluggable commission calculator if method is specified
+    // Initialize the commission-method config. Jupiter methods (the only
+    // CommissionMethodIds) model fees through the shared src/pnl module at
+    // trade close — there is no per-fill calculator to construct here.
     if (this.config.commissionMethod) {
-      this.commissionCalculator = getCommissionCalculator(this.config.commissionMethod);
       this.commissionConfig = {
         method: this.config.commissionMethod,
         settings: this.config.commissionMethodSettings ?? null,
@@ -530,11 +538,40 @@ export class StrategyEngine {
     return false;
   }
 
+  /**
+   * True when fees are modeled through the shared src/pnl module at trade close.
+   * Every CommissionMethodId is a jupiter path ('jupiter_ultra'/'jupiter_manual');
+   * if a non-jupiter id is ever added to the type, route it explicitly here.
+   */
+  private get isModuleFeeMethod(): boolean {
+    return this.config.commissionMethod !== undefined;
+  }
+
   private fillOrder(order: Order, fillPrice: number): void {
     const slippage = this.calculateSlippage(order, fillPrice);
     const isFlat = this.position.direction === 'flat';
-    let commission = this.calculateCommission(order, fillPrice, isFlat);
     const adjustedPrice = order.action === 'buy' ? fillPrice + slippage : fillPrice - slippage;
+
+    // Fee policy: jupiter (module-modeled) methods charge fees ONCE per round
+    // trip at CLOSE via src/pnl (aggregateRealizedPnl in closeOrReducePosition)
+    // — never per fill. Slippage is a price adjustment, not a fee: it already
+    // moved `adjustedPrice`, which IS the fill price the PnL anchor uses.
+    // Legacy commissionTypes keep their per-fill charging below.
+    let commission = 0;
+    if (!this.isModuleFeeMethod) {
+      commission = this.calculateCommission(order, fillPrice);
+      const isExit = !isFlat;
+      // For fixed/per_order commission types, charge commission only on entry
+      // (opening a position). Charging on both entry and exit double-counts the
+      // commission for a round-trip trade. Per-contract and percent types are
+      // still charged per fill since they represent actual per-unit costs.
+      if (
+        isExit &&
+        (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order')
+      ) {
+        commission = 0;
+      }
+    }
 
     const filledOrder: FilledOrder = {
       ...order,
@@ -544,20 +581,6 @@ export class StrategyEngine {
     };
 
     this.filledOrders.push(filledOrder);
-
-    const isExit = !isFlat;
-
-    // For fixed/per_order commission types, charge commission only on entry
-    // (opening a position). Charging on both entry and exit double-counts the
-    // commission for a round-trip trade. Per-contract and percent types are
-    // still charged per fill since they represent actual per-unit costs.
-    // NOTE: This only applies to the legacy commission path — the pluggable
-    // commission calculator already determines the correct per-fill amount.
-    if (!this.commissionCalculator && isExit) {
-      if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
-        commission = 0;
-      }
-    }
 
     if (order.action === 'buy') {
       if (isFlat || this.position.direction === 'long') {
@@ -619,22 +642,14 @@ export class StrategyEngine {
     return price * (this.config.slippage / 100);
   }
 
-  private calculateCommission(order: Order, price: number, isEntry: boolean): number {
-    // Use pluggable commission calculator if configured (takes precedence over legacy)
-    if (this.commissionCalculator && this.commissionConfig) {
-      const context = buildTradeContextFromFill({
-        direction: order.direction,
-        fillPrice: price,
-        quantity: order.quantity,
-        isEntry,
-        symbol: this.config.symbol,
-      });
-      return this.commissionCalculator.calculate(context, this.commissionConfig);
-    }
-
-    // Legacy commission calculation
-    // Note: order.commission field is set at order creation but is NOT used for charging.
-    // Commission is calculated fresh at fill time based on current config.
+  /**
+   * Legacy (commissionType) per-fill commission — used only when no jupiter
+   * commissionMethod is configured. Jupiter methods model fees via src/pnl at
+   * trade close and never reach this path.
+   * Note: order.commission field is set at order creation but is NOT used for
+   * charging. Commission is calculated fresh at fill time based on current config.
+   */
+  private calculateCommission(order: Order, price: number): number {
     if (this.config.commission === 0) return 0;
 
     if (this.config.commissionType === 'fixed' || this.config.commissionType === 'per_order') {
@@ -711,10 +726,64 @@ export class StrategyEngine {
     fromEntryLot?: string,
   ): void {
     const closeQuantity = Math.min(quantity, this.position.quantity);
-    const pnl =
+    const grossPnl =
       this.position.direction === 'long'
         ? (price - this.position.avgPrice) * closeQuantity
         : (this.position.avgPrice - price) * closeQuantity;
+
+    // --- Net PnL + fees ------------------------------------------------
+    // Jupiter methods compute the WHOLE round-trip fee here at close through
+    // the shared src/pnl module (entry fills charge nothing — see fillOrder):
+    // aggregateRealizedPnl anchored on FILL prices, so every modeled fee kind
+    // (venue/platform bps + SOL base/priority) reduces net. Legacy
+    // commissionTypes keep their inline gross − commission arithmetic.
+    let netPnl: number;
+    let totalFees: number;
+    if (this.isModuleFeeMethod && this.commissionConfig) {
+      const model = buildBacktestFeeModel(
+        this.commissionConfig.method,
+        this.commissionConfig.settings,
+        this.config.symbol,
+      );
+      const isLong = this.position.direction === 'long';
+      const entryFillSide: 'BUY' | 'SELL' = isLong ? 'BUY' : 'SELL';
+      const exitFillSide: 'BUY' | 'SELL' = isLong ? 'SELL' : 'BUY';
+      const result = aggregateRealizedPnl({
+        side: isLong ? 'LONG' : 'SHORT',
+        entryFill: {
+          side: entryFillSide,
+          qty: String(closeQuantity),
+          fillPrice: String(this.position.avgPrice),
+          ts: String(this.position.entryTime),
+        },
+        exitFill: {
+          side: exitFillSide,
+          qty: String(closeQuantity),
+          fillPrice: String(price),
+          ts: String(this.timestamp),
+        },
+        feesSource: {
+          components: modelFees(
+            {
+              // Round-trip bps are charged on the ENTRY notional — the same
+              // convention buildTradeContextFromTrade used for completed trades.
+              tradeValue: String(this.position.avgPrice * closeQuantity),
+              side: isLong ? 'LONG' : 'SHORT',
+            },
+            model,
+          ),
+        },
+        prices: { SOL: { priceUsd: model.solUsdPrice, decimals: 9 } },
+        anchor: 'fills',
+      });
+      netPnl = decimalStrToNumber(result.net);
+      // Backward-compat `commission` = sum of ALL modeled fees (display).
+      totalFees = decimalStrToNumber(result.feesTotal);
+      this.position.commission += totalFees;
+    } else {
+      netPnl = grossPnl - commission;
+      totalFees = commission;
+    }
 
     // MAE (Maximum Adverse Excursion) and MFE (Maximum Favorable Excursion)
     // Computed from the full trade lifetime (best/worst price reached during the
@@ -742,7 +811,7 @@ export class StrategyEngine {
       entryBarIndex: this.position.entryBarIndex,
       exitBarIndex: this.barIndex,
       quantity: closeQuantity,
-      pnl: pnl - commission,
+      pnl: netPnl,
       pnlPercent:
         this.position.avgPrice > 0
           ? (() => {
@@ -752,10 +821,10 @@ export class StrategyEngine {
                   ? this.config.marginLong
                   : this.config.marginShort;
               const capitalAtRisk = marginRate > 0 ? positionValue * marginRate : positionValue;
-              return capitalAtRisk > 0 ? (pnl / capitalAtRisk) * 100 : 0;
+              return capitalAtRisk > 0 ? (grossPnl / capitalAtRisk) * 100 : 0;
             })()
           : 0,
-      commission,
+      commission: totalFees,
       entryName: '',
       exitName,
       mae: Math.max(0, mae),
@@ -764,7 +833,7 @@ export class StrategyEngine {
     };
 
     this.trades.push(trade);
-    this.equity += pnl - commission;
+    this.equity += netPnl;
 
     this.position.quantity -= closeQuantity;
 

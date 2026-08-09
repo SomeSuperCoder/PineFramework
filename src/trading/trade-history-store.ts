@@ -336,12 +336,19 @@ export class TradeHistoryStore {
     const totalTrades = eligible.length;
     const winningTrades = eligible.filter((t) => t.realizedPnl > 0);
     const losingTrades = eligible.filter((t) => t.realizedPnl < 0);
-    const totalPnl = eligible.reduce((sum, t) => sum + t.realizedPnl, 0);
-    const totalFees = eligible.reduce((sum, t) => sum + t.fees, 0);
+    // SSOT net identity (net = gross − fees), folded the SAME way everywhere:
+    //  - gross per trade = grossPnl when present (post-M5); legacy (pre-M5)
+    //    rows wrote gross into realizedPnl and lack grossPnl → fall back to
+    //    realizedPnl (it is the best available gross for them).
+    //  - fees = the recorded real total; legacy rows carry 0 — never invented.
+    //  - net = totalGrossPnl − totalFees (never a third formula).
+    const totalGrossPnl = eligible.reduce((sum, t) => sum + (t.grossPnl ?? t.realizedPnl), 0);
+    const totalFees = eligible.reduce((sum, t) => sum + (t.fees ?? 0), 0);
     const grossWins = winningTrades.reduce((sum, t) => sum + t.realizedPnl, 0);
     // Sum of negative values (losing trades only), so |grossLosses| > 0
     // whenever there is at least one losing trade.
     const grossLosses = losingTrades.reduce((sum, t) => sum + t.realizedPnl, 0);
+    const feesUnknownTrades = eligible.filter((t) => t.feesUnknown === true).length;
 
     let profitFactor: number;
     if (winningTrades.length === 0) {
@@ -372,13 +379,16 @@ export class TradeHistoryStore {
       winningTrades: winningTrades.length,
       losingTrades: losingTrades.length,
       winRate: totalTrades > 0 ? winningTrades.length / totalTrades : 0,
-      totalPnl,
+      totalPnl: totalGrossPnl,
+      totalGrossPnl,
       totalFees,
       averageWin: winningTrades.length > 0 ? grossWins / winningTrades.length : 0,
       averageLoss: losingTrades.length > 0 ? grossLosses / losingTrades.length : 0,
-      netPnl: totalPnl - totalFees,
+      // THE identity: net = gross − fees (module identity, one formula).
+      netPnl: totalGrossPnl - totalFees,
+      feesUnknownTrades,
       profitFactor,
-      avgTrade: totalTrades > 0 ? totalPnl / totalTrades : 0,
+      avgTrade: totalTrades > 0 ? totalGrossPnl / totalTrades : 0,
       bestTrade,
       worstTrade,
       maxDrawdown: this.computeMaxDrawdown(eligible),
@@ -572,15 +582,26 @@ export interface TradeStats {
   winningTrades: number;
   losingTrades: number;
   winRate: number;
+  /**
+   * GROSS realized PnL (before fees) — Σ (grossPnl ?? realizedPnl). Legacy
+   * (pre-M5) rows lack grossPnl and wrote gross into realizedPnl, so they fall
+   * back to realizedPnl; post-M5 rows carry the explicit gross. This restores
+   * the field's historical meaning: netPnl = totalPnl − totalFees by identity.
+   */
   totalPnl: number;
+  /** Explicit SSOT name for the gross total — identical to totalPnl (alias). */
+  totalGrossPnl: number;
+  /** Σ fees (the recorded real total; legacy rows carry 0 — never invented). */
   totalFees: number;
   averageWin: number;
   averageLoss: number;
-  /** totalPnl − totalFees. */
+  /** totalGrossPnl − totalFees — the SSOT identity (net = gross − fees). */
   netPnl: number;
-  /** Gross wins / |gross losses|; 0 when no wins; MAX_SAFE_INTEGER when wins but no losses. */
+  /** Count of trades whose fee total could not be fully determined (feesUnknown === true). */
+  feesUnknownTrades: number;
+  /** Wins / |losses| over realizedPnl (net); 0 when no wins; MAX_SAFE_INTEGER when wins but no losses. */
   profitFactor: number;
-  /** totalPnl / totalTrades; 0 when no trades. */
+  /** totalPnl / totalTrades (gross average); 0 when no trades. */
   avgTrade: number;
   /** Largest realizedPnl in the set; 0 when no trades. */
   bestTrade: number;

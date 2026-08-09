@@ -149,6 +149,13 @@ export function computeBacktestMetrics(
 
 // ── Helpers (extracted from backtest.ts) ──
 
+/**
+ * Build the equity curve from a running balance. `trade.pnl` is NET (M6: the
+ * engine already subtracts modeled fees through the pnl module), so the curve
+ * is net-consistent with `StrategyMetrics.totalPnl` (Σ pnl). `Trade.commission`
+ * is informational only — it is NEVER added here or to totalPnl, so commission
+ * is not double-counted (net identity: net = gross − fees).
+ */
 function buildEquityCurve(initialCapital: number, trades: Array<{ pnl: number }>): number[] {
   const curve: number[] = [initialCapital];
   let equity = initialCapital;

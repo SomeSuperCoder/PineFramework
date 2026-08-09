@@ -78,11 +78,13 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // Entry at bar 0 → fills at bar 1 open=102
-      // Exit at bar 10 → fills at bar 11 open=104
-      // Exit fill tradeValue = 104 * 10 = 1040
-      // DEX (25 bps): 1040 * 0.0025 = 2.60, network: 0.0015 → total = 2.6015
-      expect(result.metrics.commission).toBeCloseTo(2.6015, 4);
+      // M6: net PnL flows through src/pnl — round-trip fees charged ONCE on the
+      // ENTRY notional (102 * 10 = 1020), not per exit fill.
+      // Entry at bar 0 → fills at bar 1 open=102; Exit at bar 10 → fills at bar 11 open=104
+      // DEX (25 bps): 1020 * 0.0025 = 2.55
+      // Base (10000 lamports @ DEFAULT_SOL_USD_PRICE 73) = 0.00073
+      // platform tier (jupiter_ecosystem) = 0 bps → total = 2.55073
+      expect(result.metrics.commission).toBeCloseTo(2.55073, 4);
     });
 
     it('should charge only DEX fee when solPriceUsd=0 (no network fee on Jupiter 0-tier)', () => {
@@ -99,9 +101,9 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // Exit fill tradeValue = 104 * 10 = 1040
-      // DEX fee (25 bps): 1040 * 0.0025 = 2.60
-      expect(result.metrics.commission).toBeCloseTo(2.6, 4);
+      // M6: DEX fee (25 bps) on the ENTRY notional (102 * 10 = 1020) = 2.55;
+      // network fee @ solPriceUsd 0 → 0.
+      expect(result.metrics.commission).toBeCloseTo(2.55, 4);
     });
 
     it('should charge 2 bps for sol_stable tier (no DEX fee)', () => {
@@ -140,13 +142,12 @@ describe('BacktestEngine Commission Methods', () => {
       });
 
       expect(result.metrics.totalTrades).toBe(1);
-      // Entry at bar 0 → fills at bar 1 open=102
-      // Exit at bar 10 → fills at bar 11 open=104
-      // Exit fill tradeValue = 104 * 10 = 1040
-      // DEX fee (25 bps) = 1040 * 0.0025 = 2.60
-      // Network fee = 0.0015
-      // trade.commission (exit only) = 2.6015
-      expect(result.metrics.commission).toBeCloseTo(2.6015, 4);
+      // M6: net PnL flows through src/pnl — round-trip fees charged ONCE on the
+      // ENTRY notional (102 * 10 = 1020).
+      // DEX fee (25 bps) = 1020 * 0.0025 = 2.55
+      // Base (10000 lamports @ DEFAULT_SOL_USD_PRICE 73) = 0.00073
+      // trade.commission = 2.55073
+      expect(result.metrics.commission).toBeCloseTo(2.55073, 4);
     });
 
     it('should apply only network fee when DEX fee is disabled', () => {
@@ -182,6 +183,66 @@ describe('BacktestEngine Commission Methods', () => {
 
       expect(result.metrics.totalTrades).toBe(1);
       expect(result.metrics.commission).toBe(0);
+    });
+  });
+
+  describe('M6 — net PnL flows through src/pnl (module math)', () => {
+    it('net PnL === gross − modeledFees, computed by the shared module (jupiter_manual)', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      // Fills: entry 102, exit 104, qty 10 → gross = (104 − 102) × 10 = 20.
+      // Modeled fees once per round trip on the ENTRY notional (102 × 10 = 1020):
+      // venue 25 bps = 2.55 + base 10000 lamports @ $73 = 0.00073 → 2.55073.
+      const gross = 20;
+      const modeledFees = 2.55073;
+      expect(result.metrics.commission).toBeCloseTo(modeledFees, 4);
+      expect(result.trades[0]!.pnl).toBeCloseTo(gross - modeledFees, 4);
+      expect(result.trades[0]!.pnl).toBeCloseTo(17.44927, 4);
+    });
+
+    it('uses DEFAULT_SOL_USD_PRICE=73 for the lamport→quote base fee when no solPriceUsd override', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+        commissionMethodSettings: { dexFeeBps: 0 }, // isolate the network fee
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      // Base fee only: 10000 lamports / 1e9 × $73 = 0.00073 (NOT the old $150 → 0.0015).
+      expect(result.metrics.commission).toBeCloseTo(0.00073, 8);
+    });
+
+    it('charges modeled fees ONCE per round trip — the old per-fill ×2 behavior is gone', () => {
+      const bars = createDeterministicBars(20, 100);
+      const engine = new BacktestEngine({
+        initialCapital: 10000,
+        commissionMethod: 'jupiter_manual',
+      });
+
+      const result = engine.run(bars, (eng, _bar, index) => {
+        if (index === 0) eng.entry('Long', 'long', 10);
+        if (index === 10) eng.exit('Exit');
+      });
+
+      // Exactly one round-trip charge on the entry notional (1020 × 25 bps =
+      // 2.55) plus one ×2-sig base fee (0.00073). The old per-fill calculator
+      // charged on the exit fill (1040 × 25 bps = 2.60 + 0.0015 = 2.6015).
+      expect(result.metrics.commission).toBeCloseTo(2.55073, 4);
+      expect(result.metrics.commission).toBeLessThan(2.6);
     });
   });
 

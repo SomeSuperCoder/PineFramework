@@ -4,25 +4,7 @@
  */
 
 import type { CommissionMethodSettings, JupiterPairCategory } from './types.js';
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Solana base fee per signature in lamports. See https://solana.com/docs/core/fees */
-const SOLANA_LAMPORTS_PER_SIG = 5_000;
-
-/** Lamports per SOL (1 SOL = 10⁹ lamports). */
-const LAMPORTS_PER_SOL = 1_000_000_000;
-
-/** Typical number of signatures in a Jupiter swap transaction (~2 for basic swap). */
-const DEFAULT_SIGS_PER_SWAP = 2;
-
-/** Default SOL/USD price (~$150, reasonable for 2024–2025). Set to 0 to disable. */
-const DEFAULT_SOL_PRICE_USD = 150;
-
-/** Default DEX swap fee in bps (25 bps = 0.25%, Raydium standard). */
-const DEFAULT_DEX_FEE_BPS = 25;
+import { DEFAULT_DEX_FEE_BPS, DEFAULT_SOL_USD_PRICE } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Helper functions
@@ -40,41 +22,16 @@ export function getDexFeeBps(settings: CommissionMethodSettings | null | undefin
 
 /**
  * Extract the SOL/USD price from commission settings, falling back to the
- * default when not set. Returns 0 when settings explicitly disable it.
+ * named default in `config.ts`. The old hard-coded `$150` in this file is
+ * gone (D7) — the default is a config constant, and `0` explicitly disables
+ * the network fee (the src/pnl model then converts lamports at $0 → 0 USD).
  */
-export function getSolPriceUsd(settings: CommissionMethodSettings | null | undefined): number {
-  if (!settings) return DEFAULT_SOL_PRICE_USD;
+export function getSolUsdPrice(settings: CommissionMethodSettings | null | undefined): number {
+  if (!settings) return DEFAULT_SOL_USD_PRICE;
   const s = settings as Record<string, unknown>;
   if (typeof s.solPriceUsd === 'number') return s.solPriceUsd;
-  return DEFAULT_SOL_PRICE_USD;
+  return DEFAULT_SOL_USD_PRICE;
 }
-
-/**
- * Calculate the Solana network fee in USD for a single swap transaction.
- * @returns USD amount of the network fee, or 0 if solPriceUsd is ≤ 0.
- */
-export function calculateSolanaNetworkFee(
-  settings: CommissionMethodSettings | null | undefined,
-): number {
-  const solPriceUsd = getSolPriceUsd(settings);
-  if (solPriceUsd <= 0) return 0;
-  const solFee = (DEFAULT_SIGS_PER_SWAP * SOLANA_LAMPORTS_PER_SIG) / LAMPORTS_PER_SOL;
-  return solFee * solPriceUsd;
-}
-
-// ---------------------------------------------------------------------------
-// Jupiter fee schedule
-// ---------------------------------------------------------------------------
-
-/** Maps each Jupiter pair category to its fee in basis points (1 bps = 0.01%). */
-export const JUPITER_FEE_BPS: Record<Exclude<JupiterPairCategory, 'custom'>, number> = {
-  jupiter_ecosystem: 0, // 0%
-  pegged_asset: 0, // 0%
-  sol_stable: 2, // 0.02%
-  lst_stable: 5, // 0.05%
-  default: 10, // 0.1%
-  new_token: 50, // 0.5%
-};
 
 // ---------------------------------------------------------------------------
 // Token classification for Jupiter auto-tier-detection

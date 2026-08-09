@@ -138,8 +138,12 @@ export function buildGlobalPnlSnapshot(input: {
   // Unrealized is independent of trade history: open positions exist even when
   // the stats service has no closed trades yet (engine on, no exits).
   const unrealized = round2(positions.reduce((sum, p) => sum + p.unrealizedPnl, 0));
+  // Realized = session NET PnL (SSOT identity: gross − fees, via
+  // TradeStats.netPnl). No fee netting on unrealized — positions are open.
   const realized = round2(input.summary ? input.summary.netPnl : 0);
 
+  // avgTrade reconstruction mirrors TradeStats.avgTrade = totalPnl / totalTrades
+  // exactly: netPnl + totalFees = (gross − fees) + fees = gross = totalPnl.
   const avgTrade =
     input.summary && input.summary.totalTrades > 0
       ? (input.summary.netPnl + input.summary.totalFees) / input.summary.totalTrades

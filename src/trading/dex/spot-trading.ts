@@ -36,7 +36,9 @@ export interface SpotTradeResult {
   success: boolean;
   inputAmount: string;
   outputAmount: string;
-  fee: string;
+  /** Fee in the input token — present ONLY when observed by the adapter
+   *  (M4: never a fabricated '0'). */
+  fee?: string;
   signature?: string;
   error?: string;
 }
@@ -58,7 +60,6 @@ export async function openLongPosition(
       success: false,
       inputAmount: params.amount.toString(),
       outputAmount: '0',
-      fee: '0',
       error: `Insufficient USDC balance: have ${usdcAmount}, need ${params.amount}`,
     };
   }
@@ -68,7 +69,6 @@ export async function openLongPosition(
       success: false,
       inputAmount: params.amount.toString(),
       outputAmount: '0',
-      fee: '0',
       error: `USDC balance below minimum: ${usdcAmount} < ${MIN_USDC_BALANCE}`,
     };
   }
@@ -85,7 +85,7 @@ export async function openLongPosition(
         success: false,
         inputAmount: params.amount.toString(),
         outputAmount: '0',
-        fee: result.fee ?? '0',
+        ...(result.fee !== undefined ? { fee: result.fee } : {}),
         error: result.error ?? 'Swap failed',
       };
     }
@@ -94,7 +94,7 @@ export async function openLongPosition(
       success: true,
       inputAmount: result.inputAmount,
       outputAmount: result.outputAmount,
-      fee: result.fee,
+      ...(result.fee !== undefined ? { fee: result.fee } : {}),
       signature: result.signature,
     };
   } catch (err) {
@@ -103,7 +103,6 @@ export async function openLongPosition(
       success: false,
       inputAmount: params.amount.toString(),
       outputAmount: '0',
-      fee: '0',
       error: message,
     };
   }
@@ -126,7 +125,6 @@ export async function closeLongPosition(
       success: false,
       inputAmount: params.amount.toString(),
       outputAmount: '0',
-      fee: '0',
       error: `Insufficient asset balance: have ${assetAmount}, need ${params.amount}`,
     };
   }
@@ -143,7 +141,7 @@ export async function closeLongPosition(
         success: false,
         inputAmount: params.amount.toString(),
         outputAmount: '0',
-        fee: result.fee ?? '0',
+        ...(result.fee !== undefined ? { fee: result.fee } : {}),
         error: result.error ?? 'Swap failed',
       };
     }
@@ -152,7 +150,7 @@ export async function closeLongPosition(
       success: true,
       inputAmount: result.inputAmount,
       outputAmount: result.outputAmount,
-      fee: result.fee,
+      ...(result.fee !== undefined ? { fee: result.fee } : {}),
       signature: result.signature,
     };
   } catch (err) {
@@ -161,7 +159,6 @@ export async function closeLongPosition(
       success: false,
       inputAmount: params.amount.toString(),
       outputAmount: '0',
-      fee: '0',
       error: message,
     };
   }
