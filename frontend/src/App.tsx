@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartComponent, type ChartComponentHandle } from './components/ChartComponent';
+import { DashboardToolbar } from './components/DashboardToolbar';
 import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { GoToDatePopup } from './components/GoToDatePopup';
@@ -339,138 +340,29 @@ function App() {
       {activePanel === 'dashboard' && (
         <div style={dashboardStyles.container}>
           {/* Top toolbar: symbol, timeframe, quick actions */}
-          <div style={dashboardStyles.toolbar}>
-            <select
-              value={symbol}
-              onChange={(e) => { const v = e.target.value; setSymbol(v); localStorage.setItem('pine-symbol', v); }}
-              style={dashboardStyles.select}
-            >
-              {PAIR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-            <select
-              value={timeframe}
-              onChange={(e) => { const v = e.target.value; setTimeframe(v); localStorage.setItem('pine-timeframe', v); }}
-              style={dashboardStyles.select}
-            >
-              {TIMEFRAME_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-
-            <div style={dashboardStyles.divider} />
-
-            <span style={{
-              fontSize: 12,
-              color: isConnected ? tokens.colors.semantic.success : tokens.colors.semantic.error,
-            }}>
-              {isLoading ? '◌ Loading...' : isConnected ? '● Connected' : '○ Disconnected'}
-            </span>
-
-            <div style={{ flex: 1 }} />
-
-            {/* Quick action buttons */}
-            <button onClick={() => { setEditingScriptId(null); setQuickAdderOpen(true); }} style={dashboardStyles.actionBtn}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <line x1="6" y1="2" x2="6" y2="10" />
-                <line x1="2" y1="6" x2="10" y2="6" />
-              </svg>
-              Add
-            </button>
-            <button onClick={() => { setEditingScriptId(null); setEditorOpen(true); }} style={dashboardStyles.actionBtn}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8.5 1.5l2 2L4 10H2v-2z" />
-              </svg>
-              Editor
-            </button>
-
-            <div style={dashboardStyles.divider} />
-            <button onClick={() => setActivePanel('backtest')} style={dashboardStyles.primaryBtn}>
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
-                <polygon points="2,0 10,5.5 2,11" />
-              </svg>
-              Backtest
-            </button>
-
-            <div style={dashboardStyles.divider} />
-
-            <button
-              onClick={() => setAutoScale(!autoScale)}
-              style={{
-                ...dashboardStyles.actionBtn,
-                background: autoScale ? tokens.colors.semantic.successBg : undefined,
-                color: autoScale ? tokens.colors.semantic.success : undefined,
-                borderColor: autoScale ? tokens.colors.semantic.success : undefined,
-              }}
-            >
-              {autoScale ? 'Auto Scale' : 'Manual'}
-            </button>
-            <button
-              onClick={() => setDebugMode(!debugMode)}
-              style={{
-                ...dashboardStyles.actionBtn,
-                background: debugMode ? tokens.colors.semantic.warningBg : undefined,
-                color: debugMode ? tokens.colors.semantic.warning : undefined,
-                borderColor: debugMode ? tokens.colors.semantic.warning : undefined,
-              }}
-            >
-              Debug
-            </button>
-
-            <div style={dashboardStyles.divider} />
-
-            <button onClick={() => setGoToDateOpen(true)} style={dashboardStyles.actionBtn}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                <circle cx="6" cy="6" r="4.5" />
-                <polyline points="6,3 6,6 8,7" />
-              </svg>
-              Go to Date
-            </button>
-
-            <div style={dashboardStyles.divider} />
-
-            {/* Bot Dashboard toggle */}
-            <button
-              onClick={async () => {
-                const path = await exportChartData();
-                if (path) {
-                  alert(`Chart data exported to:\n${path}`);
-                } else {
-                  alert('Export failed. Check console for details.');
-                }
-              }}
-              style={dashboardStyles.actionBtn}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2v7M3 6l3 3 3-3M2 10h8" />
-              </svg>
-              Export
-            </button>
-
-            <div style={dashboardStyles.divider} />
-
-            <button
-              onClick={() => setErrorConsoleOpen(!errorConsoleOpen)}
-              style={{
-                ...dashboardStyles.actionBtn,
-                background: errorConsoleOpen ? tokens.colors.semantic.errorBg : undefined,
-                color: errors.length > 0 ? tokens.colors.semantic.error : undefined,
-                borderColor: errors.length > 0 ? tokens.colors.semantic.error : undefined,
-                position: 'relative',
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 1L1 11h10z" />
-                <line x1="6" y1="5" x2="6" y2="7.5" />
-                <circle cx="6" cy="9.5" r="0.5" fill="currentColor" />
-              </svg>
-              Errors
-              {errors.length > 0 && (
-                <span style={dashboardStyles.errorBadge}>{errors.length}</span>
-              )}
-            </button>
-          </div>
+          <DashboardToolbar
+            symbol={symbol}
+            setSymbol={setSymbol}
+            timeframe={timeframe}
+            setTimeframe={setTimeframe}
+            pairOptions={PAIR_OPTIONS}
+            timeframeOptions={TIMEFRAME_OPTIONS}
+            isConnected={isConnected}
+            isLoading={isLoading}
+            autoScale={autoScale}
+            setAutoScale={setAutoScale}
+            debugMode={debugMode}
+            setDebugMode={setDebugMode}
+            errors={errors}
+            errorConsoleOpen={errorConsoleOpen}
+            setErrorConsoleOpen={setErrorConsoleOpen}
+            setEditingScriptId={setEditingScriptId}
+            setQuickAdderOpen={setQuickAdderOpen}
+            setEditorOpen={setEditorOpen}
+            setActivePanel={setActivePanel}
+            setGoToDateOpen={setGoToDateOpen}
+            exportChartData={exportChartData}
+          />
 
           {/* Chart */}
           <div style={dashboardStyles.chartArea}>
@@ -674,72 +566,6 @@ const dashboardStyles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     flex: 1,
     overflow: 'hidden',
-  },
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '6px 12px',
-    background: tokens.colors.surface['1'],
-    borderBottom: `1px solid ${tokens.colors.hairline.default}`,
-    gap: 6,
-    flexShrink: 0,
-  },
-  select: {
-    padding: '5px 10px',
-    border: `1px solid ${tokens.colors.hairline.default}`,
-    borderRadius: 4,
-    background: tokens.colors.canvas,
-    color: tokens.colors.ink['1'],
-    fontSize: 12,
-    cursor: 'pointer',
-  },
-  divider: {
-    width: 1,
-    height: 18,
-    background: '#222',
-    margin: '0 6px',
-  },
-  actionBtn: {
-    padding: '5px 10px',
-    background: tokens.colors.hairline.default,
-    color: tokens.colors.ink['1'],
-    border: `1px solid ${tokens.colors.hairline.default}`,
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 11,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 5,
-  },
-  primaryBtn: {
-    padding: '5px 10px',
-    background: tokens.colors.brand.blue,
-    color: tokens.colors.ink.default,
-    border: 'none',
-    borderRadius: 4,
-    cursor: 'pointer',
-    fontSize: 11,
-    fontWeight: 600,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 5,
-  },
-  errorBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    backgroundColor: tokens.colors.semantic.error,
-    color: tokens.colors.ink.default,
-    fontSize: 10,
-    fontWeight: 'bold',
-    borderRadius: '50%',
-    minWidth: 16,
-    height: 16,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
-    pointerEvents: 'none',
   },
   chartArea: {
     flex: 1,
