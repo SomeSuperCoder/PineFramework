@@ -36,11 +36,9 @@ export type {
 } from './alert-system.js';
 
 export {
-  getCommissionCalculator,
   getCommissionMethodDescriptor,
   getAllCommissionMethodDescriptors,
   isLongOnlyEnforced,
-  computeCommission,
   buildTradeContextFromFill,
   buildTradeContextFromTrade,
 } from './commission-calculator.js';

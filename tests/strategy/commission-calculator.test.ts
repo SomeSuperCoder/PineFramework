@@ -1,45 +1,17 @@
 import {
-  getCommissionCalculator,
   getCommissionMethodDescriptor,
   getAllCommissionMethodDescriptors,
   isLongOnlyEnforced,
-  computeCommission,
   buildTradeContextFromFill,
   buildTradeContextFromTrade,
   detectJupiterPairCategory,
   parsePairSymbol,
 } from '../../src/strategy/commission-calculator.js';
-import type {
-  TradeContext,
-  CommissionConfig,
-  JupiterUltraSettings,
-  JupiterManualSettings,
-  JupiterPairCategory,
-} from '../../src/strategy/commission-calculator.js';
+import { buildBacktestFeeModel } from '../../src/strategy/commission-methods/backtest-model.js';
+import { feeBreakdownToQuote, modelFees } from '../../src/pnl/index.js';
 import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 
 describe('Commission Calculator', () => {
-  const makeContext = (overrides: Partial<TradeContext> = {}): TradeContext => ({
-    direction: 'long',
-    entryPrice: 100,
-    exitPrice: 110,
-    quantity: 10,
-    tradeValue: 1000, // 100 * 10
-    isEntry: true,
-    ...overrides,
-  } as TradeContext);
-
-  describe('getCommissionCalculator', () => {
-    it('should return a calculator for each built-in method', () => {
-      expect(getCommissionCalculator('jupiter_ultra')).toBeDefined();
-      expect(getCommissionCalculator('jupiter_manual')).toBeDefined();
-    });
-
-    it('should return undefined for unknown method', () => {
-      expect(getCommissionCalculator('unknown' as any)).toBeUndefined();
-    });
-  });
-
   describe('getCommissionMethodDescriptor', () => {
     it('should return descriptor for known method', () => {
       const desc = getCommissionMethodDescriptor('jupiter_ultra');
@@ -76,164 +48,7 @@ describe('Commission Calculator', () => {
     });
   });
 
-  describe('jupiter_ultra method', () => {
-    // Tiered-fee unit tests use dexFeeBps: 0 + solPriceUsd: 0 to isolate
-    // Jupiter's own commission from DEX and network fees. The DEX and
-    // network fees are tested separately.
-
-    // ── Backward compatible: rate-based (no pairCategory) ──
-
-    it('should calculate commission as tradeValue * rate (backward compat)', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { rate: 0.001, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      expect(computeCommission(context, config)).toBeCloseTo(10);
-    });
-
-    it('should use default rate of 0.001 when settings only disable DEX/network (backward compat)', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      expect(computeCommission(context, config)).toBeCloseTo(10);
-    });
-
-    it('should use default rate when pairCategory is unset (backward compat)', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { rate: 0.005, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005
-    });
-
-    // ── Tiered fee schedule (pairCategory-based) ──
-
-    it.each([
-      ['jupiter_ecosystem', 0, 10000, 0],
-      ['pegged_asset', 0, 10000, 0],
-      ['sol_stable', 2, 10000, 2],
-      ['lst_stable', 5, 10000, 5],
-      ['default', 10, 10000, 10],
-      ['new_token', 50, 10000, 50],
-    ])('should charge %s tier: %d bps', (category, _bps, tradeValue, expectedCommission) => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: category as JupiterPairCategory,
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue });
-      // bps / 10000 = decimal fraction
-      expect(computeCommission(context, config)).toBeCloseTo(expectedCommission);
-    });
-
-    it('should use custom rate when pairCategory is "custom"', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'custom',
-          rate: 0.002,
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      expect(computeCommission(context, config)).toBeCloseTo(20); // 10000 * 0.002
-    });
-
-    it('should ignore rate field when a named tier is set', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'sol_stable',
-          rate: 0.1,
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 10000 });
-      // 2 bps = 0.02% = tradeValue * 0.0002
-      expect(computeCommission(context, config)).toBeCloseTo(2);
-    });
-
-    // ── Large values ──
-
-    it('should handle large trade values with default tier', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { pairCategory: 'default', dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 1_000_000 });
-      // 10 bps = 0.001 = 1_000_000 * 0.001 = 1000
-      expect(computeCommission(context, config)).toBeCloseTo(1000);
-    });
-
-    it('should handle small trade values with sol_stable tier', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'sol_stable',
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 50 });
-      // 2 bps = 0.0002 = 50 * 0.0002 = 0.01
-      expect(computeCommission(context, config)).toBeCloseTo(0.01);
-    });
-
-    it('should handle zero trade value', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'new_token',
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      const context = makeContext({ tradeValue: 0 });
-      expect(computeCommission(context, config)).toBe(0);
-    });
-
-    // ── DEX fee + network fee on top ──
-
-    it('should add DEX fee and network fee on top of Jupiter tiered fee', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'default',
-          dexFeeBps: 25,
-          solPriceUsd: 150,
-        } as JupiterUltraSettings,
-      };
-      // Jupiter 10 bps = 10000 * 0.001 = 10
-      // DEX 25 bps = 10000 * 0.0025 = 25
-      // Network = 0.0015
-      // Total = 35.0015
-      expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(35.0015, 4);
-    });
-
-    it('should add only DEX fee + network fee when Jupiter tier is 0 bps', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'jupiter_ecosystem',
-          dexFeeBps: 25,
-          solPriceUsd: 150,
-        } as JupiterUltraSettings,
-      };
-      // Jupiter fee = 0, DEX = 25 bps = 25, network = 0.0015
-      expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(25.0015, 4);
-    });
-  });
-
-  describe('jupiter_ultra auto-detection from symbol', () => {
+  describe('detectJupiterPairCategory', () => {
     it('should detect jupiter_ecosystem tier for JUPUSDT', () => {
       expect(detectJupiterPairCategory('JUPUSDT')).toBe('jupiter_ecosystem');
     });
@@ -276,81 +91,6 @@ describe('Commission Calculator', () => {
       expect(detectJupiterPairCategory('BTC-USDT')).toBe('default');
       expect(detectJupiterPairCategory('JUP_USDT')).toBe('jupiter_ecosystem');
     });
-
-    it('should compute fee from auto-detected symbol tier via TradeContext', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      // SOLUSDT → sol_stable → 2 bps → 10000 * 0.0002 = 2
-      const context: TradeContext = {
-        direction: 'long',
-        entryPrice: 100,
-        exitPrice: 110,
-        quantity: 100,
-        tradeValue: 10000,
-        isEntry: true,
-        symbol: 'SOLUSDT',
-      };
-      expect(computeCommission(context, config)).toBeCloseTo(2);
-    });
-
-    it('should compute default 10 bps for non-SOL symbol', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      // BTCUSDT → default → 10 bps → 10000 * 0.001 = 10
-      const context: TradeContext = {
-        direction: 'long',
-        entryPrice: 100,
-        exitPrice: 110,
-        quantity: 100,
-        tradeValue: 10000,
-        isEntry: true,
-        symbol: 'BTCUSDT',
-      };
-      expect(computeCommission(context, config)).toBeCloseTo(10);
-    });
-
-    it('should prefer explicit pairCategory over symbol auto-detection', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: {
-          pairCategory: 'pegged_asset',
-          dexFeeBps: 0,
-          solPriceUsd: 0,
-        } as JupiterUltraSettings,
-      };
-      // Even though the symbol is SOLUSDT (sol_stable), explicit pairCategory wins
-      const context: TradeContext = {
-        direction: 'long',
-        entryPrice: 100,
-        exitPrice: 110,
-        quantity: 100,
-        tradeValue: 10000,
-        isEntry: true,
-        symbol: 'SOLUSDT',
-      };
-      expect(computeCommission(context, config)).toBeCloseTo(0); // pegged_asset = 0 bps
-    });
-
-    it('should fall back to rate when no symbol and no pairCategory', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_ultra',
-        settings: { rate: 0.005, dexFeeBps: 0, solPriceUsd: 0 } as JupiterUltraSettings,
-      };
-      const context: TradeContext = {
-        direction: 'long',
-        entryPrice: 100,
-        exitPrice: 110,
-        quantity: 100,
-        tradeValue: 10000,
-        isEntry: true,
-        // no symbol
-      };
-      expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005
-    });
   });
 
   describe('parsePairSymbol', () => {
@@ -369,75 +109,6 @@ describe('Commission Calculator', () => {
     it('should return undefined for unrecognised format', () => {
       expect(parsePairSymbol('')).toBeUndefined();
       expect(parsePairSymbol('X')).toBeUndefined();
-    });
-  });
-
-  describe('jupiter_manual method', () => {
-    it('should return DEX fee + network fee with default settings', () => {
-      // Default: dexFeeBps=25 (0.25%), solPriceUsd=150 (0.0015 network fee)
-      // tradeValue=1000 → 1000 * 0.0025 = 2.50, network = 0.0015 → total = 2.5015
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: null,
-      };
-      expect(computeCommission(makeContext({ tradeValue: 1000 }), config)).toBeCloseTo(2.5015, 4);
-    });
-
-    it('should return only DEX fee when SOL price is 0 (no network fee)', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: { solPriceUsd: 0 } as JupiterManualSettings,
-      };
-      // dexFeeBps defaults to 25 → 1000 * 0.0025 = 2.50
-      expect(computeCommission(makeContext({ tradeValue: 1000 }), config)).toBeCloseTo(2.5, 4);
-    });
-
-    it('should return only network fee when DEX fee is 0', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: { dexFeeBps: 0, solPriceUsd: 150 } as JupiterManualSettings,
-      };
-      // 0.00001 SOL * $150 = $0.0015
-      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBeCloseTo(0.0015, 6);
-      expect(computeCommission(makeContext({ tradeValue: 0 }), config)).toBeCloseTo(0.0015, 6);
-    });
-
-    it('should return zero when both fees are disabled', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: { dexFeeBps: 0, solPriceUsd: 0 } as JupiterManualSettings,
-      };
-      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBe(0);
-    });
-
-    it('should scale DEX fee with trade value', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: { solPriceUsd: 0 } as JupiterManualSettings,
-      };
-      // 25 bps = 0.25% → 10000 * 0.0025 = 25
-      expect(computeCommission(makeContext({ tradeValue: 10000 }), config)).toBeCloseTo(25, 4);
-      // 20000 * 0.0025 = 50
-      expect(computeCommission(makeContext({ tradeValue: 20000 }), config)).toBeCloseTo(50, 4);
-    });
-
-    it('should scale network fee with SOL price when DEX fee is disabled', () => {
-      const config: CommissionConfig = {
-        method: 'jupiter_manual',
-        settings: { dexFeeBps: 0, solPriceUsd: 300 } as JupiterManualSettings,
-      };
-      // 0.00001 SOL * $300 = $0.0030
-      expect(computeCommission(makeContext({ tradeValue: 100000 }), config)).toBeCloseTo(0.003, 6);
-    });
-  });
-
-  describe('unknown method', () => {
-    it('should return 0 for unrecognized method', () => {
-      const config: CommissionConfig = {
-        method: 'unknown' as any,
-        settings: null,
-      };
-      expect(computeCommission(makeContext(), config)).toBe(0);
     });
   });
 
@@ -500,12 +171,95 @@ describe('Commission Calculator', () => {
     });
   });
 
-  describe('StrategyEngine integration', () => {
-    beforeEach(() => {
-      // Each new StrategyEngine instance starts with its own order ID counter
+  // -------------------------------------------------------------------------
+  // REAL fee path — buildBacktestFeeModel → modelFees (src/pnl).
+  //
+  // D6/D7 (commit 94f3e8c) deleted the per-fill commission calculators. Jupiter
+  // fees are now modeled ONCE per round trip through the shared src/pnl module:
+  //   buildBacktestFeeModel(method, settings, symbol)  (commission-methods/backtest-model.ts)
+  //     → modelFees({ tradeValue }, model)             (pnl/fees.ts)
+  //     → aggregateRealizedPnl(...) at trade close      (strategy-engine.ts:742-782)
+  // These tests lock the module math with REAL numbers — the engine-level path
+  // that consumes it is asserted below in the StrategyEngine integration block.
+  // -------------------------------------------------------------------------
+
+  describe('REAL fee path — buildBacktestFeeModel → modelFees', () => {
+    it('models jupiter_manual as venue bps + base lamports (DEX swap + SOL network fee)', () => {
+      const model = buildBacktestFeeModel('jupiter_manual', { dexFeeBps: 25, solPriceUsd: 73 });
+      expect(model.tag).toBe('jupiter_manual');
+      expect(model.venueBps).toBe('25');
+      expect(model.solUsdPrice).toBe('73');
+      // Router path charges 0% Jupiter platform fee — no PLATFORM component.
+      expect(model.platformBps).toBeUndefined();
+
+      const fees = modelFees({ tradeValue: '1020', side: 'LONG' }, model);
+      const quote = feeBreakdownToQuote(fees, { SOL: { priceUsd: '73', decimals: 9 } });
+      // VENUE: 1020 × 25 / 10000 = 2.55 (quote-denominated).
+      expect(Number(quote.VENUE!)).toBeCloseTo(2.55, 8);
+      // BASE: 5000 lamports × 2 signatures / 1e9 × $73 = 0.00073.
+      expect(Number(quote.BASE!)).toBeCloseTo(0.00073, 8);
+      // Total = 2.55073 — the exact M6 number through the shared module.
+      expect(Number(quote.VENUE!) + Number(quote.BASE!)).toBeCloseTo(2.55073, 8);
     });
 
-    it('should use jupiter_ultra commission method', () => {
+    it('models jupiter_ultra as venue bps + platform tier bps + base lamports', () => {
+      const model = buildBacktestFeeModel('jupiter_ultra', {}); // all defaults
+      expect(model.venueBps).toBe('25'); // default DEX fee (Raydium)
+      expect(model.platformBps).toBe('10'); // DEFAULT_JUPITER_FEE_BPS
+
+      const fees = modelFees({ tradeValue: '1020', side: 'LONG' }, model);
+      const quote = feeBreakdownToQuote(fees, { SOL: { priceUsd: '73', decimals: 9 } });
+      expect(Number(quote.VENUE!)).toBeCloseTo(2.55, 8); // 1020 × 25 / 10000
+      expect(Number(quote.PLATFORM!)).toBeCloseTo(1.02, 8); // 1020 × 10 / 10000
+      expect(Number(quote.BASE!)).toBeCloseTo(0.00073, 8); // 10000 lamports @ $73
+      const total = Number(quote.VENUE!) + Number(quote.PLATFORM!) + Number(quote.BASE!);
+      expect(total).toBeCloseTo(3.57073, 8);
+    });
+
+    it('auto-detects the platform tier from the trading symbol', () => {
+      // SOLUSDT → sol_stable → 2 bps; BTCUSDT → default → 10 bps.
+      const solModel = buildBacktestFeeModel('jupiter_ultra', { dexFeeBps: 0, solPriceUsd: 0 }, 'SOLUSDT');
+      expect(solModel.platformBps).toBe('2');
+      const btcModel = buildBacktestFeeModel('jupiter_ultra', { dexFeeBps: 0, solPriceUsd: 0 }, 'BTCUSDT');
+      expect(btcModel.platformBps).toBe('10');
+    });
+
+    it('prefers an explicit pairCategory over symbol auto-detection', () => {
+      // SOLUSDT auto-detects sol_stable (2 bps), but the explicit tier wins.
+      const model = buildBacktestFeeModel(
+        'jupiter_ultra',
+        { pairCategory: 'pegged_asset', dexFeeBps: 0, solPriceUsd: 0 },
+        'SOLUSDT',
+      );
+      expect(model.platformBps).toBe('0'); // pegged_asset = 0 bps
+    });
+
+    it('maps a custom rate (decimal fraction) to bps when no tier or symbol is set', () => {
+      const model = buildBacktestFeeModel('jupiter_ultra', {
+        rate: 0.005,
+        dexFeeBps: 0,
+        solPriceUsd: 0,
+      });
+      expect(model.platformBps).toBe('50'); // 0.005 × 10000
+    });
+  });
+
+  describe('StrategyEngine integration', () => {
+    it('charges NO fee at entry for jupiter_manual (fees are modeled once at close)', () => {
+      const engine = new StrategyEngine({ commissionMethod: 'jupiter_manual' });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
+      engine.entry('Long', 'long', 10);
+      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000); // entry fills at open=100
+
+      // Old per-fill behavior charged 2.5015 at entry (equity 9997.4985). The
+      // current mechanism charges NOTHING at entry — equity is untouched.
+      expect(engine.getEquity()).toBe(10000);
+      expect(engine.getPosition().direction).toBe('long');
+      expect(engine.getPosition().commission).toBe(0);
+    });
+
+    it('charges NO fee at entry for jupiter_ultra (fees are modeled once at close)', () => {
       const engine = new StrategyEngine({
         commissionMethod: 'jupiter_ultra',
         commissionMethodSettings: { rate: 0.001, dexFeeBps: 0, solPriceUsd: 0 },
@@ -513,28 +267,53 @@ describe('Commission Calculator', () => {
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
       engine.entry('Long', 'long', 10);
+      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000); // entry fills at open=100
 
-      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
-
-      // Commission: 100 * 10 * 0.001 = 1
-      expect(engine.getEquity()).toBeCloseTo(10000 - 1);
+      // Old per-fill behavior charged 1000 × 0.001 = 1 at entry (equity 9999).
+      expect(engine.getEquity()).toBe(10000);
     });
 
-    it('should use jupiter_manual commission method (DEX fee + Solana network fee)', () => {
+    it('models jupiter_manual fees ONCE at close on the entry notional', () => {
+      const engine = new StrategyEngine({ commissionMethod: 'jupiter_manual' });
+
+      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
+      engine.entry('Long', 'long', 10);
+      engine.updateBar(1, 1001, 100, 105, 100, 103, 1000); // entry fills at open=100
+      engine.updateBar(2, 1002, 110, 115, 108, 112, 1000);
+      engine.close('Exit');
+      engine.updateBar(3, 1003, 110, 115, 108, 112, 1000); // close fills at open=110
+
+      const trades = engine.getTrades();
+      expect(trades).toHaveLength(1);
+      // Gross = (110 − 100) × 10 = 100. Fees ONCE on the ENTRY notional
+      // (100 × 10 = 1000): venue 25 bps = 2.50 + base 10000 lamports @
+      // DEFAULT_SOL_USD_PRICE 73 = 0.00073 → 2.50073. The old per-fill
+      // calculator charged on the EXIT notional with $150 → 2.7515.
+      expect(trades[0]!.commission).toBeCloseTo(2.50073, 4);
+      expect(trades[0]!.pnl).toBeCloseTo(100 - 2.50073, 4);
+      expect(engine.getEquity()).toBeCloseTo(10000 + (100 - 2.50073), 4);
+    });
+
+    it('models jupiter_ultra platform fees ONCE at close (rate 0.001 → 10 bps)', () => {
       const engine = new StrategyEngine({
-        commissionMethod: 'jupiter_manual',
+        commissionMethod: 'jupiter_ultra',
+        commissionMethodSettings: { rate: 0.001, dexFeeBps: 0, solPriceUsd: 0 },
       });
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
       engine.entry('Long', 'long', 10);
+      engine.updateBar(1, 1001, 100, 105, 100, 103, 1000); // entry fills at open=100
+      engine.updateBar(2, 1002, 110, 115, 108, 112, 1000);
+      engine.close('Exit');
+      engine.updateBar(3, 1003, 110, 115, 108, 112, 1000); // close fills at open=110
 
-      engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
-
-      // Entry fills at open=100, tradeValue=100*10=1000
-      // DEX fee (25 bps) = 1000 * 0.0025 = 2.50
-      // Network fee at default $150/SOL: 0.00001 * 150 = $0.0015
-      // Total: 2.5015
-      expect(engine.getEquity()).toBeCloseTo(10000 - 2.5015, 4);
+      const trades = engine.getTrades();
+      expect(trades).toHaveLength(1);
+      // Fees ONCE on the entry notional (1000): venue 0 bps (dexFeeBps 0) +
+      // platform 10 bps = 1.00 + base 0 (solPriceUsd 0) → 1.00.
+      expect(trades[0]!.commission).toBeCloseTo(1.0, 4);
+      expect(trades[0]!.pnl).toBeCloseTo(99, 4);
+      expect(engine.getEquity()).toBeCloseTo(10099, 4);
     });
 
     it('should fall back to legacy commission when no method specified', () => {
@@ -549,28 +328,6 @@ describe('Commission Calculator', () => {
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
       expect(engine.getEquity()).toBeCloseTo(10000 - 1);
-    });
-
-    it('should record commission on trade when using jupiter_manual', () => {
-      const engine = new StrategyEngine({
-        commissionMethod: 'jupiter_manual',
-      });
-
-      engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
-      engine.entry('Long', 'long', 10);
-      engine.updateBar(1, 1001, 100, 105, 100, 103, 1000); // entry fills at open=100
-
-      engine.updateBar(2, 1002, 110, 115, 108, 112, 1000);
-      engine.close('Exit');
-      engine.updateBar(3, 1003, 110, 115, 108, 112, 1000); // close fills at open=110
-
-      const trades = engine.getTrades();
-      expect(trades).toHaveLength(1);
-      // Entry fills at 100, close fills at 110
-      // Exit tradeValue = 110 * 10 = 1100
-      // DEX fee (25 bps) = 1100 * 0.0025 = 2.75
-      // Network fee = 0.0015
-      expect(trades[0]!.commission).toBeCloseTo(2.7515, 4);
     });
 
     it('should enforce long-only when jupiter_ultra is selected', () => {
