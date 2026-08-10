@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Info } from 'lucide-react';
 import { NumberField } from './BacktestGeneralSettings.js';
 import type { CommissionMethodId } from '../types';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -12,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { StatusCallout } from '@/components/ui/status-callout';
 
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
   {
@@ -93,126 +91,23 @@ function detectJupiterTier(symbol: string): { tier: string; label: string; bps: 
   return { tier: 'default', label: 'Default', bps: 10 };
 }
 
-/** Shared footnote inside the advanced panels — muted description text. */
+/** Shared footnote inside the sub-config panels — muted description text. */
 function FieldHint({ children }: { children: React.ReactNode }) {
-  return <p className="mt-1 text-[11px] text-muted-foreground">{children}</p>;
-}
-
-/** Helpable numeric labelled row (label + ⓘ + NumberField + hint). */
-function FeeField({
-  label,
-  title,
-  value,
-  onChange,
-  step,
-  min,
-  max,
-  hint,
-}: {
-  label: string;
-  title: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: string;
-  min?: number;
-  max?: number;
-  hint: string;
-}) {
-  return (
-    <div className="mt-2">
-      <div title={title}>
-        <Label className="text-sm">
-          {label}
-          <Info
-            className="ml-1 inline-block size-3.5 cursor-help text-muted-foreground"
-            role="img"
-            aria-label="More info"
-          />
-        </Label>
-      </div>
-      <NumberField value={value} onChange={onChange} step={step} min={min} max={max} />
-      <FieldHint>{hint}</FieldHint>
-    </div>
-  );
-}
-
-/** Advanced-settings disclosure (ghost toggle) — keyed by id so each
- *  sub-config keeps its own open state. */
-function AdvancedToggle({
-  open,
-  onToggle,
-  summary,
-}: {
-  open: boolean;
-  onToggle: () => void;
-  summary?: string;
-}) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className="-mx-2 mt-2 h-auto px-2 text-xs text-muted-foreground"
-      aria-expanded={open}
-      onClick={onToggle}
-    >
-      {open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-      Advanced settings
-      {!open && summary && <span className="ml-2 font-normal text-muted-foreground/80">{summary}</span>}
-    </Button>
-  );
+  return <p className="mt-1 text-xs text-muted-foreground">{children}</p>;
 }
 
 // ── Jupiter Basic Swap config sub-component ──
 
-function JupiterBasicConfig({
-  settings,
-  onSettingsChange,
-}: {
-  settings: Record<string, unknown>;
-  onSettingsChange: (s: Record<string, unknown>) => void;
-}) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const dexFee = ((settings as Record<string, unknown>)?.dexFeeBps as number) ?? 25;
-  const solPrice = ((settings as Record<string, unknown>)?.solPriceUsd as number) ?? 150;
+function JupiterBasicConfig() {
   return (
     <>
-      <div
-        role="status"
-        className="rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-2.5 py-2 text-xs text-[#22c55e]"
-      >
-        ✓ Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
-      </div>
+      <StatusCallout tone="success">
+        Realistic fee model — DEX swap fee + 0% Jupiter commission + ~$0.0015 network fee
+      </StatusCallout>
 
-      <AdvancedToggle
-        open={showAdvanced}
-        onToggle={() => setShowAdvanced(!showAdvanced)}
-        summary={`(DEX fee: ${dexFee} bps · SOL: $${solPrice})`}
-      />
-
-      {showAdvanced && (
-        <>
-          <FeeField
-            label="DEX Swap Fee (bps)"
-            title="Liquidity pool fee charged by the underlying DEX. Raydium=25, Orca=1-30, Meteora=dynamic."
-            value={dexFee}
-            onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
-            step="1"
-            min={0}
-            max={100}
-            hint="Fee paid to the DEX liquidity pool. Default 25 bps (Raydium standard). Auto-fetched from Jupiter API before each backtest."
-          />
-          <FeeField
-            label="SOL Price (USD)"
-            title="SOL/USD price for converting Solana network fees from lamports to USD."
-            value={solPrice}
-            onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
-            step="0.01"
-            min={0}
-            hint="SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee."
-          />
-        </>
-      )}
+      <p className="mt-2 text-xs text-muted-foreground">
+        DEX fee and SOL price are auto-fetched from Jupiter for this pair.
+      </p>
     </>
   );
 }
@@ -228,11 +123,8 @@ function JupiterUltraConfig({
   settings: Record<string, unknown>;
   onSettingsChange: (s: Record<string, unknown>) => void;
 }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const useCustom = !!(settings as Record<string, unknown>)?.useCustomRate;
   const tierInfo = symbol ? detectJupiterTier(symbol) : null;
-  const dexFee = ((settings as Record<string, unknown>)?.dexFeeBps as number) ?? 25;
-  const solPrice = ((settings as Record<string, unknown>)?.solPriceUsd as number) ?? 150;
 
   const handleToggleCustom = (checked: boolean) => {
     const updated = { ...settings };
@@ -253,16 +145,13 @@ function JupiterUltraConfig({
   return (
     <>
       {tierInfo && !useCustom && (
-        <div
-          role="status"
-          className="mb-2 rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-2.5 py-2 text-xs text-[#22c55e]"
-        >
+        <StatusCallout tone="success" className="mb-2">
           Auto-detected:{' '}
           <strong>
             {tierInfo.label} ({tierInfo.bps} bps)
           </strong>{' '}
           from symbol {symbol}
-        </div>
+        </StatusCallout>
       )}
 
       {!tierInfo && !useCustom && (
@@ -292,37 +181,11 @@ function JupiterUltraConfig({
         </div>
       )}
 
-      <AdvancedToggle
-        open={showAdvanced}
-        onToggle={() => setShowAdvanced(!showAdvanced)}
-        summary={`(DEX fee: ${dexFee} bps · SOL: $${solPrice})`}
-      />
+      <p className="mt-2 text-xs text-muted-foreground">
+        DEX fee and SOL price are auto-fetched from Jupiter for this pair.
+      </p>
 
-      {showAdvanced && (
-        <>
-          <FeeField
-            label="DEX Swap Fee (bps)"
-            title="Liquidity pool fee charged by the underlying DEX. Jupiter always routes through a DEX."
-            value={dexFee}
-            onChange={(v) => onSettingsChange({ ...settings, dexFeeBps: v })}
-            step="1"
-            min={0}
-            max={100}
-            hint="Underlying DEX pool fee (Raydium=25, Orca=1-30). Always paid on every swap."
-          />
-          <FeeField
-            label="SOL Price (USD)"
-            title="SOL/USD price for converting Solana network fees from lamports to USD."
-            value={solPrice}
-            onChange={(v) => onSettingsChange({ ...settings, solPriceUsd: v })}
-            step="0.01"
-            min={0}
-            hint="SOL/USD price for Solana network fees (~$0.0015 at $150/SOL). 0 disables network fee."
-          />
-        </>
-      )}
-
-      <p className="mt-2 text-[11px] text-muted-foreground">
+      <p className="mt-2 text-xs text-muted-foreground">
         <strong>Total = DEX fee + Jupiter Ultra fee + network fee.</strong> See{' '}
         <a
           href="https://developers.jup.ag/docs/ultra/fees"
@@ -376,7 +239,7 @@ export function BacktestCommissionSettings({
           ))}
         </SelectContent>
       </Select>
-      <p className="mt-1 text-[11px] text-muted-foreground">
+      <p className="mt-1 text-xs text-muted-foreground">
         {COMMISSION_METHODS.find((m) => m.id === commissionMethod)?.description}
       </p>
 
@@ -392,10 +255,7 @@ export function BacktestCommissionSettings({
 
       {commissionMethod === 'jupiter_manual' && (
         <div className="mt-2">
-          <JupiterBasicConfig
-            settings={(commissionMethodSettings as Record<string, unknown>) ?? {}}
-            onSettingsChange={(newSettings) => onCommissionMethodSettingsChange(newSettings)}
-          />
+          <JupiterBasicConfig />
         </div>
       )}
     </div>

@@ -6,8 +6,8 @@ import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { SectionHeader } from './SectionHeader';
-import { StatusCallout } from './StatusCallout';
+import { SectionHeader } from '@/components/ui/section-header';
+import { StatusCallout } from '@/components/ui/status-callout';
 import type { ProxyDraft, ProxyField, SaveStatus } from './useTelegramSettings';
 
 interface ConnectionCardProps {

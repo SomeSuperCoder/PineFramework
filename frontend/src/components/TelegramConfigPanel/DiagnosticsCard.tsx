@@ -1,8 +1,8 @@
 import { Loader2, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SettingRow } from './SettingRow';
-import { StatusCallout } from './StatusCallout';
+import { SettingRow } from '@/components/ui/setting-row';
+import { StatusCallout } from '@/components/ui/status-callout';
 import type { TestStatus } from './useTelegramSettings';
 
 interface DiagnosticsCardProps {

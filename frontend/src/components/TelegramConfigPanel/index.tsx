@@ -1,12 +1,12 @@
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { AlertConditionData } from '../../types';
+import { CardSkeleton } from '@/components/ui/card-skeleton';
+import { StatusCallout } from '@/components/ui/status-callout';
 import { AccessControlCard } from './AccessControlCard';
-import { CardSkeleton } from './CardSkeleton';
 import { ConnectionCard } from './ConnectionCard';
 import { DiagnosticsCard } from './DiagnosticsCard';
 import { RecipientsCard } from './RecipientsCard';
-import { StatusCallout } from './StatusCallout';
 import { useTelegramSettings } from './useTelegramSettings';
 
 interface TelegramConfigPanelProps {

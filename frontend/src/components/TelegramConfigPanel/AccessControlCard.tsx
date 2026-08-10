@@ -24,9 +24,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import type { TelegramAdmin, TelegramControlRequest, TelegramController } from '../../types';
-import { SectionHeader } from './SectionHeader';
-import { SettingRow } from './SettingRow';
-import { StatusCallout } from './StatusCallout';
+import { SectionHeader } from '@/components/ui/section-header';
+import { SettingRow } from '@/components/ui/setting-row';
+import { StatusCallout } from '@/components/ui/status-callout';
 import type { AdminDraft } from './useTelegramSettings';
 
 interface AccessControlCardProps {

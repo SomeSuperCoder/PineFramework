@@ -4,7 +4,7 @@ import { CodeEditor } from './components/CodeEditor';
 import { ErrorConsole } from './components/ErrorConsole';
 import { GoToDatePopup } from './components/GoToDatePopup';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
-import { BacktestPanel, type SelectedBacktestStrategy } from './components/BacktestPanel';
+import { BacktestPanel } from './components/BacktestPanel';
 import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
@@ -12,36 +12,25 @@ import { ControlPanel, type PanelId } from './components/ControlPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
+import type { BacktestRunRequest } from './hooks/useBacktestPanelState';
 import { useIndicatorManager } from './hooks/useIndicatorManager';
 import { useBotWebSocket, LiveDashboard } from './components/TradingBotPanel';
 import { useChaosMode } from './hooks/useChaosMode';
-import type { ScriptResult, BacktestConfig } from './types';
-import { TRADABLE_PAIRS } from 'pine-framework';
+import type { ScriptResult } from './types';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { tokens } from './theme/tokens';
-
-const SYMBOLS = [...TRADABLE_PAIRS];
-const INTERVALS = [
-  { value: '1', label: '1m' },
-  { value: '5', label: '5m' },
-  { value: '15', label: '15m' },
-  { value: '30', label: '30m' },
-  { value: '60', label: '1h' },
-  { value: '240', label: '4h' },
-  { value: 'D', label: '1D' },
-  { value: 'W', label: '1W' },
-];
+import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from './utils/options';
 
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
 
   const [timeframe, setTimeframe] = useState(() => {
     const saved = localStorage.getItem('pine-timeframe');
-    return saved && INTERVALS.some(i => i.value === saved) ? saved : '1';
+    return saved && TIMEFRAME_OPTIONS.some((o) => o.value === saved) ? saved : '1';
   });
   const [symbol, setSymbol] = useState(() => {
     const saved = localStorage.getItem('pine-symbol');
-    return saved && (SYMBOLS as readonly string[]).includes(saved) ? saved : 'BTCUSDT';
+    return saved && PAIR_OPTIONS.some((o) => o.value === saved) ? saved : 'BTCUSDT';
   });
   const [dataVersion, setDataVersion] = useState(0);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
@@ -315,14 +304,14 @@ function App() {
     overlay: true,
   }));
 
-  const handleRunBacktest = useCallback((config: BacktestConfig, strategy: SelectedBacktestStrategy, startDate?: string, endDate?: string) => {
-    if (!strategy?.source) {
+  const handleRunBacktest = useCallback((request: BacktestRunRequest) => {
+    if (!request.strategy?.source) {
       // Defensive — the panel already blocks this; never POST an empty script.
       return;
     }
     setShowResultsPopup(true);
-    submitBacktest(symbol, timeframe, { ...config, script: strategy.source }, startDate, endDate);
-  }, [symbol, timeframe, submitBacktest]);
+    submitBacktest(request.symbol, request.timeframe, { ...request.config, script: request.strategy.source }, request.startDate, request.endDate);
+  }, [submitBacktest]);
 
   const handleCloseResults = useCallback(() => {
     setShowResultsPopup(false);
@@ -353,8 +342,8 @@ function App() {
               onChange={(e) => { const v = e.target.value; setSymbol(v); localStorage.setItem('pine-symbol', v); }}
               style={dashboardStyles.select}
             >
-              {SYMBOLS.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {PAIR_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
             <select
@@ -362,8 +351,8 @@ function App() {
               onChange={(e) => { const v = e.target.value; setTimeframe(v); localStorage.setItem('pine-timeframe', v); }}
               style={dashboardStyles.select}
             >
-              {INTERVALS.map((i) => (
-                <option key={i.value} value={i.value}>{i.label}</option>
+              {TIMEFRAME_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
 
@@ -589,9 +578,6 @@ function App() {
         <BacktestPanel
           onRun={handleRunBacktest}
           onClose={() => setActivePanel('dashboard')}
-          timeframe={timeframe}
-          symbol={symbol}
-          backendUrl={backendUrl}
         />
       )}
 

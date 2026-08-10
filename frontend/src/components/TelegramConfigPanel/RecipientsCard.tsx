@@ -42,7 +42,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import type { AlertConditionData, ChatLanguage, TelegramChat } from '../../types';
-import { SectionHeader } from './SectionHeader';
+import { SectionHeader } from '@/components/ui/section-header';
 
 interface RecipientsCardProps {
   chats: TelegramChat[];

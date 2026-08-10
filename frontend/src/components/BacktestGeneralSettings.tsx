@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { DateRangeMode } from '../types';
 import {
   SAFE_AMOUNT_OF_CANDLES,
   estimateBars,
   sliderBounds,
+  validateDateRange,
 } from '../utils/candleLimit';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { StatusCallout } from '@/components/ui/status-callout';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const TIMEFRAME_LABELS: Record<string, string> = {
@@ -80,14 +82,14 @@ export function NumberField({
           if (!Number.isNaN(v)) onChange(v);
         }}
         onBlur={() => setDisplay(value === 0 ? '' : String(value))}
-        className="h-11 flex-1"
+        className="h-10 flex-1"
         aria-label="Numeric value"
       />
       <div className="flex flex-col">
         <Button
           type="button"
           variant="ghost"
-          className="h-7 w-9"
+          className="h-5 w-9"
           aria-label="Increase"
           onClick={() => bump(1)}
         >
@@ -96,7 +98,7 @@ export function NumberField({
         <Button
           type="button"
           variant="ghost"
-          className="h-7 w-9"
+          className="h-5 w-9"
           aria-label="Decrease"
           onClick={() => bump(-1)}
         >
@@ -121,6 +123,8 @@ export interface BacktestGeneralSettingsProps {
   timeframe: string;
   /** Called whenever the estimated bar count vs. limit changes. */
   onBarsExceededChange?: (exceedsLimit: boolean) => void;
+  /** Called when the explicit date range fails validation (Run must be disabled). */
+  onValidationBlocked?: (blocked: boolean, message?: string) => void;
 }
 
 export function BacktestGeneralSettings({
@@ -136,15 +140,41 @@ export function BacktestGeneralSettings({
   onEndDateChange,
   timeframe,
   onBarsExceededChange,
+  onValidationBlocked,
 }: BacktestGeneralSettingsProps) {
   const { min: minDays, max: maxDays } = sliderBounds(timeframe);
+  const mountedRef = useRef(true);
+  const [daysBackWarning, setDaysBackWarning] = useState<string | null>(null);
 
-  // Clamp daysBack if it exceeds the current max (e.g., after timeframe switch)
+  // Clamp daysBack into [minDays, maxDays] (e.g., after timeframe switch or on
+  // mount). A clamp on the very first render surfaces the rule-2 warning;
+  // later clamps (timeframe switches) are silent.
   useEffect(() => {
-    if (daysBack > maxDays) {
-      onDaysBackChange(maxDays);
+    if (daysBack < minDays || daysBack > maxDays) {
+      const bound = daysBack < minDays ? minDays : maxDays;
+      onDaysBackChange(bound);
+      if (mountedRef.current) {
+        setDaysBackWarning(`Invalid backtest period reset to ${bound} days.`);
+      }
     }
-  }, [maxDays, daysBack, onDaysBackChange]);
+    mountedRef.current = false;
+  }, [minDays, maxDays, daysBack, onDaysBackChange]);
+
+  const validation = useMemo(
+    () =>
+      dateRangeMode === 'traditional' && startDate && endDate
+        ? validateDateRange(startDate, endDate, timeframe)
+        : ({ valid: true } as const),
+    [dateRangeMode, startDate, endDate, timeframe],
+  );
+
+  useEffect(() => {
+    if (!validation.valid) {
+      onValidationBlocked?.(true, validation.message);
+    } else {
+      onValidationBlocked?.(false);
+    }
+  }, [validation, onValidationBlocked]);
 
   const estimatedDays =
     dateRangeMode === 'days_back'
@@ -202,12 +232,14 @@ export function BacktestGeneralSettings({
               <input
                 type="range"
                 value={daysBack}
-                onChange={(e) => onDaysBackChange(Number(e.target.value))}
+                onChange={(e) => {
+                  setDaysBackWarning(null);
+                  onDaysBackChange(Math.min(maxDays, Math.max(minDays, Number(e.target.value))));
+                }}
                 min={minDays}
                 max={maxDays}
                 step={1}
-                className="flex-1"
-                style={{ accentColor: 'var(--color-primary)' }}
+                className="flex-1 accent-primary"
               />
               <span className="min-w-[60px] text-right text-[13px] text-foreground">
                 {daysBack}
@@ -216,42 +248,55 @@ export function BacktestGeneralSettings({
             </div>
           )
         ) : (
-          <div className="flex gap-2">
-            <div className="flex flex-1 flex-col gap-1">
-              <Label htmlFor="backtest-start-date" className="text-xs text-muted-foreground">
-                Start Date
-              </Label>
-              <Input
-                id="backtest-start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => onStartDateChange(e.target.value)}
-                className="h-11 w-full"
-              />
+          <>
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-1">
+                <Label htmlFor="backtest-start-date" className="text-xs text-muted-foreground">
+                  Start Date
+                </Label>
+                <Input
+                  id="backtest-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => onStartDateChange(e.target.value)}
+                  className="h-10 w-full"
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1">
+                <Label htmlFor="backtest-end-date" className="text-xs text-muted-foreground">
+                  End Date
+                </Label>
+                <Input
+                  id="backtest-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => onEndDateChange(e.target.value)}
+                  className="h-10 w-full"
+                />
+              </div>
             </div>
-            <div className="flex flex-1 flex-col gap-1">
-              <Label htmlFor="backtest-end-date" className="text-xs text-muted-foreground">
-                End Date
-              </Label>
-              <Input
-                id="backtest-end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => onEndDateChange(e.target.value)}
-                className="h-11 w-full"
-              />
-            </div>
-          </div>
+            {!validation.valid && (
+              <StatusCallout tone="error" className="mt-3">
+                {validation.message}
+              </StatusCallout>
+            )}
+          </>
+        )}
+
+        {daysBackWarning && (
+          <StatusCallout tone="warning" className="mt-3">
+            {daysBackWarning}
+          </StatusCallout>
         )}
       </div>
 
-      {estimatedDays > 0 && (
+      {validation.valid && estimatedDays > 0 && (
         <div
           role="status"
           className={
             exceedsLimit
               ? 'mt-3 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive'
-              : 'mt-3 rounded-md border border-[#22c55e] bg-[#22c55e]/10 px-3 py-2 text-xs text-[#22c55e]'
+              : 'mt-3 rounded-md border border-success bg-success/10 px-3 py-2 text-xs text-success'
           }
         >
           {exceedsLimit

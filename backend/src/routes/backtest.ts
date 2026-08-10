@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
+import { fetchDexFeeBps, type FeeFetchResult } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import type { StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
 import { logger } from '../utils/logger.js';
+import { fetchSolPriceUsd } from '../services/sol-price-fetcher.js';
+import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
 
 /** Completed/failed backtest jobs older than this (ms) are eligible for garbage collection. */
 const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -293,6 +295,66 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       res.status(500).json({ error: message });
     }
   });
+
+  /**
+   * GET /api/backtest/dex-fee?symbol=SOL
+   *
+   * Live DEX fee + optional SOL/USD price for the frontend sample-fees panel.
+   * Implements openspec/changes/renovate-backtest-panel/api-contract.md verbatim:
+   * 200 { dexFeeBps, source, dexLabel?, solPriceUsd? } | 400 VALIDATION_ERROR |
+   * 400 UNSUPPORTED_SYMBOL | 503 UPSTREAM_UNAVAILABLE | 429 RATE_LIMITED.
+   *
+   * Registered BEFORE /backtest/:jobId so the static path wins over the param
+   * route — otherwise "dex-fee" would be captured as a jobId and this endpoint
+   * would 404, breaking the frontend's feature-gate probe (contract §5).
+   */
+  router.get(
+    '/backtest/dex-fee',
+    ipRateLimiter({ max: 30, windowMs: 60_000 }),
+    async (req, res) => {
+      try {
+        const rawSymbol = req.query.symbol;
+        // Non-string (e.g. repeated ?symbol=a&symbol=b) or empty-after-trim → validation error.
+        if (typeof rawSymbol !== 'string' || rawSymbol.trim() === '') {
+          res.status(400).json({ error: 'Missing or invalid "symbol" query parameter', code: 'VALIDATION_ERROR' });
+          return;
+        }
+        const symbol = rawSymbol.trim().toUpperCase();
+
+        let fee: FeeFetchResult;
+        try {
+          fee = await fetchDexFeeBps(symbol);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          // Classify by the fetcher's own error message, never by matching input
+          // (contract §4: identify via its error type/message).
+          if (message.includes('not mapped to Solana mints')) {
+            res.status(400).json({ error: `Symbol ${symbol} is not mapped to a Jupiter mint`, code: 'UNSUPPORTED_SYMBOL' });
+          } else {
+            logger.warn('DEX fee upstream unavailable', { symbol, err });
+            res.status(503).json({ error: 'DEX fee data temporarily unavailable, try again later', code: 'UPSTREAM_UNAVAILABLE' });
+          }
+          return;
+        }
+
+        const body: FeeFetchResult & { solPriceUsd?: number } = {
+          dexFeeBps: fee.dexFeeBps,
+          source: fee.source,
+        };
+        if (fee.dexLabel !== undefined) body.dexLabel = fee.dexLabel;
+        // SOL price is non-blocking — never fail the request for it (contract §3).
+        const solPriceUsd = await fetchSolPriceUsd();
+        if (solPriceUsd !== null) body.solPriceUsd = solPriceUsd;
+
+        res.json(body);
+      } catch (err) {
+        // Genuine programmer bug — reuse the route file's sanitized 500 fallback.
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        logger.error('DEX fee route error', { err });
+        res.status(500).json({ error: message });
+      }
+    },
+  );
 
   router.get('/backtest/:jobId', (req, res) => {
     const { jobId } = req.params;

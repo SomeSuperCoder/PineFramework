@@ -161,7 +161,7 @@ describe('Backtest Flow Integration', () => {
     });
 
     it('fetches /api/scripts + /api/scripts/built-in only when opened', async () => {
-      render(<StrategySelector backendUrl="http://test:8081" value="" onChange={vi.fn()} />);
+      render(<StrategySelector value="" onChange={vi.fn()} />);
 
       expect(fetchMock).not.toHaveBeenCalled();
 
@@ -169,13 +169,13 @@ describe('Backtest Flow Integration', () => {
       await screen.findByText('User Momentum');
 
       const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
-      expect(calledUrls).toContain('http://test:8081/api/scripts');
-      expect(calledUrls).toContain('http://test:8081/api/scripts/built-in');
+      expect(calledUrls).toContain('/api/scripts');
+      expect(calledUrls).toContain('/api/scripts/built-in');
     });
 
     it('calls onChange with (source, name, id) when a strategy is picked', async () => {
       const onChange = vi.fn();
-      render(<StrategySelector backendUrl="http://test:8081" value="" onChange={onChange} />);
+      render(<StrategySelector value="" onChange={onChange} />);
 
       await userEvent.click(screen.getByText('Select a strategy...'));
       await userEvent.click(await screen.findByText('User Momentum'));
@@ -185,7 +185,7 @@ describe('Backtest Flow Integration', () => {
     });
 
     it('filters indicators out and only offers strategies', async () => {
-      render(<StrategySelector backendUrl="http://test:8081" value="" onChange={vi.fn()} />);
+      render(<StrategySelector value="" onChange={vi.fn()} />);
 
       await userEvent.click(screen.getByText('Select a strategy...'));
       await screen.findByText('User Momentum');
@@ -212,9 +212,6 @@ describe('Backtest Flow Integration', () => {
         <BacktestPanel
           onRun={onRun}
           onClose={vi.fn()}
-          timeframe="1d"
-          symbol="BTCUSDT"
-          backendUrl="http://test:8081"
         />
       );
     }
@@ -241,7 +238,12 @@ describe('Backtest Flow Integration', () => {
       await userEvent.click(screen.getByRole('button', { name: /run backtest/i }));
 
       expect(onRun).toHaveBeenCalledTimes(1);
-      const [config, strategy, startDate, endDate] = onRun.mock.calls[0];
+      const { config, strategy, startDate, endDate } = onRun.mock.calls[0][0] as {
+        config: unknown;
+        strategy: { id: string; name: string; source: string };
+        startDate?: string;
+        endDate?: string;
+      };
       expect(strategy).toEqual({
         id: 'str-user-1',
         name: 'User Momentum',

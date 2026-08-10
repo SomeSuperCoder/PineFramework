@@ -6,9 +6,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { KeyRound } from 'lucide-react';
-import { StatusCallout } from '../components/TelegramConfigPanel/StatusCallout';
-import { SectionHeader } from '../components/TelegramConfigPanel/SectionHeader';
-import { SettingRow } from '../components/TelegramConfigPanel/SettingRow';
+import { StatusCallout } from '../components/ui/status-callout';
+import { SectionHeader } from '../components/ui/section-header';
+import { SettingRow } from '../components/ui/setting-row';
 
 afterEach(() => {
   vi.useRealTimers();

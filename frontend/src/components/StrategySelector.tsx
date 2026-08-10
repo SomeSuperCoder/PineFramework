@@ -39,21 +39,17 @@ interface MergedStrategy {
 }
 
 interface StrategySelectorProps {
-  backendUrl: string;
   value: string;
   onChange: (source: string, name: string, id: string) => void;
   /** Optional visible label; renders a real <label htmlFor> when provided (config-bar a11y). */
   label?: string;
   /** Optional search-input placeholder; defaults to the current text. */
   placeholder?: string;
-  /** Optional fixed height for the control (config-bar sizing). */
-  height?: number;
 }
 
-export function StrategySelector({ backendUrl, value, onChange, label, placeholder = 'Search strategies...', height }: StrategySelectorProps) {
+export function StrategySelector({ value, onChange, label, placeholder = 'Search strategies...' }: StrategySelectorProps) {
   const inputId = useId();
   const listId = useId();
-  const heightStyle = height !== undefined ? { height } : undefined;
   const [strategies, setStrategies] = useState<MergedStrategy[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -68,8 +64,8 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
     setError('');
     try {
       const [listRes, builtInRes] = await Promise.all([
-        fetch(`${backendUrl}/api/scripts`),
-        fetch(`${backendUrl}/api/scripts/built-in`),
+        fetch('/api/scripts'),
+        fetch('/api/scripts/built-in'),
       ]);
       const listData = await listRes.json();
       const builtInData = await builtInRes.json();
@@ -101,16 +97,16 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
     } finally {
       setLoading(false);
     }
-  }, [backendUrl]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setSearch('');
-      if (strategies.length === 0 && !error) {
+      if (strategies.length === 0) {
         fetchStrategies();
       }
     }
-  }, [isOpen, fetchStrategies, strategies.length, error]);
+  }, [isOpen, fetchStrategies, strategies.length]);
 
   const filtered = strategies.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()),
@@ -142,7 +138,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
               setUseRawPaste(false);
               setRawSource('');
             }}
-            className="h-6 px-2 text-[10px]"
+            className="h-10 text-xs"
           >
             ← Select from list
           </Button>
@@ -160,7 +156,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
 
   const triggerContent = selectedName ? (
     <>
-      <Check className="size-3.5 text-[#22c55e]" />
+      <Check className="size-3.5 text-foreground" />
       {selectedName}
     </>
   ) : sourceLoaded ? (
@@ -196,12 +192,9 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
             aria-haspopup="listbox"
             aria-expanded={isOpen}
             aria-controls={listId}
-            className="w-full justify-between border-input text-[11px]"
-            style={{
-              ...heightStyle,
-              minHeight: height ?? 40,
-              color: selectedName ? 'var(--color-foreground)' : 'var(--color-muted-foreground)',
-            }}
+            className={`w-full h-10 justify-between border-input text-[11px] ${
+              selectedName ? 'text-foreground' : 'text-muted-foreground'
+            }`}
           >
             <span className="inline-flex items-center gap-1.5 truncate">{triggerContent}</span>
             {isOpen ? (
@@ -242,7 +235,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                     variant="outline"
                     size="sm"
                     onClick={fetchStrategies}
-                    className="h-6 px-3 text-[10px]"
+                    className="h-10 text-xs"
                   >
                     Retry
                   </Button>
@@ -267,7 +260,7 @@ export function StrategySelector({ backendUrl, value, onChange, label, placehold
                           variant="secondary"
                           className={
                             s.type === 'strategy'
-                              ? 'h-[14px] px-1 text-[9px] font-semibold bg-[#22c55e]/10 text-[#22c55e]'
+                              ? 'h-[14px] px-1 text-[9px] font-semibold bg-primary/10 text-primary'
                               : 'h-[14px] px-1 text-[9px] font-semibold bg-primary/10 text-primary'
                           }
                         >

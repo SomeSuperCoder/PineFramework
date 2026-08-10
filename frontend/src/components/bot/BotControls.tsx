@@ -442,7 +442,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
       </div>
       <div className="flex flex-col gap-2">
         <StrategySelector
-          backendUrl={backendUrl}
           value={strategySource}
           onChange={(src, _name, _id) => { setStrategySource(src); }}
         />

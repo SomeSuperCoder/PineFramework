@@ -395,6 +395,13 @@ export type DateRangeMode = 'days_back' | 'traditional';
 
 export type CommissionMethodId = 'jupiter_ultra' | 'jupiter_manual';
 
+/** A strategy the user picked for a backtest run (from the StrategySelector). */
+export interface SelectedBacktestStrategy {
+  id: string;
+  name: string;
+  source: string;
+}
+
 export interface BacktestConfig {
   initialCapital: number;
   commission: number;

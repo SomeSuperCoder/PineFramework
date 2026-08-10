@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
-type StatusTone = 'success' | 'info' | 'error';
+type StatusTone = 'success' | 'info' | 'error' | 'warning';
 
 interface StatusCalloutProps {
   tone: StatusTone;
@@ -13,9 +13,10 @@ interface StatusCalloutProps {
 }
 
 const toneClasses: Record<StatusTone, string> = {
-  success: 'border-[#22c55e] bg-[#22c55e]/10 text-[#22c55e]',
+  success: 'border-success bg-success/10 text-success',
   info: 'border-border bg-muted text-muted-foreground',
   error: 'border-destructive bg-destructive/10 text-destructive',
+  warning: 'border-yellow-500 bg-yellow-500/10 text-yellow-500',
 };
 
 /** Inline status message. Success/info announce via role="status"; errors via role="alert". */
