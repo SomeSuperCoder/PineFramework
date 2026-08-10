@@ -1,5 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import type { BacktestResultResponse } from '../types';
+import { useState } from 'react';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
+import type { BacktestResultResponse, EquityPoint } from '../types';
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from '@/components/ui/chart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -45,8 +53,55 @@ function StatCard({
   );
 }
 
+/** Equity & drawdown — Recharts LineChart replacing the hand-rolled canvas. */
+function EquityDrawdownChart({ points }: { points: EquityPoint[] }) {
+  if (points.length < 2) return null;
+
+  const data = points.map((p) => ({
+    time: new Date(p.time).toLocaleDateString(),
+    equity: p.equity,
+    drawdown: p.drawdown,
+  }));
+
+  return (
+    <ChartContainer
+      config={{
+        equity: { label: 'Equity', color: 'var(--color-primary)' },
+        drawdown: { label: 'Drawdown', color: 'var(--color-destructive)' },
+      }}
+      className="h-full w-full"
+    >
+      <LineChart data={data} margin={{ top: 16, right: 10, bottom: 8, left: 10 }}>
+        <CartesianGrid strokeDasharray="4 4" stroke="var(--color-border)" />
+        <XAxis dataKey="time" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+        <YAxis
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(v: number) => `$${v}`}
+        />
+        <ChartTooltip content={<ChartTooltipContent />} />
+        <ChartLegend content={<ChartLegendContent />} />
+        <Line
+          type="monotone"
+          dataKey="equity"
+          stroke="var(--color-primary)"
+          strokeWidth={1.5}
+          dot={false}
+        />
+        <Line
+          type="monotone"
+          dataKey="drawdown"
+          stroke="var(--color-destructive)"
+          strokeWidth={1}
+          dot={false}
+        />
+      </LineChart>
+    </ChartContainer>
+  );
+}
+
 export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResultsProps) {
-  const equityCanvasRef = useRef<HTMLCanvasElement>(null);
   const [sortField, setSortField] = useState<string>('pnl');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -57,70 +112,6 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     const bVal = (b as any)[sortField] ?? 0;
     return sortAsc ? aVal - bVal : bVal - aVal;
   });
-
-  useEffect(() => {
-    if (!equityCanvasRef.current || !result.equityPoints || result.equityPoints.length < 2) return;
-
-    const canvas = equityCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (!rect) return;
-
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
-    ctx.scale(dpr, dpr);
-    const w = rect.width;
-    const h = rect.height;
-
-    const points = result.equityPoints;
-    const equities = points.map((p) => p.equity);
-    const drawdowns = points.map((p) => p.drawdown);
-    const minEquity = Math.min(...equities);
-    const maxEquity = Math.max(...equities);
-    const maxDD = Math.max(...drawdowns);
-    const equityRange = maxEquity - minEquity || 1;
-
-    const pad = 10;
-    const plotW = w - pad * 2;
-    const plotH = h / 2 - pad * 2;
-    const ddH = h / 2 - pad * 2;
-
-    ctx.clearRect(0, 0, w, h);
-
-    ctx.strokeStyle = 'var(--color-primary)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    for (let i = 0; i < points.length; i++) {
-      const x = pad + (i / (points.length - 1)) * plotW;
-      const y = pad + (1 - (equities[i] - minEquity) / equityRange) * plotH;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = '#22c55e';
-    ctx.font = '11px monospace';
-    ctx.fillText(`Equity: $${maxEquity.toFixed(0)}`, pad, pad + 12);
-
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i < points.length; i++) {
-      const x = pad + (i / (points.length - 1)) * plotW;
-      const y = pad + plotH + pad + (1 - drawdowns[i] / (maxDD || 1)) * ddH;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    ctx.fillStyle = '#eab308';
-    ctx.fillText(`Max DD: $${maxDD.toFixed(0)}`, pad, pad + plotH + pad + 12);
-  }, [result]);
 
   const exportCSV = () => {
     let csv = 'Trade ID,Direction,Entry Price,Exit Price,Entry Time,Exit Time,Quantity,PnL,PnL%,MAE,MFE,Bars Held\n';
@@ -203,7 +194,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
         </CardContent>
       </Card>
 
-      {/* Equity & drawdown canvas host */}
+      {/* Equity & drawdown chart */}
       <Card>
         <CardHeader>
           <CardTitle className="text-[#eab308]">
@@ -212,7 +203,7 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
         </CardHeader>
         <CardContent>
           <div className="h-[200px] w-full rounded-md bg-background">
-            <canvas ref={equityCanvasRef} className="h-full w-full" />
+            <EquityDrawdownChart points={result.equityPoints} />
           </div>
         </CardContent>
       </Card>
