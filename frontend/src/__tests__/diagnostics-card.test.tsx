@@ -5,19 +5,19 @@
  *
  * Pure presentational component — rendered directly with props.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DiagnosticsCard } from '../components/TelegramConfigPanel/DiagnosticsCard';
 
 function renderCard(
   overrides: Partial<Parameters<typeof DiagnosticsCard>[0]> = {},
-): ReturnType<typeof vi.fn> {
+): Mock<() => void> {
   const props = {
     botToken: 'tok-1',
     testing: false,
     testStatus: 'idle' as const,
-    onSendTest: vi.fn(),
+    onSendTest: vi.fn<() => void>(),
     ...overrides,
   };
   render(<DiagnosticsCard {...props} />);
