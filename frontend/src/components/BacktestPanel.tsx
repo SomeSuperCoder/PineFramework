@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { CandlestickChart, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CandlestickChart, X } from 'lucide-react';
 import { useBacktestPanelState } from '../hooks/useBacktestPanelState';
 import type { BacktestRunRequest } from '../hooks/useBacktestPanelState';
 import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
@@ -7,13 +7,7 @@ import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
 import { SampleFeesCard } from './SampleFeesCard.js';
 import { StrategySelector } from './StrategySelector.js';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -25,11 +19,66 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow } from '@/components/ui/setting-row';
 import { StatusCallout } from '@/components/ui/status-callout';
 import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from '../utils/options';
+import { cn } from '@/lib/utils';
 
 export interface BacktestPanelProps {
   /** Panel payload — the panel supplies its OWN symbol/timeframe. */
   onRun: (request: BacktestRunRequest) => void;
   onClose: () => void;
+}
+
+type WizardStep = 'strategy' | 'market' | 'capital' | 'commission' | 'review';
+
+const STEPS: WizardStep[] = ['strategy', 'market', 'capital', 'commission', 'review'];
+const STEP_LABELS: Record<WizardStep, string> = {
+  strategy: 'Strategy',
+  market: 'Market',
+  capital: 'Capital',
+  commission: 'Commission',
+  review: 'Review',
+};
+
+function StepDot({
+  s,
+  label,
+  step,
+  setStep,
+}: {
+  s: WizardStep;
+  label: string;
+  step: WizardStep;
+  setStep: (s: WizardStep) => void;
+}) {
+  const idx = STEPS.indexOf(s) + 1;
+  const active = step === s;
+  const done = STEPS.indexOf(s) < STEPS.indexOf(step);
+  return (
+    <span
+      onClick={done ? () => setStep(s) : undefined}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]',
+        active
+          ? 'font-semibold text-[var(--color-foreground)]'
+          : done
+            ? 'cursor-pointer text-[#22c55e]'
+            : 'text-[var(--color-muted-foreground)]',
+      )}
+    >
+      <span
+        className={cn(
+          'inline-flex size-[18px] items-center justify-center rounded-full border font-semibold',
+          active
+            ? 'border-[var(--color-primary)] bg-[rgba(var(--color-primary),0.12)] text-[var(--color-primary)]'
+            : done
+              ? 'border-[#22c55e] bg-[rgba(34,197,94,0.12)] text-[#22c55e]'
+              : 'border-[var(--color-input)] bg-[var(--color-muted)] text-[var(--color-muted-foreground)]',
+        )}
+      >
+        {done ? '✓' : idx}
+      </span>
+      {label}
+    </span>
+  );
 }
 
 export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
@@ -59,6 +108,7 @@ export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
     runConfig,
   } = useBacktestPanelState();
 
+  const [step, setStep] = useState<WizardStep>('strategy');
   const [barsExceedLimit, setBarsExceedLimit] = useState(false);
   const [rangeBlocked, setRangeBlocked] = useState(false);
 
@@ -71,12 +121,250 @@ export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
     onRun({ ...runConfig, strategy: selectedStrategy });
   }, [selectedStrategy, runConfig, onRun, setValidationError]);
 
+  const stepIdx = STEPS.indexOf(step);
+  const canNext = step !== 'strategy' || !!selectedStrategy;
+
+  const next = () => {
+    if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1]);
+  };
+  const back = () => {
+    if (stepIdx > 0) setStep(STEPS[stepIdx - 1]);
+  };
+
+  const strategyLabel = selectedStrategy?.name || 'Not selected';
+  const pairLabel = PAIR_OPTIONS.find((o) => o.value === symbol)?.label ?? symbol;
+  const tfLabel = TIMEFRAME_OPTIONS.find((o) => o.value === timeframe)?.label ?? timeframe;
+
+  const dateRangeLabel =
+    dateRangeMode === 'days_back'
+      ? `Last ${daysBack} days`
+      : startDate && endDate
+        ? `${startDate} → ${endDate}`
+        : startDate
+          ? `From ${startDate}`
+          : 'Not set';
+
+  const commissionLabel =
+    commissionMethod === 'jupiter_ultra'
+      ? 'Jupiter Ultra'
+      : commissionMethod === 'jupiter_manual'
+        ? 'Jupiter Manual'
+        : commissionMethod;
+
+  const isReview = step === 'review';
+
   return (
     <div className="backtest-panel flex flex-1 flex-col overflow-auto rounded-md border border-border bg-card p-5 text-foreground">
-      {/* Shell header — Telegram recipe: title left, actions right */}
+      {/* Header */}
       <header className="mb-4 flex items-center justify-between gap-2.5">
         <h3 className="m-0 text-[16px] font-semibold tracking-tight">Backtest Settings</h3>
-        <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          aria-label="Back to dashboard"
+          className="h-10"
+        >
+          <X className="size-4" />
+        </Button>
+      </header>
+
+      {/* Step indicator */}
+      <nav className="mb-4 flex items-center gap-1" aria-label="Wizard steps">
+        {STEPS.map((s, i) => (
+          <span key={s} className="inline-flex items-center">
+            <StepDot s={s} label={STEP_LABELS[s]} step={step} setStep={setStep} />
+            {i < STEPS.length - 1 && (
+              <span className="mx-0.5 text-[10px] text-[var(--color-muted-foreground)]">→</span>
+            )}
+          </span>
+        ))}
+      </nav>
+
+      {validationError && (
+        <StatusCallout tone="error" className="mb-4">
+          {validationError}
+        </StatusCallout>
+      )}
+
+      {/* Step body */}
+      <div className="flex flex-1 flex-col gap-4">
+        {/* Step 1 — Strategy */}
+        {step === 'strategy' && (
+          <Card>
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="text-base font-semibold">Strategy</CardTitle>
+              <CardDescription className="text-[13px] text-muted-foreground">
+                Choose a Pine Script strategy to backtest.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 p-5 pt-2">
+              <section aria-label="Strategy">
+                <StrategySelector
+                  value={selectedStrategy?.source ?? ''}
+                  onChange={(source, name, id) => {
+                    setSelectedStrategy({ id, name, source });
+                    setValidationError('');
+                  }}
+                  label="Strategy"
+                />
+              </section>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 2 — Market */}
+        {step === 'market' && (
+          <Card>
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="text-base font-semibold">Market</CardTitle>
+              <CardDescription className="text-[13px] text-muted-foreground">
+                Trading pair and candle interval for the backtest.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 p-5 pt-2">
+              <section aria-label="Market">
+                <SectionHeader icon={CandlestickChart} title="Market" />
+                <SettingRow label="Trading Pair" description="Solana spot pair to backtest.">
+                  <Select value={symbol} onValueChange={setSymbol}>
+                    <SelectTrigger className="h-10 w-44" aria-label="Trading pair">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAIR_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+                <SettingRow label="Timeframe" description="Candle interval for bar data.">
+                  <Select value={timeframe} onValueChange={setTimeframe}>
+                    <SelectTrigger className="h-10 w-44" aria-label="Timeframe">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIMEFRAME_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </section>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 3 — Capital & Date Range */}
+        {step === 'capital' && (
+          <Card>
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="text-base font-semibold">Capital & Date Range</CardTitle>
+              <CardDescription className="text-[13px] text-muted-foreground">
+                Starting capital and date window for the backtest.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 p-5 pt-2">
+              <BacktestGeneralSettings
+                initialCapital={initialCapital}
+                onInitialCapitalChange={setInitialCapital}
+                daysBack={daysBack}
+                onDaysBackChange={setDaysBack}
+                dateRangeMode={dateRangeMode}
+                onDateRangeModeChange={setDateRangeMode}
+                startDate={startDate}
+                onStartDateChange={setStartDate}
+                endDate={endDate}
+                onEndDateChange={setEndDate}
+                timeframe={timeframe}
+                onBarsExceededChange={setBarsExceedLimit}
+                onValidationBlocked={(blocked) => setRangeBlocked(blocked)}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 4 — Commission */}
+        {step === 'commission' && (
+          <>
+            <Card>
+              <CardHeader className="p-5 pb-2">
+                <CardTitle className="text-base font-semibold">Commission</CardTitle>
+                <CardDescription className="text-[13px] text-muted-foreground">
+                  Fee model applied to the backtest.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4 p-5 pt-2">
+                <section aria-label="Commission method">
+                  <BacktestCommissionSettings
+                    commissionMethod={commissionMethod}
+                    onCommissionMethodChange={setCommissionMethod}
+                    commissionMethodSettings={commissionMethodSettings}
+                    onCommissionMethodSettingsChange={setCommissionMethodSettings}
+                    symbol={symbol}
+                  />
+                </section>
+              </CardContent>
+            </Card>
+            {(commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') && (
+              <SampleFeesCard symbol={symbol} commissionMethod={commissionMethod} />
+            )}
+          </>
+        )}
+
+        {/* Step 5 — Review & Run */}
+        {step === 'review' && (
+          <Card>
+            <CardHeader className="p-5 pb-2">
+              <CardTitle className="text-base font-semibold">Review & Run</CardTitle>
+              <CardDescription className="text-[13px] text-muted-foreground">
+                Confirm your settings and start the backtest.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 p-5 pt-2 text-[13px]">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Strategy</span>
+                <span className="font-medium">{strategyLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Trading Pair</span>
+                <span className="font-medium">{pairLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Timeframe</span>
+                <span className="font-medium">{tfLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Initial Capital</span>
+                <span className="font-medium">${initialCapital.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Date Range</span>
+                <span className="font-medium">{dateRangeLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Commission</span>
+                <span className="font-medium">{commissionLabel}</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Footer navigation */}
+      <footer className="mt-4 flex items-center justify-between">
+        {stepIdx > 0 ? (
+          <Button type="button" variant="ghost" onClick={back} className="gap-1">
+            <ArrowLeft className="size-4" /> Back
+          </Button>
+        ) : (
+          <span />
+        )}
+        {isReview ? (
           <Button
             onClick={handleRun}
             disabled={!selectedStrategy || barsExceedLimit || rangeBlocked}
@@ -91,133 +379,12 @@ export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
           >
             Run Backtest
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Back to dashboard"
-            className="h-10"
-          >
-            <X className="size-4" />
+        ) : (
+          <Button type="button" onClick={next} disabled={!canNext} className="gap-1">
+            Next <ArrowRight className="size-4" />
           </Button>
-        </div>
-      </header>
-
-      {validationError && (
-        <StatusCallout tone="error" className="mb-4">
-          {validationError}
-        </StatusCallout>
-      )}
-
-      <div className="flex flex-col gap-4">
-        {/* Card 1 — Strategy (design-visual §3) */}
-        <Card>
-          <CardHeader className="p-5 pb-2">
-            <CardTitle className="text-base font-semibold">Strategy</CardTitle>
-            <CardDescription className="text-[13px] text-muted-foreground">
-              Choose a Pine Script strategy to backtest.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-2">
-            <section aria-label="Strategy">
-              <StrategySelector
-                value={selectedStrategy?.source ?? ''}
-                onChange={(source, name, id) => {
-                  setSelectedStrategy({ id, name, source });
-                  setValidationError('');
-                }}
-                label="Strategy"
-              />
-            </section>
-          </CardContent>
-        </Card>
-
-        {/* Card 2 — General: Market → Capital → Date Range (design-visual §4) */}
-        <Card>
-          <CardHeader className="p-5 pb-2">
-            <CardTitle className="text-base font-semibold">General</CardTitle>
-            <CardDescription className="text-[13px] text-muted-foreground">
-              Market, starting capital, and date window for the backtest.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-2">
-            <section aria-label="Market">
-              <SectionHeader icon={CandlestickChart} title="Market" />
-              <SettingRow label="Trading Pair" description="Solana spot pair to backtest.">
-                <Select value={symbol} onValueChange={setSymbol}>
-                  <SelectTrigger className="h-10 w-44" aria-label="Trading pair">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PAIR_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <SettingRow label="Timeframe" description="Candle interval for bar data.">
-                <Select value={timeframe} onValueChange={setTimeframe}>
-                  <SelectTrigger className="h-10 w-44" aria-label="Timeframe">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEFRAME_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </section>
-
-            <BacktestGeneralSettings
-              initialCapital={initialCapital}
-              onInitialCapitalChange={setInitialCapital}
-              daysBack={daysBack}
-              onDaysBackChange={setDaysBack}
-              dateRangeMode={dateRangeMode}
-              onDateRangeModeChange={setDateRangeMode}
-              startDate={startDate}
-              onStartDateChange={setStartDate}
-              endDate={endDate}
-              onEndDateChange={setEndDate}
-              timeframe={timeframe}
-              onBarsExceededChange={setBarsExceedLimit}
-              onValidationBlocked={(blocked) => setRangeBlocked(blocked)}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Card 3 — Commission (design-visual §5) */}
-        <Card>
-          <CardHeader className="p-5 pb-2">
-            <CardTitle className="text-base font-semibold">Commission</CardTitle>
-            <CardDescription className="text-[13px] text-muted-foreground">
-              Fee model applied to the backtest.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4 p-5 pt-2">
-            <section aria-label="Commission method">
-              <BacktestCommissionSettings
-                commissionMethod={commissionMethod}
-                onCommissionMethodChange={setCommissionMethod}
-                commissionMethodSettings={commissionMethodSettings}
-                onCommissionMethodSettingsChange={setCommissionMethodSettings}
-                symbol={symbol}
-              />
-            </section>
-          </CardContent>
-        </Card>
-
-        {/* Card 4 — SampleFees (design-visual §6). Feature-gated: Jupiter methods only. */}
-        {(commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') && (
-          <SampleFeesCard symbol={symbol} commissionMethod={commissionMethod} />
         )}
-      </div>
+      </footer>
     </div>
   );
 }
