@@ -148,6 +148,8 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
     step === 'commission' &&
     (commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') &&
     sampleFeesPhase === 'loading';
+  const isJupiterMethod =
+    commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual';
 
   const next = () => {
     if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1]);
@@ -315,7 +317,7 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
 
         {/* Step 4 — Commission */}
         {step === 'commission' && (
-          <>
+          <div className={cn('grid gap-4', isJupiterMethod && 'lg:grid-cols-2 items-start')}>
             <Card>
               <CardHeader className="p-5 pb-2">
                 <CardTitle className="text-base font-semibold">Commission</CardTitle>
@@ -335,14 +337,14 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
                 </section>
               </CardContent>
             </Card>
-            {(commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') && (
+            {isJupiterMethod && (
               <SampleFeesCard
                 symbol={symbol}
                 commissionMethod={commissionMethod}
                 onPhaseChange={setSampleFeesPhase}
               />
             )}
-          </>
+          </div>
         )}
 
         {/* Step 5 — Review & Run */}
