@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 interface StrategyResultsPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenSettings: () => void;
   status: BacktestStatusResponse['status'] | null;
   progress: number;
   phase: string;
@@ -21,7 +20,7 @@ interface StrategyResultsPopupProps {
   error: string | null;
 }
 
-export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, progress, phase, result, error }: StrategyResultsPopupProps) {
+export function StrategyResultsPopup({ isOpen, onClose, status, progress, phase, result, error }: StrategyResultsPopupProps) {
   const isLoading = status === null || status === 'queued' || status === 'running';
   const displayProgress = status === 'completed' ? 100 : progress;
 
@@ -39,15 +38,6 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             {status === 'running' && (
               <span className="text-xs text-yellow-500">{displayProgress}%</span>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onOpenSettings}
-              title="Open Backtest"
-              className="size-9"
-            >
-              ⚙
-            </Button>
             <DialogClose asChild>
               <Button
                 variant="ghost"
@@ -78,7 +68,7 @@ export function StrategyResultsPopup({ isOpen, onClose, onOpenSettings, status, 
             </div>
           )}
           {status === 'completed' && result && (
-            <BacktestResults result={result} onClose={() => {}} />
+            <BacktestResults result={result} />
           )}
         </div>
       </DialogContent>

@@ -221,20 +221,32 @@ describe('Backtest Flow Integration', () => {
       await userEvent.click(await screen.findByText(name));
     }
 
-    it('keeps Run Backtest disabled until a strategy is selected', async () => {
+    async function advanceToReview() {
+      // Wizard steps: strategy → market → capital → commission → review.
+      for (let i = 0; i < 4; i++) {
+        await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
+      }
+    }
+
+    it('keeps Run Backtest gated until a strategy is selected (wizard cannot advance)', async () => {
       renderPanel();
-      expect(screen.getByRole('button', { name: /run backtest/i })).toBeDisabled();
+      // On step 1 without a strategy, "Next" is disabled — the review step
+      // (and its Run Backtest button) is unreachable, so no run path exists.
+      expect(screen.getByRole('button', { name: /^next$/i })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: /run backtest/i })).not.toBeInTheDocument();
     });
 
-    it('enables Run Backtest once a strategy is selected', async () => {
+    it('enables Run Backtest once a strategy is selected (reachable at the review step)', async () => {
       renderPanel();
       await selectStrategy('User Momentum');
+      await advanceToReview();
       expect(screen.getByRole('button', { name: /run backtest/i })).toBeEnabled();
     });
 
     it('passes the selected strategy (id+name+source) to onRun — dropdown → script source regression', async () => {
       renderPanel();
       await selectStrategy('User Momentum');
+      await advanceToReview();
       await userEvent.click(screen.getByRole('button', { name: /run backtest/i }));
 
       expect(onRun).toHaveBeenCalledTimes(1);
@@ -257,11 +269,32 @@ describe('Backtest Flow Integration', () => {
 
     it('never runs without a selected strategy (no onRun → no POST upstream)', async () => {
       renderPanel();
-      const runButton = screen.getByRole('button', { name: /run backtest/i });
-      expect(runButton).toBeDisabled();
-
-      await userEvent.click(runButton);
+      // No strategy → no way to reach the Run Backtest button at all.
+      const nextButton = screen.getByRole('button', { name: /^next$/i });
+      await userEvent.click(nextButton); // disabled — click is a no-op
+      expect(screen.queryByRole('button', { name: /run backtest/i })).not.toBeInTheDocument();
       expect(onRun).not.toHaveBeenCalled();
+    });
+
+    it('resets the wizard to the Strategy step when resetSignal changes', async () => {
+      const { rerender } = render(
+        <BacktestPanel onRun={onRun} onClose={vi.fn()} resetSignal={0} />
+      );
+
+      // Advance to step 2 (Market) so we are NOT already on Strategy.
+      await userEvent.click(screen.getByText('Select a strategy...'));
+      await userEvent.click(await screen.findByText('User Momentum'));
+      await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
+      expect(screen.getByText('Trading pair and candle interval for the backtest.')).toBeInTheDocument();
+
+      // Closing the results popup bumps resetSignal — the wizard must snap
+      // back to step 1 (Strategy) while the panel stays mounted.
+      rerender(
+        <BacktestPanel onRun={onRun} onClose={vi.fn()} resetSignal={1} />
+      );
+
+      expect(screen.getByText('Choose a Pine Script strategy to backtest.')).toBeInTheDocument();
+      expect(screen.queryByText('Trading pair and candle interval for the backtest.')).not.toBeInTheDocument();
     });
   });
 
@@ -317,7 +350,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={false}
           onClose={vi.fn()}
-          onOpenSettings={vi.fn()}
           status={null}
           progress={0}
           phase=""
@@ -333,7 +365,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          onOpenSettings={vi.fn()}
           status={null}
           progress={0}
           phase=""
@@ -349,7 +380,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          onOpenSettings={vi.fn()}
           status="running"
           progress={50}
           phase="Executing bars"
@@ -366,7 +396,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          onOpenSettings={vi.fn()}
           status="failed"
           progress={0}
           phase=""
@@ -382,7 +411,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          onOpenSettings={vi.fn()}
           status="completed"
           progress={100}
           phase=""
@@ -399,7 +427,6 @@ describe('Backtest Flow Integration', () => {
         <StrategyResultsPopup
           isOpen={true}
           onClose={onClose}
-          onOpenSettings={vi.fn()}
           status="completed"
           progress={100}
           phase=""
@@ -414,13 +441,11 @@ describe('Backtest Flow Integration', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('calls onOpenSettings (nav to backtest panel) when the Open Backtest button is clicked', async () => {
-      const onOpenSettings = vi.fn();
+    it('shows exactly one close control (✕) and no destructive Close text-button in completed results', () => {
       render(
         <StrategyResultsPopup
           isOpen={true}
           onClose={vi.fn()}
-          onOpenSettings={onOpenSettings}
           status="completed"
           progress={100}
           phase=""
@@ -429,12 +454,15 @@ describe('Backtest Flow Integration', () => {
         />
       );
 
-      // Rewire: the gear button now says "Open Backtest" (no BacktestSettingsPopup anymore)
-      const openBacktestButton = screen.getByTitle('Open Backtest');
-      expect(screen.queryByTitle('Backtest Settings')).not.toBeInTheDocument();
-      await userEvent.click(openBacktestButton);
+      // Completed-results view is showing.
+      expect(screen.getByText('Net Profit')).toBeInTheDocument();
 
-      expect(onOpenSettings).toHaveBeenCalled();
+      // The ✕ DialogClose in the popup header (title="Close") is the ONLY close control.
+      expect(screen.getAllByTitle('Close')).toHaveLength(1);
+
+      // BacktestResults no longer receives onClose from the popup, so its
+      // destructive "Close" text-button must not render.
+      expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument();
     });
   });
 

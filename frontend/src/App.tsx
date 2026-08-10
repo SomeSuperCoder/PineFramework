@@ -34,6 +34,7 @@ function App() {
   });
   const [dataVersion, setDataVersion] = useState(0);
   const [showResultsPopup, setShowResultsPopup] = useState(false);
+  const [backtestResetSignal, setBacktestResetSignal] = useState(0);
   const [autoScale, setAutoScale] = useState(true);
   const [debugMode, setDebugMode] = useState(false);
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
@@ -316,6 +317,8 @@ function App() {
   const handleCloseResults = useCallback(() => {
     setShowResultsPopup(false);
     reset();
+    // Bump the signal so BacktestPanel resets its wizard to step 1 (strategy stays selected).
+    setBacktestResetSignal((n) => n + 1);
   }, [reset]);
 
   // Sidebar navigation handler — also syncs sub-panel states
@@ -578,6 +581,7 @@ function App() {
         <BacktestPanel
           onRun={handleRunBacktest}
           onClose={() => setActivePanel('dashboard')}
+          resetSignal={backtestResetSignal}
         />
       )}
 
@@ -610,7 +614,6 @@ function App() {
       <StrategyResultsPopup
         isOpen={showResultsPopup}
         onClose={handleCloseResults}
-        onOpenSettings={() => { setShowResultsPopup(false); setActivePanel('backtest'); }}
         status={status}
         progress={progress}
         phase={phase}

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, CandlestickChart, X } from 'lucide-react';
 import { useBacktestPanelState } from '../hooks/useBacktestPanelState';
 import type { BacktestRunRequest } from '../hooks/useBacktestPanelState';
@@ -25,6 +25,8 @@ export interface BacktestPanelProps {
   /** Panel payload — the panel supplies its OWN symbol/timeframe. */
   onRun: (request: BacktestRunRequest) => void;
   onClose: () => void;
+  /** Counter incremented each time the results popup closes — resets the wizard to step 1. */
+  resetSignal?: number;
 }
 
 type WizardStep = 'strategy' | 'market' | 'capital' | 'commission' | 'review';
@@ -81,7 +83,7 @@ function StepDot({
   );
 }
 
-export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
+export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProps) {
   const {
     selectedStrategy,
     setSelectedStrategy,
@@ -111,6 +113,12 @@ export function BacktestPanel({ onRun, onClose }: BacktestPanelProps) {
   const [step, setStep] = useState<WizardStep>('strategy');
   const [barsExceedLimit, setBarsExceedLimit] = useState(false);
   const [rangeBlocked, setRangeBlocked] = useState(false);
+
+  // When the results popup closes, App bumps resetSignal — jump back to step 1
+  // so the user can tweak and re-run. Selected strategy (session-scoped) is preserved.
+  useEffect(() => {
+    setStep('strategy');
+  }, [resetSignal]);
 
   const handleRun = useCallback(() => {
     if (!selectedStrategy?.source) {

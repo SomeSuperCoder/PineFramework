@@ -166,6 +166,13 @@ describe('BacktestPanel — Run button date-range guardrail integration', () => 
     await userEvent.click(await screen.findByText(name));
   }
 
+  /** Advance the 5-step wizard (strategy → market → capital → commission → review). */
+  async function advanceSteps(count: number) {
+    for (let i = 0; i < count; i++) {
+      await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    }
+  }
+
   function runButton() {
     return screen.getByRole('button', { name: /run backtest/i });
   }
@@ -173,9 +180,10 @@ describe('BacktestPanel — Run button date-range guardrail integration', () => 
   it('disables Run Backtest on an invalid explicit range and re-enables when fixed', async () => {
     renderPanel();
     await selectStrategy('User Momentum');
-    expect(runButton()).toBeEnabled();
 
-    // Switch to the explicit Begin / End range.
+    // Step 3 — Capital & Date Range: switch to the explicit Begin / End range
+    // and enter an invalid range (start after end).
+    await advanceSteps(2);
     await userEvent.click(screen.getByRole('tab', { name: 'Begin / End' }));
 
     const startInput = screen.getByLabelText(/start date/i);
@@ -185,12 +193,21 @@ describe('BacktestPanel — Run button date-range guardrail integration', () => 
 
     const message = 'Start date must be on or before the end date.';
     expect(await screen.findByText(message)).toBeInTheDocument();
+
+    // Step 5 — Review: the Run button is gated by the bad range.
+    await advanceSteps(2);
     await waitFor(() => expect(runButton()).toBeDisabled());
     expect(runButton()).toHaveAttribute('title', 'Fix the date range to run the backtest');
 
-    // Fix the range → Run is enabled again and the error clears.
-    fireEvent.change(startInput, { target: { value: '2026-01-01' } });
-    await waitFor(() => expect(runButton()).toBeEnabled());
+    // Go back to the range, fix it, and return to Review — Run enables again.
+    await userEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^back$/i }));
+    // Re-query — the Capital step unmounts/re-mounts on navigation, so the
+    // element captured above is stale.
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2026-01-01' } });
     expect(screen.queryByText(message)).not.toBeInTheDocument();
+
+    await advanceSteps(2);
+    await waitFor(() => expect(runButton()).toBeEnabled());
   });
 });
