@@ -264,7 +264,7 @@ plot(smaValue, "SMA")`;
       expect(endTime - startTime).toBeLessThan(1000);
     });
 
-    it('should handle large datasets', { timeout: 30000 }, () => {
+    it('should handle large datasets', () => {
       const source = `//@version=6
 indicator("Large Dataset")
 plot(close, "Close")`;
@@ -278,7 +278,7 @@ plot(close, "Close")`;
 
       const result = engine.executeBars(contexts);
       expect(result.success).toBe(true);
-    });
+    }, 30000);
   });
 
   describe('Metrics', () => {

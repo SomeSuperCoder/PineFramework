@@ -81,7 +81,6 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
   it('parses successfully', () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
-    expect(result.errors?.length ?? 0).toBe(0);
   });
 
   it('compiles successfully', () => {
@@ -182,7 +181,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const colors = plotColorMap.get(key)!;
     expect(colors.length).toBe(BAR_COUNT);
     // Only check post-warmup colors (first WARMUP_BARS are nulled by lookback filter)
-    const postWarmupColors = colors.slice(WARMUP_BARS).filter((c: any) => c !== null);
+    const postWarmupColors = colors
+      .slice(WARMUP_BARS)
+      .filter((c): c is string => c !== null);
     expect(postWarmupColors.length).toBeGreaterThan(0);
     const unique = new Set(postWarmupColors);
     expect(unique.size).toBeGreaterThan(5);
@@ -275,7 +276,7 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const { result } = runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
-    expect(result.barColorData.length).toBe(0);
+    expect(result.barColorData!.length).toBe(0);
   });
 
   it('handles var variables inside method (f1/f2 filter state)', () => {

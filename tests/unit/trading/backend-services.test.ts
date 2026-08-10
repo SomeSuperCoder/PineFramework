@@ -100,7 +100,7 @@ describe('TradeHistoryStore', () => {
         size: 1,
         fees: 0,
         realizedPnl: 10,
-        dex: 'jupiter-swap',
+dex: 'jupiter-swap' as const,
         openedAt: 1000 + i,
         closedAt: 2000 + i,
       });
@@ -374,7 +374,7 @@ describe('TradingTelegramBot', () => {
       strategySource: 'test',
       dex: 'jupiter-swap',
       pairs: [{ symbol: 'SOL/USDC', timeframe: '1m' }],
-      risk: { maxDailyLoss: 100, dailyLossTimezone: 'UTC', closeOnLoss: false },
+      risk: { maxDailyLoss: 100 },
     });
 
     expect(sender.sendMessage).toHaveBeenCalledWith(123, expect.stringContaining('Bot Started'));
@@ -518,7 +518,7 @@ describe('TradingTelegramBot', () => {
       size: 1,
       fees: 0,
       realizedPnl: 0,
-      dex: 'jupiter-swap',
+      dex: 'jupiter-swap' as const,
       openedAt: 1000,
       closedAt: 0,
     };

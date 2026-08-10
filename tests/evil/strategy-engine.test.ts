@@ -10,7 +10,6 @@
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
-import { StrategyEngine } from '../../src/strategy/strategy-engine.js';
 import { makeEvilBarContext } from './helpers.js';
 
 /** Helper: create a strategy engine with some initial bars. */

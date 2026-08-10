@@ -16,7 +16,7 @@ import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import type { ExecutionContext } from '../../src/language/runtime/execution-types.js';
-import { ParseError, CompileError, PineError } from '../../src/common/errors.js';
+import { PineError } from '../../src/common/errors.js';
 
 // =============================================================================
 // Fuzz input generators

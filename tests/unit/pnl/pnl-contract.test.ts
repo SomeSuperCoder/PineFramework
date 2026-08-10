@@ -38,10 +38,16 @@ import { dAdd, dCompare, dDiv, dMul, dSub, tenPow, ZERO } from '../../../src/pnl
 // ---------------------------------------------------------------------------
 
 /** The exact FeeKind taxonomy (F7). Kept as the module contract. */
-const FEE_KINDS = ['VENUE', 'PLATFORM', 'PRIORITY', 'BASE', 'JITO', 'SLIPPAGE_MEMO'] as const;
-
-/** Compile-time guard: every member must still be a valid FeeKind (guards the JIT rename). */
-const _feeKindTaxonomyGuard: readonly FeeKind[] = FEE_KINDS;
+/** Contextual typing of these literals against FeeKind[] doubles as the compile-time guard.
+ *  Every member must still be a valid FeeKind (guards the JIT rename). */
+const FEE_KINDS: readonly FeeKind[] = [
+  'VENUE',
+  'PLATFORM',
+  'PRIORITY',
+  'BASE',
+  'JITO',
+  'SLIPPAGE_MEMO',
+];
 
 /** Kinds subtracted from net when gross is anchored on fill prices (aggregate.ts SUBTRACTED_FILLS). */
 const FILLS_SUBTRACTED: readonly FeeKind[] = ['VENUE', 'PLATFORM', 'PRIORITY', 'BASE', 'JITO'];
@@ -550,7 +556,7 @@ describe('F7 taxonomy', () => {
   });
 
   it('feesTotal === Σ of feeToQuote conversions (aggregate, feeTotal, and manual sum agree)', () => {
-    const components = [
+    const components: FeeComponent[] = [
       { kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' },
       { kind: 'PLATFORM', tokenMint: QUOTE_MINT, amountAtomic: '0.10' },
       { kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '10000' },

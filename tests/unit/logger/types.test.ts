@@ -101,10 +101,10 @@ describe('shared logger types', () => {
   describe('PineLogger interface', () => {
     it('defines info, warn, error, debug methods', () => {
       const logger: PineLogger = {
-        info: (event: string, meta?: LogMeta) => {},
-        warn: (event: string, meta?: LogMeta) => {},
-        error: (event: string, meta?: LogMeta) => {},
-        debug: (event: string, meta?: LogMeta) => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
       };
       expect(typeof logger.info).toBe('function');
       expect(typeof logger.warn).toBe('function');
@@ -114,7 +114,7 @@ describe('shared logger types', () => {
 
     it('info accepts event string and optional meta', () => {
       const logger: PineLogger = {
-        info: (event: string, meta?: LogMeta) => {},
+        info: () => {},
         warn: () => {},
         error: () => {},
         debug: () => {},
@@ -126,7 +126,7 @@ describe('shared logger types', () => {
 
   describe('CreateLogger factory', () => {
     it('is a function type that takes category and subcategory and returns PineLogger', () => {
-      const factory: CreateLogger = (category: string, subcategory: string) => ({
+      const factory: CreateLogger = () => ({
         info: () => {},
         warn: () => {},
         error: () => {},

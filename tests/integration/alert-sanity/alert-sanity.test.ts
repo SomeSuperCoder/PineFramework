@@ -69,16 +69,7 @@ describe('Alert Sanity', () => {
   const alert2Triggers = result.alertTriggers
     .filter((t) => t.alertId === 'alert_2')
     .sort((a, b) => a.barIndex - b.barIndex); // Trail Short
-  const alert3Triggers = result.alertTriggers
-    .filter((t) => t.alertId === 'alert_3')
-    .sort((a, b) => a.barIndex - b.barIndex); // Bull Retest
-  const alert4Triggers = result.alertTriggers
-    .filter((t) => t.alertId === 'alert_4')
-    .sort((a, b) => a.barIndex - b.barIndex); // Bear Retest
-
-  // Diamond shapes (retest markers)
-  const bullDiamonds = result.shapes.filter((s) => s.text === '◆' && s.type === 'diamond');
-  const bearDiamonds = result.shapes.filter((s) => s.text === '◆' && s.type === 'diamond');
+  
 
   it('should have alert conditions matching the indicator source', () => {
     const conditions = result.alertConditions;

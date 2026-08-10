@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import {
@@ -106,13 +105,13 @@ plot(factors_clusters.get(2).out.size(), "f2_size")
       const c0 = result.outputs.get('c0')?.values[0];
       const c1 = result.outputs.get('c1')?.values[0];
       const c2 = result.outputs.get('c2')?.values[0];
-      console.log(`\nCentroids: c0=${c0} c1=${c1} c2=${c2}`);
+      console.log(`\nCentroids: c0=${String(c0)} c1=${String(c1)} c2=${String(c2)}`);
 
       // Cluster sizes should be > 0
       const f0s = result.outputs.get('f0_size')?.values[0];
       const f1s = result.outputs.get('f1_size')?.values[0];
       const f2s = result.outputs.get('f2_size')?.values[0];
-      console.log(`Cluster sizes: c0=${f0s} c1=${f1s} c2=${f2s}`);
+      console.log(`Cluster sizes: c0=${String(f0s)} c1=${String(f1s)} c2=${String(f2s)}`);
 
       expect(c0).not.toBeNull();
       expect(c1).not.toBeNull();

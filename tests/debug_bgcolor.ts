@@ -1,9 +1,6 @@
 import { parse } from '../src/language/parser/parser.js';
 import { compile } from '../src/language/compiler/compiler.js';
-import {
-  ExecutionEngine,
-  type ExecutionContext,
-} from '../src/language/runtime/execution-engine.js';
+import { ExecutionEngine } from '../src/language/runtime/execution-engine.js';
 import { createSeries } from '../src/language/runtime/series.js';
 import type { Bar } from '../src/data/bar.js';
 

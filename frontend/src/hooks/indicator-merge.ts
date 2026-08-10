@@ -10,7 +10,14 @@
  * (diff), which are merged into the existing result incrementally.
  */
 
-import type { ScriptResult } from '../types';
+import type {
+  ScriptResult,
+  ShapeData,
+  FillData,
+  LineData,
+  LabelData,
+  BoxData,
+} from '../types/index.js';
 import {
   transformFillKey,
   mapShapes,
@@ -19,8 +26,8 @@ import {
   mapBoxes,
   mapFills,
   mapStrategyMarkers,
-} from './chart-data-transform';
-import type { ExecutionResultMessage } from './chart-data-transform';
+} from './chart-data-transform.js';
+import type { ExecutionResultMessage } from './chart-data-transform.js';
 
 // ---------------------------------------------------------------------------
 // Prepend merge
@@ -531,7 +538,7 @@ export function mergeDiffIntoResult(
     diffShapes.length > 0
       ? [
           ...prev.shapes.filter(
-            (s) => !diffShapes.some((d) => d.time === s.time),
+            (s) => !diffShapes.some((d: ShapeData) => d.time === s.time),
           ),
           ...diffShapes,
         ]
@@ -545,7 +552,7 @@ export function mergeDiffIntoResult(
           ...(prev.fills || []).filter(
             (f) =>
               !diffFills.some(
-                (d) => d.from === f.from && d.to === f.to,
+                (d: FillData) => d.from === f.from && d.to === f.to,
               ),
           ),
           ...diffFills,
@@ -560,7 +567,7 @@ export function mergeDiffIntoResult(
           ...prev.lines.filter(
             (l) =>
               !diffLines.some(
-                (d) => d.points[0]?.time === l.points[0]?.time,
+                (d: LineData) => d.points[0]?.time === l.points[0]?.time,
               ),
           ),
           ...diffLines,
@@ -573,7 +580,7 @@ export function mergeDiffIntoResult(
     diffLabels.length > 0
       ? [
           ...prev.labels.filter(
-            (l) => !diffLabels.some((d) => d.time === l.time),
+            (l) => !diffLabels.some((d: LabelData) => d.time === l.time),
           ),
           ...diffLabels,
         ]
@@ -656,7 +663,7 @@ export function mergeDiffIntoResult(
     diffBoxes.length > 0
       ? [
           ...(prev.boxes || []).filter(
-            (b) => !diffBoxes.some((d) => d.startTime === b.startTime),
+            (b) => !diffBoxes.some((d: BoxData) => d.startTime === b.startTime),
           ),
           ...diffBoxes,
         ]

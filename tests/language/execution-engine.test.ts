@@ -419,11 +419,12 @@ describe('ExecutionEngine', () => {
       const execResult = engine.executeBars(bars);
 
       // Bar colors from warmup bars (0-9) should be removed
+      expect(execResult.barColorData).toBeDefined();
       const warmupTimestamps = new Set(bars.slice(0, 10).map((b) => b.timestamp));
-      const warmupColors = execResult.barColorData.filter((c) => warmupTimestamps.has(c.time));
+      const warmupColors = execResult.barColorData!.filter((c) => warmupTimestamps.has(c.time));
       expect(warmupColors.length).toBe(0);
       // Non-warmup bar colors should remain
-      expect(execResult.barColorData.length).toBeGreaterThan(0);
+      expect(execResult.barColorData!.length).toBeGreaterThan(0);
     });
 
     it('should set output values to null for warmup bars with declared max_bars_back', () => {

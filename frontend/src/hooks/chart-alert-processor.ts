@@ -9,7 +9,7 @@
  * and the runtime merge functions (prependIndicatorResult, mergeDiffIntoResult).
  */
 
-import { stripMeta } from './chart-data-transform';
+import { stripMeta } from './chart-data-transform.js';
 import { formatCandleString } from 'pine-framework';
 
 // ---------------------------------------------------------------------------
@@ -27,20 +27,20 @@ export interface RawShape {
   textcolor?: string;
 }
 
-export function transformShape(s: RawShape): import('../types').ShapeData {
+export function transformShape(s: RawShape): import('../types/index.js').ShapeData {
   return {
-    type: s.style as import('../types').ShapeData['type'],
+    type: s.style as import('../types/index.js').ShapeData['type'],
     time: Math.floor(s.time / 1000),
     price: s.price ?? 0,
     color: s.color,
     text: s.text,
     textcolor: s.textcolor,
-    location: s.location as import('../types').ShapeData['location'],
+    location: s.location as import('../types/index.js').ShapeData['location'],
     overlay: s.overlay,
   };
 }
 
-export function transformShapes(shapes?: RawShape[] | null): import('../types').ShapeData[] {
+export function transformShapes(shapes?: RawShape[] | null): import('../types/index.js').ShapeData[] {
   return (shapes || []).map(transformShape);
 }
 
@@ -61,7 +61,7 @@ export interface RawLine {
   extend?: string;
 }
 
-export function transformLine(l: RawLine): import('../types').LineData {
+export function transformLine(l: RawLine): import('../types/index.js').LineData {
   return {
     points: l.points.map((p) => ({
       time: Math.floor(p.time / 1000),
@@ -74,7 +74,7 @@ export function transformLine(l: RawLine): import('../types').LineData {
   };
 }
 
-export function transformLines(lines?: RawLine[] | null): import('../types').LineData[] {
+export function transformLines(lines?: RawLine[] | null): import('../types/index.js').LineData[] {
   return (lines || []).map(transformLine);
 }
 
@@ -92,7 +92,7 @@ export interface RawLabel {
   size?: string;
 }
 
-export function transformLabel(l: RawLabel): import('../types').LabelData {
+export function transformLabel(l: RawLabel): import('../types/index.js').LabelData {
   return {
     time: Math.floor(l.time / 1000),
     price: l.price,
@@ -104,7 +104,7 @@ export function transformLabel(l: RawLabel): import('../types').LabelData {
   };
 }
 
-export function transformLabels(labels?: RawLabel[] | null): import('../types').LabelData[] {
+export function transformLabels(labels?: RawLabel[] | null): import('../types/index.js').LabelData[] {
   return (labels || []).map(transformLabel);
 }
 
@@ -121,7 +121,7 @@ export interface RawBox {
   backgroundColor?: string;
 }
 
-export function transformBox(b: RawBox): import('../types').BoxData {
+export function transformBox(b: RawBox): import('../types/index.js').BoxData {
   return {
     startTime: Math.floor(b.startTime / 1000),
     startPrice: b.startPrice,
@@ -132,7 +132,7 @@ export function transformBox(b: RawBox): import('../types').BoxData {
   };
 }
 
-export function transformBoxes(boxes?: RawBox[] | null): import('../types').BoxData[] {
+export function transformBoxes(boxes?: RawBox[] | null): import('../types/index.js').BoxData[] {
   return (boxes || []).map(transformBox);
 }
 
@@ -146,7 +146,7 @@ export interface RawFill {
   color: string;
 }
 
-export function transformFill(f: RawFill): import('../types').FillData {
+export function transformFill(f: RawFill): import('../types/index.js').FillData {
   return {
     from: stripMeta(f.from),
     to: stripMeta(f.to),
@@ -154,7 +154,7 @@ export function transformFill(f: RawFill): import('../types').FillData {
   };
 }
 
-export function transformFills(fills?: RawFill[] | null): import('../types').FillData[] {
+export function transformFills(fills?: RawFill[] | null): import('../types/index.js').FillData[] {
   return (fills || []).map(transformFill);
 }
 
@@ -177,7 +177,7 @@ export interface RawStrategyMarker {
 
 export function transformStrategyMarker(
   m: RawStrategyMarker,
-): import('../types').StrategyMarkerData {
+): import('../types/index.js').StrategyMarkerData {
   return {
     type: m.type,
     name: m.name,
@@ -194,7 +194,7 @@ export function transformStrategyMarker(
 
 export function transformStrategyMarkers(
   markers?: RawStrategyMarker[] | null,
-): import('../types').StrategyMarkerData[] {
+): import('../types/index.js').StrategyMarkerData[] {
   return (markers || []).map(transformStrategyMarker);
 }
 

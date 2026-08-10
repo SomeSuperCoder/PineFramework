@@ -4,7 +4,6 @@ import type {
   BarFetcher,
   BacktestRunner,
   CandidateEvaluation,
-  AutoSelectionResult,
 } from '../../../src/trading/auto-select.js';
 import type { PairConfig } from '../../../src/trading/types.js';
 

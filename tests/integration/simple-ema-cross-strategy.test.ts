@@ -78,7 +78,7 @@ const strategySource = fs.readFileSync('./test_indicators/simple_ema_cross_strat
 describe('Simple EMA Cross Strategy – marker analysis', () => {
   let incrementalMarkers: StrategyMarkerEntry[];
   let batchMarkers: StrategyMarkerEntry[];
-  let allResults: ReturnType<ExecutionEngine['executeBar']>;
+  let allResults: ReturnType<ExecutionEngine['executeBar']>[];
   let batchResult: ReturnType<ExecutionEngine['executeBars']>;
 
   beforeAll(() => {
@@ -235,7 +235,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     const entryMarkers = result.strategyMarkers.filter((m) => m.type === 'entry');
 
     // Map labels to bar indices
-    const labelBarIndices = result.labels
+    const labelBarIndices = (result.labels ?? [])
       .map((label) => {
         const barIdx = bars.findIndex((b) => b.timestamp === label.time);
         return { barIdx, text: label.text };

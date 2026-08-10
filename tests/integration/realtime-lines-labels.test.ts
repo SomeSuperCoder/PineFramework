@@ -44,6 +44,7 @@ interface ExecMsg {
     color: string;
     time: number;
     text: string;
+    textcolor?: string;
     price?: number;
     overlay?: boolean;
   }>;
@@ -449,6 +450,20 @@ describe('Q-Trend real-time plot/shape correctness', () => {
       style: l.style,
       size: l.size,
     }));
+    const httpBoxes = (httpResult.boxes || []).map((b: any) => ({
+      startTime:
+        b.left < (httpResult.barTimestamps?.length ?? 0)
+          ? (httpResult.barTimestamps?.[b.left] ?? 0)
+          : 0,
+      startPrice: b.top,
+      endTime:
+        b.right < (httpResult.barTimestamps?.length ?? 0)
+          ? (httpResult.barTimestamps?.[b.right] ?? 0)
+          : 0,
+      endPrice: b.bottom,
+      borderColor: b.border_color,
+      backgroundColor: b.bgcolor,
+    }));
 
     const initialResult = buildScriptResult(
       httpResult.overlay,
@@ -465,7 +480,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
       httpResult.barTimestamps,
       httpResult.alertConditions,
       httpResult.alertTriggers,
-      httpResult.boxes,
+      httpBoxes,
       httpResult.tables,
       httpResult.hiddenPlotKeys,
     );
@@ -478,6 +493,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
 
     const trendLinePlot = initialResult.plots.find((p: any) => p.title === 'trend line');
     expect(trendLinePlot).toBeDefined();
+    if (!trendLinePlot) throw new Error('Expected trend line plot to be defined');
     expect(trendLinePlot.data.length).toBe(testBars.length);
 
     // Verify we have some shapes (signals)
@@ -488,7 +504,6 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     }
 
     // Verify: the trend line has a value for the bar immediately before each shape
-    const shapeTimestamps = new Set(initialResult.shapes.map((s: any) => s.time));
     const trendLineTimestamps = new Set(trendLinePlot.data.map((d: any) => d.time));
     const shapesWithoutTrend = initialResult.shapes.filter(
       (s: any) => !trendLineTimestamps.has(s.time),
@@ -578,6 +593,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
 
     console.log(`\n=== Phase 2: After ${numTicks} forming candle ticks ===`);
     const trendAfterTicks = mergedResult.plots.find((p: any) => p.title === 'trend line');
+    if (!trendAfterTicks) throw new Error('Expected trend line plot after ticks');
     console.log(`Trend line data length: ${trendAfterTicks?.data?.length ?? 'MISSING'}`);
     console.log(`Shapes count: ${mergedResult.shapes.length}`);
 
@@ -604,7 +620,6 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     }
 
     // Check no shapes lost their trend line neighbor
-    const shapeTimesAfter = new Set(mergedResult.shapes.map((s: any) => s.time));
     const trendTimesAfter = new Set(trendAfterTicks.data.map((d: any) => d.time));
     const orphansAfter = mergedResult.shapes.filter((s: any) => !trendTimesAfter.has(s.time));
     console.log(`Shapes at timestamps NOT in trend line: ${orphansAfter.length}`);
@@ -731,6 +746,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
 
     console.log(`\n=== Phase 3a: Confirmed bar full replacement (indicator WS) ===`);
     const trendConfirmed = confirmedResult.plots.find((p: any) => p.title === 'trend line');
+    if (!trendConfirmed) throw new Error('Expected trend line plot in confirmed result');
     console.log(`Trend line data length: ${trendConfirmed?.data?.length ?? 'MISSING'}`);
     console.log(`Expected length: ${extendedBars.length}`);
     console.log(`Shapes count: ${confirmedResult.shapes.length}`);
@@ -739,7 +755,6 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     expect(trendConfirmed?.data?.length).toBe(extendedBars.length);
 
     // Check orphans
-    const shapeTimesConfirmed = new Set(confirmedResult.shapes.map((s: any) => s.time));
     const trendTimesConfirmed = new Set(trendConfirmed.data.map((d: any) => d.time));
     const orphansConfirmed = confirmedResult.shapes.filter(
       (s: any) => !trendTimesConfirmed.has(s.time),
@@ -814,7 +829,7 @@ describe('Q-Trend real-time plot/shape correctness', () => {
     );
 
     const trendFull = fullResult.plots.find((p: any) => p.title === 'trend line');
-    const shapeTimesFull = new Set(fullResult.shapes.map((s: any) => s.time));
+    if (!trendFull) throw new Error('Expected trend line plot in full replacement');
     const trendTimesFull = new Set(trendFull.data.map((d: any) => d.time));
     const orphansFull = fullResult.shapes.filter((s: any) => !trendTimesFull.has(s.time));
     console.log(`Full replacement — trend line length: ${trendFull.data.length}`);

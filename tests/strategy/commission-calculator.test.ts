@@ -25,8 +25,9 @@ describe('Commission Calculator', () => {
     exitPrice: 110,
     quantity: 10,
     tradeValue: 1000, // 100 * 10
+    isEntry: true,
     ...overrides,
-  });
+  } as TradeContext);
 
   describe('getCommissionCalculator', () => {
     it('should return a calculator for each built-in method', () => {
@@ -118,7 +119,7 @@ describe('Commission Calculator', () => {
       ['lst_stable', 5, 10000, 5],
       ['default', 10, 10000, 10],
       ['new_token', 50, 10000, 50],
-    ])('should charge %s tier: %d bps', (category, bps, tradeValue, expectedCommission) => {
+    ])('should charge %s tier: %d bps', (category, _bps, tradeValue, expectedCommission) => {
       const config: CommissionConfig = {
         method: 'jupiter_ultra',
         settings: {
@@ -288,6 +289,7 @@ describe('Commission Calculator', () => {
         exitPrice: 110,
         quantity: 100,
         tradeValue: 10000,
+        isEntry: true,
         symbol: 'SOLUSDT',
       };
       expect(computeCommission(context, config)).toBeCloseTo(2);
@@ -305,6 +307,7 @@ describe('Commission Calculator', () => {
         exitPrice: 110,
         quantity: 100,
         tradeValue: 10000,
+        isEntry: true,
         symbol: 'BTCUSDT',
       };
       expect(computeCommission(context, config)).toBeCloseTo(10);
@@ -326,6 +329,7 @@ describe('Commission Calculator', () => {
         exitPrice: 110,
         quantity: 100,
         tradeValue: 10000,
+        isEntry: true,
         symbol: 'SOLUSDT',
       };
       expect(computeCommission(context, config)).toBeCloseTo(0); // pegged_asset = 0 bps
@@ -342,6 +346,7 @@ describe('Commission Calculator', () => {
         exitPrice: 110,
         quantity: 100,
         tradeValue: 10000,
+        isEntry: true,
         // no symbol
       };
       expect(computeCommission(context, config)).toBeCloseTo(50); // 10000 * 0.005

@@ -10,12 +10,7 @@ import {
 import { DexAdapter, captureSwapFeeComponents } from '../../../src/trading/dex/dex-adapter.js';
 import { openLongPosition, closeLongPosition } from '../../../src/trading/dex/spot-trading.js';
 import { USDC_MINT } from '../../../src/trading/token-registry.js';
-import type {
-  Quote,
-  SwapResult,
-  TokenBalance,
-  TxStatus,
-} from '../../../src/trading/dex/dex-adapter.js';
+import type { TxStatus } from '../../../src/trading/dex/dex-adapter.js';
 
 // ---- DexAdapter Contract Tests ----
 

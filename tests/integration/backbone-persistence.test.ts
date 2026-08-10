@@ -10,7 +10,6 @@ describe('S/R backbone persistence across ticks', () => {
 
   it('backbone produces lines during init and continues through ticks', () => {
     const ts = 1700000000000;
-    const rb = 5; // from script defaults
 
     // Build 80 bars with 5 clear alternating pivots.
     // lb=5, rb=5 means each pivot needs 5 bars left and 5 bars right.

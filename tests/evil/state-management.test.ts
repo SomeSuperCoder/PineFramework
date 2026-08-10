@@ -54,7 +54,6 @@ describe('Evil state — rollback edge cases', () => {
 
     // Create explicit snapshot
     engine.createSnapshot();
-    const snapOutput = engine.getOutput('x')?.last();
 
     // Execute one more bar
     engine.executeBar(makeEvilBarContext({}, 4));

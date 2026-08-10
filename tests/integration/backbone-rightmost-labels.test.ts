@@ -26,7 +26,6 @@ import { FormingCandleProcessor } from '../../src/language/runtime/forming-candl
 describe('S/R backbone — rightmost labels have lines', () => {
   const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
   const TS = 1700000000000;
-  const RB = 5; // right bars from script defaults
 
   /**
    * Build 500 bars with explicit, guaranteed alternating pivots across 3 phases.
@@ -71,71 +70,6 @@ describe('S/R backbone — rightmost labels have lines', () => {
     //
     // Ensure HH/HL alternation: HH_price > previous_HL_price in bull
     //                           LH_price < previous_LL_price in bear
-
-    // Helper: fill bars between pivot at prevPivot and pivot at curPivot
-    function fill(
-      startBar: number,
-      endBar: number,
-      isHighPivot: boolean,
-      pivotPrice: number,
-      prevPivotPrice: number,
-    ): void {
-      // Set the 5 left-context bars
-      const leftStart = Math.max(0, startBar - 5);
-      for (let j = leftStart; j < startBar; j++) {
-        if (j < bars.length) continue; // might already be set
-        const trend = (pivotPrice - prevPivotPrice) / (startBar - leftStart);
-        const t = (j - leftStart) / (startBar - leftStart);
-        const price = prevPivotPrice + trend * (j - leftStart);
-
-        if (isHighPivot) {
-          // Left context must have HIGH lower than the pivot high
-          bars.push({
-            timestamp: TS + j * 3600000,
-            open: price,
-            high: pivotPrice - 3,
-            low: price - 2,
-            close: price,
-            volume: 1000,
-          });
-        } else {
-          // Left context must have LOW higher than the pivot low
-          bars.push({
-            timestamp: TS + j * 3600000,
-            open: price,
-            high: price + 2,
-            low: pivotPrice + 3,
-            close: price,
-            volume: 1000,
-          });
-        }
-      }
-
-      // The pivot bar
-      if (isHighPivot) {
-        bars.push({
-          timestamp: TS + startBar * 3600000,
-          open: pivotPrice,
-          high: pivotPrice + 5,
-          low: pivotPrice - 2,
-          close: pivotPrice + 2,
-          volume: 1000,
-        });
-      } else {
-        bars.push({
-          timestamp: TS + startBar * 3600000,
-          open: pivotPrice,
-          high: pivotPrice + 2,
-          low: pivotPrice - 5,
-          close: pivotPrice - 2,
-          volume: 1000,
-        });
-      }
-
-      // Set the 5 right-context bars (or fewer if we're at the end)
-      // Actually, right-context bars will be set by the NEXT fill call.
-      // So we just need to ensure they're set later.
-    }
 
     // Fill ALL bars from 0 to 499
     for (let i = 0; i < 500; i++) {

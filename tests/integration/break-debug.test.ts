@@ -293,7 +293,8 @@ plot(sup, "sup", display=display.none)`;
     // Count non-NA res values
     let resCount = 0;
     for (let i = 0; i < resS.values.length; i++) {
-      if (typeof resS.values[i] === 'number' && !isNaN(resS.values[i])) resCount++;
+      const resValue = resS.values[i];
+      if (typeof resValue === 'number' && !isNaN(resValue)) resCount++;
     }
 
     console.log(`rechange=true count: ${reCount}, suchange=true count: ${seCount}`);
@@ -304,7 +305,7 @@ plot(sup, "sup", display=display.none)`;
     for (let i = 0; i < Math.min(reS.values.length, 30); i++) {
       if (reS.values[i] === 1 || seS.values[i] === 1) {
         console.log(
-          `  Bar ${i}: rechange=${reS.values[i]}, suchange=${seS.values[i]}, res=${resS.values[i]}, sup=${supS.values[i]}`,
+          `  Bar ${i}: rechange=${String(reS.values[i])}, suchange=${String(seS.values[i])}, res=${String(resS.values[i])}, sup=${String(supS.values[i])}`,
         );
       }
     }
@@ -439,7 +440,7 @@ plot(e, "e")`;
     // b=l1=90, c=l2=115, d=l3=95, e=l4=110
 
     console.log(
-      `Bar 50: a=${aSeries?.values[50]}, b=${bSeries?.values[50]}, c=${cSeries?.values[50]}, d=${dSeries?.values[50]}, e=${eSeries?.values[50]}`,
+      `Bar 50: a=${String(aSeries?.values[50])}, b=${String(bSeries?.values[50])}, c=${String(cSeries?.values[50])}, d=${String(dSeries?.values[50])}, e=${String(eSeries?.values[50])}`,
     );
 
     expect(aSeries?.values[50]).toBe(120); // zz at current bar

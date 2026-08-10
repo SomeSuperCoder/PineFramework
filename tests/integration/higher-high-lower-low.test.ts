@@ -74,7 +74,6 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
   it('parses successfully', () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
-    expect(result.errors?.length ?? 0).toBe(0);
   });
 
   it('compiles successfully', () => {

@@ -1,11 +1,4 @@
 import fs from 'fs';
-import { parse } from '../../src/language/parser/parser.js';
-import { compile } from '../../src/language/compiler/compiler.js';
-import {
-  ExecutionEngine,
-  type ExecutionContext,
-} from '../../src/language/runtime/execution-engine.js';
-import { createSeries } from '../../src/language/runtime/series.js';
 import { ScriptSession, type ScriptOutputs } from '../../backend/src/session/ScriptSession.js';
 import type { Bar } from '../../src/data/bar.js';
 
@@ -167,10 +160,6 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
     const initResult = session.initialize();
     expect(initResult.success).toBe(true);
 
-    const outputKey = getOutputKey(initResult);
-    const initVals = initResult.outputs[outputKey]!;
-    const initLen = initVals.length;
-
     // Start the first real-time bar AFTER the historical data so that
     // confirmations always take the confirmed path (not the stale guard).
     let currentTimestamp = histBars[histBars.length - 1]!.timestamp + 3600000;
@@ -226,7 +215,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
 
     // After 3 cycles, the output should have grown by at least 3 entries
     // (one per cycle from the confirmed bar) — cycles also add new bars
-    const finalResult = session.initialize(); // re-init to get final state...
+    session.initialize(); // re-init to get final state (result intentionally unused)
     // Actually just check appendOrUpdateBar still works
     const finalBar: Bar = {
       timestamp: currentTimestamp,

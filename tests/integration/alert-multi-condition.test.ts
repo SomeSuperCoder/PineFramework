@@ -10,7 +10,6 @@ import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import { createTrendBars, prependBars } from '../helpers/deterministicBars.js';
-import { EVERY_BAR_ALERT_SOURCE } from '../fixtures/every-bar-alert.js';
 import {
   HHLL_SOURCE,
   HHLL_ALERT_COUNT,

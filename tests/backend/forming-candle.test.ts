@@ -187,7 +187,6 @@ describe('Forming Candle Computation', () => {
       const plotSeries = fullResult.outputs.get(plotKey!)!;
       const prevPlotValue = plotSeries.last();
 
-      const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, (prevPlotValue as number) + 10);
 
       const formingResult = engine.computeFormingCandle(formingCtx);
@@ -269,7 +268,8 @@ describe('Forming Candle Computation', () => {
       };
       const newBarResult = engine.executeRealtimeBar(newBarCtx);
       expect(newBarResult.success).toBe(true);
-      expect(newBarResult.barTimestamps.length).toBe(bars.length + 1);
+      expect(newBarResult.barTimestamps).toBeDefined();
+      expect(newBarResult.barTimestamps!.length).toBe(bars.length + 1);
     });
 
     it('should preserve var state across forming candle updates', () => {

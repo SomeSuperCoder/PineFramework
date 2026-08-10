@@ -10,7 +10,6 @@ import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import type { ExecutionContext } from '../../src/language/runtime/execution-types.js';
-import { NA } from '../../src/language/types/na.js';
 
 function makeContext(overrides?: Partial<ExecutionContext>): ExecutionContext {
   return {
@@ -30,11 +29,6 @@ function compileAndEngine(source: string): ExecutionEngine {
   const { ast } = parse(source);
   const result = compile(ast);
   return new ExecutionEngine(result);
-}
-
-function lastOutput(engine: ExecutionEngine, name: string): unknown {
-  const output = engine.getOutput(name);
-  return output ? output.last() : undefined;
 }
 
 describe('OHLC validation — non-finite input handling', () => {

@@ -98,6 +98,7 @@ function makeExecutor(generator: ChaosSignalGenerator): LiveStrategyExecutor {
     pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
     initialCapital: BigInt(10_000_000),
     positionSizePercent: 100,
+    maxDailyLoss: 0,
     chaosGenerator: generator,
   });
 }
@@ -213,9 +214,10 @@ describe('BotEngine chaosSignal emission and history (spec 5.4)', () => {
 
   const marker = {
     type: 'entry' as const,
+    orderId: '',
     name: 'Long',
     direction: 'long' as const,
-    action: 'buy',
+    action: 'buy' as const,
     quantity: 0.02,
     price: 50000,
     barIndex: 0,

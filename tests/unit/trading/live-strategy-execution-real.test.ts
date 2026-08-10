@@ -141,6 +141,7 @@ function makeConfig(overrides?: Partial<LiveStrategyConfig>): LiveStrategyConfig
     pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
     initialCapital: BigInt(1_000_000_000),
     positionSizePercent: 100,
+    maxDailyLoss: 0,
     dataDir: mkdtempSync(join(tmpdir(), 'lse-test-')),
   };
   return config;

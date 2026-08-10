@@ -13,15 +13,16 @@ import { DiagnosticsCard } from '../components/TelegramConfigPanel/DiagnosticsCa
 function renderCard(
   overrides: Partial<Parameters<typeof DiagnosticsCard>[0]> = {},
 ): Mock<() => void> {
+  const onSendTest = vi.fn<() => void>();
   const props = {
     botToken: 'tok-1',
     testing: false,
     testStatus: 'idle' as const,
-    onSendTest: vi.fn<() => void>(),
+    onSendTest,
     ...overrides,
   };
   render(<DiagnosticsCard {...props} />);
-  return props.onSendTest;
+  return onSendTest;
 }
 
 describe('DiagnosticsCard', () => {

@@ -9,7 +9,7 @@
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
-import { makeEvilBarContext, expectNa } from './helpers.js';
+import { makeEvilBarContext } from './helpers.js';
 
 /** Helper: execute a script that produces labels, lines, boxes, etc. */
 function executeDrawingScript(source: string, barCount = 5): ExecutionEngine {

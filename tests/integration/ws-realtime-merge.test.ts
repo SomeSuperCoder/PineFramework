@@ -73,14 +73,6 @@ function buildContexts(bars: ReturnType<typeof loadBars>): ExecutionContext[] {
   }));
 }
 
-/**
- * Extract a variable's values from the engine's global scope.
- */
-function getVar(engine: ExecutionEngine, name: string): any[] | null {
-  const b = (engine as any).globalScope.variables.get(name);
-  return b ? b.series.values : null;
-}
-
 describe('WS Real-Time Merge Correctness', () => {
   const source = fs.readFileSync('./test_indicators/q-trend.pine', 'utf-8');
   const { ast } = parse(source);
@@ -213,7 +205,7 @@ describe('WS Real-Time Merge Correctness', () => {
         for (let i = 0; i < overlapLen; i++) {
           const iv = typeof initialVals[i] === 'number' ? initialVals[i] : null;
           const wv = typeof wsVals[i] === 'number' ? wsVals[i] : null;
-          if (iv !== null && wv !== null && Math.abs(iv - wv) > 0.0001) {
+          if (typeof iv === 'number' && typeof wv === 'number' && Math.abs(iv - wv) > 0.0001) {
             diffs.push(`Output ${sampleKey}[${i}]: initial=${iv} ws=${wv}`);
           }
         }

@@ -11,7 +11,7 @@ import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
-import { makeEvilBarContext, expectNa } from './helpers.js';
+import { makeEvilBarContext } from './helpers.js';
 
 /** Helper: create an engine with N bars executed normally. */
 function createEngine(barCount = 10): ExecutionEngine {
@@ -28,11 +28,6 @@ plot(x, "x")
     engine.executeBar(makeEvilBarContext({}, i + 1));
   }
   return engine;
-}
-
-/** Helper: create a forming candle context (same bar index, different close). */
-function formingContext(barIndex: number, newClose: number) {
-  return makeEvilBarContext({}, barIndex + 1);
 }
 
 describe('Evil forming candle — consecutive updates', () => {

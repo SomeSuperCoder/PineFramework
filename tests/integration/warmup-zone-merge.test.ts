@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import {
@@ -6,8 +5,8 @@ import {
   type ExecutionContext,
 } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
-import { prependIndicatorResult } from '../../frontend/src/hooks/indicator-merge';
-import type { ScriptResult } from '../../frontend/src/types';
+import { prependIndicatorResult } from '../../frontend/src/hooks/indicator-merge.js';
+import type { ScriptResult } from '../../frontend/src/types/index.js';
 
 function createTrendingBars(count: number, startPrice: number, seed: number = 42) {
   const bars: Array<{
@@ -74,7 +73,6 @@ function executeScript(source: string, bars: ReturnType<typeof createTrendingBar
 }
 
 function toScriptResult(
-  engine: ExecutionEngine,
   result: ReturnType<ExecutionEngine['executeBars']>,
   execBars: ReturnType<typeof createTrendingBars>,
 ): ScriptResult {
@@ -123,21 +121,13 @@ sma14 = ta.sma(close, 14)
 plot(sma14)
   `;
 
-  const highLookbackScript = `
-//@version=5
-indicator("High Lookback Test")
-length = input.int(50, "Length")
-volatility = ta.highest(ta.atr(length), length * 3)
-plot(volatility)
-  `;
-
   it('should preserve prev values when context is insufficient (warmup nulls in overlap)', () => {
     // Simulate initial load: 300 bars loaded, indicator runs, lookback ~14
     const allBars = createTrendingBars(300, 100);
 
     // Step 1: Initial execution on first 300 bars (simulates initial chart load)
     const { engine: engine1, result: result1, bars: bars1 } = executeScript(script, allBars);
-    const prevResult = toScriptResult(engine1, result1, bars1);
+    const prevResult = toScriptResult(result1, bars1);
     expect(prevResult.plots.length).toBeGreaterThan(0);
 
     // The engine reports how many bars back it needs
@@ -147,7 +137,6 @@ plot(volatility)
 
     // Step 2: Simulate scroll-back — 100 more bars prepended
     const newBars = createTrendingBars(100, 95, 999);
-    const combinedBars = [...newBars, ...allBars];
 
     // Simulate fetchOlderOHLCV: execute on new bars + context bars
     const contextSize = Math.max(lookback, newBars.length);
@@ -155,8 +144,8 @@ plot(volatility)
     const actualContextSize = contextBars.length;
     const execBars = [...newBars, ...contextBars];
 
-    const { engine: engine2, result: result2 } = executeScript(script, execBars);
-    const newResult = toScriptResult(engine2, result2, execBars);
+    const { result: result2 } = executeScript(script, execBars);
+    const newResult = toScriptResult(result2, execBars);
 
     // Step 3: Merge via prependIndicatorResult (same flow as frontend)
     const addedCount = newBars.length;
@@ -229,8 +218,8 @@ plot(volatility)
     const initialBars = allBars.slice(100, 400);
     const { engine: eng1, bars: _b1 } = executeScript(script, initialBars);
     // Re-execute to get result (executeScript creates fresh engine each call)
-    const { engine: eng1b, result: res1b, bars: bars1b } = executeScript(script, initialBars);
-    const resultInitial = toScriptResult(eng1b, res1b, bars1b);
+    const { result: res1b, bars: bars1b } = executeScript(script, initialBars);
+    const resultInitial = toScriptResult(res1b, bars1b);
     const lookback = eng1.getMaxLookback();
 
     // Step 2: Prepend 100 older bars (0-99) with context from 200-399
@@ -241,11 +230,11 @@ plot(volatility)
     const actualCtx = context.slice(0, ctxSize); // first ctxSize (e.g., 100) bars of context
     const execBars = [...chunk, ...actualCtx]; // 100 + 100 = 200 bars
 
-    const { engine: eng2, result: res2 } = executeScript(script, execBars);
-    const newResult = toScriptResult(eng2, res2, execBars);
+    const { result: res2 } = executeScript(script, execBars);
+    const newResult = toScriptResult(res2, execBars);
 
     // Merge
-    const merged = prependIndicatorResult(
+    const merged: ScriptResult = prependIndicatorResult(
       resultInitial,
       newResult,
       chunk.length,

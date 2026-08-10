@@ -3,7 +3,8 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    // DOM: InteractionHandler.ts + tests/frontend are pulled into the root program via the interaction-handler test import. Root src/** only uses performance.now() (type-compatible in both worlds).
+    "lib": ["ES2022", "DOM"],
     "outDir": "./dist",
     "rootDir": ".",
     "strict": true,

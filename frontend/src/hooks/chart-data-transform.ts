@@ -6,8 +6,8 @@
  * stripping, and timestamp normalization.
  */
 
-import type { ScriptResult } from '../types';
-import { tokens } from '../theme/tokens';
+import type { ScriptResult } from '../types/index.js';
+import { tokens } from '../theme/tokens.js';
 import {
   transformShapes,
   transformLines,
@@ -18,7 +18,7 @@ import {
   transformBgColors,
   transformAlertConditions,
   transformAlertTriggers,
-} from './chart-alert-processor';
+} from './chart-alert-processor.js';
 
 // Local aliases so buildScriptResult can use them
 const mapShapes = transformShapes;
@@ -110,7 +110,7 @@ export interface ExecuteResponse {
     offset?: number;
     color?: string;
   }>;
-  tables?: import('../types').TableData[];
+  tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
 }
 
@@ -186,7 +186,7 @@ export interface ExecutionResultMessage {
     offset?: number;
     color?: string;
   }>;
-  tables?: import('../types').TableData[];
+  tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
 }
 
@@ -238,7 +238,7 @@ export {
   transformBgColors as mapBgColor,
   transformAlertConditions as mapAlertConditions,
   transformAlertTriggers as mapAlertTriggers,
-} from './chart-alert-processor';
+} from './chart-alert-processor.js';
 
 // ---------------------------------------------------------------------------
 // Main transformation pipeline
@@ -269,7 +269,7 @@ export function buildScriptResult(
     timestamp: number;
   }>,
   boxes?: ExecutionResultMessage['boxes'],
-  tables?: import('../types').TableData[],
+  tables?: import('../types/index.js').TableData[],
   hiddenPlotKeys?: string[],
   barColors?: ExecuteResponse['barColors'],
   formatContext?: { ticker?: string; interval?: string },
@@ -279,7 +279,7 @@ export function buildScriptResult(
     return ohlcvData[i]?.timestamp;
   };
 
-  const plotData: import('../types').PlotData[] = [];
+  const plotData: import('../types/index.js').PlotData[] = [];
   let colorIndex = 0;
   for (const [key, values] of Object.entries(outputs)) {
     let plotColor: string | undefined;
@@ -287,7 +287,7 @@ export function buildScriptResult(
     const lwMatch = key.match(/__lw:(\d+)/);
     const styleMatch = key.match(/__style:([^_]+)/);
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types').PlotData['type'];
+    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types/index.js').PlotData['type'];
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const perBarColors = plotColors?.[key];
     if (!plotColor) {

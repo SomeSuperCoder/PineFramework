@@ -11,11 +11,7 @@ import { parse } from '../../src/language/parser/parser.js';
 import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
-import type {
-  ExecutionContext,
-  EngineError,
-  ExecutionResult,
-} from '../../src/language/runtime/execution-types.js';
+import type { ExecutionContext, EngineError } from '../../src/language/runtime/execution-types.js';
 import { executePineScript } from '../../src/api.js';
 import type { Bar } from '../../src/data/bar.js';
 
@@ -40,19 +36,9 @@ function makeBar(overrides?: Partial<Bar>): Bar {
     low: 95,
     close: 102,
     volume: 1000,
-    time: Date.now(),
+    timestamp: Date.now(),
     ...overrides,
   };
-}
-
-// Interface guard: check if error is EngineError (structured)
-function isEngineError(err: unknown): err is EngineError {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'message' in err &&
-    typeof (err as EngineError).message === 'string'
-  );
 }
 
 describe('Structured error propagation', () => {
@@ -70,14 +56,9 @@ describe('Structured error propagation', () => {
     expect(execResult.error).toBeDefined();
 
     if (execResult.error) {
-      if (typeof execResult.error === 'string') {
-        // Accept string for backward compat
-        expect(execResult.error.length).toBeGreaterThan(0);
-      } else {
-        // It's an EngineError
-        expect(execResult.error.message).toBeDefined();
-        expect(execResult.error.message!.length).toBeGreaterThan(0);
-      }
+      // Current API: execution errors are structured EngineError objects
+      expect(execResult.error.message).toBeDefined();
+      expect(execResult.error.message.length).toBeGreaterThan(0);
     }
   });
 

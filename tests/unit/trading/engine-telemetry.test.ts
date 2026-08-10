@@ -15,7 +15,7 @@
  * and feed-callback wiring are exercised, not a copy.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 
 // Captured from the module mocks below — used to drive the real engine wiring.
 const { mockSchedulerOpts, mockFeedCallbacks } = vi.hoisted(() => ({
@@ -111,7 +111,11 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
 }));
 
 import { BotEngine } from '../../../src/trading/bot-engine.js';
-import { LiveStrategyExecutor } from '../../../src/trading/live-strategy-executor.js';
+import {
+  LiveStrategyExecutor,
+  type ExecutionResult,
+  type TradeSignal as ExecutorTradeSignal,
+} from '../../../src/trading/live-strategy-executor.js';
 import type { PositionEvent, FeedStatus } from '../../../src/trading/bot-engine.js';
 import type { TradeSignal as SchedulerTradeSignal } from '../../../src/trading/scheduler.js';
 
@@ -124,6 +128,7 @@ function makeSignal(action: 'buy' | 'sell', timestamp = 1_700_000_000_000): Sche
     timestamp,
     marker: {
       type: action === 'buy' ? 'entry' : 'close',
+      orderId: '',
       name: action === 'buy' ? 'Long' : 'Exit',
       direction: 'long',
       action,
@@ -164,7 +169,7 @@ function makeCandle(timestamp = 1_700_000_000_000) {
 
 describe('bot:position emission at confirmed order results (task 1.4 / D3)', () => {
   let engine: BotEngine;
-  let execSpy: ReturnType<typeof vi.spyOn>;
+  let execSpy: MockInstance<(signal: ExecutorTradeSignal) => Promise<ExecutionResult>>;
 
   beforeEach(async () => {
     mockSchedulerOpts.current = null;
@@ -410,8 +415,7 @@ describe('feed silence marker on a connected feed with zero candles (QA S3 / FIX
 // fire nothing (no phantom open/close notification).
 
 describe('Telegram position notifications at confirmed order results (BUG 4b)', () => {
-  let engine: BotEngine;
-  let execSpy: ReturnType<typeof vi.spyOn>;
+  let execSpy: MockInstance<(signal: ExecutorTradeSignal) => Promise<ExecutionResult>>;
   let telegramBot: {
     notifyPositionOpened: ReturnType<typeof vi.fn>;
     notifyPositionClosed: ReturnType<typeof vi.fn>;
@@ -436,7 +440,7 @@ describe('Telegram position notifications at confirmed order results (BUG 4b)', 
       notifyPositionOpened: vi.fn().mockResolvedValue(undefined),
       notifyPositionClosed: vi.fn().mockResolvedValue(undefined),
     };
-    engine = await initEngineWithTelegramBot();
+    await initEngineWithTelegramBot();
     // Control the executor's DEX outcome from the engine's REAL submitOrders
     // closure: success → the position notification fires at the confirmed
     // order-result point.

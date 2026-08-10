@@ -281,18 +281,18 @@ describe('TAEngine', () => {
 
   describe('call', () => {
     it('should call ta.sma', () => {
-      // Need at least 20 values for SMA(20)
-      const result = engine.call('ta', 'sma', [Array(20).fill(100), 20]);
+      // Current TA API is scalar-source: call(namespace, name, args: number[])
+      const result = engine.call('ta', 'sma', [100, 20]);
       expect(typeof result === 'number' || result === NA).toBe(true);
     });
 
     it('should call ta.ema', () => {
-      const result = engine.call('ta', 'ema', [Array(20).fill(100), 20]);
+      const result = engine.call('ta', 'ema', [100, 20]);
       expect(typeof result === 'number' || result === NA).toBe(true);
     });
 
     it('should call ta.rsi', () => {
-      const result = engine.call('ta', 'rsi', [Array(14).fill(100), 14]);
+      const result = engine.call('ta', 'rsi', [100, 14]);
       expect(typeof result === 'number' || result === NA).toBe(true);
     });
 

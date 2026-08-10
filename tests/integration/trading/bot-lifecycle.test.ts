@@ -12,13 +12,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   BotEngine,
-  StateMachine,
-  createBotStateMachine,
   BotState,
   ErrorSeverity,
   AutoMarketSelector,
 } from 'pine-framework';
-import { WalletManager, InMemoryWalletStorage } from 'pine-framework/trading/wallet';
 import type { BotConfig, PairConfig, BarFetcher, BacktestRunner } from 'pine-framework';
 
 // ── Helpers ──
@@ -29,7 +26,7 @@ function createMinimalConfig(overrides?: Partial<BotConfig>): BotConfig {
       '//@version=5\nstrategy("test")\nif close > open\n  strategy.entry("long", strategy.long)',
     dex: 'jupiter-swap',
     pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
-    risk: { maxDailyLoss: 100, dailyLossTimezone: 'UTC', closeOnDailyLoss: false },
+    risk: { maxDailyLoss: 100 },
     ...overrides,
   };
 }
@@ -158,7 +155,7 @@ describe('10.3 — Daily stop loss', () => {
     const engine = new BotEngine();
     engine.configure({
       ...createMinimalConfig(),
-      risk: { maxDailyLoss: 50, dailyLossTimezone: 'UTC', closeOnDailyLoss: false },
+      risk: { maxDailyLoss: 50 },
     });
 
     // Record errors — in Phase 2, daily loss tracking will block entries
@@ -177,18 +174,17 @@ describe('10.3 — Daily stop loss', () => {
     expect(lossErrors.length).toBe(2);
   });
 
-  it('should track risk config with closeOnDailyLoss mode', () => {
+  it('should track risk config with daily loss limits', () => {
     const engine = new BotEngine();
     const config = {
       ...createMinimalConfig(),
-      risk: { maxDailyLoss: 200, dailyLossTimezone: 'America/New_York', closeOnDailyLoss: true },
+      risk: { maxDailyLoss: 200, maxDailyWalletLossUsdc: 500 },
     };
 
     engine.configure(config);
 
     expect(engine.config?.risk.maxDailyLoss).toBe(200);
-    expect(engine.config?.risk.dailyLossTimezone).toBe('America/New_York');
-    expect(engine.config?.risk.closeOnDailyLoss).toBe(true);
+    expect(engine.config?.risk.maxDailyWalletLossUsdc).toBe(500);
   });
 });
 
@@ -213,8 +209,8 @@ describe('10.4 — Auto-selection', () => {
 
     expect(mockSelector).toHaveBeenCalledOnce();
     // Pairs should have been updated
-    expect(engine.config?.pairs.length).toBe(1);
-    expect(engine.config?.pairs[0]?.symbol).toBe('BTCUSDT');
+    expect(engine.config?.pairs?.length).toBe(1);
+    expect(engine.config?.pairs?.[0]?.symbol).toBe('BTCUSDT');
     // Auto-selection resolves pairs before the normal state transition
     expect(engine.state).toBe(BotState.Running);
   });
@@ -262,7 +258,7 @@ describe('10.4 — Auto-selection', () => {
     // autoSelect true + non-empty pairs → callback must NOT be invoked
     expect(mockSelector).not.toHaveBeenCalled();
     expect(engine.state).toBe(BotState.Running);
-    expect(engine.config?.pairs[0]?.symbol).toBe('BTCUSDT');
+    expect(engine.config?.pairs?.[0]?.symbol).toBe('BTCUSDT');
   });
 
   it('should use AutoMarketSelector with mock BarFetcher and BacktestRunner', async () => {
@@ -409,7 +405,7 @@ describe('10.6 — AbortSignal cancels in-flight processing on stop', () => {
         // Simulate a slow liveTick that checks the signal
         const fakeTick = async () => {
           try {
-            await new Promise<void>((resolve, reject) => {
+            await new Promise<void>((_resolve, reject) => {
               ac.signal.addEventListener(
                 'abort',
                 () => {
@@ -435,7 +431,7 @@ describe('10.6 — AbortSignal cancels in-flight processing on stop', () => {
     await engine.start();
 
     // Start a fake in-flight tick
-    const tickPromise = (engine as any)._fakeTick();
+    (engine as any)._fakeTick();
 
     // Stop should abort
     await engine.stop();

@@ -57,7 +57,7 @@ plot(x)`;
     if (xSeries) {
       console.log('values:', JSON.stringify(xSeries.values));
       for (let i = 0; i < xSeries.values.length; i++) {
-        console.log(`  bar ${i}: ${xSeries.values[i]}`);
+        console.log(`  bar ${i}: ${String(xSeries.values[i])}`);
       }
       // With correct history: bar0=1, bar1=2, bar2=3, ...
       // With broken history: bar0=1, bar1=1 (all 1s because x[1] returns NA)
@@ -114,7 +114,7 @@ plot(prev)`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    engine.executeBars(contexts);
     console.log('\nres and prev series:');
     const resSeries = engine.outputs.get('res');
     const prevSeries = engine.outputs.get('prev');
@@ -122,7 +122,9 @@ plot(prev)`;
       console.log('res values:', JSON.stringify(resSeries.values));
       console.log('prev values:', JSON.stringify(prevSeries.values));
       for (let i = 0; i < Math.min(5, resSeries.values.length); i++) {
-        console.log(`  bar ${i}: res=${resSeries.values[i]}, prev=${prevSeries.values[i]}`);
+        console.log(
+          `  bar ${i}: res=${String(resSeries.values[i])}, prev=${String(prevSeries.values[i])}`,
+        );
       }
       // bar 0: res=close=101, prev=res[1]=NA (no previous bar)
       // bar 1: res=close=102, prev=res[1]=101

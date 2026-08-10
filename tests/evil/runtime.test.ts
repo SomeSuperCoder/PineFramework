@@ -11,7 +11,7 @@ import { compile } from '../../src/language/compiler/compiler.js';
 import { ExecutionEngine } from '../../src/language/runtime/execution-engine.js';
 import { createSeries } from '../../src/language/runtime/series.js';
 import { NA } from '../../src/language/types/na.js';
-import { makeEvilBarContext, expectNa, expectOutputNa, emptySeries } from './helpers.js';
+import { makeEvilBarContext, expectOutputNa, emptySeries } from './helpers.js';
 
 /** Helper: compile a script and execute it over one bar, return the engine. */
 function singleBarEngine(source: string): ExecutionEngine {

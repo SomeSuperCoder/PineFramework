@@ -142,7 +142,7 @@ describe('Forming Candle Accumulation', () => {
       );
 
       engine.setFormingCandle(true);
-      const result = engine.computeFormingCandle(tickCtx);
+      engine.computeFormingCandle(tickCtx);
 
       // After the tick, variable series lengths MUST be restored
       for (const name of varNames) {

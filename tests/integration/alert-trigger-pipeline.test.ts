@@ -7,7 +7,7 @@ import { createTrendBars, prependBars } from '../helpers/deterministicBars.js';
 import { EVERY_BAR_ALERT_SOURCE, thresholdAlertSource } from '../fixtures/every-bar-alert.js';
 import { HHLL_SOURCE } from '../fixtures/higher-high-lower-low.js';
 import { Viewport } from '../../frontend/src/chart/Viewport.js';
-import type { CandlestickData, AlertTriggerData } from '../../frontend/src/chart/types.js';
+import type { CandlestickData } from '../../frontend/src/chart/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 

@@ -200,8 +200,10 @@ describe('Script Declarations', () => {
     it('should return strategy defaults', () => {
       const config = getDefaultConfig('strategy');
       expect(config.type).toBe('strategy');
-      expect(config.pyramiding).toBe(0);
-      expect(config.initial_capital).toBe(10000);
+      if (config.type === 'strategy') {
+        expect(config.pyramiding).toBe(0);
+        expect(config.initial_capital).toBe(10000);
+      }
     });
 
     it('should return library defaults', () => {

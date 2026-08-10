@@ -60,7 +60,7 @@ const strategySource = fs.readFileSync('./test_indicators/alternating-long-strat
 
 describe('Alternating Long Strategy – mock trading test', () => {
   let exchange: MockExchange;
-  let allResults: ReturnType<ExecutionEngine['executeBar']>;
+  let allResults: ReturnType<ExecutionEngine['executeBar']>[];
   let markers: StrategyMarkerEntry[];
   let labels: Array<{ time: number; text: string; color: string }>;
 

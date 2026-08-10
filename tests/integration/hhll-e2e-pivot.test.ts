@@ -196,7 +196,7 @@ plot(prevPl, "prevPl")`;
       console.log(`Output "${key}":`);
       for (let i = 0; i < values.length; i++) {
         if (values[i] !== null && values[i] !== undefined) {
-          console.log(`  bar[${i}] = ${values[i]}`);
+          console.log(`  bar[${i}] = ${String(values[i])}`);
         }
       }
     }

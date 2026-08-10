@@ -10,7 +10,7 @@ describe('DrawingEngine', () => {
 
   describe('lineNew', () => {
     it('should create a line with default options', () => {
-      const line = engine.lineNew(0, 100, 10, 200);
+      const line = engine.lineNew(0, 100, 10, 200)!;
 
       expect(line).toBeDefined();
       expect(line.x1).toBe(0);
@@ -29,7 +29,7 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a line with custom color', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { color: '#FF0000' });
+      const line = engine.lineNew(0, 100, 10, 200, { color: '#FF0000' })!;
 
       expect(line.color.r).toBe(255);
       expect(line.color.g).toBe(0);
@@ -37,43 +37,43 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a line with custom width', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { width: 3 });
+      const line = engine.lineNew(0, 100, 10, 200, { width: 3 })!;
 
       expect(line.width).toBe(3);
     });
 
     it('should create a line with custom style', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { style: 'dashed' });
+      const line = engine.lineNew(0, 100, 10, 200, { style: 'dashed' })!;
 
       expect(line.style).toBe('dashed');
     });
 
     it('should create a line with custom extend', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { extend: 'both' });
+      const line = engine.lineNew(0, 100, 10, 200, { extend: 'both' })!;
 
       expect(line.extend).toBe('both');
     });
 
     it('should create a line with custom xloc', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { xloc: 'bar_time' });
+      const line = engine.lineNew(0, 100, 10, 200, { xloc: 'bar_time' })!;
 
       expect(line.xloc).toBe('bar_time');
     });
 
     it('should create a line with custom editable', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { editable: false });
+      const line = engine.lineNew(0, 100, 10, 200, { editable: false })!;
 
       expect(line.editable).toBe(false);
     });
 
     it('should create a line with custom fillgaps', () => {
-      const line = engine.lineNew(0, 100, 10, 200, { fillgaps: true });
+      const line = engine.lineNew(0, 100, 10, 200, { fillgaps: true })!;
 
       expect(line.fillgaps).toBe(true);
     });
 
     it('should handle na values', () => {
-      const line = engine.lineNew(null, null, null, null);
+      const line = engine.lineNew(null, null, null, null)!;
 
       expect(line.x1).toBe(0);
       expect(line.y1).toBe(0);
@@ -82,7 +82,7 @@ describe('DrawingEngine', () => {
     });
 
     it('should store line in the engine', () => {
-      const line = engine.lineNew(0, 100, 10, 200);
+      const line = engine.lineNew(0, 100, 10, 200)!;
 
       const output = engine.getOutput();
       expect(output.lines.size).toBe(1);
@@ -122,7 +122,7 @@ describe('DrawingEngine', () => {
 
   describe('lineDelete', () => {
     it('should delete a line', () => {
-      const line = engine.lineNew(0, 100, 10, 200);
+      const line = engine.lineNew(0, 100, 10, 200)!;
 
       engine.lineDelete(line.id);
 
@@ -133,7 +133,7 @@ describe('DrawingEngine', () => {
 
   describe('boxNew', () => {
     it('should create a box with default options', () => {
-      const box = engine.boxNew(0, 200, 10, 100);
+      const box = engine.boxNew(0, 200, 10, 100)!;
 
       expect(box).toBeDefined();
       expect(box.left).toBe(0);
@@ -157,7 +157,7 @@ describe('DrawingEngine', () => {
       const box = engine.boxNew(0, 200, 10, 100, {
         border_color: '#FF0000',
         bgcolor: '#00FF00',
-      });
+      })!;
 
       expect(box.border_color.r).toBe(255);
       expect(box.border_color.g).toBe(0);
@@ -171,7 +171,7 @@ describe('DrawingEngine', () => {
       const box = engine.boxNew(0, 200, 10, 100, {
         border_width: 3,
         border_style: 'dashed',
-      });
+      })!;
 
       expect(box.border_width).toBe(3);
       expect(box.border_style).toBe('dashed');
@@ -183,7 +183,7 @@ describe('DrawingEngine', () => {
         extend_right: true,
         extend_top: true,
         extend_bottom: true,
-      });
+      })!;
 
       expect(box.extend_left).toBe(true);
       expect(box.extend_right).toBe(true);
@@ -198,7 +198,7 @@ describe('DrawingEngine', () => {
         text_size: 'large',
         text_halign: 'center',
         text_valign: 'middle',
-      });
+      })!;
 
       expect(box.text).toBe('Price Zone');
       expect(box.text_color.r).toBe(255);
@@ -210,13 +210,13 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a box with custom xloc', () => {
-      const box = engine.boxNew(0, 200, 10, 100, { xloc: 'bar_time' });
+      const box = engine.boxNew(0, 200, 10, 100, { xloc: 'bar_time' })!;
 
       expect(box.xloc).toBe('bar_time');
     });
 
     it('should handle na values', () => {
-      const box = engine.boxNew(null, null, null, null);
+      const box = engine.boxNew(null, null, null, null)!;
 
       expect(box.left).toBe(0);
       expect(box.top).toBe(0);
@@ -225,7 +225,7 @@ describe('DrawingEngine', () => {
     });
 
     it('should store box in the engine', () => {
-      const box = engine.boxNew(0, 200, 10, 100);
+      const box = engine.boxNew(0, 200, 10, 100)!;
 
       const output = engine.getOutput();
       expect(output.boxes.size).toBe(1);
@@ -235,7 +235,7 @@ describe('DrawingEngine', () => {
 
   describe('boxDelete', () => {
     it('should delete a box', () => {
-      const box = engine.boxNew(0, 200, 10, 100);
+      const box = engine.boxNew(0, 200, 10, 100)!;
 
       engine.boxDelete(box.id);
 
@@ -246,7 +246,7 @@ describe('DrawingEngine', () => {
 
   describe('labelNew', () => {
     it('should create a label with default options', () => {
-      const label = engine.labelNew(5, 150, 'Hello');
+      const label = engine.labelNew(5, 150, 'Hello')!;
 
       expect(label).toBeDefined();
       expect(label.x).toBe(5);
@@ -259,7 +259,7 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a label with custom style', () => {
-      const label = engine.labelNew(5, 150, 'Buy', { style: 'label_up' });
+      const label = engine.labelNew(5, 150, 'Buy', { style: 'label_up' })!;
 
       expect(label.style).toBe('label_up');
     });
@@ -268,7 +268,7 @@ describe('DrawingEngine', () => {
       const label = engine.labelNew(5, 150, 'Alert', {
         color: '#FF0000',
         textcolor: '#00FF00',
-      });
+      })!;
 
       expect(label.color.r).toBe(255);
       expect(label.color.g).toBe(0);
@@ -279,31 +279,31 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a label with custom size', () => {
-      const label = engine.labelNew(5, 150, 'Large', { size: 'large' });
+      const label = engine.labelNew(5, 150, 'Large', { size: 'large' })!;
 
       expect(label.size).toBe('large');
     });
 
     it('should create a label with custom textalign', () => {
-      const label = engine.labelNew(5, 150, 'Left', { textalign: 'left' });
+      const label = engine.labelNew(5, 150, 'Left', { textalign: 'left' })!;
 
       expect(label.textalign).toBe('left');
     });
 
     it('should create a label with custom xloc', () => {
-      const label = engine.labelNew(5, 150, 'Time', { xloc: 'bar_time' });
+      const label = engine.labelNew(5, 150, 'Time', { xloc: 'bar_time' })!;
 
       expect(label.xloc).toBe('bar_time');
     });
 
     it('should create a label with tooltip', () => {
-      const label = engine.labelNew(5, 150, 'Tip', { tooltip: 'Tooltip text' });
+      const label = engine.labelNew(5, 150, 'Tip', { tooltip: 'Tooltip text' })!;
 
       expect(label.tooltip).toBe('Tooltip text');
     });
 
     it('should handle na values', () => {
-      const label = engine.labelNew(null, null, null);
+      const label = engine.labelNew(null, null, null)!;
 
       expect(label.x).toBe(0);
       expect(label.y).toBe(0);
@@ -311,7 +311,7 @@ describe('DrawingEngine', () => {
     });
 
     it('should store label in the engine', () => {
-      const label = engine.labelNew(5, 150, 'Test');
+      const label = engine.labelNew(5, 150, 'Test')!;
 
       const output = engine.getOutput();
       expect(output.labels.size).toBe(1);
@@ -371,7 +371,7 @@ describe('DrawingEngine', () => {
 
   describe('labelDelete', () => {
     it('should delete a label', () => {
-      const label = engine.labelNew(5, 150, 'Delete');
+      const label = engine.labelNew(5, 150, 'Delete')!;
 
       engine.labelDelete(label.id);
 
@@ -510,8 +510,8 @@ describe('DrawingEngine', () => {
 
   describe('linefillNew', () => {
     it('should create a linefill between two lines', () => {
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
 
       const linefill = engine.linefillNew(line1.id, line2.id);
 
@@ -525,8 +525,8 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a linefill with custom color', () => {
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
 
       const linefill = engine.linefillNew(line1.id, line2.id, { color: '#FF0000' });
 
@@ -536,8 +536,8 @@ describe('DrawingEngine', () => {
     });
 
     it('should create a linefill with fillgaps', () => {
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
 
       const linefill = engine.linefillNew(line1.id, line2.id, { fillgaps: true });
 
@@ -551,8 +551,8 @@ describe('DrawingEngine', () => {
     });
 
     it('should store linefill in the engine', () => {
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
 
       const linefill = engine.linefillNew(line1.id, line2.id);
 
@@ -564,8 +564,8 @@ describe('DrawingEngine', () => {
 
   describe('linefillDelete', () => {
     it('should delete a linefill', () => {
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
       const linefill = engine.linefillNew(line1.id, line2.id);
 
       engine.linefillDelete(linefill!.id);
@@ -581,7 +581,7 @@ describe('DrawingEngine', () => {
         [0, 100],
         [5, 150],
         [10, 200],
-      ]);
+      ])!;
 
       expect(polyline).toBeDefined();
       expect(polyline.points).toEqual([
@@ -606,7 +606,7 @@ describe('DrawingEngine', () => {
           [10, 200],
         ],
         { close: true },
-      );
+      )!;
 
       expect(polyline.close).toBe(true);
     });
@@ -618,7 +618,7 @@ describe('DrawingEngine', () => {
           [5, 150],
         ],
         { color: '#FF0000' },
-      );
+      )!;
 
       expect(polyline.color.r).toBe(255);
       expect(polyline.color.g).toBe(0);
@@ -632,7 +632,7 @@ describe('DrawingEngine', () => {
           [5, 150],
         ],
         { linewidth: 3 },
-      );
+      )!;
 
       expect(polyline.linewidth).toBe(3);
     });
@@ -644,7 +644,7 @@ describe('DrawingEngine', () => {
           [5, 150],
         ],
         { style: 'dashed' },
-      );
+      )!;
 
       expect(polyline.style).toBe('dashed');
     });
@@ -656,13 +656,13 @@ describe('DrawingEngine', () => {
           [5, 150],
         ],
         { join: false },
-      );
+      )!;
 
       expect(polyline.join).toBe(false);
     });
 
     it('should handle empty points', () => {
-      const polyline = engine.polylineNew([]);
+      const polyline = engine.polylineNew([])!;
 
       expect(polyline.points).toEqual([]);
     });
@@ -671,7 +671,7 @@ describe('DrawingEngine', () => {
       const polyline = engine.polylineNew([
         [0, 100],
         [5, 150],
-      ]);
+      ])!;
 
       const output = engine.getOutput();
       expect(output.polylines.size).toBe(1);
@@ -684,7 +684,7 @@ describe('DrawingEngine', () => {
       const polyline = engine.polylineNew([
         [0, 100],
         [5, 150],
-      ]);
+      ])!;
 
       engine.polylineDelete(polyline.id);
 
@@ -699,8 +699,8 @@ describe('DrawingEngine', () => {
       engine.boxNew(0, 200, 10, 100);
       engine.labelNew(5, 150, 'Test');
       engine.tableNew('top_right', 2, 2);
-      const line1 = engine.lineNew(0, 100, 10, 200);
-      const line2 = engine.lineNew(0, 150, 10, 250);
+      const line1 = engine.lineNew(0, 100, 10, 200)!;
+      const line2 = engine.lineNew(0, 150, 10, 250)!;
       engine.linefillNew(line1!.id, line2!.id);
       engine.polylineNew([
         [0, 100],

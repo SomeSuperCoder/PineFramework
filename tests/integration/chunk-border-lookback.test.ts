@@ -140,7 +140,7 @@ describe('Chunk border lookback', () => {
     // Execute with full context (200 new + 200 context)
     const contextBars = allBars.slice(0, 200);
     const newBars = allBars.slice(200);
-    const { engine, result } = runEngine(source, [...newBars, ...contextBars]);
+    const { result } = runEngine(source, [...newBars, ...contextBars]);
     expect(result.success).toBe(true);
 
     // Find the visible basis plot color key

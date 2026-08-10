@@ -24,7 +24,7 @@ describe('Mutex', () => {
     const mutex = new Mutex();
     let counter = 0;
 
-    const tasks = Array.from({ length: 10 }, (_, i) =>
+    const tasks = Array.from({ length: 10 }, () =>
       mutex.runExclusive(async () => {
         const val = counter;
         await new Promise((r) => setTimeout(r, Math.random() * 5));

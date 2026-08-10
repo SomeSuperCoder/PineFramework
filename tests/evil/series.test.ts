@@ -6,7 +6,7 @@
  * Verifies graceful handling (NA returns, no crashes).
  */
 
-import { createSeries, type Series } from '../../src/language/runtime/series.js';
+import { createSeries } from '../../src/language/runtime/series.js';
 import { NA } from '../../src/language/types/na.js';
 
 describe('Evil series — empty states', () => {
@@ -146,7 +146,7 @@ describe('Evil series — negative / out-of-range indices', () => {
     const s = createSeries<number>('test', [1, 2, 3]);
     // NaN < 0 is false and NaN >= values.length is false, so the guard check
     // passes and values[NaN] returns undefined. Validate it's not a valid value.
-    const result = s.get(NaN);
+    const result: unknown = s.get(NaN);
     expect(result === undefined || result === NA).toBe(true);
   });
 });

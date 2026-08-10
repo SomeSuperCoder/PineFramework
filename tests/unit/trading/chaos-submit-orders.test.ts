@@ -48,7 +48,6 @@ vi.mock('../../../src/trading/live-scheduler.js', () => ({
 }));
 
 import { BotEngine } from '../../../src/trading/bot-engine.js';
-import { BotState } from '../../../src/trading/types.js';
 import type { BotConfig } from '../../../src/trading/types.js';
 import type { TradeSignal as SchedulerTradeSignal } from '../../../src/trading/scheduler.js';
 
@@ -69,9 +68,6 @@ describe('Chaos submitOrders wiring', () => {
 
   it('should call executeSignal for each scheduler signal', async () => {
     engine.configure(chaosConfig);
-
-    // Mock initialize to capture the submitOrders callback
-    let capturedSubmitOrders: ((signals: SchedulerTradeSignal[]) => Promise<void>) | null = null;
 
     const initSpy = vi
       .spyOn(engine as unknown as { initialize: () => Promise<void> }, 'initialize')

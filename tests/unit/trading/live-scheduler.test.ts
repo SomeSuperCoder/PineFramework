@@ -43,8 +43,30 @@ describe('LiveScheduler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    const mockExecutor = new LiveStrategyExecutor();
-    const mockDex = new DexAdapter();
+    const mockExecutor = {
+      processCandle: vi.fn().mockResolvedValue([]),
+      executeSignal: vi.fn().mockResolvedValue({
+        success: true,
+        signal: {
+          action: 'buy',
+          symbol: 'BTCUSDT',
+          quantity: 0.1,
+          expectedPrice: 50000,
+          timestamp: Date.now(),
+        },
+        swapResult: { success: true, signature: 'mock-signature' },
+      }),
+      saveState: vi.fn().mockResolvedValue(undefined),
+    } as unknown as LiveStrategyExecutor;
+    const mockDex = {
+      name: 'mock-dex',
+      commissionModel: { name: 'mock', feeBps: 0, variable: false, description: 'Mock DEX' },
+      slippageConfig: { bps: 50, configurable: true },
+      quote: vi.fn(),
+      swap: vi.fn(),
+      getBalance: vi.fn(),
+      getTransactionStatus: vi.fn(),
+    } as unknown as DexAdapter;
 
     mockConfig = {
       pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
