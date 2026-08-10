@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BacktestGeneralSettings } from '../components/BacktestGeneralSettings';
 import type { BacktestGeneralSettingsProps } from '../components/BacktestGeneralSettings';
@@ -209,5 +209,113 @@ describe('BacktestPanel — Run button date-range guardrail integration', () => 
 
     await advanceSteps(2);
     await waitFor(() => expect(runButton()).toBeEnabled());
+  });
+});
+
+describe('BacktestPanel — Commission-step Next gating (SampleFeesCard)', () => {
+  let onRun: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      /* jsdom no localStorage */
+    }
+    onRun = vi.fn();
+  });
+
+  afterEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      /* jsdom no localStorage */
+    }
+    vi.unstubAllGlobals();
+  });
+
+  function renderPanel() {
+    return render(<BacktestPanel onRun={onRun} onClose={vi.fn()} />);
+  }
+
+  async function selectStrategy(name: string) {
+    await userEvent.click(screen.getByText('Select a strategy...'));
+    await userEvent.click(await screen.findByText(name));
+  }
+
+  /** Advance the 5-step wizard (strategy → market → capital → commission → review). */
+  async function advanceSteps(count: number) {
+    for (let i = 0; i < count; i++) {
+      await userEvent.click(screen.getByRole('button', { name: /^next$/i }));
+    }
+  }
+
+  function nextButton() {
+    return screen.getByRole('button', { name: /^next$/i });
+  }
+
+  /**
+   * Stub fetch with the dex-fee MAIN load (panel symbol, default BTCUSDT) left
+   * PENDING until the test resolves it. The route probe (symbol=SOL) resolves
+   * immediately with 200 so it never flips the phase to 'absent'. Scripts routes
+   * serve the strategy dropdown as usual.
+   */
+  function installDeferredDexFeeMock() {
+    let resolveMain: (r: Partial<Response>) => void = () => {};
+    const mainPending = new Promise<Partial<Response>>((resolve) => {
+      resolveMain = resolve;
+    });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL): Promise<Partial<Response>> => {
+      const url = String(input);
+      if (url.endsWith('/api/scripts') && !url.endsWith('/built-in')) {
+        return { ok: true, status: 200, json: async () => MOCK_SCRIPTS_RESPONSE };
+      }
+      if (url.endsWith('/api/scripts/built-in')) {
+        return { ok: true, status: 200, json: async () => MOCK_BUILT_IN_RESPONSE };
+      }
+      if (url.includes('/api/backtest/dex-fee')) {
+        // Route probe only — let it settle; the MAIN load (any other symbol) gates.
+        if (url.includes('symbol=SOL')) {
+          return { ok: true, status: 200, json: async () => ({}) };
+        }
+        return mainPending;
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return { fetchMock, resolveMain };
+  }
+
+  it('disables Next while sample fees are loading and enables it once fees succeed', async () => {
+    const { resolveMain } = installDeferredDexFeeMock();
+    renderPanel();
+    await selectStrategy('User Momentum');
+    await advanceSteps(3); // strategy → market → capital → commission
+
+    // SampleFeesCard mounts on the commission step; the main dex-fee fetch is
+    // still pending → phase 'loading' → Next is gated with the waiting title.
+    await waitFor(() => expect(nextButton()).toBeDisabled());
+    expect(nextButton()).toHaveAttribute('title', 'Waiting for sample fees…');
+
+    // Resolve the pending dex-fee fetch with valid fee data → phase 'success'.
+    await act(async () => {
+      resolveMain({ ok: true, status: 200, json: async () => ({ dexFeeBps: 2.5 }) });
+    });
+
+    await waitFor(() => expect(nextButton()).toBeEnabled());
+    expect(nextButton()).not.toHaveAttribute('title', 'Waiting for sample fees…');
+  });
+
+  it('does not gate Next once the fee fetch settles to a non-loading phase', async () => {
+    installFetchMock(); // dex-fee probe + load resolve 200 without dexFeeBps → 'empty'
+    renderPanel();
+    await selectStrategy('User Momentum');
+    await advanceSteps(3);
+
+    // The card settled to its empty info callout — proof the fetch resolved —
+    // and Next is NOT blocked by fee logic (gating is loading-phase-only).
+    expect(await screen.findByText(/No fee data available for/)).toBeInTheDocument();
+    const next = nextButton();
+    await waitFor(() => expect(next).toBeEnabled());
+    expect(next).not.toHaveAttribute('title', 'Waiting for sample fees…');
   });
 });

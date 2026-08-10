@@ -123,4 +123,39 @@ describe('SampleFeesCard', () => {
       ).toBe(true);
     });
   });
+
+  it('reports phases via onPhaseChange — loading on mount, success after a successful fetch', async () => {
+    const onPhaseChange = vi.fn();
+    stubFetch(() => okJson({ dexFeeBps: 25, source: 'api' }));
+    render(
+      <SampleFeesCard
+        symbol="SOL"
+        commissionMethod="jupiter_manual"
+        onPhaseChange={onPhaseChange}
+      />,
+    );
+
+    expect(onPhaseChange).toHaveBeenCalledWith('loading');
+    await screen.findByText('25 bps');
+    expect(onPhaseChange).toHaveBeenCalledWith('success');
+  });
+
+  it('reports the error phase via onPhaseChange on network failure', async () => {
+    const onPhaseChange = vi.fn();
+    const fetchMock = vi.fn(async (): Promise<Partial<Response>> => {
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <SampleFeesCard
+        symbol="SOL"
+        commissionMethod="jupiter_manual"
+        onPhaseChange={onPhaseChange}
+      />,
+    );
+
+    expect(onPhaseChange).toHaveBeenCalledWith('loading');
+    await screen.findByText('Could not fetch live fees.');
+    expect(onPhaseChange).toHaveBeenCalledWith('error');
+  });
 });

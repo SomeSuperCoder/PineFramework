@@ -5,6 +5,7 @@ import type { BacktestRunRequest } from '../hooks/useBacktestPanelState';
 import { BacktestGeneralSettings } from './BacktestGeneralSettings.js';
 import { BacktestCommissionSettings } from './BacktestCommissionSettings.js';
 import { SampleFeesCard } from './SampleFeesCard.js';
+import type { SampleFeesPhase } from './SampleFeesCard.js';
 import { StrategySelector } from './StrategySelector.js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -113,12 +114,24 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
   const [step, setStep] = useState<WizardStep>('strategy');
   const [barsExceedLimit, setBarsExceedLimit] = useState(false);
   const [rangeBlocked, setRangeBlocked] = useState(false);
+  const [sampleFeesPhase, setSampleFeesPhase] = useState<SampleFeesPhase | null>(null);
 
   // When the results popup closes, App bumps resetSignal — jump back to step 1
   // so the user can tweak and re-run. Selected strategy (session-scoped) is preserved.
   useEffect(() => {
     setStep('strategy');
   }, [resetSignal]);
+
+  // Keep the sample-fees phase clean when the card isn't rendered, so revisiting
+  // the commission step always starts from a fresh fetch.
+  useEffect(() => {
+    if (
+      step !== 'commission' ||
+      (commissionMethod !== 'jupiter_ultra' && commissionMethod !== 'jupiter_manual')
+    ) {
+      setSampleFeesPhase(null);
+    }
+  }, [step, commissionMethod]);
 
   const handleRun = useCallback(() => {
     if (!selectedStrategy?.source) {
@@ -131,6 +144,10 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
 
   const stepIdx = STEPS.indexOf(step);
   const canNext = step !== 'strategy' || !!selectedStrategy;
+  const commissionFeesPending =
+    step === 'commission' &&
+    (commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') &&
+    sampleFeesPhase === 'loading';
 
   const next = () => {
     if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1]);
@@ -319,7 +336,11 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
               </CardContent>
             </Card>
             {(commissionMethod === 'jupiter_ultra' || commissionMethod === 'jupiter_manual') && (
-              <SampleFeesCard symbol={symbol} commissionMethod={commissionMethod} />
+              <SampleFeesCard
+                symbol={symbol}
+                commissionMethod={commissionMethod}
+                onPhaseChange={setSampleFeesPhase}
+              />
             )}
           </>
         )}
@@ -388,7 +409,13 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
             Run Backtest
           </Button>
         ) : (
-          <Button type="button" onClick={next} disabled={!canNext} className="gap-1">
+          <Button
+            type="button"
+            onClick={next}
+            disabled={!canNext || commissionFeesPending}
+            title={commissionFeesPending ? 'Waiting for sample fees…' : undefined}
+            className="gap-1"
+          >
             Next <ArrowRight className="size-4" />
           </Button>
         )}

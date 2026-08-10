@@ -20,10 +20,10 @@ interface DexFeeResponse {
   solPriceUsd?: number;
 }
 
-type Phase = 'loading' | 'error' | 'empty' | 'success' | 'absent';
+export type SampleFeesPhase = 'loading' | 'error' | 'empty' | 'success' | 'absent';
 
 interface SampleFeesState {
-  phase: Phase;
+  phase: SampleFeesPhase;
   dexFeeBps?: number;
   source?: string;
   dexLabel?: string;
@@ -44,9 +44,11 @@ function sourceLabel(source: string | undefined): string {
 export interface SampleFeesCardProps {
   symbol: string;
   commissionMethod: CommissionMethodId;
+  /** Reports each fee-fetch phase transition so the parent can gate navigation. */
+  onPhaseChange?: (phase: SampleFeesPhase) => void;
 }
 
-export function SampleFeesCard({ symbol }: SampleFeesCardProps) {
+export function SampleFeesCard({ symbol, onPhaseChange }: SampleFeesCardProps) {
   const backendUrl = `http://${window.location.hostname}:8081`;
   const [state, setState] = useState<SampleFeesState>({ phase: 'loading' });
   const requestIdRef = useRef<number>(0);
@@ -117,6 +119,12 @@ export function SampleFeesCard({ symbol }: SampleFeesCardProps) {
       requestIdRef.current += 1;
     };
   }, [load]);
+
+  // Report every phase transition (initial loading, load() results, absent probe,
+  // Retry) so the parent can gate navigation until fees are settled.
+  useEffect(() => {
+    onPhaseChange?.(state.phase);
+  }, [state.phase, onPhaseChange]);
 
   if (state.phase === 'absent') return null;
 
