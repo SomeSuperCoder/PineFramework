@@ -16,6 +16,7 @@ dev-bot:
 check:
     pnpm run typecheck:all
     pnpm run lint
+    pnpm run knip
     pnpm run build
 
 # Podman / Container recipes

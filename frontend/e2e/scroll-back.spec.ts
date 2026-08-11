@@ -3,9 +3,9 @@ import { test, expect } from '@playwright/test';
 /**
  * Integration test: scroll-back loads older OHLCV data.
  *
- * Prerequisites:
- *   - Backend server running on localhost:8081
- *   - Frontend dev server running on localhost:3000
+ * Servers are auto-started by frontend/playwright.config.ts (webServer):
+ *   - Backend on localhost:8081
+ *   - Frontend on localhost:3000
  */
 test.describe('OHLCV scroll-back', () => {
   test('scrolling left loads older data and viewport stays at left edge', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('OHLCV scroll-back', () => {
     console.log('All OHLCV requests:', ohlcvRequests);
     console.log('Scroll-back calls:', scrollBackCalls);
 
-    await page.screenshot({ path: 'tests/e2e/scroll-back-result.png' });
+    await page.screenshot({ path: 'e2e/scroll-back-result.png' });
 
     expect(scrollBackCalls.length).toBeGreaterThanOrEqual(1);
   });
