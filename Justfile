@@ -2,7 +2,9 @@ alias t := test
 alias d := dev
 alias c := check
 
+# build:lib first — vitest resolves pine-framework -> ./dist at runtime (ERR_MODULE_NOT_FOUND on fresh checkout without it)
 test:
+    pnpm run build:lib
     pnpm run test
     pnpm --filter pine-framework-frontend run test:e2e
 
@@ -13,7 +15,9 @@ dev:
 dev-bot:
     pnpm --filter pine-framework-backend run dev:bot
 
+# build:lib before typecheck — root pine-framework exports resolve to ./dist (Cannot find module on fresh checkout without it)
 check:
+    pnpm run build:lib
     pnpm run typecheck:all
     pnpm run lint
     pnpm run knip
