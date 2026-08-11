@@ -3,7 +3,7 @@ import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { ContentArea } from './ContentArea';
 
-export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'settings' | 'bot';
+export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'bot';
 
 export interface ControlPanelProps {
   /** Currently active panel */
@@ -16,8 +16,6 @@ export interface ControlPanelProps {
   botState: string;
   /** Number of active errors */
   errorCount: number;
-  /** Whether settings popup is open (for topbar indicator) */
-  settingsOpen: boolean;
   /** Children to render in the content area */
   children: React.ReactNode;
 }
@@ -28,7 +26,6 @@ export function ControlPanel({
   botConnected,
   botState,
   errorCount,
-  settingsOpen,
   children,
 }: ControlPanelProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -55,9 +52,6 @@ export function ControlPanel({
         case '4':
           onPanelChange('backtest');
           break;
-        case '5':
-          onPanelChange('settings');
-          break;
       }
     };
 
@@ -77,8 +71,6 @@ export function ControlPanel({
         botConnected={botConnected}
         botState={botState}
         errorCount={errorCount}
-        settingsOpen={settingsOpen}
-        onOpenSettings={() => onPanelChange('settings')}
       />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">

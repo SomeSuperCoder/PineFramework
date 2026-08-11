@@ -4,7 +4,6 @@ import {
   Bot,
   Send,
   TrendingUp,
-  Settings,
 } from 'lucide-react';
 import type { PanelId } from './ControlPanel';
 import { cn } from '@/lib/utils';
@@ -41,12 +40,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Backtest',
     shortcut: '4',
     icon: <TrendingUp className="size-5" aria-hidden="true" />,
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    shortcut: '5',
-    icon: <Settings className="size-5" aria-hidden="true" />,
   },
 ];
 

@@ -10,7 +10,6 @@ import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
 import { ControlPanel, type PanelId } from './components/ControlPanel';
-import { SettingsPanel } from './components/SettingsPanel';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import type { BacktestRunRequest } from './hooks/useBacktestPanelState';
@@ -334,7 +333,6 @@ function App() {
       botConnected={botConnected}
       botState={botStatus?.state ?? 'Idle'}
       errorCount={errors.length}
-      settingsOpen={activePanel === 'settings'}
     >
       {/* === Dashboard Panel === */}
       {activePanel === 'dashboard' && (
@@ -477,10 +475,6 @@ function App() {
         />
       )}
 
-      {/* === Settings Panel === */}
-      {activePanel === 'settings' && (
-        <SettingsPanel onClose={() => setActivePanel('dashboard')} />
-      )}
 
       {/* === Overlays (fixed position, always available) === */}
       <ErrorConsole

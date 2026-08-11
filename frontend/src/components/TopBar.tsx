@@ -1,4 +1,4 @@
-import { Bell, Settings } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -12,16 +12,12 @@ export interface TopBarProps {
   botConnected: boolean;
   botState: string;
   errorCount: number;
-  settingsOpen: boolean;
-  onOpenSettings: () => void;
 }
 
 export function TopBar({
   botConnected,
   botState,
   errorCount,
-  settingsOpen,
-  onOpenSettings,
 }: TopBarProps) {
   return (
     <header
@@ -63,27 +59,6 @@ export function TopBar({
       {/* Right: Quick actions — ghost icon buttons with tooltips */}
       <div className="flex min-w-[160px] items-center justify-end gap-1.5">
         <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={
-                  'size-11 text-muted-foreground hover:text-foreground ' +
-                  (settingsOpen
-                    ? 'bg-secondary text-primary hover:text-primary'
-                    : '')
-                }
-                onClick={onOpenSettings}
-                aria-label="Open settings"
-                aria-pressed={settingsOpen}
-              >
-                <Settings className="size-5" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Settings</TooltipContent>
-          </Tooltip>
-
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
