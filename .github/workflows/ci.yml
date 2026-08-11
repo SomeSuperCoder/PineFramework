@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # HARD GATE: `just test` must exit 0. No continue-on-error, no skipping —
+  # the workflow truthfully reflects the suite's exit code.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Playwright >= 1.38 no longer auto-downloads browsers on install;
+      # --with-deps also installs the system libraries the e2e webServers need.
+      - run: pnpm exec playwright install chromium --with-deps
+      - uses: extractions/setup-just@v2
+        with:
+          just-version: 1.36
+      - run: just test
+
+  # HARD GATE: `just check` must exit 0. No Playwright browser needed here.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: extractions/setup-just@v2
+        with:
+          just-version: 1.36
+      - run: just check
