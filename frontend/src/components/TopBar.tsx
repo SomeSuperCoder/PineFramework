@@ -1,12 +1,4 @@
-import { Bell } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 
 export interface TopBarProps {
   botConnected: boolean;
@@ -56,25 +48,8 @@ export function TopBar({
         )}
       </div>
 
-      {/* Right: Quick actions — ghost icon buttons with tooltips */}
-      <div className="flex min-w-[160px] items-center justify-end gap-1.5">
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-11 shrink-0 text-muted-foreground hover:text-foreground"
-                aria-label="Notifications"
-                title="Notifications"
-              >
-                <Bell className="size-5" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Notifications</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+      {/* Right: spacer — balances the left logo block */}
+      <div className="flex min-w-[160px] items-center justify-end gap-1.5" />
     </header>
   );
 }
