@@ -106,7 +106,7 @@ export async function fetchBars(
     }
 
     if (bars.length < limit) break;
-    if (startDate && cursor <= startDate) break;
+    if (startDate && cursor !== undefined && cursor <= startDate) break;
   }
 
   // ── Write back to disk cache ──────────────────────────────────────────
