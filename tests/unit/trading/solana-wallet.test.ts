@@ -218,7 +218,9 @@ describe('VersionedTransaction (v0) regression — live Jupiter /swap/v1 envelop
 
   it('sendAndConfirmTransactionWithTimeout carries the send signature when confirmation throws/times out (signature-carrying failure path)', async () => {
     const sendTransaction = vi.fn().mockResolvedValue('mock-v0-signature');
-    const confirmTransaction = vi.fn().mockRejectedValue(new Error('Transaction confirmation timeout'));
+    const confirmTransaction = vi
+      .fn()
+      .mockRejectedValue(new Error('Transaction confirmation timeout'));
     const connection = { sendTransaction, confirmTransaction } as unknown as Connection;
     const tx = deserializeTransaction(V0_SWAP_TRANSACTION_B64);
 

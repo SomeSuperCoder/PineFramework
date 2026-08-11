@@ -14,7 +14,12 @@ import {
   CLOSE_SLIPPAGE_BPS,
   withTimeout,
 } from '../../../src/trading/close-manager.js';
-import type { DexAdapter, Quote, SwapResult, TxStatus } from '../../../src/trading/dex/dex-adapter.js';
+import type {
+  DexAdapter,
+  Quote,
+  SwapResult,
+  TxStatus,
+} from '../../../src/trading/dex/dex-adapter.js';
 import type { PositionInfo } from '../../../src/trading/live-strategy-executor.js';
 import { SensitiveData } from '../../../src/trading/wallet/sensitive-data.js';
 import type { WalletKeypair } from '../../../src/trading/wallet/wallet-manager.js';
@@ -109,15 +114,17 @@ function makeHarness(positions: PositionInfo[], deps: Partial<CloseManagerOption
   // inputMint). A canned quote that defaulted every mint to USDC would make
   // swap() swap the wrong asset — and here it would defeat the tokens
   // decisions in the swap mockImplementation in several tests below.
-  const quote = vi.fn().mockImplementation(
-    async (inputMint: string, outputMint: string, amount: bigint, slippageBps: number) =>
-      makeQuote({
-        inputMint,
-        outputMint,
-        inAmount: amount.toString(),
-        slippageBps,
-      }),
-  );
+  const quote = vi
+    .fn()
+    .mockImplementation(
+      async (inputMint: string, outputMint: string, amount: bigint, slippageBps: number) =>
+        makeQuote({
+          inputMint,
+          outputMint,
+          inAmount: amount.toString(),
+          slippageBps,
+        }),
+    );
   const swap = vi.fn().mockResolvedValue(makeSwapResult());
   const getTransactionStatus = vi.fn().mockResolvedValue('confirmed' as TxStatus);
   const dex = {
@@ -130,16 +137,14 @@ function makeHarness(positions: PositionInfo[], deps: Partial<CloseManagerOption
     getTransactionStatus,
   } as unknown as DexAdapter;
 
-  const getKeypair: MockFn = (
-    deps.getKeypair ??
+  const getKeypair: MockFn = (deps.getKeypair ??
     vi.fn(
       async (): Promise<SensitiveData<WalletKeypair>> =>
         new SensitiveData<WalletKeypair>({
           publicKey: 'mock-public-key',
           privateKey: new Uint8Array(64),
         }),
-    )
-  ) as MockFn;
+    )) as MockFn;
   const getPositions = vi.fn(() => positions);
   const onPositionClosed = vi.fn();
   const onPositionCloseFailed = vi.fn();
@@ -221,10 +226,7 @@ describe('CloseManager — happy path (every stop closes all positions, confirme
     const solAmount = BigInt(Math.floor(2 * 10 ** solInfo.decimals));
 
     const { manager, swap, quote, getPositions, onPositionClosed, onPositionCloseFailed } =
-      makeHarness([
-        makePosition('BTC', '1', 0.5),
-        makePosition('SOL', '1', 2),
-      ]);
+      makeHarness([makePosition('BTC', '1', 0.5), makePosition('SOL', '1', 2)]);
 
     swap.mockImplementation(async (q: Quote) => {
       if (q.inputMint === btcInfo.mint) {
@@ -314,10 +316,27 @@ describe('CloseManager — happy path (every stop closes all positions, confirme
 
     await manager.closeAllPositions('test', 'graceful');
 
-    const events = onEvent.mock.calls.map((call) => call[0] as { type: string; closeRunId: string });
-    expect(events[0]).toMatchObject({ type: 'stop_started', reason: 'test', mode: 'graceful', total: 1 });
-    expect(events[1]).toMatchObject({ type: 'close_started', symbol: 'BTC', timeframe: '1', attempt: 1 });
-    expect(events[2]).toMatchObject({ type: 'position_closed', symbol: 'BTC', timeframe: '1', txSignature: 'sig-btc' });
+    const events = onEvent.mock.calls.map(
+      (call) => call[0] as { type: string; closeRunId: string },
+    );
+    expect(events[0]).toMatchObject({
+      type: 'stop_started',
+      reason: 'test',
+      mode: 'graceful',
+      total: 1,
+    });
+    expect(events[1]).toMatchObject({
+      type: 'close_started',
+      symbol: 'BTC',
+      timeframe: '1',
+      attempt: 1,
+    });
+    expect(events[2]).toMatchObject({
+      type: 'position_closed',
+      symbol: 'BTC',
+      timeframe: '1',
+      txSignature: 'sig-btc',
+    });
     expect(events[events.length - 1]).toMatchObject({ type: 'stop_completed' });
     // Every event is tagged with the SAME close-run identifier (spec: Close
     // results are observable, tagged with the close-run id).
@@ -349,7 +368,13 @@ describe('CloseManager — failed close leaves the position (closed only on chai
 
     const events = onEvent.mock.calls.map((call) => call[0] as { type: string; reason?: string });
     expect(events).toContainEqual(
-      expect.objectContaining({ type: 'close_failed', symbol: 'BTC', timeframe: '1', reason: 'failed', error: 'slippage' }),
+      expect.objectContaining({
+        type: 'close_failed',
+        symbol: 'BTC',
+        timeframe: '1',
+        reason: 'failed',
+        error: 'slippage',
+      }),
     );
 
     // The position stays in the engine accessor view — nothing removed (the
@@ -389,7 +414,11 @@ describe('CloseManager — deadline → timed_out (stop completes within the dea
     expect(summary.failedSymbols).toEqual(['BTC:1']);
     expect(summary.timedOutSymbols).toEqual(['BTC:1']);
     expect(getPositions()).toHaveLength(1);
-    expect(onPositionCloseFailed).toHaveBeenCalledWith('BTC', '1', 'Close timed out before confirmation');
+    expect(onPositionCloseFailed).toHaveBeenCalledWith(
+      'BTC',
+      '1',
+      'Close timed out before confirmation',
+    );
 
     const events = onEvent.mock.calls.map((call) => call[0] as { type: string; reason?: string });
     expect(events).toContainEqual(
@@ -415,7 +444,9 @@ describe('CloseManager — ambiguous confirm → getTransactionStatus, no double
     ]);
     // The send landed but confirmation raced — the failure carries the
     // signature (Wave 1 enabler). Verify on-chain BEFORE deciding.
-    swap.mockResolvedValue(makeSwapResult({ success: false, error: 'confirm timeout', signature: 'sig-abc' }));
+    swap.mockResolvedValue(
+      makeSwapResult({ success: false, error: 'confirm timeout', signature: 'sig-abc' }),
+    );
     getTransactionStatus.mockResolvedValue('confirmed');
 
     const summary = await manager.closeAllPositions('test', 'graceful');
@@ -442,7 +473,9 @@ describe('CloseManager — ambiguous confirm → getTransactionStatus, no double
   it('counts an ambiguous swap as FAILED on unknown status and does NOT retry (no double-sell)', async () => {
     const { manager, swap, getTransactionStatus, onPositionClosed, onPositionCloseFailed } =
       makeHarness([makePosition('BTC', '1', 0.5)]);
-    swap.mockResolvedValue(makeSwapResult({ success: false, error: 'confirm timeout', signature: 'sig-abc' }));
+    swap.mockResolvedValue(
+      makeSwapResult({ success: false, error: 'confirm timeout', signature: 'sig-abc' }),
+    );
     getTransactionStatus.mockResolvedValue('unknown');
 
     const summary = await manager.closeAllPositions('test', 'graceful');
@@ -450,7 +483,11 @@ describe('CloseManager — ambiguous confirm → getTransactionStatus, no double
     expect(summary).toMatchObject({ total: 1, closed: 0, failed: 1 });
     expect(swap).toHaveBeenCalledTimes(1); // NO retry of an ambiguous attempt
     expect(onPositionClosed).not.toHaveBeenCalled();
-    expect(onPositionCloseFailed).toHaveBeenCalledWith('BTC', '1', expect.stringContaining('Ambiguous swap outcome'));
+    expect(onPositionCloseFailed).toHaveBeenCalledWith(
+      'BTC',
+      '1',
+      expect.stringContaining('Ambiguous swap outcome'),
+    );
   });
 });
 
@@ -643,8 +680,13 @@ describe('CloseManager — preflightClose cross-run double-sell guard (F3)', () 
 
   it('honors a preflight refusal — fail-closed: NO quote, NO swap, position reported failed (no re-sell)', async () => {
     const preflightClose = vi.fn(async () => 'refused: unconfirmed close from run old-run');
-    const { manager, swap, quote, onPositionCloseFailed, preflightClose: wiredPreflight } =
-      makeHarness([makePosition('BTC', '1', 0.5)], { preflightClose });
+    const {
+      manager,
+      swap,
+      quote,
+      onPositionCloseFailed,
+      preflightClose: wiredPreflight,
+    } = makeHarness([makePosition('BTC', '1', 0.5)], { preflightClose });
 
     const summary = await manager.closeAllPositions('test', 'graceful');
 
@@ -668,7 +710,8 @@ describe('CloseManager — preflightClose cross-run double-sell guard (F3)', () 
   it('allows same-run retries — preflight runs on EVERY attempt with the SAME closeRunId (a different run would be refused)', async () => {
     vi.useFakeTimers();
     const preflightClose = vi.fn(
-      async (_position: PositionInfo, _closeRunId: string): Promise<string | undefined> => undefined,
+      async (_position: PositionInfo, _closeRunId: string): Promise<string | undefined> =>
+        undefined,
     ); // same run → always proceeds
     const { manager, swap } = makeHarness([makePosition('BTC', '1', 0.5)], { preflightClose });
     swap.mockResolvedValue(makeSignaturelessFailure('429 rate limit'));

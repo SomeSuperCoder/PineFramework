@@ -157,5 +157,3 @@ export function renderNotification(
     }
   }
 }
-
-export default renderNotification;

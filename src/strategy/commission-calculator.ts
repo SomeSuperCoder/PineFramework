@@ -61,13 +61,11 @@ export type {
   TradeContext,
   CommissionMethodId,
   CommissionMethodSettings,
-  JupiterPairCategory,
   JupiterUltraSettings,
   JupiterManualSettings,
   CommissionConfig,
   CommissionCalculator,
   CommissionMethodDescriptor,
-  SettingsFieldType,
   SettingsFieldDescriptor,
 } from './commission-methods/types.js';
 

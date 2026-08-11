@@ -174,5 +174,3 @@ export function tenPow(exp: number): DecimalStr {
   if (exp < 0) throw new Error(`[pnl/decimal] negative exponent: ${exp}`);
   return '1' + '0'.repeat(exp);
 }
-
-

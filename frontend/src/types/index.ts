@@ -140,9 +140,6 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 /** Locale the bot should use when talking to a chat. */
 export type ChatLanguage = 'en' | 'es' | 'ru';
 
-/** Telegram chat scope: a private 1:1 or a group. */
-export type ChatType = 'private' | 'group';
-
 /**
  * The configured admin (panel shape). The GET /settings/telegram route strips
  * the store's `configuredAt`; the panel treats it as `null` when no admin is set.
@@ -162,14 +159,6 @@ export interface TelegramControlRequest {
   username: string;
   firstName: string;
   requestedAt: number;
-}
-
-/**
- * A member of a Telegram chat is uniquely identified by its numeric Telegram
- * userId. Within `memberSubscriptions` it is stored as the numeric-string key.
- */
-export interface TelegramChatMemberId {
-  userId: number;
 }
 
 export interface TelegramChat {
@@ -204,12 +193,6 @@ export interface AlertTriggerData {
   title?: string;
   message?: string;
   destination?: string;
-}
-
-export interface AlertMarkerData {
-  id: string;
-  time: number;
-  title: string;
 }
 
 export interface StrategyMarkerData {

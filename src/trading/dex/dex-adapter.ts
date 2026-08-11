@@ -195,10 +195,7 @@ interface FeeSanitizeCtx {
  * lamport fees are capped generously; malformed/absent amounts are dropped.
  * Returns null when the component must not flow into PnL.
  */
-function sanitizeFeeComponent(
-  component: FeeComponent,
-  ctx: FeeSanitizeCtx,
-): FeeComponent | null {
+function sanitizeFeeComponent(component: FeeComponent, ctx: FeeSanitizeCtx): FeeComponent | null {
   if (
     component.tokenMint !== SOL_MINT &&
     component.tokenMint !== QUOTE_MINT &&
@@ -268,10 +265,7 @@ function sanitizeFeeComponent(
 }
 
 /** Sanitize every extracted component, dropping the ones that fail validation. */
-function sanitizeComponents(
-  components: FeeComponent[],
-  ctx: FeeSanitizeCtx,
-): FeeComponent[] {
+function sanitizeComponents(components: FeeComponent[], ctx: FeeSanitizeCtx): FeeComponent[] {
   const out: FeeComponent[] = [];
   for (const component of components) {
     const clean = sanitizeFeeComponent(component, ctx);
@@ -413,10 +407,7 @@ export function captureSwapFeeComponents(input: {
     outAmount: input.outAmount,
   };
   const venue = sanitizeComponents(extractVenueFees(input.routePlan), ctx);
-  const platform = sanitizeComponents(
-    extractPlatformFee(input.platformFee, input.inputMint),
-    ctx,
-  );
+  const platform = sanitizeComponents(extractPlatformFee(input.platformFee, input.inputMint), ctx);
   const priority = sanitizeComponents(extractPriorityFee(input.prioritizationFeeLamports), ctx);
   // BASE is the Solana protocol constant (2 × 5_000 lamports) — always valid,
   // never sanitized. The whitelist/clamp guards apply to the EXTERNAL layers

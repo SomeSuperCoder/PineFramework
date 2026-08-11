@@ -196,12 +196,3 @@ export const TOKEN_MINTS: Record<string, string> = {
   // constant above (SSOT).
   USDC: USDC_MINT,
 };
-
-/**
- * All token mints as a flat record (backward-compatible).
- * Use getTokenInfo() for new code.
- */
-export const ALL_TOKEN_MINTS: Record<string, string> = Object.keys(TOKEN_REGISTRY).reduce(
-  (acc, pairSymbol) => ({ ...acc, [pairSymbol]: TOKEN_REGISTRY[pairSymbol as TradablePair].mint }),
-  {} as Record<string, string>,
-);

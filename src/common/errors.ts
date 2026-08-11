@@ -24,13 +24,6 @@ export class CompileError extends PineError {
   }
 }
 
-export class TypeError extends PineError {
-  constructor(message: string, span?: SourceSpan) {
-    super(message, span);
-    this.name = 'TypeError';
-  }
-}
-
 /**
  * RuntimeError — thrown by the executor when invalid runtime state is detected
  * (e.g. unexpected NaN, type mismatch, invariant violation).

@@ -37,8 +37,15 @@ export interface TradingNotificationOptions {
  * The closed set of live-trading notification kinds.
  */
 export type TradingNotificationKind =
-  | 'bot_started' | 'bot_stopped' | 'position_open' | 'position_close'
-  | 'emergency_stop' | 'daily_loss' | 'error' | 'warning' | 'state_change';
+  | 'bot_started'
+  | 'bot_stopped'
+  | 'position_open'
+  | 'position_close'
+  | 'emergency_stop'
+  | 'daily_loss'
+  | 'error'
+  | 'warning'
+  | 'state_change';
 
 /** Discriminated payload per kind — all existing core types. */
 export type TradingNotificationData =
@@ -75,7 +82,11 @@ export interface PositionNotificationTrade extends Omit<
 
 /** Router implemented by the BACKEND. Core defines; backend implements. */
 export interface TradingNotificationRouter {
-  deliver(kind: TradingNotificationKind, data: TradingNotificationData, opts?: { chatId?: number }): Promise<void>;
+  deliver(
+    kind: TradingNotificationKind,
+    data: TradingNotificationData,
+    opts?: { chatId?: number },
+  ): Promise<void>;
 }
 
 const DEFAULT_OPTIONS: TradingNotificationOptions = {
@@ -134,7 +145,11 @@ export class TradingTelegramBot {
 
   async notifyBotStopped(runtimeMs: number, tradeCount: number, pnl: number): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('bot_stopped', { kind: 'bot_stopped', runtimeMs, tradeCount, pnl }, undefined);
+      await this.options.routing.deliver(
+        'bot_stopped',
+        { kind: 'bot_stopped', runtimeMs, tradeCount, pnl },
+        undefined,
+      );
       return;
     }
     const hours = Math.floor(runtimeMs / 3600000);
@@ -152,7 +167,11 @@ export class TradingTelegramBot {
 
   async notifyPositionOpened(trade: TradeRecord): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('position_open', { kind: 'position_open', trade }, undefined);
+      await this.options.routing.deliver(
+        'position_open',
+        { kind: 'position_open', trade },
+        undefined,
+      );
       return;
     }
     const txLink =
@@ -181,7 +200,11 @@ export class TradingTelegramBot {
    */
   async notifyPositionClosed(trade: PositionNotificationTrade): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('position_close', { kind: 'position_close', trade }, undefined);
+      await this.options.routing.deliver(
+        'position_close',
+        { kind: 'position_close', trade },
+        undefined,
+      );
       return;
     }
     const txLink =
@@ -217,7 +240,11 @@ export class TradingTelegramBot {
 
   async notifyEmergencyStop(source: string): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('emergency_stop', { kind: 'emergency_stop', source }, undefined);
+      await this.options.routing.deliver(
+        'emergency_stop',
+        { kind: 'emergency_stop', source },
+        undefined,
+      );
       return;
     }
     const message =
@@ -231,7 +258,11 @@ export class TradingTelegramBot {
 
   async notifyDailyLossTriggered(loss: number, maxLoss: number): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('daily_loss', { kind: 'daily_loss', loss, maxLoss }, undefined);
+      await this.options.routing.deliver(
+        'daily_loss',
+        { kind: 'daily_loss', loss, maxLoss },
+        undefined,
+      );
       return;
     }
     const message =
@@ -246,7 +277,11 @@ export class TradingTelegramBot {
 
   async notifyError(errorCode: string, errorMessage: string): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('error', { kind: 'error', code: errorCode, message: errorMessage }, undefined);
+      await this.options.routing.deliver(
+        'error',
+        { kind: 'error', code: errorCode, message: errorMessage },
+        undefined,
+      );
       return;
     }
     const truncated =
@@ -275,7 +310,11 @@ export class TradingTelegramBot {
    */
   async notifyStateChange(from: BotState, to: BotState, reason: string): Promise<void> {
     if (this.options.routing) {
-      await this.options.routing.deliver('state_change', { kind: 'state_change', from, to, reason }, undefined);
+      await this.options.routing.deliver(
+        'state_change',
+        { kind: 'state_change', from, to, reason },
+        undefined,
+      );
       return;
     }
     const message =

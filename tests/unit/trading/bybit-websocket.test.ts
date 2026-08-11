@@ -286,7 +286,12 @@ describe('feed liveness — kline tick logging + telemetry (confirmed AND unconf
     expect(logger.debug).toHaveBeenCalledTimes(2);
     expect(logger.debug).toHaveBeenCalledWith(
       'Bybit kline tick',
-      expect.objectContaining({ symbol: 'BTCUSDT', timeframe: '60', ts: 1_700_000_000_500, confirm: false }),
+      expect.objectContaining({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        ts: 1_700_000_000_500,
+        confirm: false,
+      }),
     );
     expect(logger.debug).toHaveBeenCalledWith(
       'Bybit kline tick',
@@ -306,12 +311,21 @@ describe('feed liveness — kline tick logging + telemetry (confirmed AND unconf
 
     // Telemetry: every message, confirmed or not.
     expect(onTick).toHaveBeenCalledTimes(2);
-    expect(onTick.mock.calls[0]![0]).toMatchObject({ symbol: 'BTCUSDT', timeframe: '60', confirm: false, close: 104 });
+    expect(onTick.mock.calls[0]![0]).toMatchObject({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      confirm: false,
+      close: 104,
+    });
     expect(onTick.mock.calls[1]![0]).toMatchObject({ confirm: true, close: 105 });
 
     // Execution semantics UNCHANGED: only the confirmed candle reaches the engine.
     expect(onCandle).toHaveBeenCalledTimes(1);
-    expect(onCandle.mock.calls[0]![0]).toMatchObject({ symbol: 'BTCUSDT', close: 105, timestamp: 1_700_000_000_000 });
+    expect(onCandle.mock.calls[0]![0]).toMatchObject({
+      symbol: 'BTCUSDT',
+      close: 105,
+      timestamp: 1_700_000_000_000,
+    });
   });
 
   it('ignores subscription confirmations and malformed messages without touching the candle gate', () => {
@@ -655,7 +669,10 @@ describe('reconnect-on-error (liveness suite)', () => {
     // Cycle 3 → attempts exhausted: no timer, exhausted logged, no new socket.
     wsInstances[2]!.simulateError(new Error('e3'));
     expect((service as any).reconnectTimer).toBeNull();
-    expect(logger.error).toHaveBeenCalledWith('Bybit feed reconnect attempts exhausted', expect.anything());
+    expect(logger.error).toHaveBeenCalledWith(
+      'Bybit feed reconnect attempts exhausted',
+      expect.anything(),
+    );
     vi.advanceTimersByTime(120_000);
     expect(wsInstances).toHaveLength(3);
   });
@@ -711,7 +728,9 @@ describe('reconnect-on-error (liveness suite)', () => {
 
     await service.connect();
     wsInstances[0]!.simulateOpen();
-    expect(wsInstances[0]!.sent).toContain(JSON.stringify({ op: 'subscribe', args: ['kline.60.BTCUSDT'] }));
+    expect(wsInstances[0]!.sent).toContain(
+      JSON.stringify({ op: 'subscribe', args: ['kline.60.BTCUSDT'] }),
+    );
 
     // error+close → reconnect → the fresh socket re-subscribes on open.
     wsInstances[0]!.simulateError(new Error('boom'));
@@ -720,7 +739,9 @@ describe('reconnect-on-error (liveness suite)', () => {
     expect(wsInstances).toHaveLength(2);
 
     wsInstances[1]!.simulateOpen();
-    expect(wsInstances[1]!.sent).toContain(JSON.stringify({ op: 'subscribe', args: ['kline.60.BTCUSDT'] }));
+    expect(wsInstances[1]!.sent).toContain(
+      JSON.stringify({ op: 'subscribe', args: ['kline.60.BTCUSDT'] }),
+    );
   });
 
   it('logs timestamped open / error / close lifecycle events', async () => {
@@ -771,7 +792,12 @@ describe('long-timeframe warning (liveness suite)', () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       'Long timeframe feed — no confirmed candle yet',
-      expect.objectContaining({ symbol: 'BTCUSDT', timeframe: '60', minutes: 60, nextConfirmEta: expect.any(String) }),
+      expect.objectContaining({
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        minutes: 60,
+        nextConfirmEta: expect.any(String),
+      }),
     );
   });
 

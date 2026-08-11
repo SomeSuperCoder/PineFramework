@@ -58,12 +58,6 @@ export const SOL_MINT = TOKEN_MINTS.SOL;
 /** USDC mint address on Solana mainnet. Re-exported from registry for backward compatibility. */
 export { USDC_MINT };
 
-/** Maximum transaction confirmation timeout (ms). */
-const MAX_CONFIRM_TIMEOUT_MS = 60_000;
-
-/** Polling interval for transaction confirmation (ms). */
-const CONFIRM_POLL_INTERVAL_MS = 2_000;
-
 // ---- Connection Management ----
 
 /**
@@ -134,35 +128,6 @@ export async function getTokenBalance(
     }
     throw err;
   }
-}
-
-/**
- * Get native SOL balance using the DEX adapter interface.
- */
-export async function getNativeBalance(
-  connection: Connection,
-  publicKey: string,
-): Promise<{ amount: string; decimals: number }> {
-  const balance = await getSolBalance(connection, publicKey);
-  return {
-    amount: balance.amount.toString(),
-    decimals: balance.decimals,
-  };
-}
-
-/**
- * Get SPL token balance using the DEX adapter interface.
- */
-export async function getSplTokenBalance(
-  connection: Connection,
-  walletPublicKey: string,
-  mintAddress: string,
-): Promise<{ amount: string; decimals: number }> {
-  const balance = await getTokenBalance(connection, walletPublicKey, mintAddress);
-  return {
-    amount: balance.amount.toString(),
-    decimals: balance.decimals,
-  };
 }
 
 // ---- Transaction Operations ----
@@ -278,43 +243,6 @@ export async function sendAndConfirmTransactionWithTimeout(
       error: message,
     };
   }
-}
-
-/**
- * Wait for transaction confirmation with polling.
- */
-export async function waitForConfirmation(
-  connection: Connection,
-  signature: string,
-  timeoutMs: number = MAX_CONFIRM_TIMEOUT_MS,
-): Promise<{ confirmed: boolean; err?: string }> {
-  const startTime = Date.now();
-
-  while (Date.now() - startTime < timeoutMs) {
-    const status = await connection.getSignatureStatus(signature);
-
-    if (status.value?.err) {
-      return {
-        confirmed: false,
-        err: `Transaction failed: ${JSON.stringify(status.value.err)}`,
-      };
-    }
-
-    if (
-      status.value?.confirmationStatus === 'confirmed' ||
-      status.value?.confirmationStatus === 'finalized'
-    ) {
-      return { confirmed: true };
-    }
-
-    // Wait before polling again
-    await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_INTERVAL_MS));
-  }
-
-  return {
-    confirmed: false,
-    err: `Transaction confirmation timeout after ${timeoutMs}ms`,
-  };
 }
 
 // ---- Utility Functions ----

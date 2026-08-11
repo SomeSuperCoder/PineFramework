@@ -444,7 +444,16 @@ describe('Scheduler per-candle error surfacing (D3)', () => {
   const btcPair = { symbol: 'BTC/USDC', timeframe: '5m' };
 
   function makeCandle(symbol: string, timeframe: string, timestamp: number): ClosedCandle {
-    return { symbol, timeframe, timestamp, open: 100, high: 101, low: 99, close: 100, volume: 1000 };
+    return {
+      symbol,
+      timeframe,
+      timestamp,
+      open: 100,
+      high: 101,
+      low: 99,
+      close: 100,
+      volume: 1000,
+    };
   }
 
   it('emits onCandleError with full context, counts it, and continues with the next pair', async () => {

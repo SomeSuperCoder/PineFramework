@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, OctagonX, Play, RotateCcw, Square, X } from 'lucide-react';
+import { Play, X } from 'lucide-react';
 import { StrategySelector } from '../StrategySelector';
 import { ProgressBar } from '../ProgressBar';
-import type { BotStateT, WalletInfo, ConfigValues } from '../../types/bot';
+import type { ConfigValues, WalletInfo } from '../../types/bot';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { AutoSelectGrid } from './AutoSelectGrid';
@@ -542,110 +542,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           {configuring ? 'Configuring...' : 'Apply Configuration'}
         </Button>
       </div>
-    </div>
-  );
-}
-
-export function TradingBotControlButton({
-  backendUrl,
-  botState,
-  connected,
-  onToggleDashboard,
-  dashboardOpen,
-}: {
-  backendUrl: string;
-  botState: BotStateT;
-  connected: boolean;
-  onToggleDashboard: () => void;
-  dashboardOpen: boolean;
-}) {
-  const [loading, setLoading] = useState(false);
-
-  const sendCommand = async (command: string) => {
-    setLoading(true);
-    try {
-      await fetch(`${backendUrl}/api/bot/${command}`, { method: 'POST' });
-    } catch { /* ignore */ } finally {
-      setLoading(false);
-    }
-  };
-
-  const isRunning = botState === 'Running';
-  const isStopped = botState === 'Idle' || botState === 'Stopped';
-  const isError = botState === 'Error';
-  const transitioning = botState === 'Starting' || botState === 'Stopping';
-
-  return (
-    <div className="inline-flex items-center gap-1">
-      <Button
-        type="button"
-        variant={dashboardOpen ? 'secondary' : 'ghost'}
-        onClick={isStopped && dashboardOpen ? () => sendCommand('start') : onToggleDashboard}
-        disabled={loading}
-        title={isStopped && dashboardOpen ? 'Start Live Trading Bot' : dashboardOpen ? 'Hide Dashboard' : 'Show Bot Dashboard'}
-        aria-pressed={isStopped && dashboardOpen ? undefined : dashboardOpen}
-        className={cn(
-          'h-10 px-3 text-sm',
-          dashboardOpen
-            ? 'bg-[rgba(34,197,94,0.12)] text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]'
-            : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]',
-        )}
-      >
-        {isStopped && dashboardOpen ? (
-          <Play className="size-4" aria-hidden="true" />
-        ) : (
-          <LayoutDashboard className="size-4" aria-hidden="true" />
-        )}
-        Bot Dashboard
-      </Button>
-      {isRunning && (
-        <>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => sendCommand('stop')}
-            disabled={loading}
-            title="Stop Bot"
-            className="h-10 px-3 text-sm font-semibold"
-          >
-            <Square className="size-3.5" aria-hidden="true" />
-            Stop Bot
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            size="icon"
-            onClick={() => sendCommand('emergency-stop')}
-            disabled={loading}
-            title="Emergency Stop"
-            aria-label="Emergency Stop"
-            className="h-10 w-10"
-          >
-            <OctagonX className="size-4" aria-hidden="true" />
-          </Button>
-        </>
-      )}
-      {isError && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => sendCommand('reset')}
-          disabled={loading}
-          title="Reset Bot"
-          className="h-10 border-[#eab308]/50 px-3 text-sm text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
-        >
-          <RotateCcw className="size-3.5" aria-hidden="true" />
-          Reset
-        </Button>
-      )}
-      {transitioning && (
-        <span className="text-[11px] font-medium italic text-[#eab308]">{botState}...</span>
-      )}
-      {!connected && (botState !== 'Idle' || dashboardOpen) && (
-        <span className="ml-0.5 text-[10px] text-[#eab308]" title="Reconnecting...">
-          ○
-        </span>
-      )}
     </div>
   );
 }

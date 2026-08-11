@@ -10,12 +10,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import {
-  BotEngine,
-  BotState,
-  ErrorSeverity,
-  AutoMarketSelector,
-} from 'pine-framework';
+import { BotEngine, BotState, ErrorSeverity, AutoMarketSelector } from 'pine-framework';
 import type { BotConfig, PairConfig, BarFetcher, BacktestRunner } from 'pine-framework';
 
 // ── Helpers ──

@@ -181,9 +181,7 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     const colors = plotColorMap.get(key)!;
     expect(colors.length).toBe(BAR_COUNT);
     // Only check post-warmup colors (first WARMUP_BARS are nulled by lookback filter)
-    const postWarmupColors = colors
-      .slice(WARMUP_BARS)
-      .filter((c): c is string => c !== null);
+    const postWarmupColors = colors.slice(WARMUP_BARS).filter((c): c is string => c !== null);
     expect(postWarmupColors.length).toBeGreaterThan(0);
     const unique = new Set(postWarmupColors);
     expect(unique.size).toBeGreaterThan(5);

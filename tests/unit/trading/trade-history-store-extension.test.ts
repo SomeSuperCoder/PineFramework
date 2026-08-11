@@ -65,7 +65,9 @@ describe('TradeHistoryStore extension (strategy/timeframe/mode/status, paging, e
   /** Fresh store in the shared tmpDir. Pass a distinct botId when a test
    *  needs several independent stores in the same dir (the store reloads
    *  anything already persisted under that botId). */
-  const makeStore = (options: { botId?: string; maxDebugSnapshots?: number } = {}): TradeHistoryStore =>
+  const makeStore = (
+    options: { botId?: string; maxDebugSnapshots?: number } = {},
+  ): TradeHistoryStore =>
     new TradeHistoryStore({
       baseDir: tmpDir,
       botId: options.botId ?? 'test-bot',
@@ -160,13 +162,35 @@ describe('TradeHistoryStore extension (strategy/timeframe/mode/status, paging, e
   it('filters by strategy / timeframe / mode / status and combines filters', () => {
     const store = makeStore();
     store.recordTrade(
-      makeTrade({ id: 't1', closedAt: 1000, strategy: 'macd', timeframe: '15', mode: 'live', status: 'confirmed' }),
+      makeTrade({
+        id: 't1',
+        closedAt: 1000,
+        strategy: 'macd',
+        timeframe: '15',
+        mode: 'live',
+        status: 'confirmed',
+      }),
     );
     store.recordTrade(
-      makeTrade({ id: 't2', closedAt: 2000, strategy: 'macd', timeframe: '15', mode: 'chaos', status: 'unknown' }),
+      makeTrade({
+        id: 't2',
+        closedAt: 2000,
+        strategy: 'macd',
+        timeframe: '15',
+        mode: 'chaos',
+        status: 'unknown',
+      }),
     );
     store.recordTrade(
-      makeTrade({ id: 't3', closedAt: 3000, strategy: 'rsi', timeframe: '1', mode: 'live', status: 'confirmed', symbol: 'BTC/USDC' }),
+      makeTrade({
+        id: 't3',
+        closedAt: 3000,
+        strategy: 'rsi',
+        timeframe: '1',
+        mode: 'live',
+        status: 'confirmed',
+        symbol: 'BTC/USDC',
+      }),
     );
     store.recordTrade(makeTrade({ id: 't4', closedAt: 4000 })); // legacy — no extension fields
 
@@ -196,7 +220,9 @@ describe('TradeHistoryStore extension (strategy/timeframe/mode/status, paging, e
     // combining filters
     expect(ids(store.getTrades({ strategy: 'macd', mode: 'live' }))).toEqual(['t1']);
     expect(
-      ids(store.getTrades({ strategy: 'macd', mode: 'live', status: 'confirmed', timeframe: '15' })),
+      ids(
+        store.getTrades({ strategy: 'macd', mode: 'live', status: 'confirmed', timeframe: '15' }),
+      ),
     ).toEqual(['t1']);
     expect(ids(store.getTrades({ strategy: 'rsi', mode: 'chaos' }))).toEqual([]);
   });
@@ -396,19 +422,57 @@ describe('TradeHistoryStore extension (strategy/timeframe/mode/status, paging, e
   it('groups by strategy / timeframe / asset with an (unknown) bucket and omits empty groups', () => {
     const store = makeStore();
     store.recordTrade(
-      makeTrade({ id: 't1', closedAt: 1000, strategy: 'macd', timeframe: '15', symbol: 'SOL/USDC', realizedPnl: 10, status: 'confirmed' }),
+      makeTrade({
+        id: 't1',
+        closedAt: 1000,
+        strategy: 'macd',
+        timeframe: '15',
+        symbol: 'SOL/USDC',
+        realizedPnl: 10,
+        status: 'confirmed',
+      }),
     );
     store.recordTrade(
-      makeTrade({ id: 't2', closedAt: 2000, strategy: 'macd', timeframe: '1', symbol: 'SOL/USDC', realizedPnl: 20, status: 'confirmed' }),
+      makeTrade({
+        id: 't2',
+        closedAt: 2000,
+        strategy: 'macd',
+        timeframe: '1',
+        symbol: 'SOL/USDC',
+        realizedPnl: 20,
+        status: 'confirmed',
+      }),
     );
     store.recordTrade(
-      makeTrade({ id: 't3', closedAt: 3000, strategy: 'rsi', timeframe: '15', symbol: 'BTC/USDC', realizedPnl: -5, status: 'confirmed' }),
+      makeTrade({
+        id: 't3',
+        closedAt: 3000,
+        strategy: 'rsi',
+        timeframe: '15',
+        symbol: 'BTC/USDC',
+        realizedPnl: -5,
+        status: 'confirmed',
+      }),
     );
     store.recordTrade(
-      makeTrade({ id: 't4', closedAt: 4000, symbol: 'ETH/USDC', realizedPnl: 7, status: 'confirmed' }), // no strategy/timeframe
+      makeTrade({
+        id: 't4',
+        closedAt: 4000,
+        symbol: 'ETH/USDC',
+        realizedPnl: 7,
+        status: 'confirmed',
+      }), // no strategy/timeframe
     );
     store.recordTrade(
-      makeTrade({ id: 't5', closedAt: 5000, strategy: 'macd', timeframe: '15', symbol: 'SOL/USDC', realizedPnl: 100, status: 'unknown' }), // excluded by default
+      makeTrade({
+        id: 't5',
+        closedAt: 5000,
+        strategy: 'macd',
+        timeframe: '15',
+        symbol: 'SOL/USDC',
+        realizedPnl: 100,
+        status: 'unknown',
+      }), // excluded by default
     );
 
     const byStrategy = store.getGroupedStats('strategy');
@@ -479,7 +543,9 @@ describe('TradeHistoryStore extension (strategy/timeframe/mode/status, paging, e
     const lines: string[] = [];
     for (let i = 0; i < total; i++) {
       lines.push(
-        JSON.stringify(makeTrade({ id: `t-${i}`, closedAt: 1000 + i, realizedPnl: i % 2 === 0 ? 10 : -5 })),
+        JSON.stringify(
+          makeTrade({ id: `t-${i}`, closedAt: 1000 + i, realizedPnl: i % 2 === 0 ? 10 : -5 }),
+        ),
       );
     }
     seedTradesFile(tmpDir, botId, lines.join('\n') + '\n');

@@ -22,12 +22,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  aggregateRealizedPnl,
-  modelFees,
-  QUOTE_MINT,
-  SOL_MINT,
-} from '../../../src/pnl/index.js';
+import { aggregateRealizedPnl, modelFees, QUOTE_MINT, SOL_MINT } from '../../../src/pnl/index.js';
 import type { FeeComponent, Fill, RealizedPnl, TokenPrice } from '../../../src/pnl/index.js';
 import { dSub } from '../../../src/pnl/decimal.js';
 

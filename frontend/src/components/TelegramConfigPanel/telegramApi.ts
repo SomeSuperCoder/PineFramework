@@ -1,21 +1,11 @@
 import type {
   ChatLanguage,
   ProxyConfig,
-  TelegramChat,
   TelegramConfig,
-  TelegramControlRequest,
-  TelegramController,
 } from '../../types';
 
 /** Re-exported API payload shapes so cards never import ../../types directly. */
 export type { ProxyConfig };
-export interface AdminInfo {
-  userId: number;
-  username?: string;
-}
-export type ControllerRequest = TelegramControlRequest;
-export type ControllerInfo = TelegramController;
-export type ChatInfo = TelegramChat;
 
 export interface AlertPref {
   enabled: boolean;

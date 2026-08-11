@@ -212,9 +212,7 @@ describe('trade-capture wiring', () => {
       const store = recordTradeMock();
       const exec = new LiveStrategyExecutor(createMockConfig({ tradeHistoryStore: store }));
 
-      const result = await exec.executeSignal(
-        closeSignal({ positionEntryPrice: undefined }),
-      );
+      const result = await exec.executeSignal(closeSignal({ positionEntryPrice: undefined }));
 
       expect(result.success).toBe(true);
       expect(store.recordTrade).not.toHaveBeenCalled();
@@ -271,9 +269,7 @@ describe('trade-capture wiring', () => {
       // No rethrow — the caller receives a normal failed result.
       expect(result.success).toBe(false);
       expect(result.error).toContain('RPC timeout after broadcast');
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('UNKNOWN ORDER OUTCOME'),
-      );
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('UNKNOWN ORDER OUTCOME'));
 
       expect(store.recordTrade).toHaveBeenCalledTimes(1);
       const trade = store.recordTrade.mock.calls[0][0] as TradeRecord;
@@ -294,9 +290,7 @@ describe('trade-capture wiring', () => {
       const exec = new LiveStrategyExecutor(config);
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      const result = await exec.executeSignal(
-        closeSignal({ positionEntryPrice: undefined }),
-      );
+      const result = await exec.executeSignal(closeSignal({ positionEntryPrice: undefined }));
 
       expect(result.success).toBe(false);
       const trade = store.recordTrade.mock.calls[0][0] as TradeRecord;

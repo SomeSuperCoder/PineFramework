@@ -69,7 +69,6 @@ describe('Alert Sanity', () => {
   const alert2Triggers = result.alertTriggers
     .filter((t) => t.alertId === 'alert_2')
     .sort((a, b) => a.barIndex - b.barIndex); // Trail Short
-  
 
   it('should have alert conditions matching the indicator source', () => {
     const conditions = result.alertConditions;

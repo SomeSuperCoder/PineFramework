@@ -1,8 +1,3 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-const MAX_FILE_SIZE = 1024 * 1024;
-
 /** Allowed hostnames for Bybit API URLs (SSRF prevention). */
 const ALLOWED_BYBIT_HOSTNAMES = new Set([
   'api.bybit.com',
@@ -48,36 +43,6 @@ export function validateBybitUrl(url: string, context: string): void {
  */
 export function validateSymbol(symbol: string): boolean {
   return /^[A-Za-z0-9]+$/.test(symbol);
-}
-
-export function validateFilePath(filePath: string, allowedDir: string): boolean {
-  const resolvedAllowed = path.resolve(allowedDir);
-  const resolved = path.resolve(filePath);
-
-  // Resolve symlinks to prevent bypass via symlink chains
-  try {
-    const realPath = fs.realpathSync(resolved);
-    const realAllowed = fs.realpathSync(resolvedAllowed);
-    // Check via path.relative: the relative path must NOT start with '..'
-    // Empty relative means the paths are identical (allowed).
-    const relative = path.relative(realAllowed, realPath);
-    if (relative === '' || (relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative))) {
-      return true;
-    }
-    return false;
-  } catch {
-    // If realpath fails (e.g., file doesn't exist yet), fall back to relative check
-    const relative = path.relative(resolvedAllowed, resolved);
-    return relative === '' || (relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative));
-  }
-}
-
-export function validateFileSize(size: number): boolean {
-  return size > 0 && size <= MAX_FILE_SIZE;
-}
-
-export function sanitizeContent(content: string): string {
-  return content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 
 /**

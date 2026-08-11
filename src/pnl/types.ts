@@ -53,15 +53,6 @@ export interface FeeComponent {
 }
 
 /**
- * Legacy flat mint→quote price map (US-Dollar per whole token). Retained for
- * compatibility; the richer `TokenPrice` map (with decimals) is what the fee
- * converter consumes.
- */
-export interface PriceMap {
-  [mint: string]: DecimalStr;
-}
-
-/**
  * Token price metadata: US-Dollar price for one whole token plus its on-chain
  * decimals. Passed to the mint→quote conversion (`feeToQuote`).
  */

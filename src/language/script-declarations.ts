@@ -76,11 +76,6 @@ export interface LibraryConfig {
 
 export type ScriptConfig = IndicatorConfig | StrategyConfig | LibraryConfig;
 
-export interface ScriptDeclaration {
-  version: number;
-  config: ScriptConfig;
-}
-
 const VALID_PINE_FORMATS: PineFormat[] = ['inherit', 'price', 'volume', 'tick', 'percent'];
 const VALID_PINE_SCALES: PineScale[] = ['inherit', 'linear', 'logarithmic'];
 const VALID_DEFAULT_QTY_TYPES: DefaultQtyType[] = ['fixed', 'percent_of_equity', 'currency'];

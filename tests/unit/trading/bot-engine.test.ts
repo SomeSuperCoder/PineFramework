@@ -566,10 +566,9 @@ describe('BotEngine feed telemetry (liveness suite)', () => {
       engine as unknown as { initialize: () => Promise<void> },
       'initialize',
     ).mockResolvedValue(undefined);
-    vi.spyOn(
-      engine as unknown as { shutdown: () => Promise<void> },
-      'shutdown',
-    ).mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown').mockResolvedValue(
+      undefined,
+    );
     await engine.start();
   }
 
@@ -604,8 +603,20 @@ describe('BotEngine feed telemetry (liveness suite)', () => {
 
     // Two kline messages — one unconfirmed, one confirmed. BOTH advance the
     // tick telemetry (feed proves alive before the first confirmed candle).
-    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1000, close: 100, confirm: false });
-    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 2000, close: 101, confirm: true });
+    e.handleFeedTick({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 1000,
+      close: 100,
+      confirm: false,
+    });
+    e.handleFeedTick({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 2000,
+      close: 101,
+      confirm: true,
+    });
     // The confirmed candle advances the candle path (execution gate untouched).
     e.handleCandle({
       symbol: 'BTCUSDT',
@@ -643,7 +654,13 @@ describe('BotEngine feed telemetry (liveness suite)', () => {
       }) => void;
     };
     e.feedState.connected = true;
-    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1_700_000_000_000, close: 100, confirm: false });
+    e.handleFeedTick({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 1_700_000_000_000,
+      close: 100,
+      confirm: false,
+    });
 
     // 60s later: NOT silent — the last kline tick is only 60s old.
     vi.advanceTimersByTime(60_000);
@@ -654,7 +671,13 @@ describe('BotEngine feed telemetry (liveness suite)', () => {
     expect(engine.getFeedStatus().silentSince).toBe(1_700_000_000_000 + 90_000);
 
     // A fresh tick refreshes the silence reference → no longer silent.
-    e.handleFeedTick({ symbol: 'BTCUSDT', timeframe: '60', timestamp: 1_700_000_000_000 + 91_000, close: 100, confirm: false });
+    e.handleFeedTick({
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      timestamp: 1_700_000_000_000 + 91_000,
+      close: 100,
+      confirm: false,
+    });
     expect(engine.getFeedStatus().silentSince).toBeUndefined();
   });
 
@@ -738,10 +761,9 @@ describe('BotEngine stop paths call the close manager (auto-close-on-stop)', () 
       engine as unknown as { initialize: () => Promise<void> },
       'initialize',
     ).mockResolvedValue(undefined);
-    vi.spyOn(
-      engine as unknown as { shutdown: () => Promise<void> },
-      'shutdown',
-    ).mockResolvedValue(undefined);
+    vi.spyOn(engine as unknown as { shutdown: () => Promise<void> }, 'shutdown').mockResolvedValue(
+      undefined,
+    );
     await engine.start();
     // initialize() is mocked in these tests, so wire the injected manager
     // through the private seam initialize()'s injection branch uses
@@ -877,7 +899,11 @@ describe('BotEngine stop paths call the close manager (auto-close-on-stop)', () 
 
 describe('BotEngine close-attempt tombstones (F3 security)', () => {
   type CloseAttemptEngine = {
-    prepareCloseAttempt: (symbol: string, timeframe: string, closeRunId: string) => Promise<string | undefined>;
+    prepareCloseAttempt: (
+      symbol: string,
+      timeframe: string,
+      closeRunId: string,
+    ) => Promise<string | undefined>;
     handlePositionClosed: (position: PositionInfo, result: CloseResult) => void;
     loadCloseAttemptsFromDisk: () => Promise<void>;
   };

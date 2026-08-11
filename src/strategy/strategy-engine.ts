@@ -30,11 +30,7 @@ export type {
   Position,
   Account,
   OrderDirection,
-  OrderType,
-  PositionDirection,
-  QtyType,
   CommissionType,
-  MarketFillPrice,
 } from './strategy-types.js';
 
 /**

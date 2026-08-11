@@ -218,9 +218,17 @@ describe('Commission Calculator', () => {
 
     it('auto-detects the platform tier from the trading symbol', () => {
       // SOLUSDT → sol_stable → 2 bps; BTCUSDT → default → 10 bps.
-      const solModel = buildBacktestFeeModel('jupiter_ultra', { dexFeeBps: 0, solPriceUsd: 0 }, 'SOLUSDT');
+      const solModel = buildBacktestFeeModel(
+        'jupiter_ultra',
+        { dexFeeBps: 0, solPriceUsd: 0 },
+        'SOLUSDT',
+      );
       expect(solModel.platformBps).toBe('2');
-      const btcModel = buildBacktestFeeModel('jupiter_ultra', { dexFeeBps: 0, solPriceUsd: 0 }, 'BTCUSDT');
+      const btcModel = buildBacktestFeeModel(
+        'jupiter_ultra',
+        { dexFeeBps: 0, solPriceUsd: 0 },
+        'BTCUSDT',
+      );
       expect(btcModel.platformBps).toBe('10');
     });
 

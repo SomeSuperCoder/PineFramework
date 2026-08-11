@@ -1,2 +1,2 @@
 export * from './ir.js';
-export { Compiler, compile } from './compiler.js';
+export { compile } from './compiler.js';

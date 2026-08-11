@@ -100,7 +100,7 @@ describe('TradeHistoryStore', () => {
         size: 1,
         fees: 0,
         realizedPnl: 10,
-dex: 'jupiter-swap' as const,
+        dex: 'jupiter-swap' as const,
         openedAt: 1000 + i,
         closedAt: 2000 + i,
       });
@@ -527,7 +527,11 @@ describe('TradingTelegramBot', () => {
 
     // Routed: the payload + kind go to deliver, and the legacy broadcast is
     // NOT reached.
-    expect(deliver).toHaveBeenCalledWith('position_open', { kind: 'position_open', trade }, undefined);
+    expect(deliver).toHaveBeenCalledWith(
+      'position_open',
+      { kind: 'position_open', trade },
+      undefined,
+    );
     expect(sender.sendMessage).not.toHaveBeenCalled();
   });
 });

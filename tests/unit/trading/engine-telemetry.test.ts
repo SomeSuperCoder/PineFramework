@@ -19,7 +19,9 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 
 // Captured from the module mocks below — used to drive the real engine wiring.
 const { mockSchedulerOpts, mockFeedCallbacks } = vi.hoisted(() => ({
-  mockSchedulerOpts: { current: null as { submitOrders?: (signals: unknown[]) => Promise<void> } | null },
+  mockSchedulerOpts: {
+    current: null as { submitOrders?: (signals: unknown[]) => Promise<void> } | null,
+  },
   mockFeedCallbacks: {
     candle: null as ((candle: unknown) => void) | null,
     tick: null as ((tick: unknown) => void) | null,
@@ -90,13 +92,15 @@ vi.mock('../../../src/trading/dex/jupiter-swap-adapter.js', () => ({
 }));
 
 vi.mock('../../../src/trading/live-scheduler.js', () => ({
-  LiveScheduler: vi.fn().mockImplementation((opts: { submitOrders?: (signals: unknown[]) => Promise<void> }) => {
-    mockSchedulerOpts.current = opts;
-    return {
-      liveTick: vi.fn().mockResolvedValue(undefined),
-      shutdown: vi.fn(),
-    };
-  }),
+  LiveScheduler: vi
+    .fn()
+    .mockImplementation((opts: { submitOrders?: (signals: unknown[]) => Promise<void> }) => {
+      mockSchedulerOpts.current = opts;
+      return {
+        liveTick: vi.fn().mockResolvedValue(undefined),
+        shutdown: vi.fn(),
+      };
+    }),
 }));
 
 vi.mock('../../../src/strategy/strategy-engine.js', () => ({
@@ -247,7 +251,10 @@ describe('bot:position emission at confirmed order results (task 1.4 / D3)', () 
 
     await mockSchedulerOpts.current!.submitOrders!([makeSignal('buy', 1), makeSignal('buy', 2)]);
 
-    expect((engine as unknown as { chaosStats: { ordersExecuted: number; ordersFailed: number } }).chaosStats).toMatchObject({
+    expect(
+      (engine as unknown as { chaosStats: { ordersExecuted: number; ordersFailed: number } })
+        .chaosStats,
+    ).toMatchObject({
       ordersExecuted: 1,
       ordersFailed: 1,
     });
@@ -303,14 +310,21 @@ describe('feed telemetry emit + throttled persistence (task 1.3 / D1)', () => {
     vi.advanceTimersByTime(1_000);
     mockFeedCallbacks.candle!(makeCandle(1_700_000_100_000));
     expect(statuses).toHaveLength(4);
-    expect(statuses[3]).toMatchObject({ connected: true, candleCount: 3, lastCandleAt: 1_700_000_100_000 });
+    expect(statuses[3]).toMatchObject({
+      connected: true,
+      candleCount: 3,
+      lastCandleAt: 1_700_000_100_000,
+    });
   });
 
   it('persists structural changes immediately but throttles candle-count-only writes to once per window', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_700_000_000_000);
 
-    const persistSpy = vi.spyOn(engine as unknown as { persistFeedState: () => Promise<void> }, 'persistFeedState');
+    const persistSpy = vi.spyOn(
+      engine as unknown as { persistFeedState: () => Promise<void> },
+      'persistFeedState',
+    );
 
     // Structural change (connect) → immediate write, bypassing the throttle.
     mockFeedCallbacks.connection!(true);

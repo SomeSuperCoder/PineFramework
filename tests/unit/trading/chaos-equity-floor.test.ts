@@ -87,7 +87,11 @@ function makeDex(balance: { amount: string } | Error) {
   const getBalance =
     balance instanceof Error
       ? vi.fn().mockRejectedValue(balance)
-      : vi.fn().mockResolvedValue({ mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', amount: balance.amount, decimals: 6 });
+      : vi.fn().mockResolvedValue({
+          mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+          amount: balance.amount,
+          decimals: 6,
+        });
   return {
     name: 'mock',
     commissionModel: { name: 'mock', feeBps: 0, variable: false, description: 'Mock' },

@@ -198,7 +198,12 @@ describe('F2 identity property', () => {
       expect(dCompare(result.net, expectedNet(result))).toBe(0);
 
       // 2) feesTotal === Σ of every breakdown value (reporting total).
-      expect(dCompare(result.feesTotal, sumDecs(Object.values(result.feeBreakdown).filter((v) => v !== undefined)))).toBe(0);
+      expect(
+        dCompare(
+          result.feesTotal,
+          sumDecs(Object.values(result.feeBreakdown).filter((v) => v !== undefined)),
+        ),
+      ).toBe(0);
 
       // 3) Each breakdown value equals the per-kind sum of feeToQuote conversions.
       for (const kind of FEE_KINDS) {
@@ -263,7 +268,7 @@ const ALL_KIND_COMPONENTS: FeeComponent[] = [
 ];
 
 describe('F3 anchor seam', () => {
-  it("outAmount anchor: only PRIORITY/BASE/JITO reduce net; VENUE/PLATFORM/SLIPPAGE_MEMO never change net", () => {
+  it('outAmount anchor: only PRIORITY/BASE/JITO reduce net; VENUE/PLATFORM/SLIPPAGE_MEMO never change net', () => {
     const result = aggregateRealizedPnl({
       side: 'LONG',
       ...LONG_FILLS,
@@ -276,9 +281,14 @@ describe('F3 anchor seam', () => {
     expect(result.subtractedFromNet).toEqual(['PRIORITY', 'BASE', 'JITO']);
     expect(result.net).toBe('9.9955');
     // Reporting still shows every kind.
-    expect(Object.keys(result.feeBreakdown).sort()).toEqual(
-      ['BASE', 'JITO', 'PLATFORM', 'PRIORITY', 'SLIPPAGE_MEMO', 'VENUE'],
-    );
+    expect(Object.keys(result.feeBreakdown).sort()).toEqual([
+      'BASE',
+      'JITO',
+      'PLATFORM',
+      'PRIORITY',
+      'SLIPPAGE_MEMO',
+      'VENUE',
+    ]);
     expect(result.feesTotal).toBe('0.8545');
   });
 
@@ -308,7 +318,7 @@ describe('F3 anchor seam', () => {
     expect(withQuoteKinds.feesTotal).toBe('0.8545');
   });
 
-  it("fills anchor: every charged kind (incl. VENUE/PLATFORM) reduces net; SLIPPAGE_MEMO stays informational", () => {
+  it('fills anchor: every charged kind (incl. VENUE/PLATFORM) reduces net; SLIPPAGE_MEMO stays informational', () => {
     const result = aggregateRealizedPnl({
       side: 'LONG',
       ...LONG_FILLS,
@@ -495,23 +505,33 @@ describe('F5 fill absence', () => {
 
 describe('F6 fee conversion boundary', () => {
   it('converts lamports (decimals 9) exactly: 5000 lamports @ $150 = 0.00075', () => {
-    expect(feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE)).toBe('0.00075');
-    expect(feeToQuote({ kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' }, SOL_PRICE)).toBe('0.0015');
+    expect(
+      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE),
+    ).toBe('0.00075');
+    expect(
+      feeToQuote({ kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' }, SOL_PRICE),
+    ).toBe('0.0015');
   });
 
   it('converts a 6-decimal token feeAmount exactly: 1_000_000 base units @ $1 = 1', () => {
-    expect(feeToQuote({ kind: 'VENUE', tokenMint: 'USDC', amountAtomic: '1000000' }, USDC_PRICE)).toBe('1');
+    expect(
+      feeToQuote({ kind: 'VENUE', tokenMint: 'USDC', amountAtomic: '1000000' }, USDC_PRICE),
+    ).toBe('1');
   });
 
   it('quote-denominated components are the identity (no price lookup needed)', () => {
-    expect(feeToQuote({ kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' }, {})).toBe('0.25');
-    expect(feeToQuote({ kind: 'SLIPPAGE_MEMO', tokenMint: QUOTE_MINT, amountAtomic: '0.50' }, {})).toBe('0.50');
+    expect(feeToQuote({ kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' }, {})).toBe(
+      '0.25',
+    );
+    expect(
+      feeToQuote({ kind: 'SLIPPAGE_MEMO', tokenMint: QUOTE_MINT, amountAtomic: '0.50' }, {}),
+    ).toBe('0.50');
   });
 
   it('throws on a missing TokenPrice entry — a missing price is a caller bug, fail loud', () => {
-    expect(() => feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '1' }, {})).toThrow(
-      /no price\/decimals supplied for mint "SOL"/,
-    );
+    expect(() =>
+      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '1' }, {}),
+    ).toThrow(/no price\/decimals supplied for mint "SOL"/);
     // Same failure propagates through the shared runner.
     expect(() =>
       aggregateRealizedPnl({
@@ -540,7 +560,9 @@ describe('F7 taxonomy', () => {
   });
 
   it('JITO is a real, SOL-side kind: it appears in the breakdown and reduces net in BOTH anchors', () => {
-    const components: FeeComponent[] = [{ kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' }];
+    const components: FeeComponent[] = [
+      { kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' },
+    ];
     for (const anchor of ['fills', 'outAmount'] as const) {
       const result = aggregateRealizedPnl({
         side: 'LONG',
@@ -604,6 +626,8 @@ describe('F8 decimal truth', () => {
     expect(dDiv('2', '3', 2)).toBe('0.67');
     expect(tenPow(9)).toBe('1000000000');
     // feeToQuote of lamports is exact — no 1e-7-style float residue.
-    expect(feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE)).toBe('0.00075');
+    expect(feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE)).toBe(
+      '0.00075',
+    );
   });
 });

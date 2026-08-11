@@ -102,25 +102,6 @@ export function ensureFinite(
 }
 
 /**
- * Assert that a value is a number (finite or not).
- * Throws RuntimeError if the value is not a number type.
- * Use when you need to distinguish "not a number type" from "non-finite".
- *
- * @param val - The value to check
- * @param context - Descriptive label for the error message
- * @param barIndex - Optional bar index for error context
- */
-export function expectNumber(
-  val: unknown,
-  context: string,
-  barIndex?: number,
-): asserts val is number {
-  if (typeof val !== 'number') {
-    throw new RuntimeError(`Expected number for ${context}, got ${typeof val}`, barIndex);
-  }
-}
-
-/**
  * Check if a numeric value is effectively zero within an epsilon tolerance.
  * Useful for division guards where IEEE 754 rounding may produce tiny non-zero values.
  */

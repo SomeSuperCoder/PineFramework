@@ -13,7 +13,3 @@ export function setBroadcastIndicatorRemoved(fn: (indicatorIds: string[]) => voi
 export function broadcastIndicatorRemoved(indicatorIds: string[]): void {
   broadcastFn?.(indicatorIds);
 }
-
-export function hasBroadcastFn(): boolean {
-  return broadcastFn !== null;
-}

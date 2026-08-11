@@ -18,9 +18,7 @@ export type {
   FeeComponent,
   FeeKind,
   Fill,
-  PriceMap,
   RealizedPnl,
-  Side,
   TokenPrice,
 } from './types.js';
 
@@ -32,8 +30,6 @@ export { feeBreakdownToQuote, feeToQuote, modelFees, QUOTE_MINT, SOL_MINT } from
 
 // The shared realized-PnL runner (anchor seam lives here).
 export { aggregateRealizedPnl } from './aggregate.js';
-export type { AggregateRealizedPnlArgs, PnlAnchor } from './aggregate.js';
 
 // Canonical Jupiter fee tiers.
-export { DEFAULT_JUPITER_FEE_BPS, JUPITER_FEE_TIERS, jupiterFeeBpsForTier } from './fee-tiers.js';
-export type { JupiterFeeTier } from './fee-tiers.js';
+export { DEFAULT_JUPITER_FEE_BPS, jupiterFeeBpsForTier } from './fee-tiers.js';
