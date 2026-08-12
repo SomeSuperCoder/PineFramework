@@ -41,6 +41,11 @@ vi.mock('pine-framework/strategy/jupiter-fee-fetcher', () => ({
 }));
 import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
 
+// ── Mock the live SOL-price fetcher (parity with the frontend /dex-fee panel) ─
+vi.mock('../src/services/sol-price-fetcher.js', () => ({
+  fetchSolPriceUsd: vi.fn().mockResolvedValue(150),
+}));
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURE_DIR = path.join(__dirname, 'fixtures');
@@ -174,27 +179,32 @@ describe('backtest-config glue unit tests (task 5.1)', () => {
   });
 
   describe('applyDexFee', () => {
-    it('non-Jupiter method returns the override unchanged and never fetches', async () => {
+    it('non-Jupiter method returns the override with injected solPriceUsd and never fetches a fee', async () => {
       const override = { commissionMethod: 'fixed' } as unknown as Partial<StrategyConfig>;
       const res = await applyDexFee('BTCUSDT', override);
-      expect(res).toBe(override);
+      expect(res.commissionMethod).toBe('fixed');
+      const cms = res.commissionMethodSettings as unknown as Record<string, unknown>;
+      expect(cms.solPriceUsd).toBe(150);
       expect(vi.mocked(fetchDexFeeBps)).not.toHaveBeenCalled();
     });
 
-    it('jupiter method with successful fetch sets dexFeeBps on commissionMethodSettings', async () => {
+    it('jupiter method with successful fetch sets dexFeeBps + solPriceUsd on commissionMethodSettings', async () => {
       vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 42 });
       const override = { commissionMethod: 'jupiter_ultra' } as Partial<StrategyConfig>;
       const res = await applyDexFee('BTCUSDT', override);
       const cms = res.commissionMethodSettings as unknown as Record<string, unknown>;
       expect(cms.dexFeeBps).toBe(42);
+      expect(cms.solPriceUsd).toBe(150);
     });
 
-    it('jupiter method with fetch failure + onFailure:"fallback" returns flat commission', async () => {
+    it('jupiter method with fetch failure + onFailure:"fallback" returns flat commission + solPriceUsd', async () => {
       vi.mocked(fetchDexFeeBps).mockRejectedValue(new Error('network down'));
       const override = { commissionMethod: 'jupiter_manual' } as Partial<StrategyConfig>;
       const res = await applyDexFee('BTCUSDT', override, { onFailure: 'fallback' });
       expect(res.commission).toBe(0.1);
       expect(res.commissionType).toBe('percent');
+      const cms = res.commissionMethodSettings as unknown as Record<string, unknown>;
+      expect(cms.solPriceUsd).toBe(150);
     });
 
     it('jupiter method with fetch failure + default onFailure:"throw" rejects', async () => {

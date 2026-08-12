@@ -17,6 +17,7 @@
 
 import type { StrategyConfig } from 'pine-framework';
 import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
+import { fetchSolPriceUsd } from './services/sol-price-fetcher.js';
 
 /** Raw backtest config input accepted from the CLI / API request body. */
 export interface BacktestConfigInput {
@@ -71,23 +72,30 @@ export interface ApplyDexFeeOptions {
 
 /**
  * Merge a live DEX fee (Jupiter commission methods only) into the override's
- * commissionMethodSettings.dexFeeBps. For non-Jupiter methods the override is
- * returned unchanged (no fee fetch needed). On failure: 'fallback' replaces the
- * fee with a flat commission; the default (and 'throw') re-throws.
+ * commissionMethodSettings.dexFeeBps AND inject the live SOL price
+ * (solPriceUsd) for parity with the frontend `/dex-fee` panel.
+ *
+ * The SOL price is orthogonal to the DEX fee, so it is fetched for ALL
+ * commission methods (non-Jupiter safe: the early return still resolves it).
+ * It is injected only when non-null — matching the panel contract that a SOL
+ * price outage must never fail the backtest. On DEX-fee failure: 'fallback'
+ * replaces the fee with a flat commission; the default (and 'throw') re-throws.
  */
 export async function applyDexFee(
   symbol: string,
   override: Partial<StrategyConfig>,
   opts?: ApplyDexFeeOptions,
 ): Promise<Partial<StrategyConfig>> {
+  let result: Partial<StrategyConfig> = override;
   const cm = override.commissionMethod;
   if (cm !== 'jupiter_manual' && cm !== 'jupiter_ultra') {
-    return override;
+    // Non-Jupiter: no DEX fee to fetch, but still resolve the live SOL price below.
+    return injectSolPrice(result, await fetchSolPriceUsd());
   }
 
   try {
     const { dexFeeBps } = await fetchDexFeeBps(symbol);
-    return {
+    result = {
       ...override,
       commissionMethodSettings: {
         ...(override.commissionMethodSettings ?? {}),
@@ -96,14 +104,32 @@ export async function applyDexFee(
     };
   } catch (err) {
     if (opts?.onFailure === 'fallback') {
-      return {
+      result = {
         ...override,
         commission: opts.fallbackCommission ?? 0.1,
         commissionType: 'percent',
       };
+    } else {
+      throw err;
     }
-    throw err;
   }
+
+  return injectSolPrice(result, await fetchSolPriceUsd());
+}
+
+/** Inject live SOL price into commissionMethodSettings when available (null = omit). */
+function injectSolPrice(
+  override: Partial<StrategyConfig>,
+  solPriceUsd: number | null,
+): Partial<StrategyConfig> {
+  if (solPriceUsd === null) return override;
+  return {
+    ...override,
+    commissionMethodSettings: {
+      ...(override.commissionMethodSettings ?? {}),
+      solPriceUsd,
+    } as unknown as StrategyConfig['commissionMethodSettings'],
+  };
 }
 
 /**

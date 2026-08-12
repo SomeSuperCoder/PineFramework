@@ -35,3 +35,8 @@
 
 - [x] 6.1 Code Reviewer (T3): parity exactness confirmed, no spurious config fields injected, engine behavior untouched (`backtest-runner.ts` empty diff), no dead imports. One follow-up fix (move netProfit sanitize into `toCliSymbolResult`) folded in and re-verified GREEN. QA inherited the test verdict; did NOT re-run.
   - **Evidence:** reviewer GO; follow-up applied; re-verify 30/30 green.
+
+## 7. SOL price parity (follow-up)
+
+- [x] 7.1 `applyDexFee` now ALSO live-fetches `solPriceUsd` (`backend/src/services/sol-price-fetcher.ts`) and injects it into `commissionMethodSettings` (null = omitted), so the backtest run uses the same live SOL price the frontend `/dex-fee` panel shows. Previously the backtest fell back to a default constant, diverging from the chart.
+  - **Evidence:** `backtest-config.ts` edited (relative import `./services/sol-price-fetcher.js` + `injectSolPrice` helper); `backtest-parity.test.ts` mocks the fetcher and asserts `solPriceUsd: 150`; full backtest suite 30/30 green, `tsc --noEmit` clean.
