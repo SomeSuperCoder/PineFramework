@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +16,7 @@ export function createExportRouter(): Router {
       const filename = `export-${Date.now()}.json`;
       const filePath = path.join(EXPORTS_DIR, filename);
 
+      mkdirSync(EXPORTS_DIR, { recursive: true });
       writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf-8');
 
       console.log(`[Export] Written to ${filePath}`);
