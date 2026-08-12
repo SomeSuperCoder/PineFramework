@@ -7,7 +7,7 @@ dist/
 .env.local
 .exports/
 # Runtime chart export snapshots (user-specific, regenerated on demand)
-tests/integration/alert-sanity/export.json
+# tests/integration/alert-sanity/export.json  # tracked: required fixture for alert-sanity.test.ts (gitignored previously broke CI)
 frontend/dist/
 *.log
 logs/
