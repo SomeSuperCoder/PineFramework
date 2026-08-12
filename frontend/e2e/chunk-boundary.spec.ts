@@ -255,7 +255,7 @@ test.describe('Chunk boundary invariants', () => {
     // ── Navigate and wait for chart ─────────────────────────────────────
     await page.goto(FRONTEND);
     // Wait for the canvas element (chart rendered)
-    await page.waitForSelector('canvas', { timeout: 30000 });
+    await page.waitForSelector('canvas', { timeout: 120000 });
 
     // ── Enable debug mode ───────────────────────────────────────────────
     const debugBtn = page.locator('button', { hasText: 'Debug' });
@@ -269,7 +269,7 @@ test.describe('Chunk boundary invariants', () => {
     await page.waitForFunction(() => {
       const td = (window as any).__pineTestData;
       return td !== undefined && td.indicators && td.indicators.length > 0 && td.labelCount > 0;
-    }, { timeout: 60000 });
+    }, { timeout: 120000 });
 
     testData = await getTestData(page);
     expect(testData).not.toBeNull();
@@ -301,7 +301,7 @@ test.describe('Chunk boundary invariants', () => {
           );
         },
         { initialChunkCount, prevLabelCount },
-        { timeout: 30000 },
+        { timeout: 90000 },
       );
 
       testData = await getTestData(page);

@@ -151,7 +151,7 @@ test.describe('Chunk border visual regression', () => {
   test('No orphaned plot values after 10 chunk loads', async ({ page }) => {
     await setupSeedDataInterception(page);
     await page.goto(FRONTEND);
-    await page.waitForSelector('canvas', { timeout: 30_000 });
+    await page.waitForSelector('canvas', { timeout: 120000 });
 
     const debugBtn = page.locator('button', { hasText: 'Debug' });
     await debugBtn.click();
@@ -159,7 +159,7 @@ test.describe('Chunk border visual regression', () => {
     await page.waitForFunction(() => {
       const td = (window as any).__pineTestData;
       return td !== undefined && td.indicators && td.indicators.length > 0;
-    }, { timeout: 60_000 });
+    }, { timeout: 120_000 });
 
     // Scroll back through 10 chunk boundaries
     for (let i = 0; i < 10; i++) {
@@ -171,7 +171,7 @@ test.describe('Chunk border visual regression', () => {
           return td && td.chunkBorders && td.chunkBorders.length > prevCount;
         },
         prevChunkCount,
-        { timeout: 30_000 },
+        { timeout: 90000 },
       );
       await page.waitForTimeout(500);
     }

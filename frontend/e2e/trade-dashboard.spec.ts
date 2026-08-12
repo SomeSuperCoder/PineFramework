@@ -275,24 +275,27 @@ async function installApiMocks(
 /** The dashboard opens via the toolbar TradingBotControlButton toggle. */
 async function openDashboard(page: Page) {
   await page.goto(FRONTEND);
-  await page.getByRole('button', { name: 'Bot Dashboard' }).click();
+  await page.getByRole('button', { name: 'Bot panel' }).click();
   // LiveDashboard mounts once the (stubbed) bot snapshot sets botStatus.
-  await expect(page.getByRole('button', { name: 'Trade History' })).toBeVisible({
+  await expect(page.getByRole('tab', { name: 'Trade History' })).toBeVisible({
     timeout: 15_000,
   });
 }
 
 /**
- * The dashboard's full-screen overlay (App.tsx: position fixed, zIndex 1000).
- * The underlying chart app also renders hidden <option>s and canvases, so all
- * assertions on dashboard content are scoped to this panel. It is uniquely
- * identified as the fixed overlay that contains the Trade History tab button
- * (the Chaos toast + ErrorConsole are also fixed but never contain that tab).
+ * The dashboard content is scoped to the bot panel region (ControlPanel renders
+ * the active panel inside a `<div role="region" aria-label="bot panel">`). All
+ * assertions on dashboard content are scoped to that region so they don't match
+ * the underlying chart app. The region uniquely contains the Trade History /
+ * Statistics tabs.
  */
 function dashboardPanel(page: Page) {
-  return page
-    .locator('div[style*="position: fixed"]')
-    .filter({ has: page.getByRole('button', { name: 'Trade History' }) });
+  // The bot dashboard is rendered by ControlPanel inside a
+  // <div role="region" aria-label="bot panel"> (App.tsx → ControlPanel.tsx:88).
+  // That accessible-name handle is stable and uniquely targets the dashboard
+  // content (the Trade History / Statistics tabs live inside it), immune to the
+  // inline-style / class churn that broke the old `div[style*="position: fixed"]`.
+  return page.getByRole('region', { name: 'bot panel' });
 }
 
 test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
@@ -304,14 +307,14 @@ test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
     await installApiMocks(page, cfg, statsRequests);
     await openDashboard(page);
 
-    await page.getByRole('button', { name: 'Trade History' }).click();
+    await page.getByRole('tab', { name: 'Trade History' }).click();
     const dashboard = dashboardPanel(page);
     await expect(dashboard.getByRole('cell', { name: 'BTCUSDT' })).toBeVisible();
     await expect(dashboard.getByRole('cell', { name: 'ETHUSDT' })).toBeVisible();
     await expect(dashboard.getByRole('cell', { name: 'SOLUSDT' })).toBeVisible();
 
     // Live mode hides the chaos-mode row (refetches with mode=live).
-    await dashboard.getByRole('button', { name: 'Live', exact: true }).click();
+    await dashboard.getByRole('tab', { name: 'Live', exact: true }).click();
     await expect(dashboard.getByRole('cell', { name: 'SOLUSDT' })).toHaveCount(0);
     await expect(dashboard.getByRole('cell', { name: 'BTCUSDT' })).toHaveCount(1);
     await expect(dashboard.getByRole('cell', { name: 'ETHUSDT' })).toHaveCount(1);
@@ -324,7 +327,7 @@ test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
     await expect(dashboard.getByRole('cell', { name: 'ADAUSDT' })).toHaveCount(0);
   });
 
-  test('user opens Statistics: metric cards, equity + grouped canvases, groupBy toggle', async ({
+  test('user opens Statistics: metric cards, equity + grouped charts, groupBy toggle', async ({
     page,
   }) => {
     const cfg = defaultApiConfig();
@@ -332,21 +335,22 @@ test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
     await installApiMocks(page, cfg, statsRequests);
     await openDashboard(page);
 
-    await page.getByRole('button', { name: 'Statistics' }).click();
+    await page.getByRole('tab', { name: 'Statistics' }).click();
     const dashboard = dashboardPanel(page);
-    await expect(dashboard.getByText('Global Metrics')).toBeVisible();
+    await expect(dashboard.getByText('Trade Statistics')).toBeVisible();
     await expect(dashboard.getByText('Total Trades')).toBeVisible();
     await expect(dashboard.getByText('12', { exact: true })).toBeVisible();
     await expect(dashboard.getByText('Net PnL')).toBeVisible();
 
-    // Equity curve + grouped PnL canvases both render (main chart canvas is
-    // outside the overlay, so scoping to the panel makes the count exact).
-    await expect(dashboard.locator('canvas')).toHaveCount(2);
+    // Equity curve + grouped PnL charts (Recharts SVG, not <canvas>) both render.
+    // Scoping to the panel keeps the count exact (the main app chart is outside it).
+    await expect(dashboard.locator('[data-slot="chart"]')).toHaveCount(2);
 
     // Group-by toggle refetches stats with groupBy=asset and re-renders.
     await dashboard
-      .getByTitle('Group the PnL comparison chart by strategy, timeframe, or asset')
-      .selectOption('asset');
+      .getByRole('combobox', { name: 'Group the PnL comparison chart by strategy, timeframe, or asset' })
+      .click();
+    await page.getByRole('option', { name: 'Asset' }).click();
     await expect(dashboard.getByText('PnL by Asset')).toBeVisible();
     await expect.poll(() => statsRequests.some((u) => u.includes('groupBy=asset'))).toBeTruthy();
   });
@@ -363,14 +367,14 @@ test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
     await installApiMocks(page, cfg, statsRequests);
     await openDashboard(page);
 
-    await page.getByRole('button', { name: 'Trade History' }).click();
+    await page.getByRole('tab', { name: 'Trade History' }).click();
     const dashboard = dashboardPanel(page);
     await expect(dashboard.getByText('No trades yet.')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Statistics' }).click();
+    await page.getByRole('tab', { name: 'Statistics' }).click();
     await expect(dashboard.getByText('No trades yet.')).toBeVisible();
     await expect(dashboard.getByText('No trades to chart.')).toBeVisible();
     await expect(dashboard.getByText('No groups to chart.')).toBeVisible();
-    await expect(dashboard.locator('canvas')).toHaveCount(0);
+    await expect(dashboard.locator('[data-slot="chart"]')).toHaveCount(0);
   });
 });
