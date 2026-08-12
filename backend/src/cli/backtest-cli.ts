@@ -7,6 +7,7 @@ import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, getDefaultDaysBack } from './types.j
 import { runMultiSymbolBacktest } from './multi-symbol-runner.js';
 import { buildTimeframeResult, buildMultiTimeframeOutput } from './result-aggregator.js';
 import { printSummaryTable, writeJsonOutput } from './output-formatter.js';
+import { assertRealisticCommissionMethod } from '../backtest-config.js';
 
 function printUsage(): void {
   console.log(`
@@ -164,19 +165,15 @@ function validateOptions(options: CliOptions): string | null {
     return 'At least one symbol is required';
   }
 
-  // Enforce Jupiter commission method for realistic results
-  const REALISTIC_METHODS: CliCommissionMethod[] = ['jupiter_manual', 'jupiter_ultra'];
-  if (
-    options.commissionMethod &&
-    !REALISTIC_METHODS.includes(options.commissionMethod) &&
-    !options.allowUnrealisticResults
-  ) {
-    return (
-      `Unrealistic commission method: '${options.commissionMethod}'. ` +
-      `The live trading bot executes swaps via Jupiter (Router path — 0% Jupiter commission). ` +
-      `Only 'jupiter_manual' or 'jupiter_ultra' match the bot's actual fee structure. ` +
-      `Pass --allow-unrealistic-results to override this check.`
-    );
+  // Enforce Jupiter commission method for realistic results (SSOT: backtest-config).
+  // Only meaningful when a method is explicitly supplied; the undefined case keeps
+  // the engine's default (prior behavior — no guard fired on a missing method).
+  if (options.commissionMethod !== undefined) {
+    try {
+      assertRealisticCommissionMethod(options.commissionMethod, !!options.allowUnrealisticResults);
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
   }
 
   // daysBack is checked per-timeframe in main(), not here

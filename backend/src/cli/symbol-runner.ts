@@ -1,12 +1,9 @@
-import { fetchDexFeeBps } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import type { StrategyConfig } from 'pine-framework';
-import type { SymbolResult, SymbolMetrics } from './types.js';
+import type { SymbolResult } from './types.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
-import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
-
-function isJupiterMethod(method: unknown): method is 'jupiter_manual' | 'jupiter_ultra' {
-  return method === 'jupiter_manual' || method === 'jupiter_ultra';
-}
+import { runBacktestPipeline } from '../backtest-runner.js';
+import { applyDexFee } from '../backtest-config.js';
+import { toOutcome, toCliSymbolResult } from '../backtest-result.js';
 
 export async function runSymbolBacktest(
   script: string,
@@ -22,28 +19,17 @@ export async function runSymbolBacktest(
       return { symbol, status: 'failed', error: 'No bar data available' };
     }
 
-    // ── Live DEX fee fetch (Jupiter methods only) ──
-    const effectiveConfig = configOverride ? { ...configOverride } : {};
-    if (symbol && isJupiterMethod(effectiveConfig.commissionMethod)) {
-      try {
-        const { dexFeeBps, source, dexLabel } = await fetchDexFeeBps(symbol);
-        const existingSettings = (effectiveConfig.commissionMethodSettings as Record<string, unknown>) ?? {};
-        effectiveConfig.commissionMethodSettings = { ...existingSettings, dexFeeBps };
-        process.stderr.write(
-          `  ℹ ${symbol}: using DEX fee ${dexFeeBps} bps (source: ${source})${dexLabel ? ' via ' + dexLabel : ''}\n`,
-        );
-      } catch (err) {
-        process.stderr.write(
-          `  ⚠ ${symbol}: failed to fetch live DEX fee — ${err instanceof Error ? err.message : String(err)}\n`,
-        );
-        throw err;
-      }
-    }
+    // ── Live DEX fee merge (Jupiter methods only) ──
+    const baseOverride = configOverride ? { ...configOverride } : {};
+    const override = await applyDexFee(symbol, baseOverride, {
+      onFailure: 'fallback',
+      fallbackCommission: 0.1,
+    });
 
     const pipelineResult = runBacktestPipeline({
       script,
       bars,
-      configOverride: Object.keys(effectiveConfig).length > 0 ? effectiveConfig : undefined,
+      configOverride: Object.keys(override).length > 0 ? override : undefined,
     });
 
     if (!pipelineResult.success) {
@@ -51,25 +37,18 @@ export async function runSymbolBacktest(
       return { symbol, status: 'failed', error: msg };
     }
 
-    const metricsResult = computeBacktestMetrics(bars, pipelineResult.engine!);
-    if (!metricsResult) {
+    const outcome = toOutcome(bars, pipelineResult.engine!);
+    if (!outcome) {
       return { symbol, status: 'failed', error: 'Missing strategy engine' };
     }
 
-    const sanitize = (v: number) => (Number.isFinite(v) ? v : 0);
+    const metrics = toCliSymbolResult(outcome);
 
-    const resultMetrics: SymbolMetrics = {
-      netProfit: sanitize(metricsResult.metrics.totalPnl),
-      netProfitPercent: sanitize(metricsResult.metrics.totalPnlPercent),
-      profitFactor: sanitize(metricsResult.metrics.profitFactor),
-      maxDrawdownPercent: sanitize(metricsResult.metrics.maxDrawdownPercent),
-      winRate: sanitize(metricsResult.metrics.winRate),
-      sharpeRatio: sanitize(metricsResult.metrics.sharpeRatio),
-      totalTrades: metricsResult.metrics.totalTrades,
-      buyHoldReturn: Math.round(metricsResult.buyHoldReturn * 100) / 100,
+    return {
+      symbol,
+      status: 'completed',
+      metrics,
     };
-
-    return { symbol, status: 'completed', metrics: resultMetrics };
   } catch (err) {
     return {
       symbol,

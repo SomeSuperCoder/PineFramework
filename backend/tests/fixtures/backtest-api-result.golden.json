@@ -1,0 +1,153 @@
+{
+  "metrics": {
+    "totalTrades": 2,
+    "winningTrades": 2,
+    "losingTrades": 0,
+    "winRate": 100,
+    "profitFactor": null,
+    "totalPnl": 473.57762777242044,
+    "totalPnlPercent": 4.735776277724205,
+    "maxDrawdown": 368.0810028929609,
+    "maxDrawdownPercent": 3.3309342414773764,
+    "sharpeRatio": 93.15767493737168,
+    "sortinoRatio": 0,
+    "averageWin": 236.78881388621022,
+    "averageLoss": 0,
+    "largestWin": 267.695274831244,
+    "largestLoss": 0,
+    "averageTradeDuration": 29.5,
+    "commission": 0
+  },
+  "equityCurve": [
+    10000,
+    10205.882352941177,
+    10473.57762777242
+  ],
+  "drawdownCurve": [
+    0,
+    0,
+    0
+  ],
+  "trades": [
+    {
+      "id": "trade_1",
+      "direction": "short",
+      "entryPrice": 136,
+      "exitPrice": 122,
+      "entryTime": 1700151200000,
+      "exitTime": 1700255600000,
+      "quantity": 14.705882352941176,
+      "pnl": 205.88235294117646,
+      "pnlPercent": 10.294117647058822,
+      "commission": 0,
+      "entryName": "",
+      "exitName": "Short",
+      "mae": 0.3676470588235294,
+      "mfe": 26.838235294117645,
+      "barsHeld": 29
+    },
+    {
+      "id": "trade_2",
+      "direction": "long",
+      "entryPrice": 122,
+      "exitPrice": 138,
+      "entryTime": 1700255600000,
+      "exitTime": 1700363600000,
+      "quantity": 16.73095467695275,
+      "pnl": 267.695274831244,
+      "pnlPercent": 13.114754098360656,
+      "commission": 0,
+      "entryName": "",
+      "exitName": "Long",
+      "mae": 0.4098360655737705,
+      "mfe": 31.557377049180328,
+      "barsHeld": 30
+    }
+  ],
+  "orders": [
+    {
+      "id": "order_1",
+      "direction": "short",
+      "action": "sell",
+      "type": "market",
+      "quantity": 14.705882352941176,
+      "price": 136,
+      "fillPrice": 136,
+      "fillTime": 1700151200000,
+      "entryName": "Short",
+      "commission": 0
+    },
+    {
+      "id": "order_2",
+      "direction": "short",
+      "action": "buy",
+      "type": "market",
+      "quantity": 14.705882352941176,
+      "price": 122,
+      "fillPrice": 122,
+      "fillTime": 1700255600000,
+      "entryName": "Short",
+      "commission": 0
+    },
+    {
+      "id": "order_3",
+      "direction": "long",
+      "action": "buy",
+      "type": "market",
+      "quantity": 16.73095467695275,
+      "price": 122,
+      "fillPrice": 122,
+      "fillTime": 1700255600000,
+      "entryName": "Long",
+      "commission": 0
+    },
+    {
+      "id": "order_4",
+      "direction": "long",
+      "action": "sell",
+      "type": "market",
+      "quantity": 16.73095467695275,
+      "price": 138,
+      "fillPrice": 138,
+      "fillTime": 1700363600000,
+      "entryName": "Long",
+      "commission": 0
+    },
+    {
+      "id": "order_5",
+      "direction": "short",
+      "action": "sell",
+      "type": "market",
+      "quantity": 15.179098011264376,
+      "price": 138,
+      "fillPrice": 138,
+      "fillTime": 1700363600000,
+      "entryName": "Short",
+      "commission": 0
+    }
+  ],
+  "equityPoints": [
+    {
+      "time": 1700000000000,
+      "equity": 10000,
+      "drawdown": 0,
+      "balance": 10000
+    },
+    {
+      "time": 1700003600000,
+      "equity": 10205.882352941177,
+      "drawdown": 0,
+      "balance": 10205.882352941177
+    },
+    {
+      "time": 1700007200000,
+      "equity": 10473.57762777242,
+      "drawdown": 0,
+      "balance": 10473.57762777242
+    }
+  ],
+  "monthlyReturns": {
+    "2023-11": 2.06
+  },
+  "buyHoldReturn": -1.96
+}

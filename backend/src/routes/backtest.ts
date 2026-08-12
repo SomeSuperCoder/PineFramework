@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { fetchDexFeeBps, type FeeFetchResult } from 'pine-framework/strategy/jupiter-fee-fetcher';
-import type { StrategyConfig } from 'pine-framework';
 import { randomUUID } from 'crypto';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
-import { runBacktestPipeline, computeBacktestMetrics } from '../backtest-runner.js';
+import { runBacktestPipeline } from '../backtest-runner.js';
+import { buildBacktestConfigOverride, applyDexFee, type BacktestConfigInput } from '../backtest-config.js';
+import { toOutcome, toApiResult } from '../backtest-result.js';
 import { logger } from '../utils/logger.js';
 import { fetchSolPriceUsd } from '../services/sol-price-fetcher.js';
 import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
@@ -102,40 +103,16 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       setPhase(job.jobId, 'Compiling script');
 
       // Build config override from job config
-      const configOverride: Partial<StrategyConfig> = {};
-      const configFields: Array<keyof StrategyConfig> = [
-        'initialCapital', 'commission', 'slippage',
-        'commissionType', 'slippageType',
-        'defaultQty', 'defaultQtyType',
-        'pyramiding', 'marginLong', 'marginShort',
-        'commissionMethod', 'commissionMethodSettings',
-      ];
-      for (const field of configFields) {
-        const val = job.config[field];
-        if (val !== undefined) {
-          (configOverride as Record<string, unknown>)[field] = val;
-        }
-      }
+      const baseOverride = buildBacktestConfigOverride(job.config as BacktestConfigInput);
 
       // ── Live DEX fee fetch (Jupiter methods only) ──
-      const cm = configOverride.commissionMethod;
-      if (job.symbol && (cm === 'jupiter_manual' || cm === 'jupiter_ultra')) {
-        try {
-          const { dexFeeBps } = await fetchDexFeeBps(job.symbol);
-          const existingSettings = (configOverride.commissionMethodSettings as Record<string, unknown>) ?? {};
-          configOverride.commissionMethodSettings = { ...existingSettings, dexFeeBps };
-          logger.info('DEX fee fetched', { jobId: job.jobId, symbol: job.symbol, dexFeeBps });
-        } catch (err) {
-          logger.error('Failed to fetch DEX fee', { jobId: job.jobId, symbol: job.symbol, err });
-          throw err;
-        }
-      }
+      const override = await applyDexFee(job.symbol, baseOverride, { onFailure: 'throw' });
 
       setPhase(job.jobId, 'Executing bars');
       const pipelineResult = runBacktestPipeline({
         script,
         bars,
-        configOverride: Object.keys(configOverride).length > 0 ? configOverride : undefined,
+        configOverride: Object.keys(override).length > 0 ? override : undefined,
       });
 
       if (!pipelineResult.success) {
@@ -149,75 +126,17 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       updateProgress(job.jobId, 80);
       setPhase(job.jobId, 'Computing metrics');
 
-      const metricsResult = computeBacktestMetrics(bars, execEngine);
-      if (!metricsResult) {
+      const outcome = toOutcome(bars, execEngine);
+      if (!outcome) {
         throw new Error('Script is not a strategy (missing strategy() declaration)');
       }
-
-      const { trades, metrics, filledOrders, equityCurve, drawdownCurve, equityPoints, monthlyReturns, buyHoldReturn } = metricsResult;
 
       updateProgress(job.jobId, 90);
       setPhase(job.jobId, 'Building results');
 
-      const sanitize = (v: number) => Number.isFinite(v) ? v : (v === Infinity ? null : 0);
+      logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: outcome.metrics.totalTrades, totalPnl: outcome.metrics.totalPnl, winRate: outcome.metrics.winRate, profitFactor: outcome.metrics.profitFactor });
 
-      logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: metrics.totalTrades, totalPnl: metrics.totalPnl, winRate: metrics.winRate, profitFactor: metrics.profitFactor });
-
-      job.result = {
-        metrics: {
-          totalTrades: metrics.totalTrades,
-          winningTrades: metrics.winningTrades,
-          losingTrades: metrics.losingTrades,
-          winRate: metrics.winRate,
-          profitFactor: sanitize(metrics.profitFactor),
-          totalPnl: metrics.totalPnl,
-          totalPnlPercent: metrics.totalPnlPercent,
-          maxDrawdown: metrics.maxDrawdown,
-          maxDrawdownPercent: metrics.maxDrawdownPercent,
-          sharpeRatio: sanitize(metrics.sharpeRatio),
-          sortinoRatio: sanitize(metrics.sortinoRatio),
-          averageWin: metrics.averageWin,
-          averageLoss: metrics.averageLoss,
-          largestWin: metrics.largestWin,
-          largestLoss: metrics.largestLoss,
-          averageTradeDuration: metrics.averageTradeDuration,
-          commission: metrics.commission,
-        },
-        equityCurve,
-        drawdownCurve,
-        trades: trades.map((t) => ({
-          id: t.id,
-          direction: t.direction,
-          entryPrice: t.entryPrice,
-          exitPrice: t.exitPrice,
-          entryTime: t.entryTime,
-          exitTime: t.exitTime,
-          quantity: t.quantity,
-          pnl: t.pnl,
-          pnlPercent: t.pnlPercent,
-          commission: t.commission,
-          entryName: t.entryName,
-          exitName: t.exitName,
-          mae: t.mae,
-          mfe: t.mfe,
-          barsHeld: t.barsHeld,
-        })),
-        orders: filledOrders.map((o) => ({
-          id: o.id,
-          direction: o.direction,
-          action: o.action,
-          type: o.type,
-          quantity: o.quantity,
-          price: o.price,
-          fillPrice: o.fillPrice,
-          fillTime: o.fillTime,
-          entryName: o.entryName,
-          commission: o.commission,
-        })),
-        equityPoints,
-        monthlyReturns,
-        buyHoldReturn: Math.round(buyHoldReturn * 100) / 100,
-      };
+      job.result = toApiResult(outcome);
 
       job.status = 'completed';
       job.progress = 100;
