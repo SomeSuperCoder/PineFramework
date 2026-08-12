@@ -311,6 +311,9 @@ export function useChartData(
   );
 
   const indicatorResultsRef = useRef<Map<string, ScriptResult>>(new Map());
+  // Buffer a forming-candle DIFF that arrives before the full REST result has set
+  // `prev`, so it is not silently dropped (cold-start label loss for seed indicators).
+  const pendingDiffRef = useRef<Map<string, ExecutionResultMessage>>(new Map());
 
   const handleExecutionResult = useCallback(
     (msg: ExecutionResultMessage) => {
@@ -329,7 +332,12 @@ export function useChartData(
               msg.barTimestamps.length > 1);
           const prev = indicatorResultsRef.current.get(msg.indicatorId);
           if (isDiff) {
-            if (!prev) return;
+            if (!prev) {
+              // Forming-candle DIFF arrived before the full REST result set `prev`.
+              // Buffer it so the subsequent full result can flush it instead of dropping it.
+              pendingDiffRef.current.set(msg.indicatorId, msg);
+              return;
+            }
             const merged = mergeDiffIntoResult(prev, msg);
             indicatorResultsRef.current.set(msg.indicatorId, merged);
             onIndicatorResult(msg.indicatorId, merged);
@@ -361,6 +369,15 @@ export function useChartData(
           );
           indicatorResultsRef.current.set(msg.indicatorId, result);
           onIndicatorResult(msg.indicatorId, result);
+          // Flush a forming-candle DIFF that was buffered because it arrived before this
+          // full result set `prev` (keeps cold-start labels from being lost).
+          const pendingDiff = pendingDiffRef.current.get(msg.indicatorId);
+          if (pendingDiff) {
+            pendingDiffRef.current.delete(msg.indicatorId);
+            const merged = mergeDiffIntoResult(result, pendingDiff);
+            indicatorResultsRef.current.set(msg.indicatorId, merged);
+            onIndicatorResult(msg.indicatorId, merged);
+          }
         }
         if (msg.error) {
           setErrors((prev) => [
@@ -847,37 +864,52 @@ export function useChartData(
                 if (versionRef && version !== undefined && version !== versionRef.current) return;
                 if (isStale()) return;
 
-                if (indicatorId) {
-                  onIndicatorResult?.(indicatorId, seedScriptRes);
-                  const nextMap = new Map(indicatorResultsRef.current);
-                  nextMap.set(indicatorId, seedScriptRes);
-                  indicatorResultsRef.current = nextMap;
-                } else {
-                  setCandles(toCandleData(originalBars));
-                  setScriptResult(seedScriptRes);
+                const seedHasLabels = (seedScriptRes.labels?.length ?? 0) > 0;
+                const nonSeedHasLabels = (result.labels?.length ?? 0) > 0;
+                // On cold start the seed execution can come back with 0 labels while the
+                // earlier non-seed result already has labels. Don't discard the good
+                // result — fall through to the standard (non-seed) path so the indicator
+                // keeps its labels.
+                const useSeed = !nonSeedHasLabels || seedHasLabels;
+
+                if (useSeed) {
+                  if (indicatorId) {
+                    onIndicatorResult?.(indicatorId, seedScriptRes);
+                    const nextMap = new Map(indicatorResultsRef.current);
+                    nextMap.set(indicatorId, seedScriptRes);
+                    indicatorResultsRef.current = nextMap;
+                  } else {
+                    setCandles(toCandleData(originalBars));
+                    setScriptResult(seedScriptRes);
+                  }
+
+                  pendingExecuteRef.current.set(indicatorId || 'default', {
+                    source: code,
+                    symbol,
+                    interval,
+                    bars: barsToExecute,
+                  });
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(
+                      JSON.stringify({
+                        type: 'execute',
+                        data: {
+                          source: code,
+                          symbol,
+                          interval,
+                          bars: barsToExecute,
+                          indicatorId: indicatorId || 'default',
+                        },
+                      }),
+                    );
+                  }
+                  return;
                 }
 
-                pendingExecuteRef.current.set(indicatorId || 'default', {
-                  source: code,
-                  symbol,
-                  interval,
-                  bars: barsToExecute,
-                });
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                  wsRef.current.send(
-                    JSON.stringify({
-                      type: 'execute',
-                      data: {
-                        source: code,
-                        symbol,
-                        interval,
-                        bars: barsToExecute,
-                        indicatorId: indicatorId || 'default',
-                      },
-                    }),
-                  );
-                }
-                return;
+                // Seed provided no labels but the non-seed result has some: keep the
+                // labels by restoring bars to what `result` was computed on and let the
+                // standard result path below deliver it.
+                barsToExecute = originalBars;
               }
             }
           }

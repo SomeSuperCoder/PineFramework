@@ -431,9 +431,33 @@ export function createWSGateway(
             // using a stale session during initialization.
             sub.sessions.delete(sessionIndicatorId);
             const session = new ScriptSession(source, symbol || '', interval || '', bars);
-            session.initialize();
+            // initialize() runs the full executeBars() and computes ALL
+            // historical outputs (labels, lines, plots) via
+            // FormingCandleManager.toOutputs().  These must be delivered to
+            // the client up-front: otherwise a cold-loaded indicator only
+            // ever receives incremental per-tick DIFFs, so sparse labels
+            // (e.g. HHLL pivot labels, which need rb=5 bars to confirm a
+            // pivot) never appear until enough live bars accrue — leaving
+            // labelCount at 0 on a fresh container (see e2e
+            // chunk-boundary.spec.ts).  The WS path is the LIVE path used by
+            // auto-loaded indicators, so this initial result is required to
+            // match warm-start behavior.
+            const initialOutputs = session.initialize();
             sub.sessions.set(sessionIndicatorId, session);
             ws.send(JSON.stringify({ type: 'session_ready', indicatorId: sessionIndicatorId }));
+            // Broadcast the full initial outputs for auto-loaded indicators
+            // (indicatorId !== 'default').  The 'default' id is the manual
+            // editor path, whose full result is already delivered via REST and
+            // whose WS handler would mis-merge a full payload as a diff.
+            if (sessionIndicatorId !== 'default') {
+              ws.send(
+                JSON.stringify({
+                  type: 'execution_result',
+                  indicatorId: sessionIndicatorId,
+                  data: initialOutputs,
+                }),
+              );
+            }
           } catch (err) {
             const message =
               err instanceof Error ? err.message : 'Script compilation or execution failed';
