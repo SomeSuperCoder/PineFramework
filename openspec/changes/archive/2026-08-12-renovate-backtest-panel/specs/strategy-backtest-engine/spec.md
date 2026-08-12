@@ -17,6 +17,10 @@ The system SHALL protect against excessive data ingestion by calculating the saf
   - Maximum = `Math.floor(maxSafeDays)`
   where `maxSafeDays = SAFE_AMOUNT_OF_CANDLES / candlesPerDay(timeframe)`.
 
+#### Scenario: Bar estimate exceeds safe limit
+- **WHEN** the estimated bar count for the selected date range exceeds `SAFE_AMOUNT_OF_CANDLES`
+- **THEN** the system SHALL display a warning and disable the "Run Backtest" button.
+
 #### Scenario: Explicit date range validated
 
 - **WHEN** the user selects the "date range" mode and the start date is after the end date
