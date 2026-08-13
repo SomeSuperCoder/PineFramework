@@ -16,6 +16,7 @@
  */
 
 import { Router } from 'express';
+import { USDC_MINT } from 'pine-framework';
 import type { BotEngine, BotConfig } from 'pine-framework';
 import type { WalletManager } from 'pine-framework/trading/wallet';
 import type { BotConfigStore } from 'pine-framework/trading/config-store';
@@ -627,10 +628,10 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
       }
 
       const { Connection } = await import('@solana/web3.js');
-      const USDC_MINT = new PublicKeyClass('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const usdcMint = new PublicKeyClass(USDC_MINT);
       const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, {
-        mint: USDC_MINT,
+        mint: usdcMint,
       });
 
       let balance = 0;
@@ -672,12 +673,12 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
 
       // Fetch USDC balance
       const { Connection, PublicKey } = await import('@solana/web3.js');
-      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const usdcMint = new PublicKey(USDC_MINT);
       const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
 
       const owner = new PublicKey(publicKey);
       const tokenAccounts = await connection.getParsedTokenAccountsByOwner(owner, {
-        mint: USDC_MINT,
+        mint: usdcMint,
       });
 
       let balance = 0;

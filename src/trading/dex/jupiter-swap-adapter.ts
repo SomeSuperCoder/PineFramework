@@ -30,8 +30,9 @@ import {
 import { Keypair } from '@solana/web3.js';
 import { TOKEN_MINTS, USDC_MINT } from '../token-registry.js';
 
-/** Default slippage tolerance (50 bps = 0.5%). */
-const DEFAULT_SLIPPAGE_BPS = 50;
+/** Default slippage tolerance (50 bps = 0.5%). Per-adapter name to avoid
+ *  collision with jupiter-ultra-adapter's 30 bps default. */
+const JUPITER_SWAP_SLIPPAGE_BPS = 50;
 
 /** Maximum retries for swap operations. */
 const MAX_RETRIES = 3;
@@ -71,7 +72,7 @@ export class JupiterSwapAdapter extends DexAdapter {
     description: 'Jupiter Swap — variable fees based on route complexity and liquidity sources',
   };
   readonly slippageConfig: SlippageConfig = {
-    bps: DEFAULT_SLIPPAGE_BPS,
+    bps: JUPITER_SWAP_SLIPPAGE_BPS,
     configurable: true,
   };
 
@@ -88,7 +89,7 @@ export class JupiterSwapAdapter extends DexAdapter {
     inputMint: string,
     outputMint: string,
     amount: bigint,
-    slippageBps: number = DEFAULT_SLIPPAGE_BPS,
+    slippageBps: number = JUPITER_SWAP_SLIPPAGE_BPS,
   ): Promise<Quote> {
     return retryWithBackoff(async () => {
       const params = new URLSearchParams({

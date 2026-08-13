@@ -8,7 +8,7 @@
  * knowing SOL has 9 decimals).
  *
  * ## Mint codes
- * - `SOL_MINT` ('SOL') — lamport-based fees (PRIORITY/BASE/JITO). Requires a
+ * - `SOL_MINT_CODE` ('SOL') — lamport-based fees (PRIORITY/BASE/JITO). Requires a
  *   `TokenPrice['SOL']` entry { priceUsd, decimals: 9 }.
  * - `QUOTE_MINT` ('quote') — a fee that is already denominated in quote
  *   currency (bps-modeled venue/platform). Conversion is the identity: the
@@ -19,8 +19,10 @@
 import type { BacktestFeeModel, DecimalStr, FeeComponent, FeeKind, TokenPrice } from './types.js';
 import { dAdd, dDiv, dMul, isZero, tenPow, ZERO } from './decimal.js';
 
-/** Token mint used for SOL-denominated (lamport) fees. */
-export const SOL_MINT = 'SOL';
+/** Token mint code ('SOL') used for SOL-denominated (lamport) fees.
+ *  Named `_CODE` to disambiguate from the SOL mint ADDRESS re-exported by
+ *  solana-wallet.ts — this is the string code, not an address. */
+export const SOL_MINT_CODE = 'SOL';
 
 /** Pseudo-mint for fees already expressed in quote currency. */
 export const QUOTE_MINT = 'quote';
@@ -114,7 +116,7 @@ export function modelFees(
   if (model.priorityLamports !== undefined && !isZero(model.priorityLamports)) {
     components.push({
       kind: 'PRIORITY',
-      tokenMint: SOL_MINT,
+      tokenMint: SOL_MINT_CODE,
       amountAtomic: model.priorityLamports,
     });
   }
@@ -123,7 +125,7 @@ export function modelFees(
   if (!isZero(baseLamports)) {
     components.push({
       kind: 'BASE',
-      tokenMint: SOL_MINT,
+      tokenMint: SOL_MINT_CODE,
       amountAtomic: dMul(baseLamports, String(SIGS_PER_ORDER)),
     });
   }

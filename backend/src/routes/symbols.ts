@@ -1,13 +1,8 @@
 import { Router } from 'express';
+import { getTradablePairs } from 'pine-framework';
 
 export const symbolsRouter = Router();
 
-const POPULAR_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
-  'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT',
-  'MATICUSDT', 'UNIUSDT', 'LTCUSDT', 'ATOMUSDT', 'NEARUSDT',
-];
-
 symbolsRouter.get('/symbols', (_req, res) => {
-  res.json({ symbols: POPULAR_SYMBOLS });
+  res.json({ symbols: getTradablePairs() });
 });

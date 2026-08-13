@@ -10,7 +10,7 @@
  */
 
 import { TOKEN_MINTS } from '../token-registry.js';
-import { QUOTE_MINT, SOL_MINT } from '../../pnl/index.js';
+import { QUOTE_MINT, SOL_MINT_CODE } from '../../pnl/index.js';
 import type { FeeComponent } from '../../pnl/index.js';
 
 /**
@@ -149,7 +149,7 @@ export interface SlippageConfig {
 // ---------------------------------------------------------------------------
 
 /** Native SOL mint (wrapped SOL) — venue fees charged in SOL are normalized to
- *  the pnl `SOL_MINT` code so every lamport fee converts through the one
+ *  the pnl `SOL_MINT_CODE` code so every lamport fee converts through the one
  *  canonical SOL entry (pnl's feeToQuote expects a TokenPrice['SOL'] entry). */
 const NATIVE_SOL_MINT = TOKEN_MINTS.SOL;
 
@@ -167,7 +167,7 @@ const SIGS_PER_SWAP = 2n;
  * flows into PnL.
  */
 const ALLOWED_FEE_MINTS: ReadonlySet<string> = new Set([
-  SOL_MINT,
+  SOL_MINT_CODE,
   QUOTE_MINT,
   ...Object.values(TOKEN_MINTS),
 ]);
@@ -197,7 +197,7 @@ interface FeeSanitizeCtx {
  */
 function sanitizeFeeComponent(component: FeeComponent, ctx: FeeSanitizeCtx): FeeComponent | null {
   if (
-    component.tokenMint !== SOL_MINT &&
+    component.tokenMint !== SOL_MINT_CODE &&
     component.tokenMint !== QUOTE_MINT &&
     !ALLOWED_FEE_MINTS.has(component.tokenMint)
   ) {
@@ -244,14 +244,14 @@ function sanitizeFeeComponent(component: FeeComponent, ctx: FeeSanitizeCtx): Fee
   // The sanitizer sits on the trust boundary and must NEVER throw — a
   // malformed context amount falls through to the generous cap, not to the
   // adapter's failure path.
-  if (component.tokenMint === SOL_MINT) {
-    if (ctx.inputMint === SOL_MINT && ctx.inAmount !== undefined) {
+  if (component.tokenMint === SOL_MINT_CODE) {
+    if (ctx.inputMint === SOL_MINT_CODE && ctx.inAmount !== undefined) {
       try {
         if (amount > BigInt(ctx.inAmount)) return null;
       } catch {
         return component;
       }
-    } else if (ctx.outputMint === SOL_MINT && ctx.outAmount !== undefined) {
+    } else if (ctx.outputMint === SOL_MINT_CODE && ctx.outAmount !== undefined) {
       try {
         if (amount > BigInt(ctx.outAmount)) return null;
       } catch {
@@ -296,7 +296,7 @@ function extractVenueFees(routePlan: unknown): FeeComponent[] {
     const mint = String(feeMint);
     components.push({
       kind: 'VENUE',
-      tokenMint: mint === NATIVE_SOL_MINT ? SOL_MINT : mint,
+      tokenMint: mint === NATIVE_SOL_MINT ? SOL_MINT_CODE : mint,
       amountAtomic: amount.toString(),
     });
   }
@@ -330,7 +330,7 @@ function extractPriorityFee(prioritizationFeeLamports: unknown): FeeComponent[] 
     return [];
   }
   if (parsed <= 0n) return [];
-  return [{ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: parsed.toString() }];
+  return [{ kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: parsed.toString() }];
 }
 
 /** True when any observable fee layer came back from the exchange — used to
@@ -348,7 +348,7 @@ function hasObservableFees(
  *  input token. Undefined when none are — the caller then omits `fee` rather
  *  than claiming a fabricated '0'. */
 function inputTokenFee(components: FeeComponent[], inputMint: string): string | undefined {
-  const inputCode = inputMint === NATIVE_SOL_MINT ? SOL_MINT : inputMint;
+  const inputCode = inputMint === NATIVE_SOL_MINT ? SOL_MINT_CODE : inputMint;
   let total = 0n;
   let found = false;
   for (const component of components) {
@@ -365,7 +365,7 @@ function inputTokenFee(components: FeeComponent[], inputMint: string): string | 
 function baseFeeComponent(): FeeComponent {
   return {
     kind: 'BASE',
-    tokenMint: SOL_MINT,
+    tokenMint: SOL_MINT_CODE,
     amountAtomic: (BASE_FEE_LAMPORTS_PER_SIG * SIGS_PER_SWAP).toString(),
   };
 }

@@ -66,3 +66,15 @@ export type {
   BarFetcher,
   BacktestRunner,
 } from './auto-select.js';
+
+// Token type system (single source of truth for symbols and addresses)
+export {
+  TRADABLE_PAIRS,
+  TOKEN_REGISTRY,
+  getTokenInfo,
+  getTradablePairs,
+  isValidPairSymbol,
+  type PairSymbol,
+  type TokenInfo,
+  type TradablePair,
+} from './token-registry.js';

@@ -21,7 +21,7 @@ import {
   modelFees,
   netPnl,
   QUOTE_MINT,
-  SOL_MINT,
+  SOL_MINT_CODE,
 } from '../../../src/pnl/index.js';
 import type {
   FeeComponent,
@@ -123,7 +123,7 @@ describe('F1 singular math', () => {
       feesSource: {
         components: [
           { kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' },
-          { kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '10000' },
+          { kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' },
         ],
       },
       prices: PRICES,
@@ -166,7 +166,7 @@ function randFeeComponent(r: () => number): FeeComponent {
     return { kind, tokenMint: QUOTE_MINT, amountAtomic: randDec(r, 0.001, 5, 4) };
   }
   // PRIORITY / BASE / JITO — SOL lamports.
-  return { kind, tokenMint: SOL_MINT, amountAtomic: String(Math.floor(r() * 1_000_000) + 1) };
+  return { kind, tokenMint: SOL_MINT_CODE, amountAtomic: String(Math.floor(r() * 1_000_000) + 1) };
 }
 
 describe('F2 identity property', () => {
@@ -261,9 +261,9 @@ describe('F2 identity property', () => {
 const ALL_KIND_COMPONENTS: FeeComponent[] = [
   { kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' }, // 25 bps on $100
   { kind: 'PLATFORM', tokenMint: QUOTE_MINT, amountAtomic: '0.10' },
-  { kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '10000' }, // 0.0015 @ $150
-  { kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '10000' }, // 0.0015 @ $150
-  { kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' }, // 0.0015 @ $150
+  { kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }, // 0.0015 @ $150
+  { kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }, // 0.0015 @ $150
+  { kind: 'JITO', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }, // 0.0015 @ $150
   { kind: 'SLIPPAGE_MEMO', tokenMint: QUOTE_MINT, amountAtomic: '0.50' }, // informational only
 ];
 
@@ -373,7 +373,7 @@ describe('F4 fixed fixtures', () => {
     );
     expect(components).toEqual([
       { kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' },
-      { kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '10000' },
+      { kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' },
     ]);
 
     const result = aggregateRealizedPnl({
@@ -506,10 +506,10 @@ describe('F5 fill absence', () => {
 describe('F6 fee conversion boundary', () => {
   it('converts lamports (decimals 9) exactly: 5000 lamports @ $150 = 0.00075', () => {
     expect(
-      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE),
+      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: '5000' }, SOL_PRICE),
     ).toBe('0.00075');
     expect(
-      feeToQuote({ kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' }, SOL_PRICE),
+      feeToQuote({ kind: 'JITO', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }, SOL_PRICE),
     ).toBe('0.0015');
   });
 
@@ -530,14 +530,14 @@ describe('F6 fee conversion boundary', () => {
 
   it('throws on a missing TokenPrice entry — a missing price is a caller bug, fail loud', () => {
     expect(() =>
-      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '1' }, {}),
+      feeToQuote({ kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: '1' }, {}),
     ).toThrow(/no price\/decimals supplied for mint "SOL"/);
     // Same failure propagates through the shared runner.
     expect(() =>
       aggregateRealizedPnl({
         side: 'LONG',
         ...LONG_FILLS,
-        feesSource: { components: [{ kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '10000' }] },
+        feesSource: { components: [{ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }] },
         prices: {}, // SOL missing → must throw, never silently understate fees
       }),
     ).toThrow(/no price\/decimals supplied/);
@@ -561,7 +561,7 @@ describe('F7 taxonomy', () => {
 
   it('JITO is a real, SOL-side kind: it appears in the breakdown and reduces net in BOTH anchors', () => {
     const components: FeeComponent[] = [
-      { kind: 'JITO', tokenMint: SOL_MINT, amountAtomic: '10000' },
+      { kind: 'JITO', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' },
     ];
     for (const anchor of ['fills', 'outAmount'] as const) {
       const result = aggregateRealizedPnl({
@@ -581,8 +581,8 @@ describe('F7 taxonomy', () => {
     const components: FeeComponent[] = [
       { kind: 'VENUE', tokenMint: QUOTE_MINT, amountAtomic: '0.25' },
       { kind: 'PLATFORM', tokenMint: QUOTE_MINT, amountAtomic: '0.10' },
-      { kind: 'PRIORITY', tokenMint: SOL_MINT, amountAtomic: '10000' },
-      { kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '10000' },
+      { kind: 'PRIORITY', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' },
+      { kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' },
     ];
     const expectedManual = sumDecs(components.map((c) => feeToQuote(c, PRICES))); // 0.25+0.10+0.0015+0.0015
     expect(expectedManual).toBe('0.353');
@@ -626,7 +626,7 @@ describe('F8 decimal truth', () => {
     expect(dDiv('2', '3', 2)).toBe('0.67');
     expect(tenPow(9)).toBe('1000000000');
     // feeToQuote of lamports is exact — no 1e-7-style float residue.
-    expect(feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT, amountAtomic: '5000' }, SOL_PRICE)).toBe(
+    expect(feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '5000' }, SOL_PRICE)).toBe(
       '0.00075',
     );
   });

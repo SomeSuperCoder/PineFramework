@@ -33,7 +33,7 @@ import type {
 } from './types.js';
 import {
   aggregateRealizedPnl,
-  SOL_MINT,
+  SOL_MINT_CODE,
   type DecimalStr,
   type FeeKind,
   type Fill,
@@ -1626,7 +1626,7 @@ export class LiveStrategyExecutor {
   private buildCloseFeePrices(signal: TradeSignal): TokenPrice {
     const prices: TokenPrice = {
       [USDC_MINT]: { priceUsd: '1', decimals: 6 },
-      [SOL_MINT]: this.solPriceFor(signal),
+      [SOL_MINT_CODE]: this.solPriceFor(signal),
     };
     // The base token is only priced when it is NOT the quote mint — an
     // unknown symbol falls back to USDC in getTokenInfoForSymbol, and pricing

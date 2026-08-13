@@ -26,7 +26,7 @@ export type {
 export { feeTotal, grossPnlLong, grossPnlShort, netPnl } from './core.js';
 
 // The mint→quote border + modeled fees.
-export { feeBreakdownToQuote, feeToQuote, modelFees, QUOTE_MINT, SOL_MINT } from './fees.js';
+export { feeBreakdownToQuote, feeToQuote, modelFees, QUOTE_MINT, SOL_MINT_CODE } from './fees.js';
 
 // The shared realized-PnL runner (anchor seam lives here).
 export { aggregateRealizedPnl } from './aggregate.js';
