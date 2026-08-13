@@ -4,6 +4,21 @@ import type { ExecuteResponse, ExecutionResultMessage } from './chart-data-trans
 import { buildScriptResult } from './chart-data-transform';
 import { prependIndicatorResult, mergeDiffIntoResult } from './indicator-merge';
 
+/**
+ * Normalizes a raw execute error into a render-safe string.
+ * The REST route sends the EngineError OBJECT {message, barIndex, span, stack}
+ * (backend/src/routes/execute.ts:178) despite the string-typed API — mirror the
+ * backend's toErrorMessage (src/rendering/FormingCandleManager.ts:390-392) at the
+ * storage boundary so ErrorConsole never renders a plain object as a React child.
+ */
+function toErrorMessage(err: unknown): string {
+  return typeof err === 'string'
+    ? err
+    : err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
+      ? err.message
+      : 'Execution failed';
+}
+
 export interface ChunkBorder {
   /** Bar index (0-based) where this chunk boundary falls in the current dataset. */
   barIndex: number;
@@ -384,7 +399,7 @@ export function useChartData(
             ...prev,
             {
               type: 'error',
-              message: msg.error || 'Execution failed',
+              message: toErrorMessage(msg.error),
             },
           ]);
         }
@@ -451,7 +466,7 @@ export function useChartData(
           ...prev,
           {
             type: 'error',
-            message: msg.error || 'Execution failed',
+            message: toErrorMessage(msg.error),
           },
         ]);
       }
@@ -782,7 +797,7 @@ export function useChartData(
           setErrors([
             {
               type: 'error',
-              message: result.error || 'Execution failed',
+              message: toErrorMessage(result.error),
             },
           ]);
           return;

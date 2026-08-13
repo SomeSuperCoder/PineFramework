@@ -154,9 +154,13 @@ test.describe('Dashboard toolbar (shadcn migration)', () => {
     await expect(popup).toBeHidden();
   });
 
-  test('Errors toggles the error console and shows a badge count when errors exist', async ({ page }) => {
+  test('Errors toggles the error console popover and shows a badge count when errors exist', async ({ page }) => {
     // Force the chart-data fetch to fail deterministically → error state → badge.
-    // No backend state is created: pure route interception.
+    // Indicators are intercepted as empty so the error comes ONLY from the
+    // forced OHLCV fetch. No backend state is created: pure route interception.
+    await page.route(/\/api\/indicators/, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ indicators: [] }) }),
+    );
     await page.route(/\/api\/ohlcv\b/, (route) => {
       const url = new URL(route.request().url());
       if (url.pathname.endsWith('/seed')) return route.fallback();
@@ -166,18 +170,98 @@ test.describe('Dashboard toolbar (shadcn migration)', () => {
 
     const errorsBtn = toolbarLocator(page).getByRole('button', { name: 'Errors' });
     await expect(errorsBtn).toBeVisible({ timeout: 30_000 });
-    await expect(errorsBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'false');
 
-    // Toggle opens the error console (a full-screen modal that blocks the
-    // toolbar) — close it via its own control, then aria-pressed returns false
+    // Toggle opens the shadcn popover anchored to the Errors button (Radix
+    // trigger wires aria-expanded). Close via its own control, then Escape.
     await errorsBtn.click();
-    await expect(errorsBtn).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('dialog', { name: /^Errors/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Close errors' }).click();
-    await expect(errorsBtn).toHaveAttribute('aria-pressed', 'false');
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'true');
+    const popover = page.getByRole('dialog');
+    await expect(popover).toBeVisible();
+    await expect(popover.getByRole('heading', { name: /Errors/ })).toBeVisible();
+
+    await popover.getByRole('button', { name: 'Close errors' }).click();
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'false');
+
+    await errorsBtn.click();
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Escape');
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'false');
 
     // The forced fetch failure surfaces an error → badge count becomes visible
     await expect(errorsBtn).toContainText(/[1-9]\d*/, { timeout: 30_000 });
+  });
+
+  test('Errors popover shows the "No errors" empty state when no errors exist', async ({ page }) => {
+    // Deterministic: no forced failures + empty indicator list → no errors.
+    await page.route(/\/api\/indicators/, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ indicators: [] }) }),
+    );
+    await openDashboard(page);
+
+    const errorsBtn = toolbarLocator(page).getByRole('button', { name: 'Errors' });
+    await expect(errorsBtn).toBeVisible({ timeout: 30_000 });
+    await errorsBtn.click();
+
+    const popover = page.getByRole('dialog');
+    await expect(popover).toBeVisible();
+    await expect(popover.getByRole('heading', { name: 'Errors (0)' })).toBeVisible();
+    await expect(popover.getByText('No errors')).toBeVisible();
+
+    await page.keyboard.press('Escape');
+    await expect(errorsBtn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('EngineError OBJECT from /api/execute renders in the Errors popover without crashing (black-screen regression)', async ({ page }) => {
+    // The dashboard auto-executes each indicator on load. Feed it ONE indicator
+    // whose /api/execute response mirrors the REAL backend wire shape
+    // (backend/src/routes/execute.ts:178 sends the EngineError object raw;
+    // JSON serialization drops `span: undefined`, leaving {message, barIndex,
+    // stack}). Pure route interception — no backend state is created.
+    await page.route(/\/api\/indicators/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          indicators: [
+            { id: 'e2e-engine-error', scriptId: 'e2e-engine-error', name: 'E2E Engine Error', overlay: true, source: 'plot(unknownVar)' },
+          ],
+        }),
+      }),
+    );
+    await page.route('**/api/execute', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          error: {
+            message: 'Variable unknownVar is not defined',
+            barIndex: 0,
+            stack: 'Error: Variable unknownVar is not defined',
+          },
+        }),
+      }),
+    );
+
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
+    await openDashboard(page);
+
+    const errorsBtn = toolbarLocator(page).getByRole('button', { name: 'Errors' });
+    // The normalized message surfaces as an error → badge count
+    await expect(errorsBtn).toContainText(/[1-9]\d*/, { timeout: 30_000 });
+
+    // PRE-FIX: opening the popover rendered the raw OBJECT → React threw
+    // 'Objects are not valid as a React child (found: object with keys
+    // {message, barIndex, stack})' → black screen. The message must render.
+    await errorsBtn.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByText('Variable unknownVar is not defined', { exact: false })).toBeVisible();
+
+    // No uncaught page error — the crash path is dead
+    expect(pageErrors).toEqual([]);
   });
 
   test('connection indicator announces Connected once the websocket opens', async ({ page }) => {

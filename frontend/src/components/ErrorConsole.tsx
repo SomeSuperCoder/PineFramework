@@ -1,71 +1,55 @@
-import { useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import type { PineScriptError } from '../types';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface ErrorConsoleProps {
   errors: PineScriptError[];
-  isOpen: boolean;
   onClear: () => void;
-  onClose: () => void;
 }
 
-export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  // Modal a11y contract (§15.4 / UX 4.3): initial focus, Escape close, focus trap, focus restore.
-  useEffect(() => {
-    if (!isOpen) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-
-    // Initial focus → the dialog panel; interactive children carry their own focus rings.
-    panelRef.current?.focus();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-        return;
-      }
-      if (e.key !== 'Tab' || !panelRef.current) return;
-
-      const focusables = panelRef.current.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previouslyFocused?.focus?.();
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
+/**
+ * Errors console anchored to the toolbar's Errors button as a shadcn Popover.
+ * Escape + outside-click dismissal come free from Radix; a local open state keeps
+ * the visible Close affordance wired to the same onOpenChange contract.
+ * Error messages are strings (normalized at the storage boundary in
+ * useChartData.toErrorMessage) so they are always safe as React children.
+ */
+export function ErrorConsole({ errors, onClear }: ErrorConsoleProps) {
+  const [open, setOpen] = useState(false);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Errors (${errors.length})`}
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="flex w-[520px] max-h-[60vh] flex-col overflow-hidden rounded-preflight border border-border bg-background shadow-lg outline-none"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Errors"
+          className={cn(
+            'relative text-muted-foreground hover:text-foreground',
+            open &&
+              'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive',
+            errors.length > 0 && 'text-destructive hover:text-destructive',
+          )}
+        >
+          <TriangleAlert className="size-4" aria-hidden="true" />
+          Errors
+          {errors.length > 0 && (
+            <Badge className="pointer-events-none absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground">
+              {errors.length}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[420px] gap-0 p-0">
         <div className="flex items-center justify-between border-b border-border px-3.5 py-2.5">
           <h3 className="m-0 text-sm font-semibold text-destructive">
             Errors ({errors.length})
@@ -78,7 +62,7 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onClose}
+              onClick={() => setOpen(false)}
               aria-label="Close errors"
               className="px-2 text-sm leading-none"
             >
@@ -89,7 +73,7 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
         <div
           role="log"
           aria-live="polite"
-          className="flex-1 overflow-y-auto px-3.5 py-2"
+          className="max-h-[50vh] overflow-y-auto px-3.5 py-2"
         >
           {errors.length === 0 ? (
             <div className="py-2 text-[12px] font-mono text-[#22c55e]">
@@ -117,7 +101,7 @@ export function ErrorConsole({ errors, isOpen, onClear, onClose }: ErrorConsoleP
             ))
           )}
         </div>
-      </div>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }

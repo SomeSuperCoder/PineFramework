@@ -8,15 +8,14 @@ import {
   Minimize,
   Play,
   Plus,
-  TriangleAlert,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { PineScriptError } from '@/types';
 import type { Option } from '@/utils/options';
 import type { PanelId } from './ControlPanel';
+import { ErrorConsole } from './ErrorConsole';
 
 export interface DashboardToolbarProps {
   symbol: string;
@@ -32,8 +31,8 @@ export interface DashboardToolbarProps {
   debugMode: boolean;
   setDebugMode: Dispatch<SetStateAction<boolean>>;
   errors: PineScriptError[];
-  errorConsoleOpen: boolean;
-  setErrorConsoleOpen: Dispatch<SetStateAction<boolean>>;
+  /** Clears the error list (Errors popover "Clear" button). */
+  onClearErrors: () => void;
   setEditingScriptId: Dispatch<SetStateAction<string | null>>;
   setQuickAdderOpen: Dispatch<SetStateAction<boolean>>;
   setEditorOpen: Dispatch<SetStateAction<boolean>>;
@@ -64,8 +63,7 @@ export function DashboardToolbar({
   debugMode,
   setDebugMode,
   errors,
-  errorConsoleOpen,
-  setErrorConsoleOpen,
+  onClearErrors,
   setEditingScriptId,
   setQuickAdderOpen,
   setEditorOpen,
@@ -235,28 +233,8 @@ export function DashboardToolbar({
 
       <Separator orientation="vertical" className="h-6" />
 
-      {/* Error console toggle — red accent + badge count when errors exist */}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-pressed={errorConsoleOpen}
-        onClick={() => setErrorConsoleOpen(!errorConsoleOpen)}
-        className={cn(
-          'relative text-muted-foreground hover:text-foreground',
-          errorConsoleOpen &&
-            'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive',
-          errors.length > 0 && 'text-destructive hover:text-destructive',
-        )}
-      >
-        <TriangleAlert className="size-4" aria-hidden="true" />
-        Errors
-        {errors.length > 0 && (
-          <Badge className="pointer-events-none absolute -top-1.5 -right-1.5 h-4 min-w-4 rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground">
-            {errors.length}
-          </Badge>
-        )}
-      </Button>
+      {/* Error console — shadcn Popover anchored to the Errors button */}
+      <ErrorConsole errors={errors} onClear={onClearErrors} />
     </div>
   );
 }

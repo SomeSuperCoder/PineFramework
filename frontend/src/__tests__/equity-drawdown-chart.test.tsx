@@ -16,8 +16,11 @@ vi.mock('recharts', async (importOriginal) => {
   const React = await import('react');
   return {
     ...actual,
-    YAxis: vi.fn((props: unknown) =>
-      React.createElement(actual.YAxis as React.ComponentType, props),
+    YAxis: vi.fn((props: React.ComponentProps<typeof actual.YAxis>) =>
+      React.createElement(
+        actual.YAxis as React.ComponentType<typeof props>,
+        props,
+      ),
     ),
   };
 });

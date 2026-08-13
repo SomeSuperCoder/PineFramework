@@ -1049,3 +1049,104 @@ describe('useChartData — scroll / indicator lifecycle', () => {
     expect(storedResult!.plots[0].data.length).toBe(1000);
   });
 });
+
+// ─── EngineError normalization — Errors-button black-screen regression ─────
+// The REST execute endpoint sends the EngineError OBJECT {message, barIndex,
+// span, stack} raw (backend/src/routes/execute.ts:178). Pre-fix, useChartData
+// stored the object into PineScriptError.message (typed string) and
+// ErrorConsole rendered it → React "Objects are not valid as a React child" →
+// black screen. The fix adds toErrorMessage at ALL storage sites; these tests
+// lock the string guarantee at the two live boundaries (REST + WS).
+describe('useChartData — EngineError normalization (black-screen regression)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    wsInstances = [];
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('REST /api/execute: EngineError OBJECT message is stored as a render-safe string', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    // The REAL wire shape: success:false + raw EngineError object
+    // (JSON serialization drops `span: undefined`).
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: false,
+          error: {
+            message: 'Variable unknownVar is not defined',
+            barIndex: 0,
+            stack: 'Error: Variable unknownVar is not defined',
+          },
+        }),
+    });
+
+    await act(async () => {
+      await result.current.executeScript(
+        'plot(unknownVar)',
+        'BTCUSDT',
+        '1d',
+        undefined,
+        undefined,
+        undefined,
+        'ind-err',
+      );
+    });
+
+    expect(result.current.errors).toHaveLength(1);
+    expect(typeof result.current.errors[0].message).toBe('string');
+    expect(result.current.errors[0].message).toBe(
+      'Variable unknownVar is not defined',
+    );
+  });
+
+  it('WS execution_result: EngineError OBJECT error field is stored as a render-safe string', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: bars1k }),
+    });
+
+    const { result } = renderHook(() => useChartData());
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+
+    await act(async () => {
+      wsInstances[0].simulateMessage({
+        type: 'execution_result',
+        indicatorId: 'default',
+        data: {
+          error: {
+            message: 'Variable unknownVar is not defined',
+            barIndex: 0,
+            stack: 'Error: Variable unknownVar is not defined',
+          },
+        },
+      });
+    });
+
+    expect(result.current.errors).toHaveLength(1);
+    expect(typeof result.current.errors[0].message).toBe('string');
+    expect(result.current.errors[0].message).toBe(
+      'Variable unknownVar is not defined',
+    );
+  });
+});

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChartComponent, type ChartComponentHandle } from './components/ChartComponent';
 import { DashboardToolbar } from './components/DashboardToolbar';
 import { CodeEditor } from './components/CodeEditor';
-import { ErrorConsole } from './components/ErrorConsole';
 import { GoToDatePopup } from './components/GoToDatePopup';
 import { StrategyResultsPopup } from './components/StrategyResultsPopup';
 import { BacktestPanel } from './components/BacktestPanel';
@@ -50,7 +49,6 @@ function App() {
     pendingSource: string;
   } | null>(null);
   const [editingScriptId, setEditingScriptId] = useState<string | null>(null);
-  const [errorConsoleOpen, setErrorConsoleOpen] = useState(false);
   const [goToDateOpen, setGoToDateOpen] = useState(false);
   const [lastTeleport, setLastTeleport] = useState(() => {
     const saved = localStorage.getItem('pine-last-teleport');
@@ -352,8 +350,7 @@ function App() {
             debugMode={debugMode}
             setDebugMode={setDebugMode}
             errors={errors}
-            errorConsoleOpen={errorConsoleOpen}
-            setErrorConsoleOpen={setErrorConsoleOpen}
+            onClearErrors={() => setErrors([])}
             setEditingScriptId={setEditingScriptId}
             setQuickAdderOpen={setQuickAdderOpen}
             setEditorOpen={setEditorOpen}
@@ -477,13 +474,6 @@ function App() {
 
 
       {/* === Overlays (fixed position, always available) === */}
-      <ErrorConsole
-        errors={errors}
-        isOpen={errorConsoleOpen}
-        onClear={() => setErrors([])}
-        onClose={() => setErrorConsoleOpen(false)}
-      />
-
       <CodeEditor
         isOpen={editorOpen}
         onClose={() => { setEditorOpen(false); setEditingScriptId(null); }}
