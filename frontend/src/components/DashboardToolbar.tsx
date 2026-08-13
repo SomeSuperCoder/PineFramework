@@ -10,6 +10,13 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import type { PineScriptError } from '@/types';
@@ -73,39 +80,43 @@ export function DashboardToolbar({
 }: DashboardToolbarProps) {
   return (
     <div className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border bg-card px-3">
-      {/* Left: market selects — styled native controls (TradeHistoryTab precedent) */}
-      <select
-        aria-label="Symbol"
+      {/* Left: market selects — shadcn Select (StatisticsTab precedent) */}
+      <Select
         value={symbol}
-        onChange={(e) => {
-          const v = e.target.value;
+        onValueChange={(v) => {
           setSymbol(v);
           localStorage.setItem('pine-symbol', v);
         }}
-        className={selectClass}
       >
-        {pairOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label="Timeframe"
+        <SelectTrigger aria-label="Symbol" className="h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {pairOptions.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select
         value={timeframe}
-        onChange={(e) => {
-          const v = e.target.value;
+        onValueChange={(v) => {
           setTimeframe(v);
           localStorage.setItem('pine-timeframe', v);
         }}
-        className={selectClass}
       >
-        {timeframeOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger aria-label="Timeframe" className="h-9">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {timeframeOptions.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       <Separator orientation="vertical" className="h-6" />
 
@@ -169,8 +180,7 @@ export function DashboardToolbar({
         onClick={() => setAutoScale(!autoScale)}
         className={cn(
           'text-muted-foreground hover:text-foreground',
-          autoScale &&
-            'bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20 hover:text-[#22c55e]',
+          autoScale && 'bg-[#22c55e]/10 text-[#22c55e] hover:bg-[#22c55e]/20 hover:text-[#22c55e]',
         )}
       >
         {autoScale ? (
@@ -190,8 +200,7 @@ export function DashboardToolbar({
         onClick={() => setDebugMode(!debugMode)}
         className={cn(
           'text-muted-foreground hover:text-foreground',
-          debugMode &&
-            'bg-[#eab308]/10 text-[#eab308] hover:bg-[#eab308]/20 hover:text-[#eab308]',
+          debugMode && 'bg-[#eab308]/10 text-[#eab308] hover:bg-[#eab308]/20 hover:text-[#eab308]',
         )}
       >
         <Bug className="size-4" aria-hidden="true" />
@@ -238,6 +247,3 @@ export function DashboardToolbar({
     </div>
   );
 }
-
-const selectClass =
-  'h-9 shrink-0 cursor-pointer rounded-lg border border-border bg-background px-2.5 text-xs text-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50';
