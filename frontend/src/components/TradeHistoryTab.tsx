@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button';
 import { FadeIn } from '@/components/ui/motion/fade-in';
 import { Stagger } from '@/components/ui/motion/stagger';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -179,19 +186,26 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
             placeholder="Symbol (e.g. BTCUSDT)"
             className={`${filterInputClass} w-[150px]`}
           />
-          <select
-            value={timeframe}
-            onChange={(e) => setTimeframe(e.target.value)}
-            className={filterInputClass}
-            title="Timeframe filter"
+          <Select
+            value={timeframe || 'all'}
+            onValueChange={(v) => setTimeframe(v === 'all' ? '' : v)}
           >
-            <option value="">All timeframes</option>
-            {TIMEFRAME_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              aria-label="Timeframe filter"
+              title="Timeframe filter"
+              className={filterInputClass}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All timeframes</SelectItem>
+              {TIMEFRAME_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <input
             list="trade-history-strategy-options"
             value={strategyInput}

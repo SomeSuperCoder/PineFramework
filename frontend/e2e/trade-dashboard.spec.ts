@@ -325,6 +325,17 @@ test.describe('Trade History + Statistics dashboards (D6 user flows)', () => {
     await expect(dashboard.getByText('Page 2')).toBeVisible();
     await dashboard.getByRole('button', { name: /Prev/ }).click();
     await expect(dashboard.getByRole('cell', { name: 'ADAUSDT' })).toHaveCount(0);
+
+    // Timeframe filter — shadcn Select (Radix): open the combobox trigger, then
+    // pick '1h' (value 60) from the portal'd listbox (native selectOptions no
+    // longer applies). Only the 60-tf fixture row (ETHUSDT) must remain,
+    // proving the filter refetches with timeframe=60. Options render in a
+    // portal on the page body, so they are queried from `page`, not `dashboard`.
+    await dashboard.getByRole('combobox', { name: 'Timeframe filter' }).click();
+    await page.getByRole('option', { name: '1h' }).click();
+    await expect(dashboard.getByRole('cell', { name: 'ETHUSDT' })).toHaveCount(1);
+    await expect(dashboard.getByRole('cell', { name: 'BTCUSDT' })).toHaveCount(0);
+    await expect(dashboard.getByRole('cell', { name: 'SOLUSDT' })).toHaveCount(0);
   });
 
   test('user opens Statistics: metric cards, equity + grouped charts, groupBy toggle', async ({

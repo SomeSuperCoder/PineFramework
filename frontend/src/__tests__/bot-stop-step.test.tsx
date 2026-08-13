@@ -293,9 +293,15 @@ describe('LiveDashboard stop flow', () => {
     await userEvent.click(await screen.findByText('Re-run Backtest'));
     await userEvent.click(screen.getByRole('button', { name: /Manually Select Pair/ }));
 
-    // Pick a pair (timeframe defaults to 60) and proceed to Review
-    const [pairSelect] = screen.getAllByRole('combobox');
-    await userEvent.selectOptions(pairSelect, 'SOLUSDT');
+    // Pick a pair (timeframe defaults to 60) and proceed to Review. The pair
+    // selector is a shadcn Select (Radix): open the combobox trigger, then pick
+    // the option from the portal'd listbox (native selectOptions no longer
+    // applies; getAllByRole('combobox')[0] ordering is fragile with multiple
+    // radix comboboxes). The option's accessible name is the display label
+    // "SOL/USDT" (getTokenInfo symbol/quote) — the internal value stays
+    // "SOLUSDT", which is what gets sent to the backend.
+    await userEvent.click(screen.getByRole('combobox', { name: /Pair/ }));
+    await userEvent.click(await screen.findByRole('option', { name: 'SOL/USDT' }));
     await userEvent.click(screen.getByRole('button', { name: /^Next/ }));
 
     await screen.findByText(/Review & Start/);

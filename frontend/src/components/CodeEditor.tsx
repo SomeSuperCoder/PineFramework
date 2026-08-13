@@ -1,13 +1,17 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { extractScriptName as extractName } from 'pine-framework/utils/script-name';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ScriptEntry {
   id: string;
@@ -167,25 +171,29 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
         body: JSON.stringify(updates),
       });
       if (extracted) {
-        setScripts((prev) => prev.map((s) => s.id === id ? { ...s, name: extracted, source: newSource } : s));
+        setScripts((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, name: extracted, source: newSource } : s)),
+        );
       } else {
-        setScripts((prev) => prev.map((s) => s.id === id ? { ...s, source: newSource } : s));
+        setScripts((prev) => prev.map((s) => (s.id === id ? { ...s, source: newSource } : s)));
       }
     } catch {
       // ignore
     }
   }, []);
 
-  const handleSourceChange = useCallback((newSource: string) => {
-    setSource(newSource);
-    const id = currentScriptIdRef.current;
-    if (!id) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveSource(id, newSource), 500);
-  }, [saveSource]);
+  const handleSourceChange = useCallback(
+    (newSource: string) => {
+      setSource(newSource);
+      const id = currentScriptIdRef.current;
+      if (!id) return;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => saveSource(id, newSource), 500);
+    },
+    [saveSource],
+  );
 
-  const handleDropdownChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = e.target.value;
+  const handleDropdownChange = async (id: string) => {
     if (id === currentScriptId) return;
     await loadScript(id);
   };
@@ -254,33 +262,46 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
   const isBuiltIn = !!currentBuiltIn;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent
-        className="flex h-[90vh] w-[92vw] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[92vw]"
-      >
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="flex h-[90vh] w-[92vw] max-w-[92vw] flex-col gap-0 overflow-hidden rounded-xl p-0 sm:max-w-[92vw]">
         <DialogHeader className="flex flex-row items-center gap-2 border-b border-border px-4 py-3">
           <DialogTitle className="whitespace-nowrap text-sm">Pine Script Editor</DialogTitle>
           {(scripts.length > 0 || builtInScripts.length > 0) && (
-            <select
-              value={currentScriptId || ''}
-              onChange={handleDropdownChange}
-              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-[13px] text-foreground outline-none"
-            >
-              {scripts.length > 0 && (
-                <optgroup label="My Scripts">
-                  {scripts.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-              )}
-              {builtInScripts.length > 0 && (
-                <optgroup label="Built-In Tests">
-                  {builtInScripts.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            <Select value={currentScriptId || undefined} onValueChange={handleDropdownChange}>
+              <SelectTrigger
+                aria-label="Script"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none h-8"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {scripts.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>My Scripts</SelectLabel>
+                    {scripts.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+                {builtInScripts.length > 0 && (
+                  <SelectGroup>
+                    <SelectLabel>Built-In Tests</SelectLabel>
+                    {builtInScripts.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
           )}
           <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <Button variant="ghost" size="sm" onClick={handleNewScript}>
@@ -319,9 +340,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
             {(() => {
               const pineVersion = extractVersion(source);
               return pineVersion ? (
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(var(--color-primary),0.12)] text-primary"
-                >
+                <span className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(var(--color-primary),0.12)] text-primary">
                   v{pineVersion}
                 </span>
               ) : null;
@@ -342,9 +361,7 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
             >
               {currentBuiltIn.type}
             </span>
-            <span
-              className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(234,179,8,0.12)] text-[#eab308]"
-            >
+            <span className="rounded px-1.5 py-0.5 text-[10px] bg-[rgba(234,179,8,0.12)] text-[#eab308]">
               Built-In
             </span>
           </div>
@@ -356,7 +373,8 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
             <div className="flex h-full flex-col items-center justify-center gap-4 text-muted-foreground">
               <div className="text-[15px] text-foreground">No scripts yet</div>
               <div className="max-w-[320px] text-center text-[13px] leading-6">
-                Create your first Pine Script to get started. You can write indicators and strategies, then run them on the chart.
+                Create your first Pine Script to get started. You can write indicators and
+                strategies, then run them on the chart.
               </div>
               <Button
                 onClick={handleNewScript}
@@ -373,7 +391,9 @@ export function CodeEditor({ isOpen, onClose, onAdd, initialScriptId }: CodeEdit
               onKeyDown={handleKeyDown}
               readOnly={isBuiltIn}
               className={`w-full h-full border-none p-4 font-mono text-sm leading-relaxed resize-none outline-none tabsize-2 ${
-                isBuiltIn ? 'bg-secondary text-muted-foreground cursor-not-allowed' : 'bg-card text-foreground'
+                isBuiltIn
+                  ? 'bg-secondary text-muted-foreground cursor-not-allowed'
+                  : 'bg-card text-foreground'
               }`}
               spellCheck={false}
             />

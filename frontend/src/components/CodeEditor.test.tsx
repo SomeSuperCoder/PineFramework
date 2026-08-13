@@ -86,10 +86,12 @@ describe('CodeEditor', () => {
         { url: '/api/scripts', response: { scripts: mockScripts, activeScriptId: null } },
       ]);
       render(<CodeEditor isOpen={true} onClose={() => {}} onAdd={() => {}} />);
-      await waitFor(() => {
-        expect(screen.getByText('Alpha Strategy')).toBeInTheDocument();
-        expect(screen.getByText('Beta Indicator')).toBeInTheDocument();
-      });
+      // Script selector is a shadcn Select (Radix): unselected options live in
+      // a portal and only exist in the DOM once the dropdown is open.
+      const trigger = await screen.findByRole('combobox', { name: 'Script' });
+      await userEvent.click(trigger);
+      await screen.findByRole('option', { name: 'Alpha Strategy' });
+      expect(screen.getByRole('option', { name: 'Beta Indicator' })).toBeInTheDocument();
     });
 
     it('loads first script on open', async () => {

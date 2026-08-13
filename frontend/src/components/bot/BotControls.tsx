@@ -7,6 +7,15 @@ import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { AutoSelectGrid } from './AutoSelectGrid';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // ---- Timezone Utilities ----
@@ -448,14 +457,21 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label className="text-[11px] text-[var(--color-muted-foreground)]">
             DEX:{' '}
-            <select
+            <Select
               value={dex}
-              onChange={(e) => setDex(e.target.value as 'jupiter-swap' | 'jupiter-ultra')}
-              className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
+              onValueChange={(v) => setDex(v as 'jupiter-swap' | 'jupiter-ultra')}
             >
-              <option value="jupiter-swap">Jupiter Swap</option>
-              <option value="jupiter-ultra">Jupiter Ultra</option>
-            </select>
+              <SelectTrigger
+                aria-label="DEX"
+                className="ml-1 h-7 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 text-[11px] text-[var(--color-foreground)]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="jupiter-swap">Jupiter Swap</SelectItem>
+                <SelectItem value="jupiter-ultra">Jupiter Ultra</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <label className="flex items-center gap-1 text-[11px] text-[var(--color-muted-foreground)]">
@@ -500,25 +516,34 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
               onChange={(e) => setTimezoneFilter(e.target.value)}
               className="ml-1 w-20 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[10px] text-[var(--color-foreground)]"
             />
-            <select
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
-            >
-              {TIMEZONE_GROUPS.map((group) => {
-                const filtered = timezoneFilter
-                  ? group.zones.filter(z => z.toLowerCase().includes(timezoneFilter.toLowerCase()))
-                  : group.zones;
-                if (filtered.length === 0) return null;
-                return (
-                  <optgroup key={group.group} label={group.group}>
-                    {filtered.map((zone) => (
-                      <option key={zone} value={zone}>{getTimezoneLabel(zone)}</option>
-                    ))}
-                  </optgroup>
-                );
-              })}
-            </select>
+            <Select value={timezone} onValueChange={setTimezone}>
+              <SelectTrigger
+                aria-label="Timezone"
+                className="ml-1 h-7 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 text-[11px] text-[var(--color-foreground)]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONE_GROUPS.map((group) => {
+                  const filtered = timezoneFilter
+                    ? group.zones.filter((z) =>
+                        z.toLowerCase().includes(timezoneFilter.toLowerCase()),
+                      )
+                    : group.zones;
+                  if (filtered.length === 0) return null;
+                  return (
+                    <SelectGroup key={group.group}>
+                      <SelectLabel>{group.group}</SelectLabel>
+                      {filtered.map((zone) => (
+                        <SelectItem key={zone} value={zone}>
+                          {getTimezoneLabel(zone)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </label>
         </div>
         {error && <div className="text-[10px] text-[var(--color-destructive)]">{error}</div>}
@@ -893,40 +918,55 @@ export function SetupWizard({
                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <label className="text-[11px] text-[var(--color-muted-foreground)]">
                   Pair:{' '}
-                  <select
-                    value={manualPair?.symbol ?? ''}
-                    onChange={(e) => setManualPair(prev => ({
-                      symbol: e.target.value,
-                      timeframe: prev?.timeframe ?? '60',
-                    }))}
-                    className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
+                  <Select
+                    value={manualPair?.symbol}
+                    onValueChange={(v) =>
+                      setManualPair((prev) => ({ symbol: v, timeframe: prev?.timeframe ?? '60' }))
+                    }
                   >
-                    <option value="">Select pair...</option>
-                    {TRADABLE_PAIRS.map(pair => {
-                      const info = getTokenInfo(pair);
-                      const display = info ? `${info.symbol}/${info.quote}` : pair;
-                      return <option key={pair} value={pair}>{display}</option>;
-                    })}
-                  </select>
+                    <SelectTrigger
+                      aria-label="Pair"
+                      className="ml-1 h-7 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 text-[11px] text-[var(--color-foreground)]"
+                    >
+                      <SelectValue placeholder="Select pair..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRADABLE_PAIRS.map((pair) => {
+                        const info = getTokenInfo(pair);
+                        const display = info ? `${info.symbol}/${info.quote}` : pair;
+                        return (
+                          <SelectItem key={pair} value={pair}>
+                            {display}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </label>
                 <label className="text-[11px] text-[var(--color-muted-foreground)]">
                   Timeframe:{' '}
-                  <select
+                  <Select
                     value={manualPair?.timeframe ?? '60'}
-                    onChange={(e) => setManualPair(prev => ({
-                      symbol: prev?.symbol ?? '',
-                      timeframe: e.target.value,
-                    }))}
-                    className="ml-1 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 py-1 text-[11px] text-[var(--color-foreground)]"
+                    onValueChange={(v) =>
+                      setManualPair((prev) => ({ symbol: prev?.symbol ?? '', timeframe: v }))
+                    }
                   >
-                    <option value="1">1m</option>
-                    <option value="5">5m</option>
-                    <option value="15">15m</option>
-                    <option value="30">30m</option>
-                    <option value="60">1h</option>
-                    <option value="240">4h</option>
-                    <option value="1440">1d</option>
-                  </select>
+                    <SelectTrigger
+                      aria-label="Timeframe"
+                      className="ml-1 h-7 rounded border border-[var(--color-border)] bg-[var(--color-secondary)] px-1.5 text-[11px] text-[var(--color-foreground)]"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1m</SelectItem>
+                      <SelectItem value="5">5m</SelectItem>
+                      <SelectItem value="15">15m</SelectItem>
+                      <SelectItem value="30">30m</SelectItem>
+                      <SelectItem value="60">1h</SelectItem>
+                      <SelectItem value="240">4h</SelectItem>
+                      <SelectItem value="1440">1d</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
               </div>
               {/* Validation: empty check */}

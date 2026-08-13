@@ -428,7 +428,13 @@ describe('TradeHistoryTab — task 4.7', () => {
     renderTab();
     await waitFor(() => expect(screen.getByText('BTCUSDT')).toBeInTheDocument());
 
-    await userEvent.selectOptions(screen.getByTitle('Timeframe filter'), '60');
+    // The timeframe control is now a shadcn Select (Radix): open the combobox
+    // trigger, then pick the option from the portal'd listbox (native
+    // selectOptions no longer applies). Option label '1h' = value 60.
+    await userEvent.click(
+      screen.getByRole('combobox', { name: 'Timeframe filter' }),
+    );
+    await userEvent.click(await screen.findByRole('option', { name: '1h' }));
     await waitFor(() => expect(screen.queryByText('BTCUSDT')).not.toBeInTheDocument());
     expect(screen.getByText('ETHUSDT')).toBeInTheDocument();
     expect(rowSymbols()).toEqual(['ETHUSDT']);
