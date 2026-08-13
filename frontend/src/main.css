@@ -41,6 +41,15 @@
   --color-sidebar-border: oklch(0.269 0 0);
   --color-sidebar-ring: oklch(0.439 0 0);
   --radius: 0.625rem;
+  /* Motion tokens (D2/D3) — single source of truth, mirrored in theme/motion.ts.
+     --transition-duration-* generates `duration-fast/base/slow` utilities;
+     --ease-* generates `ease-enter/exit` utilities. Both also set --tw-duration
+     / --tw-ease, which tw-animate-css (animate-in/animate-out) reads. */
+  --transition-duration-fast: 150ms;
+  --transition-duration-base: 200ms;
+  --transition-duration-slow: 250ms;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
 
 :root {
@@ -56,5 +65,31 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Indeterminate sweep for ProgressBar (element is w-[30%] of the track).
+   translateX % is relative to the element: -100% parks it fully off the left
+   edge (-30% of the track), 433.33% (130% / 30%) parks it fully off the right
+   edge (130% of the track). */
+@keyframes backtest-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(433.33%);
+  }
+}
+
+/* Global reduced-motion guard (D7) — zero every animation/transition.
+   `motion-reduce:*` utilities still provide per-element opt-outs. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

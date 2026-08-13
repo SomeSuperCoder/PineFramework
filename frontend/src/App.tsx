@@ -18,6 +18,7 @@ import { useChaosMode } from './hooks/useChaosMode';
 import type { ScriptResult } from './types';
 import { extractScriptName } from 'pine-framework/utils/script-name';
 import { tokens } from './theme/tokens';
+import { motion } from './theme/motion';
 import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from './utils/options';
 
 function App() {
@@ -77,7 +78,10 @@ function App() {
     liveTrades: botLiveTrades,
     connectionEpoch: botConnectionEpoch,
   } = useBotWebSocket(backendUrl);
-  const { chaosMode, chaosError, tapTargetProps, showToast, dismissToast } = useChaosMode(backendUrl, engineChaosMode);
+  const { chaosMode, chaosError, tapTargetProps, showToast, dismissToast } = useChaosMode(
+    backendUrl,
+    engineChaosMode,
+  );
 
   const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
@@ -142,7 +146,15 @@ function App() {
         lastIndicatorsRef.current = ids;
         setComputingIndicators(ids);
         for (const ind of list) {
-          executeScriptRef.current(ind.source, symbol, timeframe, undefined, undefined, undefined, ind.id);
+          executeScriptRef.current(
+            ind.source,
+            symbol,
+            timeframe,
+            undefined,
+            undefined,
+            undefined,
+            ind.id,
+          );
         }
       });
     });
@@ -153,7 +165,8 @@ function App() {
       if (e.key !== '/') return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if ((e.target as HTMLElement).closest('.editor-modal, .CodeMirror, [contenteditable]')) return;
+      if ((e.target as HTMLElement).closest('.editor-modal, .CodeMirror, [contenteditable]'))
+        return;
       e.preventDefault();
       setQuickAdderOpen(true);
     };
@@ -175,8 +188,7 @@ function App() {
 
   const extractScriptNameFallback = (src: string): string => extractScriptName(src) ?? 'Indicator';
 
-  const isStrategySource = (src: string): boolean =>
-    /strategy\(\s*["']/.test(src);
+  const isStrategySource = (src: string): boolean => /strategy\(\s*["']/.test(src);
 
   const findExistingStrategy = (): { id: string; name: string } | null => {
     for (const ind of indicatorManager.indicators) {
@@ -215,7 +227,15 @@ function App() {
       lastIndicatorsRef.current = new Set(lastIndicatorsRef.current).add(indicator.id);
       setComputingIndicators((prev) => new Set(prev).add(indicator.id));
       try {
-        await executeScript(source, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+        await executeScript(
+          source,
+          symbol,
+          timeframe,
+          undefined,
+          undefined,
+          undefined,
+          indicator.id,
+        );
       } catch {
         setComputingIndicators((prev) => {
           const next = new Set(prev);
@@ -247,7 +267,15 @@ function App() {
     if (indicator) {
       setComputingIndicators((prev) => new Set(prev).add(indicator.id));
       try {
-        await executeScript(pendingSource, symbol, timeframe, undefined, undefined, undefined, indicator.id);
+        await executeScript(
+          pendingSource,
+          symbol,
+          timeframe,
+          undefined,
+          undefined,
+          undefined,
+          indicator.id,
+        );
       } catch {
         setComputingIndicators((prev) => {
           const next = new Set(prev);
@@ -263,13 +291,16 @@ function App() {
     setStrategyConflict(null);
   }, []);
 
-  const handleEditIndicator = useCallback((indicatorId: string) => {
-    const ind = indicatorManager.indicators.find((i) => i.id === indicatorId);
-    if (ind) {
-      setEditingScriptId(ind.scriptId);
-      setEditorOpen(true);
-    }
-  }, [indicatorManager.indicators]);
+  const handleEditIndicator = useCallback(
+    (indicatorId: string) => {
+      const ind = indicatorManager.indicators.find((i) => i.id === indicatorId);
+      if (ind) {
+        setEditingScriptId(ind.scriptId);
+        setEditorOpen(true);
+      }
+    },
+    [indicatorManager.indicators],
+  );
 
   const handleRemoveIndicator = async (indicatorId: string) => {
     // 1. Fire-and-forget: notify server to stop real-time updates
@@ -303,14 +334,23 @@ function App() {
     overlay: true,
   }));
 
-  const handleRunBacktest = useCallback((request: BacktestRunRequest) => {
-    if (!request.strategy?.source) {
-      // Defensive — the panel already blocks this; never POST an empty script.
-      return;
-    }
-    setShowResultsPopup(true);
-    submitBacktest(request.symbol, request.timeframe, { ...request.config, script: request.strategy.source }, request.startDate, request.endDate);
-  }, [submitBacktest]);
+  const handleRunBacktest = useCallback(
+    (request: BacktestRunRequest) => {
+      if (!request.strategy?.source) {
+        // Defensive — the panel already blocks this; never POST an empty script.
+        return;
+      }
+      setShowResultsPopup(true);
+      submitBacktest(
+        request.symbol,
+        request.timeframe,
+        { ...request.config, script: request.strategy.source },
+        request.startDate,
+        request.endDate,
+      );
+    },
+    [submitBacktest],
+  );
 
   const handleCloseResults = useCallback(() => {
     setShowResultsPopup(false);
@@ -384,7 +424,16 @@ function App() {
 
       {/* === Bot Dashboard Panel === */}
       {activePanel === 'bot' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: tokens.colors.canvas, minHeight: 0, overflow: 'hidden' }}>
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            background: tokens.colors.canvas,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
           {botStatus ? (
             <LiveDashboard
               backendUrl={backendUrl}
@@ -406,21 +455,50 @@ function App() {
               connectionEpoch={botConnectionEpoch}
             />
           ) : botConnectionFailed ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-              <div style={{ color: tokens.colors.semantic.error, fontSize: 16, fontWeight: 600 }}>Cannot Connect to Bot Backend</div>
-              <div style={{ color: tokens.colors.steel.muted, fontSize: 12, textAlign: 'center', maxWidth: 400 }}>
-                The WebSocket connection to the backend server failed.
-                Make sure the backend is running on port 8081.
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
+              <div style={{ color: tokens.colors.semantic.error, fontSize: 16, fontWeight: 600 }}>
+                Cannot Connect to Bot Backend
               </div>
-              <div style={{ color: tokens.colors.steel.disabled, fontSize: 11, fontFamily: 'monospace' }}>
+              <div
+                style={{
+                  color: tokens.colors.steel.muted,
+                  fontSize: 12,
+                  textAlign: 'center',
+                  maxWidth: 400,
+                }}
+              >
+                The WebSocket connection to the backend server failed. Make sure the backend is
+                running on port 8081.
+              </div>
+              <div
+                style={{
+                  color: tokens.colors.steel.disabled,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                }}
+              >
                 {backendUrl}/ws/bot
               </div>
               <button
                 onClick={() => window.location.reload()}
                 style={{
-                  padding: '8px 20px', background: tokens.colors.surface['1'], color: '#64b5f6',
-                  border: '1px solid #64b5f6', borderRadius: 4, cursor: 'pointer',
-                  fontSize: 12, marginTop: 8,
+                  padding: '8px 20px',
+                  background: tokens.colors.surface['1'],
+                  color: '#64b5f6',
+                  border: '1px solid #64b5f6',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  marginTop: 8,
                 }}
               >
                 Retry Connection
@@ -428,24 +506,47 @@ function App() {
               <button
                 onClick={() => setActivePanel('dashboard')}
                 style={{
-                  padding: '6px 16px', background: 'transparent', color: tokens.colors.steel.muted,
-                  border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
-                  fontSize: 11, marginTop: 8,
+                  padding: '6px 16px',
+                  background: 'transparent',
+                  color: tokens.colors.steel.muted,
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  marginTop: 8,
                 }}
               >
                 Close Dashboard
               </button>
             </div>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-              <div style={{ color: tokens.colors.steel.muted, fontSize: 14 }}>Connecting to bot...</div>
-              <div style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>Waiting for WebSocket connection</div>
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                gap: 16,
+              }}
+            >
+              <div style={{ color: tokens.colors.steel.muted, fontSize: 14 }}>
+                Connecting to bot...
+              </div>
+              <div style={{ color: tokens.colors.steel.disabled, fontSize: 11 }}>
+                Waiting for WebSocket connection
+              </div>
               <button
                 onClick={() => setActivePanel('dashboard')}
                 style={{
-                  padding: '6px 16px', background: tokens.colors.surface['1'], color: tokens.colors.steel.muted,
-                  border: '1px solid #333', borderRadius: 4, cursor: 'pointer',
-                  fontSize: 11, marginTop: 16,
+                  padding: '6px 16px',
+                  background: tokens.colors.surface['1'],
+                  color: tokens.colors.steel.muted,
+                  border: '1px solid #333',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  marginTop: 16,
                 }}
               >
                 Cancel
@@ -472,11 +573,13 @@ function App() {
         />
       )}
 
-
       {/* === Overlays (fixed position, always available) === */}
       <CodeEditor
         isOpen={editorOpen}
-        onClose={() => { setEditorOpen(false); setEditingScriptId(null); }}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingScriptId(null);
+        }}
         onAdd={handleAddIndicator}
         initialScriptId={editingScriptId ?? undefined}
       />
@@ -503,9 +606,15 @@ function App() {
         lastTeleport={lastTeleport}
         onGoToDate={(ts, dateStr, timeStr) => {
           chartRef.current?.scrollToDate(ts);
-          chartRef.current?.setTeleportLine(ts, { color: tokens.colors.brand.blue, label: 'Teleport' });
+          chartRef.current?.setTeleportLine(ts, {
+            color: tokens.colors.brand.blue,
+            label: 'Teleport',
+          });
           setLastTeleport({ date: dateStr, time: timeStr });
-          localStorage.setItem('pine-last-teleport', JSON.stringify({ date: dateStr, time: timeStr }));
+          localStorage.setItem(
+            'pine-last-teleport',
+            JSON.stringify({ date: dateStr, time: timeStr }),
+          );
         }}
       />
 
@@ -522,21 +631,24 @@ function App() {
 
       {/* Chaos mode activation toast */}
       {showToast && (
-        <div style={{
-          position: 'fixed',
-          bottom: 48,
-          right: 8,
-          background: chaosMode ? tokens.colors.semantic.error : tokens.colors.surface['1'],
-          color: chaosMode ? tokens.colors.ink.default : tokens.colors.ink['1'],
-          padding: '8px 16px',
-          borderRadius: 6,
-          fontSize: 12,
-          fontWeight: 600,
-          zIndex: 10000,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-          cursor: 'pointer',
-          transition: `opacity ${tokens.motion.base} ${tokens.motion.ease}`,
-        }} onClick={dismissToast}>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 48,
+            right: 8,
+            background: chaosMode ? tokens.colors.semantic.error : tokens.colors.surface['1'],
+            color: chaosMode ? tokens.colors.ink.default : tokens.colors.ink['1'],
+            padding: '8px 16px',
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 600,
+            zIndex: 10000,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            cursor: 'pointer',
+            transition: `opacity ${motion.durations.base} ${motion.easings.enter}`,
+          }}
+          onClick={dismissToast}
+        >
           {chaosMode ? '⚡ Chaos Mode Enabled' : 'Chaos Mode Disabled'}
         </div>
       )}

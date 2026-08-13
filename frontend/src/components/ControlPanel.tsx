@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 import { ContentArea } from './ContentArea';
+import { FadeIn } from '@/components/ui/motion/fade-in';
 
 export type PanelId = 'dashboard' | 'telegram' | 'backtest' | 'bot';
 
@@ -64,14 +65,8 @@ export function ControlPanel({
   }, []);
 
   return (
-    <div
-      className="flex h-screen w-screen flex-col overflow-hidden bg-background"
-    >
-      <TopBar
-        botConnected={botConnected}
-        botState={botState}
-        errorCount={errorCount}
-      />
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+      <TopBar botConnected={botConnected} botState={botState} errorCount={errorCount} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <Sidebar
@@ -81,16 +76,18 @@ export function ControlPanel({
           onHoverChange={handleSidebarHover}
         />
 
-        {/* Content region — the panel swaps its payload here */}
+        {/* Content region — the panel swaps its payload here; the key forces a
+            remount on switch so FadeIn plays a fresh entrance every time */}
         <ContentArea>
-          <div
+          <FadeIn
             key={activePanel}
             role="region"
             aria-label={`${activePanel} panel`}
             className="flex min-h-0 flex-1 flex-col"
+            duration="base"
           >
             {children}
-          </div>
+          </FadeIn>
         </ContentArea>
       </div>
     </div>

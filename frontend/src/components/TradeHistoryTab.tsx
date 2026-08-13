@@ -5,6 +5,8 @@ import { DASH, fmtPnl, fmtSize, fmtTimeframe, fmtTimestamp } from '../utils/form
 import { ErrorState, ModeToggle, StatusSelect } from './TradeTabShared';
 
 import { Button } from '@/components/ui/button';
+import { FadeIn } from '@/components/ui/motion/fade-in';
+import { Stagger } from '@/components/ui/motion/stagger';
 import {
   Table,
   TableBody,
@@ -151,193 +153,193 @@ export function TradeHistoryTab({ backendUrl, liveTrades, reconnectEpoch }: Trad
     'h-9 border border-input bg-background px-2 text-[11px] text-foreground box-border';
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <Stagger className="flex flex-col gap-2.5">
       {/* Section label + loaded count */}
-      <div className="flex items-center gap-2.5 flex-wrap">
-        <span
-          className="text-[11px] font-semibold uppercase tracking-[1px] text-muted-foreground"
-        >
-          Trade History
-        </span>
-        {!loading && !error && (
-          <span className="text-[11px] text-muted-foreground">
-            {history.totalLoaded} loaded{hasMore ? ' · more available' : ''}
+      <FadeIn>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="text-[11px] font-semibold uppercase tracking-[1px] text-muted-foreground">
+            Trade History
           </span>
-        )}
-      </div>
+          {!loading && !error && (
+            <span className="text-[11px] text-muted-foreground">
+              {history.totalLoaded} loaded{hasMore ? ' · more available' : ''}
+            </span>
+          )}
+        </div>
+      </FadeIn>
 
       {/* Filters */}
-      <div className="flex gap-2 items-center flex-wrap">
-        <ModeToggle value={mode} onChange={setMode} />
-        <StatusSelect value={status} onChange={setStatus} />
-        <input
-          value={symbolInput}
-          onChange={(e) => setSymbolInput(e.target.value)}
-          placeholder="Symbol (e.g. BTCUSDT)"
-          className={`${filterInputClass} w-[150px]`}
-        />
-        <select
-          value={timeframe}
-          onChange={(e) => setTimeframe(e.target.value)}
-          className={filterInputClass}
-          title="Timeframe filter"
-        >
-          <option value="">All timeframes</option>
-          {TIMEFRAME_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <input
-          list="trade-history-strategy-options"
-          value={strategyInput}
-          onChange={(e) => setStrategyInput(e.target.value)}
-          placeholder="Strategy"
-          className={`${filterInputClass} w-[170px]`}
-        />
-        <datalist id="trade-history-strategy-options">
-          {strategyOptions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </div>
+      <FadeIn>
+        <div className="flex gap-2 items-center flex-wrap">
+          <ModeToggle value={mode} onChange={setMode} />
+          <StatusSelect value={status} onChange={setStatus} />
+          <input
+            value={symbolInput}
+            onChange={(e) => setSymbolInput(e.target.value)}
+            placeholder="Symbol (e.g. BTCUSDT)"
+            className={`${filterInputClass} w-[150px]`}
+          />
+          <select
+            value={timeframe}
+            onChange={(e) => setTimeframe(e.target.value)}
+            className={filterInputClass}
+            title="Timeframe filter"
+          >
+            <option value="">All timeframes</option>
+            {TIMEFRAME_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <input
+            list="trade-history-strategy-options"
+            value={strategyInput}
+            onChange={(e) => setStrategyInput(e.target.value)}
+            placeholder="Strategy"
+            className={`${filterInputClass} w-[170px]`}
+          />
+          <datalist id="trade-history-strategy-options">
+            {strategyOptions.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+      </FadeIn>
 
       {/* Body: error / loading / empty / table */}
-      {error ? (
-        <ErrorState message={error} onRetry={history.reload} />
-      ) : loading && trades.length === 0 ? (
-        <div className="p-6 text-center text-[12px] text-muted-foreground">
-          Loading trade history…
-        </div>
-      ) : trades.length === 0 ? (
-        <div className="p-8 text-center text-[12px] text-muted-foreground">
-          No trades yet{filterActive ? ' matching these filters' : ''}.
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table className="w-full text-[11px] font-mono">
-            <TableHeader>
-              <TableRow className="bg-border">
-                {COLUMNS.map((col) => (
-                  <TableHead
-                    key={col.field}
-                    aria-sort={
-                      sortField === col.field
-                        ? sortAsc
-                          ? 'ascending'
-                          : 'descending'
-                        : undefined
-                    }
-                    className={`px-2 py-1.5 whitespace-nowrap ${
-                      col.numeric ? 'text-right' : 'text-left'
-                    } ${sortField === col.field ? 'text-primary' : 'text-muted-foreground'}`}
+      <FadeIn>
+        {error ? (
+          <ErrorState message={error} onRetry={history.reload} />
+        ) : loading && trades.length === 0 ? (
+          <div className="p-6 text-center text-[12px] text-muted-foreground">
+            Loading trade history…
+          </div>
+        ) : trades.length === 0 ? (
+          <div className="p-8 text-center text-[12px] text-muted-foreground">
+            No trades yet{filterActive ? ' matching these filters' : ''}.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table className="w-full text-[11px] font-mono">
+              <TableHeader>
+                <TableRow className="bg-border">
+                  {COLUMNS.map((col) => (
+                    <TableHead
+                      key={col.field}
+                      aria-sort={
+                        sortField === col.field ? (sortAsc ? 'ascending' : 'descending') : undefined
+                      }
+                      className={`px-2 py-1.5 whitespace-nowrap ${
+                        col.numeric ? 'text-right' : 'text-left'
+                      } ${sortField === col.field ? 'text-primary' : 'text-muted-foreground'}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(col.field)}
+                        className={`inline-flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-inherit ${
+                          col.numeric ? 'justify-end' : 'justify-start'
+                        }`}
+                      >
+                        {col.label}
+                        {sortIndicator(col.field)}
+                      </button>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedTrades.map((t, i) => (
+                  <TableRow
+                    key={t.id}
+                    className={`border-b border-border ${i % 2 === 0 ? 'bg-background' : 'bg-card'}`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(col.field)}
-                      className={`inline-flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-inherit ${
-                        col.numeric ? 'justify-end' : 'justify-start'
+                    <TableCell
+                      className={`px-2 py-1 font-semibold ${t.side === 'buy' ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}
+                    >
+                      {t.side === 'buy' ? 'BUY' : 'SELL'}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 font-semibold">{t.symbol}</TableCell>
+                    <TableCell className="px-2 py-1 text-muted-foreground">
+                      {fmtTimeframe(t.timeframe)}
+                    </TableCell>
+                    <TableCell
+                      className={`px-2 py-1 max-w-[180px] truncate whitespace-nowrap ${t.strategy === 'Chaos Mode' ? 'text-[#eab308]' : 'text-muted-foreground'}`}
+                      title={t.strategy}
+                    >
+                      {t.strategy ?? DASH}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-right text-muted-foreground">
+                      ${t.entryPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-right text-muted-foreground">
+                      ${t.exitPrice.toFixed(2)}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-right text-muted-foreground">
+                      {fmtSize(t.size)}
+                    </TableCell>
+                    <TableCell
+                      className="px-2 py-1 text-right font-semibold"
+                      style={{ color: fmtPnl(t.realizedPnl).color }}
+                    >
+                      {fmtPnl(t.realizedPnl).text}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-right text-muted-foreground">
+                      ${t.fees.toFixed(2)}
+                    </TableCell>
+                    <TableCell
+                      className={`px-2 py-1 ${
+                        t.status === 'unknown'
+                          ? 'text-[#eab308]'
+                          : t.status === 'confirmed'
+                            ? 'text-[#22c55e]'
+                            : 'text-muted-foreground'
                       }`}
                     >
-                      {col.label}
-                      {sortIndicator(col.field)}
-                    </button>
-                  </TableHead>
+                      {t.status ?? DASH}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-muted-foreground">
+                      {fmtTimestamp(t.openedAt)}
+                    </TableCell>
+                    <TableCell className="px-2 py-1 text-muted-foreground">
+                      {fmtTimestamp(t.closedAt)}
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedTrades.map((t, i) => (
-                <TableRow
-                  key={t.id}
-                  className={`border-b border-border ${i % 2 === 0 ? 'bg-background' : 'bg-card'}`}
-                >
-                  <TableCell
-                    className={`px-2 py-1 font-semibold ${t.side === 'buy' ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}
-                  >
-                    {t.side === 'buy' ? 'BUY' : 'SELL'}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 font-semibold">{t.symbol}</TableCell>
-                  <TableCell className="px-2 py-1 text-muted-foreground">
-                    {fmtTimeframe(t.timeframe)}
-                  </TableCell>
-                  <TableCell
-                    className={`px-2 py-1 max-w-[180px] truncate whitespace-nowrap ${t.strategy === 'Chaos Mode' ? 'text-[#eab308]' : 'text-muted-foreground'}`}
-                    title={t.strategy}
-                  >
-                    {t.strategy ?? DASH}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
-                    ${t.entryPrice.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
-                    ${t.exitPrice.toFixed(2)}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
-                    {fmtSize(t.size)}
-                  </TableCell>
-                  <TableCell
-                    className="px-2 py-1 text-right font-semibold"
-                    style={{ color: fmtPnl(t.realizedPnl).color }}
-                  >
-                    {fmtPnl(t.realizedPnl).text}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-right text-muted-foreground">
-                    ${t.fees.toFixed(2)}
-                  </TableCell>
-                  <TableCell
-                    className={`px-2 py-1 ${
-                      t.status === 'unknown'
-                        ? 'text-[#eab308]'
-                        : t.status === 'confirmed'
-                          ? 'text-[#22c55e]'
-                          : 'text-muted-foreground'
-                    }`}
-                  >
-                    {t.status ?? DASH}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-muted-foreground">
-                    {fmtTimestamp(t.openedAt)}
-                  </TableCell>
-                  <TableCell className="px-2 py-1 text-muted-foreground">
-                    {fmtTimestamp(t.closedAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </FadeIn>
 
       {/* Pagination — Next loads older pages, Previous re-loads the prior page */}
-      {!loading && !error && trades.length > 0 && (
-        <div className="flex items-center gap-2.5 justify-end">
-          <span className="text-[11px] text-muted-foreground">
-            Page {history.page + 1}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={history.goBack}
-            disabled={!history.canGoBack || loadingMore}
-            className="h-8 px-2.5 text-[11px]"
-          >
-            ← Prev
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={history.goNext}
-            disabled={!hasMore || loadingMore}
-            className="h-8 px-2.5 text-[11px]"
-          >
-            {loadingMore ? 'Loading…' : 'Next →'}
-          </Button>
-        </div>
-      )}
-    </div>
+      <FadeIn>
+        {!loading && !error && trades.length > 0 && (
+          <div className="flex items-center gap-2.5 justify-end">
+            <span className="text-[11px] text-muted-foreground">Page {history.page + 1}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={history.goBack}
+              disabled={!history.canGoBack || loadingMore}
+              className="h-8 px-2.5 text-[11px]"
+            >
+              ← Prev
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={history.goNext}
+              disabled={!hasMore || loadingMore}
+              className="h-8 px-2.5 text-[11px]"
+            >
+              {loadingMore ? 'Loading…' : 'Next →'}
+            </Button>
+          </div>
+        )}
+      </FadeIn>
+    </Stagger>
   );
 }

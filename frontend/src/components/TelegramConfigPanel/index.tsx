@@ -7,6 +7,8 @@ import { AccessControlCard } from './AccessControlCard';
 import { ConnectionCard } from './ConnectionCard';
 import { DiagnosticsCard } from './DiagnosticsCard';
 import { RecipientsCard } from './RecipientsCard';
+import { FadeIn } from '@/components/ui/motion/fade-in';
+import { Stagger } from '@/components/ui/motion/stagger';
 import { useTelegramSettings } from './useTelegramSettings';
 
 interface TelegramConfigPanelProps {
@@ -53,53 +55,61 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
-          <ConnectionCard
-            botToken={tg.botToken}
-            onBotTokenChange={tg.setBotToken}
-            botTokenDirty={tg.botTokenDirty}
-            tokenSaving={!!tg.busy.saveToken}
-            tokenStatus={tg.status.saveToken}
-            onSaveToken={() => void tg.actions.saveBotToken()}
-            proxy={tg.proxy}
-            onProxyFieldChange={tg.setProxyField}
-            proxyDirty={tg.proxyDirty}
-            proxySaving={!!tg.busy.proxy}
-            proxyStatus={tg.status.proxy}
-            showProxyPassword={tg.showProxyPassword}
-            onToggleProxyPassword={tg.toggleShowProxyPassword}
-            onSaveProxy={() => void tg.actions.saveProxy()}
-          />
-          <DiagnosticsCard
-            botToken={tg.botToken}
-            testing={!!tg.busy.test}
-            testStatus={tg.status.test}
-            onSendTest={() => void tg.actions.sendTest()}
-          />
-          <AccessControlCard
-            currentAdmin={tg.data?.admin ?? null}
-            requests={tg.data?.requests ?? []}
-            controllers={tg.data?.controllers ?? []}
-            admin={tg.admin}
-            onAdminFieldChange={tg.setAdminField}
-            busy={tg.busy}
-            onSetAdmin={() => void tg.actions.setAdmin()}
-            onApproveRequest={(userId) => void tg.actions.approveRequest(userId)}
-            onDenyRequest={(userId) => void tg.actions.denyRequest(userId)}
-            onRemoveController={(userId) => void tg.actions.removeController(userId)}
-          />
-          <RecipientsCard
-            chats={tg.data?.chats ?? []}
-            alertConditions={alertConditions}
-            busy={tg.busy}
-            getAlertPref={tg.getAlertPref}
-            onUpdateChatLanguage={(chatId, language) =>
-              void tg.actions.updateChatLanguage(chatId, language)
-            }
-            onUnlinkChat={(chatId) => void tg.actions.unlinkChat(chatId)}
-            onToggleAlert={tg.actions.toggleAlert}
-          />
-        </div>
+        <Stagger className="flex flex-col gap-4">
+          <FadeIn>
+            <ConnectionCard
+              botToken={tg.botToken}
+              onBotTokenChange={tg.setBotToken}
+              botTokenDirty={tg.botTokenDirty}
+              tokenSaving={!!tg.busy.saveToken}
+              tokenStatus={tg.status.saveToken}
+              onSaveToken={() => void tg.actions.saveBotToken()}
+              proxy={tg.proxy}
+              onProxyFieldChange={tg.setProxyField}
+              proxyDirty={tg.proxyDirty}
+              proxySaving={!!tg.busy.proxy}
+              proxyStatus={tg.status.proxy}
+              showProxyPassword={tg.showProxyPassword}
+              onToggleProxyPassword={tg.toggleShowProxyPassword}
+              onSaveProxy={() => void tg.actions.saveProxy()}
+            />
+          </FadeIn>
+          <FadeIn>
+            <DiagnosticsCard
+              botToken={tg.botToken}
+              testing={!!tg.busy.test}
+              testStatus={tg.status.test}
+              onSendTest={() => void tg.actions.sendTest()}
+            />
+          </FadeIn>
+          <FadeIn>
+            <AccessControlCard
+              currentAdmin={tg.data?.admin ?? null}
+              requests={tg.data?.requests ?? []}
+              controllers={tg.data?.controllers ?? []}
+              admin={tg.admin}
+              onAdminFieldChange={tg.setAdminField}
+              busy={tg.busy}
+              onSetAdmin={() => void tg.actions.setAdmin()}
+              onApproveRequest={(userId) => void tg.actions.approveRequest(userId)}
+              onDenyRequest={(userId) => void tg.actions.denyRequest(userId)}
+              onRemoveController={(userId) => void tg.actions.removeController(userId)}
+            />
+          </FadeIn>
+          <FadeIn>
+            <RecipientsCard
+              chats={tg.data?.chats ?? []}
+              alertConditions={alertConditions}
+              busy={tg.busy}
+              getAlertPref={tg.getAlertPref}
+              onUpdateChatLanguage={(chatId, language) =>
+                void tg.actions.updateChatLanguage(chatId, language)
+              }
+              onUnlinkChat={(chatId) => void tg.actions.unlinkChat(chatId)}
+              onToggleAlert={tg.actions.toggleAlert}
+            />
+          </FadeIn>
+        </Stagger>
       )}
     </div>
   );

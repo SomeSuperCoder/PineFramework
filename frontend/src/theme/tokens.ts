@@ -82,10 +82,4 @@ export const tokens = {
   typography: {
     fontFamily: "'Inter', system-ui, sans-serif",
   },
-
-  motion: {
-    fast: '150ms',
-    base: '200ms',
-    ease: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
-  },
 } as const;

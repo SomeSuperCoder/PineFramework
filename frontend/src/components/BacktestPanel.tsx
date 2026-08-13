@@ -19,6 +19,7 @@ import {
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow } from '@/components/ui/setting-row';
 import { StatusCallout } from '@/components/ui/status-callout';
+import { FadeIn } from '@/components/ui/motion/fade-in';
 import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from '../utils/options';
 import { cn } from '@/lib/utils';
 
@@ -215,8 +216,8 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
         </StatusCallout>
       )}
 
-      {/* Step body */}
-      <div className="flex flex-1 flex-col gap-4">
+      {/* Step body — key forces a remount on step navigation so each step fades in */}
+      <FadeIn key={step} className="flex flex-1 flex-col gap-4">
         {/* Step 1 — Strategy */}
         {step === 'strategy' && (
           <Card>
@@ -384,7 +385,7 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
             </CardContent>
           </Card>
         )}
-      </div>
+      </FadeIn>
 
       {/* Footer navigation */}
       <footer className="mt-4 flex items-center justify-between">
