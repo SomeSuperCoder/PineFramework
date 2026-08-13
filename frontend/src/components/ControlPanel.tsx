@@ -68,7 +68,7 @@ export function ControlPanel({
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
       <TopBar botConnected={botConnected} botState={botState} errorCount={errorCount} />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <Sidebar
           activePanel={activePanel}
           onPanelChange={onPanelChange}
@@ -77,18 +77,22 @@ export function ControlPanel({
         />
 
         {/* Content region — the panel swaps its payload here; the key forces a
-            remount on switch so FadeIn plays a fresh entrance every time */}
-        <ContentArea>
-          <FadeIn
-            key={activePanel}
-            role="region"
-            aria-label={`${activePanel} panel`}
-            className="flex min-h-0 flex-1 flex-col"
-            duration="base"
-          >
-            {children}
-          </FadeIn>
-        </ContentArea>
+            remount on switch so FadeIn plays a fresh entrance every time.
+            Wrapper carries ml-16 (collapsed rail = 64px) so content never sits
+            under the rail and never resizes when the sidebar widens. */}
+        <div className="ml-16 flex min-h-0 flex-1 flex-col">
+          <ContentArea>
+            <FadeIn
+              key={activePanel}
+              role="region"
+              aria-label={`${activePanel} panel`}
+              className="flex min-h-0 flex-1 flex-col"
+              duration="base"
+            >
+              {children}
+            </FadeIn>
+          </ContentArea>
+        </div>
       </div>
     </div>
   );

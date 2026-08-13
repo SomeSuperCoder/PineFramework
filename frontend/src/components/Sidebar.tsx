@@ -57,7 +57,7 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
         width: expanded ? '13.75rem' : '4rem', // 220 ↔ 64
         transition: 'width 200ms cubic-bezier(0.25, 0.1, 0.25, 1)',
       }}
-      className="flex shrink-0 flex-col overflow-hidden border-r border-border bg-card"
+      className="absolute inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-border bg-card shadow-lg"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
       role="navigation"
