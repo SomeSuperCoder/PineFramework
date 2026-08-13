@@ -72,9 +72,24 @@ function EquityDrawdownChart({ points }: { points: EquityPoint[] }) {
       className="h-full w-full"
     >
       <LineChart data={data} margin={{ top: 16, right: 10, bottom: 8, left: 10 }}>
-        <CartesianGrid strokeDasharray="4 4" stroke="var(--color-border)" />
+        <CartesianGrid strokeDasharray="4 4" stroke="var(--color-border)" yAxisId="equity" />
         <XAxis dataKey="time" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+        {/* Two Y axes so BOTH series are visible: equity zooms to its own range (the real
+            payload wiggles only ±2.28%, which a [0, ~10200] axis renders as a flat line),
+            and drawdown (0–175, ~1.7% of the equity scale) gets its own right axis instead
+            of hugging 0. domain string form 'dataMin - 10' is Recharts v3-supported. */}
         <YAxis
+          yAxisId="equity"
+          domain={['dataMin - 10', 'dataMax + 10']}
+          tick={{ fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={(v: number) => `$${v}`}
+        />
+        <YAxis
+          yAxisId="dd"
+          orientation="right"
+          domain={[0, 'dataMax + 10']}
           tick={{ fontSize: 10 }}
           tickLine={false}
           axisLine={false}
@@ -85,6 +100,7 @@ function EquityDrawdownChart({ points }: { points: EquityPoint[] }) {
         <Line
           type="monotone"
           dataKey="equity"
+          yAxisId="equity"
           stroke="var(--color-primary)"
           strokeWidth={1.5}
           dot={false}
@@ -92,6 +108,7 @@ function EquityDrawdownChart({ points }: { points: EquityPoint[] }) {
         <Line
           type="monotone"
           dataKey="drawdown"
+          yAxisId="dd"
           stroke="var(--color-destructive)"
           strokeWidth={1}
           dot={false}

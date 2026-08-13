@@ -128,7 +128,7 @@ export function computeBacktestMetrics(
   const initialCapital = strategyEngine.getConfig().initialCapital;
   const equityCurve = buildEquityCurve(initialCapital, trades);
   const drawdownCurve = buildDrawdownCurve(equityCurve);
-  const equityPoints = buildEquityPoints(bars, equityCurve, drawdownCurve);
+  const equityPoints = buildEquityPoints(bars, trades, equityCurve, drawdownCurve);
   const monthlyReturns = computeMonthlyReturns(equityPoints);
   const buyHoldReturn =
     bars.length >= 2
@@ -178,19 +178,50 @@ function buildDrawdownCurve(equityCurve: number[]): number[] {
 
 function buildEquityPoints(
   bars: Array<{ timestamp: number }>,
+  trades: Array<{ entryTime: number; exitTime: number }>,
   equityCurve: number[],
   drawdownCurve: number[],
 ): Array<{ time: number; equity: number; drawdown: number; balance: number }> {
   const points: Array<{ time: number; equity: number; drawdown: number; balance: number }> = [];
-  const len = Math.min(bars.length, equityCurve.length);
-  for (let i = 0; i < len; i++) {
+
+  // No trades → single point at the first bar (or now) so callers keep seeing ≥1 point.
+  if (trades.length === 0) {
     points.push({
-      time: bars[i]!.timestamp,
+      time: bars[0]?.timestamp ?? Date.now(),
+      equity: equityCurve[0] ?? 0,
+      drawdown: drawdownCurve[0] ?? 0,
+      balance: equityCurve[0] ?? 0,
+    });
+    return points;
+  }
+
+  // TIME ALIGNMENT (values unchanged): the curve semantics are
+  // [initialCapital, initialCapital+pnl1, ..., initialCapital+Σpnl] — index i is the
+  // equity AFTER trade i. So point 0 belongs at the FIRST trade's ENTRY and point i
+  // (i≥1) at trade i-1's EXIT. Previously every point was stamped with a bar timestamp,
+  // which collapsed the x-axis onto the first ~64 bars (~3 days) while trades span
+  // months — the date-collapse defect behind the flat Equity & Drawdown chart.
+  const lastExitTime = trades[trades.length - 1]!.exitTime;
+  // Defensive: curve is expected to be trades.length + 1; clamp if a caller disagrees
+  // and fall back to the last known exit for any leftover indices.
+  const len = Math.min(trades.length + 1, equityCurve.length);
+
+  points.push({
+    time: trades[0]!.entryTime,
+    equity: equityCurve[0] ?? 0,
+    drawdown: drawdownCurve[0] ?? 0,
+    balance: equityCurve[0] ?? 0,
+  });
+
+  for (let i = 1; i < len; i++) {
+    points.push({
+      time: trades[i - 1]?.exitTime ?? lastExitTime,
       equity: equityCurve[i] ?? 0,
       drawdown: drawdownCurve[i] ?? 0,
       balance: equityCurve[i] ?? 0,
     });
   }
+
   return points;
 }
 
