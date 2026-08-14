@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createBuiltInScriptsRouter } from '../src/routes/builtInScripts.js';
+import { getBuiltInScript } from '../src/store/builtInScripts.js';
 
 function tmpDir(): string {
   const dir = path.join(os.tmpdir(), `built-in-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -120,5 +121,43 @@ describe('createBuiltInScriptsRouter', () => {
     router.handle(mockReq('GET', '/scripts/built-in'), res);
     expect(res._status).toBe(500);
     expect(res._json.error).toBeDefined();
+  });
+});
+
+describe('getBuiltInScript — safe lookup (never path-joins user-controlled ids)', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = tmpDir();
+    fs.writeFileSync(path.join(dir, 'macd.pine'), '//@version=6\nindicator("MACD")');
+    fs.writeFileSync(path.join(dir, 'ema.pine'), '//@version=6\nstrategy("EMA Cross")');
+  });
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('resolves a valid builtin_<basename> id to the scanned entry', () => {
+    const entry = getBuiltInScript(dir, 'builtin_macd');
+    expect(entry).toBeDefined();
+    expect(entry!.id).toBe('builtin_macd');
+    expect(entry!.type).toBe('indicator');
+  });
+
+  it('rejects path-traversal ids — the builtin_ prefix cannot smuggle a filesystem path', () => {
+    expect(getBuiltInScript(dir, 'builtin_../../etc/passwd')).toBeUndefined();
+    expect(getBuiltInScript(dir, 'builtin_..%2f..%2fetc%2fpasswd')).toBeUndefined();
+    expect(getBuiltInScript(dir, 'builtin_/etc/passwd')).toBeUndefined();
+    expect(getBuiltInScript(dir, 'builtin_..\\..\\etc\\passwd')).toBeUndefined();
+  });
+
+  it('rejects ids without the builtin_ prefix — user/uuid ids never reach the scan', () => {
+    expect(getBuiltInScript(dir, '../../etc/passwd')).toBeUndefined();
+    expect(getBuiltInScript(dir, 'macd')).toBeUndefined();
+    expect(getBuiltInScript(dir, '')).toBeUndefined();
+  });
+
+  it('never throws on a missing directory — degrades to not-found', () => {
+    expect(getBuiltInScript('/nonexistent/path', 'builtin_macd')).toBeUndefined();
   });
 });

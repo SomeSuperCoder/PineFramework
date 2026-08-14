@@ -124,7 +124,11 @@ const telegramFeature = new TelegramBotFeature({
   onPhoto: (chatId, buffer, caption) => telegramService.sendPhoto(chatId, buffer, caption),
   // /backtest wizard dependencies: the strategy library accessor and the
   // persistent OHLCV cache the producer seam (runTelegramBacktest) reads.
+  // builtInScriptsDir points the wizard at the SAME test_indicators directory
+  // the /scripts/built-in route serves, so the bot offers the same built-in
+  // strategies the frontend lists.
   scripts: scriptFileManager,
+  builtInScriptsDir: TEST_INDICATORS_DIR,
   diskCache,
 });
 telegramFeature.install(telegramService);

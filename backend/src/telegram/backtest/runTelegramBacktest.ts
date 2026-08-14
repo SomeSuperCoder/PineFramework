@@ -41,6 +41,7 @@ import { runBacktestPipeline } from '../../backtest-runner.js';
 import { buildDecisionWarnings, toApiResult, toOutcome } from '../../backtest-result.js';
 import { fetchBars } from '../../bybit/fetch-bars.js';
 import type { ScriptFileManager } from '../../store/ScriptFileManager.js';
+import { getBuiltInScript } from '../../store/builtInScripts.js';
 import type { DiskOHLCVCache } from '../../cache/DiskOHLCVCache.js';
 
 /** Wizard input — the four settings the /backtest wizard collects, nothing more. */
@@ -62,6 +63,12 @@ export interface TelegramBacktestParams {
 export interface TelegramBacktestDeps {
   /** Strategy library accessor — the seam resolves a SOURCE STRING, never an id/path. */
   scripts: ScriptFileManager;
+  /** Built-in scripts directory (test_indicators). When set, `builtin_*` ids
+   *  that miss the user library resolve through the shared built-in store —
+   *  the same module the /scripts/built-in route serves (never written to the
+   *  manifest). Absent: builtin_* ids fall through to STRATEGY_NOT_FOUND
+   *  (pre-fix behavior). */
+  builtInScriptsDir?: string;
   /** Optional persistent OHLCV cache, forwarded to fetchBars. */
   diskCache?: DiskOHLCVCache;
   /** Injectable clock (ms) for deterministic date resolution. */
@@ -125,7 +132,24 @@ export async function runTelegramBacktest(
   deps: TelegramBacktestDeps,
 ): Promise<TelegramBacktestResult> {
   // ── 1. Strategy resolution — SOURCE STRING only, never id/path ───────────
-  const entry = await deps.scripts.getById(params.strategyId);
+  // User scripts resolve from the manifest-backed library first; `builtin_*`
+  // ids fall through to the shared built-in store. The built-in is adapted to
+  // the canonical ScriptEntry shape (zero timestamps) so the NOT_A_STRATEGY
+  // check below and the engine call work identically for both sources.
+  let entry = await deps.scripts.getById(params.strategyId);
+  if (!entry && deps.builtInScriptsDir) {
+    const builtIn = getBuiltInScript(deps.builtInScriptsDir, params.strategyId);
+    if (builtIn) {
+      entry = {
+        id: builtIn.id,
+        name: builtIn.name,
+        source: builtIn.source,
+        scriptType: builtIn.type,
+        createdAt: 0,
+        updatedAt: 0,
+      };
+    }
+  }
   if (!entry) {
     // Distinguish an empty library from a missing id: the manifest is currently
     // empty, and an empty library deserves its own user-facing message.

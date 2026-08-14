@@ -9,6 +9,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import type {
   FeatureCommandContext,
   CallbackContext,
@@ -75,15 +78,27 @@ function makeCommandCtx(): { ctx: FeatureCommandContext; reply: ReturnType<typeo
   return { ctx, reply };
 }
 
-function makeWizard(opts: { entries?: ScriptEntry[] } = {}) {
+function makeWizard(opts: { entries?: ScriptEntry[]; builtInScriptsDir?: string } = {}) {
   const scripts = makeScripts(opts.entries ?? []);
   const onPhoto = vi.fn(async () => true);
   const wizard = new BacktestWizard({
     scripts,
+    builtInScriptsDir: opts.builtInScriptsDir,
     getChatLanguage: () => 'en', // sync per contract BacktestWizardOptions
     onPhoto,
   });
   return { wizard, scripts, onPhoto };
+}
+
+/** Real temp dir holding one built-in strategy .pine (id builtin_simple_ema_cross_strategy). */
+function makeBuiltInDir(): string {
+  const dir = path.join(os.tmpdir(), `wizard-builtin-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'simple_ema_cross_strategy.pine'),
+    '//@version=5\nstrategy("Simple EMA Cross Strategy", overlay=true, initial_capital=10000)',
+  );
+  return dir;
 }
 
 beforeEach(() => {
@@ -109,6 +124,55 @@ describe('BacktestWizard — session lifecycle', () => {
     expect(cb.answerCallback).toHaveBeenCalled();
     expect(cb.editMessage).not.toHaveBeenCalled();
     expect(onPhoto).not.toHaveBeenCalled();
+  });
+
+  it('empty user manifest + builtInScriptsDir → the built-in strategy saves the flow (bug 2 fix)', async () => {
+    const dir = makeBuiltInDir();
+    try {
+      const { wizard } = makeWizard({ entries: [], builtInScriptsDir: dir });
+      const { ctx, reply } = makeCommandCtx();
+      await wizard.start(ctx);
+
+      // NOT the empty-library dead end — the built-in merge mirrors the
+      // frontend QuickAdderPopup merge (user + built-in strategies).
+      expect(reply).not.toHaveBeenCalledWith(t('en', 'backtestEmptyLibrary'));
+      expect(reply).toHaveBeenCalledWith(t('en', 'backtestStepStrategy'), expect.any(Object));
+
+      // The built-in is the ONLY strategy → index 0 on the strategy keyboard.
+      const markup = reply.mock.calls[0]?.[1] as {
+        reply_markup: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
+      };
+      const buttons = markup.reply_markup.inline_keyboard.flat();
+      expect(buttons.some((b) => b.callback_data === 'bt:strat:0')).toBe(true);
+
+      // Full flow against the built-in — buildParams passes its id through.
+      await wizard.handleCallback(makeCtx('bt:strat:0').cb);
+      await wizard.handleCallback(makeCtx('bt:sym:BTCUSDT').cb);
+      await wizard.handleCallback(makeCtx('bt:tf:60').cb);
+      await wizard.handleCallback(makeCtx('bt:days:30').cb);
+      await wizard.handleCallback(makeCtx('bt:method:jupiter_manual').cb);
+      await wizard.handleCallback(makeCtx('bt:run').cb);
+      await vi.waitFor(() => expect(runTelegramBacktest).toHaveBeenCalledTimes(1));
+      expect(runTelegramBacktest).toHaveBeenCalledWith(
+        { strategyId: 'builtin_simple_ema_cross_strategy', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual' },
+        expect.any(Object),
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('bt:start (dashboard button) restarts the wizard at the strategy step with built-ins merged', async () => {
+    const dir = makeBuiltInDir();
+    try {
+      const { wizard } = makeWizard({ entries: [], builtInScriptsDir: dir });
+      const start = makeCtx('bt:start').cb;
+      await wizard.handleCallback(start);
+      expect(start.answerCallback).toHaveBeenCalled();
+      expect(start.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepStrategy'), expect.any(Object));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('full flow: strategy → symbol → timeframe → days → method → run → card + done', async () => {

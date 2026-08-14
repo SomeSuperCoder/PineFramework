@@ -171,6 +171,11 @@ interface TelegramBotFeatureOptions {
   scripts?: ScriptFileManager;
   /** Optional persistent OHLCV cache, forwarded to the /backtest producer seam. */
   diskCache?: DiskOHLCVCache;
+  /** Built-in scripts directory (test_indicators) — forwarded to the /backtest
+   *  wizard so built-in strategies appear alongside user strategies (mirrors
+   *  the frontend's user+built-in merge). Optional — sibling-flow test
+   *  constructions omit it. */
+  builtInScriptsDir?: string;
 }
 
 function isNotificationType(value: string): value is NotificationType {
@@ -368,6 +373,7 @@ export class TelegramBotFeature {
     // time, so construction order is irrelevant.
     this.backtestWizard = new BacktestWizard({
       scripts: opts.scripts,
+      builtInScriptsDir: opts.builtInScriptsDir,
       diskCache: opts.diskCache,
       getChatLanguage: (chatId) => this.store.getChatLanguage(chatId),
       onPhoto: (chatId, buffer, caption) => this.sendPhoto(chatId, buffer, caption),
@@ -1208,6 +1214,11 @@ export class TelegramBotFeature {
             ],
           ]
         : [[{ text: t(lang, 'dashBtnRequest'), callback_data: 'request:go' }]]),
+      // Backtest is available to EVERY user (not operator-gated) — the
+      // /backtest command and wizard are part of the shared surface. The
+      // `bt` prefix is registered in the action registry and validated at
+      // install; bt:start routes through the wizard's handleCallback.
+      [{ text: t(lang, 'dashBtnBacktest'), callback_data: 'bt:start' }],
     ];
   }
 

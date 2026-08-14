@@ -20,9 +20,9 @@ describe('i18n dictionary parity', () => {
     expect(DICTIONARIES.ru).toBe(ru);
   });
 
-  it('keeps the parallel dictionaries at exactly 143 keys each (localization change)', () => {
+  it('keeps the parallel dictionaries at exactly 144 keys each (localization change)', () => {
     const count = Object.keys(en).length;
-    expect(count).toBe(143);
+    expect(count).toBe(144);
     expect(Object.keys(es).length).toBe(count);
     expect(Object.keys(ru).length).toBe(count);
   });
@@ -30,7 +30,7 @@ describe('i18n dictionary parity', () => {
   it('covers the localized keyboard + PnL-card label key groups in every language', () => {
     const enKeys = new Set(Object.keys(en));
     const groups = [
-      ['dashBtnManage', 'dashBtnLang', 'dashBtnReport', 'dashBtnStop', 'dashBtnEmergency', 'dashBtnRequest'],
+      ['dashBtnManage', 'dashBtnLang', 'dashBtnReport', 'dashBtnStop', 'dashBtnEmergency', 'dashBtnRequest', 'dashBtnBacktest'],
       ['btnConfirm', 'btnCancel', 'btnEmergencyStop', 'btnBackMain', 'btnNotifEnableAll', 'btnNotifDisableAll'],
       ['notifTypeTrading', 'notifTypePositionOpen', 'notifTypePositionClose', 'notifTypeReport', 'notifTypeDaily', 'notifTypeError', 'notifTypeBotLifecycle'],
       ['cardBrand', 'cardGlobal', 'cardRealized', 'cardUnrealized', 'cardNetRealizedUnrealized', 'cardSymbolPnl', 'cardTopMovers', 'cardWinRate', 'cardProfitFactor', 'cardAvgTrade', 'cardMaxDrawdown', 'cardOpenPositions', 'cardGenerated', 'cardEmptyState', 'cardEngineRunning', 'cardEngineStopped', 'cardEngineError', 'cardEngineUnknown', 'cardFooter', 'cardReportWord'],

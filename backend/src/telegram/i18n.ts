@@ -89,6 +89,7 @@ const en = {
   dashBtnStop: '🛑 Stop',
   dashBtnEmergency: '🚨 Emergency',
   dashBtnRequest: '🪪 Request access',
+  dashBtnBacktest: '📊 Backtest',
   // ── shared inline keyboard buttons ────────────────────────────────────────
   btnConfirm: '✅ Yes, Stop',
   btnCancel: '❌ Cancel',
@@ -265,6 +266,7 @@ const es: Record<keyof typeof en, string> = {
   dashBtnStop: '🛑 Detener',
   dashBtnEmergency: '🚨 Emergencia',
   dashBtnRequest: '🪪 Solicitar acceso',
+  dashBtnBacktest: '📊 Backtest',
   // ── botones compartidos de teclados inline ────────────────────────────────
   btnConfirm: '✅ Sí, Detener',
   btnCancel: '❌ Cancelar',
@@ -441,6 +443,7 @@ const ru: Record<keyof typeof en, string> = {
   dashBtnStop: '🛑 Стоп',
   dashBtnEmergency: '🚨 Аварийная остановка',
   dashBtnRequest: '🪪 Запросить доступ',
+  dashBtnBacktest: '📊 Бэктест',
   // ── общие кнопки инлайн-клавиатур ────────────────────────────────────────
   btnConfirm: '✅ Да, остановить',
   btnCancel: '❌ Отмена',

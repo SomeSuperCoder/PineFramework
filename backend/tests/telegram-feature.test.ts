@@ -19,6 +19,7 @@ import {
 } from '../src/telegram/TelegramBotFeature.js';
 import { renderGlobalPnlCard } from '../src/telegram/report/renderCard.js';
 import { escapeMarkdownV2 } from '../src/telegram/TelegramService.js';
+import { t } from '../src/telegram/i18n.js';
 import type { StatsService } from '../src/services/StatsService.js';
 import type { SessionSummary } from '../src/services/StatsService.js';
 
@@ -636,6 +637,25 @@ describe('TelegramBotFeature stop/emergency gating (operator-only controls)', ()
     expect(buttons.some((b) => b.callback_data.startsWith('link'))).toBe(false);
     expect(buttons.some((b) => b.callback_data.startsWith('unlink'))).toBe(false);
     cleanHarness(h);
+  });
+
+  it('the Backtest button (bt:start) is on the dashboard for EVERY user — not operator-gated', async () => {
+    // Non-operator: backtest is part of the shared surface, like /backtest itself.
+    const h = makeHarness();
+    await h.feature.handleStart(h.ctx({ from: { id: 500, username: 'nobody' } }));
+    let buttons = dashboardButtons(h.reply);
+    expect(buttons.some((b) => b.callback_data === 'bt:start')).toBe(true);
+    expect(buttons.find((b) => b.callback_data === 'bt:start')?.text).toBe(t('en', 'dashBtnBacktest'));
+    cleanHarness(h);
+
+    // Operator: same row present, not hidden behind the operator-gated controls.
+    const h2 = makeHarness();
+    h2.store.setAdmin(1, 'boss');
+    await h2.feature.handleStart(h2.ctx({ from: { id: 1, username: 'boss' } }));
+    buttons = dashboardButtons(h2.reply);
+    expect(buttons.some((b) => b.callback_data === 'bt:start')).toBe(true);
+    expect(buttons.find((b) => b.callback_data === 'bt:start')?.text).toBe(t('en', 'dashBtnBacktest'));
+    cleanHarness(h2);
   });
 
   it.each(['stop:done', 'stop:confirm'])(

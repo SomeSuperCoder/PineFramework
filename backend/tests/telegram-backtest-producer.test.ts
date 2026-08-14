@@ -14,6 +14,9 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import type { Bar } from 'pine-framework';
 import {
   runTelegramBacktest,
@@ -121,8 +124,17 @@ const BASE_PARAMS: TelegramBacktestParams = {
 /** Mid-day clock — proves the shared UTC-midnight resolver anchors the range. */
 const NOW = Date.UTC(2026, 6, 15, 12, 0);
 
-function deps(scripts: ScriptFileManager): TelegramBacktestDeps {
-  return { scripts, now: NOW };
+function deps(scripts: ScriptFileManager, builtInScriptsDir?: string): TelegramBacktestDeps {
+  return { scripts, builtInScriptsDir, now: NOW };
+}
+
+/** Real temp dir holding one built-in strategy .pine (id builtin_simple_ema_cross_strategy). */
+function makeBuiltInDir(): string {
+  const dir = path.join(os.tmpdir(), `producer-builtin-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  fs.mkdirSync(dir, { recursive: true });
+  // The REAL EMA-cross source — the seam must compile+run it, not just resolve it.
+  fs.writeFileSync(path.join(dir, 'simple_ema_cross_strategy.pine'), STRATEGY_SOURCE);
+  return dir;
 }
 
 beforeEach(() => {
@@ -152,6 +164,34 @@ describe('runTelegramBacktest — strategy resolution', () => {
     const res = await runTelegramBacktest(BASE_PARAMS, deps(scripts));
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error.code).toBe('NOT_A_STRATEGY');
+    expect(fetchBars).not.toHaveBeenCalled();
+  });
+
+  it('builtin_* id resolves through the built-in seam (empty manifest → ok, NOT STRATEGY_NOT_FOUND)', async () => {
+    const dir = makeBuiltInDir();
+    try {
+      const scripts = makeScripts([]);
+      vi.mocked(fetchBars).mockResolvedValue(createCrossoverBars());
+      vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 10, source: 'api' });
+      const res = await runTelegramBacktest(
+        { ...BASE_PARAMS, strategyId: 'builtin_simple_ema_cross_strategy' },
+        deps(scripts, dir),
+      );
+      expect(res.ok).toBe(true);
+      if (res.ok) expect(res.result.metrics.totalTrades).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('builtin_* id without a built-in dir falls through to the manifest failure block (pre-fix behavior)', async () => {
+    const scripts = makeScripts([]);
+    const res = await runTelegramBacktest(
+      { ...BASE_PARAMS, strategyId: 'builtin_simple_ema_cross_strategy' },
+      deps(scripts),
+    );
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe('NO_STRATEGIES');
     expect(fetchBars).not.toHaveBeenCalled();
   });
 });

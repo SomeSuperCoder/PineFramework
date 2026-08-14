@@ -26,6 +26,7 @@
 import type { BacktestApiResult, BacktestCommissionMethodId } from '../../backtest-contract.js';
 import type { DiskOHLCVCache } from '../../cache/DiskOHLCVCache.js';
 import type { ScriptEntry, ScriptFileManager } from '../../store/ScriptFileManager.js';
+import { scanBuiltInScripts } from '../../store/builtInScripts.js';
 import type { BotLanguage, I18nKey } from '../i18n.js';
 import { t } from '../i18n.js';
 import type { CallbackContext, FeatureCommandContext } from '../TelegramBotFeature.js';
@@ -98,6 +99,11 @@ export interface BacktestWizardOptions {
   /** Strategy library accessor — the same ScriptFileManager the seam uses.
    *  Absent (test constructions of sibling flows) degrades to empty-library. */
   scripts?: ScriptFileManager;
+  /** Built-in scripts directory (test_indicators). When set, built-in
+   *  strategies are merged into the wizard's strategy list — mirroring the
+   *  frontend's user+built-in merge (QuickAdderPopup). Absent degrades to user
+   *  scripts only. */
+  builtInScriptsDir?: string;
   /** Optional persistent OHLCV cache, forwarded to the producer seam. */
   diskCache?: DiskOHLCVCache;
   /** Injectable clock (ms) for deterministic date resolution. */
@@ -111,6 +117,7 @@ export interface BacktestWizardOptions {
 export class BacktestWizard {
   private readonly sessions = new Map<number, BacktestSession>();
   private readonly scripts?: ScriptFileManager;
+  private readonly builtInScriptsDir?: string;
   private readonly diskCache?: DiskOHLCVCache;
   private readonly now?: number;
   private readonly getChatLanguage: (chatId: number) => BotLanguage;
@@ -118,6 +125,7 @@ export class BacktestWizard {
 
   constructor(options: BacktestWizardOptions) {
     this.scripts = options.scripts;
+    this.builtInScriptsDir = options.builtInScriptsDir;
     this.diskCache = options.diskCache;
     this.now = options.now;
     this.getChatLanguage = options.getChatLanguage;
@@ -128,11 +136,35 @@ export class BacktestWizard {
     return this.getChatLanguage(chatId);
   }
 
-  /** Strategies available for backtesting (indicators/libraries excluded). */
+  /** Strategies available for backtesting (indicators/libraries excluded).
+   *  Merges manifest-backed user strategies with built-in strategies from the
+   *  SAME store the /scripts/built-in route serves — the bot's mirror of the
+   *  frontend merge (QuickAdderPopup). Built-ins map to ScriptEntry shape with
+   *  zero timestamps; the producer seam resolves `builtin_*` ids via the same
+   *  module, so the strategy keyboard needs no changes. */
   private async loadStrategies(): Promise<ScriptEntry[]> {
-    if (!this.scripts) return [];
-    const all = await this.scripts.getAll();
-    return all.filter((entry) => entry.scriptType === 'strategy');
+    const user = this.scripts
+      ? (await this.scripts.getAll()).filter((entry) => entry.scriptType === 'strategy')
+      : [];
+    let builtIn: ScriptEntry[] = [];
+    if (this.builtInScriptsDir) {
+      try {
+        builtIn = scanBuiltInScripts(this.builtInScriptsDir)
+          .filter((entry) => entry.type === 'strategy')
+          .map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            source: entry.source,
+            scriptType: entry.type,
+            createdAt: 0,
+            updatedAt: 0,
+          }));
+      } catch {
+        // Built-in scan failed (e.g. directory absent on a stripped deploy) —
+        // degrade to user strategies, never break the wizard.
+      }
+    }
+    return [...user, ...builtIn];
   }
 
   /**
@@ -165,6 +197,12 @@ export class BacktestWizard {
 
     switch (action) {
       case 'restart':
+        await ctx.answerCallback();
+        await this.restart(ctx, chatId);
+        return;
+      case 'start':
+        // Dashboard "Backtest" button (bt:start) — same fresh-start path as
+        // restart: reload strategies and edit the dashboard message in place.
         await ctx.answerCallback();
         await this.restart(ctx, chatId);
         return;
@@ -325,6 +363,7 @@ export class BacktestWizard {
       }
       const result = await runTelegramBacktest(params, {
         scripts: this.scripts,
+        builtInScriptsDir: this.builtInScriptsDir,
         diskCache: this.diskCache,
         now: this.now,
       });
