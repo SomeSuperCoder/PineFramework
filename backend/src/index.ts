@@ -122,6 +122,10 @@ const telegramFeature = new TelegramBotFeature({
   // PnL image pipeline) into the existing Telegram transport. sendPhoto
   // returns false on failure/absence — deliver-style semantics.
   onPhoto: (chatId, buffer, caption) => telegramService.sendPhoto(chatId, buffer, caption),
+  // /backtest wizard dependencies: the strategy library accessor and the
+  // persistent OHLCV cache the producer seam (runTelegramBacktest) reads.
+  scripts: scriptFileManager,
+  diskCache,
 });
 telegramFeature.install(telegramService);
 

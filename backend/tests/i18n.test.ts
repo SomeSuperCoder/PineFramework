@@ -20,9 +20,9 @@ describe('i18n dictionary parity', () => {
     expect(DICTIONARIES.ru).toBe(ru);
   });
 
-  it('keeps the parallel dictionaries at exactly 91 keys each (localization change)', () => {
+  it('keeps the parallel dictionaries at exactly 143 keys each (localization change)', () => {
     const count = Object.keys(en).length;
-    expect(count).toBe(91);
+    expect(count).toBe(143);
     expect(Object.keys(es).length).toBe(count);
     expect(Object.keys(ru).length).toBe(count);
   });
@@ -34,6 +34,7 @@ describe('i18n dictionary parity', () => {
       ['btnConfirm', 'btnCancel', 'btnEmergencyStop', 'btnBackMain', 'btnNotifEnableAll', 'btnNotifDisableAll'],
       ['notifTypeTrading', 'notifTypePositionOpen', 'notifTypePositionClose', 'notifTypeReport', 'notifTypeDaily', 'notifTypeError', 'notifTypeBotLifecycle'],
       ['cardBrand', 'cardGlobal', 'cardRealized', 'cardUnrealized', 'cardNetRealizedUnrealized', 'cardSymbolPnl', 'cardTopMovers', 'cardWinRate', 'cardProfitFactor', 'cardAvgTrade', 'cardMaxDrawdown', 'cardOpenPositions', 'cardGenerated', 'cardEmptyState', 'cardEngineRunning', 'cardEngineStopped', 'cardEngineError', 'cardEngineUnknown', 'cardFooter', 'cardReportWord'],
+      ['backtestStepStrategy', 'backtestStepSymbol', 'backtestStepTimeframe', 'backtestStepDays', 'backtestStepMethod', 'backtestStepRun', 'backtestRunSummary', 'backtestRunning', 'backtestRunDone', 'backtestCancelConfirm', 'backtestEmptyLibrary', 'backtestAlreadyRunning', 'backtestErrNoStrategies', 'backtestErrStrategyNotFound', 'backtestErrNotAStrategy', 'backtestErrTooManyBars', 'backtestErrInvalidSettings', 'backtestErrFeeFetch', 'backtestErrEngine', 'backtestErrDataFetch', 'backtestBtnBack', 'backtestBtnRestart', 'backtestBtnRun', 'backtestMethodUltra', 'backtestMethodManual', 'backtestTextTitle', 'backtestTextSummary', 'backtestTextMetrics', 'backtestTextStats', 'backtestTextGenerated', 'backtestResultCaption', 'backtestCardEngine', 'backtestCardNet', 'backtestCardSettings', 'backtestCardSetSymbol', 'backtestCardSetTimeframe', 'backtestCardSetRange', 'backtestCardSetMethod', 'backtestCardSetCapital', 'backtestCardPerformance', 'backtestCardBarsAnnotation', 'backtestCardTrades', 'backtestCardWinRate', 'backtestCardProfitFactor', 'backtestCardMaxDrawdown', 'backtestCardSharpe', 'backtestCardBuyHold', 'backtestCardCommission', 'backtestCardBars', 'backtestCardAvgTrade', 'backtestCardGenerated', 'backtestCardFooter'],
     ];
     for (const group of groups) {
       for (const key of group) {

@@ -45,6 +45,9 @@ import {
 } from './report/format.js';
 import { t, isSupportedLanguage, type BotLanguage, type I18nKey } from './i18n.js';
 import { escapeMarkdownV2 } from './TelegramService.js';
+import { BacktestWizard } from './backtest/wizard.js';
+import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
+import type { ScriptFileManager } from '../store/ScriptFileManager.js';
 
 /**
  * The minimal, fabricatable message context each handler accepts. Structurally
@@ -159,6 +162,15 @@ interface TelegramBotFeatureOptions {
    * feature degrades to "not delivered" (false) when absent.
    */
   onPhoto?: (chatId: number, buffer: Buffer, caption?: string) => Promise<boolean>;
+  /**
+   * Strategy library accessor for the /backtest wizard. Optional — test
+   * constructions of sibling flows omit it; the wizard degrades to a
+   * localized empty-library state. The production composition root always
+   * injects the live ScriptFileManager.
+   */
+  scripts?: ScriptFileManager;
+  /** Optional persistent OHLCV cache, forwarded to the /backtest producer seam. */
+  diskCache?: DiskOHLCVCache;
 }
 
 function isNotificationType(value: string): value is NotificationType {
@@ -198,6 +210,7 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
   'notif',
   'start',
   'request',
+  'bt',
 ];
 
 /**
@@ -265,13 +278,15 @@ export class TelegramBotFeature {
   private readonly getEngine: () => BotEngine | null;
   private readonly onMessage?: (chatId: number, message: string) => Promise<boolean>;
   private readonly onPhoto?: (chatId: number, buffer: Buffer, caption?: string) => Promise<boolean>;
+  /** /backtest inline-keyboard wizard — owns the bt:* callback family. */
+  private readonly backtestWizard: BacktestWizard;
 
   /**
    * SSOT action registry — the single source of truth for every control and
    * its inline-button callback. `install()` iterates this instead of a
    * hardcoded wire-up list, so a control and its keyboard can never drift
-   * apart. /start is the ONLY registered command; every other control is
-   * reached exclusively through inline buttons.
+   * drift apart. /start and /backtest are the only registered commands; every
+   * other control is reached exclusively through inline buttons.
    */
   private readonly actions: BotAction[] = [
     {
@@ -329,6 +344,16 @@ export class TelegramBotFeature {
       callbackPrefix: 'emergency',
       callbackHandler: (ctx) => this.handleEmergencyCallback(ctx),
     },
+    {
+      // /backtest — the inline-keyboard backtest wizard (strategy -> symbol ->
+      // timeframe -> days -> commission method -> run). The wizard owns the
+      // entire bt:* callback family; the feature only routes to it.
+      name: 'backtest',
+      command: 'backtest',
+      handler: (ctx) => this.backtestWizard.start(ctx),
+      callbackPrefix: 'bt',
+      callbackHandler: (ctx) => this.backtestWizard.handleCallback(ctx),
+    },
   ];
 
   constructor(opts: TelegramBotFeatureOptions) {
@@ -337,6 +362,16 @@ export class TelegramBotFeature {
     this.getEngine = opts.getEngine;
     this.onMessage = opts.onMessage;
     this.onPhoto = opts.onPhoto;
+    // The photo transport is the feature's private sendPhoto (never throws,
+    // returns false on failure) — the wizard's fallback path mirrors
+    // handleReport's. sendPhoto is a method reference resolved lazily at call
+    // time, so construction order is irrelevant.
+    this.backtestWizard = new BacktestWizard({
+      scripts: opts.scripts,
+      diskCache: opts.diskCache,
+      getChatLanguage: (chatId) => this.store.getChatLanguage(chatId),
+      onPhoto: (chatId, buffer, caption) => this.sendPhoto(chatId, buffer, caption),
+    });
   }
 
   // ---- Transport wiring ----------------------------------------------------
@@ -347,8 +382,9 @@ export class TelegramBotFeature {
    */
   install(transport: BotCommandTransport): void {
     // Iterate the SSOT action registry: every action and its inline callback
-    // is bound here. Commands are intentionally limited to /start — every
-    // other control is reached exclusively through inline buttons.
+    // is bound here. Commands are intentionally limited to /start and
+    // /backtest — every other control is reached exclusively through inline
+    // buttons.
     this.registerActions(transport);
 
     // Fail fast: every inline-button prefix the feature *emits* (dashboard,

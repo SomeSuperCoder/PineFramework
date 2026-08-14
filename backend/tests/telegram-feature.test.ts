@@ -782,10 +782,11 @@ describe('B2 — install() transport seam (button-only)', () => {
     const registered: string[] = [];
     const registerBotCommand = vi.fn((cmd: string) => { registered.push(cmd); });
     h.feature.install({ registerBotCommand });
-    // /start is the ONLY registered command — every other control is
-    // button-only (the 11 text commands were removed).
-    expect(registered).toEqual(['start']);
-    expect(registerBotCommand).toHaveBeenCalledTimes(1);
+    // /start is the ONLY dashboard command — every other control is button-only
+    // (the 11 text commands were removed). The telegram-backtest-flow change
+    // intentionally adds exactly one more: /backtest.
+    expect(registered).toEqual(['start', 'backtest']);
+    expect(registerBotCommand).toHaveBeenCalledTimes(2);
     cleanHarness(h);
   });
 
@@ -818,8 +819,9 @@ describe('B2 — install() transport seam (button-only)', () => {
     const h = makeHarness();
     const registerBotCommand = vi.fn();
     h.feature.install({ registerBotCommand });
-    expect(registerBotCommand).toHaveBeenCalledTimes(1);
+    expect(registerBotCommand).toHaveBeenCalledTimes(2);
     expect(registerBotCommand).toHaveBeenCalledWith('start', expect.any(Function));
+    expect(registerBotCommand).toHaveBeenCalledWith('backtest', expect.any(Function));
     cleanHarness(h);
   });
 });
