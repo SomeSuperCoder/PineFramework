@@ -416,6 +416,102 @@ test.describe('backtest parity trust — user-facing acceptance', () => {
     await dialog.screenshot({ path: path.join(ARTIFACTS_DIR, 'parity-trust-jupiter-swap.png') });
   });
 
+  test('strip aggregation: duplicates collapse to ×N, baselines to ONE summary, fee-decision shows effectiveSettings', async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(String(err)));
+
+    // Mirrors the REAL backend producer set (buildDecisionWarnings + the
+    // baseline collector) for the acceptance scenario the Director ran
+    // (SOLUSDT / jupiter_manual): 14 identical long-only suppressions, 14
+    // baseline-applied diagnostics, ONE fee-decision with effectiveSettings.
+    const suppression = {
+      type: 'long-only-suppression',
+      message: 'Strategy only produces long entries — short trades were suppressed.',
+      context: {
+        name: 'Short',
+        direction: 'short',
+        commissionMethod: 'jupiter_manual',
+        closedExistingLong: true,
+      },
+    };
+    const baselineSettings = [
+      ['commission', '0'],
+      ['slippage', '0'],
+      ['commissionType', "'percent'"],
+      ['slippageType', "'ticks' (hard-coded)"],
+      ['defaultQty', '20'],
+      ['defaultQtyType', "'percent_of_equity'"],
+      ['pyramiding', '0'],
+      ['calcOnOrderFills', 'true (hard-coded)'],
+      ['calcOnEveryTick', 'false'],
+      ['processOrdersOnClose', 'false'],
+      ['maxBarsBack', '0 (hard-coded)'],
+      ['marginLong', '0'],
+      ['marginShort', '0'],
+      ['commissionSettings', '{}'],
+    ] as const;
+    const fixtureWarnings = [
+      ...Array.from({ length: 14 }, () => suppression),
+      ...baselineSettings.map(([setting, baseline]) => ({
+        type: 'baseline-applied',
+        message: `${setting} not declared in strategy(); baseline ${baseline} applied`,
+        context: { setting, baseline },
+      })),
+      {
+        type: 'fee-decision',
+        message: "Commission method 'jupiter_manual' (user-explicit)",
+        context: {
+          explicitMethod: 'jupiter_manual',
+          effectiveMethod: 'jupiter_manual',
+          explicitSettings: null,
+          // The FIXED live fee — 25 bps, NEVER the old 0.25 double-division artifact.
+          effectiveSettings: { dexFeeBps: 25, solPriceUsd: 150 },
+        },
+      },
+    ];
+
+    await installApiMocks(page, () => ({
+      ...BASE_RESULT,
+      effectiveConfig: effectiveConfigFor('jupiter_manual'),
+      warnings: fixtureWarnings,
+    }));
+
+    await openBacktestPanel(page);
+    await runBacktest(page, 'jupiter_manual');
+
+    const dialog = resultsDialog(page);
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    const strip = dialog.getByRole('status');
+    await expect(strip).toHaveCount(1);
+
+    // ── Long-only suppression: ONE row with a ×14 badge (not 14 rows) ──
+    await expect(strip.getByText('Long-only suppression')).toHaveCount(1);
+    await expect(strip.getByText('×14')).toBeVisible();
+
+    // ── Baseline applied: ONE summary row (not 14 rows) + compact detail ──
+    await expect(strip.getByText('Baseline applied')).toHaveCount(1);
+    await expect(strip.getByText(/did not declare 14 settings/)).toBeVisible();
+    await expect(strip).toContainText('marginShort: 0');
+    await expect(strip).toContainText("commissionType: 'percent'");
+
+    // ── Fee decision: effectiveSettings visible in the context hint ──
+    await expect(strip.getByText('Fee decision')).toHaveCount(1);
+    await expect(strip).toContainText('dexFeeBps');
+    await expect(strip).toContainText('solPriceUsd');
+    // The 100× undercharge artifact is gone from the rendered strip.
+    await expect(strip).not.toContainText('0.25');
+
+    // No uncaught page errors.
+    expect(pageErrors).toEqual([]);
+
+    // Evidence screenshot.
+    mkdirSync(ARTIFACTS_DIR, { recursive: true });
+    await dialog.screenshot({ path: path.join(ARTIFACTS_DIR, 'strip-aggregation-x14.png') });
+  });
+
   test('Jupiter Ultra: commission label reads "Jupiter Ultra" in the strip', async ({ page }) => {
     await installApiMocks(page, (postBody) => ({
       ...BASE_RESULT,

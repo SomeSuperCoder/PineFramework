@@ -232,6 +232,108 @@ describe('WarningsStrip', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByText('Long-only suppression')).not.toBeInTheDocument();
   });
+
+  it('collapses exact-duplicate warnings (same type|message) into one row with a ×N badge', () => {
+    const duplicate = {
+      type: 'long-only-suppression' as const,
+      message: '3 short orders suppressed by the long-only rule',
+      context: { suppressed: 3, reason: 'long_only_rule' },
+    };
+    render(
+      <WarningsStrip
+        warnings={[
+          duplicate,
+          { ...duplicate, context: { suppressed: 3, reason: 'long_only_rule_alt' } },
+          duplicate,
+        ]}
+      />,
+    );
+
+    // ONE row for the message — duplicates collapse (would be 3 matches otherwise).
+    expect(screen.getAllByText('3 short orders suppressed by the long-only rule')).toHaveLength(1);
+    // The ×N badge surfaces the collapsed count.
+    expect(screen.getByText('×3')).toBeInTheDocument();
+    // Context is NOT part of the dedup key — the first occurrence's hint is retained.
+    expect(screen.getByText('suppressed: 3 · reason: long_only_rule')).toBeInTheDocument();
+  });
+
+  it('groups multiple baseline-applied warnings into one summary row with count and per-setting detail', () => {
+    render(
+      <WarningsStrip
+        warnings={[
+          {
+            type: 'baseline-applied',
+            message: 'initial_capital not declared',
+            context: { setting: 'initial_capital', baseline: '10000' },
+          },
+          {
+            type: 'baseline-applied',
+            message: 'commission not declared',
+            context: { setting: 'commission', baseline: '0' },
+          },
+          {
+            type: 'baseline-applied',
+            message: 'slippage not declared',
+            context: { setting: 'slippage', baseline: '0' },
+          },
+        ]}
+      />,
+    );
+
+    // ONE summary row — count in the message (pluralized).
+    expect(
+      screen.getByText('strategy() did not declare 3 settings — engine defaults applied'),
+    ).toBeInTheDocument();
+    // Per-setting compact detail: setting: baseline, ' · ' joined.
+    expect(screen.getByText('initial_capital: 10000 · commission: 0 · slippage: 0')).toBeInTheDocument();
+    // Only the single summary row renders — one 'Baseline applied' badge, no per-row messages.
+    expect(screen.getAllByText('Baseline applied')).toHaveLength(1);
+    expect(screen.queryByText('initial_capital not declared')).not.toBeInTheDocument();
+    expect(screen.queryByText('commission not declared')).not.toBeInTheDocument();
+  });
+
+  it('pluralizes the baseline summary copy for a single undeclared setting', () => {
+    render(
+      <WarningsStrip
+        warnings={[
+          {
+            type: 'baseline-applied',
+            message: 'pyramiding not declared',
+            context: { setting: 'pyramiding', baseline: '0' },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('strategy() did not declare 1 setting — engine defaults applied')).toBeInTheDocument();
+    expect(screen.getByText('pyramiding: 0')).toBeInTheDocument();
+  });
+
+  it('renders the full 4-key fee-decision context — effectiveSettings visible, not truncated', () => {
+    render(
+      <WarningsStrip
+        warnings={[
+          {
+            type: 'fee-decision',
+            message: 'Commission method resolved: jupiter_ultra (Jupiter Ultra)',
+            context: {
+              explicitMethod: 'jupiter_manual',
+              effectiveMethod: 'jupiter_ultra',
+              explicitSettings: { dexFeeBps: 25, solPriceUsd: 180.5 },
+              effectiveSettings: { dexFeeBps: 25, solPriceUsd: 180.5 },
+            },
+          },
+        ]}
+      />,
+    );
+
+    // The 4th key renders — the old slice(0,3) would have dropped effectiveSettings entirely.
+    expect(
+      screen.getByText(/effectiveSettings: \{"dexFeeBps":25,"solPriceUsd":180\.5\}/),
+    ).toBeInTheDocument();
+    // Both effective settings values are visible in the rendered hint.
+    expect(screen.getByText(/solPriceUsd":180\.5/)).toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------
