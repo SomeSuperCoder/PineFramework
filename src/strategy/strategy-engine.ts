@@ -186,15 +186,17 @@ export class StrategyEngine {
       isLongOnlyEnforced(this.config.commissionMethod) &&
       direction === 'short'
     ) {
+      // Concise by design: emitted per suppressed order (can be dozens per
+      // backtest) — the typed context carries the structured detail.
       console.warn(
-        `[StrategyEngine] Short entry suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading.`,
+        `[StrategyEngine] Entry "${name}" suppressed — ${this.config.commissionMethod} is long-only`,
       );
       // Typed diagnostic (design D4): this suppression is what the parity
       // divergence analysis found silently dropped short entries — surface it
       // to the run's consumers (API result, export, CLI).
       this.warn({
         type: 'long-only-suppression',
-        message: `Short entry suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading.`,
+        message: `Entry "${name}" suppressed — ${this.config.commissionMethod} is long-only`,
         context: {
           name,
           direction,
@@ -284,7 +286,7 @@ export class StrategyEngine {
         // (design D4) so the run's consumers can see the suppression.
         this.warn({
           type: 'long-only-suppression',
-          message: `Short order suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading`,
+          message: `Order "${name}" suppressed — ${this.config.commissionMethod} is long-only`,
           context: {
             name,
             direction,

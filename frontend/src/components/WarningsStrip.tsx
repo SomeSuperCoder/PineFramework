@@ -11,6 +11,16 @@ const WARNING_LABELS: Record<BacktestWarningType, string> = {
   'export-failure': 'Export failure',
 };
 
+/**
+ * Render-order priority — lower number renders first. Only
+ * `long-only-suppression` is promoted (to the very top of the strip); every
+ * other row falls back to rank 1, so the stable sort keeps the remaining
+ * warnings in their current relative (payload) order.
+ */
+const WARNING_ROW_PRIORITY: Partial<Record<BacktestWarningType, number>> = {
+  'long-only-suppression': 0,
+};
+
 function stringifyContextValue(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
@@ -121,12 +131,15 @@ interface WarningsStripProps {
  * Rendering only: exact-duplicate warnings are collapsed with a ×N count and
  * baseline-applied diagnostics are grouped into one summary row, so the strip
  * surfaces the meaningful signals (suppression, fee decisions) instead of
- * being buried under repetitive rows.
+ * being buried under repetitive rows. The long-only-suppression row renders
+ * first when present; remaining rows keep their payload-relative order.
  */
 export function WarningsStrip({ warnings }: WarningsStripProps) {
   if (!warnings || warnings.length === 0) return null;
 
-  const rows = aggregateWarnings(warnings);
+  const rows = aggregateWarnings(warnings).sort(
+    (a, b) => (WARNING_ROW_PRIORITY[a.type] ?? 1) - (WARNING_ROW_PRIORITY[b.type] ?? 1),
+  );
   const hasSuppression = rows.some((row) => row.type === 'long-only-suppression');
   const tone = hasSuppression ? 'warning' : 'info';
 

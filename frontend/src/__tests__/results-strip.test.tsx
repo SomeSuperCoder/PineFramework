@@ -334,6 +334,35 @@ describe('WarningsStrip', () => {
     // Both effective settings values are visible in the rendered hint.
     expect(screen.getByText(/solPriceUsd":180\.5/)).toBeInTheDocument();
   });
+
+  it('renders the long-only-suppression row FIRST in a mixed list, before the baseline summary (priority sort)', () => {
+    render(
+      <WarningsStrip
+        warnings={[
+          {
+            type: 'baseline-applied',
+            message: 'initial_capital not declared',
+            context: { setting: 'initial_capital', baseline: '10000' },
+          },
+          suppressionWarning,
+          feeWarning,
+        ]}
+      />,
+    );
+
+    const suppression = screen.getByText('Long-only suppression');
+    const baselineSummary = screen.getByText(
+      'strategy() did not declare 1 setting — engine defaults applied',
+    );
+    const fee = screen.getByText('Fee decision');
+    const FOLLOWS = Node.DOCUMENT_POSITION_FOLLOWING;
+
+    // Regression lock: long-only-suppression is promoted to the very top of the strip…
+    expect(suppression.compareDocumentPosition(baselineSummary) & FOLLOWS).toBeTruthy();
+    expect(suppression.compareDocumentPosition(fee) & FOLLOWS).toBeTruthy();
+    // …and the non-promoted rows keep their payload-relative order (stable sort).
+    expect(baselineSummary.compareDocumentPosition(fee) & FOLLOWS).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
