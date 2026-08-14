@@ -18,9 +18,10 @@ interface StrategyResultsPopupProps {
   phase: string;
   result: BacktestResultResponse | null;
   error: string | null;
+  jobId?: string | null;
 }
 
-export function StrategyResultsPopup({ isOpen, onClose, status, progress, phase, result, error }: StrategyResultsPopupProps) {
+export function StrategyResultsPopup({ isOpen, onClose, status, progress, phase, result, error, jobId }: StrategyResultsPopupProps) {
   const isLoading = status === null || status === 'queued' || status === 'running';
   const displayProgress = status === 'completed' ? 100 : progress;
 
@@ -68,7 +69,7 @@ export function StrategyResultsPopup({ isOpen, onClose, status, progress, phase,
             </div>
           )}
           {status === 'completed' && result && (
-            <BacktestResults result={result} />
+            <BacktestResults result={result} jobId={jobId} />
           )}
         </div>
       </DialogContent>

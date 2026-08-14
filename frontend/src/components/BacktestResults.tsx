@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import type { BacktestResultResponse, EquityPoint } from '../types';
 import {
@@ -29,6 +29,7 @@ interface BacktestResultsProps {
   result: BacktestResultResponse;
   onClose?: () => void;
   onSelectTrade?: (tradeIndex: number) => void;
+  jobId?: string | null;
 }
 
 /** Small stat tile (§15.2 Card recipe: label caption + tabular-nums value). */
@@ -118,9 +119,24 @@ function EquityDrawdownChart({ points }: { points: EquityPoint[] }) {
   );
 }
 
-export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResultsProps) {
+export function BacktestResults({ result, onClose, onSelectTrade, jobId }: BacktestResultsProps) {
   const [sortField, setSortField] = useState<string>('pnl');
   const [sortAsc, setSortAsc] = useState(false);
+  const [exportState, setExportState] = useState<'idle' | 'exporting' | 'success' | 'error'>('idle');
+  const [exportError, setExportError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  const exportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (exportTimeoutRef.current) {
+        clearTimeout(exportTimeoutRef.current);
+        exportTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const { metrics, trades } = result;
 
@@ -143,6 +159,56 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
     a.download = 'backtest-trades.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Triggers the server-side full-data export. The response body is
+   * informational only — the file is written server-side. State machine:
+   * idle → exporting → success (2s) | error. The mounted guard ignores
+   * stale responses after unmount; the timeout ref is cleared on unmount.
+   */
+  const exportFullData = async () => {
+    if (!jobId || exportState === 'exporting') return;
+    setExportError(null);
+    setExportState('exporting');
+    try {
+      const response = await fetch('/api/backtest/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+      if (!mountedRef.current) return;
+      if (response.ok) {
+        setExportState('success');
+        if (exportTimeoutRef.current) clearTimeout(exportTimeoutRef.current);
+        exportTimeoutRef.current = setTimeout(() => {
+          exportTimeoutRef.current = null;
+          if (mountedRef.current) setExportState('idle');
+        }, 2000);
+      } else {
+        let message = `Export failed (HTTP ${response.status})`;
+        try {
+          const body: unknown = await response.json();
+          const errorMsg =
+            typeof body === 'object' &&
+            body !== null &&
+            'error' in body &&
+            typeof (body as Record<string, unknown>).error === 'string'
+              ? (body as { error: string }).error
+              : null;
+          if (errorMsg) message = `Export failed — ${errorMsg}`;
+        } catch {
+          // Non-JSON error body — keep the HTTP status message.
+        }
+        setExportState('error');
+        setExportError(message);
+      }
+    } catch {
+      if (mountedRef.current) {
+        setExportState('error');
+        setExportError('Export failed — network error');
+      }
+    }
   };
 
   const toggleSort = (field: string) => {
@@ -174,8 +240,23 @@ export function BacktestResults({ result, onClose, onSelectTrade }: BacktestResu
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={exportCSV}>Export CSV</DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={exportFullData}
+                  disabled={!jobId || exportState === 'exporting'}
+                >
+                  {exportState === 'exporting'
+                    ? 'Exporting…'
+                    : exportState === 'success'
+                      ? 'Exported ✓'
+                      : 'Export Full Data'}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            {exportState === 'error' && exportError && (
+              <span className="text-xs text-destructive" role="alert">
+                {exportError}
+              </span>
+            )}
             {onClose && (
               <Button type="button" variant="destructive" size="sm" onClick={onClose}>
                 Close

@@ -11,6 +11,8 @@ export interface CliOptions {
   startDate?: string;
   endDate?: string;
   output?: string;
+  /** `--export [dir]`: full backtest data export dir. '' = use default (.exports/). */
+  exportDir?: string;
   initialCapital?: number;
   commission?: number;
   commissionType?: CliCommissionType;

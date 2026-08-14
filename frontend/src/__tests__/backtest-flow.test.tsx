@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, renderHook, act } from '@testing-library/react';
+import { render, screen, renderHook, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrategyResultsPopup } from '../components/StrategyResultsPopup';
 import { BacktestPanel } from '../components/BacktestPanel';
@@ -497,6 +497,157 @@ describe('Backtest Flow Integration', () => {
 
       expect(screen.getByText('Net Profit')).toBeInTheDocument();
       expect(screen.getByText('No trades')).toBeInTheDocument();
+    });
+
+    describe('Export Full Data dropdown', () => {
+      let fetchMock: ReturnType<typeof vi.fn>;
+
+      afterEach(() => {
+        vi.unstubAllGlobals();
+      });
+
+      /** Stubs fetch with the given impl and records it for assertions. */
+      function installExportFetchMock(
+        impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Partial<Response>>,
+      ) {
+        fetchMock = vi.fn(impl);
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+      }
+
+      async function openExportMenu() {
+        await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+      }
+
+      it('shows "Export Full Data" in the dropdown after a completed backtest (result + jobId present)', async () => {
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        await openExportMenu();
+
+        const item = await screen.findByRole('menuitem', { name: 'Export Full Data' });
+        // Radix signals the disabled prop via aria-disabled (jest-dom v6's
+        // toBeDisabled only honors native `disabled` on form controls).
+        expect(item).not.toHaveAttribute('aria-disabled', 'true');
+        // The CSV path stays untouched alongside the new full-data option.
+        expect(screen.getByRole('menuitem', { name: 'Export CSV' })).toBeInTheDocument();
+      });
+
+      it('POSTs { job_id } to /api/backtest/export with JSON headers when clicked', async () => {
+        installExportFetchMock(async () => ({ ok: true, status: 200, json: async () => ({ file: 'export.json' }) }));
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-42" />);
+
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [input, init] = fetchMock.mock.calls[0];
+        expect(String(input)).toBe('/api/backtest/export');
+        expect(init?.method).toBe('POST');
+        expect(init?.headers).toEqual({ 'Content-Type': 'application/json' });
+        expect(JSON.parse(String(init?.body))).toEqual({ job_id: 'job-42' });
+      });
+
+      it('loading: shows "Exporting…" with the item disabled, and a double-click fires only ONE fetch', async () => {
+        let resolveFetch!: (value: Partial<Response>) => void;
+        installExportFetchMock(
+          () => new Promise<Partial<Response>>((resolve) => { resolveFetch = resolve; }),
+        );
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        // First click starts the export; the dropdown closes on select.
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        // While the request is in-flight, reopening shows the loading label + disabled item.
+        await openExportMenu();
+        const loadingItem = await screen.findByRole('menuitem', { name: 'Exporting…' });
+        expect(loadingItem).toHaveAttribute('aria-disabled', 'true');
+
+        // A second click (double-click) on the disabled item is a no-op → still one fetch.
+        await userEvent.dblClick(loadingItem);
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+
+        // Resolve so no dangling promise/state leaks into later tests.
+        await act(async () => {
+          resolveFetch({ ok: true, status: 200, json: async () => ({ file: 'export.json' }) });
+        });
+      });
+
+      it('success: shows "Exported ✓" then reverts to idle after ~2s', async () => {
+        installExportFetchMock(async () => ({ ok: true, status: 200, json: async () => ({ file: 'export.json' }) }));
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+
+        // Menu closed on select; reopening within the success window shows the checkmark.
+        await openExportMenu();
+        expect(await screen.findByRole('menuitem', { name: 'Exported ✓' })).not.toHaveAttribute('aria-disabled', 'true');
+
+        // After ~2s the machine reverts to idle (polling waitFor — deterministic, no sleeps).
+        await waitFor(() => {
+          expect(screen.getByRole('menuitem', { name: 'Export Full Data' })).not.toHaveAttribute('aria-disabled', 'true');
+        }, { timeout: 3000 });
+      });
+
+      it('error: shows destructive text from body.error, item re-enabled for retry', async () => {
+        installExportFetchMock(async () => ({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: 'Job not completed', code: 'JOB_NOT_COMPLETED' }),
+        }));
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+
+        // Destructive alert from body.error (rendered outside the dropdown, role=alert).
+        expect(await screen.findByRole('alert')).toHaveTextContent('Export failed — Job not completed');
+
+        // Item re-enabled: a retry fires a second request.
+        await openExportMenu();
+        const retryItem = await screen.findByRole('menuitem', { name: 'Export Full Data' });
+        expect(retryItem).not.toHaveAttribute('aria-disabled', 'true');
+        await userEvent.click(retryItem);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+      });
+
+      it('error: falls back to the HTTP status when the body is not JSON', async () => {
+        installExportFetchMock(async () => ({
+          ok: false,
+          status: 500,
+          json: async () => { throw new Error('not json'); },
+        }));
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Export failed (HTTP 500)');
+      });
+
+      it('error: network failure shows the network error message', async () => {
+        installExportFetchMock(async () => { throw new Error('Network down'); });
+        render(<BacktestResults result={MOCK_RESULT} jobId="job-1" />);
+
+        await openExportMenu();
+        await userEvent.click(await screen.findByRole('menuitem', { name: 'Export Full Data' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Export failed — network error');
+      });
+
+      it('renders the Export Full Data item disabled when jobId is undefined, firing no fetch', async () => {
+        installExportFetchMock(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+        render(<BacktestResults result={MOCK_RESULT} />);
+
+        await openExportMenu();
+        const item = await screen.findByRole('menuitem', { name: 'Export Full Data' });
+        expect(item).toHaveAttribute('aria-disabled', 'true');
+
+        // Disabled → clicking (even a double-click) must never hit the network.
+        await userEvent.click(item);
+        await userEvent.dblClick(item);
+        expect(fetchMock).not.toHaveBeenCalled();
+      });
     });
   });
 });

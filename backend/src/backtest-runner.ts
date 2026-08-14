@@ -116,6 +116,8 @@ export function computeBacktestMetrics(
   drawdownCurve: number[];
   equityPoints: Array<{ time: number; equity: number; drawdown: number; balance: number }>;
   monthlyReturns: Record<string, number>;
+  /** Unrounded monthly returns (percent) — export contract: numeric values MUST NOT be rounded. */
+  monthlyReturnsRaw: Record<string, number>;
   buyHoldReturn: number;
 } | null {
   const strategyEngine = execEngine.getStrategyEngine();
@@ -130,6 +132,7 @@ export function computeBacktestMetrics(
   const drawdownCurve = buildDrawdownCurve(equityCurve);
   const equityPoints = buildEquityPoints(bars, trades, equityCurve, drawdownCurve);
   const monthlyReturns = computeMonthlyReturns(equityPoints);
+  const monthlyReturnsRaw = computeMonthlyReturnsRaw(equityPoints);
   const buyHoldReturn =
     bars.length >= 2
       ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100
@@ -143,6 +146,7 @@ export function computeBacktestMetrics(
     drawdownCurve,
     equityPoints,
     monthlyReturns,
+    monthlyReturnsRaw,
     buyHoldReturn,
   };
 }
@@ -225,7 +229,7 @@ function buildEquityPoints(
   return points;
 }
 
-function computeMonthlyReturns(
+function computeMonthlyReturnsRaw(
   points: Array<{ time: number; equity: number }>,
 ): Record<string, number> {
   const monthly: Record<string, number> = {};
@@ -237,10 +241,29 @@ function computeMonthlyReturns(
     if (!monthly[key]) {
       monthly[key] =
         prevMonthEquity > 0
-          ? Math.round(((point.equity - prevMonthEquity) / prevMonthEquity) * 10000) / 100
+          ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100
           : 0;
       prevMonthEquity = point.equity;
     }
   }
   return monthly;
+}
+
+/**
+ * Rounded monthly returns (percent, 2dp) — historical CLI/API display shape.
+ * The export contract requires UNROUNDED numeric values; the full-data export
+ * path consumes computeMonthlyReturnsRaw instead (surfaced as
+ * `monthlyReturnsRaw` through toOutcome). Rounding `raw * 100` reproduces the
+ * original Math.round(x*10000)/100 exactly, so this wrapper is value-identical
+ * to the pre-refactor computation for every existing caller.
+ */
+function computeMonthlyReturns(
+  points: Array<{ time: number; equity: number }>,
+): Record<string, number> {
+  const raw = computeMonthlyReturnsRaw(points);
+  const rounded: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    rounded[key] = Math.round(value * 100) / 100;
+  }
+  return rounded;
 }

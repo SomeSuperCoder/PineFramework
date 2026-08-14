@@ -2,12 +2,16 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+import { randomUUID } from 'node:crypto';
+import { VERSION, buildBacktestExport, scriptHash } from 'pine-framework';
 import type { CliOptions, CliCommissionType, CliCommissionMethod, TimeframeResult } from './types.js';
 import { VALID_TIMEFRAMES, DEFAULT_SYMBOLS, getDefaultDaysBack } from './types.js';
 import { runMultiSymbolBacktest } from './multi-symbol-runner.js';
 import { buildTimeframeResult, buildMultiTimeframeOutput } from './result-aggregator.js';
 import { printSummaryTable, writeJsonOutput } from './output-formatter.js';
 import { assertRealisticCommissionMethod } from '../backtest-config.js';
+import { writeExportFile, type ExportRun } from '../backtest-export.js';
+import type { ExportOutcomeSink } from './symbol-runner.js';
 
 function printUsage(): void {
   console.log(`
@@ -22,6 +26,9 @@ Options:
   --start-date <date>     Start date YYYY-MM-DD (overrides --days-back)
   --end-date <date>       End date YYYY-MM-DD
   --output <path>         Write JSON results to file
+  --export [dir]          Export full backtest data (bars, series, trades, orders,
+                          raw metrics) as JSON files. Optional value: a directory
+                          (default: .exports/ at repo root).
   --initial-capital <n>   Starting capital (default: 10000)
   --commission <n>        Commission value (default: 0)
   --commission-type <t>   Commission type: percent, fixed, per_contract, per_order (default: percent)
@@ -84,6 +91,16 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--output') {
       i++;
       options.output = args[i];
+    } else if (arg === '--export') {
+      // Optional value: `--export ./dir` uses that dir; a bare `--export`
+      // (or a value that looks like the next flag) uses the default dir.
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith('-')) {
+        i++;
+        options.exportDir = next;
+      } else {
+        options.exportDir = '';
+      }
     } else if (arg === '--initial-capital') {
       i++;
       options.initialCapital = parseFloat(args[i] ?? '');
@@ -198,6 +215,90 @@ async function main(): Promise<void> {
   const daysBackExplicitlySet = options.daysBack > 0;
   const endDate = options.endDate ?? new Date().toISOString().split('T')[0]!;
 
+  // ── Full-data export wiring (--export) ────────────────────────────────────
+  // exportDir: undefined = export disabled; '' (bare --export) = default dir.
+  // The bare-flag default resolves from the MODULE location, not process.cwd():
+  // dist/cli/backtest-cli.js -> dirname/../../.. = monorepo root, so `pine-backtest`
+  // writes .exports/ at repo root no matter where it is invoked from (a cwd-based
+  // resolve(process.cwd(),'..','.exports') lands in the repo's PARENT when the
+  // npm bin runs from repo root). import.meta.dirname requires Node >= 20.11.
+  const exportDir =
+    options.exportDir !== undefined
+      ? options.exportDir
+        ? resolve(options.exportDir)
+        : resolve(import.meta.dirname, '../../..', '.exports')
+      : undefined;
+
+  // One ExportRun per CLI invocation: files/symbols accumulate across
+  // timeframes so the final manifest.json lists every export of the run.
+  const exportRun: ExportRun | undefined = exportDir
+    ? {
+        runId: randomUUID(),
+        source: 'script',
+        dir: exportDir,
+        files: [],
+        symbols: new Set<string>(),
+      }
+    : undefined;
+
+  // The export sink is the composition root for the full-data export: it builds
+  // the export from the pure lib builder + engine surface, writes the file via
+  // the backend glue, and records the filename for the manifest. Errors here are
+  // swallowed by runSymbolBacktest — an export never fails a backtest.
+  const onOutcome: ExportOutcomeSink | undefined = exportRun
+    ? async (ctx) => {
+        const strategyEngine = ctx.engine.getStrategyEngine();
+        if (!strategyEngine) {
+          throw new Error('Effective strategy config unavailable (missing strategy engine)');
+        }
+        const exportObj = buildBacktestExport({
+          runId: exportRun.runId,
+          source: 'script',
+          meta: {
+            symbol: ctx.symbol,
+            timeframe: ctx.timeframe,
+            ...(ctx.startDate !== undefined ? { startDate: ctx.startDate } : {}),
+            ...(ctx.endDate !== undefined ? { endDate: ctx.endDate } : {}),
+            barCount: ctx.bars.length,
+            engineVersion: VERSION,
+            scriptHash: scriptHash(ctx.script),
+          },
+          params: {
+            request: ctx.cliOptions,
+            configOverride: { ...ctx.configOverride },
+            // Mutable copy of the engine's Readonly config — the schema requires
+            // the full effective config, and a build MUST fail if it's unavailable.
+            effectiveConfig: { ...strategyEngine.getConfig() },
+          },
+          input: { bars: ctx.bars },
+          output: {
+            series: ctx.engine.getAllOutputs(),
+            barTimestamps: ctx.bars.map((b) => b.timestamp),
+            strategyMarkers: ctx.engine.getStrategyMarkers(),
+            equityCurve: ctx.outcome.equityCurve,
+            drawdownCurve: ctx.outcome.drawdownCurve,
+            equityPoints: ctx.outcome.equityPoints,
+            // Export contract: numeric values MUST NOT be rounded. toOutcome
+            // surfaces the unrounded series via monthlyReturnsRaw; fall back to
+            // the rounded record only when an outcome lacks raw values, and say
+            // so in warnings so the document stays honest.
+            monthlyReturns: ctx.outcome.monthlyReturnsRaw ?? ctx.outcome.monthlyReturns,
+            buyHoldReturn: ctx.outcome.buyHoldReturn,
+          },
+          trades: ctx.outcome.trades,
+          orders: ctx.outcome.filledOrders,
+          metrics: ctx.outcome.metrics,
+          warnings: ctx.outcome.monthlyReturnsRaw
+            ? ctx.warnings
+            : [...ctx.warnings, 'monthlyReturns rounded by caller (backtest-runner.ts:240)'],
+        });
+        const filename = await writeExportFile(exportObj, exportRun.dir);
+        exportRun.files.push(filename);
+        exportRun.symbols.add(ctx.symbol);
+        process.stderr.write(`  ↳ exported ${filename}\n`);
+      }
+    : undefined;
+
   try {
     const tfResults: TimeframeResult[] = [];
 
@@ -222,7 +323,7 @@ async function main(): Promise<void> {
 
       process.stderr.write(`\n--- Timeframe: ${tf} (${startDate} to ${endDate}) ---\n`);
 
-      const symbols = await runMultiSymbolBacktest(tfOptions);
+      const symbols = await runMultiSymbolBacktest(tfOptions, onOutcome, exportRun);
 
       const dateRange = { start: startDate, end: endDate };
       const tfResult = buildTimeframeResult(tf, symbols, dateRange);
@@ -246,6 +347,12 @@ async function main(): Promise<void> {
     if (options.output) {
       writeJsonOutput(output, options.output);
       process.stderr.write(`Results written to ${options.output}\n`);
+    }
+
+    if (exportRun && exportRun.files.length > 0) {
+      process.stderr.write(
+        `Exports written to ${exportRun.dir} (${exportRun.files.length} file(s) + manifest.json)\n`,
+      );
     }
 
     const totalSuccessful = output.timeframes.reduce(

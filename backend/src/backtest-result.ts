@@ -35,6 +35,14 @@ export interface BacktestOutcome {
   drawdownCurve: number[];
   equityPoints: Array<{ time: number; equity: number; drawdown: number; balance: number }>;
   monthlyReturns: Record<string, number>;
+  /**
+   * Unrounded monthly returns (percent) for the full-data export contract
+   * ("numeric values MUST NOT be rounded"). Populated by toOutcome; optional
+   * so hand-built BacktestOutcome literals elsewhere keep compiling. Consumers
+   * that need raw values (the export sink) read this; the API/CLI display
+   * paths keep the rounded `monthlyReturns`.
+   */
+  monthlyReturnsRaw?: Record<string, number>;
   buyHoldReturn: number;
 }
 
@@ -54,6 +62,7 @@ export function toOutcome(bars: Bar[], engine: ExecutionEngine): BacktestOutcome
     drawdownCurve: res.drawdownCurve,
     equityPoints: res.equityPoints,
     monthlyReturns: res.monthlyReturns,
+    monthlyReturnsRaw: res.monthlyReturnsRaw,
     buyHoldReturn: res.buyHoldReturn,
   };
 }

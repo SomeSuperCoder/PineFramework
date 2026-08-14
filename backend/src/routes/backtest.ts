@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { fetchDexFeeBps, type FeeFetchResult } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import { randomUUID } from 'crypto';
+import { resolve } from 'node:path';
+import { VERSION, buildBacktestExport, scriptHash, type BacktestExport } from 'pine-framework';
+import { writeExportFile } from '../backtest-export.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 import { runBacktestPipeline } from '../backtest-runner.js';
@@ -13,6 +16,14 @@ import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
 /** Completed/failed backtest jobs older than this (ms) are eligible for garbage collection. */
 const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // sweep every 5 minutes
+
+/**
+ * Where HTTP-exported backtest files land (repo-root/.exports). Same resolution
+ * the CLI's B4 fix landed (backend/src/cli/backtest-cli.ts): import.meta.dirname
+ * up 3 levels from backend/src/routes (or backend/dist/routes in the built
+ * output) is the repo root — invocation-dir independent. Requires Node >= 20.11.
+ */
+const EXPORTS_DIR = resolve(import.meta.dirname, '../../..', '.exports');
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
@@ -28,6 +39,10 @@ export interface BacktestJob {
   config: Record<string, unknown>;
   result?: Record<string, unknown>;
   error?: string;
+  /** Full-data export object, built at job completion (see runBacktest). */
+  exportData?: BacktestExport;
+  /** Non-fatal export build error — the backtest itself still completed. */
+  exportError?: string;
   createdAt: number;
   completedAt?: number;
 }
@@ -137,6 +152,70 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: outcome.metrics.totalTrades, totalPnl: outcome.metrics.totalPnl, winRate: outcome.metrics.winRate, profitFactor: outcome.metrics.profitFactor });
 
       job.result = toApiResult(outcome);
+
+      // ── Full-data export (OpenSpec backtest-full-data-export, tasks 3.1/3.2) ──
+      // Mirror the CLI sink's buildBacktestExport call (backend/src/cli/backtest-cli.ts):
+      // same params layers, same engine surface — only `source` differs ('frontend').
+      // The object is kept on the job (not stringified): the export route serializes
+      // + writes on demand, avoiding a double stringify and keeping the job store lean.
+      // A failing export NEVER fails the backtest — log + record exportError, then
+      // still mark the job completed (mirrors the CLI sink's resilience).
+      try {
+        const strategyEngine = execEngine.getStrategyEngine();
+        if (!strategyEngine) {
+          throw new Error('Effective strategy config unavailable (missing strategy engine)');
+        }
+        job.exportData = buildBacktestExport({
+          runId: job.jobId,
+          source: 'frontend',
+          meta: {
+            symbol: job.symbol,
+            timeframe: job.timeframe,
+            ...(job.startDate !== undefined ? { startDate: new Date(job.startDate).getTime() } : {}),
+            ...(job.endDate !== undefined ? { endDate: new Date(job.endDate).getTime() } : {}),
+            barCount: bars.length,
+            engineVersion: VERSION,
+            scriptHash: scriptHash(script),
+          },
+          params: {
+            // The raw HTTP job config — what the user actually sent this job.
+            request: job.config,
+            // Post-applyDexFee override — records what was REALLY run, including
+            // injected dexFeeBps/solPriceUsd (same layer the CLI sink records).
+            configOverride: { ...override },
+            // Mutable copy of the engine's Readonly config — the builder throws
+            // when the effective config is unavailable (contract: REQUIRED).
+            effectiveConfig: { ...strategyEngine.getConfig() },
+          },
+          input: { bars },
+          output: {
+            series: execEngine.getAllOutputs(),
+            barTimestamps: bars.map((b) => b.timestamp),
+            strategyMarkers: execEngine.getStrategyMarkers(),
+            equityCurve: outcome.equityCurve,
+            drawdownCurve: outcome.drawdownCurve,
+            equityPoints: outcome.equityPoints,
+            // Export contract: numeric values MUST NOT be rounded. Use the raw
+            // series when present; fall back to the rounded record with a warning
+            // so the document stays honest (same fallback the CLI sink uses).
+            monthlyReturns: outcome.monthlyReturnsRaw ?? outcome.monthlyReturns,
+            buyHoldReturn: outcome.buyHoldReturn,
+          },
+          trades: outcome.trades,
+          orders: outcome.filledOrders,
+          metrics: outcome.metrics,
+          warnings: outcome.monthlyReturnsRaw
+            ? []
+            : ['monthlyReturns rounded by caller (backtest-runner.ts:240)'],
+        });
+      } catch (exportErr) {
+        const exportMessage = exportErr instanceof Error ? exportErr.message : String(exportErr);
+        logger.warn('Backtest export build failed; backtest still completed', {
+          jobId: job.jobId,
+          error: exportMessage,
+        });
+        job.exportError = exportMessage;
+      }
 
       job.status = 'completed';
       job.progress = 100;
@@ -274,6 +353,59 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       }
     },
   );
+
+  /**
+   * POST /api/backtest/export  { job_id }
+   *
+   * Serialize + write the completed job's full-data export to .exports/ and
+   * return the filename. Frozen contract (the frontend builds against it):
+   *   200 { file } | 400 { error, code: 'VALIDATION_ERROR' | 'JOB_NOT_COMPLETED' }
+   *   | 404 { error, code: 'JOB_NOT_FOUND' }
+   * Registered before GET /backtest/:jobId — different method, but keep static
+   * paths ahead of param routes for consistency with the dex-fee route.
+   */
+  router.post('/backtest/export', async (req, res) => {
+    try {
+      const body = req.body as Record<string, unknown> | undefined;
+      const rawJobId = body?.job_id;
+      if (typeof rawJobId !== 'string' || rawJobId.trim() === '') {
+        res.status(400).json({ error: 'Missing or invalid "job_id" field', code: 'VALIDATION_ERROR' });
+        return;
+      }
+      const jobId = rawJobId.trim();
+
+      const job = jobs.get(jobId);
+      if (!job) {
+        res.status(404).json({ error: 'Job not found', code: 'JOB_NOT_FOUND' });
+        return;
+      }
+
+      // Export data only exists once the job completed successfully. A queued /
+      // running / failed job, or a completed job whose export build failed
+      // (exportError set), gets the same contract code.
+      if (job.status !== 'completed' || !job.exportData) {
+        res.status(400).json({
+          error: 'Job is not completed or export data is no longer available',
+          code: 'JOB_NOT_COMPLETED',
+        });
+        return;
+      }
+
+      // writeExportFile (backend glue) does mkdir + atomic write (temp file +
+      // rename) and derives the filename from the export itself, so the file
+      // name can never disagree with its contents.
+      const filename = await writeExportFile(job.exportData, EXPORTS_DIR);
+      logger.info('Backtest export written', { jobId, filename });
+      res.json({ file: filename });
+    } catch (err) {
+      // Never leak internals: sanitize anything logged, return a fixed message.
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const sanitized = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
+        .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
+      logger.error('Backtest export failed', { error: sanitized });
+      res.status(500).json({ error: 'Export failed' });
+    }
+  });
 
   router.get('/backtest/:jobId', (req, res) => {
     const { jobId } = req.params;

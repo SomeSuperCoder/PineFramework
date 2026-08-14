@@ -83,7 +83,7 @@ function App() {
     engineChaosMode,
   );
 
-  const { status, progress, phase, result, error, submitBacktest, reset } = useBacktest();
+  const { status, progress, phase, result, error, jobId, submitBacktest, reset } = useBacktest();
   const indicatorManager = useIndicatorManager();
 
   const onIndicatorResult = useCallback((indicatorId: string, result: ScriptResult) => {
@@ -598,6 +598,7 @@ function App() {
         phase={phase}
         result={result}
         error={error}
+        jobId={jobId}
       />
 
       <GoToDatePopup
