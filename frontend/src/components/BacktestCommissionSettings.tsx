@@ -21,7 +21,7 @@ const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; descrip
     id: 'jupiter_manual',
     label: COMMISSION_METHOD_LABELS.jupiter_manual,
     description:
-      'DEX fee (default 25 bps) + 0% Jupiter fee + ~$0.0015 network fee — matches live bot',
+      'DEX fee (live, varies by route) + 0% Jupiter fee + ~$0.0015 network fee — matches live bot',
   },
 ];
 
