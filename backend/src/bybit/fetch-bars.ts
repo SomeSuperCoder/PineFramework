@@ -1,4 +1,5 @@
 import type { Bar } from 'pine-framework';
+import { getBybitCategory, getBybitSymbol, isValidPairSymbol } from 'pine-framework';
 import { validateBybitUrl, validateSymbol } from '../utils/security.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 
@@ -53,14 +54,27 @@ export async function fetchBars(
     }
   }
 
-  const bybitSymbol = encodeURIComponent(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
+  // Resolve the Bybit instrument symbol registry-aware. Registry pairs use
+  // their mapped bybitSymbol (GOLDUSDC→XAUTUSDT, TSLAXUSDC→TSLAXUSDT,
+  // AAPLXUSDC→AAPLXUSDT); symbols NOT in the registry keep the legacy
+  // heuristic (plain base symbol 'BTC' → 'BTCUSDT'). The previous
+  // `encodeURIComponent(symbol.endsWith('USDT') ? symbol : symbol+'USDT')`
+  // hack corrupted mapped pairs (GOLDUSDC → 'GOLDUSDCUSDT').
+  const bybitSymbol = encodeURIComponent(
+    isValidPairSymbol(symbol)
+      ? getBybitSymbol(symbol)
+      : symbol.endsWith('USDT')
+        ? symbol
+        : `${symbol}USDT`,
+  );
+  const bybitCategory = getBybitCategory(symbol);
   const limit = 1000;
   const allBars: Bar[] = [];
   let cursor: number | undefined;
   const totalSpan = startDate && endDate ? endDate - startDate : undefined;
 
   for (let attempt = 0; attempt < 200; attempt++) {
-    let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
+    let url = `${BYBIT_REST_BASE}/v5/market/kline?category=${bybitCategory}&symbol=${bybitSymbol}&interval=${timeframe}&limit=${limit}`;
     if (cursor) url += `&end=${cursor}`;
 
     const response = await fetch(url);

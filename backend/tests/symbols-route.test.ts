@@ -49,7 +49,7 @@ describe('GET /api/symbols derives from the token registry (SSoT)', () => {
     // The route's output must be EXACTLY the SSoT registry — any hardcoded
     // addition/removal fails this equality.
     expect(body.symbols).toEqual([...TRADABLE_PAIRS]);
-    expect(body.symbols).toHaveLength(7);
+    expect(body.symbols).toHaveLength(10);
   });
 
   it('does not contain any of the 8 legacy-dropped symbols (registry is truth)', async () => {

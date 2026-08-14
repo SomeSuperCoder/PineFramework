@@ -6,7 +6,7 @@ import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
 import { validateBybitUrl } from '../utils/security.js';
 import { setBroadcastIndicatorRemoved } from './broadcast.js';
-import { formatCandleString } from 'pine-framework';
+import { formatCandleString, getBybitCategory, getBybitSymbol } from 'pine-framework';
 import { createBackendLogger } from '../utils/logger.js';
 
 const logger = createBackendLogger('backend', 'ws');
@@ -22,6 +22,11 @@ const BYBIT_WS_URL = (() => {
   validateBybitUrl(url, 'BYBIT_WS_URL');
   return url;
 })();
+
+/** Spot WebSocket endpoint — used for the 3 mapped spot instruments
+ *  (GOLDUSDC/TSLAXUSDC/AAPLXUSDC). Fixed constant: BYBIT_WS_URL is the legacy
+ *  linear endpoint override; Bybit's spot public endpoint has no override. */
+const BYBIT_SPOT_WS_URL = 'wss://stream.bybit.com/v5/public/spot';
 
 /** Track the most recent confirmed bar per topic for price-reasonability checks. */
 const lastConfirmedBarByTopic = new Map<string, Bar>();
@@ -73,7 +78,15 @@ export function createWSGateway(
   // Use noServer mode to avoid conflicts with the bot /ws/bot gateway
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Map<WebSocket, ClientSubscription>();
-  let bybitWs: WebSocket | null = null;
+  /** Per-category Bybit sockets — 'linear' opened at startup (as today),
+   *  'spot' opened lazily on the first spot-instrument subscribe and closed
+   *  when its last subscription drops. */
+  const bybitSockets = new Map<'linear' | 'spot', WebSocket>();
+  /** Bidirectional routing table: Bybit topic → original frontend topic.
+   *  Bybit reports the BYBIT instrument symbol (e.g. 'kline.60.XAUTUSDT'),
+   *  but clients subscribe/broadcast under the pair topic
+   *  ('kline.60.GOLDUSDC'). Legacy pairs map identity — zero behavior change. */
+  const bybitTopicToOriginal = new Map<string, { originalTopic: string; category: 'linear' | 'spot' }>();
   const topicCallbacks = new Map<string, Set<WebSocket>>();
 
   // Handle upgrade requests for /ws path (but NOT /ws/bot)
@@ -87,17 +100,38 @@ export function createWSGateway(
     // Let other handlers (like /ws/bot gateway) handle their own paths
   });
 
-  function connectToBybit(): void {
-    if (bybitWs && bybitWs.readyState === WebSocket.OPEN) return;
+  /** Translate a frontend topic ('kline.60.GOLDUSDC') into the Bybit topic +
+   *  category ('kline.60.XAUTUSDT', 'spot'). Null for unparseable topics —
+   *  callers fall back to forwarding the raw topic (legacy behavior). */
+  function translateFrontendTopic(topic: string): { bybitTopic: string; category: 'linear' | 'spot' } | null {
+    const parts = topic.split('.');
+    if (parts.length < 3 || !parts[1] || !parts[2]) return null;
+    return {
+      bybitTopic: `kline.${parts[1]}.${getBybitSymbol(parts[2])}`,
+      category: getBybitCategory(parts[2]),
+    };
+  }
 
-    bybitWs = new WebSocket(BYBIT_WS_URL);
+  /** Get (or lazily create) the Bybit socket for a category. 'linear' is
+   *  created at startup via connectToBybit(); 'spot' is created here on the
+   *  first spot-instrument subscribe. */
+  function ensureBybitSocket(category: 'linear' | 'spot'): WebSocket | null {
+    const existing = bybitSockets.get(category);
+    if (existing && existing.readyState === WebSocket.OPEN) return existing;
 
-    bybitWs.on('open', () => {
-      logger.info('Connected to Bybit WebSocket');
-      resubscribeAll();
+    const socket = new WebSocket(category === 'linear' ? BYBIT_WS_URL : BYBIT_SPOT_WS_URL);
+    bybitSockets.set(category, socket);
+
+    socket.on('open', () => {
+      // Identity guard: a stale socket's delayed open must not resubscribe a
+      // newer socket's subscriptions.
+      if (bybitSockets.get(category) !== socket) return;
+      logger.info('Connected to Bybit WebSocket', { category });
+      resubscribeAll(category);
     });
 
-    bybitWs.on('message', (data: Buffer) => {
+    socket.on('message', (data: Buffer) => {
+      if (bybitSockets.get(category) !== socket) return;
       try {
         const msg = JSON.parse(data.toString()) as {
           topic?: string;
@@ -138,7 +172,12 @@ export function createWSGateway(
           }
 
           const bar: Bar = { timestamp, open, high, low, close, volume };
-          const topicParts = msg.topic.split('.');
+          // Route under the ORIGINAL frontend topic — Bybit's topic carries
+          // the BYBIT instrument symbol; the table maps it back to the pair
+          // topic. Unmapped topics fall back to the raw split path (legacy).
+          const mapped = bybitTopicToOriginal.get(msg.topic);
+          const broadcastTopic = mapped?.originalTopic ?? msg.topic;
+          const topicParts = broadcastTopic.split('.');
           const symbol = topicParts[2] || '';
           const interval = String(d.interval || topicParts[1] || '');
           if (!symbol || !interval) return;
@@ -189,27 +228,35 @@ export function createWSGateway(
             confirm: d.confirm };
           logger.info('Bybit WS raw → broadcast', { topic: msg.topic, rawBybit, parsed: bar, confirmed });
 
-          broadcast(msg.topic, {
+          broadcast(broadcastTopic, {
             type: 'kline',
             data: { symbol, interval, ...bar, confirmed },
           });
 
-          reexecuteForTopic(msg.topic, bar, confirmed);
+          reexecuteForTopic(broadcastTopic, bar, confirmed);
         }
       } catch {
         // ignore parse errors
       }
     });
 
-    bybitWs.on('close', () => {
-      logger.info('Bybit WebSocket disconnected, reconnecting in 3s...');
-      bybitWs = null;
-      setTimeout(connectToBybit, 3000);
+    socket.on('close', () => {
+      if (bybitSockets.get(category) !== socket) return;
+      logger.info('Bybit WebSocket disconnected, reconnecting in 3s', { category });
+      bybitSockets.delete(category);
+      setTimeout(() => ensureBybitSocket(category), 3000);
     });
 
-    bybitWs.on('error', (err) => {
-      logger.error('Bybit WebSocket error', { message: err.message });
+    socket.on('error', (err) => {
+      logger.error('Bybit WebSocket error', { category, message: err.message });
     });
+
+    return socket;
+  }
+
+  function connectToBybit(): void {
+    // Linear stays open as today — the 7 legacy pairs stream linear.
+    ensureBybitSocket('linear');
   }
 
   // Per-topic alert dedup with TTL: Map<topic, Map<dedupKey, timestamp>>
@@ -339,15 +386,53 @@ export function createWSGateway(
     }
   }
 
-  function resubscribeAll(): void {
+  function resubscribeAll(category: 'linear' | 'spot'): void {
+    const socket = bybitSockets.get(category);
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
     const allTopics = new Set<string>();
     for (const sub of clients.values()) {
       for (const topic of sub.topics) {
         allTopics.add(topic);
       }
     }
-    if (allTopics.size > 0 && bybitWs?.readyState === WebSocket.OPEN) {
-      bybitWs.send(JSON.stringify({ op: 'subscribe', args: Array.from(allTopics) }));
+    // Translate every client topic to its Bybit topic, keep only this
+    // category's instruments. Legacy pairs translate identity.
+    const bybitTopics: string[] = [];
+    for (const topic of allTopics) {
+      const translated = translateFrontendTopic(topic);
+      if (translated && translated.category === category) {
+        bybitTopics.push(translated.bybitTopic);
+      }
+    }
+    if (bybitTopics.length > 0) {
+      socket.send(JSON.stringify({ op: 'subscribe', args: bybitTopics }));
+    }
+  }
+
+  /** Unsubscribe a Bybit topic (and possibly close the lazy spot socket) once
+   *  the LAST client drops an original topic. No-op while any client remains
+   *  subscribed to the original topic. */
+  function handleLastUnsubscribe(originalTopic: string): void {
+    for (const sub of clients.values()) {
+      if (sub.topics.has(originalTopic)) return; // still subscribed elsewhere
+    }
+    for (const [bybitTopic, mapped] of bybitTopicToOriginal) {
+      if (mapped.originalTopic !== originalTopic) continue;
+      const socket = bybitSockets.get(mapped.category);
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ op: 'unsubscribe', args: [bybitTopic] }));
+      }
+      bybitTopicToOriginal.delete(bybitTopic);
+    }
+    // Close the lazily-opened spot socket when no spot topics remain; linear
+    // stays open as today.
+    const hasSpot = Array.from(bybitTopicToOriginal.values()).some((m) => m.category === 'spot');
+    if (!hasSpot) {
+      const spotSocket = bybitSockets.get('spot');
+      if (spotSocket) {
+        bybitSockets.delete('spot');
+        spotSocket.close();
+      }
     }
   }
 
@@ -411,12 +496,29 @@ export function createWSGateway(
           }
           callbacks.add(ws);
 
-          if (bybitWs?.readyState === WebSocket.OPEN) {
-            bybitWs.send(JSON.stringify({ op: 'subscribe', args: [msg.topic] }));
+          // Translate the frontend topic to the Bybit instrument topic and
+          // route it to the category's socket (spot for the 3 mapped pairs).
+          // The routing table is populated HERE so inbound Bybit messages can
+          // be mapped back to the original topic; legacy pairs map identity.
+          const translated = translateFrontendTopic(msg.topic);
+          if (translated) {
+            bybitTopicToOriginal.set(translated.bybitTopic, {
+              originalTopic: msg.topic,
+              category: translated.category,
+            });
+            const socket = ensureBybitSocket(translated.category);
+            if (socket?.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify({ op: 'subscribe', args: [translated.bybitTopic] }));
+            }
+          } else if (bybitSockets.get('linear')?.readyState === WebSocket.OPEN) {
+            // Defensive fallback for unparseable topics: forward verbatim on
+            // the linear socket (legacy behavior).
+            bybitSockets.get('linear')!.send(JSON.stringify({ op: 'subscribe', args: [msg.topic] }));
           }
         } else if (msg.type === 'unsubscribe' && msg.topic) {
           sub.topics.delete(msg.topic);
           topicCallbacks.get(msg.topic)?.delete(ws);
+          handleLastUnsubscribe(msg.topic);
         } else if (msg.type === 'execute' && msg.data) {
           const { source, symbol, interval, bars, indicatorId } = msg.data;
           if (!source || !bars || bars.length === 0) {
@@ -498,10 +600,14 @@ export function createWSGateway(
 
     ws.on('close', () => {
       logger.info('Client disconnected');
-      for (const topic of sub.topics) {
-        topicCallbacks.get(topic)?.delete(ws);
-      }
+      // Detach BEFORE last-unsubscribe cleanup so this client's own topics no
+      // longer count as subscribers.
+      const topics = Array.from(sub.topics);
       clients.delete(ws);
+      for (const topic of topics) {
+        topicCallbacks.get(topic)?.delete(ws);
+        handleLastUnsubscribe(topic);
+      }
     });
   });
 

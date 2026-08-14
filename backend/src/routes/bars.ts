@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Bar } from 'pine-framework';
+import { getBybitCategory, getBybitSymbol } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 
@@ -70,8 +71,9 @@ export function createBarsRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache):
         }
       }
 
-      // L3: Bybit API
-      let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${count}`;
+      // L3: Bybit API — request uses the mapped Bybit instrument/category;
+      // response and cache keys keep the ORIGINAL pairSymbol (see ohlcv.ts).
+      let url = `${BYBIT_REST_BASE}/v5/market/kline?category=${getBybitCategory(symbol)}&symbol=${getBybitSymbol(symbol)}&interval=${interval}&limit=${count}`;
       if (before) {
         url += `&end=${before}`;
       }

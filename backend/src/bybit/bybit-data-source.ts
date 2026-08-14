@@ -1,4 +1,5 @@
 import type { Bar } from 'pine-framework';
+import { getBybitCategory, getBybitSymbol } from 'pine-framework';
 import { RateLimiter } from './rate-limiter.js';
 import { validateBybitUrl } from '../utils/security.js';
 
@@ -18,7 +19,9 @@ export class BybitDataSource {
   async fetchBars(symbol: string, timeframe: string, start: number, end: number): Promise<Bar[]> {
     await this.rateLimiter.acquire();
     const limit = Math.min(Math.ceil((end - start) / this.intervalToMs(timeframe)) + 1, 1000);
-    const url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${timeframe}&limit=${limit}`;
+    // Request uses the mapped Bybit instrument/category (spot for the 3 new
+    // pairs); the returned bars are keyed by the caller's original symbol.
+    const url = `${BYBIT_REST_BASE}/v5/market/kline?category=${getBybitCategory(symbol)}&symbol=${getBybitSymbol(symbol)}&interval=${timeframe}&limit=${limit}`;
     const response = await fetch(url);
     const json = await response.json() as {
       retCode: number;

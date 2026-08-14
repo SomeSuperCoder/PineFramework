@@ -213,7 +213,7 @@ describe('BybitWebSocketService', () => {
 
       // Try to reconnect — connect() resets isStopped, but we check the guard
       // The close handler checks isStopped before scheduling reconnect
-      expect((service as any).reconnectTimer).toBeNull();
+      expect((service as any).reconnectState.linear.timer).toBeNull();
     });
   });
 
@@ -271,6 +271,10 @@ describe('feed liveness — kline tick logging + telemetry (confirmed AND unconf
     logger = makeLogger();
     service = new BybitWebSocketService({ logger });
     await service.connect();
+    // The dual-socket service resolves incoming messages ONLY for subscribed
+    // topics (never parses the raw topic) — subscribe the fixture pair so the
+    // simulated klines below are processed.
+    service.subscribe({ symbol: 'BTCUSDT', timeframe: '60' });
   });
 
   afterEach(() => {
@@ -351,6 +355,10 @@ describe('data-shape regression — Bybit v5 ARRAY payload (4-day chaos-mode bug
     wsInstances.length = 0;
     service = new BybitWebSocketService();
     await service.connect();
+    // Incoming topics must be subscribed first — the handler resolves PairId
+    // from the subscriptions map (never parses the raw topic).
+    service.subscribe({ symbol: 'BTCUSDT', timeframe: '60' });
+    service.subscribe({ symbol: 'ETHUSDT', timeframe: '1' });
   });
 
   afterEach(() => {
@@ -465,6 +473,43 @@ describe('data-shape regression — Bybit v5 ARRAY payload (4-day chaos-mode bug
       volume: 1000,
     });
   });
+
+  // Bybit ticker mapping (2026-08-15): the incoming WS topic uses the BYBIT
+  // instrument ('kline.60.XAUTUSDT'), but the engine's data structures keep
+  // the ORIGINAL pairSymbol ('GOLDUSDC') — the topic must be resolved through
+  // the subscriptions map, never parsed.
+  it('resolves a MAPPED Bybit topic (kline.60.XAUTUSDT) to the ORIGINAL pair (GOLDUSDC)', () => {
+    const onCandle = vi.fn();
+    service.setCandleCallback(onCandle);
+    service.subscribe({ symbol: 'GOLDUSDC', timeframe: '60' });
+
+    wsInstances[0]!.simulateMessage({
+      topic: 'kline.60.XAUTUSDT',
+      type: 'kline',
+      ts: Date.now(),
+      data: [
+        {
+          start: 1_700_000_000_000,
+          end: 1_700_000_001_000,
+          interval: '60',
+          open: '2600',
+          high: '2650',
+          low: '2580',
+          close: '2630',
+          volume: '50',
+          confirm: true,
+          timestamp: 1_700_000_000_500,
+        },
+      ],
+    });
+
+    expect(onCandle).toHaveBeenCalledTimes(1);
+    expect(onCandle.mock.calls[0]![0]).toMatchObject({
+      symbol: 'GOLDUSDC', // the engine never sees XAUTUSDT
+      timeframe: '60',
+      close: 2630,
+    });
+  });
 });
 
 describe('connect timeout (liveness suite)', () => {
@@ -517,7 +562,7 @@ describe('connect timeout (liveness suite)', () => {
     vi.advanceTimersByTime(20_000);
 
     expect(onError).not.toHaveBeenCalled();
-    expect((service as any).connectTimeoutTimer).toBeNull();
+    expect((service as any).reconnectState.linear.timeoutTimer).toBeNull();
   });
 });
 
@@ -544,6 +589,9 @@ describe('stale-socket identity guard (review regression)', () => {
     service.setTickCallback(onTick);
 
     await service.connect();
+    // Subscribe so the "stale A kline must not reach the engine" assertion
+    // below exercises the identity guard, not the subscriptions lookup.
+    service.subscribe({ symbol: 'BTCUSDT', timeframe: '60' });
     const wsA = wsInstances[0]!;
     expect(wsA.readyState).toBe(MockWebSocket.CONNECTING);
 
@@ -551,7 +599,7 @@ describe('stale-socket identity guard (review regression)', () => {
     // disconnect signal at the abort is legitimate (the feed really went down).
     vi.advanceTimersByTime(12_000);
     expect(wsA.closed).toBe(true);
-    expect((service as any).reconnectTimer).not.toBeNull();
+    expect((service as any).reconnectState.linear.timer).not.toBeNull();
     expect(onConnectionChange).toHaveBeenCalledWith(false);
     const connectionCallsAtAbort = onConnectionChange.mock.calls.length;
 
@@ -561,8 +609,8 @@ describe('stale-socket identity guard (review regression)', () => {
     expect(wsInstances).toHaveLength(2);
     const wsB = wsInstances[1]!;
     expect(wsB.readyState).toBe(MockWebSocket.CONNECTING);
-    expect((service as any).isConnecting).toBe(true);
-    expect((service as any).connectTimeoutTimer).not.toBeNull();
+    expect((service as any).reconnectState.linear.connecting).toBe(true);
+    expect((service as any).reconnectState.linear.timeoutTimer).not.toBeNull();
 
     // A's late events fire AFTER B exists — the exact race the identity guard
     // fixes (the abort's close/error often lands after the reconnect).
@@ -571,11 +619,11 @@ describe('stale-socket identity guard (review regression)', () => {
     wsA.simulateMessage(klineMessage({ confirm: true, close: '999' }));
 
     // 1. B's connect timeout is NOT cleared by A's stale close/error.
-    expect((service as any).connectTimeoutTimer).not.toBeNull();
-    // 2. isConnecting is NOT flipped false mid-B-handshake.
-    expect((service as any).isConnecting).toBe(true);
+    expect((service as any).reconnectState.linear.timeoutTimer).not.toBeNull();
+    // 2. connecting is NOT flipped false mid-B-handshake.
+    expect((service as any).reconnectState.linear.connecting).toBe(true);
     // 3. NO second reconnect scheduled (stale A must not schedule one).
-    expect((service as any).reconnectTimer).toBeNull();
+    expect((service as any).reconnectState.linear.timer).toBeNull();
     // 4. No NEW onConnectionChange(false) from stale A.
     expect(onConnectionChange.mock.calls.length).toBe(connectionCallsAtAbort);
     // 5. No stale kline from A reaches the engine or the tick telemetry.
@@ -668,7 +716,7 @@ describe('reconnect-on-error (liveness suite)', () => {
 
     // Cycle 3 → attempts exhausted: no timer, exhausted logged, no new socket.
     wsInstances[2]!.simulateError(new Error('e3'));
-    expect((service as any).reconnectTimer).toBeNull();
+    expect((service as any).reconnectState.linear.timer).toBeNull();
     expect(logger.error).toHaveBeenCalledWith(
       'Bybit feed reconnect attempts exhausted',
       expect.anything(),
@@ -689,7 +737,7 @@ describe('reconnect-on-error (liveness suite)', () => {
     wsInstances[0]!.simulateError(new Error('boom'));
     wsInstances[0]!.close();
     expect(vi.getTimerCount()).toBe(0);
-    expect((service as any).reconnectTimer).toBeNull();
+    expect((service as any).reconnectState.linear.timer).toBeNull();
     vi.advanceTimersByTime(120_000);
     expect(wsInstances).toHaveLength(1);
   });

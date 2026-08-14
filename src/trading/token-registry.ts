@@ -7,8 +7,13 @@
  * - All trading code imports token info from here
  * - No other file should hardcode token addresses or symbol lists
  *
- * Last verified: 2026-08-03 against official sources (Coinbase, CoinGecko,
- * protocol documentation, Solana Explorer).
+ * Last verified: 2026-08-14 against Jupiter Swap API (lite-api.jup.ag/swap/v1/quote)
+ * and Solana mainnet RPC (api.mainnet-beta.solana.com) — every mint's existence,
+ * decimals, USDC swap route, and primary-pool fee config confirmed on-chain.
+ * 2026-08-14 — reduced to single gold pair (GOLDUSDC/Oro) per Director decision;
+ * PAXGUSDC and GLDXUSDC removed.
+ * 2026-08-15 — Bybit ticker mapping: GOLDUSDC→XAUTUSDT, TSLAXUSDC→TSLAXUSDT,
+ * AAPLXUSDC→AAPLXUSDT (all spot); price fetch via Bybit, execution stays mint-based.
  */
 
 // ---------------------------------------------------------------------------
@@ -37,6 +42,10 @@ export interface TokenInfo {
   readonly mint: string;
   /** Token decimals */
   readonly decimals: number;
+  /** Bybit instrument symbol for price/chart data (defaults to pairSymbol). */
+  readonly bybitSymbol?: string;
+  /** Bybit API category ('spot' | 'linear'). Defaults to 'linear'. */
+  readonly bybitCategory?: 'spot' | 'linear';
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +64,9 @@ export const TRADABLE_PAIRS = [
   'XRPUSDT',
   'DOGEUSDT',
   'ADAUSDT',
+  'GOLDUSDC',
+  'TSLAXUSDC',
+  'AAPLXUSDC',
 ] as const;
 
 /** Type-safe array of tradable pair symbols. */
@@ -125,6 +137,41 @@ export const TOKEN_REGISTRY: Record<TradablePair, TokenInfo> = {
     mint: 'ADA4pFMhWm2jzFJEBEv2NpgvNoSEHbMnY6hC1R8gvrkj', // ADA on Solana (Wormhole)
     decimals: 6,
   },
+  GOLDUSDC: {
+    symbol: 'GOLD',
+    quote: 'USDC',
+    pairSymbol: 'GOLDUSDC' as PairSymbol,
+    name: 'Oro GOLD',
+    mint: 'GoLDppdjB1vDTPSGxyMJFqdnj134yH6Prg9eqsGDiw6A', // Oro GOLD (SPL)
+    decimals: 6,
+    // Bybit has no Oro listing — Tether Gold (XAUT) is the gold proxy for
+    // chart/price data. Execution stays mint-based (Oro SPL), verified live
+    // against api.bybit.com 2026-08-15.
+    bybitSymbol: 'XAUTUSDT',
+    bybitCategory: 'spot',
+  },
+  TSLAXUSDC: {
+    symbol: 'TSLAx',
+    quote: 'USDC',
+    pairSymbol: 'TSLAXUSDC' as PairSymbol,
+    name: 'Tesla xStock (Backed)',
+    mint: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB', // Backed TSLAx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'TSLAXUSDT',
+    bybitCategory: 'spot',
+  },
+  AAPLXUSDC: {
+    symbol: 'AAPLx',
+    quote: 'USDC',
+    pairSymbol: 'AAPLXUSDC' as PairSymbol,
+    name: 'Apple xStock (Backed)',
+    mint: 'XsbEhLAtcf6HdfpFZ5xEMdqW8nfAvcsP5bdudRLJzJp', // Backed AAPLx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'AAPLXUSDT',
+    bybitCategory: 'spot',
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -155,6 +202,24 @@ export function getTokenInfo(pairSymbol: string): TokenInfo {
  */
 export function getTradablePairs(): readonly TradablePair[] {
   return TRADABLE_PAIRS;
+}
+
+/**
+ * Bybit instrument symbol for a pair. Falls back to pairSymbol (existing
+ * behavior). MUST NOT throw for unknown symbols — callers pass arbitrary
+ * strings (REST query params, WS topics); fall back to the input uppercased.
+ */
+export function getBybitSymbol(pairSymbol: string): string {
+  const info = TOKEN_REGISTRY[pairSymbol.toUpperCase() as TradablePair];
+  return info?.bybitSymbol ?? pairSymbol.toUpperCase();
+}
+
+/**
+ * Bybit API category for a pair. Falls back to 'linear' (existing behavior).
+ */
+export function getBybitCategory(pairSymbol: string): 'spot' | 'linear' {
+  const info = TOKEN_REGISTRY[pairSymbol.toUpperCase() as TradablePair];
+  return info?.bybitCategory ?? 'linear';
 }
 
 /**

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Bar } from 'pine-framework';
+import { getBybitCategory, getBybitSymbol } from 'pine-framework';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 import { createBackendLogger } from '../utils/logger.js';
@@ -58,8 +59,11 @@ export function createOHLCVRouter(cache: OHLCVCache, diskCache?: DiskOHLCVCache)
         }
       }
 
-      // L3: Bybit API
-      let url = `${BYBIT_REST_BASE}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+      // L3: Bybit API — request uses the mapped Bybit instrument/category
+      // (GOLDUSDC→XAUTUSDT spot, etc.), but the response, cache keys, and the
+      // JSON payload below all keep the ORIGINAL pairSymbol the frontend keys
+      // on. For the 7 legacy pairs the mapping is identity — identical URLs.
+      let url = `${BYBIT_REST_BASE}/v5/market/kline?category=${getBybitCategory(symbol)}&symbol=${getBybitSymbol(symbol)}&interval=${interval}&limit=${limit}`;
       if (end) {
         url += `&end=${end}`;
       }

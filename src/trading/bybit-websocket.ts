@@ -8,7 +8,8 @@
  */
 
 import WebSocket from 'ws';
-import { ClosedCandle, PairId, pairIdToString } from './scheduler.js';
+import { ClosedCandle, PairId } from './scheduler.js';
+import { getBybitCategory, getBybitSymbol } from './token-registry.js';
 import type { PineLogger } from '../utils/logger/types.js';
 
 // ---- Types ----
@@ -80,6 +81,10 @@ export type TickCallback = (tick: BybitTick) => void;
 // ---- Constants ----
 
 const DEFAULT_WS_URL = 'wss://stream.bybit.com/v5/public/linear';
+/** Spot WebSocket endpoint — used for the 3 mapped spot instruments
+ *  (GOLDUSDC/TSLAXUSDC/AAPLXUSDC). Not config-overridable: the `wsUrl` config
+ *  remains the legacy linear endpoint override. */
+const BYBIT_SPOT_WS_URL = 'wss://stream.bybit.com/v5/public/spot';
 const DEFAULT_REST_URL = 'https://api.bybit.com';
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 10;
 const DEFAULT_RECONNECT_BASE_DELAY_MS = 1000;
@@ -146,15 +151,33 @@ export function nextBoundaryAfter(now: number, durationMs: number): number {
  * - Exponential backoff for reconnection
  */
 export class BybitWebSocketService {
-  private ws: WebSocket | null = null;
+  /** Per-category WebSocket connections. 'linear' is created up-front by
+   *  connect() (back-compat — every legacy pair streams linear); 'spot' is
+   *  created lazily on the first spot-instrument subscribe and closed when
+   *  its last subscription drops. */
+  private sockets = new Map<'linear' | 'spot', WebSocket>();
   /** Required config minus the logger — logger is a dependency, not a config
    *  value, so Required<> must not force it. */
   private config: Omit<Required<BybitWebSocketConfig>, 'logger'>;
-  private subscriptions = new Map<string, PairId>();
-  private reconnectAttempts = 0;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private connectTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
-  private isConnecting = false;
+  /** Active subscriptions keyed by the BYBIT topic string
+   *  ('kline.<timeframe>.<bybitSymbol>'). The 7 legacy pairs' keys are
+   *  character-identical to the previous 'kline.<tf>.<pairSymbol>' scheme
+   *  (their bybitSymbol IS their pairSymbol) — zero behavior change. */
+  private subscriptions = new Map<string, { pairId: PairId; category: 'linear' | 'spot' }>();
+  /** Per-socket reconnect/connect state — each category reconnects
+   *  independently (a spot outage must not back off the linear feed). */
+  private reconnectState: Record<
+    'linear' | 'spot',
+    {
+      attempts: number;
+      timer: ReturnType<typeof setTimeout> | null;
+      timeoutTimer: ReturnType<typeof setTimeout> | null;
+      connecting: boolean;
+    }
+  > = {
+    linear: { attempts: 0, timer: null, timeoutTimer: null, connecting: false },
+    spot: { attempts: 0, timer: null, timeoutTimer: null, connecting: false },
+  };
   private isStopped = false;
   private readonly logger: PineLogger;
 
@@ -206,77 +229,90 @@ export class BybitWebSocketService {
   }
 
   /**
-   * Connect to Bybit WebSocket.
+   * Connect to the Bybit WebSocket for a category. Defaults to 'linear'
+   * (back-compat: the engine's single connect() call opens the legacy feed).
+   * The spot socket is also created lazily by subscribe() on the first
+   * spot-instrument pair.
    */
-  async connect(): Promise<void> {
-    if (this.isConnecting || this.ws?.readyState === WebSocket.OPEN) {
+  async connect(category: 'linear' | 'spot' = 'linear'): Promise<void> {
+    const state = this.reconnectState[category];
+    const existing = this.sockets.get(category);
+    if (state.connecting || existing?.readyState === WebSocket.OPEN) {
       return;
     }
 
     // A fresh explicit connect supersedes any pending scheduled reconnect —
     // clear both timers so nothing stale fires (single-flight, liveness
     // suite).
-    this.clearReconnectTimer();
-    this.clearConnectTimeout();
+    this.clearReconnectTimer(category);
+    this.clearConnectTimeout(category);
 
-    this.isConnecting = true;
+    state.connecting = true;
     this.isStopped = false;
 
     try {
       // Identity guard (review #1 — CRITICAL): every per-socket handler
       // captures the socket it was bound to and the FIRST line checks that
-      // `this.ws` still IS that socket. A stale socket's delayed close/error
-      // (e.g. the connect timeout aborted socket A AFTER a reconnect created
-      // socket B and assigned `this.ws = B`) must never mutate the NEWER
-      // socket's state — otherwise it clears B's connect timeout (B hangs
-      // forever), flips isConnecting mid-handshake, lies to telemetry, and
-      // schedules a SECOND reconnect (single-flight sees isConnecting=false +
-      // B not OPEN) → two live sockets → duplicate kline streams → duplicate
-      // confirmed candles → duplicate order signals. The abort inside the
-      // timeout callback stays — it kills the stuck handshake directly.
-      const socket = new WebSocket(this.config.wsUrl);
-      this.ws = socket;
-      this.armConnectTimeout();
+      // this category's socket STILL IS that socket. A stale socket's delayed
+      // close/error (e.g. the connect timeout aborted socket A AFTER a
+      // reconnect created socket B and assigned this category to B) must
+      // never mutate the NEWER socket's state — otherwise it clears B's
+      // connect timeout (B hangs forever), flips connecting mid-handshake,
+      // lies to telemetry, and schedules a SECOND reconnect (single-flight
+      // sees connecting=false + B not OPEN) → two live sockets → duplicate
+      // kline streams → duplicate confirmed candles → duplicate order
+      // signals. The abort inside the timeout callback stays — it kills the
+      // stuck handshake directly.
+      const socket = new WebSocket(category === 'linear' ? this.config.wsUrl : BYBIT_SPOT_WS_URL);
+      this.sockets.set(category, socket);
+      this.armConnectTimeout(category, socket);
 
       socket.on('open', () => {
-        if (this.ws !== socket) return;
-        this.clearConnectTimeout();
-        this.isConnecting = false;
-        this.reconnectAttempts = 0;
-        this.logger.info('Bybit feed socket open', { at: new Date().toISOString() });
+        if (this.sockets.get(category) !== socket) return;
+        this.clearConnectTimeout(category);
+        state.connecting = false;
+        state.attempts = 0;
+        // Meta key is `socket` (not `category`): LogMeta.category is a
+        // reserved domain field ('frontend'|'backend'|'bot').
+        this.logger.info('Bybit feed socket open', {
+          socket: category,
+          at: new Date().toISOString(),
+        });
         this.onConnectionChange?.(true);
         // Bybit WS sessions do not persist — every (re)connect must send a
         // FRESH subscription payload (resubscribeAll sends them again).
-        this.resubscribeAll();
+        this.resubscribeAll(category);
       });
 
       socket.on('message', (data: Buffer) => {
         // Same identity guard as open/close/error: a stale socket's queued
         // klines must not reach the engine after a newer socket exists.
-        if (this.ws !== socket) return;
+        if (this.sockets.get(category) !== socket) return;
         this.handleMessage(data.toString());
       });
 
       socket.on('close', (code: number, reason: Buffer) => {
-        if (this.ws !== socket) return;
-        this.clearConnectTimeout();
-        this.isConnecting = false;
+        if (this.sockets.get(category) !== socket) return;
+        this.clearConnectTimeout(category);
+        state.connecting = false;
         this.logger.info('Bybit feed socket closed', {
+          socket: category,
           at: new Date().toISOString(),
           code,
           reason: reason.toString() || undefined,
         });
         this.onConnectionChange?.(false);
         if (!this.isStopped) {
-          this.scheduleReconnect();
+          this.scheduleReconnect(category);
         }
       });
 
       socket.on('error', (error: Error) => {
-        if (this.ws !== socket) return;
-        this.clearConnectTimeout();
-        this.isConnecting = false;
+        if (this.sockets.get(category) !== socket) return;
+        this.clearConnectTimeout(category);
+        state.connecting = false;
         this.logger.error('Bybit feed socket error', {
+          socket: category,
           at: new Date().toISOString(),
           error: error.message,
         });
@@ -284,13 +320,13 @@ export class BybitWebSocketService {
         // error often fires immediately before close — scheduleReconnect is
         // single-flight (timer guard), so both events yield ONE reconnect.
         if (!this.isStopped) {
-          this.scheduleReconnect();
+          this.scheduleReconnect(category);
         }
       });
     } catch (error) {
-      this.isConnecting = false;
+      state.connecting = false;
       this.onError?.(error instanceof Error ? error : new Error(String(error)));
-      this.scheduleReconnect();
+      this.scheduleReconnect(category);
     }
   }
 
@@ -299,12 +335,14 @@ export class BybitWebSocketService {
    */
   disconnect(): void {
     this.isStopped = true;
-    this.clearReconnectTimer();
-    this.clearConnectTimeout();
-
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    for (const category of ['linear', 'spot'] as const) {
+      this.clearReconnectTimer(category);
+      this.clearConnectTimeout(category);
+      const socket = this.sockets.get(category);
+      if (socket) {
+        socket.close();
+        this.sockets.delete(category);
+      }
     }
 
     this.onConnectionChange?.(false);
@@ -314,11 +352,18 @@ export class BybitWebSocketService {
    * Subscribe to kline channel for a pair.
    */
   subscribe(pair: PairId): void {
-    const key = pairIdToString(pair);
-    this.subscriptions.set(key, pair);
+    const category = getBybitCategory(pair.symbol);
+    const bybitTopic = this.bybitTopicFor(pair);
+    this.subscriptions.set(bybitTopic, { pairId: pair, category });
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.sendSubscribe(pair);
+    if (category === 'spot') {
+      // The spot socket is created lazily on the first spot-instrument
+      // subscribe; the linear socket is created up-front by connect().
+      void this.connect('spot');
+    }
+    const socket = this.sockets.get(category);
+    if (socket?.readyState === WebSocket.OPEN) {
+      this.sendSubscribe(pair, category);
     }
   }
 
@@ -326,11 +371,19 @@ export class BybitWebSocketService {
    * Unsubscribe from kline channel for a pair.
    */
   unsubscribe(pair: PairId): void {
-    const key = pairIdToString(pair);
-    this.subscriptions.delete(key);
+    const category = getBybitCategory(pair.symbol);
+    const bybitTopic = this.bybitTopicFor(pair);
+    this.subscriptions.delete(bybitTopic);
 
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.sendUnsubscribe(pair);
+    const socket = this.sockets.get(category);
+    if (socket?.readyState === WebSocket.OPEN) {
+      this.sendUnsubscribe(pair, category);
+    }
+
+    // Close the lazily-opened spot socket once its last subscription drops;
+    // linear stays open as today.
+    if (category === 'spot' && !this.hasSpotSubscriptions()) {
+      this.closeSpotSocket();
     }
   }
 
@@ -338,7 +391,13 @@ export class BybitWebSocketService {
    * Fetch historical candles for a pair.
    */
   async fetchHistoricalCandles(pair: PairId): Promise<ClosedCandle[]> {
-    const url = `${this.config.restUrl}/v5/market/kline?category=linear&symbol=${pair.symbol}&interval=${pair.timeframe}&limit=${this.config.historicalCandleLimit}`;
+    // REST kline is instrument-scoped: request with the mapped Bybit
+    // symbol/category (the spot pairs would 404 on linear). The rows below
+    // are mapped back to the ORIGINAL pair symbol — the engine only ever
+    // sees PairId data.
+    const category = getBybitCategory(pair.symbol);
+    const bybitSymbol = getBybitSymbol(pair.symbol);
+    const url = `${this.config.restUrl}/v5/market/kline?category=${category}&symbol=${bybitSymbol}&interval=${pair.timeframe}&limit=${this.config.historicalCandleLimit}`;
 
     const response = await fetch(url);
     const json = (await response.json()) as {
@@ -366,17 +425,19 @@ export class BybitWebSocketService {
   }
 
   /**
-   * Check if connected.
+   * Check if connected. Back-compat: reflects the 'linear' socket — the
+   * engine's primary feed, opened by connect(). The lazy spot socket's state
+   * is not part of the legacy connected signal.
    */
   get connected(): boolean {
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.sockets.get('linear')?.readyState === WebSocket.OPEN;
   }
 
   /**
    * Get active subscriptions.
    */
   get activeSubscriptions(): PairId[] {
-    return Array.from(this.subscriptions.values());
+    return Array.from(this.subscriptions.values()).map((s) => s.pairId);
   }
 
   // ---- Private Methods ----
@@ -403,15 +464,21 @@ export class BybitWebSocketService {
     // Drop messages after disconnect
     if (this.isStopped) return;
 
-    // Parse topic to get symbol and timeframe
-    // Topic format: kline.{interval}.{symbol}
-    const parts = message.topic.split('.');
-    if (parts.length < 3) {
+    // Resolve the PairId from the subscriptions map BY THE INCOMING TOPIC —
+    // which is the BYBIT topic ('kline.<tf>.<bybitSymbol>'). Never parse the
+    // pair symbol out of the raw topic string: for mapped pairs
+    // (GOLDUSDC→XAUTUSDT) the topic symbol is the BYBIT instrument, not the
+    // pair the engine trades. Legacy pairs resolve identically (their bybit
+    // symbol IS their pair symbol), so the engine's data structures are
+    // byte-identical to before. A message for a topic we never subscribed to
+    // is dropped (defensive — Bybit only pushes subscribed topics).
+    const entry = this.subscriptions.get(message.topic);
+    if (!entry) {
       return;
     }
-
-    const timeframe = parts[1];
-    const symbol = parts[2];
+    const { pairId } = entry;
+    const symbol = pairId.symbol;
+    const timeframe = pairId.timeframe;
 
     // Bybit v5 sends `data` as an ARRAY of kline objects — normalize to the
     // first element before reading any field (same shape handling as the
@@ -465,53 +532,86 @@ export class BybitWebSocketService {
     this.onCandle?.(candle);
   }
 
-  private sendSubscribe(pair: PairId): void {
+  private sendSubscribe(pair: PairId, category: 'linear' | 'spot'): void {
     const message = {
       op: 'subscribe',
-      args: [`kline.${pair.timeframe}.${pair.symbol}`],
+      args: [this.bybitTopicFor(pair)],
     };
-    this.ws?.send(JSON.stringify(message));
+    this.sockets.get(category)?.send(JSON.stringify(message));
     this.warnIfLongTimeframe(pair);
   }
 
-  private sendUnsubscribe(pair: PairId): void {
+  private sendUnsubscribe(pair: PairId, category: 'linear' | 'spot'): void {
     const message = {
       op: 'unsubscribe',
-      args: [`kline.${pair.timeframe}.${pair.symbol}`],
+      args: [this.bybitTopicFor(pair)],
     };
-    this.ws?.send(JSON.stringify(message));
+    this.sockets.get(category)?.send(JSON.stringify(message));
   }
 
-  private resubscribeAll(): void {
-    for (const pair of this.subscriptions.values()) {
-      this.sendSubscribe(pair);
+  /** Bybit topic for a pair — uses the mapped bybitSymbol; identity for the
+   *  7 legacy pairs (their bybitSymbol === pairSymbol). */
+  private bybitTopicFor(pair: PairId): string {
+    return `kline.${pair.timeframe}.${getBybitSymbol(pair.symbol)}`;
+  }
+
+  /** True while any spot-category subscription remains. */
+  private hasSpotSubscriptions(): boolean {
+    return Array.from(this.subscriptions.values()).some((s) => s.category === 'spot');
+  }
+
+  /** Close the lazily-opened spot socket and reset its reconnect state so a
+   *  later spot subscribe starts from a clean slate. */
+  private closeSpotSocket(): void {
+    const state = this.reconnectState.spot;
+    this.clearReconnectTimer('spot');
+    this.clearConnectTimeout('spot');
+    state.connecting = false;
+    state.attempts = 0;
+    const socket = this.sockets.get('spot');
+    if (socket) {
+      socket.close();
+      this.sockets.delete('spot');
     }
   }
 
-  /** Schedule a single reconnect (liveness suite). Idempotent/single-flight:
-   *  a live timer means one is already scheduled, so the error→close double
-   *  event (and any other caller) can never spawn two sockets. Exponential
-   *  backoff with equal jitter (bounded minimum + randomization, avoids
-   *  synchronized retry storms), capped at reconnectMaxDelay, reset on
-   *  successful open (see the open handler). A stopped feed never schedules —
-   *  no reconnect loop after stop. */
-  private scheduleReconnect(): void {
+  /** Re-send every subscription of a category on that category's socket
+   *  (called on connect/reconnect — Bybit sessions do not persist). Legacy
+   *  per-pair subscribe messages are preserved exactly. */
+  private resubscribeAll(category: 'linear' | 'spot'): void {
+    for (const entry of this.subscriptions.values()) {
+      if (entry.category !== category) continue;
+      this.sendSubscribe(entry.pairId, category);
+    }
+  }
+
+  /** Schedule a single reconnect (liveness suite). Idempotent/single-flight
+   *  PER CATEGORY: a live timer for a category means one is already
+   *  scheduled, so the error→close double event (and any other caller) can
+   *  never spawn two sockets. Exponential backoff with equal jitter (bounded
+   *  minimum + randomization, avoids synchronized retry storms), capped at
+   *  reconnectMaxDelay, reset on successful open (see the open handler). A
+   *  stopped feed never schedules — no reconnect loop after stop. Sockets
+   *  reconnect independently: a spot outage never backs off the linear feed. */
+  private scheduleReconnect(category: 'linear' | 'spot'): void {
     if (this.isStopped) {
       return; // Shutdown guard: never reconnect after stop/restart.
     }
-    if (this.reconnectTimer !== null) {
+    const state = this.reconnectState[category];
+    if (state.timer !== null) {
       return; // Single-flight: a reconnect is already scheduled.
     }
-    if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+    if (state.attempts >= this.config.maxReconnectAttempts) {
       this.logger.error('Bybit feed reconnect attempts exhausted', {
-        attempts: this.reconnectAttempts,
+        socket: category,
+        attempts: state.attempts,
         at: new Date().toISOString(),
       });
       return;
     }
 
     const cap = Math.min(
-      this.config.reconnectBaseDelay * Math.pow(2, this.reconnectAttempts),
+      this.config.reconnectBaseDelay * Math.pow(2, state.attempts),
       this.config.reconnectMaxDelay,
     );
     // Equal jitter: delay in [cap/2, cap] — keeps a minimum backoff so the
@@ -520,22 +620,24 @@ export class BybitWebSocketService {
     const delay = cap / 2 + Math.floor(Math.random() * (cap / 2));
 
     this.logger.warn('Bybit feed reconnect scheduled', {
-      attempt: this.reconnectAttempts + 1,
+      socket: category,
+      attempt: state.attempts + 1,
       delayMs: delay,
       at: new Date().toISOString(),
     });
 
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.reconnectAttempts++;
-      this.connect();
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      state.attempts++;
+      void this.connect(category);
     }, delay);
   }
 
-  private clearReconnectTimer(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
+  private clearReconnectTimer(category: 'linear' | 'spot'): void {
+    const state = this.reconnectState[category];
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
     }
   }
 
@@ -543,17 +645,20 @@ export class BybitWebSocketService {
    *  OPEN within CONNECT_TIMEOUT_MS, treat it as failed — log with timestamp,
    *  surface to the engine (marks the feed state failed via onError), and
    *  schedule a reconnect. Cleared by open/close/error so it never fires on a
-   *  socket that already transitioned, and guarded against firing after OPEN. */
-  private armConnectTimeout(): void {
-    this.clearConnectTimeout();
-    this.connectTimeoutTimer = setTimeout(() => {
-      this.connectTimeoutTimer = null;
+   *  socket that already transitioned, and guarded against firing after OPEN
+   *  or against a stale socket (identity guard). */
+  private armConnectTimeout(category: 'linear' | 'spot', socket: WebSocket): void {
+    const state = this.reconnectState[category];
+    this.clearConnectTimeout(category);
+    state.timeoutTimer = setTimeout(() => {
+      state.timeoutTimer = null;
       // Guard: never fire after the socket is already open (or already gone).
-      if (!this.ws || this.ws.readyState === WebSocket.OPEN) {
+      if (this.sockets.get(category) !== socket || socket.readyState === WebSocket.OPEN) {
         return;
       }
-      this.isConnecting = false;
+      state.connecting = false;
       this.logger.error('Bybit feed connect timeout', {
+        socket: category,
         at: new Date().toISOString(),
         timeoutMs: CONNECT_TIMEOUT_MS,
       });
@@ -561,15 +666,16 @@ export class BybitWebSocketService {
       // Abort the stuck socket so a late (slow-network) open can never fire its
       // stale handler against a newer socket's state — close() on CONNECTING
       // aborts the handshake and the socket goes CLOSED instead of OPEN.
-      this.ws?.close();
-      this.scheduleReconnect();
+      socket.close();
+      this.scheduleReconnect(category);
     }, CONNECT_TIMEOUT_MS);
   }
 
-  private clearConnectTimeout(): void {
-    if (this.connectTimeoutTimer) {
-      clearTimeout(this.connectTimeoutTimer);
-      this.connectTimeoutTimer = null;
+  private clearConnectTimeout(category: 'linear' | 'spot'): void {
+    const state = this.reconnectState[category];
+    if (state.timeoutTimer) {
+      clearTimeout(state.timeoutTimer);
+      state.timeoutTimer = null;
     }
   }
 

@@ -27,7 +27,10 @@ import { test, expect, type Page } from '@playwright/test';
 const FRONTEND = 'http://localhost:3000';
 
 /** Known pair options (frontend/src/utils/options.ts ← TRADABLE_PAIRS). */
-const KNOWN_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
+const KNOWN_PAIRS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT',
+  'GOLDUSDC', 'TSLAXUSDC', 'AAPLXUSDC',
+];
 
 /** Known timeframe options (frontend/src/utils/options.ts): value → label. */
 const TIMEFRAME_VALUE_TO_LABEL: Record<string, string> = {

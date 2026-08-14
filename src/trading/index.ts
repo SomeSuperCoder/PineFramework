@@ -73,6 +73,8 @@ export {
   TOKEN_REGISTRY,
   getTokenInfo,
   getTradablePairs,
+  getBybitSymbol,
+  getBybitCategory,
   isValidPairSymbol,
   type PairSymbol,
   type TokenInfo,
