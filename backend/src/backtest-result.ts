@@ -233,13 +233,19 @@ export function buildDecisionWarnings(
   const effectiveMethod = effective.commissionMethod;
   const effectiveSettings = effective.commissionMethodSettings ?? null;
 
+  const explicitConfirmed = explicitMethod !== null && explicitMethod === effectiveMethod;
+
   return [
     {
       type: 'fee-decision',
-      message:
-        explicitMethod !== null && explicitMethod === effectiveMethod
-          ? `Commission method '${effectiveMethod}' (user-explicit)`
-          : `Commission method '${effectiveMethod}' (${explicitMethod !== null ? `user-requested '${explicitMethod}' overridden` : 'resolved'})`,
+      // A user-explicit method that stayed in effect merely CONFIRMS the user's
+      // own choice — information, not a warning (level 'info'). Only when the
+      // requested method was overridden or auto-resolved is the record a real
+      // warning: the effective behavior diverged from what the user asked for.
+      level: explicitConfirmed ? 'info' : 'warning',
+      message: explicitConfirmed
+        ? `Commission method '${effectiveMethod}' (user-explicit)`
+        : `Commission method '${effectiveMethod}' (${explicitMethod !== null ? `user-requested '${explicitMethod}' overridden` : 'resolved'})`,
       context: {
         explicitMethod,
         effectiveMethod,

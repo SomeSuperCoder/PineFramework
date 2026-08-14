@@ -70,6 +70,23 @@ const feeWarning: BacktestWarning = {
   context: { method: 'jupiter_manual' },
 };
 
+/**
+ * User-explicit fee decision (buildDecisionWarnings shape): level 'info' →
+ * quiet informational row, no alarm styling. The backend emits exactly this
+ * message for a user-explicit method that stayed in effect.
+ */
+const infoFeeWarning: BacktestWarning = {
+  type: 'fee-decision',
+  level: 'info',
+  message: "Commission method 'jupiter_manual' (user-explicit)",
+  context: {
+    explicitMethod: 'jupiter_manual',
+    effectiveMethod: 'jupiter_manual',
+    explicitSettings: { solPriceUsd: 180.5, dexFeeBps: 25 },
+    effectiveSettings: { solPriceUsd: 180.5, dexFeeBps: 25 },
+  },
+};
+
 // ---------------------------------------------------------------------------
 // Result fixture factory (same minimal metrics/trades shape as the existing
 // BacktestResults component tests — keep the two fixtures consistent).
@@ -333,6 +350,78 @@ describe('WarningsStrip', () => {
     ).toBeInTheDocument();
     // Both effective settings values are visible in the rendered hint.
     expect(screen.getByText(/solPriceUsd":180\.5/)).toBeInTheDocument();
+  });
+
+  it('renders an info-level row with quiet styling — ℹ marker, muted badge/message, no alarm treatment', () => {
+    const { container } = render(<WarningsStrip warnings={[infoFeeWarning]} />);
+
+    // Badge = the WARNING_LABELS span: quiet bg + muted text (info), NOT the
+    // alarm bg-foreground/10 used by warning rows.
+    const badge = screen.getByText('Fee decision');
+    expect(badge.className).toContain('bg-foreground/5');
+    expect(badge.className).toContain('text-muted-foreground');
+    expect(badge.className).not.toContain('bg-foreground/10');
+
+    // The info marker (ℹ) is rendered for info rows.
+    const marker = container.querySelector('span[aria-hidden="true"]');
+    expect(marker).not.toBeNull();
+    expect(marker!.textContent).toContain('ℹ');
+
+    // Message renders with quiet (muted) styling.
+    const message = screen.getByText("Commission method 'jupiter_manual' (user-explicit)");
+    expect(message.className).toContain('text-muted-foreground');
+  });
+
+  it('keeps an info row fully readable — context (effectiveSettings) is still visible', () => {
+    render(<WarningsStrip warnings={[infoFeeWarning]} />);
+
+    // The 4-key context hint renders for info rows too — quiet styling must
+    // never hide the WHY (effectiveSettings included).
+    expect(
+      screen.getByText(/effectiveSettings: \{"solPriceUsd":180\.5,"dexFeeBps":25\}/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/explicitMethod: jupiter_manual/)).toBeInTheDocument();
+  });
+
+  it('keeps alarm styling for warning-level and absent-level rows (info is opt-in)', () => {
+    const explicitWarning: BacktestWarning = {
+      type: 'fee-decision',
+      level: 'warning',
+      message: "Commission method 'jupiter_ultra' (user-requested 'jupiter_manual' overridden)",
+      context: { explicitMethod: 'jupiter_manual', effectiveMethod: 'jupiter_ultra' },
+    };
+    const { container } = render(<WarningsStrip warnings={[explicitWarning, feeWarning]} />);
+
+    // Both rows are fee-decision badges with the ALARM styling — explicit
+    // 'warning' and absent level (defaults to warning) alike.
+    const badges = screen.getAllByText('Fee decision');
+    expect(badges).toHaveLength(2);
+    for (const badge of badges) {
+      expect(badge.className).toContain('bg-foreground/10');
+      expect(badge.className).not.toContain('text-muted-foreground');
+    }
+    // No ℹ marker anywhere.
+    expect(container.querySelector('span[aria-hidden="true"]')).toBeNull();
+    expect(screen.queryByText('ℹ')).not.toBeInTheDocument();
+  });
+
+  it('collapses a mixed info + warning duplicate pair as ALARM (info only when every contributor is info)', () => {
+    // Same type|message key; one row is info, the other is an absent-level
+    // (warning) duplicate → the collapsed row must keep the alarm styling.
+    const message = "Commission method 'jupiter_ultra' (user-requested 'jupiter_manual' overridden)";
+    render(
+      <WarningsStrip
+        warnings={[
+          { type: 'fee-decision', level: 'info', message, context: { effectiveMethod: 'jupiter_ultra' } },
+          { type: 'fee-decision', message, context: { effectiveMethod: 'jupiter_ultra' } },
+        ]}
+      />,
+    );
+
+    const badge = screen.getByText('Fee decision');
+    expect(badge.className).toContain('bg-foreground/10');
+    expect(badge.className).not.toContain('text-muted-foreground');
+    expect(screen.getByText('×2')).toBeInTheDocument();
   });
 
   it('renders the long-only-suppression row FIRST in a mixed list, before the baseline summary (priority sort)', () => {

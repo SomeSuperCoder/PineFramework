@@ -1,4 +1,5 @@
 import { StatusCallout } from '@/components/ui/status-callout';
+import { cn } from '@/lib/utils';
 import type { BacktestWarning, BacktestWarningType } from '../types';
 
 const WARNING_LABELS: Record<BacktestWarningType, string> = {
@@ -55,6 +56,9 @@ interface WarningRow {
   context?: unknown;
   /** Pre-formatted per-setting detail for the aggregated baseline row. */
   detail?: string;
+  /** Severity carried from the source warnings — 'info' rows render as quiet
+   *  confirmations. Absent = 'warning'. */
+  level?: 'info' | 'warning';
 }
 
 /** One baseline diagnostic's "setting: baseline" entry, or null when malformed. */
@@ -82,10 +86,15 @@ function aggregateWarnings(warnings: BacktestWarning[]): WarningRow[] {
   // Baseline diagnostics are excluded — they collapse into the single summary
   // row below, which intentionally keeps count 1.
   const counts = new Map<string, number>();
+  // A collapsed row is 'info' only when EVERY contributing warning is 'info'
+  // (absent level means 'warning') — a single true warning keeps the alarm row.
+  const infoOnly = new Map<string, boolean>();
   for (const warning of warnings) {
     if (warning.type === 'baseline-applied') continue;
     const key = `${warning.type}|${warning.message}`;
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (warning.level !== 'info') infoOnly.set(key, false);
+    else if (!infoOnly.has(key)) infoOnly.set(key, true);
   }
 
   for (const warning of warnings) {
@@ -113,6 +122,7 @@ function aggregateWarnings(warnings: BacktestWarning[]): WarningRow[] {
       message: warning.message,
       count: counts.get(key) ?? 1,
       context: warning.context,
+      level: infoOnly.get(key) ? 'info' : undefined,
     });
   }
   return rows;
@@ -131,8 +141,11 @@ interface WarningsStripProps {
  * Rendering only: exact-duplicate warnings are collapsed with a ×N count and
  * baseline-applied diagnostics are grouped into one summary row, so the strip
  * surfaces the meaningful signals (suppression, fee decisions) instead of
- * being buried under repetitive rows. The long-only-suppression row renders
- * first when present; remaining rows keep their payload-relative order.
+ * being buried under repetitive rows. `info`-level diagnostics (e.g. a
+ * user-explicit fee decision) render as quiet informational rows — subdued
+ * styling, no alarm treatment — while keeping their context visible. The
+ * long-only-suppression row renders first when present; remaining rows keep
+ * their payload-relative order.
  */
 export function WarningsStrip({ warnings }: WarningsStripProps) {
   if (!warnings || warnings.length === 0) return null;
@@ -148,15 +161,35 @@ export function WarningsStrip({ warnings }: WarningsStripProps) {
       <div className="flex flex-col gap-1.5">
         {rows.map((row, index) => {
           const hint = formatContextHint(row.context);
+          const isInfo = row.level === 'info';
+          // Quiet informational rows: subdued badge + message, no alarm tone —
+          // the content (type label, message, context) stays fully visible.
+          const badgeClass = isInfo
+            ? 'rounded bg-foreground/5 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap text-muted-foreground'
+            : 'rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap';
           return (
             <div key={`${row.type}-${index}`} className="flex flex-col gap-0.5">
               <div className="flex items-start gap-2">
-                <span className="rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
-                  {WARNING_LABELS[row.type] ?? row.type}
+                {isInfo && (
+                  <span
+                    aria-hidden="true"
+                    className="mt-px text-[10px] leading-4 text-muted-foreground/70"
+                  >
+                    ℹ
+                  </span>
+                )}
+                <span className={badgeClass}>{WARNING_LABELS[row.type] ?? row.type}</span>
+                <span
+                  className={
+                    isInfo
+                      ? 'min-w-0 flex-1 break-words text-muted-foreground'
+                      : 'min-w-0 flex-1 break-words'
+                  }
+                >
+                  {row.message}
                 </span>
-                <span className="min-w-0 flex-1 break-words">{row.message}</span>
                 {row.count > 1 && (
-                  <span className="ml-auto shrink-0 rounded bg-foreground/10 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap tabular-nums">
+                  <span className={cn(badgeClass, 'ml-auto shrink-0 tabular-nums')}>
                     ×{row.count}
                   </span>
                 )}

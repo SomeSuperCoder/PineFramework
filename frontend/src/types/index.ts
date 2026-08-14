@@ -480,6 +480,12 @@ export type BacktestWarningType =
 export interface BacktestWarning {
   type: BacktestWarningType;
   message: string;
+  /**
+   * Severity of the diagnostic. Absent = 'warning'. 'info' marks a quiet
+   * informational confirmation (e.g. a user-explicit fee decision) that the UI
+   * renders without alarm styling. Mirror of backend `BacktestWarning.level`.
+   */
+  level?: 'info' | 'warning';
   context?: unknown;
 }
 

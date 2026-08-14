@@ -36,6 +36,12 @@ export interface BacktestWarning {
   message: string;
   /** Structured context (names, values, decisions) — the WHY / details. */
   context?: Record<string, unknown>;
+  /**
+   * Severity of the diagnostic. Absent = 'warning' — only diagnostics that
+   * confirm an explicit user choice use 'info' (e.g. a user-explicit
+   * commission method); everything else is a genuine warning by default.
+   */
+  level?: 'info' | 'warning';
 }
 
 /**

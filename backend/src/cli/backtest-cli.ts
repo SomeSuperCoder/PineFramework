@@ -280,7 +280,11 @@ function printWarningsSection(warnings: BacktestWarning[]): void {
   lines.push('  Warnings:');
   for (const { warning, count } of seen.values()) {
     const suffix = count > 1 ? ` (×${count})` : '';
-    lines.push(`    ⚠ [${warning.type}] ${warning.message}${suffix}`);
+    // level absent → 'warning' (SSOT default). 'info' diagnostics (e.g.
+    // fee-decision confirming an explicit user choice) get a quiet marker —
+    // they inform, they do not alarm. Unknown levels fail safe to ⚠.
+    const marker = (warning.level ?? 'warning') === 'info' ? 'ℹ' : '⚠';
+    lines.push(`    ${marker} [${warning.type}] ${warning.message}${suffix}`);
     if (warning.context !== undefined && Object.keys(warning.context).length > 0) {
       lines.push(`      context: ${JSON.stringify(warning.context)}`);
     }
