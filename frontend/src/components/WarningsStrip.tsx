@@ -138,19 +138,21 @@ interface WarningsStripProps {
  * Any `long-only-suppression` record turns the whole strip amber — suppressed
  * trades materially changed what ran and must not be missed.
  *
- * Rendering only: exact-duplicate warnings are collapsed with a ×N count and
- * baseline-applied diagnostics are grouped into one summary row, so the strip
- * surfaces the meaningful signals (suppression, fee decisions) instead of
- * being buried under repetitive rows. `info`-level diagnostics (e.g. a
- * user-explicit fee decision) render as quiet informational rows — subdued
- * styling, no alarm treatment — while keeping their context visible. The
+ * Rendering only: `info`-level diagnostics (e.g. a user-explicit fee decision)
+ * are dropped BEFORE aggregation — they confirm explicit user choices and are
+ * API/CLI material, not UI warnings, so the strip shows only real warnings
+ * (level absent or 'warning'). The remaining warnings are collapsed by exact
+ * duplicate with a ×N count and baseline-applied diagnostics are grouped into
+ * one summary row, so the strip surfaces the meaningful signals (suppression,
+ * fee decisions) instead of being buried under repetitive rows. The
  * long-only-suppression row renders first when present; remaining rows keep
  * their payload-relative order.
  */
 export function WarningsStrip({ warnings }: WarningsStripProps) {
-  if (!warnings || warnings.length === 0) return null;
+  const warningRows = (warnings ?? []).filter((warning) => warning.level !== 'info');
+  if (warningRows.length === 0) return null;
 
-  const rows = aggregateWarnings(warnings).sort(
+  const rows = aggregateWarnings(warningRows).sort(
     (a, b) => (WARNING_ROW_PRIORITY[a.type] ?? 1) - (WARNING_ROW_PRIORITY[b.type] ?? 1),
   );
   const hasSuppression = rows.some((row) => row.type === 'long-only-suppression');

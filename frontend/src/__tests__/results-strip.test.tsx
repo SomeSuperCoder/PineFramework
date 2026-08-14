@@ -72,8 +72,10 @@ const feeWarning: BacktestWarning = {
 
 /**
  * User-explicit fee decision (buildDecisionWarnings shape): level 'info' →
- * quiet informational row, no alarm styling. The backend emits exactly this
- * message for a user-explicit method that stayed in effect.
+ * filtered out BEFORE aggregation, so the row never renders in the UI. The
+ * backend emits exactly this message for a user-explicit method that stayed in
+ * effect — it confirms an explicit user choice, so the strip drops it (it is
+ * API/CLI material, not a UI warning).
  */
 const infoFeeWarning: BacktestWarning = {
   type: 'fee-decision',
@@ -352,35 +354,34 @@ describe('WarningsStrip', () => {
     expect(screen.getByText(/solPriceUsd":180\.5/)).toBeInTheDocument();
   });
 
-  it('renders an info-level row with quiet styling — ℹ marker, muted badge/message, no alarm treatment', () => {
+  it('does not render an info-only list at all — no status box, no row, no context, no ℹ marker', () => {
     const { container } = render(<WarningsStrip warnings={[infoFeeWarning]} />);
 
-    // Badge = the WARNING_LABELS span: quiet bg + muted text (info), NOT the
-    // alarm bg-foreground/10 used by warning rows.
-    const badge = screen.getByText('Fee decision');
-    expect(badge.className).toContain('bg-foreground/5');
-    expect(badge.className).toContain('text-muted-foreground');
-    expect(badge.className).not.toContain('bg-foreground/10');
-
-    // The info marker (ℹ) is rendered for info rows.
-    const marker = container.querySelector('span[aria-hidden="true"]');
-    expect(marker).not.toBeNull();
-    expect(marker!.textContent).toContain('ℹ');
-
-    // Message renders with quiet (muted) styling.
-    const message = screen.getByText("Commission method 'jupiter_manual' (user-explicit)");
-    expect(message.className).toContain('text-muted-foreground');
+    // Info-level diagnostics are dropped before aggregation — an all-info list
+    // renders nothing at all (no empty box).
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fee decision')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Commission method 'jupiter_manual' (user-explicit)"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/effectiveSettings:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('ℹ')).not.toBeInTheDocument();
+    expect(container.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
 
-  it('keeps an info row fully readable — context (effectiveSettings) is still visible', () => {
-    render(<WarningsStrip warnings={[infoFeeWarning]} />);
+  it('does not render an info row inside a mixed list — only warning/absent-level rows remain', () => {
+    render(<WarningsStrip warnings={[infoFeeWarning, suppressionWarning, feeWarning]} />);
 
-    // The 4-key context hint renders for info rows too — quiet styling must
-    // never hide the WHY (effectiveSettings included).
-    expect(
-      screen.getByText(/effectiveSettings: \{"solPriceUsd":180\.5,"dexFeeBps":25\}/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/explicitMethod: jupiter_manual/)).toBeInTheDocument();
+    // The info row's identity is absent entirely — no message, no context hint,
+    // no ℹ marker (absence is total, not quiet styling).
+    expect(screen.queryByText(/user-explicit/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/explicitMethod: jupiter_manual/)).not.toBeInTheDocument();
+    expect(screen.queryByText('ℹ')).not.toBeInTheDocument();
+
+    // Warning/absent-level rows in the same list still render normally.
+    expect(screen.getByText('Long-only suppression')).toBeInTheDocument();
+    expect(screen.getByText('2 short orders suppressed by the long-only rule')).toBeInTheDocument();
+    expect(screen.getByText('Fee decision')).toBeInTheDocument();
   });
 
   it('keeps alarm styling for warning-level and absent-level rows (info is opt-in)', () => {
@@ -405,9 +406,10 @@ describe('WarningsStrip', () => {
     expect(screen.queryByText('ℹ')).not.toBeInTheDocument();
   });
 
-  it('collapses a mixed info + warning duplicate pair as ALARM (info only when every contributor is info)', () => {
+  it('drops info contributors before aggregation — a mixed info + warning duplicate pair counts only the warning row', () => {
     // Same type|message key; one row is info, the other is an absent-level
-    // (warning) duplicate → the collapsed row must keep the alarm styling.
+    // (warning) duplicate → the info contributor is filtered out FIRST, so
+    // aggregation sees a single warning row (no collapsed ×2 pair).
     const message = "Commission method 'jupiter_ultra' (user-requested 'jupiter_manual' overridden)";
     render(
       <WarningsStrip
@@ -418,10 +420,16 @@ describe('WarningsStrip', () => {
       />,
     );
 
+    // Exactly one row — the info contributor never reaches aggregation.
+    expect(screen.getAllByText('Fee decision')).toHaveLength(1);
     const badge = screen.getByText('Fee decision');
     expect(badge.className).toContain('bg-foreground/10');
     expect(badge.className).not.toContain('text-muted-foreground');
-    expect(screen.getByText('×2')).toBeInTheDocument();
+    // Count reflects the POST-FILTER list — one unique row carries no ×N badge.
+    expect(screen.queryByText('×2')).not.toBeInTheDocument();
+    expect(screen.queryByText('×1')).not.toBeInTheDocument();
+    // No ℹ marker on the surviving alarm row.
+    expect(screen.queryByText('ℹ')).not.toBeInTheDocument();
   });
 
   it('renders the long-only-suppression row FIRST in a mixed list, before the baseline summary (priority sort)', () => {
