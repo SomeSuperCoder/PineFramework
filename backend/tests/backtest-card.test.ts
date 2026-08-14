@@ -216,7 +216,7 @@ describe('renderBacktestCard', () => {
     );
     const svg = mockCaptured.svg;
     expect(svg).toContain('ETHUSDT');
-    expect(svg).toContain('+$20,000.00');
+    expect(svg).toContain('$20,000.00');
 
     // Fallback: no symbol in effectiveConfig → the localized settings value wins.
     await renderBacktestCard(

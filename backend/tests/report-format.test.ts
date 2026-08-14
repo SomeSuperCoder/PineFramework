@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  formatAmount,
   formatMoney,
   formatRate,
   formatProfitFactor,
@@ -31,6 +32,14 @@ describe('formatMoney', () => {
   it('rounds to 2 decimals through round2', () => {
     expect(formatMoney(1.005)).toBe('+$1.01');
     expect(formatMoney(0.5)).toBe('+$0.50');
+  });
+});
+
+describe('formatAmount', () => {
+  it('formats unsigned amounts with NO leading + sign', () => {
+    expect(formatAmount(1000)).toBe('$1,000.00');
+    expect(formatAmount(10)).toBe('$10.00');
+    expect(formatAmount(0)).toBe('$0.00');
   });
 });
 

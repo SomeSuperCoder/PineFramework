@@ -37,7 +37,7 @@
 
 import sharp from 'sharp';
 import type { BacktestApiResult } from '../../backtest-contract.js';
-import { formatMoney, formatProfitFactor } from './format.js';
+import { formatAmount, formatMoney, formatProfitFactor } from './format.js';
 
 // ── Palette tokens (single source of truth for the sign rule) ────────────────
 const GREEN = '#35D07F';
@@ -69,11 +69,6 @@ function formatPercentValue(pct: number, signed = false): string {
   const body = r.toFixed(1).replace(/\.0$/, '');
   const sign = signed ? (r > 0 ? '+' : r < 0 ? '-' : '') : '';
   return `${sign}${body}%`;
-}
-
-/** formatMoney without the leading '+' — capital/commission read better unsigned. */
-function unsignedMoney(n: number): string {
-  return formatMoney(n).replace(/^\+/, '');
 }
 
 /**
@@ -215,7 +210,7 @@ const BACKTEST_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" h
  * lookback, commission-method label — they live on the run job) plus fallbacks
  * for symbol/capital. Where the payload DOES carry a value (effectiveConfig),
  * the renderer prefers it: symbol <- effectiveConfig.symbol, capital <-
- * formatMoney(effectiveConfig.initialCapital).
+ * formatAmount(effectiveConfig.initialCapital).
  */
 export interface BacktestCardLabels {
   /** Header brand eyebrow, e.g. "PINE FRAMEWORK". */
@@ -288,7 +283,8 @@ export async function renderBacktestCard(
   // Effective settings: prefer the payload's effectiveConfig (what actually
   // ran), else the caller-resolved label fallbacks.
   const symbol = result.effectiveConfig.symbol ?? labels.settingsValues.symbol;
-  const capital = formatMoney(result.effectiveConfig.initialCapital);
+  // Capital is an AMOUNT, not PnL — unsigned (no leading '+').
+  const capital = formatAmount(result.effectiveConfig.initialCapital);
 
   const svg = BACKTEST_CARD_SVG
     // Hero.
@@ -303,7 +299,7 @@ export async function renderBacktestCard(
     .replaceAll('{{sharpe}}', escapeXml(m.sharpeRatio === null ? '—' : m.sharpeRatio.toFixed(2)))
     .replaceAll('{{buyHold}}', escapeXml(formatPercentValue(result.buyHoldReturn, true)))
     // Bottom strip.
-    .replaceAll('{{commission}}', escapeXml(unsignedMoney(m.commission)))
+    .replaceAll('{{commission}}', escapeXml(formatAmount(m.commission)))
     .replaceAll('{{bars}}', escapeXml(String(result.barCount)))
     .replaceAll('{{avgTrade}}', escapeXml(m.totalTrades > 0 ? formatMoney(avgTrade) : '—'))
     // Settings panel (adversarial symbols/method labels are escaped).

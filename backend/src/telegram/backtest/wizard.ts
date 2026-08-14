@@ -31,12 +31,14 @@ import type { BotLanguage, I18nKey } from '../i18n.js';
 import { t } from '../i18n.js';
 import type { CallbackContext, FeatureCommandContext } from '../TelegramBotFeature.js';
 import { escapeMarkdownV2 } from '../TelegramService.js';
-import { formatGeneratedAt, formatMoney, formatProfitFactor } from '../report/format.js';
+import { formatAmount, formatGeneratedAt, formatMoney, formatProfitFactor } from '../report/format.js';
 import { renderBacktestCard, type BacktestCardLabels } from '../report/backtestCard.js';
 import {
   BACKTEST_METHODS,
   BACKTEST_SYMBOLS,
   BACKTEST_TIMEFRAMES,
+  CAPITAL_PRESETS,
+  capitalKeyboard,
   daysKeyboard,
   isWizardStep,
   methodKeyboard,
@@ -67,6 +69,8 @@ interface BacktestSession {
   timeframe?: string;
   daysBack?: number;
   commissionMethod?: BacktestCommissionMethodId;
+  /** Initial capital (USD) — one of the CAPITAL_PRESETS; engine default 10000 when absent. */
+  initialCapital?: number;
   /** Single-run guard per chat: true while a run is in flight. */
   running: boolean;
 }
@@ -233,6 +237,9 @@ export class BacktestWizard {
       case 'method':
         await this.selectMethod(ctx, chatId, arg);
         return;
+      case 'capital':
+        await this.selectCapital(ctx, chatId, arg);
+        return;
       case 'run':
         await this.run(ctx, chatId);
         return;
@@ -309,13 +316,27 @@ export class BacktestWizard {
     }
     session.commissionMethod = arg as BacktestCommissionMethodId;
     await ctx.answerCallback();
+    await this.showStep(ctx, chatId, 'capital');
+  }
+
+  /** Step 6 — initial-capital presets. The whitelist check doubles as the
+   *  finite->0 validation (every preset is a positive finite integer). */
+  private async selectCapital(ctx: CallbackContext, chatId: number, arg: string): Promise<void> {
+    const session = this.sessions.get(chatId);
+    const capital = Number(arg);
+    if (!session || session.step !== 'capital' || !CAPITAL_PRESETS.includes(capital)) {
+      await ctx.answerCallback();
+      return;
+    }
+    session.initialCapital = capital;
+    await ctx.answerCallback();
     await this.showStep(ctx, chatId, 'run');
   }
 
   // ---- run step --------------------------------------------------------------
 
   /**
-   * Step 6 — start the run. Never awaits the backtest inside the callback:
+   * Step 7 — start the run. Never awaits the backtest inside the callback:
    * ack, edit to "running…", fire-and-forget the producer+render+send. A
    * second tap while running is rejected by the single-run guard.
    */
@@ -432,6 +453,11 @@ export class BacktestWizard {
           reply_markup: methodKeyboard(lang),
         });
         return;
+      case 'capital':
+        await ctx.editMessage(t(lang, 'backtestStepCapital'), {
+          reply_markup: capitalKeyboard(lang),
+        });
+        return;
       case 'run':
         await ctx.editMessage(
           t(lang, 'backtestStepRun', {
@@ -483,7 +509,8 @@ export class BacktestWizard {
       session.symbol === undefined ||
       session.timeframe === undefined ||
       session.daysBack === undefined ||
-      session.commissionMethod === undefined
+      session.commissionMethod === undefined ||
+      session.initialCapital === undefined
     ) {
       return null;
     }
@@ -495,6 +522,7 @@ export class BacktestWizard {
       timeframe: session.timeframe,
       daysBack: session.daysBack,
       commissionMethod: session.commissionMethod,
+      initialCapital: session.initialCapital,
     };
   }
 
@@ -506,6 +534,9 @@ export class BacktestWizard {
       timeframe: timeframeDisplay(session.timeframe ?? ''),
       range: `${session.daysBack ?? 0}d`,
       method: methodLabel(lang, session.commissionMethod ?? 'jupiter_manual'),
+      // Fall back to the engine default only when the step was somehow skipped.
+      // Capital is an AMOUNT, not PnL — unsigned (no leading '+').
+      capital: formatAmount(session.initialCapital ?? 10000),
     };
   }
 
@@ -546,8 +577,9 @@ export class BacktestWizard {
         timeframe: timeframeDisplay(session.timeframe ?? ''),
         range: `${session.daysBack ?? 0}d`,
         method: methodLabel(lang, session.commissionMethod ?? 'jupiter_manual'),
-        // The renderer prefers effectiveConfig.initialCapital when present.
-        capital: formatMoney(10000),
+        // The renderer prefers effectiveConfig.initialCapital when present;
+        // the wizard's chosen capital (engine default when unset) is the fallback.
+        capital: formatAmount(session.initialCapital ?? 10000),
       },
       performance: t(lang, 'backtestCardPerformance'),
       barsAnnotation: t(lang, 'backtestCardBarsAnnotation', { bars: String(result.barCount) }),

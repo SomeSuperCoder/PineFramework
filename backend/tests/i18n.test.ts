@@ -20,9 +20,9 @@ describe('i18n dictionary parity', () => {
     expect(DICTIONARIES.ru).toBe(ru);
   });
 
-  it('keeps the parallel dictionaries at exactly 144 keys each (localization change)', () => {
+  it('keeps the parallel dictionaries at exactly 145 keys each (localization change)', () => {
     const count = Object.keys(en).length;
-    expect(count).toBe(144);
+    expect(count).toBe(145);
     expect(Object.keys(es).length).toBe(count);
     expect(Object.keys(ru).length).toBe(count);
   });
@@ -34,7 +34,7 @@ describe('i18n dictionary parity', () => {
       ['btnConfirm', 'btnCancel', 'btnEmergencyStop', 'btnBackMain', 'btnNotifEnableAll', 'btnNotifDisableAll'],
       ['notifTypeTrading', 'notifTypePositionOpen', 'notifTypePositionClose', 'notifTypeReport', 'notifTypeDaily', 'notifTypeError', 'notifTypeBotLifecycle'],
       ['cardBrand', 'cardGlobal', 'cardRealized', 'cardUnrealized', 'cardNetRealizedUnrealized', 'cardSymbolPnl', 'cardTopMovers', 'cardWinRate', 'cardProfitFactor', 'cardAvgTrade', 'cardMaxDrawdown', 'cardOpenPositions', 'cardGenerated', 'cardEmptyState', 'cardEngineRunning', 'cardEngineStopped', 'cardEngineError', 'cardEngineUnknown', 'cardFooter', 'cardReportWord'],
-      ['backtestStepStrategy', 'backtestStepSymbol', 'backtestStepTimeframe', 'backtestStepDays', 'backtestStepMethod', 'backtestStepRun', 'backtestRunSummary', 'backtestRunning', 'backtestRunDone', 'backtestCancelConfirm', 'backtestEmptyLibrary', 'backtestAlreadyRunning', 'backtestErrNoStrategies', 'backtestErrStrategyNotFound', 'backtestErrNotAStrategy', 'backtestErrTooManyBars', 'backtestErrInvalidSettings', 'backtestErrFeeFetch', 'backtestErrEngine', 'backtestErrDataFetch', 'backtestBtnBack', 'backtestBtnRestart', 'backtestBtnRun', 'backtestMethodUltra', 'backtestMethodManual', 'backtestTextTitle', 'backtestTextSummary', 'backtestTextMetrics', 'backtestTextStats', 'backtestTextGenerated', 'backtestResultCaption', 'backtestCardEngine', 'backtestCardNet', 'backtestCardSettings', 'backtestCardSetSymbol', 'backtestCardSetTimeframe', 'backtestCardSetRange', 'backtestCardSetMethod', 'backtestCardSetCapital', 'backtestCardPerformance', 'backtestCardBarsAnnotation', 'backtestCardTrades', 'backtestCardWinRate', 'backtestCardProfitFactor', 'backtestCardMaxDrawdown', 'backtestCardSharpe', 'backtestCardBuyHold', 'backtestCardCommission', 'backtestCardBars', 'backtestCardAvgTrade', 'backtestCardGenerated', 'backtestCardFooter'],
+      ['backtestStepStrategy', 'backtestStepSymbol', 'backtestStepTimeframe', 'backtestStepDays', 'backtestStepMethod', 'backtestStepCapital', 'backtestStepRun', 'backtestRunSummary', 'backtestRunning', 'backtestRunDone', 'backtestCancelConfirm', 'backtestEmptyLibrary', 'backtestAlreadyRunning', 'backtestErrNoStrategies', 'backtestErrStrategyNotFound', 'backtestErrNotAStrategy', 'backtestErrTooManyBars', 'backtestErrInvalidSettings', 'backtestErrFeeFetch', 'backtestErrEngine', 'backtestErrDataFetch', 'backtestBtnBack', 'backtestBtnRestart', 'backtestBtnRun', 'backtestMethodUltra', 'backtestMethodManual', 'backtestTextTitle', 'backtestTextSummary', 'backtestTextMetrics', 'backtestTextStats', 'backtestTextGenerated', 'backtestResultCaption', 'backtestCardEngine', 'backtestCardNet', 'backtestCardSettings', 'backtestCardSetSymbol', 'backtestCardSetTimeframe', 'backtestCardSetRange', 'backtestCardSetMethod', 'backtestCardSetCapital', 'backtestCardPerformance', 'backtestCardBarsAnnotation', 'backtestCardTrades', 'backtestCardWinRate', 'backtestCardProfitFactor', 'backtestCardMaxDrawdown', 'backtestCardSharpe', 'backtestCardBuyHold', 'backtestCardCommission', 'backtestCardBars', 'backtestCardAvgTrade', 'backtestCardGenerated', 'backtestCardFooter'],
     ];
     for (const group of groups) {
       for (const key of group) {
@@ -58,6 +58,12 @@ describe('t() interpolation', () => {
     const msg = t('en', 'reportRow', { symbol: 'BTC', side: 'L', pnl: '5' });
     expect(msg).toContain('BTC');
     expect(msg).toContain('5');
+  });
+
+  it('backtestRunSummary carries the {{capital}} placeholder in every language', () => {
+    for (const lang of Object.keys(DICTIONARIES) as Array<keyof typeof DICTIONARIES>) {
+      expect(t(lang, 'backtestRunSummary')).toContain('{{capital}}');
+    }
   });
 
   it('leaves the string untouched when no params are given', () => {

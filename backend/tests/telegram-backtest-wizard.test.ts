@@ -25,6 +25,7 @@ import {
 import { runTelegramBacktest, type TelegramBacktestResult } from '../src/telegram/backtest/runTelegramBacktest.js';
 import { renderBacktestCard } from '../src/telegram/report/backtestCard.js';
 import { t } from '../src/telegram/i18n.js';
+import { formatAmount } from '../src/telegram/report/format.js';
 import type { ScriptEntry, ScriptFileManager } from '../src/store/ScriptFileManager.js';
 
 vi.mock('../src/telegram/backtest/runTelegramBacktest.js', () => ({
@@ -151,10 +152,11 @@ describe('BacktestWizard — session lifecycle', () => {
       await wizard.handleCallback(makeCtx('bt:tf:60').cb);
       await wizard.handleCallback(makeCtx('bt:days:30').cb);
       await wizard.handleCallback(makeCtx('bt:method:jupiter_manual').cb);
+      await wizard.handleCallback(makeCtx('bt:capital:1000').cb);
       await wizard.handleCallback(makeCtx('bt:run').cb);
       await vi.waitFor(() => expect(runTelegramBacktest).toHaveBeenCalledTimes(1));
       expect(runTelegramBacktest).toHaveBeenCalledWith(
-        { strategyId: 'builtin_simple_ema_cross_strategy', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual' },
+        { strategyId: 'builtin_simple_ema_cross_strategy', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual', initialCapital: 1000 },
         expect.any(Object),
       );
     } finally {
@@ -175,7 +177,7 @@ describe('BacktestWizard — session lifecycle', () => {
     }
   });
 
-  it('full flow: strategy → symbol → timeframe → days → method → run → card + done', async () => {
+  it('full flow: strategy → symbol → timeframe → days → method → capital → run → card + done', async () => {
     const { wizard, onPhoto } = makeWizard({ entries: [strategyEntry('s1', 'EMA Cross'), strategyEntry('s2', 'RSI Reversal')] });
     vi.mocked(runTelegramBacktest).mockResolvedValue({
       ok: true,
@@ -198,6 +200,8 @@ describe('BacktestWizard — session lifecycle', () => {
     await wizard.handleCallback(days);
     const method = makeCtx('bt:method:jupiter_manual').cb;
     await wizard.handleCallback(method);
+    const capital = makeCtx('bt:capital:1000').cb;
+    await wizard.handleCallback(capital);
     const runCb = makeCtx('bt:run').cb;
     await wizard.handleCallback(runCb);
 
@@ -205,7 +209,9 @@ describe('BacktestWizard — session lifecycle', () => {
     await vi.waitFor(() => expect(onPhoto).toHaveBeenCalledTimes(1));
     expect(tf.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepDays'), expect.any(Object));
     expect(days.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepMethod'), expect.any(Object));
-    // The run step's text interpolates the localized summary.
+    expect(method.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepCapital'), expect.any(Object));
+    // The run step's text interpolates the localized summary, which now ends
+    // with the chosen capital line (formatAmount, e.g. 💰 $1,000.00).
     const runStepText = t('en', 'backtestStepRun', {
       summary: t('en', 'backtestRunSummary', {
         strategy: 'EMA Cross',
@@ -213,12 +219,14 @@ describe('BacktestWizard — session lifecycle', () => {
         timeframe: '60m',
         range: '30d',
         method: t('en', 'backtestMethodManual'),
+        capital: formatAmount(1000),
       }),
     });
-    expect(method.editMessage).toHaveBeenCalledWith(runStepText, expect.any(Object));
+    expect(runStepText).toContain(`💰 ${formatAmount(1000)}`);
+    expect(capital.editMessage).toHaveBeenCalledWith(runStepText, expect.any(Object));
 
     expect(runTelegramBacktest).toHaveBeenCalledWith(
-      { strategyId: 's1', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual' },
+      { strategyId: 's1', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual', initialCapital: 1000 },
       expect.any(Object),
     );
     expect(onPhoto).toHaveBeenCalledWith(
@@ -244,32 +252,34 @@ describe('BacktestWizard — session lifecycle', () => {
     await wizard.handleCallback(makeCtx('bt:sym:BTCUSDT').cb); // → timeframe
     await wizard.handleCallback(makeCtx('bt:tf:60').cb); // → days
     await wizard.handleCallback(makeCtx('bt:days:30').cb); // → method
-    await wizard.handleCallback(makeCtx('bt:method:jupiter_ultra').cb); // → run
+    await wizard.handleCallback(makeCtx('bt:method:jupiter_ultra').cb); // → capital
+    await wizard.handleCallback(makeCtx('bt:capital:10000').cb); // → run
 
-    // Back from the run step re-opens the method step (session still alive —
+    // Back from the run step re-opens the capital step (session still alive —
     // no run has been triggered yet).
-    const back = makeCtx('bt:back:method').cb;
+    const back = makeCtx('bt:back:capital').cb;
     await wizard.handleCallback(back);
-    expect(back.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepMethod'), expect.any(Object));
+    expect(back.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepCapital'), expect.any(Object));
 
-    // Overwrite the method choice (not jupiter_ultra this time).
-    const manual = makeCtx('bt:method:jupiter_manual').cb;
-    await wizard.handleCallback(manual);
+    // Overwrite the capital choice (not 10000 this time).
+    const capitalPick = makeCtx('bt:capital:1000').cb;
+    await wizard.handleCallback(capitalPick);
     const runStepText = t('en', 'backtestStepRun', {
       summary: t('en', 'backtestRunSummary', {
         strategy: 'EMA Cross',
         symbol: 'BTCUSDT',
         timeframe: '60m',
         range: '30d',
-        method: t('en', 'backtestMethodManual'),
+        method: t('en', 'backtestMethodUltra'),
+        capital: formatAmount(1000),
       }),
     });
-    expect(manual.editMessage).toHaveBeenCalledWith(runStepText, expect.any(Object));
+    expect(capitalPick.editMessage).toHaveBeenCalledWith(runStepText, expect.any(Object));
 
     await wizard.handleCallback(makeCtx('bt:run').cb);
     await vi.waitFor(() => expect(runTelegramBacktest).toHaveBeenCalledTimes(1));
     expect(runTelegramBacktest).toHaveBeenCalledWith(
-      { strategyId: 's1', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_manual' },
+      { strategyId: 's1', symbol: 'BTCUSDT', timeframe: '60', daysBack: 30, commissionMethod: 'jupiter_ultra', initialCapital: 1000 },
       expect.any(Object),
     );
   });
@@ -335,6 +345,36 @@ describe('BacktestWizard — guard rails', () => {
     expect(next.editMessage).toHaveBeenCalledWith(t('en', 'backtestStepTimeframe'), expect.any(Object));
   });
 
+  it('capital whitelist: non-preset values ack silently and never advance or run', async () => {
+    const { wizard, onPhoto } = makeWizard({ entries: [strategyEntry('s1', 'EMA Cross')] });
+    const { ctx } = makeCommandCtx();
+    await wizard.start(ctx);
+    await wizard.handleCallback(makeCtx('bt:strat:0').cb);
+    await wizard.handleCallback(makeCtx('bt:sym:BTCUSDT').cb);
+    await wizard.handleCallback(makeCtx('bt:tf:60').cb);
+    await wizard.handleCallback(makeCtx('bt:days:30').cb);
+    await wizard.handleCallback(makeCtx('bt:method:jupiter_manual').cb); // → capital
+
+    // Only CAPITAL_PRESETS values are accepted; 999 and abc must be silent acks.
+    for (const data of ['bt:capital:999', 'bt:capital:abc']) {
+      const { cb } = makeCtx(data);
+      await wizard.handleCallback(cb);
+      expect(cb.answerCallback).toHaveBeenCalled();
+      expect(cb.editMessage).not.toHaveBeenCalled();
+    }
+    expect(runTelegramBacktest).not.toHaveBeenCalled();
+
+    // The session survived the rejected taps — a valid preset still advances
+    // to the run step (whose text is the interpolated summary).
+    const good = makeCtx('bt:capital:100').cb;
+    await wizard.handleCallback(good);
+    expect(good.editMessage).toHaveBeenCalledWith(
+      expect.stringContaining(t('en', 'backtestMethodManual')),
+      expect.any(Object),
+    );
+    expect(onPhoto).not.toHaveBeenCalled();
+  });
+
   it('invalid indices ack silently; unknown actions re-show the active step', async () => {
     const { wizard, onPhoto } = makeWizard({ entries: [strategyEntry('s1', 'EMA Cross')] });
     const { ctx } = makeCommandCtx();
@@ -365,6 +405,7 @@ describe('BacktestWizard — guard rails', () => {
     await wizard.handleCallback(makeCtx('bt:tf:60').cb);
     await wizard.handleCallback(makeCtx('bt:days:30').cb);
     await wizard.handleCallback(makeCtx('bt:method:jupiter_manual').cb);
+    await wizard.handleCallback(makeCtx('bt:capital:100').cb);
     const run1 = makeCtx('bt:run').cb;
     await wizard.handleCallback(run1);
 
@@ -386,6 +427,7 @@ describe('BacktestWizard — run outcomes', () => {
     await wizard.handleCallback(makeCtx('bt:tf:60').cb);
     await wizard.handleCallback(makeCtx('bt:days:30').cb);
     await wizard.handleCallback(makeCtx('bt:method:jupiter_manual').cb);
+    await wizard.handleCallback(makeCtx('bt:capital:100').cb);
   }
 
   it('error result surfaces the localized error and still clears the session', async () => {

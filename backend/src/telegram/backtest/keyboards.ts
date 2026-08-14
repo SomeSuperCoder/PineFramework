@@ -74,8 +74,8 @@ export function daysPresetsFor(timeframe: string): readonly number[] {
   return DAYS_PRESETS[timeframe] ?? [1, 7, 30];
 }
 
-/** The six wizard steps, in flow order. */
-export type WizardStep = 'strat' | 'symbol' | 'timeframe' | 'days' | 'method' | 'run';
+/** The seven wizard steps, in flow order. */
+export type WizardStep = 'strat' | 'symbol' | 'timeframe' | 'days' | 'method' | 'capital' | 'run';
 
 export const WIZARD_STEPS: readonly WizardStep[] = [
   'strat',
@@ -83,6 +83,7 @@ export const WIZARD_STEPS: readonly WizardStep[] = [
   'timeframe',
   'days',
   'method',
+  'capital',
   'run',
 ];
 
@@ -103,8 +104,10 @@ export function previousStep(step: WizardStep): WizardStep | undefined {
       return 'timeframe';
     case 'method':
       return 'days';
-    case 'run':
+    case 'capital':
       return 'method';
+    case 'run':
+      return 'capital';
   }
 }
 
@@ -214,7 +217,29 @@ export function methodKeyboard(lang: BotLanguage): Keyboard {
   return keyboard(rows);
 }
 
-/** Step 6 — run confirmation. */
+/**
+ * Initial-capital presets (Director-specified). Plain USD labels ($10, $100,
+ * $1,000, $10,000) — the wizard's only currency, so no i18n key is needed.
+ * Whitelisting here is the validation: every preset is a positive finite int.
+ */
+export const CAPITAL_PRESETS: readonly number[] = [10, 100, 1000, 10000];
+
+/** Step 6 — initial-capital presets (2×2, mirroring the days rows). */
+export function capitalKeyboard(lang: BotLanguage): Keyboard {
+  const rows: Row[] = [];
+  for (let i = 0; i < CAPITAL_PRESETS.length; i += 2) {
+    rows.push(
+      CAPITAL_PRESETS.slice(i, i + 2).map((value) => ({
+        text: `$${value.toLocaleString('en-US')}`,
+        callback_data: `bt:capital:${value}`,
+      })),
+    );
+  }
+  rows.push(controlRow(lang, 'capital'));
+  return keyboard(rows);
+}
+
+/** Step 7 — run confirmation. */
 export function runKeyboard(lang: BotLanguage): Keyboard {
   return keyboard([
     [{ text: t(lang, 'backtestBtnRun'), callback_data: 'bt:run' }],

@@ -47,6 +47,18 @@ export function formatMoney(n: number): string {
 }
 
 /**
+ * Format an UNSIGNED dollar amount — formatMoney minus the leading '+'.
+ * For AMOUNTS (initial capital, commission), where a PnL-style '+' sign
+ * is noise ('💰 $1,000.00', not '💰 +$1,000.00'). Same round2 rounding
+ * and grouping as formatMoney, so image/text can never disagree. A
+ * negative input still renders '-' — masking a negative amount would
+ * hide bugs, so only the positive '+' is stripped.
+ */
+export function formatAmount(n: number): string {
+  return formatMoney(n).replace(/^\+/, '');
+}
+
+/**
  * Format a win-rate FRACTION (0..1) as a percent with 1 decimal.
  * e.g. 0.684 -> '68.4%', 0.7 -> '70%'. Rounded at the percent level so the
  * displayed rate never drifts from the store's fraction.
