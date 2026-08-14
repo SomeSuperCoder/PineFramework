@@ -310,7 +310,10 @@ async function callJupiterApi(
     const stepWithFee = step as { swapInfo: SwapInfoWithFee };
     const stepBps = computeStepBps(stepWithFee);
     const weight = step.percent ?? 100;
-    totalBps += stepBps * (weight / 100);
+    // WHY: `weight` is percent-unit (0-100; a single 100% step is 100) — do NOT
+    // normalize here. The division by totalWeight below is the ONLY /100; doing
+    // it here too divided by 100 twice and undercharged fees 100x (25 bps -> 0.25).
+    totalBps += stepBps * weight;
     totalWeight += weight;
     if (step.swapInfo.label) {
       labels.add(step.swapInfo.label);
