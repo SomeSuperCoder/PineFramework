@@ -29,6 +29,11 @@ const VALID_BODY = {
   symbol: 'BTCUSDT',
   timeframe: '1d',
   script: '//@version=6\nstrategy("Test")\nplot(close)',
+  // The explicit-config contract (backtest-contract.ts) makes commissionMethod
+  // REQUIRED — normalizeExplicitOverride 400s MISSING_COMMISSION_METHOD without
+  // it. jupiter_manual never live-fetches a DEX fee, and the mocked fetchBars
+  // ([]) fails the async job on empty bars before applyDexFee runs — network-safe.
+  commissionMethod: 'jupiter_manual',
 };
 
 describe('POST /api/backtest script validation', () => {

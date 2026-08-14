@@ -9,12 +9,20 @@ import {
   type Trade,
   type FilledOrder,
   type StrategyMetrics,
+  type WarningSink,
 } from 'pine-framework';
 
 export interface BacktestRunnerOptions {
   script: string;
   bars: Bar[];
   configOverride?: Partial<StrategyConfig>;
+  /**
+   * Per-run diagnostic sink (design D4 — WarningCollector at the composition
+   * root). Optional: when absent, the engine emits to a no-op sink and
+   * diagnostics are lost (the CLI/API always wire one). Must be attached
+   * here — the pipeline owns engine construction.
+   */
+  onWarning?: WarningSink;
 }
 
 export interface BacktestRunnerResult {
@@ -78,6 +86,11 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
 
   // Create engine
   const execEngine = new ExecutionEngine(compileResult, options.configOverride);
+  // Design D4: attach the run's diagnostic sink immediately after construction.
+  // Buffered warnings (merge-time baselines, commission conflicts) replay here.
+  if (options.onWarning) {
+    execEngine.setWarningSink(options.onWarning);
+  }
 
   // Build contexts — each context only needs the current bar's OHLCV since
   // executeBar uses getRelative(0) (the last element).

@@ -1,4 +1,6 @@
-export type CliCommissionType = 'percent' | 'fixed' | 'per_contract' | 'per_order';
+import type { ResolvedDateRange } from '../backtest-dates.js';
+import type { StrategyConfig, BacktestWarning } from 'pine-framework';
+
 export type CliCommissionMethod = 'jupiter_ultra' | 'jupiter_manual';
 
 export interface CliOptions {
@@ -10,21 +12,25 @@ export interface CliOptions {
   daysBack: number;
   startDate?: string;
   endDate?: string;
+  /** Pre-resolved UTC-midnight date range (ms) — the CLI resolves ONCE per
+   *  timeframe (backtest-cli.ts) and hands it to the runner so fetch + display
+   *  share the EXACT same window (design D6/M4). Absent for direct runner
+   *  callers (tests/embedders), which resolve from raw options instead. */
+  resolvedDateRange?: ResolvedDateRange;
   output?: string;
   /** `--export [dir]`: full backtest data export dir. '' = use default (.exports/). */
   exportDir?: string;
   initialCapital?: number;
-  commission?: number;
-  commissionType?: CliCommissionType;
+  /** REQUIRED since the normalizer enforces the contract (commission-methods
+   *  spec): the canonical id of the official commission method. The legacy
+   *  commission/commissionType flags are GONE — no CLI path can express the
+   *  dead 0-commission fee path. */
   commissionMethod?: CliCommissionMethod;
   commissionMethodSettings?: Record<string, unknown>;
   slippage?: number;
   defaultQty?: number;
   pyramiding?: number;
   help: boolean;
-  /** When true, allows using a non-Jupiter commission method. Without this flag,
-   *  the CLI will refuse to run with fee models that don't match the live bot. */
-  allowUnrealisticResults?: boolean;
 }
 
 export interface SymbolResult {
@@ -32,6 +38,21 @@ export interface SymbolResult {
   status: 'completed' | 'failed';
   metrics?: SymbolMetrics;
   error?: string;
+  /** The UTC-midnight-aligned date range (ms) this symbol was backtested over —
+   *  identical for every symbol in a multi-symbol run. The M6 CLI config
+   *  summary reads the resolved range from here (the runner is the resolution
+   *  owner; design D6 seam). */
+  resolvedRange?: ResolvedDateRange;
+  /** Typed diagnostics collected during this symbol's run (design D4) — engine
+   *  records (fee-decision, baseline-applied, long-only-suppression) plus the
+   *  CLI composition-root records (live-fee-cache / live-fee-failure from
+   *  applyDexFee). Present only on completed symbols; the M6 summary renders
+   *  these, quiet when none exist. */
+  warnings?: BacktestWarning[];
+  /** The engine's post-merge configuration — what ACTUALLY ran for this symbol
+   *  (the M6 config-summary source; never re-derived from CLI flags). Present
+   *  only on completed symbols. */
+  effectiveConfig?: Readonly<StrategyConfig>;
 }
 
 export interface SymbolMetrics {

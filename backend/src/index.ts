@@ -349,7 +349,7 @@ app.get('/api/logs', async (req, res) => {
 let botEngine: BotEngine | null = null;
 
 if (ENABLE_TRADING_BOT) {
-  const { BotEngine, RiskManager, AutoMarketSelector, generateDefaultCandidates } =
+  const { BotEngine, RiskManager, AutoMarketSelector, generateDefaultCandidates, WarningCollector } =
     await import('pine-framework');
   const { WalletManager, EncryptedFileStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
@@ -357,7 +357,6 @@ if (ENABLE_TRADING_BOT) {
   const defaultCandidates = generateDefaultCandidates();
 
   const barFetcher = new BybitBarFetcher();
-  const backtestRunner = new LiveBacktestRunner();
 
   // Wallet manager — always use encrypted file storage for persistence
   const walletManager = new WalletManager(
@@ -492,9 +491,16 @@ if (ENABLE_TRADING_BOT) {
     // the mode survives a restart. Engine config is truth; disk follows it.
     onConfigPersist: (config) => configStore.save(config),
     onAutoSelect: async (config) => {
+      // Per-invocation WarningCollector + fresh runner (reviewer F2): the
+      // auto-select-method diagnostic each candidate emits
+      // (auto-select-runner.ts) was silently DROPPED because the shared runner
+      // was constructed with NO warning sink. LiveBacktestRunner is stateless,
+      // so one runner per select() invocation is safe; the diagnostics ride
+      // the complete event as an additive field (design D4 typed warnings).
+      const collector = new WarningCollector();
       const selector = new AutoMarketSelector({
         barFetcher,
-        backtestRunner,
+        backtestRunner: new LiveBacktestRunner(collector.onWarning),
         script: config.strategySource,
         dex: config.dex,
         metric: config.autoSelectMetric ?? 'profitFactor',
@@ -515,6 +521,7 @@ if (ENABLE_TRADING_BOT) {
           metric: result.metric,
           evaluatedCount: result.evaluatedCount,
           failedCount: result.failedCount,
+          warnings: collector.toArray(),
         },
       });
       return [result.best.pair];
@@ -545,13 +552,23 @@ if (ENABLE_TRADING_BOT) {
       getEngine: () => botEngine,
       getWalletManager: () => walletManager,
       getConfigStore: () => configStore,
-      getAutoSelectDeps: () => ({
-        AutoMarketSelector,
-        barFetcher,
-        backtestRunner,
-        broadcast: (msg: unknown) => botWS.broadcast(msg as any),
-        candidates: defaultCandidates,
-      }),
+      getAutoSelectDeps: () => {
+        // Per-request collector + fresh runner (reviewer F2): the HTTP
+        // auto-select route (routes/bot.ts) runs candidates through this
+        // runner; without a sink the auto-select-method diagnostics were
+        // dropped. Collection is wired HERE at the composition root. The
+        // route's complete payload does not yet carry the warnings (bot.ts
+        // owns that broadcast — reported as a follow-up), but the diagnostics
+        // are no longer lost.
+        const collector = new WarningCollector();
+        return {
+          AutoMarketSelector,
+          barFetcher,
+          backtestRunner: new LiveBacktestRunner(collector.onWarning),
+          broadcast: (msg: unknown) => botWS.broadcast(msg as any),
+          candidates: defaultCandidates,
+        };
+      },
     }),
   );
 

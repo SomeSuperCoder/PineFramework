@@ -30,7 +30,12 @@ import {
   type BacktestExport,
 } from 'pine-framework';
 
-import { writeExportFile, writeExportManifest, type ExportRun } from '../src/backtest-export.js';
+import {
+  writeExportFile,
+  writeExportManifest,
+  sanitizeExportErrorMessage,
+  type ExportRun,
+} from '../src/backtest-export.js';
 import { toApiResult, toCliSymbolResult, type BacktestOutcome } from '../src/backtest-result.js';
 import { runSymbolBacktest, type ExportOutcomeSink } from '../src/cli/symbol-runner.js';
 import { runMultiSymbolBacktest } from '../src/cli/multi-symbol-runner.js';
@@ -183,7 +188,7 @@ function makeCliSink(exportRun: ExportRun): ExportOutcomeSink {
       metrics: ctx.outcome.metrics,
       warnings: ctx.outcome.monthlyReturnsRaw
         ? ctx.warnings
-        : [...ctx.warnings, 'monthlyReturns rounded by caller (backtest-runner.ts:240)'],
+        : [...ctx.warnings, { type: 'export-failure', message: 'monthlyReturns rounded by caller (backtest-runner.ts:240)' }],
     });
     const filename = await writeExportFile(exportObj, exportRun.dir);
     exportRun.files.push(filename);
@@ -332,6 +337,50 @@ describe('backend export wiring — runSymbolBacktest', () => {
     expect(result.status).toBe('completed');
     expect(result.metrics).toBeDefined();
     expect(result.metrics!.netProfitPercent).toBeTypeOf('number');
+
+    // The completed result carries the typed, SANITIZED export-failure warning
+    // (S2) — the sink's raw message stays out of the payload.
+    const failure = (result.warnings ?? []).find((w) => w.type === 'export-failure');
+    expect(failure).toBeDefined();
+    expect(failure!.message).toBe('Export failed for BTCUSDT: details logged server-side');
+    expect(failure!.message).not.toContain('exploded');
+  });
+
+  it('a FAILING export sink with an ABSOLUTE PATH error emits a sanitized export-failure warning (security S2)', async () => {
+    vi.mocked(fetchBars).mockResolvedValue(createCrossoverBars());
+
+    const result = await runSymbolBacktest(
+      STRATEGY,
+      'BTCUSDT',
+      '60',
+      undefined,
+      undefined,
+      undefined,
+      { symbols: 'BTCUSDT' },
+      async () => {
+        throw new Error(
+          "ENOENT: no such file or directory, open '/home/secret-user/repo/.exports/backtest-script-BTCUSDT.json'",
+        );
+      },
+    );
+
+    expect(result.status).toBe('completed');
+    const failure = (result.warnings ?? []).find((w) => w.type === 'export-failure');
+    expect(failure).toBeDefined();
+    // The warning keeps only the trailing basename — never the directory
+    // prefix, never the absolute path, never the home directory.
+    expect(failure!.message).not.toContain('/');
+    expect(failure!.message).not.toContain('secret-user');
+    expect(failure!.message).toContain('write failed:');
+    expect(failure!.message).toContain('backtest-script-BTCUSDT.json');
+  });
+
+  it('sanitizeExportErrorMessage strips absolute paths to a basename and falls back to a stable generic message', () => {
+    const fsErr = new Error("ENOENT: no such file or directory, open '/tmp/x/y/z.json'");
+    expect(sanitizeExportErrorMessage(fsErr)).toBe('write failed: z.json');
+    expect(sanitizeExportErrorMessage(fsErr)).not.toContain('/tmp');
+    expect(sanitizeExportErrorMessage(new Error('boom'))).toBe('details logged server-side');
+    expect(sanitizeExportErrorMessage('raw non-error value')).toBe('details logged server-side');
   });
 
   it('a successful sink builds an export whose effectiveConfig equals engine.getStrategyEngine().getConfig()', async () => {
@@ -465,10 +514,10 @@ describe('backend export wiring — runSymbolBacktest', () => {
           trades: ctx.outcome.trades,
           orders: ctx.outcome.filledOrders,
           metrics: ctx.outcome.metrics,
-          warnings: ctx.outcome.monthlyReturnsRaw
-            ? ctx.warnings
-            : [...ctx.warnings, 'monthlyReturns rounded by caller (backtest-runner.ts:240)'],
-        });
+      warnings: ctx.outcome.monthlyReturnsRaw
+        ? ctx.warnings
+        : [...ctx.warnings, { type: 'export-failure', message: 'monthlyReturns rounded by caller (backtest-runner.ts:240)' }],
+    });
         captured = { outcome: ctx.outcome, exportObj };
       },
     );
@@ -490,7 +539,11 @@ describe('backend export wiring — runSymbolBacktest', () => {
     expect(hasUnroundedMonth).toBe(true);
 
     // ── Legacy display paths keep the ROUNDED values untouched ──
-    const api = toApiResult(captured!.outcome);
+    const api = toApiResult(captured!.outcome, {
+      effectiveConfig: captured!.exportObj.params.effectiveConfig,
+      warnings: captured!.exportObj.warnings,
+      barCount: captured!.exportObj.meta.barCount,
+    });
     expect(api.monthlyReturns).toEqual(captured!.outcome.monthlyReturns);
 
     const cli = toCliSymbolResult(captured!.outcome);
@@ -519,6 +572,10 @@ describe('backend export wiring — runMultiSymbolBacktest', () => {
       timeframe: '60',
       symbols: ['BTCUSDT', 'ETHUSDT'],
       daysBack: 1,
+      // Contract REQUIRED key (normalizer throws without it) + explicit fee
+      // settings to stay offline (fetchDexFeeBps is NOT mocked in this file).
+      commissionMethod: 'jupiter_manual',
+      commissionMethodSettings: { dexFeeBps: 5 },
       help: false,
     };
 
@@ -568,6 +625,10 @@ describe('backend export wiring — runMultiSymbolBacktest', () => {
       timeframe: '60',
       symbols: ['BTCUSDT'],
       daysBack: 1,
+      // Contract REQUIRED key (normalizer throws without it) + explicit fee
+      // settings to stay offline (fetchDexFeeBps is NOT mocked in this file).
+      commissionMethod: 'jupiter_manual',
+      commissionMethodSettings: { dexFeeBps: 5 },
       help: false,
     };
 

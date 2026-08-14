@@ -17,6 +17,7 @@ import {
   type StrategyMarker,
 } from './strategy-types.js';
 import { TrailingStopManager } from './trailing-stop-manager.js';
+import { NO_WARNING_SINK, type BacktestWarning, type WarningSink } from '../warning-collector.js';
 
 // Re-export for backward compatibility
 export { DEFAULT_STRATEGY_CONFIG } from './strategy-types.js';
@@ -69,6 +70,15 @@ export class StrategyEngine {
   // Trailing stop manager
   private trailingStopManager: TrailingStopManager = new TrailingStopManager();
 
+  // Per-run diagnostic sink (design D4 — WarningCollector at the composition
+  // root). The sink attaches AFTER construction (deliberately not a constructor
+  // param: the engine stays constructible with zero infrastructure), so
+  // warnings emitted by the constructor are buffered and replayed on attach.
+  /** @internal */
+  private onWarning: WarningSink = NO_WARNING_SINK;
+  /** @internal */
+  private readonly pendingWarnings: BacktestWarning[] = [];
+
   constructor(config: Partial<StrategyConfig> = {}) {
     this.config = { ...DEFAULT_STRATEGY_CONFIG, ...config };
 
@@ -86,6 +96,17 @@ export class StrategyEngine {
         console.warn(
           `[StrategyEngine] Both commissionMethod ('${this.config.commissionMethod}') and legacy commission (${this.config.commission}) are configured. The pluggable commissionMethod takes precedence and legacy commission will be ignored.`,
         );
+        // Typed diagnostic (design D4): the precedence decision must reach the
+        // run's consumers, not just the console. Buffered until a sink attaches.
+        this.warn({
+          type: 'fee-decision',
+          message: `Both commissionMethod ('${this.config.commissionMethod}') and legacy commission (${this.config.commission}) are configured — the pluggable commissionMethod takes precedence and legacy commission is ignored`,
+          context: {
+            commissionMethod: this.config.commissionMethod,
+            legacyCommission: this.config.commission,
+            precedence: 'commissionMethod',
+          },
+        });
       }
     }
     this.position = {
@@ -113,6 +134,27 @@ export class StrategyEngine {
     this.timestamp = 0;
     this.currentPrice = 0;
     this.entries = 0;
+  }
+
+  /**
+   * Attach a per-run diagnostic sink (design D4 — WarningCollector at the
+   * composition root). Called by ExecutionEngine after construction; warnings
+   * the constructor buffered (commission-method conflicts) are replayed here.
+   */
+  setWarningSink(sink: WarningSink): void {
+    this.onWarning = sink;
+    if (sink === NO_WARNING_SINK) return;
+    for (const w of this.pendingWarnings) sink(w);
+    this.pendingWarnings.length = 0;
+  }
+
+  /** @internal Emit a typed diagnostic, buffering until a sink attaches. */
+  private warn(warning: BacktestWarning): void {
+    if (this.onWarning !== NO_WARNING_SINK) {
+      this.onWarning(warning);
+      return;
+    }
+    this.pendingWarnings.push(warning);
   }
 
   entry(
@@ -147,6 +189,19 @@ export class StrategyEngine {
       console.warn(
         `[StrategyEngine] Short entry suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading.`,
       );
+      // Typed diagnostic (design D4): this suppression is what the parity
+      // divergence analysis found silently dropped short entries — surface it
+      // to the run's consumers (API result, export, CLI).
+      this.warn({
+        type: 'long-only-suppression',
+        message: `Short entry suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading.`,
+        context: {
+          name,
+          direction,
+          commissionMethod: this.config.commissionMethod,
+          closedExistingLong: this.position.direction === 'long',
+        },
+      });
       if (this.position.direction === 'long') {
         this.close(this.position.entryName || name, 'reverse');
       }
@@ -224,6 +279,19 @@ export class StrategyEngine {
       direction === 'short'
     ) {
       if (this.position.direction !== 'long') {
+        // Was FULLY silent — the parity divergence analysis showed short orders
+        // dropped here without a trace (15 in one backtest). Typed diagnostic
+        // (design D4) so the run's consumers can see the suppression.
+        this.warn({
+          type: 'long-only-suppression',
+          message: `Short order suppressed for "${name}" because commission method "${this.config.commissionMethod}" enforces long-only trading`,
+          context: {
+            name,
+            direction,
+            commissionMethod: this.config.commissionMethod,
+            positionDirection: this.position.direction,
+          },
+        });
         return undefined;
       }
     }

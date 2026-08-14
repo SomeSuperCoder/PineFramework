@@ -24,6 +24,12 @@ import type {
   Trade,
   FilledOrder,
 } from 'pine-framework';
+import type {
+  BacktestApiResult,
+  BacktestWarning,
+  EffectiveBacktestConfig,
+  ExplicitBacktestOverride,
+} from './backtest-contract.js';
 import { computeBacktestMetrics } from './backtest-runner.js';
 
 /** Canonical shape of a completed backtest, decoupled from any one caller. */
@@ -68,12 +74,30 @@ export function toOutcome(bars: Bar[], engine: ExecutionEngine): BacktestOutcome
 }
 
 /**
- * Reproduces EXACTLY the `job.result` object built in routes/backtest.ts.
+ * Context for composing the API result payload (contract BacktestResultExtension
+ * + the parity coverage-gap barCount). `warnings` is the M5 WarningCollector
+ * sink — empty until that wave populates it.
+ */
+export interface ToApiResultOptions {
+  /** The engine's post-merge configuration — what actually ran. */
+  effectiveConfig: EffectiveBacktestConfig;
+  /** Diagnostics collected during the run (empty array when none). */
+  warnings: BacktestWarning[];
+  /** Number of bars actually backtested. */
+  barCount: number;
+}
+
+/**
+ * Reproduces EXACTLY the `job.result` object built in routes/backtest.ts,
+ * composed with the contract's BacktestResultExtension (effectiveConfig +
+ * warnings) and barCount. The return type is BacktestApiResult so TypeScript
+ * structurally enforces conformance with the declared wire contract (the parity
+ * suite locks behavior).
  * Sanitize (Infinity → null, otherwise non-finite → 0) is applied ONLY to
  * profitFactor / sharpeRatio / sortinoRatio — every other metric is passed raw,
  * matching the route.
  */
-export function toApiResult(o: BacktestOutcome) {
+export function toApiResult(o: BacktestOutcome, opts: ToApiResultOptions): BacktestApiResult {
   const sanitize = (v: number) => (Number.isFinite(v) ? v : v === Infinity ? null : 0);
 
   return {
@@ -130,6 +154,11 @@ export function toApiResult(o: BacktestOutcome) {
     equityPoints: o.equityPoints,
     monthlyReturns: o.monthlyReturns,
     buyHoldReturn: Math.round(o.buyHoldReturn * 100) / 100,
+    // Contract BacktestResultExtension — the result payload's trust surface.
+    effectiveConfig: opts.effectiveConfig,
+    warnings: opts.warnings,
+    // Parity coverage-gap: the API payload exposes the resolved bar count.
+    barCount: opts.barCount,
   };
 }
 
@@ -180,4 +209,43 @@ export function toAutoSelectMetrics(o: BacktestOutcome) {
     maxDrawdown: o.metrics.maxDrawdown,
     maxDrawdownPercent: o.metrics.maxDrawdownPercent,
   };
+}
+
+/**
+ * Compose the fee-decision diagnostic for the run (design D4 / M5 WarningCollector).
+ *
+ * Called at result assembly where BOTH the request's explicit config and the
+ * engine's post-merge effective config are visible. Emits ONE fee-decision
+ * record per run describing which commission method actually ran and with
+ * which effective settings — so the live-fee/auto-select decisions applied
+ * below this layer (backtest-config.ts applyDexFee, M3) become observable in
+ * the API result payload and the export document.
+ *
+ * auto-select-method records are emitted by M3's own runner
+ * (trading/auto-select-runner.ts) at the composition seam — the HTTP API path
+ * has no auto-select mapping to record.
+ */
+export function buildDecisionWarnings(
+  explicit: ExplicitBacktestOverride | null,
+  effective: EffectiveBacktestConfig,
+): BacktestWarning[] {
+  const explicitMethod = explicit?.commissionMethod ?? null;
+  const effectiveMethod = effective.commissionMethod;
+  const effectiveSettings = effective.commissionMethodSettings ?? null;
+
+  return [
+    {
+      type: 'fee-decision',
+      message:
+        explicitMethod !== null && explicitMethod === effectiveMethod
+          ? `Commission method '${effectiveMethod}' (user-explicit)`
+          : `Commission method '${effectiveMethod}' (${explicitMethod !== null ? `user-requested '${explicitMethod}' overridden` : 'resolved'})`,
+      context: {
+        explicitMethod,
+        effectiveMethod,
+        explicitSettings: explicit?.commissionMethodSettings ?? null,
+        effectiveSettings,
+      },
+    },
+  ];
 }

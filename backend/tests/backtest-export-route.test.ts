@@ -25,7 +25,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { Bar } from 'pine-framework';
+import type { Bar, BacktestWarning } from 'pine-framework';
 import {
   buildBacktestExport,
   parseBacktestExport,
@@ -188,7 +188,7 @@ async function createCompletedJob(): Promise<string> {
   const postRes = await fetch(`${baseUrl}/backtest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY }),
+    body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY, commissionMethod: 'jupiter_manual' }),
   });
   expect(postRes.status).toBe(200);
   const { job_id } = (await postRes.json()) as { job_id: string };
@@ -229,16 +229,20 @@ describe('POST /api/backtest/export', () => {
     expect(round.source).toBe('frontend');
     expect(round.runId).toBe(jobId);
     expect(round.meta.symbol).toBe('BTCUSDT');
-    expect(round.schemaVersion).toBe(1);
+    expect(round.schemaVersion).toBe(2);
     expect(round.timestampUnit).toBe('ms');
     expect(round.input.fingerprint).toMatch(/^[0-9a-f]{64}$/);
     expect(round.input.bars.length).toBeGreaterThan(0);
     expect(round.params.effectiveConfig).toBeDefined();
     // params.request = the raw HTTP job config. The route destructures
     // symbol/timeframe/script/startDate/endDate/days_back OUT of req.body, so
-    // the request layer carries what remains — here just the script source
+    // the request layer carries what remains — here the explicit config the
+    // contract requires (commissionMethod) plus the script source
     // (symbol/timeframe live in meta).
-    expect(round.params.request).toEqual({ script: STRATEGY });
+    expect(round.params.request).toEqual({
+      commissionMethod: 'jupiter_manual',
+      script: STRATEGY,
+    });
   });
 
   it('404 JOB_NOT_FOUND for an unknown job_id', async () => {
@@ -254,7 +258,7 @@ describe('POST /api/backtest/export', () => {
     const postRes = await fetch(`${baseUrl}/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY }),
+      body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY, commissionMethod: 'jupiter_manual' }),
     });
     const { job_id } = (await postRes.json()) as { job_id: string };
 
@@ -270,7 +274,7 @@ describe('POST /api/backtest/export', () => {
     const postRes = await fetch(`${baseUrl}/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY }),
+      body: JSON.stringify({ symbol: 'BTCUSDT', timeframe: '60', script: STRATEGY, commissionMethod: 'jupiter_manual' }),
     });
     const { job_id } = (await postRes.json()) as { job_id: string };
     await waitForJob(job_id, 'failed');
@@ -317,6 +321,17 @@ describe('POST /api/backtest/export', () => {
     expect(await res.json()).toEqual(NOT_COMPLETED_BODY);
     // And no file was ever written.
     expect(mockExportWriteCalls).toHaveLength(0);
+
+    // The completed job's RESULT still carries the typed, SANITIZED
+    // export-failure warning (S2) — the build failure never leaks raw detail
+    // into the payload (the raw message stays in the server-side log only).
+    const resultRes = await fetch(`${baseUrl}/backtest/${jobId}/result`);
+    expect(resultRes.status).toBe(200);
+    const result = (await resultRes.json()) as { warnings?: BacktestWarning[] };
+    const failure = (result.warnings ?? []).find((w) => w.type === 'export-failure');
+    expect(failure).toBeDefined();
+    expect(failure!.message).toBe('Export build failed: details logged server-side');
+    expect(failure!.message).not.toContain('exploded');
   });
 
   it('500 { error: "Export failed" } with NO URL/hostname leak when the writer fails', async () => {

@@ -64,6 +64,26 @@ function makeResult(equityPoints: EquityPoint[]): BacktestResultResponse {
     equityPoints,
     monthlyReturns: {},
     buyHoldReturn: 0,
+    barCount: equityPoints.length,
+    effectiveConfig: {
+      initialCapital: 10000,
+      commission: 0,
+      slippage: 0,
+      commissionType: 'percent',
+      slippageType: 'ticks',
+      defaultQty: 20,
+      defaultQtyType: 'percent_of_equity',
+      pyramiding: 0,
+      calcOnOrderFills: true,
+      calcOnEveryTick: false,
+      processOrdersOnClose: false,
+      maxBarsBack: 0,
+      marginLong: 0,
+      marginShort: 0,
+      currency: 'USD',
+      marketFillPrice: 'open',
+    },
+    warnings: [],
   };
 }
 

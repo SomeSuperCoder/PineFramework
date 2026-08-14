@@ -2,13 +2,16 @@ import { Router } from 'express';
 import { fetchDexFeeBps, type FeeFetchResult } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import { randomUUID } from 'crypto';
 import { resolve } from 'node:path';
-import { VERSION, buildBacktestExport, scriptHash, type BacktestExport } from 'pine-framework';
-import { writeExportFile } from '../backtest-export.js';
+import { VERSION, buildBacktestExport, scriptHash, type BacktestExport, WarningCollector } from 'pine-framework';
+import { writeExportFile, sanitizeExportErrorMessage } from '../backtest-export.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
 import { runBacktestPipeline } from '../backtest-runner.js';
-import { buildBacktestConfigOverride, applyDexFee, type BacktestConfigInput } from '../backtest-config.js';
-import { toOutcome, toApiResult } from '../backtest-result.js';
+import { buildBacktestConfigOverride, applyDexFee } from '../backtest-config.js';
+import { normalizeExplicitOverride } from '../normalize-explicit-config.js';
+import { resolveDateRange, toUtcDateString, type ResolvedDateRange } from '../backtest-dates.js';
+import { toOutcome, toApiResult, buildDecisionWarnings } from '../backtest-result.js';
+import type { BacktestApiResult, EffectiveBacktestConfig, ExplicitBacktestOverride } from '../backtest-contract.js';
 import { logger } from '../utils/logger.js';
 import { fetchSolPriceUsd } from '../services/sol-price-fetcher.js';
 import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
@@ -37,7 +40,18 @@ export interface BacktestJob {
   startDate?: string;
   endDate?: string;
   config: Record<string, unknown>;
-  result?: Record<string, unknown>;
+  /**
+   * The NORMALIZED explicit override (contract ExplicitBacktestOverride) —
+   * produced by normalizeExplicitOverride at request time (400 on ok:false),
+   * stored here so runBacktest feeds the engine merge from the canonical shape
+   * only. `config` above stays the RAW request for the export's `request` layer.
+   */
+  configOverride: ExplicitBacktestOverride;
+  /** Resolved UTC-midnight date range (ms) for bar fetch + effectiveConfig. */
+  dateRange?: ResolvedDateRange;
+  /** The API result payload — the wire contract BacktestApiResult (never an
+   *  arbitrary record). The GET /:jobId handler serializes it verbatim. */
+  result?: BacktestApiResult;
   error?: string;
   /** Full-data export object, built at job completion (see runBacktest). */
   exportData?: BacktestExport;
@@ -99,8 +113,8 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       setPhase(job.jobId, 'Fetching market data');
       logger.info('Starting backtest', { jobId: job.jobId, symbol: job.symbol, scriptLen: (job.config.script as string)?.length || 0 });
       const bars = await fetchBars(job.symbol, job.timeframe,
-        job.startDate ? new Date(job.startDate).getTime() : undefined,
-        job.endDate ? new Date(job.endDate).getTime() : undefined,
+        job.dateRange?.startDate,
+        job.dateRange?.endDate,
         (p) => updateProgress(job.jobId, p),
         diskCache,
       );
@@ -117,17 +131,37 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
 
       setPhase(job.jobId, 'Compiling script');
 
-      // Build config override from job config
-      const baseOverride = buildBacktestConfigOverride(job.config as BacktestConfigInput);
+      // ── Per-run WarningCollector (design D4) ──
+      // One collector per run: the engine writes through its onWarning sink,
+      // the composition root appends decision records (fee-decision) and
+      // export-sink failures, and both the API result payload and the export
+      // document serialize the SAME array — diagnostics never diverge.
+      //
+      // Created BEFORE the live-fee merge (reviewer F3a): applyDexFee emits its
+      // fee records (live-fee-cache / live-fee-failure) through the sink, so
+      // without the collector being wired first, API runs silently LOST the fee
+      // diagnostics that CLI runs already produced.
+      const collector = new WarningCollector();
 
-      // ── Live DEX fee fetch (Jupiter methods only) ──
-      const override = await applyDexFee(job.symbol, baseOverride, { onFailure: 'throw' });
+      // Build config override from the NORMALIZED explicit override (the engine
+      // merge at execution-engine.ts:456-475 stays the single defaults authority —
+      // this only maps the canonical shape onto the engine's Partial<StrategyConfig>).
+      const baseOverride = buildBacktestConfigOverride(job.configOverride);
+
+      // ── Live DEX fee merge (Jupiter methods only) ──
+      // POLICY (ruling B): a live-fee fetch failure THROWS — no fallback, no
+      // invented fee. The job fails with the per-symbol wrapped error. The
+      // fee-decision records (cache hit / fetch attempt) flow into the SAME
+      // collector as the engine diagnostics — parity with the CLI runner
+      // (symbol-runner.ts applies the fee with the collector's sink too).
+      const override = await applyDexFee(job.symbol, baseOverride, collector.onWarning);
 
       setPhase(job.jobId, 'Executing bars');
       const pipelineResult = runBacktestPipeline({
         script,
         bars,
         configOverride: Object.keys(override).length > 0 ? override : undefined,
+        onWarning: collector.onWarning,
       });
 
       if (!pipelineResult.success) {
@@ -151,7 +185,26 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
 
       logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: outcome.metrics.totalTrades, totalPnl: outcome.metrics.totalPnl, winRate: outcome.metrics.winRate, profitFactor: outcome.metrics.profitFactor });
 
-      job.result = toApiResult(outcome);
+      // ── Effective config (contract BacktestResultExtension) ──
+      // The engine's post-merge config echoed back to the user — what actually
+      // ran — plus the resolved UTC-midnight date range (ms, per contract).
+      const strategyEngine = execEngine.getStrategyEngine();
+      if (!strategyEngine) {
+        throw new Error('Effective strategy config unavailable (missing strategy engine)');
+      }
+      const effectiveConfig: EffectiveBacktestConfig = {
+        ...strategyEngine.getConfig(),
+        ...(job.dateRange?.startDate !== undefined ? { startDate: job.dateRange.startDate } : {}),
+        ...(job.dateRange?.endDate !== undefined ? { endDate: job.dateRange.endDate } : {}),
+      };
+      // Decision diagnostics (design D4): record which commission method ran
+      // and with which effective settings — the engine's own diagnostics
+      // (baselines, long-only suppressions) are already in the collector via
+      // onWarning. job.result is assigned AFTER the export build below so
+      // export-sink failures surface in the same warnings array.
+      for (const w of buildDecisionWarnings(job.configOverride, effectiveConfig)) {
+        collector.push(w);
+      }
 
       // ── Full-data export (OpenSpec backtest-full-data-export, tasks 3.1/3.2) ──
       // Mirror the CLI sink's buildBacktestExport call (backend/src/cli/backtest-cli.ts):
@@ -161,18 +214,14 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       // A failing export NEVER fails the backtest — log + record exportError, then
       // still mark the job completed (mirrors the CLI sink's resilience).
       try {
-        const strategyEngine = execEngine.getStrategyEngine();
-        if (!strategyEngine) {
-          throw new Error('Effective strategy config unavailable (missing strategy engine)');
-        }
         job.exportData = buildBacktestExport({
           runId: job.jobId,
           source: 'frontend',
           meta: {
             symbol: job.symbol,
             timeframe: job.timeframe,
-            ...(job.startDate !== undefined ? { startDate: new Date(job.startDate).getTime() } : {}),
-            ...(job.endDate !== undefined ? { endDate: new Date(job.endDate).getTime() } : {}),
+            ...(job.dateRange?.startDate !== undefined ? { startDate: job.dateRange.startDate } : {}),
+            ...(job.dateRange?.endDate !== undefined ? { endDate: job.dateRange.endDate } : {}),
             barCount: bars.length,
             engineVersion: VERSION,
             scriptHash: scriptHash(script),
@@ -183,9 +232,9 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
             // Post-applyDexFee override — records what was REALLY run, including
             // injected dexFeeBps/solPriceUsd (same layer the CLI sink records).
             configOverride: { ...override },
-            // Mutable copy of the engine's Readonly config — the builder throws
-            // when the effective config is unavailable (contract: REQUIRED).
-            effectiveConfig: { ...strategyEngine.getConfig() },
+            // The engine's post-merge config + resolved date range (contract
+            // EffectiveBacktestConfig) — the builder throws when unavailable.
+            effectiveConfig: { ...effectiveConfig },
           },
           input: { bars },
           output: {
@@ -204,9 +253,11 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
           trades: outcome.trades,
           orders: outcome.filledOrders,
           metrics: outcome.metrics,
-          warnings: outcome.monthlyReturnsRaw
-            ? []
-            : ['monthlyReturns rounded by caller (backtest-runner.ts:240)'],
+          // Design D4: the export's warnings are the SAME typed array as the
+          // API result payload (engine + decision diagnostics). The old
+          // stringly fallback is gone — toOutcome always provides the raw
+          // series, so a rounded fallback would be a fidelity lie.
+          warnings: collector.toArray(),
         });
       } catch (exportErr) {
         const exportMessage = exportErr instanceof Error ? exportErr.message : String(exportErr);
@@ -215,7 +266,25 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
           error: exportMessage,
         });
         job.exportError = exportMessage;
+        // Export-sink failure (design D4): the backtest completed but the
+        // developer record did not — surface it as a typed warning in the
+        // result payload (the export document itself is absent).
+        // Security S2: the warning payload is SANITIZED — build errors can
+        // embed absolute paths; the raw message stays in the server log above.
+        collector.push({
+          type: 'export-failure',
+          message: `Export build failed: ${sanitizeExportErrorMessage(exportErr)}`,
+          context: { jobId: job.jobId },
+        });
       }
+
+      // ── Result payload (contract BacktestResultExtension) ──
+      // Assigned AFTER the export build so export failures are collected first.
+      job.result = toApiResult(outcome, {
+        effectiveConfig,
+        warnings: collector.toArray(),
+        barCount: bars.length,
+      });
 
       job.status = 'completed';
       job.progress = 100;
@@ -254,16 +323,42 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
         return;
       }
 
-      let effectiveStartDate = startDate as string | undefined;
-      let effectiveEndDate = endDate as string | undefined;
-
-      if (days_back && typeof days_back === 'number' && days_back > 0) {
-        const end = new Date();
-        const start = new Date();
-        start.setDate(start.getDate() - days_back);
-        effectiveStartDate = start.toISOString().split('T')[0];
-        effectiveEndDate = end.toISOString().split('T')[0];
+      // ── Explicit-config normalization (contract D1) ──
+      // The single authority for producer input. ok:false → 400 with the
+      // normalizer's field-level errors; the run MUST NOT start. This rejects
+      // legacy commission/commissionType/currency and UI-state keys loudly
+      // (the frontend stops sending them in request-parity wave F1).
+      const normalized = normalizeExplicitOverride(config);
+      if (!normalized.ok) {
+        res.status(400).json({
+          error: 'Invalid backtest configuration',
+          code: 'VALIDATION_ERROR',
+          details: normalized.errors,
+        });
+        return;
       }
+
+      // ── Date range (contract D6 — the SHARED UTC-midnight resolver) ─────────
+      // startDate/endDate arrive as `unknown` from req.body — narrow them here;
+      // the resolver only accepts YYYY-MM-DD strings (undefined = full range).
+      // ok:false → 400 VALIDATION_ERROR with field-level details (mirrors the
+      // normalizer's contract §3 envelope) — the run MUST NOT start.
+      const startDateStr = startDate as string | undefined;
+      const endDateStr = endDate as string | undefined;
+      const daysBack = typeof days_back === 'number' && days_back > 0 ? days_back : undefined;
+      const dateRange = resolveDateRange({ startDate: startDateStr, endDate: endDateStr, daysBack });
+      if (!dateRange.ok) {
+        res.status(400).json({
+          error: 'Invalid backtest date range',
+          code: 'VALIDATION_ERROR',
+          details: dateRange.errors,
+        });
+        return;
+      }
+      const effectiveStartDate =
+        dateRange.value.startDate !== undefined ? toUtcDateString(dateRange.value.startDate) : startDateStr;
+      const effectiveEndDate =
+        dateRange.value.endDate !== undefined ? toUtcDateString(dateRange.value.endDate) : endDateStr;
 
       const jobId = randomUUID();
       const job: BacktestJob = {
@@ -276,6 +371,8 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
         startDate: effectiveStartDate,
         endDate: effectiveEndDate,
         config: { ...config, script } as Record<string, unknown>,
+        configOverride: normalized.value,
+        dateRange: dateRange.value,
         createdAt: Date.now(),
       };
 

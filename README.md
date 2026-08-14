@@ -319,6 +319,8 @@ A quick-start `curl` flow, WS channel reference, env vars, and the architecture 
 
 `BacktestEngine` runs Pine strategies over historical bars with **pluggable commission models** — including **Jupiter Ultra fee tiers** via `jupiter-fee-fetcher` — plus strategy metrics, equity/drawdown, and trailing-stop management.
 
+**Commission methods.** Exactly two are supported: **Jupiter Swap** (`jupiter_manual`) and **Jupiter Ultra** (`jupiter_ultra`). The CLI requires `--commission-method` (the legacy `--commission` / `--commission-type` flags are removed) and the REST API requires `commissionMethod` in explicit overrides. Live Jupiter fees are fetched and cached for 10 minutes; an explicit `dexFeeBps` bypasses the fetch, and a fetch failure fails the run loudly rather than fall back to a wrong fee. Both CLI and API report **what actually ran** — an effective-config summary (resolved date range, commission method, sizing and capital) plus typed warnings (suppressed orders, fee decisions, cached or failed live fees, auto-selected method).
+
 | Entry point | How |
 |-------------|-----|
 | **CLI** | `pnpm backtest` → `pine-backtest` bin → `backend/src/cli/backtest-cli.ts` (multi-symbol runner, result aggregator, output formatter) |

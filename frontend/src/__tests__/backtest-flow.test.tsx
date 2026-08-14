@@ -85,6 +85,26 @@ const MOCK_RESULT: BacktestResultResponse = {
   ],
   monthlyReturns: {},
   buyHoldReturn: 0.12,
+  barCount: 5,
+  effectiveConfig: {
+    initialCapital: 10000,
+    commission: 0,
+    slippage: 0,
+    commissionType: 'percent',
+    slippageType: 'ticks',
+    defaultQty: 20,
+    defaultQtyType: 'percent_of_equity',
+    pyramiding: 2,
+    calcOnOrderFills: true,
+    calcOnEveryTick: false,
+    processOrdersOnClose: false,
+    maxBarsBack: 0,
+    marginLong: 0,
+    marginShort: 0,
+    currency: 'USD',
+    marketFillPrice: 'open',
+  },
+  warnings: [],
 };
 
 // ─── Strategy-list fixtures for the dropdown ────────────────────────────────

@@ -6,12 +6,11 @@
  * bar fetching (Bybit) and backtest execution (runBacktestPipeline).
  */
 
-import type { Bar } from 'pine-framework';
-import type { DexKind } from 'pine-framework';
-import type { BarFetcher, BacktestRunner } from 'pine-framework';
+import type { Bar, DexKind, BarFetcher, BacktestRunner, WarningSink } from 'pine-framework';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import { runBacktestPipeline } from '../backtest-runner.js';
-import { buildBacktestConfigOverride, applyDexFee, type BacktestConfigInput } from '../backtest-config.js';
+import { buildBacktestConfigOverride, applyDexFee } from '../backtest-config.js';
+import type { ExplicitBacktestOverride } from '../backtest-contract.js';
 import { toOutcome, toAutoSelectMetrics } from '../backtest-result.js';
 
 /**
@@ -39,6 +38,15 @@ export class BybitBarFetcher implements BarFetcher {
  * with DEX-consistent fee evaluation.
  */
 export class LiveBacktestRunner implements BacktestRunner {
+  /**
+   * Optional per-run diagnostic sink (design D4 — WarningCollector at the
+   * composition root, wired by backend/src/index.ts when the caller wants the
+   * auto-select mapping recorded). Absent → the mapping stays silent
+   * (NO_WARNING_SINK semantics). The constructor param keeps `new
+   * LiveBacktestRunner()` compiling for callers that don't collect warnings.
+   */
+  constructor(private readonly onWarning?: WarningSink) {}
+
   async runBacktest(options: {
     script: string;
     symbol: string;
@@ -59,23 +67,33 @@ export class LiveBacktestRunner implements BacktestRunner {
     error?: string;
   }> {
     try {
-      // Build config override with DEX-consistent fees via the shared glue module
-      const isJupiterDex =
-        options.dex === 'jupiter-ultra' || options.dex === 'jupiter-swap';
-      const configInput: BacktestConfigInput = isJupiterDex
-        ? { commissionMethod: 'jupiter_ultra' }
-        : { commission: 0.1, commissionType: 'percent' };
-      const baseOverride = buildBacktestConfigOverride(configInput);
-      const override = await applyDexFee(options.symbol, baseOverride, {
-        onFailure: 'fallback',
-        fallbackCommission: 0.1,
+      // Build config override with DEX-consistent fees via the shared glue module.
+      // DexKind is 'jupiter-swap' | 'jupiter-ultra' ONLY (the legacy
+      // commission/commissionType branch is gone — the legacy fee path is dead,
+      // commission-methods spec). D7 mapping (implemented): the live kinds map
+      // onto the two canonical commission methods — jupiter-swap → jupiter_manual
+      // (venue dexFeeBps only), jupiter-ultra → jupiter_ultra (venue + tiered
+      // platform fee). Policy: a live-fee fetch failure THROWS (ruling B) — no
+      // fallback fee.
+      const commissionMethod = options.dex === 'jupiter-ultra' ? 'jupiter_ultra' : 'jupiter_manual';
+      // M6: the auto-select path has no user-explicit method, so record WHICH
+      // live dex kind resolved to WHICH canonical method for this run — the
+      // `auto-select-method` diagnostic (design D4 union).
+      this.onWarning?.({
+        type: 'auto-select-method',
+        message: `Auto-selected commission method '${commissionMethod}' for live dex kind '${options.dex}'`,
+        context: { dexKind: options.dex, commissionMethod, symbol: options.symbol },
       });
+      const configInput: ExplicitBacktestOverride = { commissionMethod };
+      const baseOverride = buildBacktestConfigOverride(configInput);
+      const override = await applyDexFee(options.symbol, baseOverride, this.onWarning);
 
       // Run the backtest pipeline
       const result = runBacktestPipeline({
         script: options.script,
         bars: options.bars,
         configOverride: override,
+        onWarning: this.onWarning,
       });
 
       if (!result.success || !result.engine) {

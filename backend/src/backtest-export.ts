@@ -37,6 +37,33 @@ export interface ExportManifest {
 }
 
 /**
+ * Sanitize an export-sink error for a WARNING payload (security S2).
+ *
+ * Raw Error.message strings can embed absolute filesystem paths — fs failures
+ * (ENOENT, EACCES, …) quote the target path verbatim. Warnings ride
+ * job.result.warnings and export documents, so they must never carry a
+ * directory prefix. The full raw message stays in server-side logs only
+ * (the sinks also console.warn it); the warning payload gets a stable message.
+ */
+export function sanitizeExportErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  // fs errors quote the target path: "ENOENT: no such file or directory,
+  // open '/home/user/repo/.exports/x.json'". Keep only a trailing basename —
+  // never a directory prefix, never the absolute path.
+  const quoted = raw.match(/(?:'([^']+)'|"([^"]+)")/);
+  if (quoted) {
+    const target = quoted[1] ?? quoted[2] ?? '';
+    if (target.includes('/') || target.includes('\\')) {
+      const base = target.split(/[\\/]/).filter(Boolean).pop();
+      if (base) return `write failed: ${base}`;
+    }
+  }
+  // No path discovered — emit a stable generic message. The raw detail is
+  // already in the server log, so the payload leaks nothing.
+  return 'details logged server-side';
+}
+
+/**
  * Atomically write one export file into `dir` (mkdir -p first).
  * The filename is derived from the export itself (source, symbol, generatedAt)
  * so callers cannot write a file whose name disagrees with its contents.

@@ -1,5 +1,5 @@
 import { NumberField } from './BacktestGeneralSettings.js';
-import type { CommissionMethodId } from '../types';
+import { COMMISSION_METHOD_LABELS, type CommissionMethodId } from '../types';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -14,25 +14,16 @@ import { StatusCallout } from '@/components/ui/status-callout';
 const COMMISSION_METHODS: Array<{ id: CommissionMethodId; label: string; description: string }> = [
   {
     id: 'jupiter_ultra',
-    label: 'Jupiter Ultra',
+    label: COMMISSION_METHOD_LABELS.jupiter_ultra,
     description: 'DEX fee + tiered 0–50 bps Jupiter fee + ~$0.0015 network fee',
   },
   {
     id: 'jupiter_manual',
-    label: 'Jupiter (Basic Swap)',
+    label: COMMISSION_METHOD_LABELS.jupiter_manual,
     description:
       'DEX fee (default 25 bps) + 0% Jupiter fee + ~$0.0015 network fee — matches live bot',
   },
 ];
-
-function getDefaultMethodSettings(method: CommissionMethodId): Record<string, unknown> | null {
-  switch (method) {
-    case 'jupiter_ultra':
-      return { dexFeeBps: 25, solPriceUsd: 150 };
-    case 'jupiter_manual':
-      return { dexFeeBps: 25, solPriceUsd: 150 };
-  }
-}
 
 const STABLECOINS = new Set([
   'USDT',
@@ -220,8 +211,10 @@ export function BacktestCommissionSettings({
 }: BacktestCommissionSettingsProps) {
   const handleMethodChange = (method: string) => {
     onCommissionMethodChange(method as CommissionMethodId);
-    const settings = getDefaultMethodSettings(method as CommissionMethodId);
-    onCommissionMethodSettingsChange(settings);
+    // No fee defaults are injected on method change: explicit settings are only
+    // ever the values the user actually edits. Absent settings → the backend
+    // fetches live DEX fees / SOL price (explicit fees would bypass that).
+    onCommissionMethodSettingsChange(null);
   };
 
   return (

@@ -84,7 +84,7 @@ function makeContext(overrides?: Partial<BacktestExportContext>): BacktestExport
     trades: [{ id: 't1', pnl: 150 }],
     orders: [{ id: 'o1', qty: 1 }],
     metrics: { totalPnl: 200, sharpeRatio: 1.2 },
-    warnings: ['na values present'],
+    warnings: [{ type: 'export-failure', message: 'na values present' }],
     ...overrides,
   };
 }
@@ -445,13 +445,13 @@ describe('backtest-export lib — exportFilename', () => {
 // ── Schema constants ────────────────────────────────────────────────────────
 
 describe('backtest-export lib — schema contract', () => {
-  it('freezes the schema version at 1', () => {
-    expect(BACKTEST_EXPORT_SCHEMA_VERSION).toBe(1);
+  it('freezes the schema version at 2', () => {
+    expect(BACKTEST_EXPORT_SCHEMA_VERSION).toBe(2);
   });
 
   it('the builder returns a full BacktestExport shape', () => {
     const built: BacktestExport = buildBacktestExport(makeContext());
-    expect(built.schemaVersion).toBe(1);
+    expect(built.schemaVersion).toBe(2);
     expect(built.timestampUnit).toBe('ms'); // D3: documents self-describe their timestamp unit
     expect(built.source).toBe('script');
     expect(built.generatedAt).toBe('2026-08-14T12:00:00.000Z');
@@ -459,6 +459,6 @@ describe('backtest-export lib — schema contract', () => {
     expect(built.input.bars).toHaveLength(3);
     expect(built.output.series).toHaveProperty('close');
     expect(built.output.series).toHaveProperty('ema');
-    expect(built.warnings).toEqual(['na values present']);
+    expect(built.warnings).toEqual([{ type: 'export-failure', message: 'na values present' }]);
   });
 });

@@ -3,6 +3,11 @@ import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { type PineValue } from '../types/na.js';
 import { StrategyEngine, type StrategyMarker } from '../../strategy/strategy-engine.js';
 import { parseStrategyDeclaration, getStrategyConfig } from '../script-declarations.js';
+import {
+  NO_WARNING_SINK,
+  type BacktestWarning,
+  type WarningSink,
+} from '../../warning-collector.js';
 import { type RuntimeScope, createRuntimeScope, declareVariable } from './scope.js';
 import { type Series } from './series.js';
 import { RingBuffer } from './ring-buffer.js';
@@ -55,6 +60,40 @@ export {
   type AlertConditionEntry,
   type AlertTriggerEntry,
 };
+
+/**
+ * Every default getStrategyConfig applies when a strategy() declaration omits
+ * the corresponding script field. Hard-coded entries (no scriptKey) have NO
+ * script field at all — the engine always applies them. Used to emit
+ * 'baseline-applied' diagnostics at the merge seam (initializeStrategy) so a
+ * run's effective config is fully explainable.
+ * SOURCE OF TRUTH: getStrategyConfig in src/language/script-declarations.ts.
+ */
+interface BaselineEntry {
+  /** Script-declaration key (snake_case). Undefined = no script field exists. */
+  scriptKey?: keyof import('../script-declarations.js').StrategyConfig;
+  /** Engine StrategyConfig key the baseline feeds. */
+  engineKey: keyof import('../../strategy/strategy-engine.js').StrategyConfig;
+  /** Human-readable baseline value that was applied. */
+  baseline: string;
+}
+
+const STRATEGY_CONFIG_BASELINES: BaselineEntry[] = [
+  { scriptKey: 'initial_capital', engineKey: 'initialCapital', baseline: '10000' },
+  { scriptKey: 'commission_value', engineKey: 'commission', baseline: '0' },
+  { scriptKey: 'slippage', engineKey: 'slippage', baseline: '0' },
+  { scriptKey: 'commission_type', engineKey: 'commissionType', baseline: "'percent'" },
+  { engineKey: 'slippageType', baseline: "'ticks' (hard-coded)" },
+  { scriptKey: 'default_qty_value', engineKey: 'defaultQty', baseline: '20' },
+  { scriptKey: 'default_qty_type', engineKey: 'defaultQtyType', baseline: "'percent_of_equity'" },
+  { scriptKey: 'pyramiding', engineKey: 'pyramiding', baseline: '0' },
+  { engineKey: 'calcOnOrderFills', baseline: 'true (hard-coded)' },
+  { scriptKey: 'calc_on_every_tick', engineKey: 'calcOnEveryTick', baseline: 'false' },
+  { scriptKey: 'process_orders_on_close', engineKey: 'processOrdersOnClose', baseline: 'false' },
+  { engineKey: 'maxBarsBack', baseline: '0 (hard-coded)' },
+  { scriptKey: 'margin_long', engineKey: 'marginLong', baseline: '0' },
+  { scriptKey: 'margin_short', engineKey: 'marginShort', baseline: '0' },
+];
 
 export class ExecutionEngine {
   /** @internal */ compiledScript: CompiledScript;
@@ -226,6 +265,11 @@ export class ExecutionEngine {
   /** @internal */ valuewhenLookback: number = 0;
   /** @internal */ valuewhenHistory?: Map<string, number[]>;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
+  // Per-run diagnostic sink (design D4). initializeStrategy runs inside the
+  // constructor, so warnings it emits (baseline defaults, commission conflicts)
+  // are buffered until the sink attaches after construction.
+  /** @internal */ onWarning: WarningSink = NO_WARNING_SINK;
+  /** @internal */ pendingWarnings: BacktestWarning[] = [];
   /** @internal */ cumulativeBarCount: number = 0;
   /** @internal */ runtimeMaxBarsBack: number = 0;
   /** @internal */ runtimeSeriesLookback: number = 0;
@@ -360,6 +404,33 @@ export class ExecutionEngine {
     return this.strategyEngine;
   }
 
+  /**
+   * Attach a per-run diagnostic sink (design D4 — WarningCollector at the
+   * composition root). Must be called AFTER construction: initializeStrategy
+   * runs inside the constructor, so warnings it emits (baseline defaults,
+   * commission-method conflicts) are buffered and replayed here. The sink is
+   * deliberately NOT a constructor param — the engine stays constructible with
+   * zero infrastructure.
+   */
+  setWarningSink(sink: WarningSink): void {
+    this.onWarning = sink;
+    if (sink === NO_WARNING_SINK) return;
+    for (const w of this.pendingWarnings) sink(w);
+    this.pendingWarnings.length = 0;
+    // Forward the sink so strategy-level diagnostics (commission conflicts,
+    // long-only suppressions) reach the same collector.
+    this.strategyEngine?.setWarningSink(sink);
+  }
+
+  /** @internal Emit a typed diagnostic, buffering until a sink attaches. */
+  private emitWarning(warning: BacktestWarning): void {
+    if (this.onWarning !== NO_WARNING_SINK) {
+      this.onWarning(warning);
+      return;
+    }
+    this.pendingWarnings.push(warning);
+  }
+
   /** @internal */
   updateMetrics(success: boolean, executionTimeMs: number): void {
     this.metrics.totalBars++;
@@ -465,11 +536,31 @@ export class ExecutionEngine {
 
     const config = parseStrategyDeclaration(args);
     let strategyConfig = getStrategyConfig(config);
+    // Baseline diagnostics (design D4): every getStrategyConfig default applied
+    // to a script-undeclared setting is a hidden decision — surface each as a
+    // typed warning so the effective config is fully explainable. A setting
+    // pinned by the caller's override is NOT a baseline (the caller decided).
+    if (strategyConfig && config.type === 'strategy') {
+      for (const entry of STRATEGY_CONFIG_BASELINES) {
+        const declared = entry.scriptKey !== undefined && config[entry.scriptKey] !== undefined;
+        const pinned = override?.[entry.engineKey] !== undefined;
+        if (!declared && !pinned) {
+          this.emitWarning({
+            type: 'baseline-applied',
+            message: `${entry.engineKey} not declared in strategy(); baseline ${entry.baseline} applied`,
+            context: { setting: entry.engineKey, baseline: entry.baseline },
+          });
+        }
+      }
+    }
     if (override && strategyConfig) {
       strategyConfig = { ...strategyConfig, ...override };
     }
     if (strategyConfig) {
       this.strategyEngine = new StrategyEngine(strategyConfig);
+      // Forward the run's sink so strategy-level diagnostics (commission
+      // conflicts, long-only suppressions) reach the same collector.
+      this.strategyEngine.setWarningSink(this.onWarning);
     }
     this.registerStrategyBuiltins();
   }

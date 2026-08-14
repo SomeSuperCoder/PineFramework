@@ -21,9 +21,18 @@
 import type { Bar } from '../data/bar.js';
 import type { Series } from '../language/runtime/series.js';
 import type { StrategyConfig } from '../strategy/strategy-engine.js';
+// Design D4: the export's warnings are the run's TYPED diagnostics (WarningCollector),
+// not strings — the export document and the API result payload share the same array.
+import type { BacktestWarning } from '../warning-collector.js';
 
-/** Frozen schema revision. Bump only when the shape breaks (then migrate). */
-export const BACKTEST_EXPORT_SCHEMA_VERSION = 1 as const;
+/**
+ * Frozen schema revision. Bump only when the shape breaks (then migrate).
+ * v1 → v2 (reviewer F4): `warnings` changed from string[] to BacktestWarning[]
+ * (typed diagnostics, design D4) — an object shape v1 consumers cannot parse,
+ * so the revision MUST bump. The writer always emits the version
+ * (buildBacktestExport.schemaVersion), so consumers can gate on it.
+ */
+export const BACKTEST_EXPORT_SCHEMA_VERSION = 2 as const;
 
 /** All timestamps in the export are epoch milliseconds (ms). */
 export const BACKTEST_EXPORT_TIMESTAMP_UNIT = 'ms' as const;
@@ -84,7 +93,7 @@ export interface BacktestExportOutput {
  * non-finite numbers survive serialization through tagged placeholders.
  */
 export interface BacktestExport {
-  schemaVersion: 1;
+  schemaVersion: 2;
   /** Declares the unit of every timestamp in the document — self-describing (D3). */
   timestampUnit: typeof BACKTEST_EXPORT_TIMESTAMP_UNIT;
   source: BacktestExportSource;
@@ -102,7 +111,8 @@ export interface BacktestExport {
   orders: unknown[];
   /** RAW StrategyMetrics — deliberately unsanitized. */
   metrics: unknown;
-  warnings: string[];
+  /** Typed per-run diagnostics (design D4) — the WarningCollector's array. */
+  warnings: BacktestWarning[];
 }
 
 /** Plain-data context consumed by the pure builder. */
@@ -145,7 +155,8 @@ export interface BacktestExportContext {
   trades: unknown[];
   orders: unknown[];
   metrics: unknown;
-  warnings?: string[];
+  /** Typed per-run diagnostics (design D4) — defaults to [] when omitted. */
+  warnings?: BacktestWarning[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

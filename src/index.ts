@@ -12,6 +12,7 @@ export * from './performance/index.js';
 export * from './utils/time.js';
 export * from './util/candle-string-format.js';
 export * from './api.js';
+export * from './warning-collector.js';
 export * from './export/backtest-export.js';
 
 export { parse } from './language/parser/index.js';

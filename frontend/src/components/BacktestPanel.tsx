@@ -21,6 +21,7 @@ import { SettingRow } from '@/components/ui/setting-row';
 import { StatusCallout } from '@/components/ui/status-callout';
 import { FadeIn } from '@/components/ui/motion/fade-in';
 import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from '../utils/options';
+import { COMMISSION_METHOD_LABELS } from '../types';
 import { cn } from '@/lib/utils';
 
 export interface BacktestPanelProps {
@@ -172,12 +173,7 @@ export function BacktestPanel({ onRun, onClose, resetSignal }: BacktestPanelProp
           ? `From ${startDate}`
           : 'Not set';
 
-  const commissionLabel =
-    commissionMethod === 'jupiter_ultra'
-      ? 'Jupiter Ultra'
-      : commissionMethod === 'jupiter_manual'
-        ? 'Jupiter Manual'
-        : commissionMethod;
+  const commissionLabel = COMMISSION_METHOD_LABELS[commissionMethod];
 
   const isReview = step === 'review';
 

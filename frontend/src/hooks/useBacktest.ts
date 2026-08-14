@@ -3,7 +3,7 @@ import type {
   BacktestJobResponse,
   BacktestStatusResponse,
   BacktestResultResponse,
-  BacktestConfig,
+  ExplicitBacktestOverride,
 } from '../types';
 
 export function useBacktest() {
@@ -26,7 +26,7 @@ export function useBacktest() {
   const submitBacktest = useCallback(async (
     symbol: string,
     timeframe: string,
-    config: Partial<BacktestConfig> & { script?: string },
+    config: Partial<ExplicitBacktestOverride> & { script?: string },
     startDate?: string,
     endDate?: string,
   ) => {

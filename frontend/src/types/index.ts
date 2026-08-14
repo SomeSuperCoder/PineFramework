@@ -1,3 +1,9 @@
+import type {
+  JupiterManualSettings,
+  JupiterUltraSettings,
+  StrategyConfig,
+} from 'pine-framework';
+
 export interface CandlestickData {
   time: number;
   open: number;
@@ -298,13 +304,15 @@ export interface BacktestMetrics {
   winningTrades: number;
   losingTrades: number;
   winRate: number;
-  profitFactor: number;
+  /** Nullable per API contract — backend sanitizes Infinity (all-win run: grossLoss=0 → ratio → ∞) to null. */
+  profitFactor: number | null;
   totalPnl: number;
   totalPnlPercent: number;
   maxDrawdown: number;
   maxDrawdownPercent: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
+  /** Nullable per API contract — backend sanitizes Infinity/undefined ratios to null. */
+  sharpeRatio: number | null;
+  sortinoRatio: number | null;
   averageWin: number;
   averageLoss: number;
   largestWin: number;
@@ -363,7 +371,7 @@ export interface BacktestStatusResponse {
   result_url?: string;
 }
 
-export interface BacktestResultResponse {
+export interface BacktestResultResponse extends BacktestResultExtension {
   metrics: BacktestMetrics;
   equityCurve: number[];
   drawdownCurve: number[];
@@ -372,11 +380,161 @@ export interface BacktestResultResponse {
   equityPoints: EquityPoint[];
   monthlyReturns: Record<string, number>;
   buyHoldReturn: number;
+  /** Number of bars processed for the run (backend route/export meta). */
+  barCount: number;
 }
 
 export type DateRangeMode = 'days_back' | 'traditional';
 
+/**
+ * The two official Jupiter commission methods — the canonical union, mirror of
+ * the backend contract's `BacktestCommissionMethodId` (commission-methods SSOT).
+ * Every entry point that accepts a commission method validates against this set.
+ */
 export type CommissionMethodId = 'jupiter_ultra' | 'jupiter_manual';
+
+/**
+ * Canonical display labels (contract design D8 — owned by commission-methods):
+ * `jupiter_manual` → "Jupiter Swap", `jupiter_ultra` → "Jupiter Ultra".
+ * Single naming scheme across UI/CLI/exports.
+ */
+export const COMMISSION_METHOD_LABELS: Record<CommissionMethodId, string> = {
+  jupiter_manual: 'Jupiter Swap',
+  jupiter_ultra: 'Jupiter Ultra',
+};
+
+/**
+ * User-explicit fee settings for the chosen method — mirror of backend
+ * `BacktestCommissionMethodSettings`. Typed per method — never
+ * `Record<string, unknown>`: only the engine's official settings keys are valid.
+ * UI-state keys (e.g. `useCustomRate`/`useCustom`) are NOT contract keys; the
+ * backend normalizer rejects them (UNKNOWN_FIELD) — strip them before sending.
+ */
+export type BacktestCommissionMethodSettings = JupiterUltraSettings | JupiterManualSettings;
+
+/**
+ * The ONE canonical explicit-override shape — mirror of backend
+ * `ExplicitBacktestOverride`.
+ *
+ * - EVERY field is optional EXCEPT `commissionMethod` (required by the
+ *   commission-methods spec: absent method → explicit error, never a default).
+ * - `commission` / `commissionType` / `currency` are GONE (legacy fee path dead;
+ *   producers never set currency — the engine resolves USD).
+ * - Omitted optional field = "resolve from the script-declared defaults at the
+ *   engine's single merge point" — never from a producer-side constant.
+ * - Null is never allowed: optional fields are simply omitted from the request.
+ */
+export interface ExplicitBacktestOverride {
+  /** REQUIRED. Official commission method. Absent/invalid → validation error. */
+  commissionMethod: CommissionMethodId;
+  /**
+   * User-explicit fee settings. Omitted (or empty object) = no explicit fee
+   * values; the run resolves fees from the method's official behavior / live
+   * fetch.
+   */
+  commissionMethodSettings?: BacktestCommissionMethodSettings;
+  initialCapital?: number;
+  slippage?: number;
+  slippageType?: StrategyConfig['slippageType'];
+  defaultQty?: number;
+  defaultQtyType?: StrategyConfig['defaultQtyType'];
+  pyramiding?: number;
+  marginLong?: number;
+  marginShort?: number;
+}
+
+/**
+ * Full POST /api/backtest request body — mirror of backend
+ * `BacktestRunRequestBody`. Flat wire shape: the route strips the job-level keys
+ * (symbol/timeframe/script/startDate/endDate/days_back) and passes the rest to
+ * the normalizer as `ExplicitBacktestOverride`.
+ *
+ * `days_back` keeps its existing snake_case wire name for parity — do NOT rename.
+ */
+export interface BacktestRunRequestBody extends ExplicitBacktestOverride {
+  symbol: string;
+  timeframe: string;
+  script: string;
+  /** Inclusive start date (YYYY-MM-DD). Absent = earliest available bar. */
+  startDate?: string;
+  /** Inclusive end date (YYYY-MM-DD). Absent = latest available bar. */
+  endDate?: string;
+  /** Existing wire name (kept for parity): lookback in days. */
+  days_back?: number;
+}
+
+/**
+ * Known warning types — mirror of backend `BacktestWarningType`. This set is
+ * the extensibility point — new diagnostics append to the union.
+ */
+export type BacktestWarningType =
+  | 'long-only-suppression'
+  | 'fee-decision'
+  | 'baseline-applied'
+  | 'live-fee-cache'
+  | 'live-fee-failure'
+  | 'auto-select-method'
+  | 'export-failure';
+
+/** One typed per-run diagnostic — mirror of backend `BacktestWarning`. */
+export interface BacktestWarning {
+  type: BacktestWarningType;
+  message: string;
+  context?: unknown;
+}
+
+/**
+ * The engine's post-merge configuration echoed back to the user — mirror of
+ * backend `EffectiveBacktestConfig`: extends the engine's own `StrategyConfig`
+ * (pine-framework SSOT — zero drift) plus the resolved date range
+ * (ms timestamps, UTC-midnight aligned). "What actually ran."
+ */
+export interface EffectiveBacktestConfig extends StrategyConfig {
+  /** Resolved start timestamp (ms, UTC-midnight aligned). Absent = full history. */
+  startDate?: number;
+  /** Resolved end timestamp (ms, UTC-midnight aligned). Absent = latest bar. */
+  endDate?: number;
+}
+
+/**
+ * The fields every result payload gains (warnings spec): the API result, CLI
+ * output, and full-data export record. Mirror of backend
+ * `BacktestResultExtension`.
+ */
+export interface BacktestResultExtension {
+  /** The engine's post-merge configuration — what actually ran. */
+  effectiveConfig: EffectiveBacktestConfig;
+  /** Diagnostics collected during the run (empty array when none). */
+  warnings: BacktestWarning[];
+}
+
+/** Machine-readable validation error codes — mirror of backend `ContractValidationCode`. */
+export type ContractValidationCode =
+  | 'MISSING_COMMISSION_METHOD'
+  | 'INVALID_COMMISSION_METHOD'
+  | 'INVALID_FIELD_TYPE'
+  | 'INVALID_FIELD_VALUE'
+  | 'NULL_NOT_ALLOWED'
+  | 'UNKNOWN_FIELD';
+
+/** One validation failure — mirror of backend `ContractValidationError`. `field` = the offending key (absent for whole-body errors). */
+export interface ContractValidationError {
+  code: ContractValidationCode;
+  message: string;
+  field?: string;
+  details?: unknown;
+}
+
+/**
+ * API 400 body — mirror of backend `ApiValidationErrorResponse`. Follows the
+ * existing backend error convention ({ error, code }), extended with the
+ * normalizer's field-level errors. The run MUST NOT start on ok:false.
+ */
+export interface ApiValidationErrorResponse {
+  error: string;
+  code: 'VALIDATION_ERROR';
+  details?: ContractValidationError[];
+}
 
 /** A strategy the user picked for a backtest run (from the StrategySelector). */
 export interface SelectedBacktestStrategy {
@@ -385,6 +543,13 @@ export interface SelectedBacktestStrategy {
   source: string;
 }
 
+/**
+ * @deprecated Legacy panel-config shape — producers inject engine defaults that
+ * the explicit-config contract forbids (`commission`/`commissionType`/`currency`
+ * are gone; absent override fields must resolve at the engine merge point).
+ * Prefer `ExplicitBacktestOverride` / `BacktestRunRequestBody` for new code.
+ * Migrated by the request-builder microtask (useBacktestPanelState parity wave).
+ */
 export interface BacktestConfig {
   initialCapital: number;
   commission: number;
