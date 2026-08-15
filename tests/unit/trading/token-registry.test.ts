@@ -7,6 +7,9 @@
  * - The 4 Backed xStock pairs added 2026-08-15 map to their Bybit spot
  *   instruments: NVDAXUSDC→NVDAXUSDT/spot, MCDXUSDC→MCDXUSDT/spot,
  *   GOOGLXUSDC→GOOGLXUSDT/spot, SPCXXUSDC→SPCXXUSDT/spot (mint + decimals 8).
+ * - SPYUSDC (Backed SPYx) maps to the Bybit S&P 500 LINEAR perpetual
+ *   SPYUSDT/linear — Bybit has no spot S&P 500 instrument (verified live
+ *   2026-08-15); same category as the 7 legacy crypto pairs.
  * - The 7 legacy USDT pairs map identity (pairSymbol) + 'linear' — Bybit
  *   requests for them must stay byte-identical to pre-change behavior.
  * - UNKNOWN symbols fall back to identity (uppercased) + 'linear' and MUST
@@ -18,8 +21,31 @@ import {
   getBybitCategory,
   getBybitSymbol,
   getTokenInfo,
+  getTradablePairs,
   TRADABLE_PAIRS,
 } from '../../../src/trading/token-registry.js';
+
+/**
+ * Expected SSoT order. The registry is the single source of truth; the pair
+ * count derives from this constant — never hardcode a count in the tests.
+ */
+const EXPECTED_SOOT_PAIRS = [
+  'BTCUSDT',
+  'ETHUSDT',
+  'SOLUSDT',
+  'BNBUSDT',
+  'XRPUSDT',
+  'DOGEUSDT',
+  'ADAUSDT',
+  'GOLDUSDC',
+  'TSLAXUSDC',
+  'AAPLXUSDC',
+  'NVDAXUSDC',
+  'MCDXUSDC',
+  'GOOGLXUSDC',
+  'SPCXXUSDC',
+  'SPYUSDC',
+] as const;
 
 describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => {
   it('maps the 7 non-Bybit-listed pairs to their Bybit instruments (spot)', () => {
@@ -81,6 +107,26 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
     });
   });
 
+  it('SPYUSDC maps to the Bybit S&P 500 linear perpetual (SPYUSDT/linear)', () => {
+    // Bybit has no spot S&P 500 instrument — SPYUSDT is a live linear perp,
+    // same category as the 7 legacy crypto pairs, NOT the spot xStocks.
+    expect(getBybitSymbol('SPYUSDC')).toBe('SPYUSDT');
+    expect(getBybitCategory('SPYUSDC')).toBe('linear');
+  });
+
+  it('SPYUSDC carries full token metadata (mint, decimals 8, linear bybit mapping)', () => {
+    expect(getTokenInfo('SPYUSDC')).toMatchObject({
+      symbol: 'SPYx',
+      quote: 'USDC',
+      pairSymbol: 'SPYUSDC',
+      name: 'S&P 500 xStock (Backed)',
+      mint: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W',
+      decimals: 8,
+      bybitSymbol: 'SPYUSDT',
+      bybitCategory: 'linear',
+    });
+  });
+
   it('legacy 7 pairs map to identity + linear (byte-identical Bybit requests)', () => {
     const legacy = [
       'BTCUSDT',
@@ -115,22 +161,12 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
     expect(getBybitCategory('btcusdt')).toBe('linear');
   });
 
-  it('TRADABLE_PAIRS is exactly the 14 SSoT pairs (7 legacy + 7 mapped)', () => {
-    expect([...TRADABLE_PAIRS]).toEqual([
-      'BTCUSDT',
-      'ETHUSDT',
-      'SOLUSDT',
-      'BNBUSDT',
-      'XRPUSDT',
-      'DOGEUSDT',
-      'ADAUSDT',
-      'GOLDUSDC',
-      'TSLAXUSDC',
-      'AAPLXUSDC',
-      'NVDAXUSDC',
-      'MCDXUSDC',
-      'GOOGLXUSDC',
-      'SPCXXUSDC',
-    ]);
+  it('TRADABLE_PAIRS is exactly the 15 SSoT pairs (7 legacy + 7 spot-mapped + SPYUSDC linear)', () => {
+    // Order + content locked against the constant; the count derives from it,
+    // so a future pair addition updates ONE list, never a magic number.
+    expect([...TRADABLE_PAIRS]).toEqual([...EXPECTED_SOOT_PAIRS]);
+    expect(TRADABLE_PAIRS.length).toBe(EXPECTED_SOOT_PAIRS.length);
+    // Consumer-facing helper stays byte-identical to the SSoT array.
+    expect(getTradablePairs()).toEqual(TRADABLE_PAIRS);
   });
 });

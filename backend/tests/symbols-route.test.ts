@@ -3,7 +3,8 @@
  * registry (single source of truth), never a hardcoded list.
  *
  * The symbols route previously served 15 hardcoded symbols; it now returns
- * `{ symbols: getTradablePairs() }` (registry pairs — 14 as of 2026-08-15).
+ * `{ symbols: getTradablePairs() }` (registry pairs — 15 as of 2026-08-15,
+ * incl. SPYUSDC).
  * The 8 legacy extra symbols (AVAX/DOT/LINK/MATIC/UNI/LTC/ATOM/NEAR) were
  * deliberately dropped — registry is truth, do NOT re-add them.
  *

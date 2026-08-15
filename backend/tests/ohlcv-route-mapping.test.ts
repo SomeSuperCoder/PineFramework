@@ -7,7 +7,9 @@
  *   mapped pairs: GOLDUSDC→symbol=XAUTUSDT&category=spot,
  *   TSLAXUSDC→TSLAXUSDT, AAPLXUSDC→AAPLXUSDT, and the 4 Backed xStocks
  *   (NVDAXUSDC→NVDAXUSDT, MCDXUSDC→MCDXUSDT, GOOGLXUSDC→GOOGLXUSDT,
- *   SPCXXUSDC→SPCXXUSDT).
+ *   SPCXXUSDC→SPCXXUSDT). SPYUSDC maps to the Bybit S&P 500 LINEAR
+ *   perpetual SPYUSDT/linear — no spot S&P 500 instrument exists on Bybit,
+ *   so it uses the same category as the 7 legacy crypto pairs.
  * - The 7 legacy pairs keep byte-identical legacy URL shape:
  *   /v5/market/kline?category=linear&symbol=<pair>&interval=60&limit=100.
  * - The JSON response AND the cache key keep the ORIGINAL pairSymbol — the
@@ -83,16 +85,17 @@ describe('GET /api/ohlcv Bybit instrument mapping', () => {
   });
 
   it.each([
-    ['GOLDUSDC', 'XAUTUSDT'],
-    ['TSLAXUSDC', 'TSLAXUSDT'],
-    ['AAPLXUSDC', 'AAPLXUSDT'],
-    ['NVDAXUSDC', 'NVDAXUSDT'],
-    ['MCDXUSDC', 'MCDXUSDT'],
-    ['GOOGLXUSDC', 'GOOGLXUSDT'],
-    ['SPCXXUSDC', 'SPCXXUSDT'],
+    ['GOLDUSDC', 'XAUTUSDT', 'spot'],
+    ['TSLAXUSDC', 'TSLAXUSDT', 'spot'],
+    ['AAPLXUSDC', 'AAPLXUSDT', 'spot'],
+    ['NVDAXUSDC', 'NVDAXUSDT', 'spot'],
+    ['MCDXUSDC', 'MCDXUSDT', 'spot'],
+    ['GOOGLXUSDC', 'GOOGLXUSDT', 'spot'],
+    ['SPCXXUSDC', 'SPCXXUSDT', 'spot'],
+    ['SPYUSDC', 'SPYUSDT', 'linear'],
   ])(
-    'requests the MAPPED Bybit instrument in spot category for %s → %s',
-    async (original, mapped) => {
+    'requests the MAPPED Bybit instrument (%s → %s, %s) while response/cache keep the ORIGINAL pair',
+    async (original, mapped, category) => {
       const res = await fetch(`${baseUrl}/ohlcv?symbol=${original}&interval=60&limit=100`);
       expect(res.status).toBe(200);
 
@@ -103,7 +106,7 @@ describe('GET /api/ohlcv Bybit instrument mapping', () => {
       );
       expect(bybitCall).toBeDefined();
       const url = bybitCall![0] as string;
-      expect(url).toContain('category=spot');
+      expect(url).toContain(`category=${category}`);
       expect(url).toContain(`symbol=${mapped}`);
       expect(url).toContain('interval=60');
       expect(url).toContain('limit=100');

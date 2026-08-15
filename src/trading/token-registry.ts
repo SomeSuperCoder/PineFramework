@@ -15,6 +15,8 @@
  * 2026-08-15 — Bybit ticker mapping: GOLDUSDC→XAUTUSDT, TSLAXUSDC→TSLAXUSDT,
  * AAPLXUSDC→AAPLXUSDT (all spot); price fetch via Bybit, execution stays mint-based.
  * 2026-08-15 — added NVDAXUSDC, MCDXUSDC, GOOGLXUSDC, SPCXXUSDC (Backed xStocks, spot).
+ * 2026-08-15 — added SPYUSDC (S&P 500 — SPYx Backed token on-chain; Bybit price
+ * source SPYUSDT linear perp, no spot instrument exists).
  */
 
 // ---------------------------------------------------------------------------
@@ -72,6 +74,7 @@ export const TRADABLE_PAIRS = [
   'MCDXUSDC',
   'GOOGLXUSDC',
   'SPCXXUSDC',
+  'SPYUSDC',
 ] as const;
 
 /** Type-safe array of tradable pair symbols. */
@@ -220,6 +223,20 @@ export const TOKEN_REGISTRY: Record<TradablePair, TokenInfo> = {
     // Bybit xStocks instrument (spot category), verified live 2026-08-15.
     bybitSymbol: 'SPCXXUSDT',
     bybitCategory: 'spot',
+  },
+  SPYUSDC: {
+    symbol: 'SPYx',
+    quote: 'USDC',
+    pairSymbol: 'SPYUSDC' as PairSymbol,
+    name: 'S&P 500 xStock (Backed)',
+    mint: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W', // Backed SPYx (Token-2022)
+    decimals: 8,
+    // Bybit SPYUSDT linear perpetual — no spot instrument for the S&P 500
+    // exists on Bybit (SPYXUSDT trades only on BingX/MEXC/OKX/Gate), verified
+    // live 2026-08-15. Price/chart source is the linear perp; execution stays
+    // mint-based (SPYx on-chain).
+    bybitSymbol: 'SPYUSDT',
+    bybitCategory: 'linear',
   },
 };
 
