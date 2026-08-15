@@ -101,6 +101,17 @@ export class ScriptsManifestStore {
     return entry;
   }
 
+  /** Replace the entire script list (used by lazy reconcile). Writes once. */
+  replaceAll(entries: FileScriptEntry[]): void {
+    const data = this.store.read();
+    if (data.activeScriptId && !entries.some((e) => e.id === data.activeScriptId)) {
+      data.activeScriptId = null;
+    }
+    data.scripts = entries;
+    data.lastSyncAt = Date.now();
+    this.store.write(data);
+  }
+
   remove(id: string): boolean {
     const data = this.store.read();
     const idx = data.scripts.findIndex((s) => s.id === id);
