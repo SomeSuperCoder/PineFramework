@@ -66,7 +66,9 @@ function escapeXml(s: string): string {
  */
 function formatPercentValue(pct: number, signed = false): string {
   const r = Math.round(pct * 10) / 10;
-  const body = r.toFixed(1).replace(/\.0$/, '');
+  // Use Math.abs(r) so the sign is applied only via the `sign` variable,
+  // preventing double-minus when r is negative (e.g. --5.2%).
+  const body = Math.abs(r).toFixed(1).replace(/\.0$/, '');
   const sign = signed ? (r > 0 ? '+' : r < 0 ? '-' : '') : '';
   return `${sign}${body}%`;
 }

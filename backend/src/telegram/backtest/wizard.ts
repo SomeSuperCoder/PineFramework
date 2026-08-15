@@ -94,7 +94,9 @@ const ERROR_CODE_KEYS: Record<TelegramBacktestErrorCode, I18nKey> = {
  */
 function percentValue(pct: number, signed = false): string {
   const r = Math.round(pct * 10) / 10;
-  const body = r.toFixed(1).replace(/\.0$/, '');
+  // Use Math.abs(r) so the sign is applied only via the `sign` variable,
+  // preventing double-minus when r is negative (e.g. --5.2%).
+  const body = Math.abs(r).toFixed(1).replace(/\.0$/, '');
   const sign = signed ? (r > 0 ? '+' : r < 0 ? '-' : '') : '';
   return `${sign}${body}%`;
 }
@@ -542,12 +544,17 @@ export class BacktestWizard {
 
   /** Short localized caption attached to the result card photo. */
   private buildCaption(lang: BotLanguage, session: BacktestSession): string {
-    return t(lang, 'backtestResultCaption', {
+    const base = t(lang, 'backtestResultCaption', {
       strategy: session.strategies[session.strategyIndex ?? -1]?.name ?? '—',
       symbol: session.symbol ?? '—',
       timeframe: timeframeDisplay(session.timeframe ?? ''),
       range: `${session.daysBack ?? 0}d`,
     });
+    // Bold disclaimer — cannot use MarkdownV2 italic (_…_) because
+    // escapeMarkdownV2() escapes underscores. Bold (*…*) is preserved.
+    const days = session.daysBack ?? 0;
+    const disclaimer = `\n*⚠️ This is theoretical data based on the last ${days} days of market data. Real results may differ.*`;
+    return base + disclaimer;
   }
 
   /**
