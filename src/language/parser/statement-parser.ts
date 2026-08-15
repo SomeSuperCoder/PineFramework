@@ -189,7 +189,10 @@ export class StatementParser extends ExpressionParser {
     }
     if (
       (this.checkTypeKeyword() &&
-        (this.checkNext(TokenType.Identifier) || this.checkNextTypeKeyword())) ||
+        (this.checkNext(TokenType.Identifier) ||
+          this.checkNext(TokenType.LBracket) ||
+          this.checkNext(TokenType.Less) ||
+          this.checkNextTypeKeyword())) ||
       this.looksLikeUserType()
     ) {
       return this.parseTypedVariableDeclaration(false, false);

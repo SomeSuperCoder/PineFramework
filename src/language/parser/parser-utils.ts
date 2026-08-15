@@ -204,7 +204,11 @@ export class ParserBase {
         this.advance(); // consume [
       else this.advance(); // consume <
 
-      if (typeToken.type === TokenType.Array || typeToken.type === TokenType.Map) {
+      // Angle-bracket generics (matrix<float>, array<float>, map<string, float>)
+      // parse comma-separated type arguments for ANY type keyword. Square
+      // brackets remain the shorthand array syntax (int[]) except for the
+      // array/map types, which also accept [args].
+      if (!isBracket || typeToken.type === TokenType.Array || typeToken.type === TokenType.Map) {
         // Parse comma-separated type arguments
         while (!this.isAtEnd() && !this.check(isBracket ? TokenType.RBracket : TokenType.Greater)) {
           const arg = this.parseTypeAnnotation();

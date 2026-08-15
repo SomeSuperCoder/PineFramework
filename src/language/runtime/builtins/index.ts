@@ -10,4 +10,5 @@ export { registerTableBuiltins } from './table-builtins.js';
 export { registerDrawingBuiltins } from './drawing-builtins.js';
 export { registerAlertBuiltins } from './alert-builtins.js';
 export { registerArrayBuiltins } from './array-builtins.js';
+export { registerMatrixBuiltins } from './matrix-builtins.js';
 export { registerUtilityBuiltins } from './utility-builtins.js';

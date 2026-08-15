@@ -37,6 +37,7 @@ import {
 import type { ExecutionContext } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
 import { executeArrayMethod } from './array-methods.js';
+import { isPineMatrix } from './builtins/matrix-builtins.js';
 import { executeLineMethod, executeBoxMethod } from './drawing-methods.js';
 import { executeTypeConstructor } from './type-constructors.js';
 
@@ -366,6 +367,20 @@ export function executeCallExpression(
       }
     }
 
+    // Matrix method dispatch: mx.set(r, c, v) → matrix.set(mx, r, c, v).
+    // Must precede the generic array branch: matrices are marker objects, not
+    // arrays, and matrix set/get arity (row, col, value) differs from the
+    // 1-D array set/get (index, value).
+    if (isPineMatrix(obj)) {
+      const matrixMethod = eng.builtins.get(`matrix.${methodName}`);
+      if (matrixMethod) {
+        eng.currentCallSiteId = expr.callId;
+        const builtinArgs =
+          Object.keys(namedArgs).length > 0 ? [obj, ...args, namedArgs] : [obj, ...args];
+        return matrixMethod(...builtinArgs);
+      }
+    }
+
     // Generic array methods
     if (Array.isArray(obj)) {
       const result = executeArrayMethod(obj, methodName, args);
@@ -583,6 +598,7 @@ export function executeMemberExpression(
       objName === 'location' ||
       objName === 'size' ||
       objName === 'text' ||
+      objName === 'font' ||
       objName === 'linewidth' ||
       objName === 'linecap' ||
       objName === 'linejoin' ||
@@ -649,6 +665,18 @@ export function executeMemberExpression(
         ishistory: true,
       };
       return barstateProps[expr.property] ?? NA;
+    }
+    if (objName === 'chart') {
+      // TradingView chart theme colors — scripts use these to paint UI
+      // elements (axis labels, text) to match the chart's light/dark theme.
+      // The runtime has no real chart theming, so expose TradingView's
+      // dark-theme defaults; any valid color string satisfies consumers
+      // that only forward the value to label/plot textcolor.
+      const chartProps: Record<string, PineValue> = {
+        fg_color: '#363A45',
+        bg_color: '#131722',
+      };
+      return chartProps[expr.property] ?? NA;
     }
 
     const binding = resolveVariable(scope, objName);

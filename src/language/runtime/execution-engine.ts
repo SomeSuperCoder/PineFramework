@@ -27,6 +27,7 @@ import {
   registerDrawingBuiltins,
   registerAlertBuiltins,
   registerArrayBuiltins,
+  registerMatrixBuiltins,
   registerUtilityBuiltins,
 } from './builtins/index.js';
 import type {
@@ -254,6 +255,16 @@ export class ExecutionEngine {
   /** @internal */ changePrevValues: Map<string, number> = new Map();
   /** @internal */ atrState: Map<string, { prev: number; count: number; values: PineValue[] }> =
     new Map();
+  /** Wilder's RMA state, keyed `rma_<len>_<callSiteId>` (ta.rma). Same seed-then-smooth
+   *  shape as atrState — RMA is the core of ATR, so the state layouts mirror each other. */
+  /** @internal */ rmaState: Map<string, { prev: number; count: number }> = new Map();
+  /** ta.supertrend state, keyed `st_<atrPeriod>_<callSiteId>`. Holds the internal
+   *  ATR RMA plus the previous final bands so the classic band-following rule
+   *  (min/max against prior band) can be evaluated per bar. */
+  /** @internal */ supertrendState: Map<
+    string,
+    { atrCount: number; atrPrev: number; prevUpper: number | null; prevLower: number | null }
+  > = new Map();
   /** @internal */ highestBuffers: Map<string, number[]> = new Map();
   /** @internal */ lowestBuffers: Map<string, number[]> = new Map();
   /** @internal */ currentCallSiteId = 0;
@@ -297,6 +308,12 @@ export class ExecutionEngine {
       max = Math.max(max, this.parseMapLength(key.split('_')));
     }
     for (const key of this.atrState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.rmaState.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.supertrendState.keys()) {
       max = Math.max(max, this.parseMapLength(key.split('_')));
     }
     for (const key of this.hmaBuffers.keys()) {
@@ -488,6 +505,7 @@ export class ExecutionEngine {
     registerTableBuiltins(this);
     registerDrawingBuiltins(this);
     registerArrayBuiltins(this);
+    registerMatrixBuiltins(this);
     registerAlertBuiltins(this);
     registerUtilityBuiltins(this);
   }

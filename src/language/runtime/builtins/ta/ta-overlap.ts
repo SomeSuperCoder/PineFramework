@@ -119,4 +119,30 @@ export function registerTaOverlap(engine: ExecutionEngine): void {
     }
     return dSum / dWeight;
   });
+
+  // Wilder's Relative Moving Average — the smoothing used by ATR/RSI. Seed is the
+  // incremental SMA over the first `len` bars (NA until warm), then
+  // rma = (rma[1] * (len - 1) + src) / len. State layout mirrors atrState since
+  // ta.atr IS rma of the true range — one algorithm, two call-site key namespaces.
+  eng.builtins.set('ta.rma', (source: PineValue, length: PineValue): PineValue => {
+    if (isNa(source) || isNa(length)) return NA;
+    const len = Math.trunc(length as number);
+    if (len <= 0) return NA;
+    const val = source as number;
+    if (!isFiniteNumber(val)) return NA;
+
+    const key = `rma_${len}_${eng.currentCallSiteId}`;
+    if (!eng.rmaState.has(key)) {
+      eng.rmaState.set(key, { prev: val, count: 1 });
+      return NA;
+    }
+    const state = eng.rmaState.get(key)!;
+    state.count++;
+    if (state.count <= len) {
+      state.prev = (state.prev * (state.count - 1) + val) / state.count;
+      return NA;
+    }
+    state.prev = (state.prev * (len - 1) + val) / len;
+    return guardFinite(state.prev);
+  });
 }

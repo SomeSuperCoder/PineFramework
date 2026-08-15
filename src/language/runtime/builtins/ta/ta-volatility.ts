@@ -168,4 +168,101 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     state.values.push(state.prev);
     return state.prev;
   });
+
+  // True range: max(high - low, |high - close[1]|, |low - close[1]|). Stateless —
+  // a per-bar value with at most close[1] lookback. The `useMA` parameter is
+  // accepted for signature compatibility with ta.tr(useMA): per the Pine v6
+  // reference, ta.tr(true) is the canonical RAW true-range calculation (it is
+  // paired with ta.rma(trueRange, len) to build ATRs), so the flag does not
+  // alter the returned series. The LuxAlgo supertrend-3d script depends on this:
+  // it computes `ta.tr(true)` once and derives 10 ATRs via ta.rma.
+  eng.builtins.set('ta.tr', (useMA?: PineValue): PineValue => {
+    void useMA; // accepted for Pine signature parity; does not change semantics
+    if (!eng.currentContext) return NA;
+    const ctx = eng.currentContext;
+    const high = ctx.high.getRelative(0);
+    const low = ctx.low.getRelative(0);
+    const close = ctx.close.getRelative(0);
+    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
+      return NA;
+    }
+    // On bar 0 there is no close[1]; fall back to close so TR degrades to
+    // max(high-low, |high-close|, |low-close|) — identical to the ta.atr path.
+    const prevClose = ctx.close.getRelative(1);
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
+      Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+    );
+    return guardFinite(tr);
+  });
+
+  // Supertrend: factor * ATR band channel around hl2 with the classic
+  // band-following rule (upper = min(current, prior), lower = max(current, prior),
+  // trend = close vs final band). Returns [supertrend, direction] as a JS tuple —
+  // the runtime's destructuring assignment ([a, b] = fn()) unpacks it. Direction is
+  // 1 when close is above the line (uptrend), -1 below. NA-safe: while the internal
+  // ATR warms up the function returns [na, na] without ever comparing against NA.
+  eng.builtins.set('ta.supertrend', (factor: PineValue, atrPeriod: PineValue): PineValue => {
+    if (!eng.currentContext) return [NA, NA] as PineValue;
+    const mult = typeof factor === 'number' && !isNa(factor) ? factor : 3.0;
+    const period = Math.trunc(typeof atrPeriod === 'number' ? (atrPeriod as number) : 10);
+    if (period <= 0) return [NA, NA] as PineValue;
+    const ctx = eng.currentContext;
+    const high = ctx.high.getRelative(0);
+    const low = ctx.low.getRelative(0);
+    const close = ctx.close.getRelative(0);
+    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
+      return [NA, NA] as PineValue;
+    }
+    const prevClose = ctx.close.getRelative(1);
+    const tr = Math.max(
+      high - low,
+      Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
+      Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+    );
+
+    const key = `st_${period}_${eng.currentCallSiteId}`;
+    if (!eng.supertrendState.has(key)) {
+      eng.supertrendState.set(key, {
+        atrCount: 0,
+        atrPrev: 0,
+        prevUpper: null,
+        prevLower: null,
+      });
+    }
+    const state = eng.supertrendState.get(key)!;
+
+    // Internal ATR via the same seed-then-Wilder RMA as ta.atr/ta.rma.
+    let atr: number | null;
+    state.atrCount++;
+    if (state.atrCount === 1) {
+      state.atrPrev = tr;
+      atr = null;
+    } else if (state.atrCount <= period) {
+      state.atrPrev = (state.atrPrev * (state.atrCount - 1) + tr) / state.atrCount;
+      atr = null;
+    } else {
+      state.atrPrev = (state.atrPrev * (period - 1) + tr) / period;
+      atr = state.atrPrev;
+    }
+
+    if (atr === null) {
+      state.prevUpper = null;
+      state.prevLower = null;
+      return [NA, NA] as PineValue;
+    }
+
+    const hl2 = (high + low) / 2;
+    const upper = hl2 + mult * atr;
+    const lower = hl2 - mult * atr;
+    const finalUpper = state.prevUpper === null ? upper : Math.min(upper, state.prevUpper);
+    const finalLower = state.prevLower === null ? lower : Math.max(lower, state.prevLower);
+    state.prevUpper = finalUpper;
+    state.prevLower = finalLower;
+
+    const st = close > finalUpper ? finalLower : finalUpper;
+    const direction = close >= st ? 1 : -1;
+    return [guardFinite(st), direction] as PineValue;
+  });
 }

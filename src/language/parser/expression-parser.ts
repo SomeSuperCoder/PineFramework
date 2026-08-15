@@ -463,8 +463,8 @@ export class ExpressionParser extends ParserBase {
     let name: string;
     let defaultValue: ExpressionNode | undefined;
 
-    // Pine v6 can have type before name: "float src" or name before type: "src float"
-    if (this.checkTypeKeyword()) {
+    // Pine v6 can have type before name: "float src" / "ST_State state" or name before type: "src float"
+    if (this.checkTypeKeyword() || this.looksLikeUserType()) {
       typeAnnotation = this.parseTypeAnnotation();
       name = this.consume(TokenType.Identifier, 'Expected parameter name').lexeme;
     } else {

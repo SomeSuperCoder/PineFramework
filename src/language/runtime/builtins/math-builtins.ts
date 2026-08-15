@@ -143,4 +143,12 @@ export function registerMathBuiltins(engine: ExecutionEngine): void {
     if (validArgs.length === 0) return NA;
     return validArgs.reduce((sum, val) => sum + val, 0);
   });
+
+  eng.builtins.set('math.avg', (...args: PineValue[]): PineValue => {
+    // Arithmetic mean of the arguments; NA/invalid inputs are skipped, matching
+    // math.max/min/sum's NA-filtering convention. All-NA → NA.
+    const validArgs = args.filter((a): a is number => !isNa(a) && isFiniteNumber(a));
+    if (validArgs.length === 0) return NA;
+    return guardFinite(validArgs.reduce((sum, val) => sum + val, 0) / validArgs.length);
+  });
 }
