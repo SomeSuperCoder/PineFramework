@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { getTradablePairs } from 'pine-framework';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,6 +22,7 @@ import {
   daysPresetsFor,
   BACKTEST_TIMEFRAMES,
   BACKTEST_SYMBOLS,
+  symbolKeyboard,
 } from '../src/telegram/backtest/keyboards.js';
 import { runTelegramBacktest, type TelegramBacktestResult } from '../src/telegram/backtest/runTelegramBacktest.js';
 import { renderBacktestCard } from '../src/telegram/report/backtestCard.js';
@@ -485,6 +487,38 @@ describe('BacktestWizard keyboards — preset safety', () => {
   });
 
   it('exposes the canonical symbol set', () => {
-    expect(BACKTEST_SYMBOLS).toEqual(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT']);
+    // Derive from the registry SSOT — never hardcode a count/list, so future
+    // pair additions don't break this lock.
+    expect(BACKTEST_SYMBOLS).toEqual(getTradablePairs());
+  });
+
+  it('symbol gate accepts EVERY registry pair through the wizard (hidden-subset bug locked)', async () => {
+    // Regression lock for the pre-fix bug where the keyboard/gate used a
+    // hardcoded 5-pair subset and silently rejected valid registry pairs
+    // (e.g. GOLDUSDC, TSLAXUSDC). Walk the real wizard per SSOT pair — a pair
+    // missing from BACKTEST_SYMBOLS (or the gate) never advances to timeframe.
+    const { wizard } = makeWizard({ entries: [strategyEntry('s1', 'EMA Cross')] });
+    for (const symbol of getTradablePairs()) {
+      const { ctx } = makeCommandCtx();
+      await wizard.start(ctx);
+      await wizard.handleCallback(makeCtx('bt:strat:0').cb);
+      const pick = makeCtx(`bt:sym:${symbol}`).cb;
+      await wizard.handleCallback(pick);
+      expect(pick.editMessage).toHaveBeenCalledWith(
+        t('en', 'backtestStepTimeframe'),
+        expect.any(Object),
+      );
+    }
+  });
+
+  it('symbol keyboard renders a button for every BACKTEST_SYMBOLS pair', () => {
+    // The menu builder iterates BACKTEST_SYMBOLS (keyboards.ts symbolKeyboard),
+    // so this + the toEqual(getTradablePairs()) lock prove the rendered menu
+    // covers the full registry — a subset here would re-hide valid pairs.
+    const kb = symbolKeyboard('en');
+    const callbacks = kb.inline_keyboard.flat().map((b) => b.callback_data);
+    for (const symbol of BACKTEST_SYMBOLS) {
+      expect(callbacks).toContain(`bt:sym:${symbol}`);
+    }
   });
 });

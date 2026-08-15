@@ -13,20 +13,21 @@
  * error remains the final guard against real-world bar counts.
  */
 
+import { getTradablePairs } from 'pine-framework';
 import type { BacktestCommissionMethodId } from '../../backtest-contract.js';
 import type { ScriptEntry } from '../../store/ScriptFileManager.js';
 import type { BotLanguage } from '../i18n.js';
 import { t } from '../i18n.js';
 import type { EditMessageExtras } from '../TelegramBotFeature.js';
 
-/** Curated symbols — same list as the CLI defaults. */
-export const BACKTEST_SYMBOLS: readonly string[] = [
-  'BTCUSDT',
-  'ETHUSDT',
-  'SOLUSDT',
-  'BNBUSDT',
-  'XRPUSDT',
-];
+/**
+ * All tradable pairs — DERIVED from the registry SSOT (getTradablePairs),
+ * never hardcoded. The symbol keyboard and the wizard's selectSymbol gate
+ * both read this constant, so a hardcoded subset silently hid and forbade
+ * valid pairs (the pre-fix 5-pair bug). The registry is the single source
+ * of truth; adding a pair there automatically widens the menu here.
+ */
+export const BACKTEST_SYMBOLS: readonly string[] = getTradablePairs();
 
 /** Timeframes — same list as the CLI defaults. */
 export const BACKTEST_TIMEFRAMES: readonly string[] = [
