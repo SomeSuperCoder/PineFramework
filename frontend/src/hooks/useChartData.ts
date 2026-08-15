@@ -422,14 +422,64 @@ export function useChartData(
             msg.barTimestamps &&
             msg.barTimestamps.length > ohlcvData.length
           ) {
-            const datasetStartSec = Math.floor(ohlcvData[0].timestamp / 1000);
-            msg.labels = (msg.labels || []).filter((l) => l.time >= datasetStartSec);
-            msg.lines = (msg.lines || []).filter((ln) =>
-              ln.points.some((p) => p.time >= datasetStartSec),
+            // Compute how many seed/context bars precede the dataset
+            const seedCount = msg.barTimestamps.findIndex(
+              (ts) => ts >= ohlcvData[0].timestamp,
             );
-            msg.boxes = (msg.boxes || []).filter(
-              (b) => b.startTime >= datasetStartSec || b.endTime >= datasetStartSec,
-            );
+            if (seedCount > 0) {
+              // --- Trim array-indexed plot data (the critical fix) ---
+              // Slice barTimestamps to start at the dataset's first bar
+              msg.barTimestamps = msg.barTimestamps.slice(seedCount);
+              // Slice every output series to remove seed-bar values
+              for (const key of Object.keys(msg.outputs)) {
+                msg.outputs[key] = msg.outputs[key].slice(seedCount);
+              }
+              // Slice per-plot color arrays
+              if (msg.plotColors) {
+                for (const key of Object.keys(msg.plotColors)) {
+                  msg.plotColors[key] = msg.plotColors[key].slice(seedCount);
+                }
+              }
+              // Slice per-plot fill-color arrays
+              if (msg.fillColorData) {
+                for (const key of Object.keys(msg.fillColorData)) {
+                  msg.fillColorData[key] = msg.fillColorData[key].slice(seedCount);
+                }
+              }
+              // Slice bar color overrides (body/wick/border colors per bar)
+              if (msg.barColors) {
+                msg.barColors = msg.barColors.slice(seedCount);
+              }
+              // Slice bgcolor color data
+              if (msg.bgcolor) {
+                msg.bgcolor = msg.bgcolor.slice(seedCount);
+              }
+              // --- Trim time-indexed drawing data (existing logic, kept) ---
+              const datasetStartSec = Math.floor(ohlcvData[0].timestamp / 1000);
+              msg.labels = (msg.labels || []).filter((l) => l.time >= datasetStartSec);
+              msg.lines = (msg.lines || []).filter((ln) =>
+                ln.points.some((p) => p.time >= datasetStartSec),
+              );
+              msg.boxes = (msg.boxes || []).filter(
+                (b) => b.startTime >= datasetStartSec || b.endTime >= datasetStartSec,
+              );
+              msg.shapes = (msg.shapes || []).filter(
+                (s) => s.time >= datasetStartSec,
+              );
+              // --- Adjust barIndex-based data (subtract seedCount) ---
+              if (msg.strategyMarkers) {
+                msg.strategyMarkers = msg.strategyMarkers.map((m) => ({
+                  ...m,
+                  barIndex: m.barIndex - seedCount,
+                }));
+              }
+              if (msg.alertTriggers) {
+                msg.alertTriggers = msg.alertTriggers.map((t) => ({
+                  ...t,
+                  barIndex: t.barIndex - seedCount,
+                }));
+              }
+            }
           }
           const result = buildScriptResult(
             msg.overlay,
