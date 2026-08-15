@@ -14,6 +14,7 @@
  * PAXGUSDC and GLDXUSDC removed.
  * 2026-08-15 — Bybit ticker mapping: GOLDUSDC→XAUTUSDT, TSLAXUSDC→TSLAXUSDT,
  * AAPLXUSDC→AAPLXUSDT (all spot); price fetch via Bybit, execution stays mint-based.
+ * 2026-08-15 — added NVDAXUSDC, MCDXUSDC, GOOGLXUSDC, SPCXXUSDC (Backed xStocks, spot).
  */
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,10 @@ export const TRADABLE_PAIRS = [
   'GOLDUSDC',
   'TSLAXUSDC',
   'AAPLXUSDC',
+  'NVDAXUSDC',
+  'MCDXUSDC',
+  'GOOGLXUSDC',
+  'SPCXXUSDC',
 ] as const;
 
 /** Type-safe array of tradable pair symbols. */
@@ -170,6 +175,50 @@ export const TOKEN_REGISTRY: Record<TradablePair, TokenInfo> = {
     decimals: 8,
     // Bybit xStocks instrument (spot category), verified live 2026-08-15.
     bybitSymbol: 'AAPLXUSDT',
+    bybitCategory: 'spot',
+  },
+  NVDAXUSDC: {
+    symbol: 'NVDAx',
+    quote: 'USDC',
+    pairSymbol: 'NVDAXUSDC' as PairSymbol,
+    name: 'NVIDIA Corp. (xStock)',
+    mint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh', // Backed NVDAx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'NVDAXUSDT',
+    bybitCategory: 'spot',
+  },
+  MCDXUSDC: {
+    symbol: 'MCDx',
+    quote: 'USDC',
+    pairSymbol: 'MCDXUSDC' as PairSymbol,
+    name: "McDonald's Corp. (xStock)",
+    mint: 'XsqE9cRRpzxcGKDXj1BJ7Xmg4GRhZoyY1KpmGSxAWT2', // Backed MCDx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'MCDXUSDT',
+    bybitCategory: 'spot',
+  },
+  GOOGLXUSDC: {
+    symbol: 'GOOGLx',
+    quote: 'USDC',
+    pairSymbol: 'GOOGLXUSDC' as PairSymbol,
+    name: 'Alphabet Inc. Class A (xStock)',
+    mint: 'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN', // Backed GOOGLx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'GOOGLXUSDT',
+    bybitCategory: 'spot',
+  },
+  SPCXXUSDC: {
+    symbol: 'SPCXx',
+    quote: 'USDC',
+    pairSymbol: 'SPCXXUSDC' as PairSymbol,
+    name: 'SpaceX (xStock)',
+    mint: 'Xs3oZwbHvqis4NYcf4YKWmEia2eC84wSiVrcYcTqpH8', // Backed SPCXx (Token-2022)
+    decimals: 8,
+    // Bybit xStocks instrument (spot category), verified live 2026-08-15.
+    bybitSymbol: 'SPCXXUSDT',
     bybitCategory: 'spot',
   },
 };

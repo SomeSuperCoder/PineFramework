@@ -3,9 +3,11 @@
  * (OpenSpec change: bybit-ticker-mapping).
  *
  * Contract under test:
- * - The Bybit request URL uses the MAPPED instrument + category for the 3
- *   new pairs: GOLDUSDC→symbol=XAUTUSDT&category=spot,
- *   TSLAXUSDC→TSLAXUSDT, AAPLXUSDC→AAPLXUSDT.
+ * - The Bybit request URL uses the MAPPED instrument + category for the 7
+ *   mapped pairs: GOLDUSDC→symbol=XAUTUSDT&category=spot,
+ *   TSLAXUSDC→TSLAXUSDT, AAPLXUSDC→AAPLXUSDT, and the 4 Backed xStocks
+ *   (NVDAXUSDC→NVDAXUSDT, MCDXUSDC→MCDXUSDT, GOOGLXUSDC→GOOGLXUSDT,
+ *   SPCXXUSDC→SPCXXUSDT).
  * - The 7 legacy pairs keep byte-identical legacy URL shape:
  *   /v5/market/kline?category=linear&symbol=<pair>&interval=60&limit=100.
  * - The JSON response AND the cache key keep the ORIGINAL pairSymbol — the
@@ -84,6 +86,10 @@ describe('GET /api/ohlcv Bybit instrument mapping', () => {
     ['GOLDUSDC', 'XAUTUSDT'],
     ['TSLAXUSDC', 'TSLAXUSDT'],
     ['AAPLXUSDC', 'AAPLXUSDT'],
+    ['NVDAXUSDC', 'NVDAXUSDT'],
+    ['MCDXUSDC', 'MCDXUSDT'],
+    ['GOOGLXUSDC', 'GOOGLXUSDT'],
+    ['SPCXXUSDC', 'SPCXXUSDT'],
   ])(
     'requests the MAPPED Bybit instrument in spot category for %s → %s',
     async (original, mapped) => {

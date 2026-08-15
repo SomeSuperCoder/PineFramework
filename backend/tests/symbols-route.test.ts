@@ -3,9 +3,9 @@
  * registry (single source of truth), never a hardcoded list.
  *
  * The symbols route previously served 15 hardcoded symbols; it now returns
- * `{ symbols: getTradablePairs() }` (7 registry pairs). The 8 legacy extra
- * symbols (AVAX/DOT/LINK/MATIC/UNI/LTC/ATOM/NEAR) were deliberately dropped —
- * registry is truth, do NOT re-add them.
+ * `{ symbols: getTradablePairs() }` (registry pairs — 14 as of 2026-08-15).
+ * The 8 legacy extra symbols (AVAX/DOT/LINK/MATIC/UNI/LTC/ATOM/NEAR) were
+ * deliberately dropped — registry is truth, do NOT re-add them.
  *
  * The expected list is imported from 'pine-framework' (TRADABLE_PAIRS) so the
  * test never hardcodes the list twice — it locks the ROUTE to the REGISTRY.
@@ -49,7 +49,8 @@ describe('GET /api/symbols derives from the token registry (SSoT)', () => {
     // The route's output must be EXACTLY the SSoT registry — any hardcoded
     // addition/removal fails this equality.
     expect(body.symbols).toEqual([...TRADABLE_PAIRS]);
-    expect(body.symbols).toHaveLength(10);
+    // Length derived from the SSoT registry so adding pairs never breaks this.
+    expect(body.symbols).toHaveLength(TRADABLE_PAIRS.length);
   });
 
   it('does not contain any of the 8 legacy-dropped symbols (registry is truth)', async () => {

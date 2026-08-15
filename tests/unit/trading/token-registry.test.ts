@@ -4,6 +4,9 @@
  *
  * Contract under test:
  * - GOLDUSDC→XAUTUSDT/spot, TSLAXUSDC→TSLAXUSDT/spot, AAPLXUSDC→AAPLXUSDT/spot
+ * - The 4 Backed xStock pairs added 2026-08-15 map to their Bybit spot
+ *   instruments: NVDAXUSDC→NVDAXUSDT/spot, MCDXUSDC→MCDXUSDT/spot,
+ *   GOOGLXUSDC→GOOGLXUSDT/spot, SPCXXUSDC→SPCXXUSDT/spot (mint + decimals 8).
  * - The 7 legacy USDT pairs map identity (pairSymbol) + 'linear' — Bybit
  *   requests for them must stay byte-identical to pre-change behavior.
  * - UNKNOWN symbols fall back to identity (uppercased) + 'linear' and MUST
@@ -14,11 +17,12 @@ import { describe, it, expect } from 'vitest';
 import {
   getBybitCategory,
   getBybitSymbol,
+  getTokenInfo,
   TRADABLE_PAIRS,
 } from '../../../src/trading/token-registry.js';
 
 describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => {
-  it('maps the 3 non-Bybit-listed pairs to their Bybit instruments (spot)', () => {
+  it('maps the 7 non-Bybit-listed pairs to their Bybit instruments (spot)', () => {
     expect(getBybitSymbol('GOLDUSDC')).toBe('XAUTUSDT');
     expect(getBybitCategory('GOLDUSDC')).toBe('spot');
 
@@ -27,6 +31,54 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
 
     expect(getBybitSymbol('AAPLXUSDC')).toBe('AAPLXUSDT');
     expect(getBybitCategory('AAPLXUSDC')).toBe('spot');
+
+    expect(getBybitSymbol('NVDAXUSDC')).toBe('NVDAXUSDT');
+    expect(getBybitCategory('NVDAXUSDC')).toBe('spot');
+
+    expect(getBybitSymbol('MCDXUSDC')).toBe('MCDXUSDT');
+    expect(getBybitCategory('MCDXUSDC')).toBe('spot');
+
+    expect(getBybitSymbol('GOOGLXUSDC')).toBe('GOOGLXUSDT');
+    expect(getBybitCategory('GOOGLXUSDC')).toBe('spot');
+
+    expect(getBybitSymbol('SPCXXUSDC')).toBe('SPCXXUSDT');
+    expect(getBybitCategory('SPCXXUSDC')).toBe('spot');
+  });
+
+  it('the 4 new Backed xStock pairs carry full token metadata (mint, decimals 8)', () => {
+    expect(getTokenInfo('NVDAXUSDC')).toMatchObject({
+      symbol: 'NVDAx',
+      quote: 'USDC',
+      name: 'NVIDIA Corp. (xStock)',
+      mint: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh',
+      decimals: 8,
+      bybitSymbol: 'NVDAXUSDT',
+      bybitCategory: 'spot',
+    });
+    expect(getTokenInfo('MCDXUSDC')).toMatchObject({
+      symbol: 'MCDx',
+      quote: 'USDC',
+      mint: 'XsqE9cRRpzxcGKDXj1BJ7Xmg4GRhZoyY1KpmGSxAWT2',
+      decimals: 8,
+      bybitSymbol: 'MCDXUSDT',
+      bybitCategory: 'spot',
+    });
+    expect(getTokenInfo('GOOGLXUSDC')).toMatchObject({
+      symbol: 'GOOGLx',
+      quote: 'USDC',
+      mint: 'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN',
+      decimals: 8,
+      bybitSymbol: 'GOOGLXUSDT',
+      bybitCategory: 'spot',
+    });
+    expect(getTokenInfo('SPCXXUSDC')).toMatchObject({
+      symbol: 'SPCXx',
+      quote: 'USDC',
+      mint: 'Xs3oZwbHvqis4NYcf4YKWmEia2eC84wSiVrcYcTqpH8',
+      decimals: 8,
+      bybitSymbol: 'SPCXXUSDT',
+      bybitCategory: 'spot',
+    });
   });
 
   it('legacy 7 pairs map to identity + linear (byte-identical Bybit requests)', () => {
@@ -63,7 +115,7 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
     expect(getBybitCategory('btcusdt')).toBe('linear');
   });
 
-  it('TRADABLE_PAIRS is exactly the 10 SSoT pairs (7 legacy + 3 mapped)', () => {
+  it('TRADABLE_PAIRS is exactly the 14 SSoT pairs (7 legacy + 7 mapped)', () => {
     expect([...TRADABLE_PAIRS]).toEqual([
       'BTCUSDT',
       'ETHUSDT',
@@ -75,6 +127,10 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
       'GOLDUSDC',
       'TSLAXUSDC',
       'AAPLXUSDC',
+      'NVDAXUSDC',
+      'MCDXUSDC',
+      'GOOGLXUSDC',
+      'SPCXXUSDC',
     ]);
   });
 });
