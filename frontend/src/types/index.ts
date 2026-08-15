@@ -444,26 +444,6 @@ export interface ExplicitBacktestOverride {
 }
 
 /**
- * Full POST /api/backtest request body — mirror of backend
- * `BacktestRunRequestBody`. Flat wire shape: the route strips the job-level keys
- * (symbol/timeframe/script/startDate/endDate/days_back) and passes the rest to
- * the normalizer as `ExplicitBacktestOverride`.
- *
- * `days_back` keeps its existing snake_case wire name for parity — do NOT rename.
- */
-export interface BacktestRunRequestBody extends ExplicitBacktestOverride {
-  symbol: string;
-  timeframe: string;
-  script: string;
-  /** Inclusive start date (YYYY-MM-DD). Absent = earliest available bar. */
-  startDate?: string;
-  /** Inclusive end date (YYYY-MM-DD). Absent = latest available bar. */
-  endDate?: string;
-  /** Existing wire name (kept for parity): lookback in days. */
-  days_back?: number;
-}
-
-/**
  * Known warning types — mirror of backend `BacktestWarningType`. This set is
  * the extensibility point — new diagnostics append to the union.
  */
@@ -514,34 +494,6 @@ export interface BacktestResultExtension {
   warnings: BacktestWarning[];
 }
 
-/** Machine-readable validation error codes — mirror of backend `ContractValidationCode`. */
-export type ContractValidationCode =
-  | 'MISSING_COMMISSION_METHOD'
-  | 'INVALID_COMMISSION_METHOD'
-  | 'INVALID_FIELD_TYPE'
-  | 'INVALID_FIELD_VALUE'
-  | 'NULL_NOT_ALLOWED'
-  | 'UNKNOWN_FIELD';
-
-/** One validation failure — mirror of backend `ContractValidationError`. `field` = the offending key (absent for whole-body errors). */
-export interface ContractValidationError {
-  code: ContractValidationCode;
-  message: string;
-  field?: string;
-  details?: unknown;
-}
-
-/**
- * API 400 body — mirror of backend `ApiValidationErrorResponse`. Follows the
- * existing backend error convention ({ error, code }), extended with the
- * normalizer's field-level errors. The run MUST NOT start on ok:false.
- */
-export interface ApiValidationErrorResponse {
-  error: string;
-  code: 'VALIDATION_ERROR';
-  details?: ContractValidationError[];
-}
-
 /** A strategy the user picked for a backtest run (from the StrategySelector). */
 export interface SelectedBacktestStrategy {
   id: string;
@@ -553,7 +505,7 @@ export interface SelectedBacktestStrategy {
  * @deprecated Legacy panel-config shape — producers inject engine defaults that
  * the explicit-config contract forbids (`commission`/`commissionType`/`currency`
  * are gone; absent override fields must resolve at the engine merge point).
- * Prefer `ExplicitBacktestOverride` / `BacktestRunRequestBody` for new code.
+ * Prefer `ExplicitBacktestOverride` for new code.
  * Migrated by the request-builder microtask (useBacktestPanelState parity wave).
  */
 export interface BacktestConfig {

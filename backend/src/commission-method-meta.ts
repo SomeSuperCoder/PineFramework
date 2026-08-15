@@ -27,17 +27,6 @@ export const COMMISSION_METHOD_LABELS: Record<CommissionMethodId, string> = {
   jupiter_ultra: 'Jupiter Ultra',
 };
 
-/**
- * Canonical one-line descriptions — mirror the engine descriptor SSOT
- * (commission-calculator.ts METHOD_DESCRIPTORS) exactly.
- */
-export const COMMISSION_METHOD_DESCRIPTIONS: Record<CommissionMethodId, string> = {
-  jupiter_manual:
-    'Jupiter Router path — 0% Jupiter fee + DEX swap fee (default 25 bps) + network fee',
-  jupiter_ultra:
-    'Jupiter Ultra (Meta-Aggregator) — tiered 0–50 bps Jupiter fee + DEX swap fee + network fee',
-};
-
 /** Human-readable accepted-value text for CLI/API errors ("jupiter_ultra, jupiter_manual"). */
 export const COMMISSION_METHOD_ACCEPTED_TEXT = COMMISSION_METHOD_IDS.join(', ');
 

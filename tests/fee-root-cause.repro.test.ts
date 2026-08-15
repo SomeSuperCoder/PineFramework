@@ -137,18 +137,14 @@ describe('root cause: callJupiterApi weighted average divides by 100 twice', () 
     ];
     const buggy = weightedAverageBuggy(twoStep);
     const fixed = weightedAverageFixed(twoStep);
-    console.log(
-      `[REPRO] two steps 40%/60% (25+10 bps) → BUGGY=${buggy} | FIXED=${fixed}`,
-    );
+    console.log(`[REPRO] two steps 40%/60% (25+10 bps) → BUGGY=${buggy} | FIXED=${fixed}`);
     expect(buggy).toBe(0.16); // wrong: (25*0.4 + 10*0.6) / 100 = 0.16
     expect(fixed).toBe(16); // correct weighted average
   });
 
   it('live probe: real fetchDexFeeBps("SOLUSDT") returns a sane fee (fix verified, was 0.25)', async () => {
     const result = await fetchDexFeeBps('SOLUSDT');
-    console.log(
-      `[REPRO] real fetchDexFeeBps('SOLUSDT') → ${JSON.stringify(result)}`,
-    );
+    console.log(`[REPRO] real fetchDexFeeBps('SOLUSDT') → ${JSON.stringify(result)}`);
     // FIX VERIFIED: the weighted-average no longer divides by 100 twice, so a
     // live single-step route returns the real fee (≥1 bps), not the old
     // corrupted 0.25 artifact. Live value may vary by route — the floor is 1 bps.

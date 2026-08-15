@@ -40,4 +40,3 @@ export const motion = {
 } as const
 
 export type MotionDuration = keyof typeof motion.durations
-export type MotionEasing = keyof typeof motion.easings

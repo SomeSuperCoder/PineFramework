@@ -537,7 +537,9 @@ describe('F6 fee conversion boundary', () => {
       aggregateRealizedPnl({
         side: 'LONG',
         ...LONG_FILLS,
-        feesSource: { components: [{ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }] },
+        feesSource: {
+          components: [{ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '10000' }],
+        },
         prices: {}, // SOL missing → must throw, never silently understate fees
       }),
     ).toThrow(/no price\/decimals supplied/);
@@ -626,8 +628,8 @@ describe('F8 decimal truth', () => {
     expect(dDiv('2', '3', 2)).toBe('0.67');
     expect(tenPow(9)).toBe('1000000000');
     // feeToQuote of lamports is exact — no 1e-7-style float residue.
-    expect(feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '5000' }, SOL_PRICE)).toBe(
-      '0.00075',
-    );
+    expect(
+      feeToQuote({ kind: 'BASE', tokenMint: SOL_MINT_CODE, amountAtomic: '5000' }, SOL_PRICE),
+    ).toBe('0.00075');
   });
 });

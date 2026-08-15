@@ -128,15 +128,7 @@ describe('getBybitSymbol / getBybitCategory (Bybit ticker mapping SSOT)', () => 
   });
 
   it('legacy 7 pairs map to identity + linear (byte-identical Bybit requests)', () => {
-    const legacy = [
-      'BTCUSDT',
-      'ETHUSDT',
-      'SOLUSDT',
-      'BNBUSDT',
-      'XRPUSDT',
-      'DOGEUSDT',
-      'ADAUSDT',
-    ];
+    const legacy = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT'];
     for (const pair of legacy) {
       expect(getBybitSymbol(pair)).toBe(pair);
       expect(getBybitCategory(pair)).toBe('linear');

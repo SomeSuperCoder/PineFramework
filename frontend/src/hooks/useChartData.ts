@@ -159,8 +159,12 @@ export function useChartData(
           const first = json.data[0];
           const last = json.data[json.data.length - 1];
           console.log(`[DIAG] REST loaded ${json.data.length} bars for ${symbol} ${interval}`);
-          console.log(`[DIAG] REST first bar — ts=${first.timestamp} o=${first.open} h=${first.high} l=${first.low} c=${first.close}`);
-          console.log(`[DIAG] REST last bar  — ts=${last.timestamp} o=${last.open} h=${last.high} l=${last.low} c=${last.close} v=${last.volume}`);
+          console.log(
+            `[DIAG] REST first bar — ts=${first.timestamp} o=${first.open} h=${first.high} l=${first.low} c=${first.close}`,
+          );
+          console.log(
+            `[DIAG] REST last bar  — ts=${last.timestamp} o=${last.open} h=${last.high} l=${last.low} c=${last.close} v=${last.volume}`,
+          );
         }
         setCandles(toCandleData(json.data));
       } catch (err) {
@@ -240,6 +244,10 @@ export function useChartData(
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ source: ind.source, bars: execBars, offset: 0 }),
+              // Bound the per-indicator re-execution so a hung request cannot freeze
+              // the batch state update below (setCandles + indicatorUpdates). The
+              // catch below skips the failed indicator and the batch still applies.
+              signal: AbortSignal.timeout(15000),
             });
             if (!execResponse.ok) continue;
             const execResult: ExecuteResponse = await execResponse.json();
@@ -359,6 +367,70 @@ export function useChartData(
             return;
           }
           const indicatorSrc = indicatorSourcesRef.current.get(msg.indicatorId);
+          // STALE-DATASET GUARD: a WS full-dataset execution_result is computed over the
+          // bar snapshot the backend ScriptSession was seeded with at SEND time
+          // (fetchOlderOHLCV sends ohlcvDataRef.current) and is re-executed on every live
+          // Bybit tick over that SNAPSHOT (gateway.ts reexecuteForTopic), NOT the
+          // frontend's current dataset. If chunks were prepended after the snapshot, the
+          // result is missing the newest chunk and its unconditional set below would
+          // REPLACE the freshly-merged prepend result, collapsing label counts
+          // (chunk-boundary e2e: 88 -> 86 -> 87 -> 59 — PROVEN root cause). Two checks:
+          //  1) LENGTH (legacy v3): fewer bars than the dataset = smaller snapshot.
+          //  2) DATASET-IDENTITY (new): the executed bar range must START at the current
+          //     dataset's first bar (after skipping any seed-context bars, which precede
+          //     it). Live ticks can make a stale session's LENGTH match the dataset, so
+          //     length alone cannot catch same-length different-dataset results — but a
+          //     stale snapshot is always missing the prepended chunk, so its range starts
+          //     LATER than the current first bar. Drop it; the merged prepend result is
+          //     authoritative. The v2 seed-trim below covers the (> dataset) case.
+          if (ohlcvData.length > 0 && msg.barTimestamps && msg.barTimestamps.length > 0) {
+            const curLen = ohlcvData.length;
+            const curFirst = ohlcvData[0].timestamp;
+            const execLen = msg.barTimestamps.length;
+            const execFirst = msg.barTimestamps[0];
+            if (execLen < curLen) {
+              console.warn(
+                `Execution result dropped: stale WS result (${execLen} bars) < dataset (${curLen}) for ${msg.indicatorId}`,
+              );
+              return;
+            }
+            // Executed range must begin at the current dataset's first bar. Seed-context
+            // executions prepend seed bars BEFORE the dataset, so skip ahead to the first
+            // executed bar at-or-after the current first bar and require it to BE the
+            // current first bar, with enough bars left to cover the whole dataset.
+            const startIdx = msg.barTimestamps.findIndex((ts) => ts >= curFirst);
+            if (
+              startIdx < 0 ||
+              msg.barTimestamps[startIdx] !== curFirst ||
+              execLen - startIdx < curLen
+            ) {
+              console.warn(
+                `Execution result dropped: stale dataset identity (exec ${execLen} bars from ts=${execFirst}, dataset ${curLen} bars from ts=${curFirst}) for ${msg.indicatorId}`,
+              );
+              return;
+            }
+          }
+          // The seed-path WS execute sends the full (seed + dataset) bar execution.
+          // Trim seed-context shapes to the dataset window exactly like the REST
+          // seed path — otherwise the seed-window leak re-enters the indicator
+          // result and later chunk merges can never add those labels (label counts
+          // stall — chunk-boundary e2e). Detect seed bars by comparing the executed
+          // bar count against the dataset: seed bars are present iff the execution
+          // ran strictly more bars than the current dataset.
+          if (
+            ohlcvData.length > 0 &&
+            msg.barTimestamps &&
+            msg.barTimestamps.length > ohlcvData.length
+          ) {
+            const datasetStartSec = Math.floor(ohlcvData[0].timestamp / 1000);
+            msg.labels = (msg.labels || []).filter((l) => l.time >= datasetStartSec);
+            msg.lines = (msg.lines || []).filter((ln) =>
+              ln.points.some((p) => p.time >= datasetStartSec),
+            );
+            msg.boxes = (msg.boxes || []).filter(
+              (b) => b.startTime >= datasetStartSec || b.endTime >= datasetStartSec,
+            );
+          }
           const result = buildScriptResult(
             msg.overlay,
             msg.outputs,
@@ -502,12 +574,20 @@ export function useChartData(
             const k = data.data;
             // Diagnostic: log raw WS kline data
             console.log(`[DIAG] WS kline raw`, {
-              symbol: k.symbol, interval: k.interval, ts: k.timestamp,
-              open: k.open, high: k.high, low: k.low, close: k.close,
-              confirmed: k.confirmed, volume: k.volume,
+              symbol: k.symbol,
+              interval: k.interval,
+              ts: k.timestamp,
+              open: k.open,
+              high: k.high,
+              low: k.low,
+              close: k.close,
+              confirmed: k.confirmed,
+              volume: k.volume,
             });
             // Also log as flat string for text-only log captures
-            console.log(`[DIAG] WS kline flat — symbol=${k.symbol} interval=${k.interval} ts=${k.timestamp} o=${k.open} h=${k.high} l=${k.low} c=${k.close} v=${k.volume} confirmed=${k.confirmed}`);
+            console.log(
+              `[DIAG] WS kline flat — symbol=${k.symbol} interval=${k.interval} ts=${k.timestamp} o=${k.open} h=${k.high} l=${k.low} c=${k.close} v=${k.volume} confirmed=${k.confirmed}`,
+            );
             const topic = `kline.${k.interval}.${k.symbol}`;
             if (topic !== subscribedTopicRef.current) {
               return;
@@ -517,10 +597,7 @@ export function useChartData(
             if (!time || time <= 0) return;
 
             // Belt-and-suspenders: reject NaN/Infinity at frontend entry
-            if (
-              !isFinite(k.open) || !isFinite(k.high) ||
-              !isFinite(k.low) || !isFinite(k.close)
-            ) {
+            if (!isFinite(k.open) || !isFinite(k.high) || !isFinite(k.low) || !isFinite(k.close)) {
               console.warn('[WS] Rejected kline with non-finite prices', k);
               return;
             }
@@ -554,12 +631,14 @@ export function useChartData(
             setCandles((prev) => {
               const lastCandle = prev[prev.length - 1];
               if (lastCandle) {
-                const deltaPct = ((k.close - lastCandle.close) / lastCandle.close * 100).toFixed(2);
+                const deltaPct = (((k.close - lastCandle.close) / lastCandle.close) * 100).toFixed(
+                  2,
+                );
                 console.warn(
                   `[DIAG] WS vs REST merge: symbol=${k.symbol} interval=${k.interval} ` +
-                  `histClose=${lastCandle.close} wsClose=${k.close} Δ=${deltaPct}% ` +
-                  `histOpen=${lastCandle.open} wsOpen=${k.open} ` +
-                  `histTime=${lastCandle.time} wsTime=${Math.floor(k.timestamp / 1000)}`
+                    `histClose=${lastCandle.close} wsClose=${k.close} Δ=${deltaPct}% ` +
+                    `histOpen=${lastCandle.open} wsOpen=${k.open} ` +
+                    `histTime=${lastCandle.time} wsTime=${Math.floor(k.timestamp / 1000)}`,
                 );
               }
               return prev; // read-only inspection, no mutation
@@ -578,17 +657,19 @@ export function useChartData(
               const lastOhlcv = ohlcvDataRef.current[ohlcvDataRef.current.length - 1];
               if (lastOhlcv) {
                 const lastOhlcvTime = Math.floor(lastOhlcv.timestamp / 1000);
-                console.log(`[DIAG] WS vs ohlcvRef — candleTime=${candle.time} ohlcvTime=${lastOhlcvTime} ` +
-                  `candleClose=${candle.close} ohlcvClose=${lastOhlcv.close} ` +
-                  `candleOpen=${candle.open} ohlcvOpen=${lastOhlcv.open} ` +
-                  `match=${candle.time === lastOhlcvTime ? 'YES (REPLACE)' : 'PUSH new candle'}`);
+                console.log(
+                  `[DIAG] WS vs ohlcvRef — candleTime=${candle.time} ohlcvTime=${lastOhlcvTime} ` +
+                    `candleClose=${candle.close} ohlcvClose=${lastOhlcv.close} ` +
+                    `candleOpen=${candle.open} ohlcvOpen=${lastOhlcv.open} ` +
+                    `match=${candle.time === lastOhlcvTime ? 'YES (REPLACE)' : 'PUSH new candle'}`,
+                );
               }
             }
             setCandles((prev) => {
               if (!historicalDataLoadedRef.current) return prev;
               const newCandles = [...prev];
               const last = newCandles[newCandles.length - 1];
-              const action = (last && last.time === candle.time) ? 'REPLACE' : 'PUSH';
+              const action = last && last.time === candle.time ? 'REPLACE' : 'PUSH';
               if (action === 'REPLACE') {
                 newCandles[newCandles.length - 1] = candle;
               } else {
@@ -599,13 +680,18 @@ export function useChartData(
               console.log(`[DIAG] Candle ${action}`, {
                 candleTime: candle.time,
                 lastTime: last?.time,
-                open: lastNew.open, high: lastNew.high, low: lastNew.low, close: lastNew.close,
+                open: lastNew.open,
+                high: lastNew.high,
+                low: lastNew.low,
+                close: lastNew.close,
                 totalCandles: newCandles.length,
                 watermark: lastKlineTimestampRef.current,
               });
-              console.log(`[DIAG] Candle flat — action=${action} candleTime=${candle.time} ` +
-                `o=${candle.open} h=${candle.high} l=${candle.low} c=${candle.close} v=${candle.volume} ` +
-                `totalCandles=${newCandles.length}`);
+              console.log(
+                `[DIAG] Candle flat — action=${action} candleTime=${candle.time} ` +
+                  `o=${candle.open} h=${candle.high} l=${candle.low} c=${candle.close} v=${candle.volume} ` +
+                  `totalCandles=${newCandles.length}`,
+              );
               return newCandles;
             });
             if (k.timestamp) {
@@ -875,6 +961,29 @@ export function useChartData(
                     .filter((t) => t.barIndex >= seedCount)
                     .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
                 }
+
+                // Trim seed bar labels/lines/boxes to the original dataset boundary.
+                // Seed bars exist only to warm up indicator state; their shapes must
+                // NOT leak into the initial result — a leaked label can never be
+                // re-added by later chunk merges, stalling label counts
+                // (chunk-boundary e2e timeout). The cut is anchored to the FIRST
+                // DATASET BAR (originalBars[0]) — the true boundary between seed
+                // context and the visible dataset — which keeps exactly the dataset
+                // window's shapes regardless of how many/which seed bars were
+                // fetched. buildScriptResult normalizes all shape times to SECONDS,
+                // while bar timestamps are ms — compare in seconds.
+                const datasetStartSec = Math.floor(originalBars[0].timestamp / 1000);
+                seedScriptRes.labels = seedScriptRes.labels.filter(
+                  (l) => l.time >= datasetStartSec,
+                );
+                seedScriptRes.lines = seedScriptRes.lines.filter((ln) =>
+                  ln.points.some((p) => p.time >= datasetStartSec),
+                );
+                seedScriptRes.boxes = seedScriptRes.boxes.filter(
+                  (b) => b.startTime >= datasetStartSec || b.endTime >= datasetStartSec,
+                );
+                // Tables carry no bar-time anchor (position is a screen-corner constant),
+                // so they cannot be trimmed to the dataset boundary — left untrimmed.
 
                 if (versionRef && version !== undefined && version !== versionRef.current) return;
                 if (isStale()) return;

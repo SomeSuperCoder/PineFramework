@@ -25,6 +25,9 @@ vi.mock('../../../src/trading/solana-wallet.js', () => ({
 vi.mock('../../../src/strategy/strategy-engine.js', () => ({
   StrategyEngine: vi.fn().mockImplementation(() => ({
     updateBar: vi.fn(),
+    // D4 warning-sink seam (strategy-engine.ts:144) — ExecutionEngine
+    // calls setWarningSink non-optionally after construction.
+    setWarningSink: vi.fn(),
     getEquity: vi.fn().mockReturnValue(10_000_000_000),
     getPosition: vi.fn().mockReturnValue({ direction: 'flat', quantity: 0 }),
     entry: vi.fn(),

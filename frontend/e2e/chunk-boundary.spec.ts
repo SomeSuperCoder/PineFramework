@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type APIResponse, type Page } from '@playwright/test';
 
 /**
  * HHLL indicator uses label.new() with text "HH", "HL", "LL", "LH" for
@@ -175,9 +175,30 @@ test.describe('Chunk boundary invariants', () => {
     // ── Intercept OHLCV to serve seed data ──────────────────────────────
     let seedData: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
 
-    // Load seed data once
-    const seedRes = await page.request.get(`${BACKEND}/api/ohlcv/seed`);
-    expect(seedRes.ok()).toBeTruthy();
+    // Hardened seed fetch: the backend connection is occasionally reset
+    // (ECONNRESET on GET /api/ohlcv/seed) during parallel e2e setup. Retry the
+    // seed GET up to 3 times with short backoff so a transient network error
+    // cannot fail the spec. Real failures are NOT swallowed — if no attempt
+    // yields an ok response, the last error is rethrown, and the response shape
+    // is still asserted (data.length > 100) after the retries.
+    let seedRes: APIResponse | undefined;
+    let seedErr: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await page.request.get(`${BACKEND}/api/ohlcv/seed`);
+        if (res.ok()) {
+          seedRes = res;
+          break;
+        }
+        seedErr = new Error(`seed GET returned ${res.status()}`);
+      } catch (err) {
+        seedErr = err; // e.g. ECONNRESET — transient, retry
+      }
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+      }
+    }
+    if (!seedRes) throw seedErr;
     seedData = (await seedRes.json()).data;
     expect(seedData.length).toBeGreaterThan(100);
 

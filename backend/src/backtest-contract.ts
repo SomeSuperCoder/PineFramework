@@ -49,7 +49,6 @@ import type {
   JupiterUltraSettings,
   JupiterManualSettings,
   BacktestWarning,
-  BacktestWarningType,
 } from 'pine-framework';
 
 // ============================================================================
@@ -111,31 +110,6 @@ export interface ExplicitBacktestOverride {
   marginShort?: number;
 }
 
-/**
- * Full POST /api/backtest request body (flat wire shape — preserved from the
- * existing route; only the explicit-config fields are the new contract).
- *
- * The route strips the job-level keys (symbol/timeframe/script/startDate/
- * endDate/days_back) and passes the rest to the normalizer as
- * `ExplicitBacktestOverride`.
- *
- * `days_back` keeps its existing snake_case wire name for parity — do NOT
- * rename it in the contract. Shared UTC-midnight date-range semantics are the
- * resolve-date-range wave's (D6/W3) concern; this contract only declares the
- * request surface and the resolved range on effectiveConfig.
- */
-export interface BacktestRunRequestBody extends ExplicitBacktestOverride {
-  symbol: string;
-  timeframe: string;
-  script: string;
-  /** Inclusive start date (YYYY-MM-DD). Absent = earliest available bar. */
-  startDate?: string;
-  /** Inclusive end date (YYYY-MM-DD). Absent = latest available bar. */
-  endDate?: string;
-  /** Existing wire name (kept for parity): lookback in days. */
-  days_back?: number;
-}
-
 // ============================================================================
 // 3. Validation envelope (normalizer output).
 // ============================================================================
@@ -159,7 +133,7 @@ export interface ContractValidationError {
 
 /**
  * Discriminated validation envelope. ok:false → the run MUST NOT start.
- *   - API: HTTP 400 with ApiValidationErrorResponse.
+ *   - API: HTTP 400 with the { error, code } body.
  *   - CLI: print each error (the commission-method errors name the two accepted
  *     values) and exit non-zero.
  */
@@ -177,17 +151,6 @@ export type NormalizationResult =
  * omission behavior).
  */
 export type NormalizeExplicitOverride = (raw: unknown) => NormalizationResult;
-
-/**
- * API 400 body. Follows the existing backend error convention
- * ({ error, code } — see the dex-fee route contract), extended with the
- * normalizer's field-level errors.
- */
-export interface ApiValidationErrorResponse {
-  error: string;
-  code: 'VALIDATION_ERROR';
-  details?: ContractValidationError[];
-}
 
 // ============================================================================
 // 4. Effective config (result side — what actually ran).
@@ -239,7 +202,7 @@ export interface EffectiveBacktestConfig extends StrategyConfig {
  * - export-failure: the full-data export could not be produced with full
  *   fidelity (build or write error — the backtest still completed).
  */
-export type { BacktestWarning, BacktestWarningType };
+export type { BacktestWarning };
 
 // ============================================================================
 // 6. Result extension + composed API result.

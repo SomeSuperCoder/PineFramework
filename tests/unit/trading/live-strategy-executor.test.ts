@@ -21,6 +21,9 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
     let pos: { direction: string; quantity: number } = { direction: 'flat', quantity: 0 };
     return {
       updateBar: vi.fn(),
+      // D4 warning-sink seam (strategy-engine.ts:144) — ExecutionEngine
+      // calls setWarningSink non-optionally after construction.
+      setWarningSink: vi.fn(),
       getEquity: vi.fn().mockReturnValue(10_000_000_000),
       getPosition: vi.fn().mockImplementation(() => pos),
       entry: vi.fn().mockImplementation((name: string, direction: string, quantity: number) => {
