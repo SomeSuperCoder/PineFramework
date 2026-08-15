@@ -51,6 +51,13 @@ export interface FillData {
   color: string;
 }
 
+export interface LinefillData {
+  line1: { x1: number; y1: number; x2: number; y2: number; color: string };
+  line2: { x1: number; y1: number; x2: number; y2: number; color: string };
+  color: string;
+  fillgaps: boolean;
+}
+
 export interface HLineData {
   price: number;
   color: string;

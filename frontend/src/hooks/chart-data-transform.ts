@@ -112,6 +112,12 @@ export interface ExecuteResponse {
   }>;
   tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
+  linefills?: Array<{
+    line1: { x1: number; y1: number; x2: number; y2: number; color: string };
+    line2: { x1: number; y1: number; x2: number; y2: number; color: string };
+    color: string;
+    fillgaps: boolean;
+  }>;
 }
 
 export interface ExecutionResultMessage {
@@ -188,6 +194,12 @@ export interface ExecutionResultMessage {
   }>;
   tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
+  linefills?: Array<{
+    line1: { x1: number; y1: number; x2: number; y2: number; color: string };
+    line2: { x1: number; y1: number; x2: number; y2: number; color: string };
+    color: string;
+    fillgaps: boolean;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +285,7 @@ export function buildScriptResult(
   hiddenPlotKeys?: string[],
   barColors?: ExecuteResponse['barColors'],
   formatContext?: { ticker?: string; interval?: string },
+  linefills?: ExecutionResultMessage['linefills'],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -361,6 +374,7 @@ export function buildScriptResult(
     boxes: mapBoxes(boxes),
     labels: mapLabels(labels),
     fills: mapFills(fills),
+    linefills: linefills || [],
     fillColorData: transformedFillColorData,
     plotColors: plotColors || {},
     strategyMarkers: mapStrategyMarkers(strategyMarkers),

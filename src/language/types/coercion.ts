@@ -1,5 +1,6 @@
 import { CompileError } from '../../common/errors.js';
 import type { SourceSpan } from '../../common/source-location.js';
+import { cleanNumber } from '../utils/number-format.js';
 import {
   ANY_TYPE,
   BOOL_TYPE,
@@ -143,7 +144,10 @@ function coerceToString(value: PineValue): CoercionResult {
   if (typeof value === 'string') {
     return { value, type: STRING_TYPE };
   }
-  if (typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === 'number') {
+    return { value: cleanNumber(value), type: STRING_TYPE };
+  }
+  if (typeof value === 'boolean') {
     return { value: String(value), type: STRING_TYPE };
   }
   return { value: '', type: STRING_TYPE };

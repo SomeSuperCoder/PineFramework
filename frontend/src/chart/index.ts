@@ -5,6 +5,7 @@ export type {
   ShapeMarkerData,
   StrategyMarkerData,
   FillData,
+  LinefillData,
   DrawingLineData,
   LabelData,
   BoxData,

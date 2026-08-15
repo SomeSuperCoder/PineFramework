@@ -5,6 +5,7 @@ import {
   type CandleColorEntry,
   type ShapeEntry,
   type LineEntry,
+  type LinefillEntry,
   type LabelEntry,
   type AlertTriggerEntry,
 } from './execution-types.js';
@@ -45,6 +46,7 @@ export class FormingCandleProcessor {
     const preShapesLen = this.eng.shapes.length;
     const preFillsLen = this.eng.fills.length;
     const preLinesSize = this.eng.lines.size;
+    const preLinefillsSize = this.eng.linefills.size;
     const preLabelsLen = this.eng.labels.length;
     const preTimestampsLen = this.eng.barTimestamps.length;
     const preTotalBars = this.eng.metrics.totalBars;
@@ -296,6 +298,26 @@ export class FormingCandleProcessor {
       }
     }
 
+    let diffLinefills: LinefillEntry[] = [];
+    if (this.eng.linefills.size > preLinefillsSize) {
+      diffLinefills = [];
+      for (const [id, entry] of this.eng.linefills) {
+        if (id >= preLinefillsSize) {
+          const line1 = this.eng.lines.get(entry.line1Id);
+          const line2 = this.eng.lines.get(entry.line2Id);
+          if (line1 && line2) {
+            diffLinefills.push({
+              line1: { ...line1 },
+              line2: { ...line2 },
+              color: entry.color,
+              fillgaps: entry.fillgaps,
+            });
+          }
+          this.eng.linefills.delete(id);
+        }
+      }
+    }
+
     let diffLabels: LabelEntry[] = [];
     if (this.eng.labels.length > preLabelsLen) {
       diffLabels = this.eng.labels.slice(preLabelsLen);
@@ -351,6 +373,7 @@ export class FormingCandleProcessor {
       diffShapes.length > 0 ||
       diffFills.length > 0 ||
       diffLines.length > 0 ||
+      diffLinefills.length > 0 ||
       diffLabels.length > 0 ||
       diffAlertTriggers.length > 0;
 
@@ -362,6 +385,7 @@ export class FormingCandleProcessor {
       diffShapes,
       diffFills,
       diffLines,
+      diffLinefills: diffLinefills.length > 0 ? diffLinefills : undefined,
       diffLabels,
       diffPlotColors: Object.keys(diffPlotColors).length > 0 ? diffPlotColors : undefined,
       diffFillColorData: Object.keys(diffFillColorData).length > 0 ? diffFillColorData : undefined,

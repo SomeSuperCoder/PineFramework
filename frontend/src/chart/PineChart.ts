@@ -4,6 +4,7 @@ import type {
   ShapeMarkerData,
   StrategyMarkerData,
   FillData,
+  LinefillData,
   HLineData,
   DrawingLineData,
   LabelData,
@@ -21,6 +22,7 @@ import { CandlestickRenderer } from './renderers/CandlestickRenderer.js';
 import { VolumeRenderer } from './renderers/VolumeRenderer.js';
 import { LineRenderer, type PlotRenderOptions } from './renderers/LineRenderer.js';
 import { AreaRenderer } from './renderers/AreaRenderer.js';
+import { LinefillRenderer } from './renderers/LinefillRenderer.js';
 import { MarkerRenderer } from './renderers/MarkerRenderer.js';
 import type { AlertTriggerData } from './types.js';
 import { HLineRenderer } from './renderers/HLineRenderer.js';
@@ -58,6 +60,7 @@ export class PineChart {
   private volumeRenderer: VolumeRenderer;
   private lineRenderer: LineRenderer;
   private areaRenderer: AreaRenderer;
+  private linefillRenderer: LinefillRenderer;
   private markerRenderer: MarkerRenderer;
   private hlineRenderer: HLineRenderer;
   private gridRenderer: GridRenderer;
@@ -70,6 +73,7 @@ export class PineChart {
   private shapeMarkers: ShapeMarkerData[] = [];
   private strategyMarkers: StrategyMarkerData[] = [];
   private fills: FillData[] = [];
+  private linefills: LinefillData[] = [];
   private fillColorData: Record<string, (string | null)[]> = {};
   private hlines: HLineData[] = [];
   private alertTriggers: AlertTriggerData[] = [];
@@ -128,6 +132,7 @@ export class PineChart {
     this.volumeRenderer = new VolumeRenderer();
     this.lineRenderer = new LineRenderer();
     this.areaRenderer = new AreaRenderer();
+    this.linefillRenderer = new LinefillRenderer();
     this.markerRenderer = new MarkerRenderer();
     this.hlineRenderer = new HLineRenderer();
     this.gridRenderer = new GridRenderer();
@@ -249,6 +254,9 @@ export class PineChart {
     }
 
     this.areaRenderer.render(ctx, this.fills, allPlots, this.candles, this.viewport, this.layout, this.fillColorData);
+
+    // Render linefills (filled polygons between line pairs — e.g. 3D surface)
+    this.linefillRenderer.render(ctx, this.linefills, this.viewport, this.layout);
 
     const regions = this.layout.getRegions();
 
@@ -415,7 +423,7 @@ export class PineChart {
     const frameWidth = table.frame_width || 1;
     const bgcolor = table.bgcolor || 'transparent';
 
-    let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: ${tokens.typography.fontFamily};">`;
+    let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: ${tokens.typography.fontFamily}; max-width: 100%; width: auto;">`;
 
     for (let row = 0; row < table.rows; row++) {
       html += '<tr>';
@@ -429,7 +437,7 @@ export class PineChart {
           const fontSize = cell.text_size === 'size.large' ? '14px'
             : cell.text_size === 'size.small' ? '9px'
             : '11px';
-          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${cell.text}</td>`;
+          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${cell.text}</td>`;
         } else {
           html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
         }
@@ -806,6 +814,11 @@ export class PineChart {
 
   setFills(fills: FillData[]): void {
     this.fills = fills;
+    this.markDirty();
+  }
+
+  setLinefills(linefills: LinefillData[]): void {
+    this.linefills = linefills;
     this.markDirty();
   }
 

@@ -231,6 +231,42 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
     return 0;
   });
 
+  // ── Linefill builtins ────────────────────────────────────────────────────
+  eng.builtins.set(
+    'linefill.new',
+    (line1Id: PineValue, line2Id: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
+      if (
+        typeof line1Id !== 'number' ||
+        typeof line2Id !== 'number' ||
+        !eng.lines.has(line1Id) ||
+        !eng.lines.has(line2Id)
+      ) {
+        return 0;
+      }
+      let colorStr = '#2196f380';
+      let fillgaps = false;
+      if (typeof namedArgs === 'object' && namedArgs !== null) {
+        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
+        if (typeof namedArgs.fillgaps === 'boolean') fillgaps = namedArgs.fillgaps;
+      }
+      const id = eng.linefillIdCounter++;
+      eng.linefills.set(id, {
+        line1Id: line1Id as number,
+        line2Id: line2Id as number,
+        color: colorStr,
+        fillgaps,
+      });
+      return id;
+    },
+  );
+
+  eng.builtins.set('linefill.delete', (linefillId: PineValue): PineValue => {
+    if (typeof linefillId === 'number' && eng.linefills.has(linefillId)) {
+      eng.linefills.delete(linefillId);
+    }
+    return 0;
+  });
+
   // ── Label builtins ───────────────────────────────────────────────────────
   eng.builtins.set(
     'label.new',

@@ -1,5 +1,6 @@
 import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
+import { cleanNumber, formatTemplateArg } from '../../utils/number-format.js';
 
 export function registerStrBuiltins(engine: ExecutionEngine): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,7 +11,7 @@ export function registerStrBuiltins(engine: ExecutionEngine): void {
     let result = template as string;
     const strArgs = args.filter((a) => typeof a !== 'object' && typeof a !== 'function');
     for (let i = 0; i < strArgs.length; i++) {
-      const arg = isNa(strArgs[i]) ? 'na' : String(strArgs[i]);
+      const arg = isNa(strArgs[i]) ? 'na' : formatTemplateArg(strArgs[i]);
       result = result.replace(`{${i}}`, arg);
     }
     return result;
@@ -70,6 +71,7 @@ export function registerStrBuiltins(engine: ExecutionEngine): void {
 
   eng.builtins.set('str.tostring', (value: PineValue): PineValue => {
     if (isNa(value)) return NA;
+    if (typeof value === 'number') return cleanNumber(value);
     return String(value);
   });
 }

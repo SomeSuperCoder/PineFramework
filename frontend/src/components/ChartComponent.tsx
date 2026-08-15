@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { PineChart, createChart } from '../chart';
-import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
+import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, LinefillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
 import type { ScriptResult } from '../types';
 import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
@@ -372,6 +372,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
 
     const allStrategyMarkers: StrategyMarkerData[] = [];
     const allFills: FillData[] = [];
+    const allLinefills: LinefillData[] = [];
     let allFillColorData: Record<string, (string | null)[]> = {};
     const allDrawingLines: DrawingLineData[] = [];
     const allChartLabels: LabelData[] = [];
@@ -388,6 +389,9 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       }
       for (const f of (result.fills || [])) {
         allFills.push({ from: f.from, to: f.to, color: f.color });
+      }
+      for (const lf of (result.linefills || [])) {
+        allLinefills.push(lf);
       }
       if (result.fillColorData) {
         allFillColorData = { ...allFillColorData, ...result.fillColorData };
@@ -494,6 +498,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     chart.setStrategyMarkers(allStrategyMarkers);
     chart.setAlertTriggers(allAlertTriggers);
     chart.setFills(allFills);
+    chart.setLinefills(allLinefills);
     if (Object.keys(allFillColorData).length > 0) {
       chart.setFillColorData(allFillColorData);
     }

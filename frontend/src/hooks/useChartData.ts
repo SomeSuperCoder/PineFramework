@@ -281,6 +281,7 @@ export function useChartData(
               execResult.hiddenPlotKeys,
               execResult.barColors,
               { ticker: ind.symbol, interval: ind.interval },
+              execResult.linefills,
             );
 
             const prev = indicatorResultsRef.current.get(indId);
@@ -503,6 +504,7 @@ export function useChartData(
             indicatorSrc
               ? { ticker: indicatorSrc.symbol, interval: indicatorSrc.interval }
               : undefined,
+            msg.linefills,
           );
           indicatorResultsRef.current.set(msg.indicatorId, result);
           onIndicatorResult(msg.indicatorId, result);
@@ -580,6 +582,7 @@ export function useChartData(
           msg.hiddenPlotKeys,
           msg.barColors,
           formatCtx,
+          msg.linefills,
         );
         setScriptResult(result);
       }
@@ -984,6 +987,7 @@ export function useChartData(
                   seedResult.hiddenPlotKeys,
                   seedResult.barColors,
                   { ticker: symbol, interval },
+                  seedResult.linefills,
                 );
 
                 // Trim seed bar data from plot results
@@ -1109,6 +1113,7 @@ export function useChartData(
           result.hiddenPlotKeys,
           result.barColors,
           { ticker: symbol, interval },
+          result.linefills,
         );
 
         if (versionRef && version !== undefined && version !== versionRef.current) return;

@@ -74,7 +74,14 @@ export interface TableEntry {
   border_width: number;
   frame_color: string;
   frame_width: number;
-  cells: Record<string, TableCellEntry>; // key: "row,col"
+  cells: Record<string, TableCellEntry>; // key: "col,row"
+}
+
+export interface LinefillEntry {
+  line1: LineEntry;
+  line2: LineEntry;
+  color: string;
+  fillgaps: boolean;
 }
 
 export interface BoxEntry {
@@ -158,9 +165,11 @@ export interface ExecutionResult {
   fillColorData?: Map<string, (string | null)[]>;
   hiddenPlotKeys?: string[];
   lines?: LineEntry[];
+  linefills?: LinefillEntry[];
   labels?: LabelEntry[];
   boxes?: BoxEntry[];
   tables?: TableEntry[];
+  plotOverlayKeys?: string[];
   barTimestamps?: number[];
   alertConditions?: AlertConditionEntry[];
   alertTriggers?: AlertTriggerEntry[];
@@ -176,6 +185,7 @@ export interface FormingCandleResult {
   diffShapes: ShapeEntry[];
   diffFills: Array<{ from: string; to: string; color: string }>;
   diffLines: LineEntry[];
+  diffLinefills?: LinefillEntry[];
   diffLabels: LabelEntry[];
   diffPlotColors?: Record<string, (string | null)[]>;
   diffFillColorData?: Record<string, (string | null)[]>;
@@ -225,6 +235,8 @@ export interface ExecutionSnapshot {
   fills: Array<{ from: string; to: string; color: string }>;
   lines: Map<number, LineEntry>;
   lineIdCounter: number;
+  linefills: Map<number, { line1Id: number; line2Id: number; color: string; fillgaps: boolean }>;
+  linefillIdCounter: number;
   labels: LabelEntry[];
   bgcolorData: Array<{ time: number; color: string }>;
   barColorData: Array<CandleColorEntry>;

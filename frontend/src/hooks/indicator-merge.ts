@@ -444,6 +444,7 @@ export function prependIndicatorResult(
     alertTriggers: mergedAlertTriggers,
     alertConditions: mergedAlertConditions,
     barColors: mergedBarColors.length > 0 ? mergedBarColors : undefined,
+    linefills: newResult.linefills || prev.linefills || [],
   };
 }
 
@@ -703,5 +704,6 @@ export function mergeDiffIntoResult(
     boxes: mergedBoxes,
     tables: msg.tables || prev.tables,
     alertTriggers: mergedAlertTriggers,
+    linefills: msg.linefills || prev.linefills || [],
   };
 }

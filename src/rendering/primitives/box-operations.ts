@@ -12,7 +12,7 @@ import type {
   TextVerticalAlignment,
 } from '../rendering-types.js';
 import type { BoxObject } from './drawing-types.js';
-import { isNaOrNull, toNumber, generateDrawingId } from './drawing-helpers.js';
+import { isNaOrNull, toNumber, toString, generateDrawingId } from './drawing-helpers.js';
 
 export function boxNew(
   boxes: Map<string, BoxObject>,
@@ -183,7 +183,7 @@ export function boxSetBorderStyle(
 
 export function boxSetText(boxes: Map<string, BoxObject>, boxId: string, text: PineValue): void {
   const box = boxes.get(boxId);
-  if (box && !isNaOrNull(text)) box.text = String(text);
+  if (box && !isNaOrNull(text)) box.text = toString(text);
 }
 
 export function boxSetTextColor(

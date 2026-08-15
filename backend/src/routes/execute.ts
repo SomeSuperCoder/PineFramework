@@ -173,6 +173,13 @@ executeRouter.post('/execute', async (req, res) => {
       }
     }
 
+    const linefills = (result.linefills || []).map((lf) => ({
+      line1: { x1: lf.line1.x1, y1: lf.line1.y1, x2: lf.line1.x2, y2: lf.line1.y2, color: lf.line1.color },
+      line2: { x1: lf.line2.x1, y1: lf.line2.y1, x2: lf.line2.x2, y2: lf.line2.y2, color: lf.line2.color },
+      color: lf.color,
+      fillgaps: lf.fillgaps,
+    }));
+
     res.json({
       success: result.success,
       error: result.error,
@@ -183,6 +190,7 @@ executeRouter.post('/execute', async (req, res) => {
       fillColorData,
       shapes,
       fills,
+      linefills,
       bgcolor,
       barColors,
       strategyMarkers,

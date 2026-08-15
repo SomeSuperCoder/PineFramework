@@ -18,6 +18,8 @@ export class StateManager {
       fills: [...this.eng.fills],
       lines: new Map(this.eng.lines),
       lineIdCounter: this.eng.lineIdCounter,
+      linefills: new Map(this.eng.linefills),
+      linefillIdCounter: this.eng.linefillIdCounter,
       labels: [...this.eng.labels],
       bgcolorData: [...this.eng.bgcolorData],
       barColorData: [...this.eng.barColorData],
@@ -66,6 +68,8 @@ export class StateManager {
     this.eng.fills = snapshot.fills;
     this.eng.lines = new Map(snapshot.lines);
     this.eng.lineIdCounter = snapshot.lineIdCounter;
+    this.eng.linefills = new Map(snapshot.linefills);
+    this.eng.linefillIdCounter = snapshot.linefillIdCounter;
     this.eng.labels = [...snapshot.labels];
     this.eng.bgcolorData = snapshot.bgcolorData;
     this.eng.barColorData = snapshot.barColorData;

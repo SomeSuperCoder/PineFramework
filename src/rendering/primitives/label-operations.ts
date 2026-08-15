@@ -100,7 +100,7 @@ export function labelSetText(
 ): void {
   const label = labels.get(labelId);
   if (!label) return;
-  if (!isNaOrNull(text)) label.text = String(text);
+  if (!isNaOrNull(text)) label.text = toString(text);
   if (textcolor !== undefined && !isNaOrNull(textcolor))
     label.textcolor = parseColor(textcolor as ColorInput);
   if (size !== undefined && !isNaOrNull(size)) label.size = size as Size;
@@ -158,7 +158,7 @@ export function labelSetTooltip(
   tooltip: PineValue,
 ): void {
   const label = labels.get(labelId);
-  if (label && !isNaOrNull(tooltip)) label.tooltip = String(tooltip);
+  if (label && !isNaOrNull(tooltip)) label.tooltip = toString(tooltip);
 }
 
 export function labelDelete(labels: Map<string, LabelObject>, labelId: string): void {

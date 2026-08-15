@@ -238,11 +238,17 @@ export class ExecutionEngine {
   /** @internal */ fills: Array<{ from: string; to: string; color: string }> = [];
   /** @internal */ lines: Map<number, LineEntry> = new Map();
   /** @internal */ lineIdCounter: number = 0;
+  /** @internal */ linefills: Map<
+    number,
+    { line1Id: number; line2Id: number; color: string; fillgaps: boolean }
+  > = new Map();
+  /** @internal */ linefillIdCounter: number = 0;
   /** @internal */ labels: LabelEntry[] = [];
   /** @internal */ boxes: Map<number, BoxEntry> = new Map();
   /** @internal */ boxIdCounter: number = 0;
   /** @internal */ tables: Map<number, TableEntry> = new Map();
   /** @internal */ tableIdCounter: number = 0;
+  /** @internal */ plotOverlayKeys: Set<string> = new Set();
   /** @internal */ userTypeFields: Map<
     string,
     { name: string; defaultExpr: import('../parser/ast/nodes.js').ExpressionNode | null }[]

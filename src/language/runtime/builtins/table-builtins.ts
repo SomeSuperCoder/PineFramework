@@ -48,7 +48,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         : {};
     const table = eng.tables.get(tableId);
     if (!table) return NA;
-    const key = `${row},${column}`;
+    const key = `${column},${row}`;
     const existing = table.cells[key];
     table.cells[key] = {
       text,
@@ -84,7 +84,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const row = typeof args[2] === 'number' ? Math.trunc(args[2] as number) : 0;
     const table = eng.tables.get(tableId);
     if (!table) return '';
-    const cell = table.cells[`${row},${column}`];
+    const cell = table.cells[`${column},${row}`];
     return cell ? cell.text : '';
   });
 
@@ -94,7 +94,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const row = typeof args[2] === 'number' ? Math.trunc(args[2] as number) : 0;
     const table = eng.tables.get(tableId);
     if (!table) return '';
-    const cell = table.cells[`${row},${column}`];
+    const cell = table.cells[`${column},${row}`];
     return cell ? cell.text_color : '';
   });
 
@@ -104,7 +104,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const row = typeof args[2] === 'number' ? Math.trunc(args[2] as number) : 0;
     const table = eng.tables.get(tableId);
     if (!table) return '';
-    const cell = table.cells[`${row},${column}`];
+    const cell = table.cells[`${column},${row}`];
     return cell ? cell.bgcolor : '';
   });
 
@@ -116,7 +116,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const text = typeof args[3] === 'string' ? args[3] : '';
     const table = eng.tables.get(tableId);
     if (!table) return NA;
-    const key = `${row},${column}`;
+    const key = `${column},${row}`;
     if (!table.cells[key]) {
       table.cells[key] = {
         text,
@@ -141,7 +141,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const color = typeof args[3] === 'string' ? args[3] : '#000000';
     const table = eng.tables.get(tableId);
     if (!table) return NA;
-    const key = `${row},${column}`;
+    const key = `${column},${row}`;
     if (!table.cells[key]) {
       table.cells[key] = {
         text: '',
@@ -166,7 +166,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const color = typeof args[3] === 'string' ? args[3] : '#00000000';
     const table = eng.tables.get(tableId);
     if (!table) return NA;
-    const key = `${row},${column}`;
+    const key = `${column},${row}`;
     if (!table.cells[key]) {
       table.cells[key] = {
         text: '',
@@ -191,7 +191,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
     const width = typeof args[3] === 'number' ? args[3] : 0;
     const table = eng.tables.get(tableId);
     if (!table) return NA;
-    const key = `${row},${column}`;
+    const key = `${column},${row}`;
     if (!table.cells[key]) {
       table.cells[key] = {
         text: '',

@@ -174,6 +174,12 @@ export class Interpreter {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
+      const activeLinefills = [...this.eng.linefills.values()].map((lf) => ({
+        line1: { ...this.eng.lines.get(lf.line1Id)! },
+        line2: { ...this.eng.lines.get(lf.line2Id)! },
+        color: lf.color,
+        fillgaps: lf.fillgaps,
+      }));
       return {
         success: true,
         version: this.eng.sourceProgram.version,
@@ -186,6 +192,7 @@ export class Interpreter {
         plotColors: this.eng.plotColors,
         fillColorData: this.eng.fillColorData,
         lines: activeLines,
+        linefills: activeLinefills,
         labels: [...this.eng.labels],
         boxes: [...this.eng.boxes.values()],
         tables: [...this.eng.tables.values()],
@@ -193,6 +200,7 @@ export class Interpreter {
         alertConditions: [...this.eng.alertConditionEntries],
         alertTriggers: [...this.eng.alertTriggers],
         barColorData: [...this.eng.barColorData],
+        plotOverlayKeys: [...this.eng.plotOverlayKeys],
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -214,6 +222,12 @@ export class Interpreter {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
+      const activeLinefills = [...this.eng.linefills.values()].map((lf) => ({
+        line1: { ...this.eng.lines.get(lf.line1Id)! },
+        line2: { ...this.eng.lines.get(lf.line2Id)! },
+        color: lf.color,
+        fillgaps: lf.fillgaps,
+      }));
       return {
         success: false,
         version: this.eng.sourceProgram.version,
@@ -227,6 +241,7 @@ export class Interpreter {
         plotColors: this.eng.plotColors,
         fillColorData: this.eng.fillColorData,
         lines: activeLines,
+        linefills: activeLinefills,
         labels: [...this.eng.labels],
         boxes: [...this.eng.boxes.values()],
         tables: [...this.eng.tables.values()],
@@ -234,6 +249,7 @@ export class Interpreter {
         alertConditions: [...this.eng.alertConditionEntries],
         alertTriggers: [...this.eng.alertTriggers],
         barColorData: [...this.eng.barColorData],
+        plotOverlayKeys: [...this.eng.plotOverlayKeys],
       };
     }
   }
@@ -254,6 +270,12 @@ export class Interpreter {
       hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       lines: [...this.eng.lines.values()].map((l: any) => ({ ...l })),
+      linefills: [...this.eng.linefills.values()].map((lf) => ({
+        line1: { ...this.eng.lines.get(lf.line1Id)! },
+        line2: { ...this.eng.lines.get(lf.line2Id)! },
+        color: lf.color,
+        fillgaps: lf.fillgaps,
+      })),
       labels: [...this.eng.labels],
       boxes: [...this.eng.boxes.values()],
       tables: [...this.eng.tables.values()],
@@ -262,6 +284,7 @@ export class Interpreter {
       alertTriggers: [...this.eng.alertTriggers],
       barColorData: [...this.eng.barColorData],
       maxLookback: this.eng.getMaxLookback(),
+      plotOverlayKeys: [...this.eng.plotOverlayKeys],
     };
 
     for (const bar of bars) {
@@ -293,6 +316,12 @@ export class Interpreter {
     // so lastResult reflects pre-filter state)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const activeLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
+    const activeLinefills = [...this.eng.linefills.values()].map((lf) => ({
+      line1: { ...this.eng.lines.get(lf.line1Id)! },
+      line2: { ...this.eng.lines.get(lf.line2Id)! },
+      color: lf.color,
+      fillgaps: lf.fillgaps,
+    }));
     return {
       success: true,
       version: this.eng.sourceProgram.version,
@@ -306,6 +335,7 @@ export class Interpreter {
       fillColorData: this.eng.fillColorData,
       hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
       lines: activeLines,
+      linefills: activeLinefills,
       labels: [...this.eng.labels],
       boxes: [...this.eng.boxes.values()],
       tables: [...this.eng.tables.values()],
@@ -314,6 +344,7 @@ export class Interpreter {
       alertTriggers: [...this.eng.alertTriggers],
       barColorData: [...this.eng.barColorData],
       maxLookback: this.eng.getMaxLookback(),
+      plotOverlayKeys: [...this.eng.plotOverlayKeys],
     };
   }
 

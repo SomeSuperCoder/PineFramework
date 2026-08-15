@@ -36,6 +36,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
     let linewidth: number | undefined;
     let style: string | undefined;
     let display: PineValue | undefined;
+    let forceOverlay: boolean | undefined;
     const PINE_STYLE_MAP: Record<string, string> = {
       style_line: 'line',
       style_linebr: 'line',
@@ -79,6 +80,10 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
     if (positionalArgs.length >= 12) {
       display = positionalArgs[11];
     }
+    // Pine Script plot(..., force_overlay) is at positional index 12 (13th param)
+    if (positionalArgs.length >= 13 && typeof positionalArgs[12] === 'boolean') {
+      forceOverlay = positionalArgs[12] as boolean;
+    }
 
     if (namedArgs) {
       if (typeof namedArgs.title === 'string') seriesName = namedArgs.title;
@@ -86,6 +91,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       if (typeof namedArgs.linewidth === 'number') linewidth = namedArgs.linewidth;
       if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
       if (namedArgs.display !== undefined) display = namedArgs.display;
+      if (typeof namedArgs.force_overlay === 'boolean') forceOverlay = namedArgs.force_overlay;
     }
 
     const metaParts = [seriesName];
@@ -97,6 +103,10 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
     // display=display.none only prevents frontend rendering, not data collection.
     if (display === 'none' || display === 0) {
       eng.hiddenPlotKeys.add(key);
+    }
+    // force_overlay=true overrides the indicator-level overlay=false for this plot
+    if (forceOverlay === true) {
+      eng.plotOverlayKeys.add(key);
     }
     if (!eng.outputs.has(key)) {
       eng.outputs.set(key, createSeries(key));

@@ -102,6 +102,13 @@ export interface FillData {
   color: string;
 }
 
+export interface LinefillData {
+  line1: { x1: number; y1: number; x2: number; y2: number; color: string };
+  line2: { x1: number; y1: number; x2: number; y2: number; color: string };
+  color: string;
+  fillgaps: boolean;
+}
+
 export interface ScriptResult {
   overlay: boolean;
   plots: PlotData[];
@@ -113,6 +120,7 @@ export interface ScriptResult {
   bgcolor?: { time: number; color: string }[];
   barcolor?: { time: number; color: string }[];
   fills?: FillData[];
+  linefills?: LinefillData[];
   fillColorData?: Record<string, (string | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   strategyMarkers?: StrategyMarkerData[];
