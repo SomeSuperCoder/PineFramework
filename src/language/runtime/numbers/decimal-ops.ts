@@ -32,6 +32,19 @@ export interface NumericOps {
   max(...values: Decimal[]): Decimal; // Decimal.max(...values)
   sum(values: Iterable<Decimal>): Decimal; // exact accumulation
 
+  // ── math / transcendental (R3: TOTAL — domain errors → Decimal NaN, never throw) ──
+  log(a: Decimal): Decimal; // natural log — d.ln; ln(0) = -Infinity, ln(<0) = NaN (both → NA at boundary)
+  log10(a: Decimal): Decimal; // base-10 log — d.log(10); domain same as log
+  exp(a: Decimal): Decimal; // d.exp
+  sin(a: Decimal): Decimal; // d.sin — radians (decimal.js trig default)
+  cos(a: Decimal): Decimal; // d.cos — radians
+  tan(a: Decimal): Decimal; // d.tan — radians
+  asin(a: Decimal): Decimal; // d.asin — |a| > 1 → NaN (native)
+  acos(a: Decimal): Decimal; // d.acos — |a| > 1 → NaN (native)
+  atan(a: Decimal): Decimal; // d.atan — radians
+  atan2(y: Decimal, x: Decimal): Decimal; // Decimal.atan2(y, x) — (0,0) → 0, matches Math.atan2
+  avg(values: Iterable<Decimal>): Decimal; // sum/count; empty → NaN (never throw)
+
   // ── predicates / comparison — ALWAYS return plain JS primitives, never Decimal ──
   sign(a: Decimal): -1 | 0 | 1; // includes signed-zero sign: sign(-0) = -1
   compare(a: Decimal, b: Decimal): -1 | 0 | 1; // exact decimal comparison
@@ -81,6 +94,36 @@ export const numericOps: NumericOps = {
     let acc = new Decimal(0);
     for (const v of values) acc = acc.plus(v);
     return acc;
+  },
+  // ── math / transcendental (R3: TOTAL — never throw; domain errors → Decimal NaN, boundary → NA) ──
+  // log/log10: native ln(0) = -Infinity, ln(<0) = NaN — both collapse to NA at the boundary
+  // (Pine math.log(v<=0) → na); no double-normalization here per the R3 constraint.
+  log: (a) => a.ln(),
+  // a.log(10) uses decimal.js's precomputed high-precision ln(10) (getLn10) + guard digits —
+  // exact within DP; better than a manual ln/ln(10) round-trip.
+  log10: (a) => a.log(10),
+  exp: (a) => a.exp(),
+  // Trig below is radians (decimal.js default, matches Math.* and the Pine builtin). The
+  // accuracy ceiling (~15 sig digits, decimal-config note) is accepted — do not fight it.
+  sin: (a) => a.sin(),
+  cos: (a) => a.cos(),
+  tan: (a) => a.tan(),
+  // asin/acos: |a| > 1 → NaN natively (R2 propagation); never throws.
+  asin: (a) => a.asin(),
+  acos: (a) => a.acos(),
+  atan: (a) => a.atan(),
+  // Static Decimal.atan2(y, x) exists in decimal.js 10.6.0 — (0,0) → 0 and NaN propagation
+  // match Math.atan2 (which the Pine builtin delegates to); no normalization needed.
+  atan2: (y, x) => Decimal.atan2(y, x),
+  // avg = sum/count; empty series → NaN (R3: never throw). NaN members propagate.
+  avg: (values) => {
+    let acc = new Decimal(0);
+    let count = 0;
+    for (const v of values) {
+      acc = acc.plus(v);
+      count++;
+    }
+    return count === 0 ? new Decimal(NaN) : acc.div(count);
   },
   // decimal.js 10.x removed the instance sign() method (the breaking major the
   // version pin protects against), so sign is derived from isNeg/isZero.
