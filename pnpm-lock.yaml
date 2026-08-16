@@ -17,6 +17,9 @@ importers:
       '@solana/web3.js':
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      decimal.js:
+        specifier: 10.6.0
+        version: 10.6.0
       ed25519-hd-key:
         specifier: ^2.0.0
         version: 2.0.0
