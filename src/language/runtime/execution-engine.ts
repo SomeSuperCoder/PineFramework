@@ -1,3 +1,4 @@
+import { Decimal } from 'decimal.js';
 import type { ProgramNode, FunctionExpressionNode, StatementNode } from '../parser/ast/nodes.js';
 import type { CompileResult, CompiledScript } from '../compiler/ir.js';
 import { type PineValue } from '../types/na.js';
@@ -218,7 +219,11 @@ export class ExecutionEngine {
     string,
     { prev: number; count: number; sum: number; initialized: boolean }
   > = new Map();
-  /** @internal */ hmaBuffers: Map<string, { half: number[]; full: number[]; diff: number[] }> =
+  // M5c: hma windows hold Decimal — ta.hma accumulates its WMA weighted sums
+  // exactly at DP=20 with no Number round-trip (see ta.hma in ta-overlap.ts).
+  // forming-candle.ts snapshot/restore copies references only; Decimals are
+  // immutable, so sharing the snapshot's objects on restore is safe.
+  /** @internal */ hmaBuffers: Map<string, { half: Decimal[]; full: Decimal[]; diff: Decimal[] }> =
     new Map();
   /** @internal */ sarState: Map<
     string,

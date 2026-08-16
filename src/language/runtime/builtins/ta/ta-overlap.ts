@@ -79,10 +79,22 @@ export function registerTaOverlap(engine: ExecutionEngine): void {
     return decimalToPineValue(state.prev);
   });
 
+  // Hull Moving Average — Decimal state (R4 upgrade, M5c). The three sliding
+  // windows (half, full, diff) hold Decimal values, so the WMA weighted sums
+  // accumulate EXACTLY at DP=20 and 2*wmaHalf − wmaFull never round-trips
+  // through Number — ta.hma(0.1, ...) no longer drifts the way the float path
+  // did. Count/length/threshold logic stays INTEGER number math (Math.floor,
+  // array lengths); weights are integers converted per-multiply. Non-finite
+  // inputs collapse to NA at the boundary guard, never reaching state.
   eng.builtins.set('ta.hma', (source: PineValue, length: PineValue): PineValue => {
     if (isNa(source) || isNa(length)) return NA;
     const len = Math.trunc(length as number);
     if (len <= 0) return NA;
+    const rawVal = source as number;
+    if (!isFiniteNumber(rawVal)) return NA;
+    // Convert ONCE at the bar boundary — the guard above guarantees a finite
+    // number, so pineValueToDecimal cannot produce the NaN marker here.
+    const val = pineValueToDecimal(source);
     const halfLen = Math.floor(len / 2);
     const sqrtLen = Math.floor(Math.sqrt(len));
 
@@ -91,7 +103,6 @@ export function registerTaOverlap(engine: ExecutionEngine): void {
       eng.hmaBuffers.set(key, { half: [], full: [], diff: [] });
     }
     const buf = eng.hmaBuffers.get(key)!;
-    const val = source as number;
 
     buf.half.push(val);
     if (buf.half.length > halfLen) buf.half.shift();
@@ -100,50 +111,50 @@ export function registerTaOverlap(engine: ExecutionEngine): void {
     if (buf.full.length > len) buf.full.shift();
 
     // WMA of half-length
-    let wmaHalf = 0;
+    let wmaHalf = new Decimal(0);
     if (buf.half.length >= halfLen) {
-      let wSum = 0;
+      let wSum = new Decimal(0);
       let wWeight = 0;
       for (let i = 0; i < buf.half.length; i++) {
         const weight = i + 1;
-        wSum += buf.half[i] * weight;
+        wSum = wSum.plus(buf.half[i].times(weight));
         wWeight += weight;
       }
-      wmaHalf = wSum / wWeight;
+      wmaHalf = wSum.div(new Decimal(wWeight));
     }
 
     // WMA of full-length
-    let wmaFull = 0;
+    let wmaFull = new Decimal(0);
     if (buf.full.length >= len) {
-      let wSum = 0;
+      let wSum = new Decimal(0);
       let wWeight = 0;
       for (let i = 0; i < buf.full.length; i++) {
         const weight = i + 1;
-        wSum += buf.full[i] * weight;
+        wSum = wSum.plus(buf.full[i].times(weight));
         wWeight += weight;
       }
-      wmaFull = wSum / wWeight;
+      wmaFull = wSum.div(new Decimal(wWeight));
     }
 
     if (buf.half.length < halfLen || buf.full.length < len) {
       return NA;
     }
 
-    buf.diff.push(2 * wmaHalf - wmaFull);
+    buf.diff.push(wmaHalf.times(2).minus(wmaFull));
     if (buf.diff.length > sqrtLen) buf.diff.shift();
 
     // WMA of diff with sqrtLen
     if (buf.diff.length < sqrtLen) {
       return NA;
     }
-    let dSum = 0;
+    let dSum = new Decimal(0);
     let dWeight = 0;
     for (let i = 0; i < buf.diff.length; i++) {
       const weight = i + 1;
-      dSum += buf.diff[i] * weight;
+      dSum = dSum.plus(buf.diff[i].times(weight));
       dWeight += weight;
     }
-    return dSum / dWeight;
+    return decimalToPineValue(dSum.div(new Decimal(dWeight)));
   });
 
   // Wilder's Relative Moving Average — the smoothing used by ATR/RSI. Seed is the
