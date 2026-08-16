@@ -11,6 +11,11 @@ import {
 } from './execution-types.js';
 import { type PineValue } from '../types/na.js';
 import { RingBuffer } from './ring-buffer.js';
+// M5a: ta.sma now stores DecimalRingBuffer (exact Decimal accumulation), so the
+// forming-candle snapshot must rebuild the correct class — see preSmaBuffers.
+// The Decimal type import is only for the restore-side cast (snap.values as Decimal[]).
+import { DecimalRingBuffer } from './decimal-ring-buffer.js';
+import type { Decimal } from 'decimal.js';
 import { createSeries, type Series } from './series.js';
 import { cloneRuntimeScope, type RuntimeScope } from './scope.js';
 
@@ -51,12 +56,20 @@ export class FormingCandleProcessor {
     const preTimestampsLen = this.eng.barTimestamps.length;
     const preTotalBars = this.eng.metrics.totalBars;
     const preAlertTriggersLen = this.eng.alertTriggers.length;
+    // M5a fix: snapshot each sma buffer with a `kind` tag so the restore below
+    // can rebuild the correct class. ta.sma stores DecimalRingBuffer (exact
+    // Decimal accumulation) while older float-based buffers are RingBuffer.
+    // Both expose toArray() (ordered oldest→newest), so no iterator is needed —
+    // the old `[...v]` spread threw on DecimalRingBuffer (no Symbol.iterator).
     const preSmaBuffers =
       this.eng.smaBuffers.size > 0
         ? new Map(
             [...this.eng.smaBuffers].map(([k, v]) => [
               k,
-              v instanceof RingBuffer ? v.toArray() : [...v],
+              {
+                kind: v instanceof DecimalRingBuffer ? 'decimal' : 'float',
+                values: v.toArray(),
+              },
             ]),
           )
         : undefined;
@@ -180,12 +193,22 @@ export class FormingCandleProcessor {
         binding.series.values.length = preLen;
       }
     }
+    // M5a fix: rebuild each sma buffer as its ORIGINAL class, chosen by the kind
+    // tag captured in the snapshot. The old code always rebuilt a float
+    // RingBuffer — the next ta.sma tick would then push a Decimal into a
+    // number-typed buffer, corrupting the running sum.
     if (preSmaBuffers) {
       this.eng.smaBuffers = new Map();
-      for (const [key, arr] of preSmaBuffers) {
+      for (const [key, snap] of preSmaBuffers) {
         const parts = key.split('_');
         const capacity = parseInt(parts[1], 10);
-        this.eng.smaBuffers.set(key, RingBuffer.fromArray(arr, capacity));
+        this.eng.smaBuffers.set(
+          key,
+          snap.kind === 'decimal'
+            ? // values is number[] | Decimal[]; the kind tag narrows which cast is honest
+              DecimalRingBuffer.fromArray(snap.values as Decimal[], capacity)
+            : RingBuffer.fromArray(snap.values as number[], capacity),
+        );
       }
     } else {
       this.eng.smaBuffers.clear();

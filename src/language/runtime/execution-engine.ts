@@ -11,6 +11,7 @@ import {
 import { type RuntimeScope, createRuntimeScope, declareVariable } from './scope.js';
 import { type Series } from './series.js';
 import { RingBuffer } from './ring-buffer.js';
+import { DecimalRingBuffer } from './decimal-ring-buffer.js';
 import { Interpreter } from './interpreter.js';
 import { StateManager } from './state-manager.js';
 import { FormingCandleProcessor } from './forming-candle.js';
@@ -208,7 +209,11 @@ export class ExecutionEngine {
     walk(this.sourceProgram.body);
   }
 
-  /** @internal */ smaBuffers: Map<string, RingBuffer> = new Map();
+  /** @internal */
+  // M5a: ta.sma stores DecimalRingBuffer (exact Decimal accumulation), older
+  // float-based builtins store RingBuffer — the map holds both. Consumers must
+  // narrow by instanceof (see forming-candle.ts snapshot/restore).
+  smaBuffers: Map<string, RingBuffer | DecimalRingBuffer> = new Map();
   /** @internal */ emaState: Map<
     string,
     { prev: number; count: number; sum: number; initialized: boolean }
