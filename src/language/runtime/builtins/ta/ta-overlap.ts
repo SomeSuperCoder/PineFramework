@@ -1,6 +1,7 @@
 import { NA, isNa, type PineValue } from '../../../types/na.js';
-import { RingBuffer } from '../../ring-buffer.js';
 import { guardFinite, isFiniteNumber } from '../../float-guards.js';
+import { DecimalRingBuffer } from '../../decimal-ring-buffer.js';
+import { pineValueToDecimal, decimalToPineValue } from '../../numbers/index.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
 export function registerTaOverlap(engine: ExecutionEngine): void {
@@ -14,14 +15,20 @@ export function registerTaOverlap(engine: ExecutionEngine): void {
 
     const key = `sma_${len}_${eng.currentCallSiteId}`;
     if (!eng.smaBuffers.has(key)) {
-      eng.smaBuffers.set(key, new RingBuffer(len));
+      eng.smaBuffers.set(key, new DecimalRingBuffer(len));
     }
     const buf = eng.smaBuffers.get(key)!;
-    buf.push(source as number);
+    // Convert ONCE at the bar boundary — NA/NaN → NaN Decimal (R3). The running
+    // sum accumulates EXACTLY at DP=20 inside DecimalRingBuffer (no Number
+    // round-trip, §2.2), so ta.sma(0.1,10) = (0.1×10)/10 = 0.1 EXACTLY
+    // (fp-final-gate). R4 UPGRADE vs the old float path: non-finite sums no
+    // longer leak as raw NaN — decimalToPineValue collapses them to NA, which
+    // matches Pine's ta.sma(na) → na propagation. Deliberate; do not restore.
+    buf.push(pineValueToDecimal(source));
     if (buf.getSize() < len) {
       return NA;
     }
-    return buf.getSum() / len;
+    return decimalToPineValue(buf.getSum().div(len));
   });
 
   eng.builtins.set('ta.ema', (source: PineValue, length: PineValue): PineValue => {
