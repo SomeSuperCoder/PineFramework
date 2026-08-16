@@ -1,3 +1,4 @@
+import type { Decimal } from 'decimal.js';
 import type { PineValue } from '../types/na.js';
 import type { Series } from './series.js';
 import type { RuntimeScope } from './scope.js';
@@ -213,18 +214,18 @@ export interface ExecutionMetrics {
 export interface SarStateValue {
   initialized: boolean;
   trend: 'up' | 'down';
-  sar: number;
-  ep: number;
-  af: number;
-  afStart: number;
-  afInc: number;
-  afMax: number;
-  prevSar: number;
-  prevEp: number;
-  prevLow1: number;
-  prevLow2: number;
-  prevHigh1: number;
-  prevHigh2: number;
+  sar: Decimal;
+  ep: Decimal;
+  af: Decimal;
+  afStart: Decimal;
+  afInc: Decimal;
+  afMax: Decimal;
+  prevSar: Decimal;
+  prevEp: Decimal;
+  prevLow1: Decimal;
+  prevLow2: Decimal;
+  prevHigh1: Decimal;
+  prevHigh2: Decimal;
   barCount: number;
 }
 

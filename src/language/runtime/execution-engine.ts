@@ -47,6 +47,7 @@ import type {
   TableEntry,
   AlertConditionEntry,
   AlertTriggerEntry,
+  SarStateValue,
 } from './execution-types.js';
 
 export {
@@ -225,26 +226,7 @@ export class ExecutionEngine {
   // immutable, so sharing the snapshot's objects on restore is safe.
   /** @internal */ hmaBuffers: Map<string, { half: Decimal[]; full: Decimal[]; diff: Decimal[] }> =
     new Map();
-  /** @internal */ sarState: Map<
-    string,
-    {
-      initialized: boolean;
-      trend: 'up' | 'down';
-      sar: number;
-      ep: number;
-      af: number;
-      afStart: number;
-      afInc: number;
-      afMax: number;
-      prevSar: number;
-      prevEp: number;
-      prevLow1: number;
-      prevLow2: number;
-      prevHigh1: number;
-      prevHigh2: number;
-      barCount: number;
-    }
-  > = new Map();
+  /** @internal */ sarState: Map<string, SarStateValue> = new Map();
   /** @internal */ fills: Array<{ from: string; to: string; color: string }> = [];
   /** @internal */ lines: Map<number, LineEntry> = new Map();
   /** @internal */ lineIdCounter: number = 0;

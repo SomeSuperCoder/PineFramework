@@ -1,6 +1,6 @@
 import { Decimal } from 'decimal.js';
-import { NA, isNa, type PineValue } from '../../../types/na.js';
-import { guardFinite, isFiniteNumber } from '../../float-guards.js';
+import { NA, type PineValue } from '../../../types/na.js';
+import { isFiniteNumber } from '../../float-guards.js';
 import { pineValueToDecimal, decimalToPineValue } from '../../numbers/index.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
@@ -8,35 +8,58 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
+  // Parabolic SAR — Decimal state (R4 upgrade, M7c). The classic PSAR algorithm
+  // accumulates the SAR value via sar_t = prevSar + af·(ep − prevSar), with
+  // trend-following acceleration (af ↑ on new extremes) and trend reversal when
+  // price pierces the SAR line. All arithmetic runs EXACTLY at DP=20 — no
+  // Number round-trip per bar, so constant series converge EXACTLY (fp-final-gate).
+  // State layout: the 12 numeric fields (sar, ep, af, afStart, afInc, afMax,
+  // prevSar, prevEp, prevLow1/2, prevHigh1/2) are Decimal; initialized, trend,
+  // barCount stay boolean/string/number. Snapshot/rollback: state-manager.ts
+  // captures via { ...v } shallow copy — safe because Decimal instances are
+  // immutable (arithmetic returns fresh Decimals) and bar values (pineValueToDecimal)
+  // are fresh per call — no in-place mutation risk.
+  // R4: non-finite OHLC collapses to NA via isFiniteNumber BEFORE conversion,
+  // so Infinity never reaches Decimal state. The decimalToPineValue exit
+  // subsumes the old guardFinite/isNa guard chain (decimal NaN → NA).
+  // R5: no division in SAR (additive/multiplicative only); no div-by-zero risk.
+  // af defaults: 0.02/0.02/0.2 (Pine standard). Non-finite args → defaults (R4).
   eng.builtins.set('ta.sar', (start: PineValue, inc: PineValue, max: PineValue): PineValue => {
     if (!eng.currentContext) return NA;
     const ctx = eng.currentContext;
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
+    // R4 boundary: non-finite bar values → NA. Guard BEFORE decimal conversion
+    // so Infinity/NaN never enters Decimal state (decimal.js would propagate
+    // them silently, violating the contract that no non-finite leaks to output).
+    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) return NA;
+    const highD = pineValueToDecimal(high);
+    const lowD = pineValueToDecimal(low);
+    const closeD = pineValueToDecimal(close);
 
-    const afStart = typeof start === 'number' ? start : 0.02;
-    const afInc = typeof inc === 'number' ? inc : 0.02;
-    const afMax = typeof max === 'number' ? max : 0.2;
+    // af defaults: non-finite args → standard Pine defaults (0.02/0.02/0.2).
+    const afStart = isFiniteNumber(start) ? new Decimal(start) : new Decimal('0.02');
+    const afInc = isFiniteNumber(inc) ? new Decimal(inc) : new Decimal('0.02');
+    const afMax = isFiniteNumber(max) ? new Decimal(max) : new Decimal('0.2');
     const key = `sar_${eng.currentCallSiteId}`;
 
     if (!eng.sarState.has(key)) {
       eng.sarState.set(key, {
         initialized: false,
         trend: 'up',
-        sar: 0,
-        ep: 0,
+        sar: new Decimal(0),
+        ep: new Decimal(0),
         af: afStart,
         afStart,
         afInc,
         afMax,
-        prevSar: 0,
-        prevEp: 0,
-        prevLow1: 0,
-        prevLow2: 0,
-        prevHigh1: 0,
-        prevHigh2: 0,
+        prevSar: new Decimal(0),
+        prevEp: new Decimal(0),
+        prevLow1: new Decimal(0),
+        prevLow2: new Decimal(0),
+        prevHigh1: new Decimal(0),
+        prevHigh2: new Decimal(0),
         barCount: 0,
       });
     }
@@ -44,98 +67,110 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const state = eng.sarState.get(key)!;
     state.barCount++;
 
-    const prevHigh = ctx.high.getRelative(1);
-    const prevLow = ctx.low.getRelative(1);
-    const prevClose = ctx.close.getRelative(1);
+    // Previous-bar data for initialization and rotation — always Decimal.
+    const prevHighRaw = ctx.high.getRelative(1);
+    const prevLowRaw = ctx.low.getRelative(1);
+    const prevCloseRaw = ctx.close.getRelative(1);
+    const hasPrevBar =
+      isFiniteNumber(prevHighRaw) && isFiniteNumber(prevLowRaw) && isFiniteNumber(prevCloseRaw);
+    const prevHighD = hasPrevBar ? pineValueToDecimal(prevHighRaw) : highD;
+    const prevLowD = hasPrevBar ? pineValueToDecimal(prevLowRaw) : lowD;
+    const prevCloseD = hasPrevBar ? pineValueToDecimal(prevCloseRaw) : closeD;
 
     if (!state.initialized) {
-      if (
-        typeof prevHigh !== 'number' ||
-        typeof prevLow !== 'number' ||
-        typeof prevClose !== 'number'
-      ) {
-        state.prevHigh1 = high;
-        state.prevLow1 = low;
-        state.prevHigh2 = high;
-        state.prevLow2 = low;
-        state.prevSar = low;
-        state.prevEp = high;
-        state.sar = low;
-        state.ep = high;
-        return low;
+      if (!hasPrevBar) {
+        // Pre-init buffer (bar 0): store raw bar Decimals, return low. These
+        // references are safe from mutation — they are pineValueToDecimal fresh
+        // instances used only in comparisons (lt/gt/min/max).
+        state.prevHigh1 = highD;
+        state.prevLow1 = lowD;
+        state.prevHigh2 = highD;
+        state.prevLow2 = lowD;
+        state.prevSar = lowD;
+        state.prevEp = highD;
+        state.sar = lowD;
+        state.ep = highD;
+        return decimalToPineValue(lowD);
       }
 
-      if (close > prevClose) {
+      // Direction: close > prevClose → up trend.
+      if (closeD.gt(prevCloseD)) {
         state.trend = 'up';
-        state.sar = Math.min(low, prevLow);
-        state.ep = Math.max(high, prevHigh);
+        state.sar = Decimal.min(lowD, prevLowD);
+        state.ep = Decimal.max(highD, prevHighD);
       } else {
         state.trend = 'down';
-        state.sar = Math.max(high, prevHigh);
-        state.ep = Math.min(low, prevLow);
+        state.sar = Decimal.max(highD, prevHighD);
+        state.ep = Decimal.min(lowD, prevLowD);
       }
 
       state.af = afStart;
       state.prevSar = state.sar;
       state.prevEp = state.ep;
-      state.prevLow1 = low;
-      state.prevLow2 = prevLow;
-      state.prevHigh1 = high;
-      state.prevHigh2 = prevHigh;
+      state.prevLow1 = lowD;
+      state.prevLow2 = prevLowD;
+      state.prevHigh1 = highD;
+      state.prevHigh2 = prevHighD;
       state.initialized = true;
-      return state.sar;
+      return decimalToPineValue(state.sar);
     }
 
-    const prevLow1: number = state.prevLow1;
-    const prevLow2: number = state.prevLow2;
-    const prevHigh1: number = state.prevHigh1;
-    const prevHigh2: number = state.prevHigh2;
-    const prevEp: number = state.prevEp;
+    // ── Main loop ──
+    // Local copies of rotated lookback (read state BEFORE mutation).
+    const prevLow1 = state.prevLow1;
+    const prevLow2 = state.prevLow2;
+    const prevHigh1 = state.prevHigh1;
+    const prevHigh2 = state.prevHigh2;
+    const prevEp = state.prevEp;
 
-    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) {
-      return NA;
-    }
-    let sar = guardFinite(state.prevSar + state.af * (state.ep - state.prevSar)) as number;
-    if (isNa(sar)) return NA;
+    // SAR increment: sar_t = prevSar + af·(ep − prevSar) — exact DP=20.
+    // Every arithmetic op (plus/minus/times) returns a NEW Decimal — no
+    // in-place mutation of state.prevSar or state.ep.
+    let sar = state.prevSar.plus(state.af.times(state.ep.minus(state.prevSar)));
 
     if (state.trend === 'up') {
-      sar = Math.min(sar, prevLow1, prevLow2);
+      sar = Decimal.min(sar, prevLow1, prevLow2);
 
-      if (low < sar) {
+      if (lowD.lt(sar)) {
+        // Trend reversal: up → down.
         state.trend = 'down';
         sar = prevEp;
-        state.ep = low;
+        state.ep = lowD;
         state.af = afStart;
       } else {
-        if (high > state.ep) {
-          state.ep = high;
-          state.af = Math.min(state.af + afInc, afMax);
+        if (highD.gt(state.ep)) {
+          state.ep = highD;
+          state.af = Decimal.min(state.af.plus(afInc), afMax);
         }
       }
     } else {
-      sar = Math.max(sar, prevHigh1, prevHigh2);
+      sar = Decimal.max(sar, prevHigh1, prevHigh2);
 
-      if (high > sar) {
+      if (highD.gt(sar)) {
+        // Trend reversal: down → up.
         state.trend = 'up';
         sar = prevEp;
-        state.ep = high;
+        state.ep = highD;
         state.af = afStart;
       } else {
-        if (low < state.ep) {
-          state.ep = low;
-          state.af = Math.min(state.af + afInc, afMax);
+        if (lowD.lt(state.ep)) {
+          state.ep = lowD;
+          state.af = Decimal.min(state.af.plus(afInc), afMax);
         }
       }
     }
 
+    // Rotate lookback + persist. Every assignment is a fresh Decimal — either
+    // from arithmetic ops (plus/minus/times/min/max) or from pineValueToDecimal.
+    // No in-place mutation of existing instances — safe for shallow-copy snapshot.
     state.prevSar = sar;
     state.prevEp = state.ep;
-    state.prevLow1 = low;
+    state.prevLow1 = lowD;
     state.prevLow2 = prevLow1;
-    state.prevHigh1 = high;
+    state.prevHigh1 = highD;
     state.prevHigh2 = prevHigh1;
 
-    return guardFinite(sar);
+    return decimalToPineValue(sar);
   });
 
   // Average True Range — Decimal state (R4 upgrade, M7a). ta.atr IS rma of the
