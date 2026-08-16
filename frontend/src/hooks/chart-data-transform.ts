@@ -112,6 +112,7 @@ export interface ExecuteResponse {
   }>;
   tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
+  plotOverlayKeys?: string[];
   linefills?: Array<{
     line1: { x1: number; y1: number; x2: number; y2: number; color: string };
     line2: { x1: number; y1: number; x2: number; y2: number; color: string };
@@ -194,6 +195,7 @@ export interface ExecutionResultMessage {
   }>;
   tables?: import('../types/index.js').TableData[];
   hiddenPlotKeys?: string[];
+  plotOverlayKeys?: string[];
   linefills?: Array<{
     line1: { x1: number; y1: number; x2: number; y2: number; color: string };
     line2: { x1: number; y1: number; x2: number; y2: number; color: string };
@@ -286,6 +288,7 @@ export function buildScriptResult(
   barColors?: ExecuteResponse['barColors'],
   formatContext?: { ticker?: string; interval?: string },
   linefills?: ExecutionResultMessage['linefills'],
+  plotOverlayKeys?: string[],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -350,6 +353,9 @@ export function buildScriptResult(
   // Hidden plot titles — plots with display=display.none
   const hiddenPlotTitles: string[] = (hiddenPlotKeys || []).map((key) => stripMeta(key));
 
+  // Overlay plot titles — plots with force_overlay=true that go on the main chart
+  const overlayPlotTitles: string[] = (plotOverlayKeys || []).map((key) => stripMeta(key));
+
   const transformedFillColorData: Record<string, (string | null)[]> = {};
   if (fillColorData) {
     for (const [key, colors] of Object.entries(fillColorData)) {
@@ -383,6 +389,7 @@ export function buildScriptResult(
     alertTriggers: mapAlertTriggers(alertTriggers),
     tables: tables || [],
     hiddenPlotTitles: hiddenPlotTitles.length > 0 ? hiddenPlotTitles : undefined,
+    overlayPlotTitles: overlayPlotTitles.length > 0 ? overlayPlotTitles : undefined,
     barColors:
       transformedBarColors && transformedBarColors.length > 0 ? transformedBarColors : undefined,
   };

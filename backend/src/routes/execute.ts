@@ -203,6 +203,7 @@ executeRouter.post('/execute', async (req, res) => {
       alertConditions,
       alertTriggers,
       hiddenPlotKeys: result.hiddenPlotKeys ?? [],
+      plotOverlayKeys: result.plotOverlayKeys ?? [],
     });
   } catch (err) {
     console.error('[Execute] Error:', err);
