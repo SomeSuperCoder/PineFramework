@@ -267,8 +267,14 @@ export class ExecutionEngine {
   /** @internal */ fillColorData: Map<string, (string | null)[]> = new Map();
   /** @internal */ hiddenPlotKeys: Set<string> = new Set();
   /** @internal */ inputs: Map<string, { type: string; default: PineValue }> = new Map();
-  /** @internal */ crossPrevValues: Map<string, { src: number; cmp: number }> = new Map();
-  /** @internal */ changePrevValues: Map<string, number> = new Map();
+  // M6: momentum TA state holds Decimal — ta.rsi gain/loss averages accumulate
+  // exactly at DP=20 and ta.crossover/crossunder/change diffs are exact Decimal
+  // minus (no Number round-trip per bar; see ta-momentum.ts). forming-candle.ts
+  // snapshot/restore copies map entries only; Decimals are immutable and the
+  // builtins reassign state fields with fresh Decimals (never mutate in place),
+  // so a snapshot's Decimals stay valid.
+  /** @internal */ crossPrevValues: Map<string, { src: Decimal; cmp: Decimal }> = new Map();
+  /** @internal */ changePrevValues: Map<string, Decimal> = new Map();
   /** @internal */ atrState: Map<string, { prev: number; count: number; values: PineValue[] }> =
     new Map();
   /** Wilder's RMA state, keyed `rma_<len>_<callSiteId>` (ta.rma). Same seed-then-smooth
@@ -286,7 +292,7 @@ export class ExecutionEngine {
   /** @internal */ currentCallSiteId = 0;
   /** @internal */ rsiState: Map<
     string,
-    { prevAvgGain: number; prevAvgLoss: number; count: number; prevSource: number }
+    { prevAvgGain: Decimal; prevAvgLoss: Decimal; count: number; prevSource: Decimal }
   > = new Map();
   /** @internal */ pivotLookback: number = 0;
   /** @internal */ valuewhenLookback: number = 0;
