@@ -279,8 +279,9 @@ export class ExecutionEngine {
     string,
     { atrCount: number; atrPrev: Decimal; prevUpper: Decimal | null; prevLower: Decimal | null }
   > = new Map();
-  /** @internal */ highestBuffers: Map<string, number[]> = new Map();
-  /** @internal */ lowestBuffers: Map<string, number[]> = new Map();
+  // M8: highest/lowest buffers hold Decimal for exact comparison (no IEEE 754 drift).
+  /** @internal */ highestBuffers: Map<string, Decimal[]> = new Map();
+  /** @internal */ lowestBuffers: Map<string, Decimal[]> = new Map();
   /** @internal */ currentCallSiteId = 0;
   /** @internal */ rsiState: Map<
     string,
@@ -288,7 +289,8 @@ export class ExecutionEngine {
   > = new Map();
   /** @internal */ pivotLookback: number = 0;
   /** @internal */ valuewhenLookback: number = 0;
-  /** @internal */ valuewhenHistory?: Map<string, number[]>;
+  // M8: valuewhen history stores Decimal for exact conditional source storage.
+  /** @internal */ valuewhenHistory?: Map<string, Decimal[]>;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
   // Per-run diagnostic sink (design D4). initializeStrategy runs inside the
   // constructor, so warnings it emits (baseline defaults, commission conflicts)
