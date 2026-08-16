@@ -275,7 +275,12 @@ export class ExecutionEngine {
   // so a snapshot's Decimals stay valid.
   /** @internal */ crossPrevValues: Map<string, { src: Decimal; cmp: Decimal }> = new Map();
   /** @internal */ changePrevValues: Map<string, Decimal> = new Map();
-  /** @internal */ atrState: Map<string, { prev: number; count: number; values: PineValue[] }> =
+  // M7a: ATR state holds Decimal — ta.atr accumulates the exact seed-then-Wilder
+  // RMA of the true range at DP=20 (see ta-volatility.ts). forming-candle.ts
+  // snapshot/restore copies map entries only; Decimals are immutable and the
+  // builtin reassigns state.prev with fresh Decimals (never mutates in place),
+  // so a snapshot's Decimals stay valid.
+  /** @internal */ atrState: Map<string, { prev: Decimal; count: number; values: PineValue[] }> =
     new Map();
   /** Wilder's RMA state, keyed `rma_<len>_<callSiteId>` (ta.rma). Same seed-then-smooth
    *  shape as atrState — RMA is the core of ATR, so the state layouts mirror each other. */

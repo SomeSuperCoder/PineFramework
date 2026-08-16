@@ -1,5 +1,7 @@
+import { Decimal } from 'decimal.js';
 import { NA, isNa, type PineValue } from '../../../types/na.js';
 import { guardFinite, isFiniteNumber } from '../../float-guards.js';
+import { pineValueToDecimal, decimalToPineValue } from '../../numbers/index.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
 
 export function registerTaVolatility(engine: ExecutionEngine): void {
@@ -136,6 +138,19 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     return guardFinite(sar);
   });
 
+  // Average True Range — Decimal state (R4 upgrade, M7a). ta.atr IS rma of the
+  // true range: the TR is computed at the bar boundary as exact Decimal, then
+  // accumulated with the seed-then-Wilder recursion (prev*(count-1)+tr)/count →
+  // (prev*(len-1)+tr)/len entirely at DP=20 — no Number round-trip per bar, so
+  // the ATR converges EXACTLY on constant series (fp-final-gate). State layout
+  // mirrors rmaState (ta.rma in ta-overlap.ts) — one algorithm, two call-site
+  // key namespaces. The values[] history keeps PineValue[] semantics for the
+  // ta.atr(N)[i] historical-index path in expression-executor: the first bar
+  // pushes the NA sentinel; warm-up and Wilder entries are decimalToPineValue'd.
+  // count/len stay INTEGER number math (Math.trunc guard). R4: non-finite OHLC
+  // collapses to NA via isFiniteNumber BEFORE conversion, so Infinity never
+  // reaches Decimal state (a NaN close[1] also falls back to close). R5: count/
+  // len are positive integers by guard, so every div denominator is non-zero.
   eng.builtins.set('ta.atr', (length: PineValue): PineValue => {
     if (!eng.currentContext) return NA;
     const len = Math.trunc(typeof length === 'number' ? length : 14);
@@ -144,12 +159,20 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') return NA;
+    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) return NA;
+    // Convert ONCE at the bar boundary — the guard above guarantees finite
+    // numbers, so pineValueToDecimal cannot produce the NaN marker here.
+    const highD = pineValueToDecimal(high);
+    const lowD = pineValueToDecimal(low);
+    const closeD = pineValueToDecimal(close);
+    // On bar 0 there is no close[1]; fall back to close so TR degrades to
+    // max(high-low, |high-close|, |low-close|) — identical to the ta.tr path.
     const prevClose = ctx.close.getRelative(1);
-    const tr = Math.max(
-      high - low,
-      Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
-      Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+    const prevCloseD = isFiniteNumber(prevClose) ? pineValueToDecimal(prevClose) : closeD;
+    const tr = Decimal.max(
+      highD.minus(lowD),
+      highD.minus(prevCloseD).abs(),
+      lowD.minus(prevCloseD).abs(),
     );
     const key = `atr_${len}_${eng.currentCallSiteId}`;
     if (!eng.atrState.has(key)) {
@@ -160,13 +183,19 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const state = eng.atrState.get(key)!;
     state.count++;
     if (state.count <= len) {
-      state.prev = (state.prev * (state.count - 1) + tr) / state.count;
-      state.values.push(state.prev);
+      state.prev = state.prev
+        .times(new Decimal(state.count - 1))
+        .plus(tr)
+        .div(new Decimal(state.count));
+      state.values.push(decimalToPineValue(state.prev));
       return NA;
     }
-    state.prev = (state.prev * (len - 1) + tr) / len;
-    state.values.push(state.prev);
-    return state.prev;
+    state.prev = state.prev
+      .times(new Decimal(len - 1))
+      .plus(tr)
+      .div(new Decimal(len));
+    state.values.push(decimalToPineValue(state.prev));
+    return decimalToPineValue(state.prev);
   });
 
   // True range: max(high - low, |high - close[1]|, |low - close[1]|). Stateless —
@@ -176,6 +205,11 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
   // paired with ta.rma(trueRange, len) to build ATRs), so the flag does not
   // alter the returned series. The LuxAlgo supertrend-3d script depends on this:
   // it computes `ta.tr(true)` once and derives 10 ATRs via ta.rma.
+  // Decimal (R4 upgrade, M7a): the three terms are computed EXACTLY at DP=20
+  // (high-low / |high-close[1]| / |low-close[1]| carry no IEEE 754 drift), and
+  // decimalToPineValue double-guards the exit — the old guardFinite(tr) is
+  // subsumed. Non-finite OHLC collapses to NA at the isFiniteNumber boundary
+  // BEFORE conversion, so Infinity never reaches Decimal.
   eng.builtins.set('ta.tr', (useMA?: PineValue): PineValue => {
     void useMA; // accepted for Pine signature parity; does not change semantics
     if (!eng.currentContext) return NA;
@@ -183,18 +217,24 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
+    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) {
       return NA;
     }
+    // Convert ONCE at the bar boundary — the guard above guarantees finite
+    // numbers, so pineValueToDecimal cannot produce the NaN marker here.
+    const highD = pineValueToDecimal(high);
+    const lowD = pineValueToDecimal(low);
+    const closeD = pineValueToDecimal(close);
     // On bar 0 there is no close[1]; fall back to close so TR degrades to
     // max(high-low, |high-close|, |low-close|) — identical to the ta.atr path.
     const prevClose = ctx.close.getRelative(1);
-    const tr = Math.max(
-      high - low,
-      Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
-      Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+    const prevCloseD = isFiniteNumber(prevClose) ? pineValueToDecimal(prevClose) : closeD;
+    const tr = Decimal.max(
+      highD.minus(lowD),
+      highD.minus(prevCloseD).abs(),
+      lowD.minus(prevCloseD).abs(),
     );
-    return guardFinite(tr);
+    return decimalToPineValue(tr);
   });
 
   // Supertrend: factor * ATR band channel around hl2 with the classic
