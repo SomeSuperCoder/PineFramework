@@ -13,18 +13,9 @@
 import type { ExpressionNode, StatementNode } from '../parser/ast/nodes.js';
 import { NA, isNa, pineTruthy, type PineValue } from '../types/na.js';
 import { FLOAT_TYPE } from '../types/pine-types.js';
-import {
-  guardFinite,
-  safeAdd,
-  safeSub,
-  safeMul,
-  safeDiv,
-  safeMod,
-  safePow,
-  safeUnaryMinus,
-  safeUnaryPlus,
-  ensureFinite,
-} from './float-guards.js';
+import { guardFinite, safeAdd, ensureFinite } from './float-guards.js';
+import { numericOps, toDecimal, decimalToPineValue } from './numbers/index.js';
+import type { Decimal } from 'decimal.js';
 import {
   type RuntimeScope,
   createRuntimeScope,
@@ -144,6 +135,111 @@ export function executeIdentifier(
   throw new Error(`Variable '${expr.name}' is not defined`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FUSED DECIMAL ARITHMETIC (M3b — decimal expression fusion)
+//
+// WHY: chained arithmetic like `close*2 - close` must return `close` EXACTLY.
+// The old engine evaluated each operator via safe*(a, b), which round-trips
+// through JS number at every operator seam: Decimal(close)×2 → number, then
+// number − Decimal(close) → number. The old float engine was bit-identical
+// because IEEE 754 ×2 is exact and the subtraction was Sterbenz-exact; the
+// per-op decimal round-trip lost that exactness (close×2 − close ≠ close at
+// double precision for a 20-digit decimal-rounded intermediate).
+//
+// The fix: evaluate the WHOLE arithmetic subtree in Decimal space and convert
+// via decimalToPineValue ONCE at the root — never per-op. Decimal(close)×2
+// then −Decimal(close) is exact at DP=20 (both are exactly representable), so
+// the composed expression returns close exactly. Comparisons (==, !=, <, >,
+// <=, >=) deliberately stay nearest-double (trap_cmp must remain true); only
+// arithmetic ops (+ - * / % ** and unary - +) take the fused path.
+//
+// INVARIANT: no Decimal escapes the PineValue surface. The helper below
+// returns Decimal internally; evalFusedArithmetic converts to PineValue once.
+// No Decimal is stored in scope, passed to calls, or written to series.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Evaluate an entire arithmetic subtree in Decimal space.
+ *
+ * Returns Decimal | null:
+ *   - Decimal — the exact subtree result (may be Decimal NaN/±Inf for
+ *     div/mod-by-zero or overflow; collapsed to Pine NA at the boundary by
+ *     decimalToPineValue, R4/R5).
+ *   - null    — NA / non-numeric (string, bool, …) → Pine NA, never a throw.
+ *
+ * ParenthesizedExpression is unwrapped FIRST (the AST emits paren nodes;
+ * `(a*b)-c` must recurse into the inner node, not fall back to lossy
+ * dispatch). Binary arithmetic recurses both sides then applies numericOps;
+ * unary -/+ recurse the operand then negate/identity. Anything else is a
+ * LEAF: dispatch it and bridge via toDecimal if it is a finite number.
+ */
+function evalDecimalArithmetic(
+  expr: ExpressionNode,
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  dispatch: (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext) => PineValue,
+): Decimal | null {
+  if (expr.kind === 'ParenthesizedExpression') {
+    return evalDecimalArithmetic(expr.expression, scope, context, dispatch);
+  }
+
+  if (expr.kind === 'BinaryExpression') {
+    const left = evalDecimalArithmetic(expr.left, scope, context, dispatch);
+    if (left === null) return null;
+    const right = evalDecimalArithmetic(expr.right, scope, context, dispatch);
+    if (right === null) return null;
+    switch (expr.operator) {
+      case '+':
+        return numericOps.add(left, right);
+      case '-':
+        return numericOps.sub(left, right);
+      case '*':
+        return numericOps.mul(left, right);
+      // R5: div/mod-by-zero → Decimal NaN inside numericOps → NA at boundary.
+      case '/':
+        return numericOps.div(left, right);
+      case '%':
+        return numericOps.mod(left, right);
+      case '**':
+        return numericOps.pow(left, right);
+      default:
+        // Non-arithmetic binary ops never reach here (caller guards
+        // and/or/comparisons); defensive null → NA.
+        return null;
+    }
+  }
+
+  if (expr.kind === 'UnaryExpression') {
+    if (expr.operator !== '-' && expr.operator !== '+') return null; // `not` is boolean, not arithmetic
+    const operand = evalDecimalArithmetic(expr.operand, scope, context, dispatch);
+    if (operand === null) return null;
+    return expr.operator === '-' ? numericOps.neg(operand) : operand; // unary + → identity
+  }
+
+  // Leaf (identifier, literal, call, ternary, index/member, anything else):
+  // dispatch once, bridge to Decimal. NA → null; number → Decimal; any other
+  // type (string, bool, …) → null (non-numeric → Pine NA, never a throw).
+  const v = dispatch(expr, scope, context);
+  if (isNa(v)) return null;
+  if (typeof v === 'number') return toDecimal(v);
+  return null;
+}
+
+/**
+ * Root conversion — the ONLY place a fused Decimal becomes a PineValue.
+ * null (NA / non-numeric) → NA; Decimal → decimalToPineValue (finite → number,
+ * NaN/±Inf → NA, -0 → +0). Called once per arithmetic expression, never per-op.
+ */
+function evalFusedArithmetic(
+  expr: ExpressionNode,
+  scope: RuntimeScope,
+  context: ExecutionContext,
+  dispatch: (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext) => PineValue,
+): PineValue {
+  const d = evalDecimalArithmetic(expr, scope, context, dispatch);
+  return d === null ? NA : decimalToPineValue(d);
+}
+
 export function executeBinaryExpression(
   _eng: ExecutionEngine,
   expr: any,
@@ -151,18 +247,52 @@ export function executeBinaryExpression(
   context: ExecutionContext,
   dispatch: (expr: ExpressionNode, scope: RuntimeScope, context: ExecutionContext) => PineValue,
 ): PineValue {
+  // and/or — short-circuit on pineTruthy of dispatched values (unchanged behavior).
+  if (expr.operator === 'and' || expr.operator === 'or') {
+    const left = dispatch(expr.left, scope, context);
+    const right = dispatch(expr.right, scope, context);
+    if (expr.operator === 'and') return pineTruthy(left) && pineTruthy(right);
+    return pineTruthy(left) || pineTruthy(right);
+  }
+
+  // Pure arithmetic — fused path evaluates the subtree in Decimal ONCE (no
+  // eager dispatch; NA/non-numeric → null → NA internally). Removes the 2×
+  // hot-path cost and the latent double-evaluation risk for any side-effecting
+  // operand. F1 fix (code review).
+  if (
+    expr.operator === '-' ||
+    expr.operator === '*' ||
+    expr.operator === '/' ||
+    expr.operator === '%' ||
+    expr.operator === '**'
+  ) {
+    return evalFusedArithmetic(expr, scope, context, dispatch);
+  }
+
+  // '+' — eager dispatch REQUIRED for the string-concat check; then fused
+  // (numeric/NA operands take the fused path exactly like the other arithmetic
+  // ops). NA wins over string concat — old NA-switch priority restored:
+  // NA + "str" → NA, never String(Symbol.for('pine.na')) garbage.
+  if (expr.operator === '+') {
+    const left = dispatch(expr.left, scope, context);
+    const right = dispatch(expr.right, scope, context);
+    // NA wins over string concat — old NA-switch priority (NA + "str" → NA,
+    // never String(Symbol.for('pine.na')) garbage).
+    if (isNa(left) || isNa(right)) return NA;
+    if (typeof left === 'string' || typeof right === 'string') return String(left) + String(right);
+    return evalFusedArithmetic(expr, scope, context, dispatch);
+  }
+
+  // Comparisons — eager dispatch of both sides (nearest-double collapse
+  // semantics preserved; trap_cmp depends on it).
   const left = dispatch(expr.left, scope, context);
   const right = dispatch(expr.right, scope, context);
-
-  if (expr.operator === 'and') return pineTruthy(left) && pineTruthy(right);
-  if (expr.operator === 'or') return pineTruthy(left) || pineTruthy(right);
 
   // PineScript NA semantics for comparisons:
   // - == with na on either side → na (unknown), unless BOTH are na → na too (indeterminate)
   // - != with na on exactly ONE side → true (one is known, the other is na → definitely not equal)
   // - != with na on BOTH sides → na (indeterminate)
   // - <, >, <=, >= with na on either side → na
-  // - +, -, *, /, %, ** with na on either side → na
   if (isNa(left) || isNa(right)) {
     switch (expr.operator) {
       case '==':
@@ -179,20 +309,6 @@ export function executeBinaryExpression(
   }
 
   switch (expr.operator) {
-    case '+':
-      if (typeof left === 'string' || typeof right === 'string')
-        return String(left) + String(right);
-      return safeAdd(left as number, right as number);
-    case '-':
-      return safeSub(left as number, right as number);
-    case '*':
-      return safeMul(left as number, right as number);
-    case '/':
-      return safeDiv(left as number, right as number);
-    case '%':
-      return safeMod(left as number, right as number);
-    case '**':
-      return safePow(left as number, right as number);
     case '==':
       return left === right;
     case '!=':
@@ -234,9 +350,8 @@ export function executeUnaryExpression(
   if (isNa(operand)) return NA;
   switch (expr.operator) {
     case '-':
-      return safeUnaryMinus(operand as number);
     case '+':
-      return safeUnaryPlus(operand as number);
+      return evalFusedArithmetic(expr, scope, context, dispatch);
     case 'not':
       return !pineTruthy(operand);
     default:

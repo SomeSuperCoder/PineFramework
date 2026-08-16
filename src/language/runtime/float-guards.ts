@@ -11,12 +11,19 @@
  * by isNa().  These bridge functions convert IEEE 754 non-finite values to
  * Pine NA so the existing guard chain catches them.
  *
+ * Since the decimal migration (contract §2.2) the safe* arithmetic bodies
+ * delegate to the decimal core in ./numbers/index.js — toDecimal → numericOps
+ * → decimalToPineValue — keeping the observable `number | NA` contract
+ * byte-identical. The float-level helpers below remain for non-arithmetic
+ * callers (expression-executor, statement-executor, ta-*).
+ *
  * Use in expression-executor, math builtins, and any arithmetic path where
  * NaN/Infinity from IEEE 754 operations could propagate unchecked.
  */
 
 import { NA, type PineValue } from '../types/na.js';
 import { RuntimeError } from '../../common/errors.js';
+import { toDecimal, decimalToPineValue, numericOps } from './numbers/index.js';
 
 /**
  * Pass through finite numbers; convert NaN/Infinity/-Infinity to Pine NA.
@@ -26,49 +33,54 @@ export function guardFinite(val: number): PineValue {
 }
 
 /**
- * Safe arithmetic — pre-checks inputs and post-guards result.
+ * Safe arithmetic — pre-checks inputs (non-number → NA, never a throw; the
+ * decimal core would RuntimeError on a non-number PineValue), then delegates
+ * through the decimal core (toDecimal → numericOps → decimalToPineValue).
  */
 
 export function safeAdd(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  return guardFinite(a + b);
+  return decimalToPineValue(numericOps.add(toDecimal(a), toDecimal(b)));
 }
 
 export function safeSub(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  return guardFinite(a - b);
+  return decimalToPineValue(numericOps.sub(toDecimal(a), toDecimal(b)));
 }
 
 export function safeMul(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  return guardFinite(a * b);
+  return decimalToPineValue(numericOps.mul(toDecimal(a), toDecimal(b)));
 }
 
 export function safeDiv(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
   if (b === 0 || !Number.isFinite(b)) return NA;
-  return guardFinite(a / b);
+  return decimalToPineValue(numericOps.div(toDecimal(a), toDecimal(b)));
 }
 
 export function safeMod(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
   if (b === 0 || !Number.isFinite(b)) return NA;
-  return guardFinite(a % b);
+  return decimalToPineValue(numericOps.mod(toDecimal(a), toDecimal(b)));
 }
 
 export function safePow(a: number, b: number): PineValue {
   if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  return guardFinite(Math.pow(a, b));
+  return decimalToPineValue(numericOps.pow(toDecimal(a), toDecimal(b)));
 }
 
 export function safeUnaryMinus(a: number): PineValue {
   if (typeof a !== 'number') return NA;
-  return guardFinite(-a);
+  return decimalToPineValue(numericOps.neg(toDecimal(a)));
 }
 
 export function safeUnaryPlus(a: number): PineValue {
   if (typeof a !== 'number') return NA;
-  return guardFinite(+a);
+  // toDecimal round-trip — +a's -0 → +0 normalization is preserved by
+  // decimalToPineValue with no spurious precision rounding (add(a, 0) would
+  // re-round to 20 significant digits).
+  return decimalToPineValue(toDecimal(a));
 }
 
 /**
@@ -116,6 +128,8 @@ export function isNearlyEqual(a: number, b: number, epsilon: number = 1e-10): bo
   return Math.abs(a - b) < epsilon;
 }
 
+// Legacy float summation — kept for ieee754-arithmetic.test.ts; retired when
+// that test is migrated (contract §5.2).
 // ---- Compensated summation ----
 
 /**
