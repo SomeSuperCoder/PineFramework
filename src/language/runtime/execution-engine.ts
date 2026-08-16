@@ -285,12 +285,17 @@ export class ExecutionEngine {
   /** Wilder's RMA state, keyed `rma_<len>_<callSiteId>` (ta.rma). Same seed-then-smooth
    *  shape as atrState — RMA is the core of ATR, so the state layouts mirror each other. */
   /** @internal */ rmaState: Map<string, { prev: number; count: number }> = new Map();
+  // M7b: Supertrend state holds Decimal — the internal ATR RMA and the previous
+  // final bands accumulate/compare exactly at DP=20 (see ta-volatility.ts).
+  // forming-candle.ts snapshot/restore copies map entries only; Decimals are
+  // immutable and the builtin reassigns state fields with fresh Decimals (never
+  // mutates in place), so a snapshot's Decimals stay valid.
   /** ta.supertrend state, keyed `st_<atrPeriod>_<callSiteId>`. Holds the internal
    *  ATR RMA plus the previous final bands so the classic band-following rule
    *  (min/max against prior band) can be evaluated per bar. */
   /** @internal */ supertrendState: Map<
     string,
-    { atrCount: number; atrPrev: number; prevUpper: number | null; prevLower: number | null }
+    { atrCount: number; atrPrev: Decimal; prevUpper: Decimal | null; prevLower: Decimal | null }
   > = new Map();
   /** @internal */ highestBuffers: Map<string, number[]> = new Map();
   /** @internal */ lowestBuffers: Map<string, number[]> = new Map();

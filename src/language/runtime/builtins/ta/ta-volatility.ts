@@ -243,47 +243,75 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
   // the runtime's destructuring assignment ([a, b] = fn()) unpacks it. Direction is
   // 1 when close is above the line (uptrend), -1 below. NA-safe: while the internal
   // ATR warms up the function returns [na, na] without ever comparing against NA.
+  // Decimal (R4 upgrade, M7b): TR, the internal seed-then-Wilder RMA, and the band
+  // math (hl2 ± mult·atr, min/max band-following, close-vs-band compare) all run
+  // EXACTLY at DP=20 — no Number round-trip per bar, so constant series converge
+  // EXACTLY (fp-final-gate). Values convert once at the bar boundary
+  // (pineValueToDecimal) and back at the exit (decimalToPineValue double-guards:
+  // decimal NaN/±Inf AND JS Number overflow → NA — subsumes the old guardFinite).
+  // R4: non-finite OHLC collapses to NA via isFiniteNumber BEFORE conversion, so
+  // Infinity never reaches Decimal state; a NaN close[1] falls back to close.
+  // mult defaults to 3.0 for a missing/NA/non-finite factor. period stays an
+  // integer via Math.trunc — only VALUES are decimal, window sizing stays int.
+  // prevUpper/prevLower are stored Decimal | null so band-following compares
+  // exact decimals across bars. R5: period ≥ 1 by guard, so every div denominator
+  // (count, period) is non-zero.
   eng.builtins.set('ta.supertrend', (factor: PineValue, atrPeriod: PineValue): PineValue => {
     if (!eng.currentContext) return [NA, NA] as PineValue;
-    const mult = typeof factor === 'number' && !isNa(factor) ? factor : 3.0;
+    const mult = isFiniteNumber(factor) ? new Decimal(factor) : new Decimal(3.0);
     const period = Math.trunc(typeof atrPeriod === 'number' ? (atrPeriod as number) : 10);
     if (period <= 0) return [NA, NA] as PineValue;
     const ctx = eng.currentContext;
     const high = ctx.high.getRelative(0);
     const low = ctx.low.getRelative(0);
     const close = ctx.close.getRelative(0);
-    if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
+    if (!isFiniteNumber(high) || !isFiniteNumber(low) || !isFiniteNumber(close)) {
       return [NA, NA] as PineValue;
     }
+    // Convert ONCE at the bar boundary — the guard above guarantees finite
+    // numbers, so pineValueToDecimal cannot produce the NaN marker here.
+    const highD = pineValueToDecimal(high);
+    const lowD = pineValueToDecimal(low);
+    const closeD = pineValueToDecimal(close);
+    // On bar 0 there is no close[1]; fall back to close so TR degrades to
+    // max(high-low, |high-close|, |low-close|) — identical to ta.tr/ta.atr.
     const prevClose = ctx.close.getRelative(1);
-    const tr = Math.max(
-      high - low,
-      Math.abs(high - (typeof prevClose === 'number' ? prevClose : close)),
-      Math.abs(low - (typeof prevClose === 'number' ? prevClose : close)),
+    const prevCloseD = isFiniteNumber(prevClose) ? pineValueToDecimal(prevClose) : closeD;
+    const tr = Decimal.max(
+      highD.minus(lowD),
+      highD.minus(prevCloseD).abs(),
+      lowD.minus(prevCloseD).abs(),
     );
 
     const key = `st_${period}_${eng.currentCallSiteId}`;
     if (!eng.supertrendState.has(key)) {
       eng.supertrendState.set(key, {
         atrCount: 0,
-        atrPrev: 0,
+        atrPrev: new Decimal(0),
         prevUpper: null,
         prevLower: null,
       });
     }
     const state = eng.supertrendState.get(key)!;
 
-    // Internal ATR via the same seed-then-Wilder RMA as ta.atr/ta.rma.
-    let atr: number | null;
+    // Internal ATR via the same seed-then-Wilder RMA as ta.atr/ta.rma — the
+    // warm-up SMA and the Wilder smoothing both accumulate EXACTLY at DP=20.
+    let atr: Decimal | null;
     state.atrCount++;
     if (state.atrCount === 1) {
       state.atrPrev = tr;
       atr = null;
     } else if (state.atrCount <= period) {
-      state.atrPrev = (state.atrPrev * (state.atrCount - 1) + tr) / state.atrCount;
+      state.atrPrev = state.atrPrev
+        .times(new Decimal(state.atrCount - 1))
+        .plus(tr)
+        .div(new Decimal(state.atrCount));
       atr = null;
     } else {
-      state.atrPrev = (state.atrPrev * (period - 1) + tr) / period;
+      state.atrPrev = state.atrPrev
+        .times(new Decimal(period - 1))
+        .plus(tr)
+        .div(new Decimal(period));
       atr = state.atrPrev;
     }
 
@@ -293,16 +321,16 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
       return [NA, NA] as PineValue;
     }
 
-    const hl2 = (high + low) / 2;
-    const upper = hl2 + mult * atr;
-    const lower = hl2 - mult * atr;
-    const finalUpper = state.prevUpper === null ? upper : Math.min(upper, state.prevUpper);
-    const finalLower = state.prevLower === null ? lower : Math.max(lower, state.prevLower);
+    const hl2 = highD.plus(lowD).div(2);
+    const upper = hl2.plus(mult.times(atr));
+    const lower = hl2.minus(mult.times(atr));
+    const finalUpper = state.prevUpper === null ? upper : Decimal.min(upper, state.prevUpper);
+    const finalLower = state.prevLower === null ? lower : Decimal.max(lower, state.prevLower);
     state.prevUpper = finalUpper;
     state.prevLower = finalLower;
 
-    const st = close > finalUpper ? finalLower : finalUpper;
-    const direction = close >= st ? 1 : -1;
-    return [guardFinite(st), direction] as PineValue;
+    const st = closeD.gt(finalUpper) ? finalLower : finalUpper;
+    const direction = closeD.gte(st) ? 1 : -1;
+    return [decimalToPineValue(st), direction] as PineValue;
   });
 }
