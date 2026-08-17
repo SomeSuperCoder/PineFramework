@@ -427,21 +427,55 @@ export class PineChart {
 
     for (let row = 0; row < table.rows; row++) {
       html += '<tr>';
-      for (let col = 0; col < table.columns; col++) {
-        const cell = table.cells[`${col},${row}`];
-        if (cell) {
-          const textColor = cell.text_color || tokens.colors.ink['1'];
-          const cellBg = cell.bgcolor || 'transparent';
-          const halign = cell.text_halign || 'center';
-          const valign = cell.text_valign || 'center';
-          const fontSize = cell.text_size === 'size.large' ? '14px'
-            : cell.text_size === 'size.small' ? '9px'
+
+      // Row 0: merge all cells into a single spanning cell (title + sparkline row).
+      // PineScript tables put the title at col 0 and sparkline block characters in
+      // subsequent columns of row 0. TradingView renders these as a single centered
+      // row; we replicate that with colspan.
+      if (row === 0) {
+        let cellContent = '';
+        let firstCell: typeof table.cells[string] | null = null;
+        for (let col = 0; col < table.columns; col++) {
+          const cell = table.cells[`${col},${row}`];
+          if (cell) {
+            if (!firstCell) firstCell = cell;
+            // Convert literal \n to <br> for HTML line breaks
+            cellContent += cell.text.replace(/\n/g, '<br>');
+          }
+        }
+
+        if (firstCell) {
+          const textColor = firstCell.text_color || tokens.colors.ink['1'];
+          const cellBg = firstCell.bgcolor || 'transparent';
+          const valign = firstCell.text_valign || 'center';
+          const fontSize = firstCell.text_size === 'size.large' ? '14px'
+            : firstCell.text_size === 'size.small' ? '9px'
             : '11px';
-          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${cell.text}</td>`;
+          html += `<td colspan="${table.columns}" style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: center; vertical-align: ${valign}; font-size: ${fontSize}; white-space: nowrap;" title="${firstCell.tooltip || firstCell.text}">${cellContent}</td>`;
         } else {
-          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
+          html += `<td colspan="${table.columns}" style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
+        }
+      } else {
+        // Normal rows: render each cell individually
+        for (let col = 0; col < table.columns; col++) {
+          const cell = table.cells[`${col},${row}`];
+          if (cell) {
+            const textColor = cell.text_color || tokens.colors.ink['1'];
+            const cellBg = cell.bgcolor || 'transparent';
+            const halign = cell.text_halign || 'center';
+            const valign = cell.text_valign || 'center';
+            const fontSize = cell.text_size === 'size.large' ? '14px'
+              : cell.text_size === 'size.small' ? '9px'
+              : '11px';
+            // Convert literal \n to <br> for HTML line breaks
+            const text = cell.text.replace(/\n/g, '<br>');
+            html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${text}</td>`;
+          } else {
+            html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
+          }
         }
       }
+
       html += '</tr>';
     }
     html += '</table>';
