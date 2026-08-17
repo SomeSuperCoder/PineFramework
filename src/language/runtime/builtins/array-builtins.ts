@@ -5,21 +5,25 @@ export function registerArrayBuiltins(engine: ExecutionEngine): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
 
-  eng.builtins.set('array.new_float', (_size: PineValue): PineValue => {
-    return [];
+  eng.builtins.set('array.new_float', (size: PineValue): PineValue => {
+    const n = typeof size === 'number' ? Math.max(0, Math.floor(size)) : 0;
+    return new Array(n).fill(0);
   });
 
-  eng.builtins.set('array.new_int', (_size: PineValue): PineValue => {
-    return [];
+  eng.builtins.set('array.new_int', (size: PineValue): PineValue => {
+    const n = typeof size === 'number' ? Math.max(0, Math.floor(size)) : 0;
+    return new Array(n).fill(0);
   });
 
-  eng.builtins.set('array.new_line', (_size: PineValue): PineValue => {
-    return [];
+  eng.builtins.set('array.new_line', (size: PineValue): PineValue => {
+    const n = typeof size === 'number' ? Math.max(0, Math.floor(size)) : 0;
+    return new Array(n).fill(null);
   });
 
   // Generic array.new<T>(size) - used as array.new<T>(size)
-  eng.builtins.set('array.new', (_size: PineValue): PineValue => {
-    return [];
+  eng.builtins.set('array.new', (size: PineValue): PineValue => {
+    const n = typeof size === 'number' ? Math.max(0, Math.floor(size)) : 0;
+    return new Array(n).fill(0);
   });
 
   // array.from(...values) - create array from values

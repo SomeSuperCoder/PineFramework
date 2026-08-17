@@ -464,7 +464,7 @@ export class PineChart {
             : cell.text_size === 'size.small' ? '9px'
             : '11px';
           // Map text_font_family to CSS font-family
-          const fontFamily = cell.text_font_family === 'monospace' || cell.text_font_family === 'font.family_monospace'
+          const fontFamily = cell.text_font_family === 'monospace' || cell.text_font_family === 'font.family_monospace' || cell.text_font_family === 'family_monospace'
             ? 'monospace'
             : cell.text_font_family === 'sans-serif'
               ? 'sans-serif'
