@@ -105,7 +105,7 @@ export class PlotSeriesManager {
   getNonOverlayPaneCount(): number {
     const paneIndices = new Set<number>();
     for (const [, handle] of this.plotSeries) {
-      if (!handle.overlay && handle.paneIndex !== undefined) {
+      if (handle.paneIndex !== undefined) {
         paneIndices.add(handle.paneIndex);
       }
     }
