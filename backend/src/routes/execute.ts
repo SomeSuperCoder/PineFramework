@@ -150,6 +150,7 @@ executeRouter.post('/execute', async (req, res) => {
       frame_color: t.frame_color,
       frame_width: t.frame_width,
       cells: t.cells,
+      mergedCells: t.mergedCells,
     }));
 
     const resultAny = result as unknown as Record<string, unknown>;

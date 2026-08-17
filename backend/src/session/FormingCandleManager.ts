@@ -232,6 +232,7 @@ export class FormingCandleManager {
       position: number; columns: number; rows: number; bgcolor: string;
       border_color: string; border_width: number; frame_color: string; frame_width: number;
       cells: Record<string, { text: string; text_color: string; text_halign: string; text_valign: string; bgcolor: string; width: number; text_size: string; tooltip: string }>;
+      mergedCells: Array<{ startCol: number; startRow: number; endCol: number; endRow: number }>;
     }> | undefined;
     const tables = (rawTables || []).map((t) => ({
       position: t.position,
@@ -243,6 +244,7 @@ export class FormingCandleManager {
       frame_color: t.frame_color,
       frame_width: t.frame_width,
       cells: t.cells,
+      mergedCells: t.mergedCells,
     }));
     const alertConditions: Array<{ id: string; title: string; message: string }> = [];
     const rawConditions = resultAny.alertConditions as Array<{ id: string; title: string; message: string }> | undefined;
