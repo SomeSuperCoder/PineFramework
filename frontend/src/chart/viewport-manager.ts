@@ -7,10 +7,20 @@
  * on rendering and public API.
  */
 
-import type { CandlestickData } from './types.js';
+import type { CandlestickData, LinefillData, DrawingLineData, LabelData } from './types.js';
 import type { Viewport } from './Viewport.js';
 import type { LayoutManager } from './LayoutManager.js';
 import type { PlotSeriesHandle } from './plot-series-manager.js';
+
+/**
+ * The pane-scoped drawing objects whose price values can seed an indicator
+ * pane's price range when the pane has no non-overlay plot series.
+ */
+export interface PaneDrawings {
+  linefills: LinefillData[];
+  drawingLines: DrawingLineData[];
+  labels: LabelData[];
+}
 
 export class ViewportManager {
   constructor(
@@ -54,11 +64,19 @@ export class ViewportManager {
   /**
    * Compute and set the price range from visible candles + overlay plots.
    * Also updates indicator pane price ranges.
+   *
+   * Panes with non-overlay plot series are seeded from those series' prices.
+   * A pane with NO non-overlay series (e.g. an all-force_overlay indicator
+   * like supertrend-3d) falls back to `paneDrawings` — the price extents of
+   * the pane's own drawing objects — so lines/linefills/labels map on-pane
+   * instead of hitting the {-1,1} default and rendering off-pane. This is
+   * fallback-only: it never overrides a series-derived pane range.
    */
   updatePriceRange(
     candles: CandlestickData[],
     allSeries: Map<string, PlotSeriesHandle>,
     hiddenPlots: Set<string>,
+    paneDrawings?: PaneDrawings,
   ): void {
     const range = this.viewport.getVisibleRange();
     let min = Infinity;
@@ -127,6 +145,38 @@ export class ViewportManager {
       }
       if (indMin !== Infinity && indMax !== -Infinity) {
         this.layout.setIndicatorPriceRange(pane.id, indMin, indMax);
+      } else if (paneDrawings) {
+        // FALLBACK-ONLY: this pane has no non-overlay series prices, so the
+        // range would stay at the {-1,1} default and every drawing would map
+        // off-pane. Seed the range from the pane's drawing objects instead.
+        let drawingMin = Infinity;
+        let drawingMax = -Infinity;
+        const consider = (v: number | undefined): void => {
+          if (v !== null && v !== undefined && typeof v === 'number' && isFinite(v)) {
+            if (v < drawingMin) drawingMin = v;
+            if (v > drawingMax) drawingMax = v;
+          }
+        };
+        for (const lf of paneDrawings.linefills) {
+          if (lf.paneIndex !== paneIndex) continue;
+          consider(lf.line1.y1);
+          consider(lf.line1.y2);
+          consider(lf.line2.y1);
+          consider(lf.line2.y2);
+        }
+        for (const line of paneDrawings.drawingLines) {
+          if (line.paneIndex !== paneIndex) continue;
+          for (const p of line.points) consider(p.price);
+        }
+        for (const label of paneDrawings.labels) {
+          if (label.paneIndex !== paneIndex) continue;
+          consider(label.price);
+        }
+        if (drawingMin !== Infinity && drawingMax !== -Infinity) {
+          // setIndicatorPriceRange applies the 10% padding so the surface is
+          // not clipped at the pane edges.
+          this.layout.setIndicatorPriceRange(pane.id, drawingMin, drawingMax);
+        }
       }
     }
   }

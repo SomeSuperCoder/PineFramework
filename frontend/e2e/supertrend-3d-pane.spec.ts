@@ -22,9 +22,15 @@ import { fileURLToPath } from 'url';
  *      renders the API name POSTed to /api/indicators, NOT the PineScript
  *      title ("Supertrend Parameter Sensitivity 3D").
  *   2. The badge is NOT stuck on "Computing…" — the execution engine finished.
- *   3. The overlay=false indicator renders a bottom pane: the indicator-pane
- *      band of the canvas (≈70–93% of height, below the volume area) contains
- *      non-transparent pixels — the pane's drawing objects actually drew.
+ *   3. A REAL indicator pane exists: the pixel-level proof is the SEPARATOR
+ *      line. PineChart.ts:374-379 strokes a full-width horizontal line at the
+ *      pane's top edge in the chart's configured borderColor — but ONLY when
+ *      regions.indicatorPanes is non-empty. No separator = no pane.
+ *      NOTE: the app passes borderColor = tokens.colors.hairline.default
+ *      (#262636) from ChartComponent, NOT tokens.chart.border (#35354a). The
+ *      detection predicate below matches #262636 and its anti-aliased blends.
+ *   4. The pane BELOW the separator contains rendered content (the 81
+ *      paneIndexed linefills = the 3D surface), not an empty box.
  */
 
 const FRONTEND = 'http://localhost:3000';
@@ -183,7 +189,10 @@ async function addSupertrend3D(page: Page) {
 
   // 3. The indicator badge MUST appear. The badge renders the API name we
   //    sent ("LuxAlgo - ST 3D Surface"), not the PineScript title.
-  await expect(page.getByText('LuxAlgo - ST 3D Surface')).toBeVisible({
+  //    `.first()`: a stale duplicate indicator in the backend store (from a
+  //    prior session) renders a second badge with the same name — the first
+  //    badge is the one this test added. Strict mode would otherwise throw.
+  await expect(page.getByText('LuxAlgo - ST 3D Surface').first()).toBeVisible({
     timeout: 15_000,
   });
 
@@ -207,52 +216,123 @@ test.describe('supertrend-3d indicator pane rendering', () => {
     // While executing, the badge shows a spinner with sr-only "Computing…"
     // text. When the execution engine finishes, that text is replaced by
     // "Ready". It must NOT be stuck on "Computing…".
-    await expect(page.getByText('Computing…')).toBeHidden({
+    await expect(page.getByText('Computing…').first()).toBeHidden({
       timeout: 15_000,
     });
 
-    // ── Acceptance 3: a bottom pane exists for the overlay=false indicator ──
-    // LayoutManager.calculate allocates an indicator PaneRegion in the bottom
-    // of the canvas (above the volume area, below the main chart). Evidence:
-    // the indicator-pane band (≈70–93% of canvas height) contains
-    // non-transparent pixels — the pane's drawing objects actually drew.
+    // ── Acceptance 3: a REAL indicator pane exists (separator line) ──
+    // The distinguishing pixel feature of a pane is the SEPARATOR drawn by
+    // PineChart.ts:374-379: a full-width horizontal line in the chart's
+    // configured borderColor at pane.y, drawn ONLY when regions.indicatorPanes
+    // is non-empty. When the pane machinery is broken (indicatorPanes stays
+    // []), no separator is ever drawn — the main chart simply fills the whole
+    // canvas, which is why the old "70–93% band has non-transparent pixels"
+    // check was a false positive.
+    //
+    // The app configures borderColor = tokens.colors.hairline.default =
+    // #262636 = rgb(38,38,54) (ChartComponent passes it to createChart), and
+    // pane.y is fractional (0.7*(h-30)), so the 1px line anti-aliases across
+    // two rows at ~70%/30% blend over the canvas background rgb(13,13,24) →
+    // measured separator pixels ≈ rgb(34,41,48) / rgb(20,20,32). Predicate:
+    // blue-dominant (B >= R && B >= G), clearly brighter than background
+    // (bright >= 30), and not bright content (bright <= 140). The 90%-of-row
+    // width threshold keeps vertical bars (candles/volume — sparse per row)
+    // and the 3D surface (≤10% non-background per row) from matching.
+    //
+    // Scan rows between 50% and (height − 40px) of the canvas for a horizontal
+    // run ≥90% of the chart width of the separator color family. The scan band
+    // deliberately excludes the time-scale top border (drawn at height − 30px
+    // in the same border color) and starts below the main-chart price grid.
     // Poll because the canvas render lands asynchronously after execution.
+    let paneSeparator: { y: number; coverage: number } | null = null;
     await expect
       .poll(
         async () => {
-          const pane = await page.evaluate(() => {
+          const separator = await page.evaluate(() => {
             const canvas = document.querySelector(
               'canvas',
             ) as HTMLCanvasElement | null;
-            if (!canvas) return { coverage: 0, width: 0, height: 0 };
+            if (!canvas) return null;
             const ctx = canvas.getContext('2d');
-            if (!ctx) return { coverage: 0, width: canvas.width, height: canvas.height };
+            if (!ctx) return null;
             const w = canvas.width;
             const h = canvas.height;
-            const startY = Math.floor(h * 0.7);
-            const endY = Math.floor(h * 0.93);
-            let nonEmpty = 0;
-            let total = 0;
-            for (let x = 0; x < Math.min(w, 200); x += 10) {
-              for (let y = startY; y < endY; y += 10) {
-                const px = ctx.getImageData(x, y, 1, 1).data;
-                if (px[3] > 0) nonEmpty++;
-                total++;
+            const chartW = Math.max(0, w - 70); // priceScaleWidth=70 → separator spans x∈[0, chartW)
+            if (chartW < 100) return null;
+            const startY = Math.floor(h * 0.5);
+            const endY = Math.max(startY + 1, h - 40); // exclude time-scale border at h-30
+            const band = ctx.getImageData(0, startY, w, endY - startY);
+            const data = band.data;
+            const rowStride = w * 4;
+            for (let r = 0; r < endY - startY; r++) {
+              let match = 0;
+              for (let x = 0; x < chartW; x++) {
+                const o = r * rowStride + x * 4;
+                const R = data[o];
+                const G = data[o + 1];
+                const B = data[o + 2];
+                // Separator color family: the app's borderColor is
+                // #262636 = rgb(38,38,54) (hairline.default), blue-dominant,
+                // anti-aliased to ≈rgb(34,41,48) at the fractional pane.y.
+                const bright = (R + G + B) / 3;
+                if (
+                  B >= R &&
+                  B >= G &&
+                  bright >= 30 &&
+                  bright <= 140
+                ) {
+                  match++;
+                }
+              }
+              if (match >= chartW * 0.9) {
+                const sepY = startY + r;
+                // ── Acceptance 4: pane BELOW separator must contain content ──
+                // Measure non-background pixel coverage in the pane area
+                // (separator+1 .. h−30, the indicator pane's vertical extent).
+                // Background is tokens.colors.canvas #0d0d18 = rgb(13,13,24);
+                // the 81 paneIndexed linefills (3D surface) are much brighter.
+                const paneTop = sepY + 1;
+                const paneBottom = Math.min(h - 30, h);
+                let nonBg = 0;
+                let total = 0;
+                if (paneBottom > paneTop) {
+                  const paneImg = ctx.getImageData(
+                    0,
+                    paneTop,
+                    chartW,
+                    paneBottom - paneTop,
+                  );
+                  const pdata = paneImg.data;
+                  for (let i = 0; i < pdata.length; i += 4) {
+                    const pr = pdata[i];
+                    const pg = pdata[i + 1];
+                    const pb = pdata[i + 2];
+                    total++;
+                    if (pr > 40 || pg > 40 || pb > 40) nonBg++;
+                  }
+                }
+                return {
+                  y: sepY,
+                  coverage: total > 0 ? nonBg / total : 0,
+                };
               }
             }
-            return {
-              coverage: total > 0 ? nonEmpty / total : 0,
-              width: w,
-              height: h,
-            };
+            return null;
           });
-          return pane.coverage;
+          paneSeparator = separator;
+          return separator;
         },
         {
           timeout: 10_000,
-          message: 'supertrend-3d bottom pane NOT rendered',
+          message:
+            'supertrend-3d bottom pane separator NOT rendered — no full-width border-color line in the 50%..h-40px band (regions.indicatorPanes is empty)',
         },
       )
-      .toBeGreaterThan(0);
+      .not.toBeNull();
+
+    // ── Acceptance 4 (continued): the pane is not an empty box ──
+    // Only reachable once a separator exists. Require meaningful rendered
+    // content (the 3D surface linefills) inside the pane, not just a line.
+    expect(paneSeparator!.coverage).toBeGreaterThan(0.01);
   });
 });

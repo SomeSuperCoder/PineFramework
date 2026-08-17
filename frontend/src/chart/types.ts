@@ -73,6 +73,8 @@ export interface DrawingLineData {
   width?: number;
   style?: 'solid' | 'dotted' | 'dashed';
   extend?: 'none' | 'left' | 'right' | 'both';
+  /** Pane index for indicator-paned drawing lines. Undefined = main chart area. */
+  paneIndex?: number;
 }
 
 export interface LabelData {
@@ -83,6 +85,8 @@ export interface LabelData {
   textColor?: string;
   style?: string;
   size?: string;
+  /** Pane index for indicator-paned labels. Undefined = main chart area. */
+  paneIndex?: number;
 }
 
 export interface AlertTriggerData {

@@ -105,6 +105,12 @@ export class PlotSeriesManager {
 
   setManualNonOverlayCount(count: number): void {
     this.manualNonOverlayCount = count;
+    // Fire the layout-change check like addPlotSeries/removeSeries do, so a
+    // change in the manual count (pane-only indicators with no non-overlay
+    // plots) triggers a resize → layout.calculate with the new pane count.
+    // Without this, indicator panes would never appear (or would persist as a
+    // ghost pane after the indicator is removed).
+    this.checkLayoutChange();
   }
 
   getNonOverlayPaneCount(): number {

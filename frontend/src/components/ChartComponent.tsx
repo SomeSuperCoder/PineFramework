@@ -417,18 +417,32 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         allFillColorData = { ...allFillColorData, ...result.fillColorData };
       }
       for (const l of (result.lines || [])) {
-        allDrawingLines.push({
+        const line: DrawingLineData = {
           points: l.points, color: l.color || tokens.colors.brand.blue,
           width: l.width || 1, style: l.style || 'dotted',
           extend: l.extend || 'none',
-        });
+        };
+        // Non-overlay indicator lines need a paneIndex so they render in the
+        // correct indicator pane instead of the main chart area.
+        if (!result.overlay) {
+          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
+          line.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+        }
+        allDrawingLines.push(line);
       }
       for (const l of (result.labels || [])) {
-        allChartLabels.push({
+        const label: LabelData = {
           time: l.time, price: l.price, text: l.text,
           color: l.color || tokens.colors.brand.blue, textColor: l.textColor || tokens.colors.ink['1'],
           style: l.style, size: l.size,
-        });
+        };
+        // Non-overlay indicator labels need a paneIndex so they render in the
+        // correct indicator pane instead of the main chart area.
+        if (!result.overlay) {
+          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
+          label.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+        }
+        allChartLabels.push(label);
       }
       // Resolve Pine Script alert template placeholders
       const resolveAlertMsg = (msg: string, barIdx: number): string => {

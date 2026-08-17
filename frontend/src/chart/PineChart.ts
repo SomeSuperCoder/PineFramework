@@ -16,7 +16,7 @@ import type {
 } from './types.js';
 import { DEFAULT_OPTIONS } from './types.js';
 import { Viewport } from './Viewport.js';
-import { LayoutManager } from './LayoutManager.js';
+import { LayoutManager, type PaneRegion } from './LayoutManager.js';
 import { InteractionHandler } from './InteractionHandler.js';
 import { CandlestickRenderer } from './renderers/CandlestickRenderer.js';
 import { VolumeRenderer } from './renderers/VolumeRenderer.js';
@@ -241,6 +241,7 @@ export class PineChart {
       this.candles,
       this.plotSeriesManager.getAllSeries(),
       this.plotSeriesManager.getHiddenPlots(),
+      { linefills: this.linefills, drawingLines: this.drawingLines, labels: this.chartLabels },
     );
     this.viewportManager.updateVolumeMax(this.candles);
 
@@ -308,7 +309,13 @@ export class PineChart {
 
     this.hlineRenderer.render(ctx, this.hlines, this.viewport, this.layout);
 
-    this.renderDrawingLines(ctx);
+    // Render drawing lines (e.g. 3D surface wireframe)
+    // Only render overlay/main-chart lines here; indicator-paned lines are
+    // rendered inside the per-pane loop below.
+    const overlayDrawingLines = this.drawingLines.filter((l) => l.paneIndex === undefined);
+    if (overlayDrawingLines.length > 0) {
+      this.renderDrawingLines(ctx, undefined, overlayDrawingLines);
+    }
 
     this.renderTeleportLine(ctx);
 
@@ -350,6 +357,18 @@ export class PineChart {
         this.linefillRenderer.render(ctx, paneLinefills, this.viewport, this.layout, pane);
       }
 
+      // Render drawing lines for this indicator pane
+      const paneDrawingLines = this.drawingLines.filter((l) => l.paneIndex === paneIndex);
+      if (paneDrawingLines.length > 0) {
+        this.renderDrawingLines(ctx, pane, paneDrawingLines);
+      }
+
+      // Render labels for this indicator pane
+      const paneLabels = this.chartLabels.filter((l) => l.paneIndex === paneIndex);
+      if (paneLabels.length > 0) {
+        this.renderLabels(ctx, pane, paneLabels);
+      }
+
       ctx.restore();
 
       ctx.strokeStyle = this.options.borderColor;
@@ -364,7 +383,12 @@ export class PineChart {
 
     this.markerRenderer.renderAlertTriggers(ctx, this.alertTriggers, this.candles, this.viewport, this.layout);
 
-    this.renderLabels(ctx);
+    // Only render overlay/main-chart labels here; indicator-paned labels are
+    // rendered inside the per-pane loop above.
+    const overlayLabels = this.chartLabels.filter((l) => l.paneIndex === undefined);
+    if (overlayLabels.length > 0) {
+      this.renderLabels(ctx, undefined, overlayLabels);
+    }
     this.renderBoxes(ctx);
 
     if (this.options.showAxisLabels) {
@@ -525,17 +549,19 @@ export class PineChart {
     return lo;
   }
 
-  private renderDrawingLines(ctx: CanvasRenderingContext2D): void {
+  private renderDrawingLines(ctx: CanvasRenderingContext2D, pane?: PaneRegion, lines?: DrawingLineData[]): void {
     const regions = this.layout.getRegions();
-    const { chartArea } = regions;
-    for (const line of this.drawingLines) {
+    const chartArea = pane ?? regions.chartArea;
+    const paneId = pane?.id;
+    const toRender = lines ?? this.drawingLines;
+    for (const line of toRender) {
       if (line.points.length < 2) continue;
       const bi1 = this.findBarIndex(line.points[0].time);
       const bi2 = this.findBarIndex(line.points[1].time);
       const x1 = this.viewport.barIndexToPixel(bi1);
-      const y1 = this.layout.priceToPixel(line.points[0].price, chartArea.y, chartArea.height);
+      const y1 = this.layout.priceToPixel(line.points[0].price, chartArea.y, chartArea.height, paneId);
       const x2 = this.viewport.barIndexToPixel(bi2);
-      const y2 = this.layout.priceToPixel(line.points[1].price, chartArea.y, chartArea.height);
+      const y2 = this.layout.priceToPixel(line.points[1].price, chartArea.y, chartArea.height, paneId);
       ctx.beginPath();
       const extend = line.extend || 'none';
       if (extend === 'right') {
@@ -605,9 +631,10 @@ export class PineChart {
     ctx.restore();
   }
 
-  private renderLabels(ctx: CanvasRenderingContext2D): void {
+  private renderLabels(ctx: CanvasRenderingContext2D, pane?: PaneRegion, labels?: LabelData[]): void {
     const regions = this.layout.getRegions();
-    const { chartArea } = regions;
+    const chartArea = pane ?? regions.chartArea;
+    const paneId = pane?.id;
 
     // Map Pine Script size strings to font sizes
     const sizeMap: Record<string, number> = {
@@ -618,10 +645,11 @@ export class PineChart {
       'size.huge': 16,
     };
 
-    for (const label of this.chartLabels) {
+    const toRender = labels ?? this.chartLabels;
+    for (const label of toRender) {
       const bi = this.findBarIndex(label.time);
       const x = this.viewport.barIndexToPixel(bi) + this.viewport.getBarSpacing() / 2;
-      const y = this.layout.priceToPixel(label.price, chartArea.y, chartArea.height);
+      const y = this.layout.priceToPixel(label.price, chartArea.y, chartArea.height, paneId);
       const text = label.text || '';
       const style = label.style || 'label.style_label_down';
       const fontSize = sizeMap[label.size || 'size.normal'] || 12;
