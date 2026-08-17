@@ -19,3 +19,10 @@ ChartComponent assigns pane indexes sequentially (`nonOverlayPaneIndex++`) but t
 - `frontend/src/chart/plot-series-manager.ts:116-124`: `getNonOverlayPaneCount` returns `Math.max(paneIndices.size, this.manualNonOverlayCount)`.
 - The e2e (`frontend/e2e/supertrend-3d-pane.spec.ts`) covers only the single-indicator case; multi-indicator ordering is untested.
 - Out of acceptance scope for the supertrend-3d single-indicator fix (which is GREEN); flagged for future multi-indicator work.
+## Related test-coverage gap (2026-08-18, QA pane-vanish acceptance)
+
+The new `pane-vanish-classification.test.tsx` covers only the single-indicator supertrend-3d case. Add a test asserting `maxManualNonOverlayCount` accumulates correctly via Math.max across two indicators (all-overlay + normal non-overlay) in one classification run — proving the collision fix above and locking the ordering behavior. Low priority; the 415-suite passes today.
+
+## Evidence
+- ChartComponent.tsx:355-357 (Math.max accumulation)
+- frontend/src/__tests__/pane-vanish-classification.test.tsx (single-indicator only)

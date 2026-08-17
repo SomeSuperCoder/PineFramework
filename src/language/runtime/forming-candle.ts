@@ -33,6 +33,8 @@ export class FormingCandleProcessor {
         success: result.success,
         error: result.error,
         overlay: this.eng.compiledScript.overlay,
+        hiddenPlotKeys: result.hiddenPlotKeys,
+        plotOverlayKeys: result.plotOverlayKeys,
         diffOutputs: Object.fromEntries(
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Array.from(result.outputs as Map<string, any>).map(([k, s]) => [k, (s as any).last()]),
@@ -404,6 +406,8 @@ export class FormingCandleProcessor {
       success: result.success,
       error: result.error,
       overlay: this.eng.compiledScript.overlay,
+      hiddenPlotKeys: result.hiddenPlotKeys,
+      plotOverlayKeys: result.plotOverlayKeys,
       diffOutputs,
       diffShapes,
       diffFills,

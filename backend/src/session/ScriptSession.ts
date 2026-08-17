@@ -9,6 +9,11 @@ export interface ScriptOutputs {
   outputs: Record<string, (number | string | boolean | null)[]>;
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
+  // Overlay classification keys — forwarded from ExecutionResult so WS
+  // messages carry the same pane classification as the REST path (execute.ts).
+  // Optional: consumers that predate these fields are unaffected.
+  hiddenPlotKeys?: string[];
+  plotOverlayKeys?: string[];
   shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: Array<{

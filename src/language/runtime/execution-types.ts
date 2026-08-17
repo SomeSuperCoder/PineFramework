@@ -200,6 +200,10 @@ export interface FormingCandleResult {
   diffLabels: LabelEntry[];
   diffPlotColors?: Record<string, (string | null)[]>;
   diffFillColorData?: Record<string, (string | null)[]>;
+  // Overlay classification keys — mirror ExecutionResult so the forming-candle
+  // serializer can forward the same pane classification over WS as REST.
+  hiddenPlotKeys?: string[];
+  plotOverlayKeys?: string[];
   diffBgcolor?: Array<{ time: number; color: string }>;
   diffBarColors?: Array<CandleColorEntry>;
   diffAlertTriggers?: AlertTriggerEntry[];
