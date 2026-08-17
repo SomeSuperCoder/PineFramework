@@ -74,6 +74,10 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         typeof namedArgs.text_size === 'string'
           ? namedArgs.text_size
           : (existing?.text_size ?? 'normal'),
+      text_font_family:
+        typeof namedArgs.text_font_family === 'string'
+          ? namedArgs.text_font_family
+          : (existing?.text_font_family ?? 'inherit'),
       tooltip: typeof namedArgs.tooltip === 'string' ? namedArgs.tooltip : '',
     };
     return NA;
@@ -140,6 +144,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         bgcolor: '#00000000',
         width: 0,
         text_size: 'normal',
+        text_font_family: 'inherit',
         tooltip: '',
       };
     } else {
@@ -165,6 +170,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         bgcolor: '#00000000',
         width: 0,
         text_size: 'normal',
+        text_font_family: 'inherit',
         tooltip: '',
       };
     } else {
@@ -190,6 +196,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         bgcolor: color,
         width: 0,
         text_size: 'normal',
+        text_font_family: 'inherit',
         tooltip: '',
       };
     } else {
@@ -215,6 +222,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
         bgcolor: '#00000000',
         width,
         text_size: 'normal',
+        text_font_family: 'inherit',
         tooltip: '',
       };
     } else {

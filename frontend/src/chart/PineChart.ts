@@ -463,6 +463,16 @@ export class PineChart {
           const fontSize = cell.text_size === 'size.large' ? '14px'
             : cell.text_size === 'size.small' ? '9px'
             : '11px';
+          // Map text_font_family to CSS font-family
+          const fontFamily = cell.text_font_family === 'monospace' || cell.text_font_family === 'font.family_monospace'
+            ? 'monospace'
+            : cell.text_font_family === 'sans-serif'
+              ? 'sans-serif'
+              : cell.text_font_family === 'serif'
+                ? 'serif'
+                : cell.text_font_family && cell.text_font_family !== 'inherit'
+                  ? cell.text_font_family
+                  : '';
           // Convert literal \n to <br> for HTML line breaks
           const text = cell.text.replace(/\n/g, '<br>');
 
@@ -477,7 +487,7 @@ export class PineChart {
           // Merged cells get word-break: normal to prevent awkward breaks
           const wordBreak = span ? 'white-space: nowrap;' : 'word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;';
 
-          html += `<td${colspanAttr}${rowspanAttr} style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; ${wordBreak}" title="${cell.tooltip || cell.text}">${text}</td>`;
+          html += `<td${colspanAttr}${rowspanAttr} style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize};${fontFamily ? ` font-family: ${fontFamily};` : ''} ${wordBreak}" title="${cell.tooltip || cell.text}">${text}</td>`;
         } else {
           html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
         }

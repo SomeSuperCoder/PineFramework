@@ -76,6 +76,7 @@ export interface TableCellData {
   width: number;
   text_size: string;
   tooltip: string;
+  text_font_family?: string;
 }
 
 export interface MergedRegionData {

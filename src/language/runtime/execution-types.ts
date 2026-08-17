@@ -63,6 +63,7 @@ export interface TableCellEntry {
   bgcolor: string;
   width: number;
   text_size: string;
+  text_font_family: string;
   tooltip: string;
 }
 

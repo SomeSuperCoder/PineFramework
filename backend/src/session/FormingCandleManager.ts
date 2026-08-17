@@ -231,7 +231,7 @@ export class FormingCandleManager {
     const rawTables = resultAny.tables as Array<{
       position: number; columns: number; rows: number; bgcolor: string;
       border_color: string; border_width: number; frame_color: string; frame_width: number;
-      cells: Record<string, { text: string; text_color: string; text_halign: string; text_valign: string; bgcolor: string; width: number; text_size: string; tooltip: string }>;
+      cells: Record<string, { text: string; text_color: string; text_halign: string; text_valign: string; bgcolor: string; width: number; text_size: string; text_font_family: string; tooltip: string }>;
       mergedCells: Array<{ startCol: number; startRow: number; endCol: number; endRow: number }>;
     }> | undefined;
     const tables = (rawTables || []).map((t) => ({
