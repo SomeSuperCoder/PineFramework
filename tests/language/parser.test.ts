@@ -74,10 +74,10 @@ describe('Tokenizer', () => {
   });
 
   it('tokenizes string with escape sequences', () => {
-    // In Pine Script, \n is treated as literal characters, not newline
+    // PineScript \n → newline (matches TradingView behavior)
     const tokens = new Tokenizer('"line1\\nline2"').tokenize();
     expect(tokens[0]?.type).toBe('String');
-    expect(tokens[0]?.value).toBe('line1nline2');
+    expect(tokens[0]?.value).toBe('line1\nline2');
   });
 
   it('tokenizes float numbers', () => {

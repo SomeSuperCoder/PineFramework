@@ -118,6 +118,15 @@ export function executeAssignment(
       // `:=` always assigns the RHS value regardless of current value.
       if (stmt.operator !== ':=' && (isNa(current) || isNa(value))) {
         result = NA;
+      } else if (
+        // String concatenation for `+=`: mirror the binary `+` operator's
+        // string handling (expression-executor.ts line 282).  Without this,
+        // non-numeric values (strings, booleans) silently coerce to 0,
+        // turning `result += blocks.get(i)` into `result += 0`.
+        stmt.operator === '+=' &&
+        (typeof current === 'string' || typeof value === 'string')
+      ) {
+        result = String(current) + String(value);
       } else {
         const c = typeof current === 'number' ? current : 0;
         const v = typeof value === 'number' ? value : 0;
@@ -167,6 +176,15 @@ export function executeAssignment(
         // `:=` always assigns the RHS value regardless of current value.
         if (stmt.operator !== ':=' && (isNa(current) || isNa(value))) {
           result = NA;
+        } else if (
+          // String concatenation for `+=`: mirror the binary `+` operator's
+          // string handling (expression-executor.ts line 282).  Without this,
+          // non-numeric values (strings, booleans) silently coerce to 0,
+          // turning `obj.field += str` into `obj.field += 0`.
+          stmt.operator === '+=' &&
+          (typeof current === 'string' || typeof value === 'string')
+        ) {
+          result = String(current) + String(value);
         } else {
           const c = typeof current === 'number' ? current : 0;
           const v = typeof value === 'number' ? value : 0;
