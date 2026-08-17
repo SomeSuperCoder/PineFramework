@@ -328,10 +328,10 @@ function App() {
     await indicatorManager.removeIndicator(indicatorId);
   };
 
-  const overlayIndicatorLabels = indicatorManager.getOverlayIndicators().map((i) => ({
+  const indicatorLabels = indicatorManager.indicators.map((i) => ({
     id: i.id,
     name: i.name,
-    overlay: true,
+    overlay: i.overlay,
   }));
 
   const handleRunBacktest = useCallback(
@@ -409,7 +409,7 @@ function App() {
               symbol={symbol}
               interval={timeframe}
               fetchOlderOHLCV={fetchOlderOHLCV}
-              indicatorLabels={overlayIndicatorLabels}
+              indicatorLabels={indicatorLabels}
               indicatorResults={indicatorResults}
               computingIndicators={computingIndicators}
               onRemoveIndicator={handleRemoveIndicator}
