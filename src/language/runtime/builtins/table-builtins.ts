@@ -29,6 +29,7 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
       frame_color: typeof namedArgs.frame_color === 'string' ? namedArgs.frame_color : '#00000000',
       frame_width: typeof namedArgs.frame_width === 'number' ? namedArgs.frame_width : 1,
       cells: {},
+      mergedCells: [],
     };
     eng.tables.set(id, table);
     return id;
@@ -75,6 +76,19 @@ export function registerTableBuiltins(engine: ExecutionEngine): void {
           : (existing?.text_size ?? 'normal'),
       tooltip: typeof namedArgs.tooltip === 'string' ? namedArgs.tooltip : '',
     };
+    return NA;
+  });
+
+  // table.merge_cells(table_id, start_col, start_row, end_col, end_row)
+  eng.builtins.set('table.merge_cells', (...args: PineValue[]): PineValue => {
+    const tableId = typeof args[0] === 'number' ? args[0] : 0;
+    const startCol = typeof args[1] === 'number' ? Math.trunc(args[1] as number) : 0;
+    const startRow = typeof args[2] === 'number' ? Math.trunc(args[2] as number) : 0;
+    const endCol = typeof args[3] === 'number' ? Math.trunc(args[3] as number) : 0;
+    const endRow = typeof args[4] === 'number' ? Math.trunc(args[4] as number) : 0;
+    const table = eng.tables.get(tableId);
+    if (!table) return NA;
+    table.mergedCells.push({ startCol, startRow, endCol, endRow });
     return NA;
   });
 

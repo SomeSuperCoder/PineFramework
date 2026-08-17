@@ -66,6 +66,14 @@ export interface TableCellEntry {
   tooltip: string;
 }
 
+// Region defined by start/end column and row, used by table.merge_cells
+export interface MergedRegion {
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+}
+
 export interface TableEntry {
   position: number;
   columns: number;
@@ -76,6 +84,7 @@ export interface TableEntry {
   frame_color: string;
   frame_width: number;
   cells: Record<string, TableCellEntry>; // key: "col,row"
+  mergedCells: MergedRegion[];
 }
 
 export interface LinefillEntry {

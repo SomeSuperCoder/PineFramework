@@ -423,56 +423,63 @@ export class PineChart {
     const frameWidth = table.frame_width || 1;
     const bgcolor = table.bgcolor || 'transparent';
 
+    // Build skip set and span map for merged cells
+    const skipCells = new Set<string>();
+    const spanMap = new Map<string, { colspan: number; rowspan: number }>();
+
+    if (table.mergedCells) {
+      for (const merge of table.mergedCells) {
+        const colspan = merge.endCol - merge.startCol + 1;
+        const rowspan = merge.endRow - merge.startRow + 1;
+        spanMap.set(`${merge.startCol},${merge.startRow}`, { colspan, rowspan });
+
+        // Mark all other cells in the merge as skipped
+        for (let r = merge.startRow; r <= merge.endRow; r++) {
+          for (let c = merge.startCol; c <= merge.endCol; c++) {
+            if (c !== merge.startCol || r !== merge.startRow) {
+              skipCells.add(`${c},${r}`);
+            }
+          }
+        }
+      }
+    }
+
     let html = `<table style="border-collapse: collapse; background: ${bgcolor}; border: ${frameWidth}px solid ${frameColor}; font-size: 11px; font-family: ${tokens.typography.fontFamily}; max-width: 100%; width: auto;">`;
 
     for (let row = 0; row < table.rows; row++) {
       html += '<tr>';
 
-      // Row 0: merge all cells into a single spanning cell (title + sparkline row).
-      // PineScript tables put the title at col 0 and sparkline block characters in
-      // subsequent columns of row 0. TradingView renders these as a single centered
-      // row; we replicate that with colspan.
-      if (row === 0) {
-        let cellContent = '';
-        let firstCell: typeof table.cells[string] | null = null;
-        for (let col = 0; col < table.columns; col++) {
-          const cell = table.cells[`${col},${row}`];
-          if (cell) {
-            if (!firstCell) firstCell = cell;
-            // Convert literal \n to <br> for HTML line breaks
-            cellContent += cell.text.replace(/\n/g, '<br>');
-          }
-        }
+      for (let col = 0; col < table.columns; col++) {
+        const key = `${col},${row}`;
 
-        if (firstCell) {
-          const textColor = firstCell.text_color || tokens.colors.ink['1'];
-          const cellBg = firstCell.bgcolor || 'transparent';
-          const valign = firstCell.text_valign || 'center';
-          const fontSize = firstCell.text_size === 'size.large' ? '14px'
-            : firstCell.text_size === 'size.small' ? '9px'
+        // Skip cells that are covered by a merge but are not the start cell
+        if (skipCells.has(key)) continue;
+
+        const cell = table.cells[key];
+        if (cell) {
+          const textColor = cell.text_color || tokens.colors.ink['1'];
+          const cellBg = cell.bgcolor || 'transparent';
+          const valign = cell.text_valign || 'center';
+          const fontSize = cell.text_size === 'size.large' ? '14px'
+            : cell.text_size === 'size.small' ? '9px'
             : '11px';
-          html += `<td colspan="${table.columns}" style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: center; vertical-align: ${valign}; font-size: ${fontSize}; white-space: nowrap;" title="${firstCell.tooltip || firstCell.text}">${cellContent}</td>`;
+          // Convert literal \n to <br> for HTML line breaks
+          const text = cell.text.replace(/\n/g, '<br>');
+
+          // Check if this cell is the start of a merged region
+          const span = spanMap.get(key);
+          const colspanAttr = span ? ` colspan="${span.colspan}"` : '';
+          const rowspanAttr = span ? ` rowspan="${span.rowspan}"` : '';
+
+          // Merged cells are always centered; non-merged use the cell's halign
+          const halign = span ? 'center' : (cell.text_halign || 'center');
+
+          // Merged cells get word-break: normal to prevent awkward breaks
+          const wordBreak = span ? 'white-space: nowrap;' : 'word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;';
+
+          html += `<td${colspanAttr}${rowspanAttr} style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; ${wordBreak}" title="${cell.tooltip || cell.text}">${text}</td>`;
         } else {
-          html += `<td colspan="${table.columns}" style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
-        }
-      } else {
-        // Normal rows: render each cell individually
-        for (let col = 0; col < table.columns; col++) {
-          const cell = table.cells[`${col},${row}`];
-          if (cell) {
-            const textColor = cell.text_color || tokens.colors.ink['1'];
-            const cellBg = cell.bgcolor || 'transparent';
-            const halign = cell.text_halign || 'center';
-            const valign = cell.text_valign || 'center';
-            const fontSize = cell.text_size === 'size.large' ? '14px'
-              : cell.text_size === 'size.small' ? '9px'
-              : '11px';
-            // Convert literal \n to <br> for HTML line breaks
-            const text = cell.text.replace(/\n/g, '<br>');
-            html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px; color: ${textColor}; background: ${cellBg}; text-align: ${halign}; vertical-align: ${valign}; font-size: ${fontSize}; word-break: break-word; max-width: 200px; overflow: hidden; text-overflow: ellipsis;" title="${cell.tooltip || cell.text}">${text}</td>`;
-          } else {
-            html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
-          }
+          html += `<td style="border: ${borderWidth}px solid ${borderColor}; padding: 2px 6px;"></td>`;
         }
       }
 

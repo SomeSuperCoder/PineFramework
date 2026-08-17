@@ -172,6 +172,13 @@ export interface TableCellData {
   tooltip: string;
 }
 
+export interface MergedRegionData {
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+}
+
 export interface TableData {
   position: number;
   columns: number;
@@ -182,4 +189,5 @@ export interface TableData {
   frame_color: string;
   frame_width: number;
   cells: Record<string, TableCellData>;
+  mergedCells?: MergedRegionData[];
 }

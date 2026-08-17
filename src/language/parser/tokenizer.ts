@@ -355,7 +355,33 @@ export class Tokenizer {
         if (this.isAtEnd()) {
           throw this.error('Unterminated escape sequence', start);
         }
-        value += this.advance();
+        const escaped = this.advance();
+        switch (escaped) {
+          case 'n':
+            value += '\n';
+            break;
+          case 't':
+            value += '\t';
+            break;
+          case 'r':
+            value += '\r';
+            break;
+          case '\\':
+            value += '\\';
+            break;
+          case '"':
+            value += '"';
+            break;
+          case "'":
+            value += "'";
+            break;
+          case '0':
+            value += '\0';
+            break;
+          default:
+            value += escaped;
+            break;
+        }
       } else {
         value += this.advance();
       }
