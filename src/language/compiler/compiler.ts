@@ -473,15 +473,31 @@ export class Compiler {
         );
       }
       this.builder.emit(IROpCode.StoreVar, stmt.span, name, stmt.operator);
+    } else if (stmt.target.kind === 'ArrayExpression') {
+      // Destructuring assignment: declare each variable in the pattern
+      for (const elem of stmt.target.elements) {
+        if (elem.kind === 'Identifier') {
+          const existing = resolveVariable(this.scope, elem.name);
+          if (!existing) {
+            const varType = seriesOf(FLOAT_TYPE);
+            declareVariable(this.scope, elem.name, varType);
+            this.globals.push({
+              name: elem.name,
+              type: varType,
+              isVar: false,
+              isVarip: false,
+              isConst: false,
+            });
+          }
+        }
+      }
+      this.inferExpressionType(stmt.target);
+      this.builder.emit(IROpCode.StoreVar, stmt.span, 'indexed', stmt.operator);
     } else if (
       stmt.target.kind === 'MemberExpression' ||
-      stmt.target.kind === 'IndexExpression' ||
-      stmt.target.kind === 'ArrayExpression'
+      stmt.target.kind === 'IndexExpression'
     ) {
       // Validate the target is a structurally assignable expression.
-      // MemberExpression: property set on a mutable object
-      // IndexExpression:  element set on a mutable array/map
-      // ArrayExpression:  destructuring assignment
       this.inferExpressionType(stmt.target);
       this.builder.emit(IROpCode.StoreVar, stmt.span, 'indexed', stmt.operator);
     } else {

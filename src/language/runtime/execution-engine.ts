@@ -277,7 +277,7 @@ export class ExecutionEngine {
    *  (min/max against prior band) can be evaluated per bar. */
   /** @internal */ supertrendState: Map<
     string,
-    { atrCount: number; atrPrev: Decimal; prevUpper: Decimal | null; prevLower: Decimal | null }
+    { atrCount: number; atrPrev: Decimal; prevUpper: Decimal | null; prevLower: Decimal | null; prevDirection: number }
   > = new Map();
   // M8: highest/lowest buffers hold Decimal for exact comparison (no IEEE 754 drift).
   /** @internal */ highestBuffers: Map<string, Decimal[]> = new Map();

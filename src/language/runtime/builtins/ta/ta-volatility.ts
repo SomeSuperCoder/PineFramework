@@ -310,8 +310,16 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const closeD = pineValueToDecimal(close);
     // On bar 0 there is no close[1]; fall back to close so TR degrades to
     // max(high-low, |high-close|, |low-close|) — identical to ta.tr/ta.atr.
-    const prevClose = ctx.close.getRelative(1);
-    const prevCloseD = isFiniteNumber(prevClose) ? pineValueToDecimal(prevClose) : closeD;
+    //
+    // IMPORTANT: ctx.close only has the current bar's value (1-element series),
+    // so ctx.close.getRelative(1) always returns NA.  Use ohlcHistory instead —
+    // the interpreter pushes the current bar's close there BEFORE executing
+    // statements, so ohlcHistory.close[length-2] is the previous bar's close.
+    const ohlcClose = eng.ohlcHistory.close;
+    const prevCloseNum =
+      ohlcClose.length >= 2 ? ohlcClose[ohlcClose.length - 2] : NaN;
+    const prevCloseD =
+      isFinite(prevCloseNum) ? new Decimal(prevCloseNum) : closeD;
     const tr = Decimal.max(
       highD.minus(lowD),
       highD.minus(prevCloseD).abs(),
@@ -325,6 +333,7 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
         atrPrev: new Decimal(0),
         prevUpper: null,
         prevLower: null,
+        prevDirection: 1,  // PineScript: initial direction is downtrend (1)
       });
     }
     const state = eng.supertrendState.get(key)!;
@@ -378,8 +387,21 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     state.prevUpper = finalUpper;
     state.prevLower = finalLower;
 
-    const st = closeD.gt(finalUpper) ? finalLower : finalUpper;
-    const direction = closeD.gte(st) ? -1 : 1;
+    // PineScript: supertrend value depends on previous direction
+    let st: Decimal;
+    let direction: number;
+    if (state.prevDirection === -1) {
+      // Was uptrend: supertrend = lower band (support)
+      // But if close < lower, flip to upper (reversal to downtrend)
+      st = closeD.lt(finalLower) ? finalUpper : finalLower;
+      direction = closeD.lt(finalLower) ? 1 : -1;
+    } else {
+      // Was downtrend: supertrend = upper band (resistance)
+      // But if close > upper, flip to lower (reversal to uptrend)
+      st = closeD.gt(finalUpper) ? finalLower : finalUpper;
+      direction = closeD.gt(finalUpper) ? -1 : 1;
+    }
+    state.prevDirection = direction;
     return [decimalToPineValue(st), direction] as PineValue;
   });
 }
