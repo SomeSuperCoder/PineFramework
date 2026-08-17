@@ -55,6 +55,119 @@ export function cleanNumber(value: number): string {
 }
 
 /**
+ * Format a number using a PineScript format specifier string.
+ *
+ * Supported patterns:
+ *   "#.##"  — up to 2 decimal places, trailing zeros suppressed
+ *   "#.#"   — up to 1 decimal place, trailing zeros suppressed
+ *   "#"     — integer, no decimal point
+ *   "0.00"  — exactly 2 decimal places, trailing zeros kept
+ *   "0"     — exactly 0 decimal places
+ *   "+#.#"  — signed, explicit sign prefix
+ *   "-#.#"  — signed, explicit sign prefix
+ *
+ * Rules:
+ *   '#' = optional digit (suppress trailing zeros)
+ *   '0' = required digit (pad with zeros)
+ *   Characters other than #, 0, ., +, - are treated as decoration
+ *   (prefix/suffix text), not format specifiers — unsupported.
+ *
+ * Non-finite values bypass the format and return their String() representation.
+ * Unrecognized/empty format falls back to cleanNumber().
+ *
+ * Examples:
+ *   formatNumber(35.51401869, "#.##")  → "35.51"
+ *   formatNumber(37.2, "#.#")          → "37.2"
+ *   formatNumber(37.9, "#")            → "38"
+ *   formatNumber(35.5, "0.00")         → "35.50"
+ *   formatNumber(37.2, "+#.#")         → "+37.2"
+ *   formatNumber(-5.1, "+#.#")         → "-5.1"
+ */
+export function formatNumber(value: number, format: string): string {
+  // NaN / Infinity — always bypass format, match PineScript behavior
+  if (Number.isNaN(value)) return 'NaN';
+  if (!Number.isFinite(value)) return String(value);
+
+  // ── Parse the format string ──
+  // Expected: [signPrefix][integerPattern][.fractionalPattern][suffix]
+  // Allow only valid characters: # 0 . + -
+  const CORE_RE = /^[+-]?[0#]+\.?[0#]*$/;
+  const match = format.match(CORE_RE);
+  if (!match) {
+    // Unrecognized format — fall back to cleanNumber (matches constraint 5)
+    return cleanNumber(value);
+  }
+
+  const token = match[0];
+  const hasDot = token.includes('.');
+
+  // Split into sign, integer part, fractional part
+  const signChar = token[0] === '+' || token[0] === '-' ? token[0] : null;
+  const body = signChar ? token.slice(1) : token;
+  const [intPart, fracPart] = hasDot ? body.split('.') : [body, ''];
+
+  // Count required zero digits in integer part
+  const intZero = (intPart.match(/0/g) || []).length;
+  const fracHash = (fracPart.match(/#/g) || []).length;
+  const fracZero = (fracPart.match(/0/g) || []).length;
+
+  // Determine sign of the result (always follows the actual number)
+  const isNeg = value < 0;
+  const absVal = Math.abs(value);
+
+  // ── Compute integer and fractional parts ──
+  let integerPart: string;
+  let fractionalPart: string;
+
+  if (!hasDot || (fracHash === 0 && fracZero === 0)) {
+    // No fractional digits requested — round to integer
+    const rounded = Math.round(absVal);
+    integerPart = String(rounded);
+    fractionalPart = '';
+  } else {
+    // Compute fractional precision (highest of # and 0 counts)
+    const maxFrac = Math.max(fracHash, fracZero);
+    // toFixed rounds half-away-from-zero; toFixed(0) for negative 0 edge case
+    const fixed = absVal.toFixed(maxFrac);
+    const dotIdx = fixed.indexOf('.');
+    integerPart = fixed.slice(0, dotIdx);
+    fractionalPart = fixed.slice(dotIdx + 1);
+  }
+
+  // ── Apply formatting rules ──
+  let result = '';
+
+  // Sign prefix
+  if (signChar) {
+    // Explicit sign mode: always show sign, negative numbers already have it
+    if (!isNeg) result += signChar === '+' ? '+' : '';
+  }
+  if (isNeg) result += '-';
+
+  // Integer part: pad with zeros if integer part contains '0' chars
+  if (intZero > 0) {
+    integerPart = integerPart.padStart(intZero, '0');
+  }
+  result += integerPart;
+
+  // Fractional part
+  if (hasDot && (fracHash > 0 || fracZero > 0)) {
+    if (fracHash > 0 && fracZero === 0) {
+      // Pure '#' mode: keep fractional digits, but strip trailing zeros
+      fractionalPart = fractionalPart.replace(/0+$/, '');
+    }
+    // else: '0' mode or mixed — keep all digits (toFixed already handles padding)
+
+    // Only append the dot + fractional digits if there's something to show
+    if (fractionalPart.length > 0) {
+      result += '.' + fractionalPart;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Format a number as a template argument for str.format().
  * Integers stay as-is; floats get clean formatting.
  * Arrays and other types fall back to String().

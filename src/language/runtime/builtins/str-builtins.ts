@@ -1,6 +1,6 @@
 import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
-import { cleanNumber, formatTemplateArg } from '../../utils/number-format.js';
+import { cleanNumber, formatNumber, formatTemplateArg } from '../../utils/number-format.js';
 
 export function registerStrBuiltins(engine: ExecutionEngine): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,9 +69,14 @@ export function registerStrBuiltins(engine: ExecutionEngine): void {
     return Number.isNaN(num) ? NA : num;
   });
 
-  eng.builtins.set('str.tostring', (value: PineValue): PineValue => {
+  eng.builtins.set('str.tostring', (value: PineValue, format?: PineValue): PineValue => {
     if (isNa(value)) return NA;
-    if (typeof value === 'number') return cleanNumber(value);
+    if (typeof value === 'number') {
+      if (typeof format === 'string' && format.length > 0) {
+        return formatNumber(value, format);
+      }
+      return cleanNumber(value);
+    }
     return String(value);
   });
 }

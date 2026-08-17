@@ -234,7 +234,7 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
   // ── Linefill builtins ────────────────────────────────────────────────────
   eng.builtins.set(
     'linefill.new',
-    (line1Id: PineValue, line2Id: PineValue, namedArgs?: Record<string, PineValue>): PineValue => {
+    (line1Id: PineValue, line2Id: PineValue, arg3?: PineValue | Record<string, PineValue>): PineValue => {
       if (
         typeof line1Id !== 'number' ||
         typeof line2Id !== 'number' ||
@@ -245,9 +245,14 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
       }
       let colorStr = '#2196f380';
       let fillgaps = false;
-      if (typeof namedArgs === 'object' && namedArgs !== null) {
-        if (typeof namedArgs.color === 'string') colorStr = namedArgs.color;
-        if (typeof namedArgs.fillgaps === 'boolean') fillgaps = namedArgs.fillgaps;
+      // Handle both positional (color) and named ({color, fillgaps}) third argument
+      if (typeof arg3 === 'object' && arg3 !== null && !Array.isArray(arg3)) {
+        // Named args: linefill.new(l1, l2, color=color, fillgaps=true)
+        if (typeof arg3.color === 'string') colorStr = arg3.color;
+        if (typeof arg3.fillgaps === 'boolean') fillgaps = arg3.fillgaps;
+      } else if (typeof arg3 === 'string') {
+        // Positional color: linefill.new(l1, l2, color)
+        colorStr = arg3;
       }
       const id = eng.linefillIdCounter++;
       eng.linefills.set(id, {
