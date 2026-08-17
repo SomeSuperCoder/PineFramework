@@ -25,6 +25,7 @@ export interface ScriptOutputs {
   }>;
   bgcolor?: Array<{ time: number; color: string }>;
   lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
+  linefills?: Array<{ line1: { x1: number; y1: number; x2: number; y2: number; color: string }; line2: { x1: number; y1: number; x2: number; y2: number; color: string }; color: string; fillgaps: boolean }>;
   labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
   boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
   tables?: Array<{

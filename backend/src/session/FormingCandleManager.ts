@@ -207,6 +207,13 @@ export class FormingCandleManager {
       style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid' as string,
     }));
 
+    const linefills = (result.linefills || []).map((lf) => ({
+      line1: { x1: lf.line1.x1, y1: lf.line1.y1, x2: lf.line1.x2, y2: lf.line1.y2, color: lf.line1.color },
+      line2: { x1: lf.line2.x1, y1: lf.line2.y1, x2: lf.line2.x2, y2: lf.line2.y2, color: lf.line2.color },
+      color: lf.color,
+      fillgaps: lf.fillgaps,
+    }));
+
     const labels = (result.labels || []).map((l) => ({
       time: l.time,
       price: l.price,
@@ -294,6 +301,7 @@ export class FormingCandleManager {
       bgcolor: result.bgcolor,
       barColors: barColors.length > 0 ? barColors : undefined,
       lines,
+      linefills,
       labels,
       boxes,
       tables,
@@ -344,6 +352,13 @@ export class FormingCandleManager {
       style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid' as string,
     }));
 
+    const linefills = (result.diffLinefills || []).map((lf) => ({
+      line1: { x1: lf.line1.x1, y1: lf.line1.y1, x2: lf.line1.x2, y2: lf.line1.y2, color: lf.line1.color },
+      line2: { x1: lf.line2.x1, y1: lf.line2.y1, x2: lf.line2.x2, y2: lf.line2.y2, color: lf.line2.color },
+      color: lf.color,
+      fillgaps: lf.fillgaps,
+    }));
+
     const labels = (result.diffLabels || []).map((l) => ({
       time: l.time,
       price: l.price,
@@ -377,6 +392,7 @@ export class FormingCandleManager {
       bgcolor: result.diffBgcolor,
       barColors: barColors.length > 0 ? barColors : undefined,
       lines,
+      linefills,
       labels,
       barTimestamps,
       barIndex: this.bars.length - 1,
