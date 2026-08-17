@@ -246,10 +246,11 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
       let colorStr = '#2196f380';
       let fillgaps = false;
       // Handle both positional (color) and named ({color, fillgaps}) third argument
-      if (typeof arg3 === 'object' && arg3 !== null && !Array.isArray(arg3)) {
+      if (typeof arg3 === 'object' && arg3 !== null && !Array.isArray(arg3) && !(arg3 instanceof Map)) {
         // Named args: linefill.new(l1, l2, color=color, fillgaps=true)
-        if (typeof arg3.color === 'string') colorStr = arg3.color;
-        if (typeof arg3.fillgaps === 'boolean') fillgaps = arg3.fillgaps;
+        const opts = arg3 as Record<string, PineValue>;
+        if (typeof opts.color === 'string') colorStr = opts.color;
+        if (typeof opts.fillgaps === 'boolean') fillgaps = opts.fillgaps;
       } else if (typeof arg3 === 'string') {
         // Positional color: linefill.new(l1, l2, color)
         colorStr = arg3;

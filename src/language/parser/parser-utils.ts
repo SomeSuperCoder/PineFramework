@@ -86,7 +86,11 @@ export class ParserBase {
       this.check(TokenType.ColorType) ||
       this.check(TokenType.Array) ||
       this.check(TokenType.Map) ||
-      this.check(TokenType.Matrix)
+      this.check(TokenType.Matrix) ||
+      this.check(TokenType.LineType) ||
+      this.check(TokenType.LabelType) ||
+      this.check(TokenType.BoxType) ||
+      this.check(TokenType.TableType)
     );
   }
 
@@ -103,6 +107,10 @@ export class ParserBase {
       TokenType.Array,
       TokenType.Map,
       TokenType.Matrix,
+      TokenType.LineType,
+      TokenType.LabelType,
+      TokenType.BoxType,
+      TokenType.TableType,
     ].includes(type);
   }
 
@@ -142,6 +150,10 @@ export class ParserBase {
       TokenType.Array,
       TokenType.Map,
       TokenType.Matrix,
+      TokenType.LineType,
+      TokenType.LabelType,
+      TokenType.BoxType,
+      TokenType.TableType,
       TokenType.Identifier,
     ];
 

@@ -1,5 +1,5 @@
 import { Decimal } from 'decimal.js';
-import { NA, type PineValue } from '../../../types/na.js';
+import { NA, isNa, type PineValue } from '../../../types/na.js';
 import { isFiniteNumber } from '../../float-guards.js';
 import { pineValueToDecimal, decimalToPineValue } from '../../numbers/index.js';
 import type { ExecutionEngine } from '../../execution-engine.js';
@@ -311,15 +311,21 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     // On bar 0 there is no close[1]; fall back to close so TR degrades to
     // max(high-low, |high-close|, |low-close|) — identical to ta.tr/ta.atr.
     //
-    // IMPORTANT: ctx.close only has the current bar's value (1-element series),
-    // so ctx.close.getRelative(1) always returns NA.  Use ohlcHistory instead —
-    // the interpreter pushes the current bar's close there BEFORE executing
-    // statements, so ohlcHistory.close[length-2] is the previous bar's close.
+    // Prefer ohlcHistory (the interpreter populates it with full bar history).
+    // Fall back to ctx.close.getRelative(1) for direct calls (e.g. tests) where
+    // the series carries the full history via contextAt.
     const ohlcClose = eng.ohlcHistory.close;
-    const prevCloseNum =
-      ohlcClose.length >= 2 ? ohlcClose[ohlcClose.length - 2] : NaN;
-    const prevCloseD =
-      isFinite(prevCloseNum) ? new Decimal(prevCloseNum) : closeD;
+    let prevCloseD: Decimal;
+    if (ohlcClose.length >= 2) {
+      const prevCloseNum = ohlcClose[ohlcClose.length - 2];
+      prevCloseD = isFinite(prevCloseNum) ? new Decimal(prevCloseNum) : closeD;
+    } else {
+      const rel1 = ctx.close.getRelative(1);
+      prevCloseD =
+        !isNa(rel1) && isFinite(Number(rel1))
+          ? new Decimal(Number(rel1))
+          : closeD;
+    }
     const tr = Decimal.max(
       highD.minus(lowD),
       highD.minus(prevCloseD).abs(),
@@ -392,14 +398,24 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     let direction: number;
     if (state.prevDirection === -1) {
       // Was uptrend: supertrend = lower band (support)
-      // But if close < lower, flip to upper (reversal to downtrend)
-      st = closeD.lt(finalLower) ? finalUpper : finalLower;
-      direction = closeD.lt(finalLower) ? 1 : -1;
+      // Flip to downtrend if close breaks below lower band (support)
+      if (closeD.lt(finalLower)) {
+        st = finalUpper;
+        direction = 1;
+      } else {
+        st = finalLower;
+        direction = -1;
+      }
     } else {
       // Was downtrend: supertrend = upper band (resistance)
-      // But if close > upper, flip to lower (reversal to uptrend)
-      st = closeD.gt(finalUpper) ? finalLower : finalUpper;
-      direction = closeD.gt(finalUpper) ? -1 : 1;
+      // Flip to uptrend if close breaks above upper band (resistance)
+      if (closeD.gt(finalUpper)) {
+        st = finalLower;
+        direction = -1;
+      } else {
+        st = finalUpper;
+        direction = 1;
+      }
     }
     state.prevDirection = direction;
     return [decimalToPineValue(st), direction] as PineValue;

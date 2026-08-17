@@ -138,50 +138,51 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     for (let i = 0; i < 7; i++) {
       expect(stAt(engine, bars, i, 3, 7)).toEqual([NA, NA]);
     }
-    // bar7: atr = (1.9*6 + 1.9)/7 = 13.3/7 = 1.9 EXACTLY.
-    // hl2 = (10.1+8.2)/2 = 9.15; upper = 9.15 + 3*1.9 = 14.85; lower = 3.45.
-    // prevUpper/prevLower null → finalUpper=14.85, finalLower=3.45.
-    // close 9.3 > 14.85? NO → st = 14.85; direction = -1.
+    // bar7: atr converges to 1.9 exactly (constant series → TR constant).
+    // PineScript convention: direction = -1 (uptrend), close >= st → -1.
+    // close 9.3 < 14.85 → direction = 1 (downtrend).
     expect(stAt(engine, bars, 7, 3, 7)).toEqual([
       new Decimal('14.85').toNumber(),
-      -1,
+      1,
     ]);
-    // recursion keeps atr = 1.9 forever → [14.85, -1] stable, no drift
+    // recursion keeps atr = 1.9 forever → [14.85, 1] stable, no drift
     for (let i = 8; i < bars.length; i++) {
       expect(stAt(engine, bars, i, 3, 7)).toEqual([
         new Decimal('14.85').toNumber(),
-        -1,
+        1,
       ]);
     }
   });
 
-  it('known mixed series → hand-computed EXACT band-following (min/max vs prior) + trend flip', () => {
+  it('known mixed series → hand-computed EXACT band-following (conditional ratchet) + trend flip', () => {
     const engine = newEngine();
-    // period=2, mult=1. TRs and the internal ATR are hand-computed below; the
-    // band-following rule (finalUpper = min(upper, prevUpper), finalLower =
-    // max(lower, prevLower)) is what makes bar3 keep the capped upper AND flip.
+    // period=2, mult=1. prevClose from getRelative(1) (real previous bar close).
+    // Conditional band-following:
+    // upper only tightens when close[1] < prevUpper; lower only tightens when
+    // close[1] > prevLower.
     const bars: TestBar[] = [
-      { high: 10, low: 8, close: 9 }, // tr=2 (fallback) → count=1 → NA
-      { high: 12, low: 9.5, close: 11 }, // tr=3 (prevClose=9) → count=2 ≤ 2 → NA
-      { high: 11.5, low: 7, close: 8.6 }, // tr=4.5 → count=3 > 2 → atr=(2.5+4.5)/2=3.5
-      { high: 14, low: 10, close: 13 }, // tr=5.4 → atr=(3.5+5.4)/2=4.45
-      { high: 13.4, low: 11, close: 12 }, // tr=2.4 → atr=(4.45+2.4)/2=3.425
+      { high: 10, low: 8, close: 9 }, // tr=max(2,1,1)=2 → count=1 → NA
+      { high: 12, low: 9.5, close: 11 }, // prevClose=9, tr=max(2.5,3,0.5)=3 → count=2 ≤ 2 → NA
+      { high: 11.5, low: 7, close: 8.6 }, // prevClose=11, tr=max(4.5,0.5,4)=4.5 → count=3 → atr=(2.5+4.5)/2=3.5
+      { high: 14, low: 10, close: 13 }, // prevClose=8.6, tr=max(4,5.4,1.4)=5.4 → atr=(3.5+5.4)/2=4.45
+      { high: 13.4, low: 11, close: 12 }, // prevClose=13, tr=max(2.4,0.4,2)=2.4 → atr=(4.45+2.4)/2=3.425
     ];
     // bar0/bar1: warm-up → [NA,NA]
     expect(stAt(engine, bars, 0, 1, 2)).toEqual([NA, NA]);
     expect(stAt(engine, bars, 1, 1, 2)).toEqual([NA, NA]);
     // bar2: atr=3.5, hl2=9.25 → upper=12.75, lower=5.75 (prev null).
-    // close 8.6 > 12.75? NO → st=12.75, dir=-1.
-    expect(stAt(engine, bars, 2, 1, 2)).toEqual([new Decimal('12.75').toNumber(), -1]);
+    // prevDirection=1 (init downtrend), close 8.6 < upper → st=12.75, dir=1.
+    expect(stAt(engine, bars, 2, 1, 2)).toEqual([new Decimal('12.75').toNumber(), 1]);
     // bar3: atr=4.45, hl2=12 → upper=16.45, lower=7.55.
-    // finalUpper=min(16.45, 12.75)=12.75 (band-following keeps the OLD upper),
-    // finalLower=max(7.55, 5.75)=7.55. close 13 > 12.75? YES → st=finalLower=7.55,
-    // dir: 13 >= 7.55 → 1. TREND FLIP.
-    expect(stAt(engine, bars, 3, 1, 2)).toEqual([new Decimal('7.55').toNumber(), 1]);
+    // close[1]=8.6 < prevUpper=12.75 → finalUpper=min(16.45,12.75)=12.75.
+    // close[1]=8.6 > prevLower=5.75 → finalLower=max(7.55,5.75)=7.55.
+    // close 13 > 12.75 → TREND FLIP: st=finalLower=7.55, dir=-1.
+    expect(stAt(engine, bars, 3, 1, 2)).toEqual([new Decimal('7.55').toNumber(), -1]);
     // bar4: atr=3.425, hl2=12.2 → upper=15.625, lower=8.775.
-    // finalUpper=min(15.625, 12.75)=12.75, finalLower=max(8.775, 7.55)=8.775.
-    // close 12 > 12.75? NO → st=12.75, dir=-1. FLIP BACK.
-    expect(stAt(engine, bars, 4, 1, 2)).toEqual([new Decimal('12.75').toNumber(), -1]);
+    // close[1]=13 > prevUpper=12.75 → finalUpper=15.625 (reset).
+    // close[1]=13 > prevLower=7.55 → finalLower=max(8.775,7.55)=8.775.
+    // close 12 > finalLower=8.775 → stays uptrend: st=8.775, dir=-1.
+    expect(stAt(engine, bars, 4, 1, 2)).toEqual([new Decimal('8.775').toNumber(), -1]);
   });
 
   it('supertrendState — Decimal|null widening: warm-up resets prevUpper/prevLower to null, emitted bands are exact Decimals', () => {
@@ -244,16 +245,16 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     // an emitted value. Instead count is STILL 2 → warm-up → [NA,NA].
     expect(stAt(engine2, mixed, 2, 3, 2)).toEqual([NA, NA]);
     // bar3: count=3 → atr=(2.5*1+2.4)/2=2.45. hl2=12.2 → upper=12.2+7.35=19.55,
-    // lower=12.2-7.35=4.85 (mult=3). st: 12 > 19.55? NO → 19.55, dir=-1.
-    expect(stAt(engine2, mixed, 3, 3, 2)).toEqual([new Decimal('19.55').toNumber(), -1]);
+    // lower=12.2-7.35=4.85 (mult=3). st: 12 > 19.55? NO → 19.55, dir=1.
+    expect(stAt(engine2, mixed, 3, 3, 2)).toEqual([new Decimal('19.55').toNumber(), 1]);
 
     // NaN close[1] falls back to close (period=1 → Wilder = TR itself).
     // The NaN-close bar (bar1) does NOT advance state (R4 guard fires before
     // state access) — so the seed is bar0's tr=2, and bar2's prevClose is
     // bar1's NaN close → fallback close=11 → tr = max(2.5, |12.5−11|=1.5,
     // |10−11|=1) = 2.5. count=2 > 1 → atr=(2*0+2.5)/1=2.5. hl2=11.25 →
-    // upper=18.75, lower=3.75. st: 11 > 18.75? NO → 18.75, dir=-1. Without
-    // the fallback, tr would be NaN → [NA,NA] — so [18.75,-1] proves it.
+    // upper=18.75, lower=3.75. st: 11 > 18.75? NO → 18.75, dir=1. Without
+    // the fallback, tr would be NaN → [NA,NA] — so [18.75,1] proves it.
     const engine3 = newEngine();
     const nanClose: TestBar[] = [
       { high: 10, low: 8, close: 9 }, // finite → count=1 seed → NA
@@ -262,7 +263,7 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     ];
     expect(stAt(engine3, nanClose, 0, 3, 1)).toEqual([NA, NA]);
     expect(stAt(engine3, nanClose, 1, 3, 1)).toEqual([NA, NA]);
-    expect(stAt(engine3, nanClose, 2, 3, 1)).toEqual([new Decimal('18.75').toNumber(), -1]);
+    expect(stAt(engine3, nanClose, 2, 3, 1)).toEqual([new Decimal('18.75').toNumber(), 1]);
   });
 
   it('R5: factor non-finite → mult defaults 3.0; atrPeriod non-number → Math.trunc default 10; atrPeriod ≤ 0 → [NA,NA]', () => {
@@ -272,9 +273,9 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
       close: 9.3,
     }));
     // factor NA / NaN / +Infinity → mult = 3.0. Constant series (period=7):
-    // bar7 upper = 9.15 + 3*1.9 = 14.85 → st=14.85, dir=-1. If mult were 0 the
+    // bar7 upper = 9.15 + 3*1.9 = 14.85 → st=14.85, dir=1. If mult were 0 the
     // band would collapse to hl2=9.15 and close 9.3 would flip the trend (st
-    // = lower = 9.15, dir=1) — so [14.85,-1] proves the 3.0 default. (Legacy
+    // = lower = 9.15, dir=-1) — so [14.85,1] proves the 3.0 default. (Legacy
     // code let +Infinity through as mult=Infinity → guardFinite → NA; the
     // isFiniteNumber guard now defaults it to 3.0 — the R5 improvement.)
     const engineFactorNA = newEngine();
@@ -283,7 +284,7 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     }
     expect(stAt(engineFactorNA, bars, 7, NA, 7)).toEqual([
       new Decimal('14.85').toNumber(),
-      -1,
+      1,
     ]);
     const engineFactorNaN = newEngine();
     for (let i = 0; i < 7; i++) {
@@ -291,7 +292,7 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     }
     expect(stAt(engineFactorNaN, bars, 7, Number.NaN, 7)).toEqual([
       new Decimal('14.85').toNumber(),
-      -1,
+      1,
     ]);
     const engineFactorInf = newEngine();
     for (let i = 0; i < 7; i++) {
@@ -299,18 +300,18 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     }
     expect(stAt(engineFactorInf, bars, 7, Number.POSITIVE_INFINITY, 7)).toEqual([
       new Decimal('14.85').toNumber(),
-      -1,
+      1,
     ]);
 
     // atrPeriod non-number (NA) → period defaults to 10 → 10 NA bars (0..9),
-    // first value on bar 10 (still [14.85,-1] on the constant series).
+    // first value on bar 10 (still [14.85,1] on the constant series).
     const enginePeriodNA = newEngine();
     for (let i = 0; i < 10; i++) {
       expect(stAt(enginePeriodNA, bars, i, 3, NA)).toEqual([NA, NA]);
     }
     expect(stAt(enginePeriodNA, bars, 10, 3, NA)).toEqual([
       new Decimal('14.85').toNumber(),
-      -1,
+      1,
     ]);
 
     // atrPeriod ≤ 0 → [NA,NA] on a finite bar, every bar.

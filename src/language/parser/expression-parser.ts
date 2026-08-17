@@ -363,7 +363,11 @@ export class ExpressionParser extends ParserBase {
       this.match(TokenType.Math) ||
       this.match(TokenType.Str) ||
       this.match(TokenType.Time) ||
-      this.match(TokenType.Input)
+      this.match(TokenType.Input) ||
+      this.match(TokenType.LineType) ||
+      this.match(TokenType.LabelType) ||
+      this.match(TokenType.BoxType) ||
+      this.match(TokenType.TableType)
     ) {
       const token = this.previous();
 

@@ -305,11 +305,13 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
     const currentTitles = new Set<string>();
     let colorIndex = 0;
     let nonOverlayPaneIndex = 0;
+    let maxManualNonOverlayCount = 0;
 
     for (const { result } of allResults) {
       // A result goes on the main chart if overlay=true OR if any of its plots are in overlayPlotTitles
       const resultIsOverlay = result.overlay;
       const paneIndex = resultIsOverlay ? undefined : nonOverlayPaneIndex++;
+      let hasNonOverlayPlot = false;
       for (const plot of result.plots) {
         let title = plot.title || `Plot ${colorIndex + 1}`;
         let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
@@ -340,6 +342,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
 
         // Per-plot overlay: use overlayPlotTitles to decide if this specific plot goes on the main chart
         const plotIsOverlay = result.overlay || (result.overlayPlotTitles?.includes(title) ?? false);
+        if (!plotIsOverlay) hasNonOverlayPlot = true;
         if (!seriesNamesRef.current.has(title)) {
           chart.addPlotSeries(title, {
             color: plotColor,
@@ -350,7 +353,12 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         seriesNamesRef.current.add(title);
         chart.setPlotData(title, seriesData);
       }
+      if (!resultIsOverlay && !hasNonOverlayPlot) {
+        maxManualNonOverlayCount = Math.max(maxManualNonOverlayCount, nonOverlayPaneIndex);
+      }
     }
+
+    chart.setManualNonOverlayPaneCount(maxManualNonOverlayCount);
 
     for (const name of seriesNamesRef.current) {
       if (!currentTitles.has(name)) {

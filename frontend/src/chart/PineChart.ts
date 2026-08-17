@@ -859,6 +859,10 @@ export class PineChart {
     this.markDirty();
   }
 
+  setManualNonOverlayPaneCount(count: number): void {
+    this.plotSeriesManager.setManualNonOverlayCount(count);
+  }
+
   setMarkers(markers: ShapeMarkerData[]): void {
     this.shapeMarkers = markers;
     this.markDirty();

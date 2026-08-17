@@ -22,6 +22,7 @@ export class PlotSeriesManager {
   private plotSeries: Map<string, PlotSeriesHandle> = new Map();
   private hiddenPlots: Set<string> = new Set();
   private lastIndicatorCount: number = 0;
+  private manualNonOverlayCount: number = 0;
 
   /** Called when the number of non-overlay indicator panes changes. */
   onLayoutChanged: (() => void) | null = null;
@@ -102,6 +103,10 @@ export class PlotSeriesManager {
     return this.hiddenPlots;
   }
 
+  setManualNonOverlayCount(count: number): void {
+    this.manualNonOverlayCount = count;
+  }
+
   getNonOverlayPaneCount(): number {
     const paneIndices = new Set<number>();
     for (const [, handle] of this.plotSeries) {
@@ -109,7 +114,7 @@ export class PlotSeriesManager {
         paneIndices.add(handle.paneIndex);
       }
     }
-    return paneIndices.size;
+    return Math.max(paneIndices.size, this.manualNonOverlayCount);
   }
 
   private checkLayoutChange(): void {

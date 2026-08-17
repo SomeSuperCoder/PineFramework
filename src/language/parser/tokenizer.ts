@@ -62,6 +62,10 @@ export enum TokenType {
   Str = 'Str',
   Time = 'Time',
   Input = 'Input',
+  LineType = 'LineType',
+  LabelType = 'LabelType',
+  BoxType = 'BoxType',
+  TableType = 'TableType',
 
   // Operators
   Plus = 'Plus',
@@ -151,6 +155,10 @@ const KEYWORDS: Record<string, TokenType> = {
   math: TokenType.Math,
   str: TokenType.Str,
   time: TokenType.Time,
+  line: TokenType.LineType,
+  label: TokenType.LabelType,
+  box: TokenType.BoxType,
+  table: TokenType.TableType,
   input: TokenType.Input,
 };
 
