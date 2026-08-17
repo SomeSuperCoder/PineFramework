@@ -359,13 +359,27 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const hl2 = highD.plus(lowD).div(2);
     const upper = hl2.plus(mult.times(atr));
     const lower = hl2.minus(mult.times(atr));
-    const finalUpper = state.prevUpper === null ? upper : Decimal.min(upper, state.prevUpper);
-    const finalLower = state.prevLower === null ? lower : Decimal.max(lower, state.prevLower);
+    // Upper band: ratchet down only if close[1] was below previous upper;
+    // otherwise reset to current upper (PineScript conditional band-following).
+    const finalUpper = state.prevUpper === null
+      ? upper
+      : prevCloseD.lt(state.prevUpper)
+        ? Decimal.min(upper, state.prevUpper)
+        : upper;
+
+    // Lower band: ratchet up only if close[1] was above previous lower;
+    // otherwise reset to current lower (PineScript conditional band-following).
+    const finalLower = state.prevLower === null
+      ? lower
+      : prevCloseD.gt(state.prevLower)
+        ? Decimal.max(lower, state.prevLower)
+        : lower;
+
     state.prevUpper = finalUpper;
     state.prevLower = finalLower;
 
     const st = closeD.gt(finalUpper) ? finalLower : finalUpper;
-    const direction = closeD.gte(st) ? 1 : -1;
+    const direction = closeD.gte(st) ? -1 : 1;
     return [decimalToPineValue(st), direction] as PineValue;
   });
 }
