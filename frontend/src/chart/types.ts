@@ -56,6 +56,8 @@ export interface LinefillData {
   line2: { x1: number; y1: number; x2: number; y2: number; color: string };
   color: string;
   fillgaps: boolean;
+  /** Pane index for indicator-paned linefills. Undefined = main chart area. */
+  paneIndex?: number;
 }
 
 export interface HLineData {

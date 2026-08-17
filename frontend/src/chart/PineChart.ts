@@ -256,7 +256,12 @@ export class PineChart {
     this.areaRenderer.render(ctx, this.fills, allPlots, this.candles, this.viewport, this.layout, this.fillColorData);
 
     // Render linefills (filled polygons between line pairs — e.g. 3D surface)
-    this.linefillRenderer.render(ctx, this.linefills, this.viewport, this.layout);
+    // Only render overlay/main-chart linefills here; indicator-paned linefills
+    // are rendered inside the per-pane loop below.
+    const overlayLinefills = this.linefills.filter((lf) => lf.paneIndex === undefined);
+    if (overlayLinefills.length > 0) {
+      this.linefillRenderer.render(ctx, overlayLinefills, this.viewport, this.layout);
+    }
 
     const regions = this.layout.getRegions();
 
@@ -337,6 +342,12 @@ export class PineChart {
       const paneShapes = this.shapeMarkers.filter((s) => s.paneIndex === paneIndex && s.overlay === false);
       if (paneShapes.length > 0) {
         this.markerRenderer.renderShapes(ctx, paneShapes, this.candles, this.viewport, this.layout, pane);
+      }
+
+      // Render linefills for this indicator pane
+      const paneLinefills = this.linefills.filter((lf) => lf.paneIndex === paneIndex);
+      if (paneLinefills.length > 0) {
+        this.linefillRenderer.render(ctx, paneLinefills, this.viewport, this.layout, pane);
       }
 
       ctx.restore();

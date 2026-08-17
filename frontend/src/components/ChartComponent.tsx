@@ -308,7 +308,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
 
     for (const { result } of allResults) {
       // A result goes on the main chart if overlay=true OR if any of its plots are in overlayPlotTitles
-      const resultIsOverlay = result.overlay || (result.overlayPlotTitles?.length ?? 0) > 0;
+      const resultIsOverlay = result.overlay;
       const paneIndex = resultIsOverlay ? undefined : nonOverlayPaneIndex++;
       for (const plot of result.plots) {
         let title = plot.title || `Plot ${colorIndex + 1}`;
@@ -395,7 +395,15 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         allFills.push({ from: f.from, to: f.to, color: f.color });
       }
       for (const lf of (result.linefills || [])) {
-        allLinefills.push(lf);
+        // Non-overlay indicator linefills need a paneIndex so they render in the
+        // correct indicator pane instead of the main chart area.
+        if (!result.overlay) {
+          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
+          const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+          allLinefills.push({ ...lf, paneIndex });
+        } else {
+          allLinefills.push(lf);
+        }
       }
       if (result.fillColorData) {
         allFillColorData = { ...allFillColorData, ...result.fillColorData };

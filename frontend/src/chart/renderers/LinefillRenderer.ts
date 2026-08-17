@@ -1,6 +1,6 @@
 import type { LinefillData } from '../types.js';
 import type { Viewport } from '../Viewport.js';
-import type { LayoutManager } from '../LayoutManager.js';
+import type { LayoutManager, PaneRegion } from '../LayoutManager.js';
 
 /** Convert #RRGGBBAA to rgba() — some Canvas contexts silently reject 9-char hex */
 function toRgba(hex: string): string {
@@ -29,12 +29,14 @@ export class LinefillRenderer {
     linefills: LinefillData[],
     viewport: Viewport,
     layout: LayoutManager,
+    pane?: PaneRegion,
   ): void {
     if (linefills.length === 0) return;
 
     const regions = layout.getRegions();
-    const { chartArea } = regions;
+    const chartArea = pane ?? regions.chartArea;
     const barSpacing = viewport.getBarSpacing();
+    const paneId = pane?.id;
 
     // Group by color for batch rendering (one fill call per color group)
     const colorGroups = new Map<string, LinefillData[]>();
@@ -55,13 +57,13 @@ export class LinefillRenderer {
       for (const lf of group) {
         // Convert barIndex → pixel X, price → pixel Y
         const x1 = viewport.barIndexToPixel(lf.line1.x1) + barSpacing / 2;
-        const y1 = layout.priceToPixel(lf.line1.y1, chartArea.y, chartArea.height);
+        const y1 = layout.priceToPixel(lf.line1.y1, chartArea.y, chartArea.height, paneId);
         const x2 = viewport.barIndexToPixel(lf.line1.x2) + barSpacing / 2;
-        const y2 = layout.priceToPixel(lf.line1.y2, chartArea.y, chartArea.height);
+        const y2 = layout.priceToPixel(lf.line1.y2, chartArea.y, chartArea.height, paneId);
         const x3 = viewport.barIndexToPixel(lf.line2.x2) + barSpacing / 2;
-        const y3 = layout.priceToPixel(lf.line2.y2, chartArea.y, chartArea.height);
+        const y3 = layout.priceToPixel(lf.line2.y2, chartArea.y, chartArea.height, paneId);
         const x4 = viewport.barIndexToPixel(lf.line2.x1) + barSpacing / 2;
-        const y4 = layout.priceToPixel(lf.line2.y1, chartArea.y, chartArea.height);
+        const y4 = layout.priceToPixel(lf.line2.y1, chartArea.y, chartArea.height, paneId);
 
         // Draw quadrilateral: line1.p1 → line1.p2 → line2.p2 → line2.p1
         ctx.moveTo(x1, y1);
