@@ -6,6 +6,7 @@ import {
   normalizeExecutionResultMessage,
   type ExecutionResultMessage,
   type ExecutionResultMessageInput,
+  type TableCellData,
 } from 'pine-framework/contracts';
 import type { ScriptResult } from '../types';
 
@@ -25,6 +26,25 @@ import type { ScriptResult } from '../types';
  */
 
 const SEC = 1000;
+
+/**
+ * A fully-shaped TableCellData fixture. The shared contract refactor made the
+ * cell fields REQUIRED (text_color, text_halign, text_valign, bgcolor, width,
+ * text_size, tooltip); the merge drivers treat cells as opaque data, so the
+ * extra fields do not change any assertion — they only satisfy the type.
+ */
+function makeCell(text: string): TableCellData {
+  return {
+    text,
+    text_color: '#fff',
+    text_halign: 'center',
+    text_valign: 'middle',
+    bgcolor: '#000',
+    width: 0,
+    text_size: 'small',
+    tooltip: '',
+  };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fixtures
@@ -52,7 +72,7 @@ function buildPrev(): ScriptResult {
     labels: [{ time: 100, price: 10, text: 'L', color: '#0ff' }],
     boxes: [{ startTime: 100, startPrice: 5, endTime: 200, endPrice: 15, borderColor: '#abc' }],
     tables: [
-      { position: 1, columns: 1, rows: 1, bgcolor: '#000', border_color: '#fff', border_width: 1, frame_color: '#aaa', frame_width: 1, cells: { '0,0': { text: 'v' } }, mergedCells: [] },
+      { position: 1, columns: 1, rows: 1, bgcolor: '#000', border_color: '#fff', border_width: 1, frame_color: '#aaa', frame_width: 1, cells: { '0,0': makeCell('v') }, mergedCells: [] },
     ],
     bgcolor: [{ time: 1, color: '#123' }],
     plotColors: { p0: ['#f00', '#0f0'] },
@@ -309,7 +329,7 @@ describe('merge oracle parity — deterministic diffs (new driver === legacy ora
 
   it('tables: full replace when the diff carries a NON-empty table', () => {
     const prev = buildPrev();
-    const replacement = { position: 2, columns: 2, rows: 2, bgcolor: '#111', border_color: '#222', border_width: 2, frame_color: '#333', frame_width: 2, cells: { '0,0': { text: 'new' } }, mergedCells: [] };
+    const replacement = { position: 2, columns: 2, rows: 2, bgcolor: '#111', border_color: '#222', border_width: 2, frame_color: '#333', frame_width: 2, cells: { '0,0': makeCell('new') }, mergedCells: [] };
     const msg = makeDiff({ tables: [replacement] });
     const { newResult, legacyResult } = runBoth(prev, msg);
     assertParity(prev, msg, newResult, legacyResult, 'tables replace');
@@ -424,7 +444,7 @@ function randomDiff(rnd: () => number): ExecutionResultMessage {
     alertTriggers: maybe(0.3, () => ({ alertId: ['a0', 'a1', 'a2'][randInt(rnd, 0, 2)]!, barIndex: randInt(rnd, 0, 3), timestamp: times() })),
     bgcolor: maybe(0.3, () => ({ time: randInt(rnd, 1000, 9000), color: randColor(rnd) })),
     barColors: maybe(0.3, () => ({ time: randInt(rnd, 1, 8), bodyColor: randColor(rnd) })),
-    tables: rnd() < 0.5 ? [] : [{ position: 1, columns: 1, rows: 1, bgcolor: '#000', border_color: '#fff', border_width: 1, frame_color: '#aaa', frame_width: 1, cells: { '0,0': { text: 'v' } }, mergedCells: [] }],
+    tables: rnd() < 0.5 ? [] : [{ position: 1, columns: 1, rows: 1, bgcolor: '#000', border_color: '#fff', border_width: 1, frame_color: '#aaa', frame_width: 1, cells: { '0,0': makeCell('v') }, mergedCells: [] }],
     barTimestamps: rnd() < 0.5 ? undefined : Array.from({ length: 10 }, (_, i) => (i + 1) * 1000),
     barIndex: randInt(rnd, 0, 8),
   });
@@ -467,7 +487,7 @@ describe('FIELD_SEMANTICS exhaustiveness (runtime reflection vs the contract)', 
   });
 
   it('normalize guarantees all 17 collections on every message — arrays for lists, maps for outputs/colors (the "even if empty" mandate)', () => {
-    const sample = normalizeExecutionResultMessage({}) as Record<string, unknown>;
+    const sample = normalizeExecutionResultMessage({}) as unknown as Record<string, unknown>;
     for (const k of CONTRACT_COLLECTION_KEYS) {
       expect(k in sample, `missing collection key "${k}"`).toBe(true);
       if (k === 'outputs' || k === 'plotColors' || k === 'fillColorData') {
@@ -494,7 +514,7 @@ describe('FIELD_SEMANTICS exhaustiveness (runtime reflection vs the contract)', 
 
   it('unknown keys are stripped by normalize (payload key set == contract key set, nothing extra)', () => {
     const input = { success: true, bogus: 'x', outputs: { p: [1] } } as ExecutionResultMessageInput;
-    const out = normalizeExecutionResultMessage(input) as Record<string, unknown>;
+    const out = normalizeExecutionResultMessage(input) as unknown as Record<string, unknown>;
     expect('bogus' in out).toBe(false);
     expect(out.outputs).toEqual({ p: [1] });
   });

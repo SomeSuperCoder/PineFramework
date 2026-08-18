@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useChartData } from '../hooks/useChartData';
+import type { ScriptResult } from '../types';
 
 // ─── Mock types ───────────────────────────────────────────────────
 interface MockBar {
@@ -1148,5 +1149,423 @@ describe('useChartData — EngineError normalization (black-screen regression)',
     expect(result.current.errors[0].message).toBe(
       'Variable unknownVar is not defined',
     );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// seed-trim LINEFILLS regression — supertrend-3d rendering misalignment.
+// Bug Hunter PROOF: the seed-trim (useChartData.ts WS ~:422-484 + REST
+// ~:997-1044) shifted/filtered every collection EXCEPT linefills — fills kept
+// engine-absolute bar indexes (seed+dataset space) while lines were trimmed to
+// the dataset window → fills drifted seedCount bars right (14 bars = 7.0 cells
+// at x_step_in=2 for supertrend-3d's maxLookback=14 default).
+// FIX (landed): subtract seedCount from linefill line1.x1/x2 + line2.x1/x2 in
+// BOTH seed-trims, mirroring the strategyMarkers/alertTriggers pattern.
+// These tests lock the fix: 100 - 14 = 86.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A linefill at engine-absolute bar indexes (raw seed+dataset space). */
+function makeAbsoluteLinefill(seed: number) {
+  return {
+    line1: {
+      x1: seed,
+      y1: 100,
+      x2: seed + 1,
+      y2: 100,
+      color: '#0f0',
+    },
+    line2: {
+      x1: seed + 100,
+      y1: 200,
+      x2: seed + 101,
+      y2: 200,
+      color: '#f00',
+    },
+    color: 'rgba(0, 255, 0, 0.2)',
+    fillgaps: true,
+  };
+}
+
+/** A line in TIME space (raw wire shape: milliseconds). transformLine
+ *  normalizes ms → seconds inside buildScriptResult; the seed-trim filters
+ *  lines against the dataset boundary in seconds but never shifts them. */
+function makeDatasetLine(datasetStartSec: number) {
+  return {
+    points: [
+      { time: (datasetStartSec + 100) * 1000, price: 10 },
+      { time: (datasetStartSec + 101) * 1000, price: 11 },
+    ],
+    color: '#00f',
+    width: 1,
+    style: 'solid' as const,
+  };
+}
+
+describe('useChartData — seed-trim linefills regression (REST seed path)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    wsInstances = [];
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('shifts linefills by seedCount on the REST executeScript seed path (100-14=86)', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+    const seedCount = 14; // supertrend-3d maxLookback default — exact repro
+    // Seed bars must sit STRICTLY BEFORE the dataset (each 1d apart, ending
+    // before bars1k[0]) so the WS seedCount/stale-guard compute 14, not a
+    // partial overlap index.
+    const seedBars = makeBars(
+      bars1k[0].timestamp - seedCount * 86_400_000,
+      seedCount,
+    );
+    const allBars = [...seedBars, ...bars1k];
+    const datasetStartSec = Math.floor(bars1k[0].timestamp / 1000);
+    const results: Array<{ id: string; result: ScriptResult }> = [];
+
+    // fetch #1: initial OHLCV load
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: bars1k }),
+    });
+    // fetch #2: probe /api/execute → maxLookback 14 triggers the seed path
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          overlay: true,
+          maxLookback: seedCount,
+          outputs: { sma: bars1k.map(() => null) },
+          barTimestamps: bars1k.map((b) => b.timestamp),
+          shapes: [],
+          fills: [],
+          linefills: [],
+          strategyMarkers: [],
+          lines: [],
+          labels: [],
+          boxes: [],
+          tables: [],
+        }),
+    });
+    // fetch #3: fetchSeedBars → 14 seed bars
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: seedBars }),
+    });
+    // fetch #4: seed /api/execute → seed+dataset bars with engine-absolute
+    // linefills (the exact shape the Bug Hunter measured: fill at raw engine
+    // barIndex 100 while the skeleton sits at dataset barIndex 86)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          overlay: true,
+          outputs: { sma: allBars.map(() => null) },
+          barTimestamps: allBars.map((b) => b.timestamp),
+          shapes: [],
+          fills: [],
+          linefills: [makeAbsoluteLinefill(100)],
+          strategyMarkers: [
+            {
+              type: 'entry',
+              name: 'm0',
+              direction: 'long',
+              action: 'buy',
+              quantity: 1,
+              price: 10,
+              barIndex: 100,
+              timestamp: 1000,
+              color: '#fff',
+            },
+          ],
+          lines: [makeDatasetLine(datasetStartSec)],
+          labels: [],
+          boxes: [],
+          tables: [],
+        }),
+    });
+
+    const { result } = renderHook(() =>
+      useChartData((id, r) => results.push({ id, result: r })),
+    );
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+    await act(async () => {
+      await result.current.executeScript(
+        'indicator',
+        'BTCUSDT',
+        '1d',
+        undefined,
+        undefined,
+        undefined,
+        'ind-linefill-rest',
+      );
+    });
+
+    // The seed path delivered the trimmed result with shifted linefills
+    const last = results[results.length - 1];
+    expect(last).toBeDefined();
+    expect(last.id).toBe('ind-linefill-rest');
+    expect(last.result.linefills).toHaveLength(1);
+
+    // KEY assertion: engine-absolute linefill x indexes shifted by seedCount
+    expect(last.result.linefills![0].line1.x1).toBe(100 - seedCount); // 86
+    expect(last.result.linefills![0].line1.x2).toBe(101 - seedCount); // 87
+    expect(last.result.linefills![0].line2.x1).toBe(200 - seedCount); // 186
+    expect(last.result.linefills![0].line2.x2).toBe(201 - seedCount); // 187
+
+    // Same seedCount variable as the strategyMarkers pattern (parity)
+    expect(last.result.strategyMarkers![0].barIndex).toBe(100 - seedCount); // 86
+
+    // Lines (time space) are NOT shifted — filter-only, no arithmetic
+    expect(last.result.lines).toHaveLength(1);
+    expect(last.result.lines![0].points[0].time).toBe(datasetStartSec + 100);
+    expect(last.result.lines![0].points[1].time).toBe(datasetStartSec + 101);
+  });
+});
+
+describe('useChartData — seed-trim linefills regression (WS seed path)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    wsInstances = [];
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('shifts linefills by seedCount on WS execution_result with seed bars (100-14=86)', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+    const seedCount = 14;
+    // Seed bars strictly BEFORE the dataset → seedCount computes exactly 14
+    const seedBars = makeBars(
+      bars1k[0].timestamp - seedCount * 86_400_000,
+      seedCount,
+    );
+    const allBars = [...seedBars, ...bars1k];
+    const datasetStartSec = Math.floor(bars1k[0].timestamp / 1000);
+    const results: Array<{ id: string; result: ScriptResult }> = [];
+
+    // fetch #1: initial OHLCV load
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: bars1k }),
+    });
+    // fetch #2: probe /api/execute → maxLookback 0 registers the indicator
+    // source without running the REST seed flow (the WS seed-trim computes
+    // seedCount from barTimestamps, not from the stored maxLookback)
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          overlay: true,
+          maxLookback: 0,
+          outputs: { sma: bars1k.map(() => null) },
+          barTimestamps: bars1k.map((b) => b.timestamp),
+          shapes: [],
+          fills: [],
+          linefills: [],
+          strategyMarkers: [],
+          lines: [],
+          labels: [],
+          boxes: [],
+          tables: [],
+        }),
+    });
+
+    const { result } = renderHook(() =>
+      useChartData((id, r) => results.push({ id, result: r })),
+    );
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+    // Registers indicatorSourcesRef synchronously so the WS full result routes
+    // to the indicator branch (where the seed-trim lives)
+    await act(async () => {
+      await result.current.executeScript(
+        'indicator',
+        'BTCUSDT',
+        '1d',
+        undefined,
+        undefined,
+        undefined,
+        'ind-linefill-ws',
+      );
+    });
+
+    // Simulate a WS full execution_result carrying seed+dataset bars (1014)
+    // with engine-absolute linefills — the exact seed-path wire shape.
+    act(() => {
+      wsInstances[0].simulateMessage({
+        type: 'execution_result',
+        indicatorId: 'ind-linefill-ws',
+        data: {
+          success: true,
+          overlay: true,
+          outputs: { sma: allBars.map(() => null) },
+          barTimestamps: allBars.map((b) => b.timestamp),
+          shapes: [],
+          fills: [],
+          linefills: [makeAbsoluteLinefill(100)],
+          strategyMarkers: [
+            {
+              type: 'entry',
+              name: 'm0',
+              direction: 'long',
+              action: 'buy',
+              quantity: 1,
+              price: 10,
+              barIndex: 100,
+              timestamp: 1000,
+              color: '#fff',
+            },
+          ],
+          lines: [makeDatasetLine(datasetStartSec)],
+          labels: [],
+          boxes: [],
+          tables: [],
+        },
+      });
+    });
+
+    // Last result = the WS seed-trimmed full result
+    const last = results[results.length - 1];
+    expect(last).toBeDefined();
+    expect(last.id).toBe('ind-linefill-ws');
+    expect(last.result.linefills).toHaveLength(1);
+
+    // KEY assertion: engine-absolute linefill x indexes shifted by seedCount
+    expect(last.result.linefills![0].line1.x1).toBe(100 - seedCount); // 86
+    expect(last.result.linefills![0].line1.x2).toBe(101 - seedCount); // 87
+    expect(last.result.linefills![0].line2.x1).toBe(200 - seedCount); // 186
+    expect(last.result.linefills![0].line2.x2).toBe(201 - seedCount); // 187
+
+    // Same seedCount variable as the strategyMarkers pattern (parity)
+    expect(last.result.strategyMarkers![0].barIndex).toBe(100 - seedCount); // 86
+
+    // Lines (time space) are NOT shifted — filter-only, no arithmetic
+    expect(last.result.lines).toHaveLength(1);
+    expect(last.result.lines![0].points[0].time).toBe(datasetStartSec + 100);
+    expect(last.result.lines![0].points[1].time).toBe(datasetStartSec + 101);
+  });
+
+  it('handles ABSENT linefills (undefined) on the WS seed path without throwing', async () => {
+    const bars1k = makeBars(BASE_TS + 1_000_000, 1000);
+    const seedCount = 14;
+    // Seed bars strictly BEFORE the dataset → the WS seed path genuinely runs
+    const seedBars = makeBars(
+      bars1k[0].timestamp - seedCount * 86_400_000,
+      seedCount,
+    );
+    const allBars = [...seedBars, ...bars1k];
+    const results: Array<{ id: string; result: ScriptResult }> = [];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ data: bars1k }),
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          success: true,
+          overlay: true,
+          maxLookback: 0,
+          outputs: { sma: bars1k.map(() => null) },
+          barTimestamps: bars1k.map((b) => b.timestamp),
+          shapes: [],
+          fills: [],
+          linefills: [],
+          strategyMarkers: [],
+          lines: [],
+          labels: [],
+          boxes: [],
+          tables: [],
+        }),
+    });
+
+    const { result } = renderHook(() =>
+      useChartData((id, r) => results.push({ id, result: r })),
+    );
+
+    await act(async () => {
+      result.current.fetchOHLCV('BTCUSDT', '1d');
+    });
+    await act(async () => {
+      await result.current.executeScript(
+        'indicator',
+        'BTCUSDT',
+        '1d',
+        undefined,
+        undefined,
+        undefined,
+        'ind-linefill-absent',
+      );
+    });
+
+    // WS message with seed bars but NO linefills key — the seed-trim guard
+    // must skip the shift and buildScriptResult must still deliver a result.
+    // A strategyMarker at engine-absolute barIndex 100 proves the WS seed
+    // path genuinely ran (it is shifted to 86); a dropped message would leave
+    // the probe result's empty strategyMarkers behind.
+    expect(() => {
+      act(() => {
+        wsInstances[0].simulateMessage({
+          type: 'execution_result',
+          indicatorId: 'ind-linefill-absent',
+          data: {
+            success: true,
+            overlay: true,
+            outputs: { sma: allBars.map(() => null) },
+            barTimestamps: allBars.map((b) => b.timestamp),
+            shapes: [],
+            fills: [],
+            strategyMarkers: [
+              {
+                type: 'entry',
+                name: 'm0',
+                direction: 'long',
+                action: 'buy',
+                quantity: 1,
+                price: 10,
+                barIndex: 100,
+                timestamp: 1000,
+                color: '#fff',
+              },
+            ],
+            lines: [],
+            labels: [],
+            boxes: [],
+            tables: [],
+            // linefills intentionally omitted
+          },
+        });
+      });
+    }).not.toThrow();
+
+    const last = results[results.length - 1];
+    expect(last).toBeDefined();
+    expect(last.id).toBe('ind-linefill-absent');
+    // Proves the WS seed-trim ran: strategyMarker shifted by seedCount
+    expect(last.result.strategyMarkers![0].barIndex).toBe(100 - seedCount); // 86
+    // Absent linefills → normalized to [] by buildScriptResult, no throw
+    expect(last.result.linefills).toEqual([]);
+    expect(result.current.errors).toHaveLength(0);
   });
 });

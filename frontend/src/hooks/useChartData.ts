@@ -481,6 +481,26 @@ export function useChartData(
                   barIndex: t.barIndex - seedCount,
                 }));
               }
+              // Linefills carry RAW engine bar indexes (line1.x1/x2, line2.x1/x2)
+              // — the same seed+dataset space as strategyMarkers/alertTriggers.
+              // Subtract seedCount from their x coordinates so fills align with
+              // the skeleton lines (which ARE trimmed to the dataset window);
+              // otherwise fills drift seedCount bars right of the skeleton.
+              if (msg.linefills) {
+                msg.linefills = msg.linefills.map((lf) => ({
+                  ...lf,
+                  line1: {
+                    ...lf.line1,
+                    x1: lf.line1.x1 - seedCount,
+                    x2: lf.line1.x2 - seedCount,
+                  },
+                  line2: {
+                    ...lf.line2,
+                    x1: lf.line2.x1 - seedCount,
+                    x2: lf.line2.x2 - seedCount,
+                  },
+                }));
+              }
             }
           }
           const result = buildScriptResult(
@@ -1012,12 +1032,32 @@ export function useChartData(
                     .filter((m) => m.barIndex >= seedCount)
                     .map((m) => ({ ...m, barIndex: m.barIndex - seedCount }));
                 }
-
                 // Trim seed bar alert triggers
                 if (seedScriptRes.alertTriggers) {
-                  seedScriptRes.alertTriggers = seedScriptRes.alertTriggers
-                    .filter((t) => t.barIndex >= seedCount)
-                    .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
+                  seedScriptRes.alertTriggers =
+                    seedScriptRes.alertTriggers
+                      .filter((t) => t.barIndex >= seedCount)
+                      .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
+                }
+
+                // Trim seed bar linefills — they carry RAW engine bar indexes
+                // (line1.x1/x2, line2.x1/x2) in the same seed+dataset space as
+                // strategyMarkers/alertTriggers, so subtract seedCount from their
+                // x coordinates to align fills with the trimmed skeleton lines.
+                if (seedScriptRes.linefills) {
+                  seedScriptRes.linefills = seedScriptRes.linefills.map((lf) => ({
+                    ...lf,
+                    line1: {
+                      ...lf.line1,
+                      x1: lf.line1.x1 - seedCount,
+                      x2: lf.line1.x2 - seedCount,
+                    },
+                    line2: {
+                      ...lf.line2,
+                      x1: lf.line2.x1 - seedCount,
+                      x2: lf.line2.x2 - seedCount,
+                    },
+                  }));
                 }
 
                 // Trim seed bar labels/lines/boxes to the original dataset boundary.
