@@ -17,6 +17,7 @@ export * from './extensibility/index.js';
 export * from './performance/index.js';
 export * from './utils/time.js';
 export * from './util/candle-string-format.js';
+export * from './contracts/index.js';
 export * from './api.js';
 
 // Token type system (single source of truth for symbols and addresses)

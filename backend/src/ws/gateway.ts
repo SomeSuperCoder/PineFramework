@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { Bar } from 'pine-framework';
+import { normalizeExecutionResultMessage } from 'pine-framework/contracts';
 import type { OHLCVCache } from '../cache/ohlcv-cache.js';
 import { ScriptSession } from '../session/ScriptSession.js';
 import type { TelegramService } from '../telegram/TelegramService.js';
@@ -325,11 +326,17 @@ export function createWSGateway(
         try {
           const outputs = session.appendOrUpdateBar(bar, confirmed);
 
+          // WIRE EGRESS BACKSTOP (B2 — the third normalize call site):
+          // the serializers normalize internally, but this is where the
+          // payload actually leaves to the wire. Normalizing here is
+          // idempotent (normalize∘normalize == same shape) and guarantees
+          // the wire always carries a contract-complete message even if a
+          // future producer path skips its own normalize.
           ws.send(
             JSON.stringify({
               type: 'execution_result',
               indicatorId,
-              data: outputs,
+              data: normalizeExecutionResultMessage(outputs),
             }),
           );
 
@@ -556,7 +563,9 @@ export function createWSGateway(
                 JSON.stringify({
                   type: 'execution_result',
                   indicatorId: sessionIndicatorId,
-                  data: initialOutputs,
+                  // WIRE EGRESS BACKSTOP (B2 — same rationale as reexecuteForTopic):
+                  // idempotent contract guarantee at the wire boundary.
+                  data: normalizeExecutionResultMessage(initialOutputs),
                 }),
               );
             }

@@ -19,6 +19,18 @@ import {
   transformAlertConditions,
   transformAlertTriggers,
 } from './chart-alert-processor.js';
+// Shared execution-result contract (B1) — single source of truth for the
+// WS message payload and REST response shapes. Re-exported below so existing
+// callers (useChartData, indicator-merge) compile unchanged.
+import type {
+  ExecutionResultMessage,
+  ExecuteResponse,
+} from 'pine-framework/contracts';
+
+export type {
+  ExecutionResultMessage,
+  ExecuteResponse,
+} from 'pine-framework/contracts';
 
 // Local aliases so buildScriptResult can use them
 const mapShapes = transformShapes;
@@ -37,172 +49,11 @@ const mapAlertTriggers = transformAlertTriggers;
 
 // ---------------------------------------------------------------------------
 // Types matching the backend API response shape
+//
+// ExecutionResultMessage and ExecuteResponse now come from the shared
+// pine-framework/contracts module (B1). They are re-exported above so the
+// callers that imported them from this file compile unchanged.
 // ---------------------------------------------------------------------------
-
-export interface ExecuteResponse {
-  success: boolean;
-  error?: string;
-  overlay: boolean;
-  outputs: Record<string, (number | string | boolean | null)[]>;
-  plotColors?: Record<string, (string | null)[]>;
-  fillColorData?: Record<string, (string | null)[]>;
-  shapes?: Array<{
-    style: string;
-    location: string;
-    color: string;
-    time: number;
-    text: string;
-    price?: number;
-    overlay?: boolean;
-  }>;
-  fills?: Array<{ from: string; to: string; color: string }>;
-  strategyMarkers?: Array<{
-    type: string;
-    name: string;
-    direction: string;
-    action: string;
-    quantity: number;
-    price: number;
-    barIndex: number;
-    timestamp: number;
-    color: string;
-    comment?: string;
-  }>;
-  bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{
-    points: Array<{ time: number; price: number }>;
-    color: string;
-    width?: number;
-    style?: string;
-    extend?: string;
-  }>;
-  labels?: Array<{
-    time: number;
-    price: number;
-    text: string;
-    color?: string;
-    textColor?: string;
-    style?: string;
-    size?: string;
-  }>;
-  boxes?: Array<{
-    startTime: number;
-    startPrice: number;
-    endTime: number;
-    endPrice: number;
-    borderColor?: string;
-    backgroundColor?: string;
-  }>;
-  barTimestamps?: number[];
-  maxLookback?: number;
-  alertConditions?: Array<{ id: string; title: string; message: string }>;
-  alertTriggers?: Array<{
-    alertId: string;
-    barIndex: number;
-    timestamp: number;
-  }>;
-  /** Per-bar candle color overrides from barcolor() / plotcandle(). Format matches backend: {time, bodyColor?, wickColor?, borderColor?, offset?, color?} */
-  barColors?: Array<{
-    time: number;
-    bodyColor?: string;
-    wickColor?: string;
-    borderColor?: string;
-    offset?: number;
-    color?: string;
-  }>;
-  tables?: import('../types/index.js').TableData[];
-  hiddenPlotKeys?: string[];
-  plotOverlayKeys?: string[];
-  linefills?: Array<{
-    line1: { x1: number; y1: number; x2: number; y2: number; color: string };
-    line2: { x1: number; y1: number; x2: number; y2: number; color: string };
-    color: string;
-    fillgaps: boolean;
-  }>;
-}
-
-export interface ExecutionResultMessage {
-  success: boolean;
-  error?: string;
-  overlay: boolean;
-  indicatorId?: string;
-  outputs: Record<string, (number | string | boolean | null)[]>;
-  plotColors?: Record<string, (string | null)[]>;
-  fillColorData?: Record<string, (string | null)[]>;
-  shapes: Array<{
-    style: string;
-    location: string;
-    color: string;
-    time: number;
-    text: string;
-    price?: number;
-    overlay?: boolean;
-  }>;
-  fills: Array<{ from: string; to: string; color: string }>;
-  strategyMarkers: Array<{
-    type: string;
-    name: string;
-    direction: string;
-    action: string;
-    quantity: number;
-    price: number;
-    barIndex: number;
-    timestamp: number;
-    color: string;
-    comment?: string;
-  }>;
-  bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{
-    points: Array<{ time: number; price: number }>;
-    color: string;
-    width?: number;
-    style?: string;
-  }>;
-  labels?: Array<{
-    time: number;
-    price: number;
-    text: string;
-    color?: string;
-    textColor?: string;
-    style?: string;
-    size?: string;
-  }>;
-  boxes?: Array<{
-    startTime: number;
-    startPrice: number;
-    endTime: number;
-    endPrice: number;
-    borderColor?: string;
-    backgroundColor?: string;
-  }>;
-  barTimestamps?: number[];
-  formingCandle?: boolean;
-  alertConditions?: Array<{ id: string; title: string; message: string }>;
-  alertTriggers?: Array<{
-    alertId: string;
-    barIndex: number;
-    timestamp: number;
-  }>;
-  barIndex: number;
-  /** Per-bar candle color overrides from barcolor() / plotcandle(). Format matches backend: {time, bodyColor?, wickColor?, borderColor?, offset?, color?} */
-  barColors?: Array<{
-    time: number;
-    bodyColor?: string;
-    wickColor?: string;
-    borderColor?: string;
-    offset?: number;
-    color?: string;
-  }>;
-  tables?: import('../types/index.js').TableData[];
-  hiddenPlotKeys?: string[];
-  plotOverlayKeys?: string[];
-  linefills?: Array<{
-    line1: { x1: number; y1: number; x2: number; y2: number; color: string };
-    line2: { x1: number; y1: number; x2: number; y2: number; color: string };
-    color: string;
-    fillgaps: boolean;
-  }>;
-}
 
 // ---------------------------------------------------------------------------
 // Constants

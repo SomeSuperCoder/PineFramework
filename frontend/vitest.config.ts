@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     conditions: ['source'],
     alias: [
+      { find: 'pine-framework/contracts', replacement: path.resolve(__dirname, '../src/contracts/index.ts') },
       { find: 'pine-framework/utils/time', replacement: path.resolve(__dirname, '../src/utils/time.ts') },
       { find: 'pine-framework/utils/script-name', replacement: path.resolve(__dirname, '../src/utils/script-name.ts') },
       { find: 'pine-framework', replacement: path.resolve(__dirname, '../src/frontend-safe.ts') },

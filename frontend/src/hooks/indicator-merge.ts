@@ -28,8 +28,12 @@ import {
   mapFills,
   mapStrategyMarkers,
 } from './chart-data-transform.js';
-import type { ExecutionResultMessage } from './chart-data-transform.js';
-
+import {
+  FIELD_SEMANTICS,
+  normalizeExecutionResultMessage,
+  type ExecutionResultMessage,
+  type FieldSemanticsMap,
+} from 'pine-framework/contracts';
 // ---------------------------------------------------------------------------
 // Prepend merge
 // ---------------------------------------------------------------------------
@@ -461,11 +465,98 @@ export function prependIndicatorResult(
  * value (forming candle update) or appends a new entry (new bar confirmed).
  * Shapes, fills, lines, labels, and boxes are deduped by timestamp.
  * Alert triggers use an ID+barIndex dedup key to avoid duplicates.
+ *
+ * IMPLEMENTATION (F2, shared-contract refactor): the per-collection merge
+ * branches were extracted VERBATIM from the original inline function into
+ * named strategy functions registered per field. The driver iterates
+ * FIELD_SEMANTICS from the shared contract (pine-framework/contracts) and
+ * dispatches each field to its registered strategy, with a generic
+ * accumulate-dedupe fallback for any future field that declares
+ * accumulate-dedupe semantics but has no custom strategy.
+ *
+ * The ONLY intentional behavior delta vs the legacy implementation: EMPTY
+ * incoming diff values ({}/[]) for tail-merge and replace strategies SKIP the
+ * merge and keep prev. This closes the B1 merge-clobber hazard — B2 serializers
+ * emit plotColors:{} / tables:[] on diffs that carry none, and clobbering
+ * accumulated state on those ticks is exactly the fills-vanish class of bug.
+ * (barColors already skipped empty diffs in the legacy code; the extracted
+ * strategy preserves that.)
+ *
+ * The legacy implementation is preserved VERBATIM as the parity oracle at
+ * frontend/src/__tests__/fixtures/legacy-merge.ts (legacyMergeDiffIntoResult).
  */
 export function mergeDiffIntoResult(
   prev: ScriptResult,
   msg: ExecutionResultMessage,
 ): ScriptResult {
+  // Normalize at merge entry: guarantees every contract collection exists
+  // (arrays as [], records as {}), strips unknown wire keys, and never mutates
+  // or freezes the input — the caller may still mutate the result (seed-trim).
+  const diff = normalizeExecutionResultMessage(msg);
+
+  const merged: ScriptResult = { ...prev };
+  for (const field of Object.keys(FIELD_SEMANTICS) as Array<keyof FieldSemanticsMap>) {
+    const semantics = FIELD_SEMANTICS[field];
+    const strategy = MERGE_STRATEGIES[field];
+    if (strategy) {
+      Object.assign(merged, strategy(prev, diff));
+      continue;
+    }
+    // Generic fallback: an unregistered accumulate-dedupe field merges by its
+    // declared dedupeKeys (empty dedupeKeys = plain append, no dedupe).
+    if (semantics.merge === 'accumulate-dedupe') {
+      const incoming = (diff as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(incoming)) {
+        const prevValue = (prev as unknown as Record<string, unknown>)[field];
+        Object.assign(merged, {
+          [field]: genericAccumulateDedupe(
+            prevValue as readonly unknown[] | undefined,
+            incoming,
+            semantics.dedupeKeys ?? [],
+          ),
+        });
+      }
+    }
+    // static / tail-merge / replace / outputs-append-update fields without a
+    // registered strategy are intentionally skipped: no generic merge is
+    // possible without more shape info, and static fields are not merged here.
+  }
+  return merged;
+}
+
+// ---------------------------------------------------------------------------
+// Strategy registry — field name → merge strategy (mirrors FIELD_SEMANTICS).
+// Static fields (hiddenPlotKeys, plotOverlayKeys) are deliberately NOT
+// registered: the merge does not touch them.
+// ---------------------------------------------------------------------------
+
+type MergeStrategy = (
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+) => Partial<ScriptResult>;
+
+const MERGE_STRATEGIES: Partial<Record<keyof FieldSemanticsMap, MergeStrategy>> = {
+  outputs: mergeOutputs,
+  plotColors: mergePlotColors,
+  fillColorData: mergeFillColorData,
+  shapes: mergeShapes,
+  fills: mergeFills,
+  linefills: mergeLinefills,
+  lines: mergeLines,
+  labels: mergeLabels,
+  boxes: mergeBoxes,
+  strategyMarkers: mergeStrategyMarkers,
+  alertTriggers: mergeAlertTriggers,
+  bgcolor: mergeBgcolor,
+  barColors: mergeBarColors,
+  tables: mergeTables,
+};
+
+// ── outputs (per-key append-or-update; plots' isNewBar replace-last) ──
+function mergeOutputs(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const mergedPlots = prev.plots.map((plot) => {
     const diffKey = Object.keys(msg.outputs).find((k) => {
       const stripped = k
@@ -491,7 +582,11 @@ export function mergeDiffIntoResult(
         plot.data[plot.data.length - 1]?.color;
       const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
       if (isNewBar) {
-        const rawTime = msg.barTimestamps?.[msg.barIndex];
+        // NOTE: `msg.barIndex!` is retained — the shared contract keeps
+        // barIndex OPTIONAL (Frontend Lead carve-out), so normalize() cannot
+        // make it present. The `?? 0` above handles the absent case for the
+        // isNewBar check; the non-null assertion is needed for array indexing.
+        const rawTime = msg.barTimestamps?.[msg.barIndex!];
         const newTime =
           rawTime !== undefined
             ? Math.floor(rawTime / 1000)
@@ -517,7 +612,7 @@ export function mergeDiffIntoResult(
     ) {
       const lastEntry = plot.data[plot.data.length - 1];
       const rawTime =
-        msg.barTimestamps?.[msg.barIndex] ?? (lastEntry?.time ?? 0);
+        msg.barTimestamps?.[msg.barIndex!] ?? (lastEntry?.time ?? 0);
       const newTime = Math.floor(rawTime / 1000);
       return {
         ...plot,
@@ -533,8 +628,14 @@ export function mergeDiffIntoResult(
     }
     return plot;
   });
+  return { plots: mergedPlots };
+}
 
-  // ── Shapes ──
+// ── shapes (accumulate-dedupe by time) ──
+function mergeShapes(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffShapes = mapShapes(msg.shapes);
   const mergedShapes =
     diffShapes.length > 0
@@ -545,8 +646,14 @@ export function mergeDiffIntoResult(
           ...diffShapes,
         ]
       : prev.shapes;
+  return { shapes: mergedShapes };
+}
 
-  // ── Fills ──
+// ── fills (accumulate-dedupe by [from, to]) ──
+function mergeFills(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffFills = mapFills(msg.fills);
   const mergedFills =
     diffFills.length > 0
@@ -560,8 +667,14 @@ export function mergeDiffIntoResult(
           ...diffFills,
         ]
       : prev.fills || [];
+  return { fills: mergedFills };
+}
 
-  // ── Lines ──
+// ── lines (accumulate-dedupe by points[0].time) ──
+function mergeLines(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffLines = mapLines(msg.lines);
   const mergedLines =
     diffLines.length > 0
@@ -575,10 +688,16 @@ export function mergeDiffIntoResult(
           ...diffLines,
         ]
       : prev.lines;
+  return { lines: mergedLines };
+}
 
-  // ── Linefills (accumulate+dedupe like lines/fills — a forming tick carries
-  //    ONLY newly-created fills, so replacing prev with the diff clobbers the
-  //    REST-accumulated fills on the first live tick) ──
+// ── linefills (accumulate-dedupe like lines/fills — a forming tick carries
+//    ONLY newly-created fills, so replacing prev with the diff clobbers the
+//    REST-accumulated fills on the first live tick) ──
+function mergeLinefills(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffLinefills = msg.linefills || [];
   const mergedLinefills =
     diffLinefills.length > 0
@@ -593,8 +712,14 @@ export function mergeDiffIntoResult(
           ...diffLinefills,
         ]
       : prev.linefills || [];
+  return { linefills: mergedLinefills };
+}
 
-  // ── Labels ──
+// ── labels (accumulate-dedupe by time) ──
+function mergeLabels(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffLabels = mapLabels(msg.labels);
   const mergedLabels =
     diffLabels.length > 0
@@ -605,79 +730,14 @@ export function mergeDiffIntoResult(
           ...diffLabels,
         ]
       : prev.labels;
+  return { labels: mergedLabels };
+}
 
-  // ── Strategy markers ──
-  const diffStrategyMarkers = mapStrategyMarkers(msg.strategyMarkers);
-  const mergedStrategyMarkers = [
-    ...(prev.strategyMarkers || []),
-    ...diffStrategyMarkers,
-  ];
-
-  // ── Plot colors ──
-  const mergedPlotColors = msg.plotColors
-    ? Object.entries(msg.plotColors).reduce(
-        (acc, [key, colors]) => {
-          const prevColors = prev.plotColors?.[key];
-          if (prevColors) {
-            acc[key] = [
-              ...prevColors.slice(0, -colors.length || undefined),
-              ...colors,
-            ];
-          } else {
-            acc[key] = colors;
-          }
-          return acc;
-        },
-        {} as Record<string, (string | null)[]>,
-      )
-    : prev.plotColors;
-
-  // ── Fill color data ──
-  const mergedFillColorData = msg.fillColorData
-    ? Object.entries(msg.fillColorData).reduce(
-        (acc, [key, colors]) => {
-          const transformedKey = transformFillKey(key);
-          const prevColors = prev.fillColorData?.[transformedKey];
-          if (prevColors) {
-            acc[transformedKey] = [
-              ...prevColors.slice(0, -colors.length || undefined),
-              ...colors,
-            ];
-          } else {
-            acc[transformedKey] = colors;
-          }
-          return acc;
-        },
-        {} as Record<string, (string | null)[]>,
-      )
-    : prev.fillColorData;
-
-  // ── Bar colors (diff) ──
-  const mergedBarColors = (() => {
-    if (!msg.barColors || msg.barColors.length === 0) return prev.barColors;
-    const prevColors = prev.barColors || [];
-    const prevByTime = new Map(prevColors.map((c) => [c.time, c]));
-    for (const b of msg.barColors) {
-      prevByTime.set(b.time, { time: b.time, body: b.bodyColor ?? b.color, wick: b.wickColor, border: b.borderColor, offset: b.offset });
-    }
-    const result = Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
-    return result.length > 0 ? result : undefined;
-  })();
-
-  // ── Background color ──
-  let mergedBgcolor = prev.bgcolor;
-  if (msg.bgcolor) {
-    const bg = msg.bgcolor;
-    mergedBgcolor = [
-      ...(prev.bgcolor || []).slice(0, bg.length > 0 ? -bg.length : undefined),
-      ...bg.map((b) => ({
-        time: Math.floor(b.time / 1000),
-        color: b.color,
-      })),
-    ];
-  }
-
-  // ── Boxes ──
+// ── boxes (accumulate-dedupe by startTime) ──
+function mergeBoxes(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffBoxes = mapBoxes(msg.boxes);
   const mergedBoxes =
     diffBoxes.length > 0
@@ -688,8 +748,27 @@ export function mergeDiffIntoResult(
           ...diffBoxes,
         ]
       : prev.boxes || [];
+  return { boxes: mergedBoxes };
+}
 
-  // ── Alert triggers (deduped by alertId+barIndex) ──
+// ── strategyMarkers (pure append, NO dedupe — dedupeKeys: []) ──
+function mergeStrategyMarkers(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const diffStrategyMarkers = mapStrategyMarkers(msg.strategyMarkers);
+  const mergedStrategyMarkers = [
+    ...(prev.strategyMarkers || []),
+    ...diffStrategyMarkers,
+  ];
+  return { strategyMarkers: mergedStrategyMarkers };
+}
+
+// ── alertTriggers (accumulate-dedupe by alertId+barIndex) ──
+function mergeAlertTriggers(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
   const diffAlertTriggers = msg.alertTriggers;
   const mergedAlertTriggers =
     diffAlertTriggers && diffAlertTriggers.length > 0
@@ -707,22 +786,158 @@ export function mergeDiffIntoResult(
             : prev.alertTriggers;
         })()
       : prev.alertTriggers;
+  return { alertTriggers: mergedAlertTriggers };
+}
 
-  return {
-    ...prev,
-    plots: mergedPlots,
-    shapes: mergedShapes,
-    fills: mergedFills,
-    lines: mergedLines,
-    labels: mergedLabels,
-    strategyMarkers: mergedStrategyMarkers,
-    plotColors: mergedPlotColors,
-    fillColorData: mergedFillColorData,
-    bgcolor: mergedBgcolor,
-    barColors: mergedBarColors,
-    boxes: mergedBoxes,
-    tables: msg.tables || prev.tables,
-    alertTriggers: mergedAlertTriggers,
-    linefills: mergedLinefills,
-  };
+// ── plotColors (tail-merge) ──
+function mergePlotColors(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const incoming = msg.plotColors;
+  // EMPTY-DIFF SKIP (B1 hazard fix): a diff carrying no per-bar colors must
+  // NOT clobber the accumulated colors (B2 emits plotColors:{} on such ticks).
+  if (!incoming || Object.keys(incoming).length === 0) {
+    return { plotColors: prev.plotColors };
+  }
+  const mergedPlotColors = Object.entries(incoming).reduce(
+    (acc, [key, colors]) => {
+      const prevColors = prev.plotColors?.[key];
+      if (prevColors) {
+        acc[key] = [
+          ...prevColors.slice(0, -colors.length || undefined),
+          ...colors,
+        ];
+      } else {
+        acc[key] = colors;
+      }
+      return acc;
+    },
+    {} as Record<string, (string | null)[]>,
+  );
+  return { plotColors: mergedPlotColors };
+}
+
+// ── fillColorData (tail-merge + transformFillKey) ──
+function mergeFillColorData(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const incoming = msg.fillColorData;
+  // EMPTY-DIFF SKIP (B1 hazard fix) — see mergePlotColors.
+  if (!incoming || Object.keys(incoming).length === 0) {
+    return { fillColorData: prev.fillColorData };
+  }
+  const mergedFillColorData = Object.entries(incoming).reduce(
+    (acc, [key, colors]) => {
+      const transformedKey = transformFillKey(key);
+      const prevColors = prev.fillColorData?.[transformedKey];
+      if (prevColors) {
+        acc[transformedKey] = [
+          ...prevColors.slice(0, -colors.length || undefined),
+          ...colors,
+        ];
+      } else {
+        acc[transformedKey] = colors;
+      }
+      return acc;
+    },
+    {} as Record<string, (string | null)[]>,
+  );
+  return { fillColorData: mergedFillColorData };
+}
+
+// ── barColors (time-map-merge + sort; empty diff already skipped) ──
+function mergeBarColors(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const mergedBarColors = (() => {
+    if (!msg.barColors || msg.barColors.length === 0) return prev.barColors;
+    const prevColors = prev.barColors || [];
+    const prevByTime = new Map(prevColors.map((c) => [c.time, c]));
+    for (const b of msg.barColors) {
+      prevByTime.set(b.time, { time: b.time, body: b.bodyColor ?? b.color, wick: b.wickColor, border: b.borderColor, offset: b.offset });
+    }
+    const result = Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
+    return result.length > 0 ? result : undefined;
+  })();
+  return { barColors: mergedBarColors };
+}
+
+// ── bgcolor (tail-merge with ms→s time conversion) ──
+function mergeBgcolor(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const incoming = msg.bgcolor;
+  // EMPTY-DIFF SKIP (B1 hazard fix) — an empty bgcolor diff must not clobber
+  // the accumulated background colors.
+  if (!incoming || incoming.length === 0) {
+    return { bgcolor: prev.bgcolor };
+  }
+  const mergedBgcolor = [
+    ...(prev.bgcolor || []).slice(0, incoming.length > 0 ? -incoming.length : undefined),
+    ...incoming.map((b) => ({
+      time: Math.floor(b.time / 1000),
+      color: b.color,
+    })),
+  ];
+  return { bgcolor: mergedBgcolor };
+}
+
+// ── tables (full replace; empty diff skipped) ──
+function mergeTables(
+  prev: ScriptResult,
+  msg: ExecutionResultMessage,
+): Partial<ScriptResult> {
+  const incoming = msg.tables;
+  // EMPTY-DIFF SKIP (B1 hazard fix): B2 emits tables:[] on diffs with no
+  // table payload — replacing prev with [] would clobber accumulated tables.
+  if (!incoming || incoming.length === 0) {
+    return { tables: prev.tables };
+  }
+  return { tables: incoming };
+}
+
+// ---------------------------------------------------------------------------
+// Generic accumulate-dedupe fallback
+// ---------------------------------------------------------------------------
+
+/** Resolve a dotted dedupe path (e.g. 'points[0].time') against an element. */
+function resolveDedupePath(value: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((acc, part) => {
+    if (acc === null || acc === undefined) return undefined;
+    const arrayAccess = part.match(/^(.+)\[(\d+)\]$/);
+    if (arrayAccess) {
+      const arr = (acc as Record<string, unknown>)[arrayAccess[1]];
+      return Array.isArray(arr) ? arr[Number(arrayAccess[2])] : undefined;
+    }
+    return (acc as Record<string, unknown>)[part];
+  }, value);
+}
+
+/**
+ * Generic accumulate-dedupe for fields declared with accumulate-dedupe
+ * semantics but no custom strategy. Empty dedupeKeys = plain append with NO
+ * dedupe (strategyMarkers behavior).
+ */
+function genericAccumulateDedupe<T>(
+  prev: readonly T[] | undefined,
+  incoming: readonly T[],
+  dedupeKeys: readonly string[],
+): T[] {
+  if (incoming.length === 0) return [...(prev ?? [])];
+  if (dedupeKeys.length === 0) return [...(prev ?? []), ...incoming];
+  return [
+    ...(prev ?? []).filter(
+      (p) =>
+        !incoming.some((d) =>
+          dedupeKeys.every(
+            (key) => resolveDedupePath(d, key) === resolveDedupePath(p, key),
+          ),
+        ),
+    ),
+    ...incoming,
+  ];
 }

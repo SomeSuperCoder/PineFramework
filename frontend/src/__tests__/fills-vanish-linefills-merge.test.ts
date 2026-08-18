@@ -95,12 +95,24 @@ function makePrevState(): ScriptResult {
  */
 function makeTickMsg(overrides: Partial<ExecutionResultMessage> = {}): ExecutionResultMessage {
   return {
+    isConfirmed: false,
     success: true,
     overlay: true,
     outputs: {},
+    plotColors: {},
+    fillColorData: {},
+    hiddenPlotKeys: [],
+    plotOverlayKeys: [],
     shapes: [],
     fills: [],
     strategyMarkers: [],
+    bgcolor: [],
+    barColors: [],
+    labels: [],
+    boxes: [],
+    tables: [],
+    alertConditions: [],
+    alertTriggers: [],
     lines: [
       {
         points: [

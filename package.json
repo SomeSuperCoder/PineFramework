@@ -56,6 +56,11 @@
       "source": "./src/util/candle-string-format.ts",
       "types": "./dist/util/candle-string-format.d.ts",
       "import": "./dist/util/candle-string-format.js"
+    },
+    "./contracts": {
+      "source": "./src/contracts/index.ts",
+      "types": "./dist/contracts/index.d.ts",
+      "import": "./dist/contracts/index.js"
     }
   },
   "files": [

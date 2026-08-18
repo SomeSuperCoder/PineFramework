@@ -1,73 +1,21 @@
 import { parseAndCompile, barsToContext, ExecutionEngine, type Bar } from 'pine-framework';
+import type { ExecutionResultMessage } from 'pine-framework/contracts';
 import { FormingCandleManager } from './FormingCandleManager.js';
 
-export interface ScriptOutputs {
-  success: boolean;
-  error?: string;
-  version?: number;
-  overlay: boolean;
-  outputs: Record<string, (number | string | boolean | null)[]>;
-  plotColors?: Record<string, (string | null)[]>;
-  fillColorData?: Record<string, (string | null)[]>;
-  // Overlay classification keys — forwarded from ExecutionResult so WS
-  // messages carry the same pane classification as the REST path (execute.ts).
-  // Optional: consumers that predate these fields are unaffected.
-  hiddenPlotKeys?: string[];
-  plotOverlayKeys?: string[];
-  shapes: Array<{ style: string; location: string; color: string; time: number; text: string }>;
-  fills: Array<{ from: string; to: string; color: string }>;
-  strategyMarkers: Array<{
-    type: string;
-    name: string;
-    direction: string;
-    action: string;
-    quantity: number;
-    price: number;
-    barIndex: number;
-    timestamp: number;
-    color: string;
-    comment?: string;
-  }>;
-  bgcolor?: Array<{ time: number; color: string }>;
-  lines?: Array<{ points: Array<{ time: number; price: number }>; color: string; width?: number; style?: string }>;
-  linefills?: Array<{ line1: { x1: number; y1: number; x2: number; y2: number; color: string }; line2: { x1: number; y1: number; x2: number; y2: number; color: string }; color: string; fillgaps: boolean }>;
-  labels?: Array<{ time: number; price: number; text: string; color?: string; textColor?: string; style?: string; size?: string }>;
-  boxes?: Array<{ startTime: number; startPrice: number; endTime: number; endPrice: number; borderColor?: string; backgroundColor?: string }>;
-  tables?: Array<{
-    position: number;
-    columns: number;
-    rows: number;
-    bgcolor: string;
-    border_color: string;
-    border_width: number;
-    frame_color: string;
-    frame_width: number;
-    cells: Record<string, {
-      text: string;
-      text_color: string;
-      text_halign: string;
-      text_valign: string;
-      bgcolor: string;
-      width: number;
-      text_size: string;
-      tooltip: string;
-    }>;
-  }>;
-  barTimestamps?: number[];
-  barColors?: Array<{
-    time: number;
-    bodyColor?: string;
-    wickColor?: string;
-    borderColor?: string;
-    offset?: number;
-    color?: string;
-  }>;
-  barIndex: number;
-  formingCandle?: boolean;
-  isConfirmed?: boolean;
-  alertConditions?: Array<{ id: string; title: string; message: string }>;
-  alertTriggers?: Array<{ alertId: string; barIndex: number; timestamp: number }>;
-}
+/**
+ * WS execution-result payload.
+ *
+ * WHY THIS IS AN ALIAS (B2): ScriptOutputs was a third hand-maintained copy
+ * of the execution-result wire shape (drifted from REST execute.ts and the
+ * frontend's ExecuteResponse/ExecutionResultMessage — optionality, extend,
+ * maxLookback, mergedCells, isConfirmed). The Director mandate: build both
+ * wire paths from ONE source of truth, "everything passed even if empty".
+ * The contract union (ExecutionResultMessage) now requires all 17 collection
+ * fields on both variants; the serializers (FormingCandleManager) guarantee
+ * them via normalizeExecutionResultMessage(). Backend callers keep using the
+ * ScriptOutputs name — it IS the shared contract type.
+ */
+export type ScriptOutputs = ExecutionResultMessage;
 
 export class ScriptSession {
   public source: string;

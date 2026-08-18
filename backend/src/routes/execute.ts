@@ -1,5 +1,20 @@
+/**
+ * REST /execute route — adapts the engine ExecutionResult to the SHARED wire
+ * contract (pine-framework/contracts, B1). The wire SHAPE is the contract's
+ * ExecutionResultMessage FULL variant + the REST-only maxLookback field; this
+ * file owns the engine→contract mapping and the normalize() backstop.
+ */
 import { Router } from 'express';
 import { createPineScriptEngine, type Bar } from 'pine-framework';
+import {
+  normalizeExecutionResultMessage,
+  type ColorValuesMap,
+  type ExecuteResponse,
+  type ExecutionResultFullMessage,
+  type ExecutionResultMessageInput,
+  type LineData,
+  type OutputValuesMap,
+} from 'pine-framework/contracts';
 
 const engine = createPineScriptEngine();
 
@@ -40,7 +55,10 @@ executeRouter.post('/execute', async (req, res) => {
 
     const keepCount = offset > 0 ? Math.max(0, bars.length - offset) : bars.length;
 
-    const outputs: Record<string, (number | string | boolean | null)[]> = {};
+    // Wire SHAPE comes from the contract (SSOT) — these are the contract's
+    // element types, not engine types. Wire invariance: same fields, same
+    // values, same types as pre-B3 (except isConfirmed added at the end).
+    const outputs: OutputValuesMap = {};
     if (result.outputs) {
       for (const [key, series] of result.outputs) {
         const values = Array.from(series.values).map(pineValueToJSON);
@@ -48,7 +66,7 @@ executeRouter.post('/execute', async (req, res) => {
       }
     }
 
-    const plotColors: Record<string, (string | null)[]> = {};
+    const plotColors: ColorValuesMap = {};
     if (result.plotColors) {
       for (const [key, colors] of result.plotColors) {
         const arr = Array.from(colors);
@@ -56,7 +74,7 @@ executeRouter.post('/execute', async (req, res) => {
       }
     }
 
-    const fillColorData: Record<string, (string | null)[]> = {};
+    const fillColorData: ColorValuesMap = {};
     if (result.fillColorData) {
       for (const [key, colors] of result.fillColorData) {
         const arr = Array.from(colors);
@@ -109,7 +127,7 @@ executeRouter.post('/execute', async (req, res) => {
     }));
 
     const barTimestamps = result.barTimestamps ?? [];
-    const lines = (result.lines || []).map((l) => ({
+    const lines: LineData[] = (result.lines || []).map((l) => ({
       points: [
         { time: l.xloc === 'bar_index' ? (barTimestamps[l.x1] ?? l.x1) : l.x1, price: l.y1 },
         { time: l.xloc === 'bar_index' ? (barTimestamps[l.x2] ?? l.x2) : l.x2, price: l.y2 },
@@ -117,7 +135,11 @@ executeRouter.post('/execute', async (req, res) => {
       color: l.color,
       width: l.width,
       style: l.style === 'style_dotted' ? 'dotted' : l.style === 'style_dashed' ? 'dashed' : 'solid',
-      extend: l.extend || 'none',
+      // Engine types extend as `string`, but Pine's extend namespace only
+      // yields 'none'|'left'|'right'|'both' (expression-executor.ts:729,
+      // drawing-builtins.ts:83-101). The cast narrows to the contract's
+      // literal union — the wire value is byte-identical to pre-B3.
+      extend: (l.extend || 'none') as LineData['extend'],
     }));
 
     const labels = (result.labels || []).map((l) => ({
@@ -181,14 +203,27 @@ executeRouter.post('/execute', async (req, res) => {
       fillgaps: lf.fillgaps,
     }));
 
-    res.json({
+    // ── Assemble the contract-typed wire payload ─────────────────────────────
+    // All keys come from the contract's ExecutionResultMessageInput (every
+    // collection optional on INPUT; normalize() guarantees the OUTPUT). The
+    // mapper already emits every collection as [] ((x || []).map, ?? []) —
+    // normalize is the belt-and-suspenders contract backstop.
+    const payload: ExecutionResultMessageInput = {
       success: result.success,
-      error: result.error,
+      // DRIFT (documented, not normalized this wave — Backend Lead): the
+      // engine's ExecutionResult.error is an EngineError OBJECT
+      // (message/span/barIndex/stack) that the REST mapper serializes as-is;
+      // the contract types error?: string. Wire-format invariance wins — the
+      // object stays. Same for version: REST emits `version ?? null` while WS
+      // emits `version ?? undefined` — a deliberate, preserved divergence.
+      error: result.error as unknown as string | undefined,
       version: result.version ?? null,
       overlay: result.overlay,
       outputs,
       plotColors,
       fillColorData,
+      hiddenPlotKeys: result.hiddenPlotKeys ?? [],
+      plotOverlayKeys: result.plotOverlayKeys ?? [],
       shapes,
       fills,
       linefills,
@@ -199,13 +234,33 @@ executeRouter.post('/execute', async (req, res) => {
       labels,
       boxes,
       tables,
-      barTimestamps: result.barTimestamps ?? [],
-      maxLookback: result.maxLookback ?? 0,
       alertConditions,
       alertTriggers,
-      hiddenPlotKeys: result.hiddenPlotKeys ?? [],
-      plotOverlayKeys: result.plotOverlayKeys ?? [],
-    });
+      barTimestamps: result.barTimestamps ?? [],
+      maxLookback: result.maxLookback ?? 0,
+      // REST emits the FULL variant — the union discriminant MUST exist on
+      // REST for the frontend union migration to work (Backend Lead CRITICAL
+      // finding). normalize() defaults a MISSING isConfirmed to false (diff),
+      // so set it explicitly BEFORE normalizing.
+      isConfirmed: true,
+    };
+
+    // Contract backstop: fills any missing required collection with [] and
+    // strips unknown keys by construction (returns a fresh object, never
+    // mutates the input). REST is a full snapshot, so isConfirmed stays true.
+    const normalized = normalizeExecutionResultMessage(payload) as ExecutionResultFullMessage;
+
+    // The REST wire response = the FULL variant + REST-only maxLookback.
+    // ExecuteResponse (payload + maxLookback, no isConfirmed) predates B3;
+    // the wire now carries the discriminant too, so the response type is the
+    // intersection — SSOT field set plus isConfirmed: true (harmless on REST,
+    // future-proof for the frontend union migration).
+    const response: ExecuteResponse & ExecutionResultFullMessage = {
+      ...normalized,
+      maxLookback: result.maxLookback ?? 0,
+    };
+
+    res.json(response);
   } catch (err) {
     console.error('[Execute] Error:', err);
     const message = err instanceof Error ? err.message : 'Unknown execution error';
