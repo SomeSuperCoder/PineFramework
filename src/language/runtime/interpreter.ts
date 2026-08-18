@@ -201,6 +201,7 @@ export class Interpreter {
         alertTriggers: [...this.eng.alertTriggers],
         barColorData: [...this.eng.barColorData],
         plotOverlayKeys: [...this.eng.plotOverlayKeys],
+        hlines: [...this.eng.hlines],
       };
     } catch (error) {
       const executionTime = performance.now() - startTime;
@@ -250,6 +251,7 @@ export class Interpreter {
         alertTriggers: [...this.eng.alertTriggers],
         barColorData: [...this.eng.barColorData],
         plotOverlayKeys: [...this.eng.plotOverlayKeys],
+        hlines: [...this.eng.hlines],
       };
     }
   }
@@ -285,6 +287,7 @@ export class Interpreter {
       barColorData: [...this.eng.barColorData],
       maxLookback: this.eng.getMaxLookback(),
       plotOverlayKeys: [...this.eng.plotOverlayKeys],
+      hlines: [...this.eng.hlines],
     };
 
     for (const bar of bars) {
@@ -345,6 +348,7 @@ export class Interpreter {
       barColorData: [...this.eng.barColorData],
       maxLookback: this.eng.getMaxLookback(),
       plotOverlayKeys: [...this.eng.plotOverlayKeys],
+      hlines: [...this.eng.hlines],
     };
   }
 

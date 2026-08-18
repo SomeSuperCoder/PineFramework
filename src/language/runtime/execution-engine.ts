@@ -48,6 +48,7 @@ import type {
   AlertConditionEntry,
   AlertTriggerEntry,
   SarStateValue,
+  HLineEntry,
 } from './execution-types.js';
 
 export {
@@ -228,6 +229,8 @@ export class ExecutionEngine {
     new Map();
   /** @internal */ sarState: Map<string, SarStateValue> = new Map();
   /** @internal */ fills: Array<{ from: string; to: string; color: string }> = [];
+  /** hline() records — constant horizontal lines, deduped by title (additive). */
+  /** @internal */ hlines: HLineEntry[] = [];
   /** @internal */ lines: Map<number, LineEntry> = new Map();
   /** @internal */ lineIdCounter: number = 0;
   /** @internal */ linefills: Map<
@@ -282,6 +285,9 @@ export class ExecutionEngine {
   // M8: highest/lowest buffers hold Decimal for exact comparison (no IEEE 754 drift).
   /** @internal */ highestBuffers: Map<string, Decimal[]> = new Map();
   /** @internal */ lowestBuffers: Map<string, Decimal[]> = new Map();
+  // M8: stdev buffers hold Decimal for exact population-stdev accumulation
+  // (ta.stdev — same rolling-window pattern as highest/lowest, keyed by call site).
+  /** @internal */ stdevBuffers: Map<string, Decimal[]> = new Map();
   /** @internal */ currentCallSiteId = 0;
   /** @internal */ rsiState: Map<
     string,
@@ -342,6 +348,9 @@ export class ExecutionEngine {
       max = Math.max(max, this.parseMapLength(key.split('_')));
     }
     for (const key of this.lowestBuffers.keys()) {
+      max = Math.max(max, this.parseMapLength(key.split('_')));
+    }
+    for (const key of this.stdevBuffers.keys()) {
       max = Math.max(max, this.parseMapLength(key.split('_')));
     }
     // ta.pivothigh/ta.pivotlow need leftBars + rightBars of OHLC history

@@ -162,6 +162,23 @@ export interface ExecutionContext {
 
 // ---- Results ----
 
+/**
+ * A constant horizontal line emitted by the hline() builtin.
+ *
+ * Wire-shape contract: field names mirror the frontend's HLineData
+ * (frontend/src/chart/renderers/HLineRenderer.ts consumes { price, color,
+ * style, width }) so the record can be fed to the renderer unchanged when
+ * the frontend feed path is wired. `title` identifies the line (Pine's
+ * hline title, default "hline_N" per plot-engine convention).
+ */
+export interface HLineEntry {
+  title: string;
+  price: number;
+  color: string;
+  style: 'solid' | 'dotted' | 'dashed';
+  width: number;
+}
+
 export interface ExecutionResult {
   success: boolean;
   error?: EngineError;
@@ -174,6 +191,8 @@ export interface ExecutionResult {
   bgcolor: Array<{ time: number; color: string }>;
   plotColors?: Map<string, (string | null)[]>;
   fillColorData?: Map<string, (string | null)[]>;
+  /** hline() records — constant horizontal lines (additive; empty unless the script calls hline). */
+  hlines?: HLineEntry[];
   hiddenPlotKeys?: string[];
   lines?: LineEntry[];
   linefills?: LinefillEntry[];

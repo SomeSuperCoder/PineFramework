@@ -719,6 +719,7 @@ export function executeMemberExpression(
       objName === 'linejoin' ||
       objName === 'textalign' ||
       objName === 'line' ||
+      objName === 'hline' ||
       objName === 'label' ||
       objName === 'plot' ||
       objName === 'barmerge' ||

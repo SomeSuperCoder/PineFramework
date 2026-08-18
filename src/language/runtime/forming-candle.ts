@@ -91,6 +91,10 @@ export class FormingCandleProcessor {
       this.eng.lowestBuffers.size > 0
         ? new Map([...this.eng.lowestBuffers].map(([k, v]) => [k, [...v]]))
         : undefined;
+    const preStdevBuffers =
+      this.eng.stdevBuffers.size > 0
+        ? new Map([...this.eng.stdevBuffers].map(([k, v]) => [k, [...v]]))
+        : undefined;
     const prePlotColors =
       this.eng.plotColors.size > 0
         ? new Map([...this.eng.plotColors].map(([k, v]) => [k, [...v]]))
@@ -220,6 +224,7 @@ export class FormingCandleProcessor {
     restoreMap(this.eng.changePrevValues, preChangePrevValues);
     restoreMap(this.eng.highestBuffers, preHighestBuffers);
     restoreMap(this.eng.lowestBuffers, preLowestBuffers);
+    restoreMap(this.eng.stdevBuffers, preStdevBuffers);
     restoreMap(this.eng.rsiState, preRsiState);
     restoreMap(this.eng.atrState, preAtrState);
     restoreMap(this.eng.hmaBuffers, preHmaBuffers);

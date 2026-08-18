@@ -120,6 +120,75 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
     return `__plot_ref:${key}` as PineValue;
   });
 
+  // ─── hline ──────────────────────────────────────────────────────────────
+  // Emits a constant horizontal-line record into the execution result. Wire
+  // shape mirrors the frontend's HLineData (frontend/src/chart/renderers/
+  // HLineRenderer.ts consumes { price, color, style, width }) — the record
+  // carries those exact field names so a future feed path can hand it to the
+  // renderer unchanged. hline.style_* constants arrive as raw strings
+  // ('style_dotted') from the enum-namespace resolution (expression-executor);
+  // map them to the renderer's style strings. Records are deduped by title —
+  // hline is a CONSTANT line re-emitted every bar, so the set stays flat.
+  const HLINE_STYLE_MAP: Record<string, string> = {
+    style_solid: 'solid',
+    style_dotted: 'dotted',
+    style_dashed: 'dashed',
+  };
+
+  eng.builtins.set('hline', (...allArgs: PineValue[]): PineValue => {
+    const lastArg = allArgs.length > 0 ? allArgs[allArgs.length - 1] : undefined;
+    const namedArgs =
+      typeof lastArg === 'object' &&
+      lastArg !== null &&
+      !Array.isArray(lastArg) &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      !(lastArg as any).__isSeries
+        ? (lastArg as unknown as Record<string, PineValue>)
+        : undefined;
+    const positionalArgs = namedArgs ? allArgs.slice(0, -1) : allArgs;
+
+    // Pine Script hline(price, title, color, linestyle, linewidth, editable, display, offset)
+    const price =
+      typeof positionalArgs[0] === 'number' && !isNa(positionalArgs[0])
+        ? (positionalArgs[0] as number)
+        : 0;
+    let title = 'hline';
+    let color = '#000000';
+    let style: string = 'solid';
+    let width: number = 1;
+    if (positionalArgs.length >= 2 && typeof positionalArgs[1] === 'string') {
+      title = positionalArgs[1] as string;
+    }
+    if (positionalArgs.length >= 3 && typeof positionalArgs[2] === 'string') {
+      color = positionalArgs[2] as string;
+    }
+    if (positionalArgs.length >= 4 && typeof positionalArgs[3] === 'string') {
+      style = HLINE_STYLE_MAP[positionalArgs[3] as string] || 'solid';
+    }
+    if (positionalArgs.length >= 5 && typeof positionalArgs[4] === 'number') {
+      width = positionalArgs[4] as number;
+    }
+    if (namedArgs) {
+      if (typeof namedArgs.title === 'string') title = namedArgs.title;
+      if (typeof namedArgs.color === 'string') color = namedArgs.color;
+      if (typeof namedArgs.linestyle === 'string') {
+        style = HLINE_STYLE_MAP[namedArgs.linestyle] || 'solid';
+      }
+      if (typeof namedArgs.linewidth === 'number') width = namedArgs.linewidth;
+    }
+
+    if (!eng.hlines.some((h: { title: string }) => h.title === title)) {
+      eng.hlines.push({
+        title,
+        price,
+        color,
+        style: style as 'solid' | 'dotted' | 'dashed',
+        width,
+      });
+    }
+    return NA;
+  });
+
   eng.builtins.set('plotshape', (...args: PineValue[]): PineValue => {
     const namedArgs =
       args.length > 0 &&

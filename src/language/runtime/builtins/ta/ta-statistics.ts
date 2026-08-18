@@ -1,4 +1,4 @@
-import type { Decimal } from 'decimal.js';
+import { Decimal } from 'decimal.js';
 import { NA, isNa, type PineValue } from '../../../types/na.js';
 import { isFiniteNumber } from '../../float-guards.js';
 import { pineValueToDecimal, decimalToPineValue } from '../../numbers/index.js';
@@ -62,6 +62,44 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
       if (buf[i].lt(min)) min = buf[i];
     }
     return decimalToPineValue(min);
+  });
+
+  // ─── ta.stdev ─────────────────────────────────────────────────────────────
+  // M8: Population standard deviation over `length` bars — semantics match the
+  // ANALYSIS registry reference (src/analysis/math-functions.ts stdev/variance:
+  // sumSqDiff is divided by `length`, NOT length-1, so this is POPULATION sd).
+  // Exact Decimal math at DP=20: mean = Σx/n, then sqrt(Σ(x−mean)²/n) via
+  // Decimal.sqrt() — no IEEE 754 drift (fp-final-gate). Warm-up mirrors
+  // ta.highest: NA until `len` values accumulate (the reference emits NaN for
+  // the first `length-1` bars — same gate). Buffer keyed by call site so two
+  // QQE instances with different lengths never share a window.
+  eng.builtins.set('ta.stdev', (source: PineValue, length: PineValue): PineValue => {
+    if (isNa(source) || isNa(length)) return NA;
+    const len = Math.trunc(length as number);
+    if (len <= 0) return NA;
+    // R4: reject Infinity/NaN before Decimal conversion — they must not enter
+    // the buffer (ta.highest pattern).
+    const rawVal = source as number;
+    if (!isFiniteNumber(rawVal)) return NA;
+    const key = `stdev_${len}_${eng.currentCallSiteId}`;
+    if (!eng.stdevBuffers.has(key)) {
+      eng.stdevBuffers.set(key, []);
+    }
+    const buf = eng.stdevBuffers.get(key)!;
+    buf.push(pineValueToDecimal(source));
+    if (buf.length > len) buf.shift();
+    if (buf.length < len) return NA;
+    // Population stdev — exact Decimal: mean = Σx/n, var = Σ(x−mean)²/n, sd = √var.
+    let sum = new Decimal(0);
+    for (const v of buf) sum = sum.plus(v);
+    const mean = sum.div(new Decimal(len));
+    let sumSqDiff = new Decimal(0);
+    for (const v of buf) {
+      const diff = v.minus(mean);
+      sumSqDiff = sumSqDiff.plus(diff.times(diff));
+    }
+    const variance = sumSqDiff.div(new Decimal(len));
+    return decimalToPineValue(variance.sqrt());
   });
 
   // ─── ta.pivothigh ────────────────────────────────────────────────────────
