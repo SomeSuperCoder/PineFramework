@@ -15,6 +15,7 @@ import type {
   ShapeData,
   FillData,
   LineData,
+  LinefillData,
   LabelData,
   BoxData,
 } from '../types/index.js';
@@ -575,6 +576,24 @@ export function mergeDiffIntoResult(
         ]
       : prev.lines;
 
+  // ── Linefills (accumulate+dedupe like lines/fills — a forming tick carries
+  //    ONLY newly-created fills, so replacing prev with the diff clobbers the
+  //    REST-accumulated fills on the first live tick) ──
+  const diffLinefills = msg.linefills || [];
+  const mergedLinefills =
+    diffLinefills.length > 0
+      ? [
+          ...(prev.linefills || []).filter(
+            (lf) =>
+              !diffLinefills.some(
+                (d: LinefillData) =>
+                  d.line1.x1 === lf.line1.x1 && d.line2.x1 === lf.line2.x1,
+              ),
+          ),
+          ...diffLinefills,
+        ]
+      : prev.linefills || [];
+
   // ── Labels ──
   const diffLabels = mapLabels(msg.labels);
   const mergedLabels =
@@ -704,6 +723,6 @@ export function mergeDiffIntoResult(
     boxes: mergedBoxes,
     tables: msg.tables || prev.tables,
     alertTriggers: mergedAlertTriggers,
-    linefills: msg.linefills || prev.linefills || [],
+    linefills: mergedLinefills,
   };
 }
