@@ -394,6 +394,21 @@ export function executeSwitchExpression(
   return NA;
 }
 
+// A namespace is a builtin group with dotted members (strategy.entry,
+// ta.sma, math.abs, …). When a member of a KNOWN namespace is missing, the
+// namespace itself resolved — only the member is unknown — so the error must
+// name the member, never the namespace. Namespaces are detected from the
+// registered dotted builtins (data-driven — no hardcoded list to drift when
+// new members are added).
+function hasNamespaceBuiltins(eng: ExecutionEngine, ns: string): boolean {
+  if (!ns) return false;
+  const prefix = `${ns}.`;
+  for (const key of eng.builtins.keys()) {
+    if (key.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
 export function executeCallExpression(
   eng: ExecutionEngine,
   expr: any,
@@ -466,6 +481,20 @@ export function executeCallExpression(
     if (methodName === 'new' && eng.userTypeFields.has(objName)) {
       const fields = eng.userTypeFields.get(objName)!;
       return executeTypeConstructor(fields, args, dispatch, scope, context);
+    }
+
+    // Known namespace but this member is not implemented. Dispatched as an
+    // identifier the namespace is never a scope variable, so the old
+    // fall-through threw a misleading "Variable '<ns>' is not defined".
+    // Report the TRUE missing member instead. The gate yields to a user
+    // variable bound in the script scope: `size = array.new_float();
+    // size.push(x)` must dispatch to the user's array object, not report a
+    // missing member on the size.* namespace (F2 — regression from this
+    // gate). Genuine namespace misses (strategy.not_a_real_member) still
+    // reach the diagnostic when no user binding shadows the namespace.
+    const nsBinding = resolveVariable(scope, objName);
+    if (!nsBinding && hasNamespaceBuiltins(eng, objName)) {
+      throw new Error(`Variable '${methodName}' is not defined in '${objName}'`);
     }
 
     // Evaluate the object — used for both table and array method dispatch
@@ -767,10 +796,33 @@ export function executeMemberExpression(
       };
       if (expr.property === 'commission') return '__strategy.commission__';
       if (expr.property in strategyConstants) return strategyConstants[expr.property]!;
+      // Dotted VALUE members (strategy.equity) resolve through the same
+      // zero-arg-thunk path as timeframe.* members — one registration, two
+      // access paths (property read here, call in executeCallExpression).
+      // The strategy.* registry ALSO holds ACTION functions (entry/exit/
+      // close/...): a property-read must NEVER execute them — reading one
+      // would fire a real order with undefined args (F1, silent spurious
+      // orders = financial harm). This allowlist restricts the thunk path to
+      // value members only; keep it in sync with value-member registrations
+      // in strategy-builtins.ts (registerStrategyEquityBuiltin). A
+      // property-read of an action falls through to the member-naming
+      // diagnostic below; action CALLS (strategy.entry(...)) still resolve
+      // through the call path in executeCallExpression, unchanged.
+      const strategyValueMembers = new Set(['equity']);
+      const strategyBuiltin = strategyValueMembers.has(expr.property)
+        ? eng.builtins.get(`strategy.${expr.property}`)
+        : undefined;
+      if (strategyBuiltin) return strategyBuiltin();
       if (expr.property === 'position_size' && eng.strategyEngine)
         return eng.strategyEngine.getPosition().quantity;
       if (expr.property === 'position_avg_price' && eng.strategyEngine)
         return eng.strategyEngine.getPosition().avgPrice;
+      // `strategy` is a DEFINED namespace — a missing member must be reported
+      // as the member, not the namespace. Falling through to dispatch(object)
+      // would throw "Variable 'strategy' is not defined" (the namespace is
+      // never a scope variable), blaming the resolved symbol for the missing
+      // one and sending compat work chasing the wrong name.
+      throw new Error(`Variable '${expr.property}' is not defined in '${objName}'`);
     }
     if (objName === 'barstate') {
       const barstateProps: Record<string, PineValue> = {

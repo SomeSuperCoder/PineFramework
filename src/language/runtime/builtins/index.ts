@@ -6,6 +6,7 @@ export { registerTimeframeBuiltins } from './timeframe-builtins.js';
 export { registerColorBuiltins } from './color-builtins.js';
 export { registerPlotBuiltins } from './plot-builtins.js';
 export { registerStrategyBuiltins } from './strategy-builtins.js';
+export { registerStrategyEquityBuiltin } from './strategy-builtins.js';
 export { registerInputBuiltins } from './input-builtins.js';
 export { registerTableBuiltins } from './table-builtins.js';
 export { registerDrawingBuiltins } from './drawing-builtins.js';

@@ -221,3 +221,27 @@ export function registerStrategyBuiltins(engine: ExecutionEngine): void {
     },
   );
 }
+
+/**
+ * Register `strategy.equity` for EVERY script kind (strategy AND indicator).
+ * The action members above are strategy-only (registered by initializeStrategy)
+ * because calling them without a strategy engine is a script bug. Equity is the
+ * exception per the strategy-compat contract (G3): an indicator script reading
+ * `strategy.equity` must resolve to NA — never throw. Registration is
+ * idempotent, so strategy scripts simply re-set the same thunk.
+ */
+export function registerStrategyEquityBuiltin(engine: ExecutionEngine): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eng = engine as any;
+
+  eng.builtins.set('strategy.equity', (): PineValue => {
+    // OR semantics (the contract's Group 2): an injected source FULLY
+    // overrides the default provider — never AND, no double-counted PnL.
+    // Default: the strategy engine's live equity (initialCapital + realized
+    // PnL − commissions; fillOrder deducts commission, closeOrReducePosition
+    // adds netPnl). No strategy engine (indicator script) → NA, not an error.
+    if (eng.equitySource) return eng.equitySource();
+    if (!eng.strategyEngine) return NA;
+    return eng.strategyEngine.getEquity();
+  });
+}

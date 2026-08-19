@@ -136,8 +136,13 @@ export interface LiveStrategyConfig {
   strategySource: string;
   /** DEX adapter for order execution. */
   dex: DexAdapter;
-  /** Wallet manager for signing transactions. */
-  walletManager: WalletManager;
+  /**
+   * Wallet manager for signing transactions. Optional — when absent (no
+   * wallet configured), the strategy still evaluates but order execution is
+   * disabled and the strategy.equity seam falls back to the engine's default
+   * provider (never throws on a missing wallet).
+   */
+  walletManager?: WalletManager;
   /** Trading pairs to execute on. */
   pairs: PairId[];
   /** Initial capital in USDC (smallest units). */
@@ -476,6 +481,23 @@ export class LiveStrategyExecutor {
 
     const barIndex = state.barIndex++;
     const context = createExecutionContextFromBar(candle, barIndex);
+
+    // Live wallet equity (composition root for the strategy.equity seam):
+    // fetch the REAL USDC balance of the wallet for THIS candle and inject it
+    // as the equity source BEFORE the bar runs — so a live strategy reading
+    // strategy.equity gets the actual on-chain balance, not simulated PnL.
+    // The async fetch completes before the bar executes; the seam itself is
+    // synchronous. OR semantics (engine contract): an injected source FULLY
+    // overrides the default strategy-engine equity — never AND, no
+    // double-counted PnL. No wallet configured → skip injection and let the
+    // engine default apply (orders-disabled evaluation) — never throw. RPC
+    // transport failures propagate through the existing error path (a fake
+    // zero here would mis-size live orders).
+    if (this.config.walletManager) {
+      const microUsdc = await this.fetchUsdcBalance();
+      state.runtime.setEquitySource(() => Number(microUsdc) / 1e6);
+    }
+
     const result = state.runtime.executeBar(context);
 
     if (!result.success) {
@@ -663,7 +685,12 @@ export class LiveStrategyExecutor {
         });
       }
 
-      // Get wallet keypair
+      // Get wallet keypair — a signal can only execute when a wallet exists.
+      // No wallet configured → fail loudly (the former null deref threw the
+      // same failure class; orders must never silently no-op).
+      if (!this.config.walletManager) {
+        throw new Error('[LiveStrategyExecutor] Cannot execute signal without a wallet manager');
+      }
       const keypairData = await this.config.walletManager.getKeypair();
 
       try {
@@ -1070,6 +1097,9 @@ export class LiveStrategyExecutor {
    * the real on-chain balance instead of a hardcoded constant.
    */
   private async fetchUsdcBalance(): Promise<bigint> {
+    if (!this.config.walletManager) {
+      throw new Error('[LiveStrategyExecutor] Cannot fetch USDC balance without a wallet manager');
+    }
     const keypairData = await this.config.walletManager.getKeypair();
     try {
       const balance = await this.config.dex.getBalance(USDC_MINT, keypairData.value.publicKey);

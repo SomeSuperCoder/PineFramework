@@ -25,6 +25,7 @@ import {
   registerColorBuiltins,
   registerPlotBuiltins,
   registerStrategyBuiltins,
+  registerStrategyEquityBuiltin,
   registerInputBuiltins,
   registerTableBuiltins,
   registerDrawingBuiltins,
@@ -308,7 +309,13 @@ export class ExecutionEngine {
    *  (min/max against prior band) can be evaluated per bar. */
   /** @internal */ supertrendState: Map<
     string,
-    { atrCount: number; atrPrev: Decimal; prevUpper: Decimal | null; prevLower: Decimal | null; prevDirection: number }
+    {
+      atrCount: number;
+      atrPrev: Decimal;
+      prevUpper: Decimal | null;
+      prevLower: Decimal | null;
+      prevDirection: number;
+    }
   > = new Map();
   // M8: highest/lowest buffers hold Decimal for exact comparison (no IEEE 754 drift).
   /** @internal */ highestBuffers: Map<string, Decimal[]> = new Map();
@@ -326,6 +333,14 @@ export class ExecutionEngine {
   // M8: valuewhen history stores Decimal for exact conditional source storage.
   /** @internal */ valuewhenHistory?: Map<string, Decimal[]>;
   /** @internal */ strategyEngine: StrategyEngine | null = null;
+  /**
+   * Post-construction equity provider for the `strategy.equity` seam. When
+   * set, it FULLY overrides the default strategy-engine equity (OR semantics —
+   * never AND, no double-counted PnL). Null = the strategy engine's live
+   * equity (initialCapital + realized PnL − commissions) is the source.
+   * @internal
+   */
+  equitySource: (() => number) | null = null;
   // Per-run diagnostic sink (design D4). initializeStrategy runs inside the
   // constructor, so warnings it emits (baseline defaults, commission conflicts)
   // are buffered until the sink attaches after construction.
@@ -475,6 +490,17 @@ export class ExecutionEngine {
   }
 
   /**
+   * Attach a post-construction equity provider (the `strategy.equity` seam).
+   * Mirrors setWarningSink: the engine stays constructible with zero
+   * infrastructure — callers that want a live wallet-backed equity feed
+   * inject it here after construction. OR semantics: the injected source
+   * fully overrides the default strategy-engine equity (never AND).
+   */
+  setEquitySource(source: () => number): void {
+    this.equitySource = source;
+  }
+
+  /**
    * Attach a per-run diagnostic sink (design D4 — WarningCollector at the
    * composition root). Must be called AFTER construction: initializeStrategy
    * runs inside the constructor, so warnings it emits (baseline defaults,
@@ -562,6 +588,11 @@ export class ExecutionEngine {
     registerMatrixBuiltins(this);
     registerAlertBuiltins(this);
     registerUtilityBuiltins(this);
+    // strategy.equity is registered for EVERY script kind (indicator included):
+    // the contract requires it to resolve to NA — not throw — when no strategy
+    // engine exists. The action members (strategy.entry/close/...) stay
+    // strategy-only via initializeStrategy → registerStrategyBuiltins.
+    registerStrategyEquityBuiltin(this);
   }
 
   private initializeGlobals(): void {

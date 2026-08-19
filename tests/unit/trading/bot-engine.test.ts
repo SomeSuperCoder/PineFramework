@@ -480,6 +480,9 @@ describe('BotEngine realized PnL round-trip (B1)', () => {
       entryTime: Date.now() - 60000,
     };
     state.runtime = {
+      // Live-wiring seam (strategy.equity): processCandle injects the real
+      // USDC wallet balance via setEquitySource before each bar runs.
+      setEquitySource: vi.fn(),
       executeBar: vi.fn().mockReturnValue({
         success: true,
         strategyMarkers: [

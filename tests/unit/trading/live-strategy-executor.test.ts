@@ -192,6 +192,9 @@ describe('LiveStrategyExecutor', () => {
 
       // Drive the live path through the runtime's executeBar returning a short marker
       state.runtime = {
+        // Live-wiring seam (strategy.equity): processCandle injects the real
+        // USDC wallet balance via setEquitySource before each bar runs.
+        setEquitySource: vi.fn(),
         executeBar: vi.fn().mockReturnValue({
           success: true,
           strategyMarkers: [
@@ -240,6 +243,9 @@ describe('LiveStrategyExecutor', () => {
 
       // Drive the live path through the runtime's executeBar returning a short marker
       state.runtime = {
+        // Live-wiring seam (strategy.equity): processCandle injects the real
+        // USDC wallet balance via setEquitySource before each bar runs.
+        setEquitySource: vi.fn(),
         executeBar: vi.fn().mockReturnValue({
           success: true,
           strategyMarkers: [
@@ -299,6 +305,9 @@ describe('LiveStrategyExecutor', () => {
 
       // Drive the live path through the runtime's executeBar returning a short marker
       state.runtime = {
+        // Live-wiring seam (strategy.equity): processCandle injects the real
+        // USDC wallet balance via setEquitySource before each bar runs.
+        setEquitySource: vi.fn(),
         executeBar: vi.fn().mockReturnValue({
           success: true,
           strategyMarkers: [
@@ -339,6 +348,125 @@ describe('LiveStrategyExecutor', () => {
       );
 
       warnSpy.mockRestore();
+    });
+
+    describe('live wallet equity injection (F3 — fetch-before-bar money path)', () => {
+      const candle = {
+        symbol: 'BTCUSDT',
+        timeframe: '60',
+        timestamp: 1_700_000_000_000,
+        open: 100,
+        high: 110,
+        low: 90,
+        close: 105,
+        volume: 1000,
+      };
+
+      /** Drive the live path with a recording runtime: replace state.runtime
+       *  with a mock that CAPTURES the injected equity source (so the produced
+       *  VALUE at the seam can be asserted) and records executeBar. */
+      function recordingRuntime(exec: LiveStrategyExecutor): {
+        injectedSource: (() => number) | null;
+        setEquitySource: ReturnType<typeof vi.fn>;
+        executeBar: ReturnType<typeof vi.fn>;
+      } {
+        const state = (exec as any).strategyStates.get('BTCUSDT:60');
+        const rec = {
+          injectedSource: null as (() => number) | null,
+          setEquitySource: vi.fn(),
+          executeBar: vi.fn().mockReturnValue({ success: true, strategyMarkers: [] }),
+        };
+        rec.setEquitySource.mockImplementation((source: () => number) => {
+          rec.injectedSource = source;
+        });
+        state.runtime = { setEquitySource: rec.setEquitySource, executeBar: rec.executeBar } as any;
+        state.warmUpComplete = true;
+        state.lastBarTimestamp = 0;
+        return rec;
+      }
+
+      it('fetches the wallet balance and injects the equity source BEFORE executeBar runs', async () => {
+        const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+        await executor.initializeStrategy(pair);
+        const { setEquitySource, executeBar } = recordingRuntime(executor);
+
+        // Real fetch path (walletManager + dex are mocked in config): the spy
+        // records the call while the original implementation still runs.
+        const fetchSpy = vi.spyOn(
+          executor as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+          'fetchUsdcBalance',
+        );
+
+        await executor.processCandle(candle);
+
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+        expect(setEquitySource).toHaveBeenCalledTimes(1);
+        expect(executeBar).toHaveBeenCalledTimes(1);
+        // Strict ordering: fetch → inject → bar. The bar must never run on a
+        // balance that hasn't been injected first.
+        expect(fetchSpy.mock.invocationCallOrder[0]).toBeLessThan(
+          setEquitySource.mock.invocationCallOrder[0],
+        );
+        expect(setEquitySource.mock.invocationCallOrder[0]).toBeLessThan(
+          executeBar.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('injects Number(microUsdc) / 1e6 — exactly 42.5 for 42500000 micro, never blended with the engine default', async () => {
+        const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+        await executor.initializeStrategy(pair);
+        // Keep the recording object (not a destructured copy) — the injected
+        // source is written onto `rec.injectedSource` while processCandle runs.
+        const rec = recordingRuntime(executor);
+
+        vi.spyOn(
+          executor as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+          'fetchUsdcBalance',
+        ).mockResolvedValue(42500000n); // 42.5 USDC in micro units
+
+        await executor.processCandle(candle);
+
+        expect(rec.setEquitySource).toHaveBeenCalledWith(expect.any(Function));
+        expect(rec.injectedSource).not.toBeNull();
+        // OR semantics (engine contract): the injected source is the ONLY value
+        // strategy.equity reads — not 42500000 (raw micro), not 10_000_000_000
+        // (engine default), not a blend. Exactly 42.5.
+        expect(rec.injectedSource!()).toBe(42.5);
+      });
+
+      it('skips equity injection entirely when no wallet manager is configured — bar still runs, never throws', async () => {
+        const exec = new LiveStrategyExecutor({
+          ...mockConfig,
+          walletManager: undefined,
+        } as LiveStrategyConfig);
+        const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+        await exec.initializeStrategy(pair);
+        const { setEquitySource, executeBar } = recordingRuntime(exec);
+
+        const signals = await exec.processCandle(candle);
+
+        expect(setEquitySource).not.toHaveBeenCalled();
+        expect(executeBar).toHaveBeenCalledTimes(1);
+        // Engine default equity applies; evaluation completes normally.
+        expect(signals).toEqual([]);
+      });
+
+      it('propagates the RPC failure from fetchUsdcBalance — the bar never runs, never caught-and-zeroed', async () => {
+        const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+        await executor.initializeStrategy(pair);
+        const { executeBar } = recordingRuntime(executor);
+
+        const rpcError = new Error('RPC down: getBalance failed');
+        vi.spyOn(
+          executor as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+          'fetchUsdcBalance',
+        ).mockRejectedValue(rpcError);
+
+        // Identity assertion: the SAME error instance surfaces — a fake zero
+        // here would mis-size live orders, so catch-and-zero would be a bug.
+        await expect(executor.processCandle(candle)).rejects.toBe(rpcError);
+        expect(executeBar).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -568,6 +696,9 @@ describe('LiveStrategyExecutor', () => {
         entryTime: Date.now() - 60000,
       };
       state.runtime = {
+        // Live-wiring seam (strategy.equity): processCandle injects the real
+        // USDC wallet balance via setEquitySource before each bar runs.
+        setEquitySource: vi.fn(),
         executeBar: vi.fn().mockReturnValue({
           success: true,
           strategyMarkers: [
