@@ -1,0 +1,226 @@
+//@version=6
+indicator("TrendCraft ICT SwiftEdge", overlay=true)
+
+// --- Brugerinput ---
+// SMA Input
+smaLength = input.int(20, "SMA Length", minval=1)
+
+// ICT Struktur Input
+var STRU = "ICT Structure Settings"
+showBos = input.bool(true, "Show Continuation (BOS)", group=STRU)
+showMss = input.bool(true, "Show Breaker (MSS)", group=STRU)
+tfStructure = input.timeframe("", "Structure Timeframe", group=STRU, tooltip="Select the timeframe used to calculate breakers.")
+chartTimeframe = input.string("30M", "Chart Timeframe", ["1M", "5M", "15M", "30M", "1H", "4H", "1D"], group=STRU)
+signalType = input.string("BoS", "Signal Type", ["BoS", "MSS"], group=STRU, tooltip="Choose whether signals are based on Break of Structure (BoS) or Market Structure Shift (MSS).")
+
+// Farveindstillinger
+bosBullCol = input.color(color.teal, "Bull BOS Color", group=STRU)
+bosBearCol = input.color(color.red, "Bear BOS Color", group=STRU)
+mssBullCol = input.color(color.blue, "Bull MSS Color", group=STRU)
+mssBearCol = input.color(color.orange, "Bear MSS Color", group=STRU)
+
+// --- Dynamisk Parameterjustering ---
+var int rlBars = 2
+switch chartTimeframe
+    "1M" => rlBars := 1
+    "5M" => rlBars := 1
+    "15M" => rlBars := 2
+    "30M" => rlBars := 2
+    "1H" => rlBars := 3
+    "4H" => rlBars := 4
+    "1D" => rlBars := 5
+
+// --- SMA Logik ---
+smaLow = ta.sma(low, smaLength)
+smaHigh = ta.sma(high, smaLength)
+
+// Bestem prisens position
+isAboveBoth = close > smaHigh and close > smaLow
+isBelowBoth = close < smaHigh and close < smaLow
+isBetween = close > smaLow and close < smaHigh
+
+// Farve baseret på prisposition
+lineColor = isAboveBoth ? color.green : isBelowBoth ? color.red : color.purple
+
+// Plot SMA'er
+p1 = plot(smaLow, "SMA Low", color=lineColor, linewidth=2)
+p2 = plot(smaHigh, "SMA High", color=lineColor, linewidth=2)
+
+// Udfyld baggrund mellem SMA'er
+fill(p1, p2, color=isAboveBoth ? color.new(color.green, 80) : isBelowBoth ? color.new(color.red, 80) : color.new(color.purple, 80))
+
+// --- ICT BoS/MSS Logik ---
+var line[] lin = array.new_line(0)
+var bool bull = false
+var float nPh1 = na
+var float nPl1 = na
+
+// Custom pivot struktur
+type piv
+    float pp
+    int pi
+
+// Track pivots
+var piv pH = na
+var piv pL = na
+var piv nPh = na
+var piv nPl = na
+
+// Funktion til at hente pivotpunkter
+Fmtf() =>
+    phPs = ta.pivothigh(rlBars, rlBars)
+    plPs = ta.pivotlow(rlBars, rlBars)
+    int phBi = na
+    int plBi = na
+    if not na(phPs)
+        phBi := time[rlBars]
+    if not na(plPs)
+        plBi := time[rlBars]
+    [phPs, phBi, plPs, plBi]
+
+// Hent HTF pivots
+[phPs, phBi, plPs, plBi] = request.security(syminfo.tickerid, tfStructure, Fmtf(), lookahead=barmerge.lookahead_on)
+
+if not na(phPs)
+    nPh := piv.new(phPs, phBi)
+    if na(pH)
+        pH := piv.new(phPs, phBi)
+
+if not na(plPs)
+    nPl := piv.new(plPs, plBi)
+    if na(pL)
+        pL := piv.new(plPs, plBi)
+
+bosBull = false
+bosBear = false
+mssBull = false
+mssBear = false
+
+var mssBullVar = false
+var mssBearVar = false
+
+// Hent HTF close og tid
+[htfClose, htfTime] = request.security(syminfo.tickerid, tfStructure, [close[1], time[1]], lookahead=barmerge.lookahead_on)
+
+highCond = bull ? high : htfClose
+timeHighCond = bull ? time : htfTime
+
+if (plPs > nPl1 and bull) or na(nPl1) or plPs < nPl1
+    nPl1 := plPs
+
+// Bullish logik
+var float tempBosBullLevel = na
+var float tempMssBullLevel = na
+breakHighCond = not na(pH) and highCond > pH.pp
+if breakHighCond
+    if bull
+        bosBull := true
+        tempBosBullLevel := pH.pp
+        if not mssBullVar and lin.size() > 0
+            lin.shift().delete()
+        mssBullVar := false
+    else
+        mssBull := true
+        tempMssBullLevel := pH.pp
+        mssBullVar := true
+
+    linCon = bull ? showBos : showMss
+    linCol = bull ? bosBullCol : mssBullCol
+    newLin = line.new(pH.pi, pH.pp, timeHighCond, pH.pp, color=linCon ? linCol : na, xloc=xloc.bar_time, style=line.style_dotted, width=2)
+
+    bull := true
+    mssBearVar := false
+    pH := na
+    pL := na
+    if not na(nPl1) and not na(nPl)
+        pL := piv.new(nPl.pp, nPl.pi)
+    lin.unshift(newLin)
+
+lowCond = bull ? htfClose : low
+timeLowCond = bull ? htfTime : time
+
+if (phPs < nPh1 and not bull) or na(nPh1) or phPs > nPh1
+    nPh1 := phPs
+
+// Bearish logik
+var float tempBosBearLevel = na
+var float tempMssBearLevel = na
+breakLowCond = not na(pL) and lowCond < pL.pp
+if breakLowCond
+    if not bull
+        bosBear := true
+        tempBosBearLevel := pL.pp
+        if not mssBearVar and lin.size() > 0
+            lin.shift().delete()
+        mssBearVar := false
+    else
+        mssBear := true
+        tempMssBearLevel := pL.pp
+        mssBearVar := true
+
+    linCon = bull ? showMss : showBos
+    linCol = bull ? mssBearCol : bosBearCol
+    newLin = line.new(pL.pi, pL.pp, timeLowCond, pL.pp, color=linCon ? linCol : na, xloc=xloc.bar_time, style=line.style_dotted, width=2)
+
+    bull := false
+    mssBullVar := false
+    pH := na
+    pL := na
+    if not na(nPh1) and not na(nPh)
+        pH := piv.new(nPh.pp, nPh.pi)
+    lin.unshift(newLin)
+
+// Opdater swing points
+if not na(pH) and not na(nPh) and not na(nPh[1]) and lin.size() > 0 and not bull and nPh.pp != (nPh[1]).pp and nPh.pi <= line.get_x2(lin.first())
+    pH := piv.new(nPh.pp, nPh.pi)
+
+if not na(pL) and not na(nPl) and not na(nPl[1]) and lin.size() > 0 and bull and nPl.pp != (nPl[1]).pp and nPl.pi <= line.get_x2(lin.first())
+    pL := piv.new(nPl.pp, nPl.pi)
+
+// Nulstil brudte pivots
+if not na(nPh) and high > nPh.pp
+    nPh := na
+
+if not na(nPl) and low < nPl.pp
+    nPl := na
+
+// --- Signal Logik ---
+// Spor seneste BoS- og MSS-niveauer
+var float lastBosBullLevel = na
+var float lastBosBearLevel = na
+var float lastMssBullLevel = na
+var float lastMssBearLevel = na
+
+if bosBull and not na(tempBosBullLevel)
+    lastBosBullLevel := tempBosBullLevel
+if bosBear and not na(tempBosBearLevel)
+    lastBosBearLevel := tempBosBearLevel
+if mssBull and not na(tempMssBullLevel)
+    lastMssBullLevel := tempMssBullLevel
+if mssBear and not na(tempMssBearLevel)
+    lastMssBearLevel := tempMssBearLevel
+
+// Køb- og salg-betingelser baseret på signalType
+buyCondition = signalType == "BoS" ? ta.crossover(close, lastBosBullLevel) and close > smaHigh and close > smaLow : ta.crossover(close, lastMssBullLevel) and close > smaHigh and close > smaLow
+sellCondition = signalType == "BoS" ? ta.crossunder(close, lastBosBearLevel) and close < smaHigh and close < smaLow : ta.crossunder(close, lastMssBearLevel) and close < smaHigh and close < smaLow
+
+// Spor trendtilstand
+var int trendState = 0
+buySignal = buyCondition and trendState != 1
+sellSignal = sellCondition and trendState != -1
+
+// Opdater trendtilstand
+if buySignal
+    trendState := 1
+if sellSignal
+    trendState := -1
+if isBetween
+    trendState := 0
+
+// --- Labels ---
+if buySignal
+    label.new(bar_index, high, "Buy", color=color.green, textcolor=color.white, style=label.style_label_down, size=size.normal)
+
+if sellSignal
+    label.new(bar_index, low, "Sell", color=color.red, textcolor=color.white, style=label.style_label_up, size=size.normal)
+

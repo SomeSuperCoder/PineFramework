@@ -1,0 +1,36 @@
+//@version=5
+strategy("Simple EMA Cross Strategy", overlay=true, initial_capital=10000)
+
+// --- Inputs ---
+fastLength = input.int(9, title="Fast EMA Length")
+slowLength = input.int(21, title="Slow EMA Length")
+
+// --- Calculate Indicators ---
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+
+// --- Plot EMAs on Chart ---
+plot(fastEMA, title="Fast EMA", color=color.blue, linewidth=2)
+plot(slowEMA, title="Slow EMA", color=color.orange, linewidth=2)
+
+// --- Strategy Logic ---
+longCondition = ta.crossover(fastEMA, slowEMA)
+shortCondition = ta.crossunder(fastEMA, slowEMA)
+
+// --- Execute Trades ---
+if longCondition
+    strategy.entry("Long", strategy.long)
+
+if shortCondition
+    strategy.entry("Short", strategy.short)
+
+// --- Print Labels on Cross ---
+if longCondition
+    label.new(bar_index, low, "Long Cross", 
+              color=color.green, textcolor=color.white, 
+              style=label.style_label_up, size=size.small)
+
+if shortCondition
+    label.new(bar_index, high, "Short Cross", 
+              color=color.red, textcolor=color.white, 
+              style=label.style_label_down, size=size.small)

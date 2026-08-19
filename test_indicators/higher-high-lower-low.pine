@@ -1,0 +1,179 @@
+//@version=6
+indicator("Higher High Lower Low 🦉{Phanchai}", overlay=true, max_lines_count=500)
+
+// === Inputs (English tooltips) ===
+lb               = input.int(5,  "Left Bars",  minval=1, tooltip="Bars to the LEFT of a pivot. Higher values produce fewer but stronger pivots.")
+rb               = input.int(5,  "Right Bars", minval=1, tooltip="Bars to the RIGHT of a pivot (confirmation window).")
+
+showSR           = input.bool(true, "Show Support/Resistance", tooltip="Draw segmented support/resistance lines that end on change and extend to the right.")
+srLineStyleStr   = input.string("Dotted", "S/R Line Style", options=["Solid","Dashed","Dotted"], tooltip="Line style for segmented support/resistance lines.")
+srLineWidth      = input.int(3, "S/R Line Width", minval=1, maxval=5, tooltip="Line width for segmented support/resistance lines.")
+supColor         = input.color(color.blue,  "Support Color",    tooltip="Color for support segments.")
+resColor         = input.color(color.red,   "Resistance Color", tooltip="Color for resistance segments.")
+
+labelSizeStr     = input.string("Tiny", "Label Size", options=["Tiny","Small","Normal","Large","Huge"], tooltip="Size of HH/HL/LH/LL labels.")
+labelSize        = labelSizeStr=="Tiny"?size.tiny:labelSizeStr=="Small"?size.small:labelSizeStr=="Normal"?size.normal:labelSizeStr=="Large"?size.large:size.huge
+
+// Per-label colors
+hlBg = input.color(color.purple, "HL Background", inline="hlc", tooltip="Background color for Higher Low labels.")
+hlTx = input.color(color.black,  "HL Text",       inline="hlc", tooltip="Text color for Higher Low labels.")
+hhBg = input.color(color.yellow, "HH Background", inline="hhc", tooltip="Background color for Higher High labels.")
+hhTx = input.color(color.black,  "HH Text",       inline="hhc", tooltip="Text color for Higher High labels.")
+llBg = input.color(color.red,    "LL Background", inline="llc", tooltip="Background color for Lower Low labels.")
+llTx = input.color(color.black,  "LL Text",       inline="llc", tooltip="Text color for Lower Low labels.")
+lhBg = input.color(color.orange, "LH Background", inline="lhc", tooltip="Background color for Lower High labels.")
+lhTx = input.color(color.black,  "LH Text",       inline="lhc", tooltip="Text color for Lower High labels.")
+
+// Options that affect only specific parts
+keepInsidePivots  = input.bool(true,  "Keep inside counter-trend pivots", tooltip="Affects ONLY S/R backbone (not labels).")
+countEqualAsBreak = input.bool(false, "Count equal as break (<= for LL, >= for HH)", tooltip="If ON, equal lows count as LL and equal highs count as HH.")
+showDebug         = input.bool(false, "Show debug labels (values & deltas)", tooltip="Prints current vs. previous pivot values on the pivot bar.")
+
+// Map style
+srLineStyle = srLineStyleStr=="Solid"?line.style_solid:srLineStyleStr=="Dashed"?line.style_dashed:line.style_dotted
+
+// === Confirmed pivots (appear on THIS bar after rb bars) ===
+ph = ta.pivothigh(lb, rb)    // series float (pivot high price) or na
+pl = ta.pivotlow(lb, rb)     // series float (pivot low price)  or na
+
+// === STRICT labels: compare in TICKS to avoid float/rounding issues ===
+toTicks(x) =>
+    // convert price to integer number of ticks
+    int(math.round(nz(x) / syminfo.mintick))
+
+prevPl = ta.valuewhen(not na(pl), pl, 1)
+prevPh = ta.valuewhen(not na(ph), ph, 1)
+
+curLowT  = toTicks(pl)
+prevLowT = toTicks(prevPl)
+curHighT  = toTicks(ph)
+prevHighT = toTicks(prevPh)
+
+isLL = not na(pl) and not na(prevPl) and (countEqualAsBreak ? curLowT <= prevLowT : curLowT < prevLowT)
+isHL = not na(pl) and (na(prevPl) or not isLL)
+
+isHH = not na(ph) and not na(prevPh) and (countEqualAsBreak ? curHighT >= prevHighT : curHighT > prevHighT)
+isLH = not na(ph) and (na(prevPh) or not isHH)
+
+// === Labels (placed at the pivot bar: x = bar_index - rb) ===
+if isHL
+    label.new(bar_index-rb, pl, xloc=xloc.bar_index, yloc=yloc.belowbar, text="HL", tooltip="Higher Low — Price: "+str.tostring(pl, format.mintick), style=label.style_label_up, color=hlBg, textcolor=hlTx, size=labelSize)
+if isHH
+    label.new(bar_index-rb, ph, xloc=xloc.bar_index, yloc=yloc.abovebar, text="HH", tooltip="Higher High — Price: "+str.tostring(ph, format.mintick), style=label.style_label_down, color=hhBg, textcolor=hhTx, size=labelSize)
+if isLL
+    label.new(bar_index-rb, pl, xloc=xloc.bar_index, yloc=yloc.belowbar, text="LL", tooltip="Lower Low — Price: "+str.tostring(pl, format.mintick), style=label.style_label_up, color=llBg, textcolor=llTx, size=labelSize)
+if isLH
+    label.new(bar_index-rb, ph, xloc=xloc.bar_index, yloc=yloc.abovebar, text="LH", tooltip="Lower High — Price: "+str.tostring(ph, format.mintick), style=label.style_label_down, color=lhBg, textcolor=lhTx, size=labelSize)
+
+// === Debug (optional) ===
+if showDebug and not na(pl)
+    label.new(bar_index-rb, pl, xloc=xloc.bar_index, yloc=yloc.belowbar, text="LOW\ncur: "+str.tostring(pl)+"\nprev: "+str.tostring(prevPl)+"\ncurT: "+str.tostring(curLowT)+"  prevT: "+str.tostring(prevLowT), style=label.style_label_left, color=color.new(color.gray,85), textcolor=color.black, size=size.tiny)
+if showDebug and not na(ph)
+    label.new(bar_index-rb, ph, xloc=xloc.bar_index, yloc=yloc.abovebar, text="HIGH\ncur: "+str.tostring(ph)+"\nprev: "+str.tostring(prevPh)+"\ncurT: "+str.tostring(curHighT)+"  prevT: "+str.tostring(prevHighT), style=label.style_label_left, color=color.new(color.gray,85), textcolor=color.black, size=size.tiny)
+
+// === Backbone for S/R (independent of label logic; unchanged visuals) ===
+hlFlag = not na(ph) ? 1 : (not na(pl) ? -1 : na)
+zz = not na(ph) ? ph : (not na(pl) ? pl : na)
+
+// Optional cleanup (backbone only)
+zz := (not keepInsidePivots and not na(pl) and hlFlag==-1 and ta.valuewhen(hlFlag!=0, hlFlag, 1)==-1 and pl > ta.valuewhen(not na(zz), zz, 1)) ? na : zz
+zz := (not keepInsidePivots and not na(ph) and hlFlag== 1 and ta.valuewhen(hlFlag!=0, hlFlag, 1)== 1 and ph < ta.valuewhen(not na(zz), zz, 1)) ? na : zz
+
+// Keep hlFlag consistent
+hlFlag := hlFlag==-1 and ta.valuewhen(hlFlag!=0, hlFlag, 1)==1  and zz > ta.valuewhen(not na(zz), zz, 1) ? na : hlFlag
+hlFlag := hlFlag== 1 and ta.valuewhen(hlFlag!=0, hlFlag, 1)==-1 and zz < ta.valuewhen(not na(zz), zz, 1) ? na : hlFlag
+zz := na(hlFlag) ? na : zz
+
+// Previous backbone pivots (for S/R only)
+findprevious() =>
+    ehl = hlFlag==1 ? -1 : 1
+    loc1=0.0, loc2=0.0, loc3=0.0, loc4=0.0, xx=0
+    for x=1 to 1000
+        if hlFlag[x]==ehl and not na(zz[x])
+            loc1:=zz[x], xx:=x+1, break
+    ehl:=hlFlag
+    for x=xx to 1000
+        if hlFlag[x]==ehl and not na(zz[x])
+            loc2:=zz[x], xx:=x+1, break
+    ehl:=hlFlag==1 ? -1 : 1
+    for x=xx to 1000
+        if hlFlag[x]==ehl and not na(zz[x])
+            loc3:=zz[x], xx:=x+1, break
+    ehl:=hlFlag
+    for x=xx to 1000
+        if hlFlag[x]==ehl and not na(zz[x])
+            loc4:=zz[x], break
+    [loc1,loc2,loc3,loc4]
+
+float a = na
+float b = na
+float c = na
+float d = na
+float e = na
+if not na(hlFlag)
+    [l1,l2,l3,l4] = findprevious()
+    a := zz
+    b := l1
+    c := l2
+    d := l3
+    e := l4
+
+// Raw structure (for S/R)
+isHH_raw = not na(zz) and (a>b and a>c and c>b and c>d)
+isLL_raw = not na(zz) and (a<b and a<c and c<b and c<d)
+isHL_raw = not na(zz) and ((a>=c and (b>c and b>d and d>c and d>e)) or (a<b and a>c and b<d))
+isLH_raw = not na(zz) and ((a<=c and (b<c and b<d and d<c and d<e)) or (a>b and a<c and b>d))
+
+// === Dynamic S/R drawing (same visuals) ===
+float res = na
+float sup = na
+res := isLH_raw ? zz : res[1]
+sup := isHL_raw ? zz : sup[1]
+int trend = na
+trend := close>res ? 1 : (close<sup ? -1 : nz(trend[1]))
+res := ((trend==1 and isHH_raw) or (trend==-1 and isLH_raw)) ? zz : res
+sup := ((trend==1 and isHL_raw) or (trend==-1 and isLL_raw)) ? zz : sup
+rechange = res != res[1]
+suchange = sup != sup[1]
+
+// draw lines
+var line resLine = na
+var line supLine = na
+if showSR
+    if rechange and not na(res)
+        if not na(resLine)
+            line.set_x2(resLine, bar_index), line.set_extend(resLine, extend.none)
+        resLine := line.new(bar_index-rb, res, bar_index, res, xloc=xloc.bar_index, extend=extend.right, style=srLineStyle, width=srLineWidth, color=resColor)
+    if suchange and not na(sup)
+        if not na(supLine)
+            line.set_x2(supLine, bar_index), line.set_extend(supLine, extend.none)
+        supLine := line.new(bar_index-rb, sup, bar_index, sup, xloc=xloc.bar_index, extend=extend.right, style=srLineStyle, width=srLineWidth, color=supColor)
+
+// === Alerts (built from STRICT labels) ===
+var string lastLabelType = ""  // "HH","HL","LL","LH"
+firstLLafterBull = isLL and (lastLabelType=="HL" or lastLabelType=="HH")
+firstHHafterBear = isHH and (lastLabelType=="LL" or lastLabelType=="LH")
+anyLabelFormed   = isHL or isHH or isLL or isLH
+lowSideFormed    = isLL or isHL
+highSideFormed   = isLH or isHH
+
+alertcondition(anyLabelFormed,   title="Any structure label (HH/HL/LH/LL)", message="Structure pivot detected (HH/HL/LH/LL) on {{ticker}} {{interval}}.")
+alertcondition(firstLLafterBull, title="First LL after HL/HH",              message="First Lower Low after HL or HH on {{ticker}} {{interval}}.")
+alertcondition(firstHHafterBear, title="First HH after LL/LH",              message="First Higher High after LL or LH on {{ticker}} {{interval}}.")
+alertcondition(lowSideFormed,    title="LL or HL formed",                   message="LL or HL formed on {{ticker}} {{interval}}.")
+alertcondition(highSideFormed,   title="LH or HH formed",                   message="LH or HH formed on {{ticker}} {{interval}}.")
+alertcondition(isHL,             title="HL formed",                         message="Higher Low (HL) formed on {{ticker}} {{interval}}.")
+alertcondition(isHH,             title="HH formed",                         message="Higher High (HH) formed on {{ticker}} {{interval}}.")
+alertcondition(isLL,             title="LL formed",                         message="Lower Low (LL) formed on {{ticker}} {{interval}}.")
+alertcondition(isLH,             title="LH formed",                         message="Lower High (LH) formed on {{ticker}} {{interval}}.")
+
+// remember last label type
+if isHH
+    lastLabelType := "HH"
+else if isLH
+    lastLabelType := "LH"
+else if isHL
+    lastLabelType := "HL"
+else if isLL
+    lastLabelType := "LL"
+

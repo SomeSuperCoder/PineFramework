@@ -1,0 +1,142 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © BOSWaves
+
+//@version=6
+indicator("Curved Radius Supertrend [BOSWaves]", overlay=true)
+
+// ============================================================================
+// Inputs
+// ============================================================================
+
+// Supertrend Settings
+atrLength = input.int(14, "ATR Length", minval=1, group="Supertrend Settings",
+     tooltip="Number of bars for ATR calculation. Higher = smoother, Lower = more responsive.")
+
+atrMult = input.float(2.0, "ATR Multiplier", minval=0.1, group="Supertrend Settings",
+     tooltip="Distance of bands from price. Higher = wider bands, fewer signals.")
+
+// Curve Settings
+radiusStrength = input.float(0.002, "Radius Strength", 
+     minval=0.001, maxval=0.3, step=0.001, group="Curve Settings",
+     tooltip="Controls curve acceleration strength.\n\n" +
+              "Lower = Tighter curves (responsive)\n" +
+              "Higher = Wider curves (smoother)")
+
+smoothness = input.int(5, "Smoothness", minval=1, maxval=20, group="Curve Settings",
+     tooltip="Smoothing applied to curved band. Higher = smoother curves, less noise.")
+
+// Color Settings
+upColor = input.color(color.green, "Up Trend", group="Color Settings",
+     tooltip="Color for uptrend band and signals.")
+
+dnColor = input.color(color.red, "Down Trend", group="Color Settings",
+     tooltip="Color for downtrend band and signals.")
+
+// ============================================================================
+// Supertrend Calculation
+// ============================================================================
+atr = ta.atr(atrLength)
+src = hl2
+
+upperBand = src + (atrMult * atr)
+lowerBand = src - (atrMult * atr)
+
+var float supertrend = na
+var int direction = 1
+
+// Initialize
+if na(supertrend)
+    supertrend := lowerBand
+    direction := 1
+
+// Standard supertrend logic
+float prevSupertrend = supertrend
+
+if direction == 1
+    supertrend := close < prevSupertrend ? upperBand : math.max(lowerBand, prevSupertrend)
+else
+    supertrend := close > prevSupertrend ? lowerBand : math.min(upperBand, prevSupertrend)
+
+int prevDirection = direction
+if close < supertrend
+    direction := -1
+if close > supertrend
+    direction := 1
+
+// ============================================================================
+// Curved Radius Implementation
+// ============================================================================
+var float anchorPrice = na
+var int anchorBar = na
+var float velocity = 0.0
+var int barCount = 0
+
+// Detect trend change - set new anchor
+bool trendChanged = direction != prevDirection
+
+if trendChanged
+    anchorPrice := supertrend
+    anchorBar := bar_index
+    velocity := 0.0
+    barCount := 0
+
+// Increment bar counter
+barCount := barCount + 1
+
+// Calculate curved offset using acceleration creating a parabolic curve
+if not na(anchorPrice)
+    // Acceleration increases with each bar (quadratic growth)
+    velocity := velocity + (radiusStrength * barCount)
+    
+    // Apply velocity in direction of trend
+    if direction == 1
+        // Uptrend - curve upward with acceleration
+        supertrend := anchorPrice + velocity
+    else
+        // Downtrend - curve downward with acceleration  
+        supertrend := anchorPrice - velocity
+
+// Apply smoothing to create flowing curves
+curvedBand = ta.sma(supertrend, smoothness)
+
+// ============================================================================
+// Visualization
+// ============================================================================
+trendColor = direction == 1 ? upColor : dnColor
+
+// Plot the curved band
+plot(curvedBand, "Curved Radius Band", 
+     color=trendColor, 
+     linewidth=3)
+
+// Fill between price and band
+basePlot = plot(close, display=display.none)
+bandPlot = plot(curvedBand, display=display.none)
+fill(basePlot, bandPlot, color.new(trendColor, 85))
+
+// Plot smoother outer envelope
+outerBand = direction == 1 ? curvedBand + atr : curvedBand - atr
+plot(outerBand, "Outer Band", 
+     color=color.new(trendColor, 70), 
+     linewidth=1,
+     style=plot.style_circles)
+
+// Plot candle coloring based on trend
+barcolor(direction == 1 ? upColor : dnColor, title="Trend Candle Color")
+
+// ============================================================================
+// Signals
+// ============================================================================
+buySignal = trendChanged and direction == 1
+sellSignal = trendChanged and direction == -1
+
+plotshape(buySignal, "Buy", shape.labelup, location.belowbar, 
+          upColor, text="BUY", textcolor=color.white, size=size.small)
+plotshape(sellSignal, "Sell", shape.labeldown, location.abovebar, 
+          dnColor, text="SELL", textcolor=color.white, size=size.small)
+
+// ============================================================================
+// Alerts
+// ============================================================================
+alertcondition(buySignal, "Curved Buy", "Curved Radius Supertrend - Buy Signal")
+alertcondition(sellSignal, "Curved Sell", "Curved Radius Supertrend - Sell Signal")
