@@ -157,10 +157,14 @@ export function buildScriptResult(
     const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types/index.js').PlotData['type'];
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const perBarColors = plotColors?.[key];
-    if (!plotColor) {
+    const hasExplicitColor =
+      perBarColors?.some((c) => c !== null && c !== undefined) ?? false;
+    if (!hasExplicitColor) {
       plotColor = COLORS[colorIndex % COLORS.length];
+      colorIndex++;
+    } else {
+      plotColor = perBarColors!.find((c) => c !== null && c !== undefined)!;
     }
-    colorIndex++;
     const mappedData: Array<{
       time: number;
       value: number | null;
