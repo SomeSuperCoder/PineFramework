@@ -1,6 +1,16 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { PineChart, createChart } from '../chart';
-import type { CandlestickData, PlotSeriesData, ShapeMarkerData, StrategyMarkerData, FillData, LinefillData, DrawingLineData, LabelData, ChunkBorderData } from '../chart';
+import type {
+  CandlestickData,
+  PlotSeriesData,
+  ShapeMarkerData,
+  StrategyMarkerData,
+  FillData,
+  LinefillData,
+  DrawingLineData,
+  LabelData,
+  ChunkBorderData,
+} from '../chart';
 import type { ScriptResult } from '../types';
 import { tokens } from '../theme/tokens';
 import { Button } from '@/components/ui/button';
@@ -34,124 +44,131 @@ interface ChartComponentProps {
 
 export interface ChartComponentHandle {
   scrollToDate: (timestampSeconds: number) => void;
-  setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => void;
+  setTeleportLine: (
+    timeSeconds: number,
+    options?: {
+      color?: string;
+      width?: number;
+      style?: 'solid' | 'dotted' | 'dashed';
+      label?: string;
+    },
+  ) => void;
   clearTeleportLine: () => void;
 }
 
-export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(function ChartComponent({ data, scriptResult, dataVersion, symbol, interval, fetchOlderOHLCV, indicatorLabels = [], indicatorResults = new Map(), computingIndicators = new Set(), onRemoveIndicator, onEditIndicator, forceAutoScale = false, debugMode = false, chunkBorders = [] }: ChartComponentProps, ref) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<PineChart | null>(null);
-  const seriesNamesRef = useRef<Set<string>>(new Set());
-  const shouldFitRef = useRef(true);
-  const prevDataVersionRef = useRef(dataVersion);
+export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentProps>(
+  function ChartComponent(
+    {
+      data,
+      scriptResult,
+      dataVersion,
+      symbol,
+      interval,
+      fetchOlderOHLCV,
+      indicatorLabels = [],
+      indicatorResults = new Map(),
+      computingIndicators = new Set(),
+      onRemoveIndicator,
+      onEditIndicator,
+      forceAutoScale = false,
+      debugMode = false,
+      chunkBorders = [],
+    }: ChartComponentProps,
+    ref,
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const chartRef = useRef<PineChart | null>(null);
+    const seriesNamesRef = useRef<Set<string>>(new Set());
+    const shouldFitRef = useRef(true);
+    const prevDataVersionRef = useRef(dataVersion);
 
-  if (dataVersion !== prevDataVersionRef.current) {
-    prevDataVersionRef.current = dataVersion;
-    shouldFitRef.current = true;
-  }
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    const chart = createChart(containerRef.current, {
-      background: tokens.colors.canvas,
-      textColor: tokens.colors.ink['1'],
-      gridColor: tokens.chart.grid,
-      borderColor: tokens.colors.hairline.default,
-      barSpacing: 8,
-    });
-
-    chartRef.current = chart;
-
-    return () => {
-      chart.remove();
-      chartRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    chartRef.current?.setForceAutoScale(forceAutoScale);
-  }, [forceAutoScale]);
-
-  useEffect(() => {
-    chartRef.current?.setDebugMode(debugMode);
-  }, [debugMode]);
-
-  useEffect(() => {
-    chartRef.current?.setChunkBorders(chunkBorders);
-  }, [chunkBorders]);
-
-  // Test data bridge for Playwright e2e tests
-  useEffect(() => {
-    if (!debugMode) {
-      // Production safety: clear any stale bridge data
-      if (typeof window !== 'undefined') {
-        if ((window as any).__pineTestData) {
-          delete (window as any).__pineTestData;
-        }
-        if ((window as any).__pineChart) {
-          delete (window as any).__pineChart;
-        }
-      }
-      return;
+    if (dataVersion !== prevDataVersionRef.current) {
+      prevDataVersionRef.current = dataVersion;
+      shouldFitRef.current = true;
     }
-    // Expose chart instance and helpers for test programmatic operations
-    (window as any).__pineChart = chartRef.current;
-    (window as any).__pineFetchOlder = fetchOlderOHLCV;
-    interface IndicatorDiagnostics {
-      id: string;
-      name: string;
-      labels: Array<{ time: number; price: number; text?: string }>;
-      lines: Array<{ points: Array<{ time: number; price: number }> }>;
-      plotNullCounts: Record<string, number>;
-      boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }>;
-      orphanedValueCounts: Record<string, number>;
-      orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }>;
-      totalBars: number;
-    }
-    const indicators: IndicatorDiagnostics[] = [];
-    if (indicatorResults) {
-      for (const [id, res] of indicatorResults) {
-        // Compute per-plot null counts from plotColors
-        const plotNullCounts: Record<string, number> = {};
-        if (res.plotColors) {
-          for (const [key, colors] of Object.entries(res.plotColors)) {
-            plotNullCounts[key] = colors.filter((c) => c === null).length;
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+
+      const chart = createChart(containerRef.current, {
+        background: tokens.colors.canvas,
+        textColor: tokens.colors.ink['1'],
+        gridColor: tokens.chart.grid,
+        borderColor: tokens.colors.hairline.default,
+        barSpacing: 8,
+      });
+
+      chartRef.current = chart;
+
+      return () => {
+        chart.remove();
+        chartRef.current = null;
+      };
+    }, []);
+
+    useEffect(() => {
+      chartRef.current?.setForceAutoScale(forceAutoScale);
+    }, [forceAutoScale]);
+
+    useEffect(() => {
+      chartRef.current?.setDebugMode(debugMode);
+    }, [debugMode]);
+
+    useEffect(() => {
+      chartRef.current?.setChunkBorders(chunkBorders);
+    }, [chunkBorders]);
+
+    // Test data bridge for Playwright e2e tests
+    useEffect(() => {
+      if (!debugMode) {
+        // Production safety: clear any stale bridge data
+        if (typeof window !== 'undefined') {
+          if ((window as any).__pineTestData) {
+            delete (window as any).__pineTestData;
+          }
+          if ((window as any).__pineChart) {
+            delete (window as any).__pineChart;
           }
         }
-        if (res.fillColorData) {
-          for (const [key, colors] of Object.entries(res.fillColorData)) {
-            if (!(key in plotNullCounts)) {
+        return;
+      }
+      // Expose chart instance and helpers for test programmatic operations
+      (window as any).__pineChart = chartRef.current;
+      (window as any).__pineFetchOlder = fetchOlderOHLCV;
+      interface IndicatorDiagnostics {
+        id: string;
+        name: string;
+        labels: Array<{ time: number; price: number; text?: string }>;
+        lines: Array<{ points: Array<{ time: number; price: number }> }>;
+        plotNullCounts: Record<string, number>;
+        boundaryNullDensities: Array<{ borderIndex: number; nullCount: number; totalBars: number }>;
+        orphanedValueCounts: Record<string, number>;
+        orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }>;
+        totalBars: number;
+      }
+      const indicators: IndicatorDiagnostics[] = [];
+      if (indicatorResults) {
+        for (const [id, res] of indicatorResults) {
+          // Compute per-plot null counts from plotColors
+          const plotNullCounts: Record<string, number> = {};
+          if (res.plotColors) {
+            for (const [key, colors] of Object.entries(res.plotColors)) {
               plotNullCounts[key] = colors.filter((c) => c === null).length;
             }
           }
-        }
-
-        // Detect orphaned values: plotColors is null but raw data has a value.
-        // This means the line extends past the warmup zone uncolored.
-        // Skip hidden plots (display=display.none) — identified by having
-        // all-null plotColors (no bar is ever colored).
-        const orphanedValueCounts: Record<string, number> = {};
-        for (const plot of res.plots) {
-          const key = plot.title;
-          if (!key) continue;
-          const colors = res.plotColors?.[key];
-          if (!colors) continue;
-          const hasNonNullColor = colors.some((c) => c !== null);
-          if (!hasNonNullColor) continue;
-          let orphaned = 0;
-          for (let i = 0; i < Math.min(plot.data.length, colors.length); i++) {
-            if (colors[i] === null && plot.data[i].value !== null) {
-              orphaned++;
+          if (res.fillColorData) {
+            for (const [key, colors] of Object.entries(res.fillColorData)) {
+              if (!(key in plotNullCounts)) {
+                plotNullCounts[key] = colors.filter((c) => c === null).length;
+              }
             }
           }
-          if (orphaned > 0) orphanedValueCounts[key] = orphaned;
-        }
 
-        // Detect orphaned values near chunk borders: positions within 50 bars
-        // of a chunk border where plotColors is null but raw data has a value.
-        const orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }> = [];
-        if (chunkBorders.length > 0) {
+          // Detect orphaned values: plotColors is null but raw data has a value.
+          // This means the line extends past the warmup zone uncolored.
+          // Skip hidden plots (display=display.none) — identified by having
+          // all-null plotColors (no bar is ever colored).
+          const orphanedValueCounts: Record<string, number> = {};
           for (const plot of res.plots) {
             const key = plot.title;
             if (!key) continue;
@@ -159,524 +176,619 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
             if (!colors) continue;
             const hasNonNullColor = colors.some((c) => c !== null);
             if (!hasNonNullColor) continue;
+            let orphaned = 0;
+            for (let i = 0; i < Math.min(plot.data.length, colors.length); i++) {
+              if (colors[i] === null && plot.data[i].value !== null) {
+                orphaned++;
+              }
+            }
+            if (orphaned > 0) orphanedValueCounts[key] = orphaned;
+          }
+
+          // Detect orphaned values near chunk borders: positions within 50 bars
+          // of a chunk border where plotColors is null but raw data has a value.
+          const orphanedAtBorders: Array<{ plotKey: string; borderIndex: number; count: number }> =
+            [];
+          if (chunkBorders.length > 0) {
+            for (const plot of res.plots) {
+              const key = plot.title;
+              if (!key) continue;
+              const colors = res.plotColors?.[key];
+              if (!colors) continue;
+              const hasNonNullColor = colors.some((c) => c !== null);
+              if (!hasNonNullColor) continue;
+              for (const border of chunkBorders) {
+                const borderIdx =
+                  border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
+                if (borderIdx < 0) continue;
+                const windowStart = Math.max(0, borderIdx - 50);
+                const windowEnd = Math.min(plot.data.length, colors.length, borderIdx + 50);
+                let count = 0;
+                for (let i = windowStart; i < windowEnd; i++) {
+                  if (colors[i] === null && plot.data[i].value !== null) {
+                    count++;
+                  }
+                }
+                if (count > 0)
+                  orphanedAtBorders.push({ plotKey: key, borderIndex: borderIdx, count });
+              }
+            }
+          }
+
+          // Compute boundary null densities: nulls in 50-bar window around each chunk border
+          const boundaryNullDensities: IndicatorDiagnostics['boundaryNullDensities'] = [];
+          if (chunkBorders.length > 0 && res.plotColors) {
+            const allPlotColors = Object.values(res.plotColors);
+            const totalBars = allPlotColors.length > 0 ? allPlotColors[0].length : 0;
             for (const border of chunkBorders) {
-              const borderIdx = border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
+              const borderIdx =
+                border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
               if (borderIdx < 0) continue;
               const windowStart = Math.max(0, borderIdx - 50);
-              const windowEnd = Math.min(plot.data.length, colors.length, borderIdx + 50);
-              let count = 0;
-              for (let i = windowStart; i < windowEnd; i++) {
-                if (colors[i] === null && plot.data[i].value !== null) {
-                  count++;
+              const windowEnd = Math.min(totalBars, borderIdx + 50);
+              let nullCount = 0;
+              for (const colors of allPlotColors) {
+                for (let i = windowStart; i < windowEnd; i++) {
+                  if (colors[i] === null) nullCount++;
                 }
               }
-              if (count > 0) orphanedAtBorders.push({ plotKey: key, borderIndex: borderIdx, count });
+              boundaryNullDensities.push({
+                borderIndex: borderIdx,
+                nullCount,
+                totalBars: windowEnd - windowStart,
+              });
             }
           }
+
+          // Total bars from plot data length
+          const totalBars = res.plots.length > 0 ? res.plots[0].data.length : 0;
+
+          indicators.push({
+            id,
+            name: id,
+            labels: res.labels || [],
+            lines: res.lines || [],
+            plotNullCounts,
+            boundaryNullDensities,
+            orphanedValueCounts,
+            orphanedAtBorders,
+            totalBars,
+          });
         }
-
-        // Compute boundary null densities: nulls in 50-bar window around each chunk border
-        const boundaryNullDensities: IndicatorDiagnostics['boundaryNullDensities'] = [];
-        if (chunkBorders.length > 0 && res.plotColors) {
-          const allPlotColors = Object.values(res.plotColors);
-          const totalBars = allPlotColors.length > 0 ? allPlotColors[0].length : 0;
-          for (const border of chunkBorders) {
-            const borderIdx = border.barIndex ?? data.findIndex((d) => d.time >= border.timestamp);
-            if (borderIdx < 0) continue;
-            const windowStart = Math.max(0, borderIdx - 50);
-            const windowEnd = Math.min(totalBars, borderIdx + 50);
-            let nullCount = 0;
-            for (const colors of allPlotColors) {
-              for (let i = windowStart; i < windowEnd; i++) {
-                if (colors[i] === null) nullCount++;
-              }
-            }
-            boundaryNullDensities.push({ borderIndex: borderIdx, nullCount, totalBars: windowEnd - windowStart });
-          }
-        }
-
-        // Total bars from plot data length
-        const totalBars = res.plots.length > 0 ? res.plots[0].data.length : 0;
-
-        indicators.push({
-          id,
-          name: id,
-          labels: res.labels || [],
-          lines: res.lines || [],
-          plotNullCounts,
-          boundaryNullDensities,
-          orphanedValueCounts,
-          orphanedAtBorders,
-          totalBars,
-        });
       }
-    }
-    (window as any).__pineTestData = {
-      indicators,
-      chunkBorders,
-      labelCount: indicators.reduce((sum, ind) => sum + ind.labels.length, 0),
-      lineCount: indicators.reduce((sum, ind) => sum + ind.lines.length, 0),
-    };
-  }, [debugMode, indicatorResults, chunkBorders]);
+      (window as any).__pineTestData = {
+        indicators,
+        chunkBorders,
+        labelCount: indicators.reduce((sum, ind) => sum + ind.labels.length, 0),
+        lineCount: indicators.reduce((sum, ind) => sum + ind.lines.length, 0),
+      };
+    }, [debugMode, indicatorResults, chunkBorders]);
 
-  const isLoadingHistoryRef = useRef(false);
-  const fetchRef = useRef(fetchOlderOHLCV);
-  fetchRef.current = fetchOlderOHLCV;
-  const symbolRef = useRef(symbol);
-  symbolRef.current = symbol;
-  const intervalRef = useRef(interval);
-  intervalRef.current = interval;
-  const prevFirstTimeRef = useRef<number | undefined>(undefined);
-  const wasPrependedRef = useRef(false);
+    const isLoadingHistoryRef = useRef(false);
+    const fetchRef = useRef(fetchOlderOHLCV);
+    fetchRef.current = fetchOlderOHLCV;
+    const symbolRef = useRef(symbol);
+    symbolRef.current = symbol;
+    const intervalRef = useRef(interval);
+    intervalRef.current = interval;
+    const prevFirstTimeRef = useRef<number | undefined>(undefined);
+    const wasPrependedRef = useRef(false);
 
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-
-    const onRangeChange = async () => {
-      if (isLoadingHistoryRef.current) return;
+    useEffect(() => {
       const chart = chartRef.current;
       if (!chart) return;
-      // Use the true firstBarIndex (not the clamped visible range start) so
-      // that panning past the data edge (negative firstBarIndex, allowed by
-      // the pan() overscroll fix) doesn't trigger an infinite cascade.  The
-      // guard: only trigger when firstBarIndex <= 50 (i.e. the user is within
-      // 50 bars of — or past — the oldest loaded bar).
-      const firstBarIndex = chart.timeScale().getFirstBarIndex();
-      if (firstBarIndex > 50) return;
-      isLoadingHistoryRef.current = true;
-      const sy = symbolRef.current;
-      const iv = intervalRef.current;
+
+      const onRangeChange = async () => {
+        if (isLoadingHistoryRef.current) return;
+        const chart = chartRef.current;
+        if (!chart) return;
+        // Use the true firstBarIndex (not the clamped visible range start) so
+        // that panning past the data edge (negative firstBarIndex, allowed by
+        // the pan() overscroll fix) doesn't trigger an infinite cascade.  The
+        // guard: only trigger when firstBarIndex <= 50 (i.e. the user is within
+        // 50 bars of — or past — the oldest loaded bar).
+        const firstBarIndex = chart.timeScale().getFirstBarIndex();
+        if (firstBarIndex > 50) return;
+        isLoadingHistoryRef.current = true;
+        const sy = symbolRef.current;
+        const iv = intervalRef.current;
+        try {
+          await fetchRef.current(sy, iv);
+          // Note: we do NOT set shouldFitRef here. fetchOlderOHLCV returns 0
+          // on empty response, so no-op is handled naturally. Calling fitContent()
+          // when scroll-back reaches the end would teleport the user from the
+          // oldest bars back to the newest — the opposite of what they want.
+          //
+          // The chart's prepend handling in setCandles + adjustForPrepend
+          // correctly maintains the viewport position after new bars arrive.
+        } finally {
+          isLoadingHistoryRef.current = false;
+        }
+      };
+
+      chart.on('onVisibleRangeChange', onRangeChange);
+    }, []);
+
+    useEffect(() => {
+      if (!chartRef.current) return;
+      const chart = chartRef.current;
+
+      const allResults: Array<{ result: ScriptResult }> = [];
+      if (scriptResult) allResults.push({ result: scriptResult });
+      if (indicatorResults) {
+        for (const [, res] of indicatorResults) {
+          allResults.push({ result: res });
+        }
+      }
+
+      chart.beginUpdate();
       try {
-        await fetchRef.current(sy, iv);
-        // Note: we do NOT set shouldFitRef here. fetchOlderOHLCV returns 0
-        // on empty response, so no-op is handled naturally. Calling fitContent()
-        // when scroll-back reaches the end would teleport the user from the
-        // oldest bars back to the newest — the opposite of what they want.
-        //
-        // The chart's prepend handling in setCandles + adjustForPrepend
-        // correctly maintains the viewport position after new bars arrive.
-      } finally {
-        isLoadingHistoryRef.current = false;
-      }
-    };
+        if (data.length > 0) {
+          // Detect prepend: new data starts with an older bar than before
+          wasPrependedRef.current =
+            prevFirstTimeRef.current !== undefined &&
+            data[0]?.time !== undefined &&
+            data[0].time < prevFirstTimeRef.current;
+          prevFirstTimeRef.current = data[0]?.time;
 
-    chart.on('onVisibleRangeChange', onRangeChange);
-  }, []);
+          chart.setCandles(data);
 
-  useEffect(() => {
-    if (!chartRef.current) return;
-    const chart = chartRef.current;
-
-    const allResults: Array<{ result: ScriptResult }> = [];
-    if (scriptResult) allResults.push({ result: scriptResult });
-    if (indicatorResults) {
-      for (const [, res] of indicatorResults) {
-        allResults.push({ result: res });
-      }
-    }
-
-    chart.beginUpdate();
-
-    if (data.length > 0) {
-      // Detect prepend: new data starts with an older bar than before
-      wasPrependedRef.current =
-        prevFirstTimeRef.current !== undefined &&
-        data[0]?.time !== undefined &&
-        data[0].time < prevFirstTimeRef.current;
-      prevFirstTimeRef.current = data[0]?.time;
-
-      chart.setCandles(data);
-
-      // If data was prepended (scroll-back), NEVER fitContent — that would
-      // teleport the user from the oldest bars back to the newest ones.
-      if (shouldFitRef.current && !wasPrependedRef.current) {
-        chart.timeScale().fitContent();
-        shouldFitRef.current = false;
-      } else {
-        // Clear the flag even if we skipped fitContent so it doesn't
-        // trigger on a future non-prepended update (e.g. timeframe switch).
-        shouldFitRef.current = false;
-      }
-    }
-
-    const COLORS = [tokens.colors.brand.blue, tokens.colors.semantic.warning, tokens.colors.semantic.success, '#e91e63', '#9c27b0', '#00bcd4', '#ff5722', '#607d8b'];
-
-    const currentTitles = new Set<string>();
-    let colorIndex = 0;
-    let nonOverlayPaneIndex = 0;
-    let maxManualNonOverlayCount = 0;
-
-    for (const { result } of allResults) {
-      // A result goes on the main chart if overlay=true OR if any of its plots are in overlayPlotTitles
-      const resultIsOverlay = result.overlay;
-      const paneIndex = resultIsOverlay ? undefined : nonOverlayPaneIndex++;
-      let hasNonOverlayPlot = false;
-      for (const plot of result.plots) {
-        let title = plot.title || `Plot ${colorIndex + 1}`;
-        let plotColor = plot.color || COLORS[colorIndex % COLORS.length];
-        colorIndex++;
-        currentTitles.add(title);
-
-        const seriesData: PlotSeriesData[] = [];
-
-        for (const d of plot.data) {
-          if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
-            seriesData.push({ time: d.time, value: d.value, color: d.color });
+          // If data was prepended (scroll-back), NEVER fitContent — that would
+          // teleport the user from the oldest bars back to the newest ones.
+          if (shouldFitRef.current && !wasPrependedRef.current) {
+            chart.timeScale().fitContent();
+            shouldFitRef.current = false;
           } else {
-            seriesData.push({ time: d.time, value: null, color: d.color });
+            // Clear the flag even if we skipped fitContent so it doesn't
+            // trigger on a future non-prepended update (e.g. timeframe switch).
+            shouldFitRef.current = false;
           }
         }
 
-        if (data.length > seriesData.length && seriesData.length > 0) {
-          // Pad with null instead of repeating last value to avoid showing
-          // incorrect data for bars before the indicator started computing
-          for (let j = seriesData.length; j < data.length; j++) {
-            seriesData.push({
-              time: data[j].time,
-              value: null,
-              color: undefined,
+        const COLORS = [
+          tokens.colors.brand.blue,
+          tokens.colors.semantic.warning,
+          tokens.colors.semantic.success,
+          '#e91e63',
+          '#9c27b0',
+          '#00bcd4',
+          '#ff5722',
+          '#607d8b',
+        ];
+
+        const currentTitles = new Set<string>();
+        let colorIndex = 0;
+        let nonOverlayPaneIndex = 0;
+        let maxManualNonOverlayCount = 0;
+
+        for (const { result } of allResults) {
+          // A result goes on the main chart if overlay=true OR if any of its plots are in overlayPlotTitles
+          const resultIsOverlay = result.overlay;
+          const paneIndex = resultIsOverlay ? undefined : nonOverlayPaneIndex++;
+          let hasNonOverlayPlot = false;
+          for (const plot of result.plots) {
+            const title = plot.title || `Plot ${colorIndex + 1}`;
+            const plotColor = plot.color || COLORS[colorIndex % COLORS.length];
+            colorIndex++;
+            currentTitles.add(title);
+
+            const seriesData: PlotSeriesData[] = [];
+
+            for (const d of plot.data) {
+              if (d.value !== null && d.value !== undefined && typeof d.value === 'number') {
+                seriesData.push({ time: d.time, value: d.value, color: d.color });
+              } else {
+                seriesData.push({ time: d.time, value: null, color: d.color });
+              }
+            }
+
+            if (data.length > seriesData.length && seriesData.length > 0) {
+              // Pad with null instead of repeating last value to avoid showing
+              // incorrect data for bars before the indicator started computing
+              for (let j = seriesData.length; j < data.length; j++) {
+                seriesData.push({
+                  time: data[j].time,
+                  value: null,
+                  color: undefined,
+                });
+              }
+            }
+
+            // Per-plot overlay: use overlayPlotTitles to decide if this specific plot goes on the main chart
+            const plotIsOverlay =
+              result.overlay || (result.overlayPlotTitles?.includes(title) ?? false);
+            if (!plotIsOverlay) hasNonOverlayPlot = true;
+            if (!seriesNamesRef.current.has(title)) {
+              chart.addPlotSeries(
+                title,
+                {
+                  color: plotColor,
+                  lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
+                  style: (plot.type as any) || 'line',
+                },
+                plotIsOverlay,
+                plotIsOverlay ? undefined : paneIndex,
+              );
+            }
+            seriesNamesRef.current.add(title);
+            chart.setPlotData(title, seriesData);
+          }
+          if (!resultIsOverlay && !hasNonOverlayPlot) {
+            maxManualNonOverlayCount = Math.max(maxManualNonOverlayCount, nonOverlayPaneIndex);
+          }
+        }
+
+        chart.setManualNonOverlayPaneCount(maxManualNonOverlayCount);
+
+        for (const name of seriesNamesRef.current) {
+          if (!currentTitles.has(name)) {
+            chart.removeSeries(name);
+          }
+        }
+        seriesNamesRef.current.clear();
+        for (const title of currentTitles) {
+          seriesNamesRef.current.add(title);
+        }
+
+        // Collect hidden plot titles from all results and mark them in PineChart
+        // so they don't render as visible lines (display=display.none fill references).
+        const allHiddenTitles: string[] = [];
+        for (const { result } of allResults) {
+          if (result.hiddenPlotTitles) {
+            for (const t of result.hiddenPlotTitles) {
+              allHiddenTitles.push(t);
+            }
+          }
+        }
+        chart.setHiddenPlots(allHiddenTitles);
+
+        const allStrategyMarkers: StrategyMarkerData[] = [];
+        const allFills: FillData[] = [];
+        const allLinefills: LinefillData[] = [];
+        let allFillColorData: Record<string, (string | null)[]> = {};
+        const allDrawingLines: DrawingLineData[] = [];
+        const allChartLabels: LabelData[] = [];
+        const allAlertTriggers: import('../types').AlertTriggerData[] = [];
+        const allBoxes: import('../types').BoxData[] = [];
+        const allTables: import('../types').TableData[] = [];
+
+        for (const { result } of allResults) {
+          for (const m of result.strategyMarkers || []) {
+            allStrategyMarkers.push({
+              type: m.type,
+              name: m.name,
+              direction: m.direction,
+              timestamp: m.timestamp,
+              color: m.color,
+              comment: m.comment,
+              barIndex: m.barIndex,
             });
           }
-        }
-
-        // Per-plot overlay: use overlayPlotTitles to decide if this specific plot goes on the main chart
-        const plotIsOverlay = result.overlay || (result.overlayPlotTitles?.includes(title) ?? false);
-        if (!plotIsOverlay) hasNonOverlayPlot = true;
-        if (!seriesNamesRef.current.has(title)) {
-          chart.addPlotSeries(title, {
-            color: plotColor,
-            lineWidth: (plot.lineWidth as 1 | 2 | 3 | 4) || 1,
-            style: (plot.type as any) || 'line',
-          }, plotIsOverlay, plotIsOverlay ? undefined : paneIndex);
-        }
-        seriesNamesRef.current.add(title);
-        chart.setPlotData(title, seriesData);
-      }
-      if (!resultIsOverlay && !hasNonOverlayPlot) {
-        maxManualNonOverlayCount = Math.max(maxManualNonOverlayCount, nonOverlayPaneIndex);
-      }
-    }
-
-    chart.setManualNonOverlayPaneCount(maxManualNonOverlayCount);
-
-    for (const name of seriesNamesRef.current) {
-      if (!currentTitles.has(name)) {
-        chart.removeSeries(name);
-      }
-    }
-    seriesNamesRef.current.clear();
-    for (const title of currentTitles) {
-      seriesNamesRef.current.add(title);
-    }
-
-    // Collect hidden plot titles from all results and mark them in PineChart
-    // so they don't render as visible lines (display=display.none fill references).
-    const allHiddenTitles: string[] = [];
-    for (const { result } of allResults) {
-      if (result.hiddenPlotTitles) {
-        for (const t of result.hiddenPlotTitles) {
-          allHiddenTitles.push(t);
-        }
-      }
-    }
-    chart.setHiddenPlots(allHiddenTitles);
-
-    const allStrategyMarkers: StrategyMarkerData[] = [];
-    const allFills: FillData[] = [];
-    const allLinefills: LinefillData[] = [];
-    let allFillColorData: Record<string, (string | null)[]> = {};
-    const allDrawingLines: DrawingLineData[] = [];
-    const allChartLabels: LabelData[] = [];
-    const allAlertTriggers: import('../types').AlertTriggerData[] = [];
-    const allBoxes: import('../types').BoxData[] = [];
-    const allTables: import('../types').TableData[] = [];
-
-    for (const { result } of allResults) {
-      for (const m of (result.strategyMarkers || [])) {
-        allStrategyMarkers.push({
-          type: m.type, name: m.name, direction: m.direction,
-          timestamp: m.timestamp, color: m.color, comment: m.comment, barIndex: m.barIndex,
-        });
-      }
-      for (const f of (result.fills || [])) {
-        allFills.push({ from: f.from, to: f.to, color: f.color });
-      }
-      for (const lf of (result.linefills || [])) {
-        // Non-overlay indicator linefills need a paneIndex so they render in the
-        // correct indicator pane instead of the main chart area.
-        if (!result.overlay) {
-          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
-          const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
-          allLinefills.push({ ...lf, paneIndex });
-        } else {
-          allLinefills.push(lf);
-        }
-      }
-      if (result.fillColorData) {
-        allFillColorData = { ...allFillColorData, ...result.fillColorData };
-      }
-      for (const l of (result.lines || [])) {
-        const line: DrawingLineData = {
-          points: l.points, color: l.color || tokens.colors.brand.blue,
-          width: l.width || 1, style: l.style || 'dotted',
-          extend: l.extend || 'none',
-        };
-        // Non-overlay indicator lines need a paneIndex so they render in the
-        // correct indicator pane instead of the main chart area.
-        if (!result.overlay) {
-          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
-          line.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
-        }
-        allDrawingLines.push(line);
-      }
-      for (const l of (result.labels || [])) {
-        const label: LabelData = {
-          time: l.time, price: l.price, text: l.text,
-          color: l.color || tokens.colors.brand.blue, textColor: l.textColor || tokens.colors.ink['1'],
-          style: l.style, size: l.size,
-        };
-        // Non-overlay indicator labels need a paneIndex so they render in the
-        // correct indicator pane instead of the main chart area.
-        if (!result.overlay) {
-          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
-          label.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
-        }
-        allChartLabels.push(label);
-      }
-      // Resolve Pine Script alert template placeholders
-      const resolveAlertMsg = (msg: string, barIdx: number): string => {
-        const candle = barIdx >= 0 && barIdx < data.length ? data[barIdx] : undefined;
-        return msg
-          .replace(/\{\{ticker\}\}/g, symbol ?? '')
-          .replace(/\{\{interval\}\}/g, interval ?? '')
-          .replace(/\{\{tickerid\}\}/g, symbol ?? '')
-          .replace(/\{\{exchange\}\}/g, '')
-          .replace(/\{\{close\}\}/g, candle ? candle.close.toFixed(2) : '')
-          .replace(/\{\{open\}\}/g, candle ? candle.open.toFixed(2) : '')
-          .replace(/\{\{high\}\}/g, candle ? candle.high.toFixed(2) : '')
-          .replace(/\{\{low\}\}/g, candle ? candle.low.toFixed(2) : '')
-          .replace(/\{\{volume\}\}/g, candle ? candle.volume.toFixed(0) : '')
-          .replace(/\{\{time\}\}/g, candle ? new Date(candle.time * 1000).toISOString() : '');
-      };
-      // Enrich alertTriggers with title/message from alertConditions, resolving placeholders
-      const condMap = new Map<string, import('../types').AlertConditionData>();
-      for (const c of (result.alertConditions || [])) {
-        condMap.set(c.id, c);
-      }
-      for (const t of (result.alertTriggers || [])) {
-        const cond = condMap.get(t.alertId);
-        const rawMsg = cond?.message ?? t.message ?? '';
-        allAlertTriggers.push({
-          alertId: t.alertId,
-          barIndex: t.barIndex,
-          timestamp: t.timestamp,
-          title: cond?.title ?? t.title,
-          message: resolveAlertMsg(rawMsg, t.barIndex),
-        });
-      }
-      for (const b of (result.boxes || [])) {
-        allBoxes.push(b);
-      }
-      for (const t of (result.tables || [])) {
-        allTables.push(t);
-      }
-    }
-
-    const allShapeMarkers: ShapeMarkerData[] = [];
-    const allBgColorsMap = new Map<number, string>();
-    const ohlcvMap = new Map<number, CandlestickData>();
-    for (let i = 0; i < data.length; i++) {
-      ohlcvMap.set(data[i].time, data[i]);
-    }
-
-    for (const { result } of allResults) {
-      // Find the pane index for this result
-      const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(([, v]) => v === result);
-      const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
-      
-      for (const s of (result.shapes || [])) {
-        const candle = ohlcvMap.get(s.time);
-        let barIdx = -1;
-        if (candle) {
-          for (let i = 0; i < data.length; i++) {
-            if (data[i] === candle) { barIdx = i; break; }
+          for (const f of result.fills || []) {
+            allFills.push({ from: f.from, to: f.to, color: f.color });
+          }
+          for (const lf of result.linefills || []) {
+            // Non-overlay indicator linefills need a paneIndex so they render in the
+            // correct indicator pane instead of the main chart area.
+            if (!result.overlay) {
+              const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(
+                ([, v]) => v === result,
+              );
+              const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+              allLinefills.push({ ...lf, paneIndex });
+            } else {
+              allLinefills.push(lf);
+            }
+          }
+          if (result.fillColorData) {
+            allFillColorData = { ...allFillColorData, ...result.fillColorData };
+          }
+          for (const l of result.lines || []) {
+            const line: DrawingLineData = {
+              points: l.points,
+              color: l.color || tokens.colors.brand.blue,
+              width: l.width || 1,
+              style: l.style || 'dotted',
+              extend: l.extend || 'none',
+            };
+            // Non-overlay indicator lines need a paneIndex so they render in the
+            // correct indicator pane instead of the main chart area.
+            if (!result.overlay) {
+              const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(
+                ([, v]) => v === result,
+              );
+              line.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+            }
+            allDrawingLines.push(line);
+          }
+          for (const l of result.labels || []) {
+            const label: LabelData = {
+              time: l.time,
+              price: l.price,
+              text: l.text,
+              color: l.color || tokens.colors.brand.blue,
+              textColor: l.textColor || tokens.colors.ink['1'],
+              style: l.style,
+              size: l.size,
+            };
+            // Non-overlay indicator labels need a paneIndex so they render in the
+            // correct indicator pane instead of the main chart area.
+            if (!result.overlay) {
+              const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(
+                ([, v]) => v === result,
+              );
+              label.paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+            }
+            allChartLabels.push(label);
+          }
+          // Resolve Pine Script alert template placeholders
+          const resolveAlertMsg = (msg: string, barIdx: number): string => {
+            const candle = barIdx >= 0 && barIdx < data.length ? data[barIdx] : undefined;
+            return msg
+              .replace(/\{\{ticker\}\}/g, symbol ?? '')
+              .replace(/\{\{interval\}\}/g, interval ?? '')
+              .replace(/\{\{tickerid\}\}/g, symbol ?? '')
+              .replace(/\{\{exchange\}\}/g, '')
+              .replace(/\{\{close\}\}/g, candle ? candle.close.toFixed(2) : '')
+              .replace(/\{\{open\}\}/g, candle ? candle.open.toFixed(2) : '')
+              .replace(/\{\{high\}\}/g, candle ? candle.high.toFixed(2) : '')
+              .replace(/\{\{low\}\}/g, candle ? candle.low.toFixed(2) : '')
+              .replace(/\{\{volume\}\}/g, candle ? candle.volume.toFixed(0) : '')
+              .replace(/\{\{time\}\}/g, candle ? new Date(candle.time * 1000).toISOString() : '');
+          };
+          // Enrich alertTriggers with title/message from alertConditions, resolving placeholders
+          const condMap = new Map<string, import('../types').AlertConditionData>();
+          for (const c of result.alertConditions || []) {
+            condMap.set(c.id, c);
+          }
+          for (const t of result.alertTriggers || []) {
+            const cond = condMap.get(t.alertId);
+            const rawMsg = cond?.message ?? t.message ?? '';
+            allAlertTriggers.push({
+              alertId: t.alertId,
+              barIndex: t.barIndex,
+              timestamp: t.timestamp,
+              title: cond?.title ?? t.title,
+              message: resolveAlertMsg(rawMsg, t.barIndex),
+            });
+          }
+          for (const b of result.boxes || []) {
+            allBoxes.push(b);
+          }
+          for (const t of result.tables || []) {
+            allTables.push(t);
           }
         }
-        allShapeMarkers.push({
-          time: s.time,
-          position: (s.location || 'abovebar') as ShapeMarkerData['position'],
-          shape: s.type,
-          color: s.color || tokens.colors.brand.blue,
-          text: s.text || undefined,
-          textcolor: s.textcolor,
-          barIndex: barIdx >= 0 ? barIdx : undefined,
-          price: s.price,
-          overlay: s.overlay,
-          paneIndex,
-        });
+
+        const allShapeMarkers: ShapeMarkerData[] = [];
+        const allBgColorsMap = new Map<number, string>();
+        const ohlcvMap = new Map<number, CandlestickData>();
+        for (let i = 0; i < data.length; i++) {
+          ohlcvMap.set(data[i].time, data[i]);
+        }
+
+        for (const { result } of allResults) {
+          // Find the pane index for this result
+          const resultPaneIndex = Array.from(indicatorResults.entries()).findIndex(
+            ([, v]) => v === result,
+          );
+          const paneIndex = resultPaneIndex >= 0 ? resultPaneIndex : 0;
+
+          for (const s of result.shapes || []) {
+            const candle = ohlcvMap.get(s.time);
+            let barIdx = -1;
+            if (candle) {
+              for (let i = 0; i < data.length; i++) {
+                if (data[i] === candle) {
+                  barIdx = i;
+                  break;
+                }
+              }
+            }
+            allShapeMarkers.push({
+              time: s.time,
+              position: (s.location || 'abovebar') as ShapeMarkerData['position'],
+              shape: s.type,
+              color: s.color || tokens.colors.brand.blue,
+              text: s.text || undefined,
+              textcolor: s.textcolor,
+              barIndex: barIdx >= 0 ? barIdx : undefined,
+              price: s.price,
+              overlay: s.overlay,
+              paneIndex,
+            });
+          }
+          for (const b of result.bgcolor || []) {
+            const candle = ohlcvMap.get(b.time);
+            if (candle) {
+              for (let i = 0; i < data.length; i++) {
+                if (data[i] === candle) {
+                  allBgColorsMap.set(i, b.color);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        chart.setStrategyMarkers(allStrategyMarkers);
+        chart.setAlertTriggers(allAlertTriggers);
+        chart.setFills(allFills);
+        chart.setLinefills(allLinefills);
+        if (Object.keys(allFillColorData).length > 0) {
+          chart.setFillColorData(allFillColorData);
+        }
+        chart.setDrawingLines(allDrawingLines);
+        chart.setLabels(allChartLabels);
+        chart.setBoxes(allBoxes);
+        chart.setTables(allTables);
+        chart.setMarkers(allShapeMarkers);
+        chart.setBgColors(allBgColorsMap);
+        chart.setHLines([]);
+        // Convert ScriptResult.barColors (time-keyed array with body/wick/border/offset) to
+        // Map<number, CandleColorData> keyed by bar index for the chart renderer.
+        const barColorsMap = new Map<number, { body?: string; wick?: string; border?: string }>();
+        const timeToIndex = new Map<number, number>();
+        for (let i = 0; i < data.length; i++) {
+          timeToIndex.set(data[i].time, i);
+        }
+        for (const { result } of allResults) {
+          if (!result.barColors) continue;
+          for (const bc of result.barColors) {
+            // bc.time is in milliseconds (from engine), data[i].time is in seconds (from toCandleData)
+            const timeSec = Math.floor(bc.time / 1000);
+            const barIdx = timeToIndex.get(timeSec);
+            if (barIdx === undefined) continue;
+            const targetIdx =
+              bc.offset !== undefined
+                ? Math.min(Math.max(0, barIdx + bc.offset), data.length - 1)
+                : barIdx;
+            barColorsMap.set(targetIdx, { body: bc.body, wick: bc.wick, border: bc.border });
+          }
+        }
+        chart.setBarColors(barColorsMap);
+      } finally {
+        chart.endUpdate();
       }
-      for (const b of (result.bgcolor || [])) {
-        const candle = ohlcvMap.get(b.time);
-        if (candle) {
-          for (let i = 0; i < data.length; i++) {
-            if (data[i] === candle) {
-              allBgColorsMap.set(i, b.color);
+    }, [data, scriptResult, indicatorResults]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        scrollToDate: (timestampSeconds: number) => {
+          const chart = chartRef.current;
+          if (!chart) return;
+          let lo = 0;
+          let hi = data.length - 1;
+          while (lo <= hi) {
+            const mid = (lo + hi) >>> 1;
+            if (data[mid].time < timestampSeconds) lo = mid + 1;
+            else if (data[mid].time > timestampSeconds) hi = mid - 1;
+            else {
+              lo = mid;
               break;
             }
           }
-        }
-      }
-    }
+          const idx = Math.min(Math.max(lo, 0), data.length - 1);
+          chart.timeScale().scrollTo(idx);
+        },
+        setTeleportLine: (
+          timeSeconds: number,
+          options?: {
+            color?: string;
+            width?: number;
+            style?: 'solid' | 'dotted' | 'dashed';
+            label?: string;
+          },
+        ) => {
+          const chart = chartRef.current;
+          if (!chart) return;
+          chart.timeScale().setTeleportLine(timeSeconds, options);
+        },
+        clearTeleportLine: () => {
+          const chart = chartRef.current;
+          if (!chart) return;
+          chart.timeScale().clearTeleportLine();
+        },
+      }),
+      [data],
+    );
 
-    chart.setStrategyMarkers(allStrategyMarkers);
-    chart.setAlertTriggers(allAlertTriggers);
-    chart.setFills(allFills);
-    chart.setLinefills(allLinefills);
-    if (Object.keys(allFillColorData).length > 0) {
-      chart.setFillColorData(allFillColorData);
-    }
-    chart.setDrawingLines(allDrawingLines);
-    chart.setLabels(allChartLabels);
-    chart.setBoxes(allBoxes);
-    chart.setTables(allTables);
-    chart.setMarkers(allShapeMarkers);
-    chart.setBgColors(allBgColorsMap);
-    chart.setHLines([]);
-    // Convert ScriptResult.barColors (time-keyed array with body/wick/border/offset) to
-    // Map<number, CandleColorData> keyed by bar index for the chart renderer.
-    const barColorsMap = new Map<number, { body?: string; wick?: string; border?: string }>();
-    const timeToIndex = new Map<number, number>();
-    for (let i = 0; i < data.length; i++) {
-      timeToIndex.set(data[i].time, i);
-    }
-    for (const { result } of allResults) {
-      if (!result.barColors) continue;
-      for (const bc of result.barColors) {
-        // bc.time is in milliseconds (from engine), data[i].time is in seconds (from toCandleData)
-        const timeSec = Math.floor(bc.time / 1000);
-        const barIdx = timeToIndex.get(timeSec);
-        if (barIdx === undefined) continue;
-        const targetIdx = bc.offset !== undefined ? Math.min(Math.max(0, barIdx + bc.offset), data.length - 1) : barIdx;
-        barColorsMap.set(targetIdx, { body: bc.body, wick: bc.wick, border: bc.border });
-      }
-    }
-    chart.setBarColors(barColorsMap);
+    const handleRemoveIndicator = useCallback(
+      (indicatorId: string) => {
+        onRemoveIndicator?.(indicatorId);
+      },
+      [onRemoveIndicator],
+    );
 
-    chart.endUpdate();
-  }, [data, scriptResult, indicatorResults]);
+    const handleEditIndicator = useCallback(
+      (indicatorId: string) => {
+        onEditIndicator?.(indicatorId);
+      },
+      [onEditIndicator],
+    );
 
-  useImperativeHandle(ref, () => ({
-    scrollToDate: (timestampSeconds: number) => {
-      const chart = chartRef.current;
-      if (!chart) return;
-      let lo = 0;
-      let hi = data.length - 1;
-      while (lo <= hi) {
-        const mid = (lo + hi) >>> 1;
-        if (data[mid].time < timestampSeconds) lo = mid + 1;
-        else if (data[mid].time > timestampSeconds) hi = mid - 1;
-        else { lo = mid; break; }
-      }
-      const idx = Math.min(Math.max(lo, 0), data.length - 1);
-      chart.timeScale().scrollTo(idx);
-    },
-    setTeleportLine: (timeSeconds: number, options?: { color?: string; width?: number; style?: 'solid' | 'dotted' | 'dashed'; label?: string }) => {
-      const chart = chartRef.current;
-      if (!chart) return;
-      chart.timeScale().setTeleportLine(timeSeconds, options);
-    },
-    clearTeleportLine: () => {
-      const chart = chartRef.current;
-      if (!chart) return;
-      chart.timeScale().clearTeleportLine();
-    },
-  }), [data]);
-
-  const handleRemoveIndicator = useCallback((indicatorId: string) => {
-    onRemoveIndicator?.(indicatorId);
-  }, [onRemoveIndicator]);
-
-  const handleEditIndicator = useCallback((indicatorId: string) => {
-    onEditIndicator?.(indicatorId);
-  }, [onEditIndicator]);
-
-  return (
-    <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      {indicatorLabels.length > 0 && (
-        <TooltipProvider delayDuration={0}>
-          <div className="pointer-events-auto absolute top-2 left-2 z-10 flex flex-col gap-1">
-            {indicatorLabels.map((label) => (
-              <Badge
-                key={label.id}
-                title={label.name}
-                variant="outline"
-                className={cn(
-                  'h-auto! gap-1.5 py-1 pr-1 pl-2 text-[13px] font-medium text-[var(--color-foreground)]',
-                  'bg-[var(--color-background)]/90',
-                  label.overlay
-                    ? 'border-[var(--color-primary)]/70'
-                    : 'border-[#eab308]/70',
-                )}
-              >
-                <span
-                  aria-hidden="true"
+    return (
+      <div className="chart-panel" style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        {indicatorLabels.length > 0 && (
+          <TooltipProvider delayDuration={0}>
+            <div className="pointer-events-auto absolute top-2 left-2 z-10 flex flex-col gap-1">
+              {indicatorLabels.map((label) => (
+                <Badge
+                  key={label.id}
+                  title={label.name}
+                  variant="outline"
                   className={cn(
-                    'size-2 shrink-0 rounded-full',
-                    label.overlay ? 'bg-[var(--color-primary)]' : 'bg-[#eab308]',
+                    'h-auto! gap-1.5 py-1 pr-1 pl-2 text-[13px] font-medium text-[var(--color-foreground)]',
+                    'bg-[var(--color-background)]/90',
+                    label.overlay ? 'border-[var(--color-primary)]/70' : 'border-[#eab308]/70',
                   )}
-                />
-                <span className="max-w-[140px] truncate">{label.name}</span>
-                {computingIndicators.has(label.id) ? (
-                  <span title="Computing..." className="inline-flex shrink-0 items-center justify-center">
-                    <Loader2
-                      className="size-3 animate-spin text-[#eab308] motion-reduce:animate-none"
-                      aria-hidden="true"
-                    />
-                    <span className="sr-only">Computing…</span>
-                  </span>
-                ) : (
-                    <span title="Ready" className="inline-flex shrink-0 items-center justify-center text-[#22c55e]">
-                    <Check className="size-3" aria-hidden="true" />
-                    <span className="sr-only">Ready</span>
-                  </span>
-                )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleEditIndicator(label.id)}
-                      aria-label={`Edit ${label.name}`}
-                      className="text-[var(--color-muted-foreground)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-foreground)]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-2 shrink-0 rounded-full',
+                      label.overlay ? 'bg-[var(--color-primary)]' : 'bg-[#eab308]',
+                    )}
+                  />
+                  <span className="max-w-[140px] truncate">{label.name}</span>
+                  {computingIndicators.has(label.id) ? (
+                    <span
+                      title="Computing..."
+                      className="inline-flex shrink-0 items-center justify-center"
                     >
-                      <Pencil className="size-3.5" aria-hidden="true" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit script</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleRemoveIndicator(label.id)}
-                      aria-label={`Remove ${label.name}`}
-                      className="text-[var(--color-muted-foreground)] hover:bg-[rgba(239,68,68,0.12)] hover:text-[#ef4444]"
+                      <Loader2
+                        className="size-3 animate-spin text-[#eab308] motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">Computing…</span>
+                    </span>
+                  ) : (
+                    <span
+                      title="Ready"
+                      className="inline-flex shrink-0 items-center justify-center text-[#22c55e]"
                     >
-                      <X className="size-3.5" aria-hidden="true" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Remove indicator</TooltipContent>
-                </Tooltip>
-              </Badge>
-            ))}
-          </div>
-        </TooltipProvider>
-      )}
-    </div>
-  );
-});
+                      <Check className="size-3" aria-hidden="true" />
+                      <span className="sr-only">Ready</span>
+                    </span>
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleEditIndicator(label.id)}
+                        aria-label={`Edit ${label.name}`}
+                        className="text-[var(--color-muted-foreground)] hover:bg-[var(--color-secondary)] hover:text-[var(--color-foreground)]"
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Edit script</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleRemoveIndicator(label.id)}
+                        aria-label={`Remove ${label.name}`}
+                        className="text-[var(--color-muted-foreground)] hover:bg-[rgba(239,68,68,0.12)] hover:text-[#ef4444]"
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Remove indicator</TooltipContent>
+                  </Tooltip>
+                </Badge>
+              ))}
+            </div>
+          </TooltipProvider>
+        )}
+      </div>
+    );
+  },
+);

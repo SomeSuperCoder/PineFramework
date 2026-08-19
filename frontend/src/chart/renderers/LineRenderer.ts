@@ -198,11 +198,10 @@ export class LineRenderer {
     layout: LayoutManager,
     chartArea: { x: number; y: number; width: number; height: number },
     barSpacing: number,
-    _options: PlotRenderOptions,
+    options: PlotRenderOptions,
     paneId?: string,
   ): void {
     const radius = Math.max(2, barSpacing * 0.2);
-    ctx.beginPath();
     const limit = Math.min(data.length, candles.length);
     for (let i = 0; i < limit; i++) {
       const d = data[i];
@@ -210,10 +209,11 @@ export class LineRenderer {
       if (d.color === null) continue;
       const x = viewport.barIndexToPixel(i) + barSpacing / 2;
       const y = layout.priceToPixel(d.value, chartArea.y, chartArea.height, paneId);
-      ctx.moveTo(x + radius, y);
+      ctx.fillStyle = d.color ?? options.color;
+      ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fill();
   }
 
   private renderCross(

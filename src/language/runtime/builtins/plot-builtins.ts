@@ -2,6 +2,36 @@ import type { ExecutionEngine } from '../execution-engine.js';
 import { NA, isNa, type PineValue } from '../../types/na.js';
 import { createSeries } from '../series.js';
 
+// Per-engine stable key generator for unnamed plot() calls.
+// Replaces the old module-level counter that incremented per bar, causing
+// each bar to create a new series instead of accumulating into one.
+// State is attached to the engine object to avoid cross-engine contamination.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolvePlotKey(eng: any): string {
+  if (!eng._plotCallOrder) eng._plotCallOrder = 0;
+  if (!eng._plotDeclMap) eng._plotDeclMap = new Map<number, string>();
+  if (!eng._plotNextId) eng._plotNextId = 0;
+  if (eng._lastPlotBarCount === undefined) eng._lastPlotBarCount = -1;
+
+  const currentBarCount = eng.barTimestamps.length;
+  // Detect bar boundary: reset per-bar call order counter
+  if (currentBarCount !== eng._lastPlotBarCount) {
+    eng._plotCallOrder = 0;
+    eng._lastPlotBarCount = currentBarCount;
+  }
+  // Check if we've already assigned a key for this call order
+  const existing = eng._plotDeclMap.get(eng._plotCallOrder);
+  if (existing) {
+    eng._plotCallOrder++;
+    return existing;
+  }
+  // First bar: assign a new stable key
+  const key = `plot_${eng._plotNextId++}`;
+  eng._plotDeclMap.set(eng._plotCallOrder, key);
+  eng._plotCallOrder++;
+  return key;
+}
+
 export function registerPlotBuiltins(engine: ExecutionEngine): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const eng = engine as any;
@@ -31,7 +61,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
   );
 
   eng.builtins.set('plot', (...allArgs: PineValue[]): PineValue => {
-    let seriesName = 'plot';
+    let seriesName: string | undefined;
     let color: string | undefined;
     let linewidth: number | undefined;
     let style: string | undefined;
@@ -92,6 +122,10 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       if (typeof namedArgs.style === 'string') style = PINE_STYLE_MAP[namedArgs.style] || 'line';
       if (namedArgs.display !== undefined) display = namedArgs.display;
       if (typeof namedArgs.force_overlay === 'boolean') forceOverlay = namedArgs.force_overlay;
+    }
+
+    if (seriesName === undefined) {
+      seriesName = resolvePlotKey(eng);
     }
 
     const metaParts = [seriesName];
@@ -216,6 +250,7 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
         if (i === 2)
           styleStr = a; // style
         else if (i === 3) locationStr = a; // location
+        else if (i === 4) colorStr = a; // color
       }
     }
     const isLocationBool = locationStr === 'abovebar' || locationStr === 'belowbar';

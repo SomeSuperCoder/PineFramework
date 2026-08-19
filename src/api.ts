@@ -165,8 +165,8 @@ export function executePineScript(
   fills: Array<{ from: string; to: string; color: string }>;
   strategyMarkers: import('./language/runtime/execution-engine.js').StrategyMarkerEntry[];
   metrics: import('./language/runtime/execution-engine.js').ExecutionMetrics;
-  plotColors?: Map<string, (string | null)[]>;
-  fillColorData?: Map<string, (string | null)[]>;
+  plotColors?: Record<string, (string | null)[]>;
+  fillColorData?: Record<string, (string | null)[]>;
   maxLookback?: number;
 } {
   const result = parse(source);
@@ -183,8 +183,14 @@ export function executePineScript(
     fills: execResult.fills,
     strategyMarkers: execResult.strategyMarkers,
     metrics: engine.getMetrics(),
-    plotColors: execResult.plotColors,
-    fillColorData: execResult.fillColorData,
+    // Convert Maps to plain objects — JSON.stringify(Map) produces '{}',
+    // breaking downstream serialization (wire transport, REST responses, etc.).
+    plotColors: execResult.plotColors
+      ? Object.fromEntries(execResult.plotColors)
+      : undefined,
+    fillColorData: execResult.fillColorData
+      ? Object.fromEntries(execResult.fillColorData)
+      : undefined,
     maxLookback: execResult.maxLookback,
   };
 }

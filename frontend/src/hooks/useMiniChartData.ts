@@ -3,6 +3,7 @@ import type { CandlestickData } from '../chart';
 import type { ScriptResult, ChaosSignalRecord, ChaosHeartbeatRecord, StrategyMarkerData } from '../types';
 import { buildScriptResult } from './chart-data-transform';
 import { tokens } from '../theme/tokens';
+import { wsSend } from '../utils/wsSend';
 
 const DEFAULT_DISPLAY_COUNT = 12;
 const FETCH_LIMIT = 200; // enough for lookback periods
@@ -198,8 +199,11 @@ export function useBotMiniChartData(
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // Subscribe using gateway format (type/topic, not op/args)
-        ws.send(JSON.stringify({ type: 'subscribe', topic }));
+        // Subscribe using gateway format (type/topic, not op/args). Route through
+        // wsSend: a stale onopen callback (socket closed by the effect cleanup or
+        // reconnect) would otherwise throw "WebSocket is already in CLOSING or
+        // CLOSED state" as an uncaught page error.
+        wsSend(ws, { type: 'subscribe', topic });
       };
 
       ws.onmessage = (event) => {

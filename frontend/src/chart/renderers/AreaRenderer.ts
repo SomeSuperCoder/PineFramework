@@ -54,6 +54,11 @@ export class AreaRenderer {
       const fillKey = `${fill.from}::${fill.to}`;
       const perBarColors = fillColorData?.[fillKey];
 
+      // Guard: the fill builtin always pushes a per-bar color entry, but if
+      // the string type check fails the array becomes all-nulls. Treat that
+      // as solid fill so the area renders instead of being silently skipped.
+      const hasValidPerBarColors = perBarColors?.some(c => c != null) ?? false;
+
       // Build points with both from and to plot values so we can
       // orient the gradient correctly per segment.
       const points: Array<{
@@ -80,7 +85,7 @@ export class AreaRenderer {
 
       if (points.length < 2) continue;
 
-      if (!perBarColors) {
+      if (!hasValidPerBarColors) {
         // Solid fill fallback — one-directional gradient from opaque at
         // the 'from' plot (first fill arg) to transparent at the 'to' plot.
         const fillColor = toRgba(fill.color);

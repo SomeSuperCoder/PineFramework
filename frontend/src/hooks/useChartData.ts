@@ -3,6 +3,7 @@ import type { CandlestickData, ScriptResult, PineScriptError } from '../types';
 import type { ExecuteResponse, ExecutionResultMessage } from './chart-data-transform';
 import { buildScriptResult } from './chart-data-transform';
 import { prependIndicatorResult, mergeDiffIntoResult } from './indicator-merge';
+import { wsSend } from '../utils/wsSend';
 
 /**
  * Normalizes a raw execute error into a render-safe string.
@@ -78,6 +79,15 @@ export function useChartData(
   /** Incremented each time an indicator is removed, used to discard stale HTTP results. */
   const indicatorGenerationRef = useRef<Map<string, number>>(new Map());
   const historicalDataLoadedRef = useRef(false);
+  /**
+   * Buffers the most recent kline that arrived while historical data was still
+   * loading (historicalDataLoadedRef === false). The updater bails on those
+   * klines — the initial REST load supersedes them — but a sparse feed may not
+   * send another tick, so the buffered forming candle is applied to the loaded
+   * dataset right after fetchOHLCV resolves. Without this, the kline update is
+   * silently lost and the candle never reflects the live forming bar.
+   */
+  const pendingKlineRef = useRef<CandlestickData | null>(null);
   const executeScriptRef = useRef<
     | ((
         code: string,
@@ -144,6 +154,7 @@ export function useChartData(
       setChunkBorders([]);
       lastKlineTimestampRef.current = 0; // Reset watermark on new data load
       oldestFetchedTsRef.current = 0; // Reset fetch guard on new data load
+      pendingKlineRef.current = null; // New load epoch — stale pre-load klines no longer apply
       try {
         const response = await fetch(
           `/api/ohlcv?symbol=${symbol}&interval=${interval}&limit=${limit}`,
@@ -154,19 +165,39 @@ export function useChartData(
         const json = await response.json();
         ohlcvDataRef.current = json.data;
         historicalDataLoadedRef.current = true;
-        // Diagnostic: log REST data boundaries
-        if (json.data && json.data.length > 0) {
-          const first = json.data[0];
-          const last = json.data[json.data.length - 1];
-          console.log(`[DIAG] REST loaded ${json.data.length} bars for ${symbol} ${interval}`);
-          console.log(
-            `[DIAG] REST first bar — ts=${first.timestamp} o=${first.open} h=${first.high} l=${first.low} c=${first.close}`,
-          );
-          console.log(
-            `[DIAG] REST last bar  — ts=${last.timestamp} o=${last.open} h=${last.high} l=${last.low} c=${last.close} v=${last.volume}`,
-          );
-        }
         setCandles(toCandleData(json.data));
+        // Apply the most recent kline that arrived while the load was in
+        // flight (see pendingKlineRef). The updater below runs against the
+        // just-loaded array, so REPLACE hits the loaded last bar and PUSH
+        // appends the live forming candle — the chart never misses the first
+        // post-connect tick even on a sparse feed.
+        // NOTE: asserted local — TS does not narrow an alias of a mutable
+        // ref property, so without the assertion `pending` stays `null`
+        // inside the block and the copy below fails to typecheck.
+        const pending = pendingKlineRef.current as CandlestickData | null;
+        if (pending) {
+          pendingKlineRef.current = null;
+          const pk: CandlestickData = {
+            time: pending.time,
+            open: pending.open,
+            high: pending.high,
+            low: pending.low,
+            close: pending.close,
+            volume: pending.volume,
+          };
+          setCandles((prev) => {
+            if (prev.length === 0) return prev;
+            const last = prev[prev.length - 1];
+            // Never append a bar older than the loaded dataset (stale replay).
+            if (pk.time < last.time) return prev;
+            if (last.time === pk.time) {
+              const next = [...prev];
+              next[next.length - 1] = pk;
+              return next;
+            }
+            return [...prev, pk];
+          });
+        }
       } catch (err) {
         console.error('Failed to fetch OHLCV:', err);
         setErrors((prev) => [
@@ -302,18 +333,16 @@ export function useChartData(
             indicatorUpdates.push({ id: indId, result: merged });
 
             if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(
-                JSON.stringify({
-                  type: 'execute',
-                  data: {
-                    source: ind.source,
-                    symbol: ind.symbol,
-                    interval: ind.interval,
-                    bars: ohlcvDataRef.current,
-                    indicatorId: indId,
-                  },
-                }),
-              );
+              wsSend(wsRef.current, {
+                type: 'execute',
+                data: {
+                  source: ind.source,
+                  symbol: ind.symbol,
+                  interval: ind.interval,
+                  bars: ohlcvDataRef.current,
+                  indicatorId: indId,
+                },
+              });
             }
           } catch {
             // Skip failed indicators
@@ -425,9 +454,7 @@ export function useChartData(
             msg.barTimestamps.length > ohlcvData.length
           ) {
             // Compute how many seed/context bars precede the dataset
-            const seedCount = msg.barTimestamps.findIndex(
-              (ts) => ts >= ohlcvData[0].timestamp,
-            );
+            const seedCount = msg.barTimestamps.findIndex((ts) => ts >= ohlcvData[0].timestamp);
             if (seedCount > 0) {
               // --- Trim array-indexed plot data (the critical fix) ---
               // Slice barTimestamps to start at the dataset's first bar
@@ -465,9 +492,7 @@ export function useChartData(
               msg.boxes = (msg.boxes || []).filter(
                 (b) => b.startTime >= datasetStartSec || b.endTime >= datasetStartSec,
               );
-              msg.shapes = (msg.shapes || []).filter(
-                (s) => s.time >= datasetStartSec,
-              );
+              msg.shapes = (msg.shapes || []).filter((s) => s.time >= datasetStartSec);
               // --- Adjust barIndex-based data (subtract seedCount) ---
               if (msg.strategyMarkers) {
                 msg.strategyMarkers = msg.strategyMarkers.map((m) => ({
@@ -629,16 +654,14 @@ export function useChartData(
       ws.onopen = () => {
         setIsConnected(true);
         if (subscribedTopicRef.current) {
-          ws.send(JSON.stringify({ type: 'subscribe', topic: subscribedTopicRef.current }));
+          wsSend(ws, { type: 'subscribe', topic: subscribedTopicRef.current });
         }
         if (pendingExecuteRef.current.size > 0) {
           for (const [indId, data] of pendingExecuteRef.current) {
-            ws.send(
-              JSON.stringify({
-                type: 'execute',
-                data: { ...data, bars: data.bars || ohlcvDataRef.current, indicatorId: indId },
-              }),
-            );
+            wsSend(ws, {
+              type: 'execute',
+              data: { ...data, bars: data.bars || ohlcvDataRef.current, indicatorId: indId },
+            });
           }
         }
       };
@@ -648,22 +671,6 @@ export function useChartData(
           const data = JSON.parse(event.data);
           if (data.type === 'kline' && data.data) {
             const k = data.data;
-            // Diagnostic: log raw WS kline data
-            console.log(`[DIAG] WS kline raw`, {
-              symbol: k.symbol,
-              interval: k.interval,
-              ts: k.timestamp,
-              open: k.open,
-              high: k.high,
-              low: k.low,
-              close: k.close,
-              confirmed: k.confirmed,
-              volume: k.volume,
-            });
-            // Also log as flat string for text-only log captures
-            console.log(
-              `[DIAG] WS kline flat — symbol=${k.symbol} interval=${k.interval} ts=${k.timestamp} o=${k.open} h=${k.high} l=${k.low} c=${k.close} v=${k.volume} confirmed=${k.confirmed}`,
-            );
             const topic = `kline.${k.interval}.${k.symbol}`;
             if (topic !== subscribedTopicRef.current) {
               return;
@@ -699,26 +706,14 @@ export function useChartData(
             // Advance watermark only on confirmed ticks (final candle close).
             // Forming ticks update the candle in-place without advancing, so
             // the confirmed tick for the same period can still pass through.
-            if (k.confirmed) {
+            // Gated on historical data being loaded: a confirmed tick that
+            // arrives during the initial load is dropped by the updater guard
+            // below — advancing the watermark anyway would poison the dedup,
+            // making every forming tick for that minute look like a duplicate
+            // and freezing the candle REPLACE even after the data loads.
+            if (k.confirmed && historicalDataLoadedRef.current) {
               lastKlineTimestampRef.current = k.timestamp;
             }
-
-            // Instrumentation: log price delta vs last candle
-            setCandles((prev) => {
-              const lastCandle = prev[prev.length - 1];
-              if (lastCandle) {
-                const deltaPct = (((k.close - lastCandle.close) / lastCandle.close) * 100).toFixed(
-                  2,
-                );
-                console.warn(
-                  `[DIAG] WS vs REST merge: symbol=${k.symbol} interval=${k.interval} ` +
-                    `histClose=${lastCandle.close} wsClose=${k.close} Δ=${deltaPct}% ` +
-                    `histOpen=${lastCandle.open} wsOpen=${k.open} ` +
-                    `histTime=${lastCandle.time} wsTime=${Math.floor(k.timestamp / 1000)}`,
-                );
-              }
-              return prev; // read-only inspection, no mutation
-            });
 
             const candle: CandlestickData = {
               time,
@@ -728,21 +723,15 @@ export function useChartData(
               close: k.close,
               volume: k.volume,
             };
-            // Diagnostic: compare WS data to ohlcvDataRef (canonical source)
-            {
-              const lastOhlcv = ohlcvDataRef.current[ohlcvDataRef.current.length - 1];
-              if (lastOhlcv) {
-                const lastOhlcvTime = Math.floor(lastOhlcv.timestamp / 1000);
-                console.log(
-                  `[DIAG] WS vs ohlcvRef — candleTime=${candle.time} ohlcvTime=${lastOhlcvTime} ` +
-                    `candleClose=${candle.close} ohlcvClose=${lastOhlcv.close} ` +
-                    `candleOpen=${candle.open} ohlcvOpen=${lastOhlcv.open} ` +
-                    `match=${candle.time === lastOhlcvTime ? 'YES (REPLACE)' : 'PUSH new candle'}`,
-                );
-              }
-            }
             setCandles((prev) => {
-              if (!historicalDataLoadedRef.current) return prev;
+              if (!historicalDataLoadedRef.current) {
+                // Historical data is still loading (or was reset by a reload).
+                // Buffer the latest kline so fetchOHLCV applies it to the
+                // loaded dataset — otherwise a sparse feed that sends this
+                // one forming tick and nothing more loses the update forever.
+                pendingKlineRef.current = candle;
+                return prev;
+              }
               const newCandles = [...prev];
               const last = newCandles[newCandles.length - 1];
               const action = last && last.time === candle.time ? 'REPLACE' : 'PUSH';
@@ -751,23 +740,6 @@ export function useChartData(
               } else {
                 newCandles.push(candle);
               }
-              // Diagnostic: log candle update result
-              const lastNew = newCandles[newCandles.length - 1];
-              console.log(`[DIAG] Candle ${action}`, {
-                candleTime: candle.time,
-                lastTime: last?.time,
-                open: lastNew.open,
-                high: lastNew.high,
-                low: lastNew.low,
-                close: lastNew.close,
-                totalCandles: newCandles.length,
-                watermark: lastKlineTimestampRef.current,
-              });
-              console.log(
-                `[DIAG] Candle flat — action=${action} candleTime=${candle.time} ` +
-                  `o=${candle.open} h=${candle.high} l=${candle.low} c=${candle.close} v=${candle.volume} ` +
-                  `totalCandles=${newCandles.length}`,
-              );
               return newCandles;
             });
             if (k.timestamp) {
@@ -843,9 +815,9 @@ export function useChartData(
     subscribedTopicRef.current = topic;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       if (prevTopic) {
-        wsRef.current.send(JSON.stringify({ type: 'unsubscribe', topic: prevTopic }));
+        wsSend(wsRef.current, { type: 'unsubscribe', topic: prevTopic });
       }
-      wsRef.current.send(JSON.stringify({ type: 'subscribe', topic }));
+      wsSend(wsRef.current, { type: 'subscribe', topic });
     }
   }, []);
 
@@ -1034,10 +1006,9 @@ export function useChartData(
                 }
                 // Trim seed bar alert triggers
                 if (seedScriptRes.alertTriggers) {
-                  seedScriptRes.alertTriggers =
-                    seedScriptRes.alertTriggers
-                      .filter((t) => t.barIndex >= seedCount)
-                      .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
+                  seedScriptRes.alertTriggers = seedScriptRes.alertTriggers
+                    .filter((t) => t.barIndex >= seedCount)
+                    .map((t) => ({ ...t, barIndex: t.barIndex - seedCount }));
                 }
 
                 // Trim seed bar linefills — they carry RAW engine bar indexes
@@ -1112,18 +1083,16 @@ export function useChartData(
                     bars: barsToExecute,
                   });
                   if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    wsRef.current.send(
-                      JSON.stringify({
-                        type: 'execute',
-                        data: {
-                          source: code,
-                          symbol,
-                          interval,
-                          bars: barsToExecute,
-                          indicatorId: indicatorId || 'default',
-                        },
-                      }),
-                    );
+                    wsSend(wsRef.current, {
+                      type: 'execute',
+                      data: {
+                        source: code,
+                        symbol,
+                        interval,
+                        bars: barsToExecute,
+                        indicatorId: indicatorId || 'default',
+                      },
+                    });
                   }
                   return;
                 }
@@ -1181,18 +1150,16 @@ export function useChartData(
           bars: barsToExecute,
         });
         if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: 'execute',
-              data: {
-                source: code,
-                symbol,
-                interval,
-                bars: barsToExecute,
-                indicatorId: indicatorId || 'default',
-              },
-            }),
-          );
+          wsSend(wsRef.current, {
+            type: 'execute',
+            data: {
+              source: code,
+              symbol,
+              interval,
+              bars: barsToExecute,
+              indicatorId: indicatorId || 'default',
+            },
+          });
         }
       } catch (error) {
         if (versionRef && version !== undefined && version !== versionRef.current) return;

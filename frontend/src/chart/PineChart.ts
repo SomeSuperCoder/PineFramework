@@ -195,10 +195,38 @@ export class PineChart {
   }
 
   private startRenderLoop(): void {
+    let consecutiveRenderErrors = 0;
     const loop = () => {
+      // Watchdog: a beginUpdate()..endUpdate() batch never spans frames — every
+      // call site pairs them synchronously inside a try/finally. If batchCount
+      // is still > 0 at frame time, a batch was left unbalanced (a throw that
+      // bypassed endUpdate, or a stuck positive wedge from an earlier tick).
+      // Without recovery, markDirty() skips every subsequent update and the
+      // canvas freezes forever. Force the counter back to 0 and re-mark dirty —
+      // the batching guard only ever defers within the same synchronous tick,
+      // so resetting it across frames cannot change rendering semantics.
+      if (this.batchCount > 0) {
+        console.warn(
+          `[PineChart] batchCount=${this.batchCount} leaked across a frame — resetting to 0`,
+        );
+        this.batchCount = 0;
+        this.dirty = true;
+      }
       if (this.dirty) {
-        this.render();
-        this.dirty = false;
+        try {
+          this.render();
+          consecutiveRenderErrors = 0;
+          this.dirty = false;
+        } catch (err) {
+          // Never let a renderer exception kill the rAF chain — otherwise the
+          // canvas freezes on the last successful draw, permanently stale.
+          // Keep dirty=true so the next frame retries: a transient bad value
+          // recovers automatically instead of waiting for the next state change.
+          consecutiveRenderErrors++;
+          if (consecutiveRenderErrors <= 10) {
+            console.error('[PineChart] render failed:', err);
+          }
+        }
       }
       this.animFrame = requestAnimationFrame(loop);
     };

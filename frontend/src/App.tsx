@@ -20,6 +20,7 @@ import { extractScriptName } from 'pine-framework/utils/script-name';
 import { tokens } from './theme/tokens';
 import { motion } from './theme/motion';
 import { PAIR_OPTIONS, TIMEFRAME_OPTIONS } from './utils/options';
+import { wsSend } from './utils/wsSend';
 
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
@@ -303,10 +304,10 @@ function App() {
   );
 
   const handleRemoveIndicator = async (indicatorId: string) => {
-    // 1. Fire-and-forget: notify server to stop real-time updates
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'stop_indicator', indicatorId }));
-    }
+    // 1. Fire-and-forget: notify server to stop real-time updates. Route through
+    //    wsSend so a socket that closed between the readyState check and send()
+    //    cannot throw an uncaught page error.
+    wsSend(wsRef.current, { type: 'stop_indicator', indicatorId });
 
     // 2. Synchronous cleanup FIRST — purge refs and state before any await
     //    This closes the race window where HTTP results could arrive after removal.

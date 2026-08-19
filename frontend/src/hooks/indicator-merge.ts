@@ -74,17 +74,19 @@ export function prependIndicatorResult(
       const firstValidIdx = overlapFromNew.findIndex(
         (v) => v.value !== null && v.value !== undefined,
       );
-      const replacedPrev = overlapFromNew.map((v, i) => {
-        if (v.value !== null && v.value !== undefined) return v;
-        const prevEntry = plot.data[i];
-        if (prevEntry && prevEntry.value !== null && prevEntry.value !== undefined)
-          return prevEntry;
-        // Both null — backfill from the first valid post-warmup entry
-        if (firstValidIdx >= 0 && i < firstValidIdx) {
-          return { ...overlapFromNew[firstValidIdx], time: v.time };
-        }
-        return v;
-      }).concat(plot.data.slice(contextSize));
+      const replacedPrev = overlapFromNew
+        .map((v, i) => {
+          if (v.value !== null && v.value !== undefined) return v;
+          const prevEntry = plot.data[i];
+          if (prevEntry && prevEntry.value !== null && prevEntry.value !== undefined)
+            return prevEntry;
+          // Both null — backfill from the first valid post-warmup entry
+          if (firstValidIdx >= 0 && i < firstValidIdx) {
+            return { ...overlapFromNew[firstValidIdx], time: v.time };
+          }
+          return v;
+        })
+        .concat(plot.data.slice(contextSize));
       return { ...plot, data: [...newBarData, ...replacedPrev] };
     }
     return plot;
@@ -102,18 +104,12 @@ export function prependIndicatorResult(
 
   const mergedShapes = [
     ...newResult.shapes,
-    ...prev.shapes.filter(
-      (s) =>
-        !newResult.shapes.some((n) => n.time === s.time),
-    ),
+    ...prev.shapes.filter((s) => !newResult.shapes.some((n) => n.time === s.time)),
   ];
   const mergedFills = [
     ...(newResult.fills || []),
     ...(prev.fills || []).filter(
-      (f) =>
-        !(newResult.fills || []).some(
-          (n) => n.from === f.from && n.to === f.to,
-        ),
+      (f) => !(newResult.fills || []).some((n) => n.from === f.from && n.to === f.to),
     ),
   ];
   // ── Lines ──
@@ -122,10 +118,7 @@ export function prependIndicatorResult(
   // drops ALL prev lines starting at a given timestamp when newResult has
   // ANY line starting there — causing labels at chunk borders to lose their
   // attached lines when the re-execution doesn't reproduce every line.
-  function linesMatch(
-    a: typeof prev.lines[number],
-    b: typeof prev.lines[number],
-  ): boolean {
+  function linesMatch(a: (typeof prev.lines)[number], b: (typeof prev.lines)[number]): boolean {
     if (a.points.length !== b.points.length) return false;
     for (let i = 0; i < a.points.length; i++) {
       if (a.points[i].time !== b.points[i].time) return false;
@@ -134,12 +127,10 @@ export function prependIndicatorResult(
     return true;
   }
 
-  const prevLineReplaced = (pl: typeof prev.lines[number]): boolean =>
+  const prevLineReplaced = (pl: (typeof prev.lines)[number]): boolean =>
     newResult.lines.some((nl) => linesMatch(nl, pl));
 
-  const survivingPrevLines = prev.lines.filter(
-    (pl) => !prevLineReplaced(pl),
-  );
+  const survivingPrevLines = prev.lines.filter((pl) => !prevLineReplaced(pl));
 
   // Fix lines from newResult that incorrectly have extend:right because
   // the re-execution on a smaller dataset didn't see subsequent pivots
@@ -167,11 +158,7 @@ export function prependIndicatorResult(
 
     // Find the earliest surviving prev line whose start time ≥ endTime
     const nextPrevLine = survivingPrevLines
-      .filter(
-        (pl) =>
-          pl.points[0]?.time !== undefined &&
-          pl.points[0].time >= endTime,
-      )
+      .filter((pl) => pl.points[0]?.time !== undefined && pl.points[0].time >= endTime)
       .sort((a, b) => a.points[0].time - b.points[0].time)[0];
 
     if (!nextPrevLine) return nl; // no later line — keep extend:right
@@ -203,7 +190,7 @@ export function prependIndicatorResult(
     chunkBoundaryTime = Math.min(...overlapTimestamps);
   }
 
-  const clipAtBoundary = (line: typeof prev.lines[number]): typeof prev.lines[number] => {
+  const clipAtBoundary = (line: (typeof prev.lines)[number]): (typeof prev.lines)[number] => {
     if (chunkBoundaryTime <= 0) return line;
     if (line.points.length < 2) return line;
     const firstPoint = line.points[0];
@@ -216,9 +203,7 @@ export function prependIndicatorResult(
       const p1 = line.points[i];
       const p2 = line.points[i + 1];
       if (p1.time <= chunkBoundaryTime && p2.time >= chunkBoundaryTime) {
-        const t = (p2.time - p1.time) > 0
-          ? (chunkBoundaryTime - p1.time) / (p2.time - p1.time)
-          : 0;
+        const t = p2.time - p1.time > 0 ? (chunkBoundaryTime - p1.time) / (p2.time - p1.time) : 0;
         return {
           ...line,
           points: [
@@ -256,9 +241,7 @@ export function prependIndicatorResult(
   const newTimeTextPriceKeys = new Set(
     newResult.labels.map((l) => `${l.time}|${l.text ?? ''}|${l.price ?? ''}`),
   );
-  const newLabelTextPriceKeys = new Set(
-    newResult.labels.map((l) => `${l.text}|${l.price}`),
-  );
+  const newLabelTextPriceKeys = new Set(newResult.labels.map((l) => `${l.text}|${l.price}`));
   const mergedLabels = [
     ...newResult.labels,
     ...prev.labels.filter((l) => {
@@ -302,15 +285,12 @@ export function prependIndicatorResult(
     const prevColors = prev.fillColorData?.[key] || [];
     const overlapNewFillColors = newColors.slice(addedCount, addedCount + contextSize);
     // Find the first valid color in the overlap region (past the warmup zone)
-    const firstValidIdx = overlapNewFillColors.findIndex(
-      (c) => c !== null && c !== undefined,
-    );
+    const firstValidIdx = overlapNewFillColors.findIndex((c) => c !== null && c !== undefined);
     mergedFillColorData[key] = [
       ...newColors.slice(0, addedCount),
       ...overlapNewFillColors.map((c, i) => {
         if (c !== null) return c;
-        if (prevColors[i] !== null && prevColors[i] !== undefined)
-          return prevColors[i];
+        if (prevColors[i] !== null && prevColors[i] !== undefined) return prevColors[i];
         // Both null — backfill from the first valid post-warmup color in the
         // new execution, so the gap at the chunk border is filled with a
         // reasonable color instead of rendering nothing. Once more chunk data
@@ -345,15 +325,12 @@ export function prependIndicatorResult(
     const newColors = newResult.plotColors?.[key] || [];
     const prevColors = prev.plotColors?.[key] || [];
     const overlapNewColors = newColors.slice(addedCount, addedCount + contextSize);
-    const firstValidIdx = overlapNewColors.findIndex(
-      (c) => c !== null && c !== undefined,
-    );
+    const firstValidIdx = overlapNewColors.findIndex((c) => c !== null && c !== undefined);
     mergedPlotColors[key] = [
       ...newColors.slice(0, addedCount),
       ...overlapNewColors.map((c, i) => {
         if (c !== null) return c;
-        if (prevColors[i] !== null && prevColors[i] !== undefined)
-          return prevColors[i];
+        if (prevColors[i] !== null && prevColors[i] !== undefined) return prevColors[i];
         if (firstValidIdx >= 0 && i < firstValidIdx) {
           return overlapNewColors[firstValidIdx];
         }
@@ -366,30 +343,24 @@ export function prependIndicatorResult(
   const mergedBgcolor = [
     ...(newResult.bgcolor || []),
     ...(prev.bgcolor || []).filter(
-      (b) =>
-        !(newResult.bgcolor || []).some((n) => n.time === b.time),
+      (b) => !(newResult.bgcolor || []).some((n) => n.time === b.time),
     ),
   ];
   const mergedBoxes = [
     ...(newResult.boxes || []),
     ...(prev.boxes || []).filter(
-      (b) =>
-        !(newResult.boxes || []).some((n) => n.startTime === b.startTime),
+      (b) => !(newResult.boxes || []).some((n) => n.startTime === b.startTime),
     ),
   ];
   // Tables are static dashboard state — use the latest
-  const mergedTables =
-    newResult.tables.length > 0 ? newResult.tables : prev.tables;
+  const mergedTables = newResult.tables.length > 0 ? newResult.tables : prev.tables;
 
   // Merge alert triggers with barIndex shifting
   const newTriggers = newResult.alertTriggers || [];
   const prevTriggers = prev.alertTriggers || [];
   const mergedAlertTriggers = [
     ...newTriggers.filter((t) => t.barIndex < addedCount),
-    ...newTriggers.filter(
-      (t) =>
-        t.barIndex >= addedCount && t.barIndex < addedCount + contextSize,
-    ),
+    ...newTriggers.filter((t) => t.barIndex >= addedCount && t.barIndex < addedCount + contextSize),
     ...prevTriggers
       .filter((t) => t.barIndex >= contextSize)
       .map((t) => ({ ...t, barIndex: t.barIndex + addedCount })),
@@ -420,9 +391,7 @@ export function prependIndicatorResult(
   // buildScriptResult (before backfill existed). Apply the (now-corrected)
   // mergedPlotColors to the plot data so the LineRenderer gets non-null colors.
   for (const [colorKey, colors] of Object.entries(mergedPlotColors)) {
-    const plotTitle = colorKey
-      .replace(/__lw:\d+/g, '')
-      .replace(/__style:[^_]+/g, '');
+    const plotTitle = colorKey.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const plot = mergedPlots.find((p) => p.title === plotTitle);
     if (plot) {
       for (let i = 0; i < plot.data.length && i < colors.length; i++) {
@@ -485,10 +454,7 @@ export function prependIndicatorResult(
  * The legacy implementation is preserved VERBATIM as the parity oracle at
  * frontend/src/__tests__/fixtures/legacy-merge.ts (legacyMergeDiffIntoResult).
  */
-export function mergeDiffIntoResult(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): ScriptResult {
+export function mergeDiffIntoResult(prev: ScriptResult, msg: ExecutionResultMessage): ScriptResult {
   // Normalize at merge entry: guarantees every contract collection exists
   // (arrays as [], records as {}), strips unknown wire keys, and never mutates
   // or freezes the input — the caller may still mutate the result (seed-trim).
@@ -530,10 +496,7 @@ export function mergeDiffIntoResult(
 // registered: the merge does not touch them.
 // ---------------------------------------------------------------------------
 
-type MergeStrategy = (
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-) => Partial<ScriptResult>;
+type MergeStrategy = (prev: ScriptResult, msg: ExecutionResultMessage) => Partial<ScriptResult>;
 
 const MERGE_STRATEGIES: Partial<Record<keyof FieldSemanticsMap, MergeStrategy>> = {
   outputs: mergeOutputs,
@@ -553,15 +516,10 @@ const MERGE_STRATEGIES: Partial<Record<keyof FieldSemanticsMap, MergeStrategy>> 
 };
 
 // ── outputs (per-key append-or-update; plots' isNewBar replace-last) ──
-function mergeOutputs(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeOutputs(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const mergedPlots = prev.plots.map((plot) => {
     const diffKey = Object.keys(msg.outputs).find((k) => {
-      const stripped = k
-        .replace(/__lw:\d+/g, '')
-        .replace(/__style:[^_]+/g, '');
+      const stripped = k.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
       return stripped === plot.title || k === plot.title;
     });
     if (diffKey && msg.outputs[diffKey] && msg.outputs[diffKey].length > 0) {
@@ -578,8 +536,7 @@ function mergeOutputs(
               : null;
       const perBarColors = msg.plotColors?.[diffKey];
       const color =
-        perBarColors?.[perBarColors.length - 1] ??
-        plot.data[plot.data.length - 1]?.color;
+        perBarColors?.[perBarColors.length - 1] ?? plot.data[plot.data.length - 1]?.color;
       const isNewBar = (msg.barIndex ?? 0) >= plot.data.length;
       if (isNewBar) {
         // NOTE: `msg.barIndex!` is retained — the shared contract keeps
@@ -590,7 +547,7 @@ function mergeOutputs(
         const newTime =
           rawTime !== undefined
             ? Math.floor(rawTime / 1000)
-            : plot.data[plot.data.length - 1]?.time ?? 0;
+            : (plot.data[plot.data.length - 1]?.time ?? 0);
         return {
           ...plot,
           data: [...plot.data, { time: newTime, value: numValue, color }],
@@ -600,19 +557,12 @@ function mergeOutputs(
       if (lastEntry) {
         return {
           ...plot,
-          data: [
-            ...plot.data.slice(0, -1),
-            { ...lastEntry, value: numValue, color },
-          ],
+          data: [...plot.data.slice(0, -1), { ...lastEntry, value: numValue, color }],
         };
       }
-    } else if (
-      (msg.barIndex ?? 0) >= plot.data.length &&
-      plot.data.length > 0
-    ) {
+    } else if ((msg.barIndex ?? 0) >= plot.data.length && plot.data.length > 0) {
       const lastEntry = plot.data[plot.data.length - 1];
-      const rawTime =
-        msg.barTimestamps?.[msg.barIndex!] ?? (lastEntry?.time ?? 0);
+      const rawTime = msg.barTimestamps?.[msg.barIndex!] ?? lastEntry?.time ?? 0;
       const newTime = Math.floor(rawTime / 1000);
       return {
         ...plot,
@@ -632,17 +582,12 @@ function mergeOutputs(
 }
 
 // ── shapes (accumulate-dedupe by time) ──
-function mergeShapes(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeShapes(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffShapes = mapShapes(msg.shapes);
   const mergedShapes =
     diffShapes.length > 0
       ? [
-          ...prev.shapes.filter(
-            (s) => !diffShapes.some((d: ShapeData) => d.time === s.time),
-          ),
+          ...prev.shapes.filter((s) => !diffShapes.some((d: ShapeData) => d.time === s.time)),
           ...diffShapes,
         ]
       : prev.shapes;
@@ -650,19 +595,13 @@ function mergeShapes(
 }
 
 // ── fills (accumulate-dedupe by [from, to]) ──
-function mergeFills(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeFills(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffFills = mapFills(msg.fills);
   const mergedFills =
     diffFills.length > 0
       ? [
           ...(prev.fills || []).filter(
-            (f) =>
-              !diffFills.some(
-                (d: FillData) => d.from === f.from && d.to === f.to,
-              ),
+            (f) => !diffFills.some((d: FillData) => d.from === f.from && d.to === f.to),
           ),
           ...diffFills,
         ]
@@ -671,19 +610,13 @@ function mergeFills(
 }
 
 // ── lines (accumulate-dedupe by points[0].time) ──
-function mergeLines(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeLines(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffLines = mapLines(msg.lines);
   const mergedLines =
     diffLines.length > 0
       ? [
           ...prev.lines.filter(
-            (l) =>
-              !diffLines.some(
-                (d: LineData) => d.points[0]?.time === l.points[0]?.time,
-              ),
+            (l) => !diffLines.some((d: LineData) => d.points[0]?.time === l.points[0]?.time),
           ),
           ...diffLines,
         ]
@@ -694,10 +627,7 @@ function mergeLines(
 // ── linefills (accumulate-dedupe like lines/fills — a forming tick carries
 //    ONLY newly-created fills, so replacing prev with the diff clobbers the
 //    REST-accumulated fills on the first live tick) ──
-function mergeLinefills(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeLinefills(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffLinefills = msg.linefills || [];
   const mergedLinefills =
     diffLinefills.length > 0
@@ -705,8 +635,7 @@ function mergeLinefills(
           ...(prev.linefills || []).filter(
             (lf) =>
               !diffLinefills.some(
-                (d: LinefillData) =>
-                  d.line1.x1 === lf.line1.x1 && d.line2.x1 === lf.line2.x1,
+                (d: LinefillData) => d.line1.x1 === lf.line1.x1 && d.line2.x1 === lf.line2.x1,
               ),
           ),
           ...diffLinefills,
@@ -716,17 +645,12 @@ function mergeLinefills(
 }
 
 // ── labels (accumulate-dedupe by time) ──
-function mergeLabels(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeLabels(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffLabels = mapLabels(msg.labels);
   const mergedLabels =
     diffLabels.length > 0
       ? [
-          ...prev.labels.filter(
-            (l) => !diffLabels.some((d: LabelData) => d.time === l.time),
-          ),
+          ...prev.labels.filter((l) => !diffLabels.some((d: LabelData) => d.time === l.time)),
           ...diffLabels,
         ]
       : prev.labels;
@@ -734,10 +658,7 @@ function mergeLabels(
 }
 
 // ── boxes (accumulate-dedupe by startTime) ──
-function mergeBoxes(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeBoxes(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const diffBoxes = mapBoxes(msg.boxes);
   const mergedBoxes =
     diffBoxes.length > 0
@@ -757,10 +678,7 @@ function mergeStrategyMarkers(
   msg: ExecutionResultMessage,
 ): Partial<ScriptResult> {
   const diffStrategyMarkers = mapStrategyMarkers(msg.strategyMarkers);
-  const mergedStrategyMarkers = [
-    ...(prev.strategyMarkers || []),
-    ...diffStrategyMarkers,
-  ];
+  const mergedStrategyMarkers = [...(prev.strategyMarkers || []), ...diffStrategyMarkers];
   return { strategyMarkers: mergedStrategyMarkers };
 }
 
@@ -774,9 +692,7 @@ function mergeAlertTriggers(
     diffAlertTriggers && diffAlertTriggers.length > 0
       ? (() => {
           const existingKeys = new Set(
-            (prev.alertTriggers ?? []).map(
-              (t) => `${t.alertId}:${t.barIndex}`,
-            ),
+            (prev.alertTriggers ?? []).map((t) => `${t.alertId}:${t.barIndex}`),
           );
           const dedupedNew = diffAlertTriggers.filter(
             (t) => !existingKeys.has(`${t.alertId}:${t.barIndex}`),
@@ -790,10 +706,7 @@ function mergeAlertTriggers(
 }
 
 // ── plotColors (tail-merge) ──
-function mergePlotColors(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergePlotColors(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const incoming = msg.plotColors;
   // EMPTY-DIFF SKIP (B1 hazard fix): a diff carrying no per-bar colors must
   // NOT clobber the accumulated colors (B2 emits plotColors:{} on such ticks).
@@ -804,10 +717,7 @@ function mergePlotColors(
     (acc, [key, colors]) => {
       const prevColors = prev.plotColors?.[key];
       if (prevColors) {
-        acc[key] = [
-          ...prevColors.slice(0, -colors.length || undefined),
-          ...colors,
-        ];
+        acc[key] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
       } else {
         acc[key] = colors;
       }
@@ -833,31 +743,31 @@ function mergeFillColorData(
       const transformedKey = transformFillKey(key);
       const prevColors = prev.fillColorData?.[transformedKey];
       if (prevColors) {
-        acc[transformedKey] = [
-          ...prevColors.slice(0, -colors.length || undefined),
-          ...colors,
-        ];
+        acc[transformedKey] = [...prevColors.slice(0, -colors.length || undefined), ...colors];
       } else {
         acc[transformedKey] = colors;
       }
       return acc;
     },
-    {} as Record<string, (string | null)[]>,
+    { ...(prev.fillColorData || {}) } as Record<string, (string | null)[]>,
   );
   return { fillColorData: mergedFillColorData };
 }
 
 // ── barColors (time-map-merge + sort; empty diff already skipped) ──
-function mergeBarColors(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeBarColors(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const mergedBarColors = (() => {
     if (!msg.barColors || msg.barColors.length === 0) return prev.barColors;
     const prevColors = prev.barColors || [];
     const prevByTime = new Map(prevColors.map((c) => [c.time, c]));
     for (const b of msg.barColors) {
-      prevByTime.set(b.time, { time: b.time, body: b.bodyColor ?? b.color, wick: b.wickColor, border: b.borderColor, offset: b.offset });
+      prevByTime.set(b.time, {
+        time: b.time,
+        body: b.bodyColor ?? b.color,
+        wick: b.wickColor,
+        border: b.borderColor,
+        offset: b.offset,
+      });
     }
     const result = Array.from(prevByTime.values()).sort((a, b) => a.time - b.time);
     return result.length > 0 ? result : undefined;
@@ -866,10 +776,7 @@ function mergeBarColors(
 }
 
 // ── bgcolor (tail-merge with ms→s time conversion) ──
-function mergeBgcolor(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeBgcolor(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const incoming = msg.bgcolor;
   // EMPTY-DIFF SKIP (B1 hazard fix) — an empty bgcolor diff must not clobber
   // the accumulated background colors.
@@ -887,10 +794,7 @@ function mergeBgcolor(
 }
 
 // ── tables (full replace; empty diff skipped) ──
-function mergeTables(
-  prev: ScriptResult,
-  msg: ExecutionResultMessage,
-): Partial<ScriptResult> {
+function mergeTables(prev: ScriptResult, msg: ExecutionResultMessage): Partial<ScriptResult> {
   const incoming = msg.tables;
   // EMPTY-DIFF SKIP (B1 hazard fix): B2 emits tables:[] on diffs with no
   // table payload — replacing prev with [] would clobber accumulated tables.
@@ -933,9 +837,7 @@ function genericAccumulateDedupe<T>(
     ...(prev ?? []).filter(
       (p) =>
         !incoming.some((d) =>
-          dedupeKeys.every(
-            (key) => resolveDedupePath(d, key) === resolveDedupePath(p, key),
-          ),
+          dedupeKeys.every((key) => resolveDedupePath(d, key) === resolveDedupePath(p, key)),
         ),
     ),
     ...incoming,
