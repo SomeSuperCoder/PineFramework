@@ -11,10 +11,36 @@ export const BYBIT_REST_BASE = (() => {
 })();
 
 /**
+ * Sort bars chronologically and remove duplicate timestamps.
+ *
+ * WHY: Bybit returns each page newest-first; the pagination loop reverses
+ * each page to ascending and appends pages in fetch order (newest page
+ * first, cursor walking backwards). For multi-page windows the raw
+ * concatenation jumps BACKWARD at every ~1000-bar boundary. PineScript
+ * `var` state and `[1]` series references assume a strictly chronological
+ * feed — a backward jump corrupts trailing-stop state machines (e.g. the UT
+ * trailing stop never fires → 0 trades). Boundary bars can also repeat
+ * across pages (the oldest bar of page N is the newest bar of page N+1), so
+ * dedupe by timestamp, keeping the first occurrence.
+ */
+function dedupeAndSortBars(bars: Bar[]): Bar[] {
+  const byTimestamp = new Map<number, Bar>();
+  for (const bar of bars) {
+    if (!byTimestamp.has(bar.timestamp)) {
+      byTimestamp.set(bar.timestamp, bar);
+    }
+  }
+  return Array.from(byTimestamp.values()).sort((a, b) => a.timestamp - b.timestamp);
+}
+
+/**
  * Fetch OHLCV bars from Bybit with pagination.
  *
  * Iterates up to 200 pages of 1000 bars each, applying optional
- * start/end date filters. Returns bars sorted chronologically.
+ * start/end date filters. Returns bars sorted chronologically and
+ * deduplicated by timestamp (multi-page windows are globally sorted —
+ * pages are fetched newest-first, so the concatenation is NOT already
+ * chronological).
  *
  * When a `diskCache` is provided, the function checks the disk cache first.
  * If the requested range is fully covered and not stale, cached data is returned
@@ -123,12 +149,21 @@ export async function fetchBars(
     if (startDate && cursor !== undefined && cursor <= startDate) break;
   }
 
+  // ── Globally sort + dedupe BEFORE cache write and return ──────────────
+  // The pagination loop appends pages newest-first; the cache and the Pine
+  // engine must only ever see a strictly chronological, duplicate-free feed.
+  const sortedBars = dedupeAndSortBars(allBars);
+
   // ── Write back to disk cache ──────────────────────────────────────────
-  if (diskCache && allBars.length > 0) {
-    diskCache.set(symbol, timeframe, allBars).catch((err) => {
+  // Write the SORTED result so the cache never stores the backward-jumping
+  // order. (DiskOHLCVCache.mergeBars also sorts on write, but the invariant
+  // belongs at this call site — the fetch function must never hand the cache
+  // unsorted bars.)
+  if (diskCache && sortedBars.length > 0) {
+    diskCache.set(symbol, timeframe, sortedBars).catch((err) => {
       console.error('[fetchBars] Disk cache write error:', err);
     });
   }
 
-  return allBars;
+  return sortedBars;
 }

@@ -25,9 +25,16 @@ export class BybitBarFetcher implements BarFetcher {
     limit?: number,
   ): Promise<Bar[]> {
     const bars = await fetchBars(symbol, timeframe, startDate, endDate);
-    // Truncate to limit if specified
+    // Truncate to limit if specified.
+    // fetchBars now returns GLOBALLY ASCENDING bars. `slice(0, limit)` would
+    // keep the OLDEST `limit` bars — auto-select wants the most RECENT
+    // `limit` bars (the tail of the window is what the strategy actually
+    // trades). Slice from the end to preserve that semantic. (Pre-fix, the
+    // buggy newest-page-first order made `slice(0, limit)` accidentally
+    // "correct"; the chronological fix makes it wrong, so the slice
+    // direction flips.)
     if (limit && bars.length > limit) {
-      return bars.slice(0, limit);
+      return bars.slice(-limit);
     }
     return bars;
   }

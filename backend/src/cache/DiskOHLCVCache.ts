@@ -56,13 +56,26 @@ export interface DiskCacheStats {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Cache format version, embedded in every cache key namespace.
+ *
+ * Bumped whenever the on-disk bar contract changes, so entries written by
+ * older code are never served. v1 files carry no format marker — their bar
+ * order cannot be proven. v2 (fetch-bars chronological fix): fetchBars now
+ * guarantees globally sorted + deduped bars for multi-page windows. The
+ * version bump invalidates ALL v1 entries in one move — the new namespace
+ * starts cold and is only ever populated with the fixed ordering. Old v1
+ * files are orphaned and reclaimed by LRU disk-limit enforcement.
+ */
+const CACHE_FORMAT_VERSION = 2;
+
 /** Sanitise a symbol- interval pair to a safe filename component. */
 function cacheKey(symbol: string, interval: string): string {
   // Symbols like "BTCUSDT" and intervals like "60" are already safe — but
   // encode any non-alphanumeric characters to prevent path traversal.
   const safeSymbol = symbol.replace(/[^A-Z0-9]/gi, '_');
   const safeInterval = String(interval).replace(/[^A-Z0-9]/gi, '_');
-  return `${safeSymbol}_${safeInterval}`;
+  return `v${CACHE_FORMAT_VERSION}_${safeSymbol}_${safeInterval}`;
 }
 
 /** Resolve the NDJSON data file path for a given key. */
