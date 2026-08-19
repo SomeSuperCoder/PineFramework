@@ -1176,7 +1176,7 @@ export class BotEngine {
                 result.swapResult && 'signature' in result.swapResult
                   ? (result.swapResult as { signature: string }).signature
                   : 'unknown';
-              this.logger.info('chaos.order.success', {
+              this.logger.info('order.success', {
                 action: signal.action,
                 symbol: signal.pair.symbol,
                 quantity: signal.quantity,
@@ -1196,7 +1196,7 @@ export class BotEngine {
               this.notifyPositionResult(signal, result);
             } else {
               this.chaosStats.ordersFailed++;
-              this.logger.warn('chaos.order.failed', {
+              this.logger.warn('order.failed', {
                 action: signal.action,
                 symbol: signal.pair.symbol,
                 quantity: signal.quantity,
@@ -1207,7 +1207,7 @@ export class BotEngine {
             }
           } catch (err) {
             this.chaosStats.ordersFailed++;
-            this.logger.error('chaos.order.error', {
+            this.logger.error('order.error', {
               action: signal.action,
               symbol: signal.pair.symbol,
               error: String(err),
