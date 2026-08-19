@@ -794,6 +794,17 @@ export function executeMemberExpression(
       };
       return chartProps[expr.property] ?? NA;
     }
+    if (objName === 'timeframe') {
+      // Pine v6 `timeframe.*` namespace — property reads resolve against the
+      // dotted builtin keys registered by registerTimeframeBuiltins. Every
+      // member is a zero-arg thunk, so a property read invokes it; call
+      // expressions (timeframe.in_seconds()) resolve the SAME key through the
+      // MemberExpression branch of executeCallExpression — one registration,
+      // two access paths.
+      const tfBuiltin = eng.builtins.get(`timeframe.${expr.property}`);
+      if (tfBuiltin) return tfBuiltin();
+      return NA;
+    }
 
     const binding = resolveVariable(scope, objName);
     if (binding && expr.property === 'length') return binding.series.length;

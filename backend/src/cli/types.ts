@@ -30,6 +30,9 @@ export interface CliOptions {
   slippage?: number;
   defaultQty?: number;
   pyramiding?: number;
+  /** `--max-bars <n>`: raise the engine's per-run bar-count cap (default 1500).
+   *  Absent → legacy cap; the CLI enforces a positive integer in validateOptions. */
+  maxBars?: number;
   help: boolean;
 }
 

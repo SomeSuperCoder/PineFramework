@@ -66,11 +66,22 @@ export async function runSymbolBacktest(
     const baseOverride = configOverride ? { ...configOverride } : {};
     const override = await applyDexFee(symbol, baseOverride, collector.onWarning);
 
+    // A2 (defect 2): the CLI's raw options ride the export `request` record
+    // (maxBars included via the {...options} spread in multi-symbol-runner).
+    // Extract the cap here — the pipeline's BacktestRunnerOptions.maxBars is
+    // the typed seam; the record stays untyped by design (export layer).
+    const maxBars = typeof cliOptions?.maxBars === 'number' ? cliOptions.maxBars : undefined;
+
     const pipelineResult = runBacktestPipeline({
       script,
       bars,
       configOverride: Object.keys(override).length > 0 ? override : undefined,
       onWarning: collector.onWarning,
+      maxBars,
+      // A2 (defect 2): per-cell chart resolution from the CLI (--timeframe /
+      // --timeframes) — forwarded so the engine's timeframe.* builtins reflect
+      // the chart the bars were fetched on.
+      timeframe,
     });
 
     if (!pipelineResult.success) {

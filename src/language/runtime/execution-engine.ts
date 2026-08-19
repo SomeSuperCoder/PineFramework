@@ -21,6 +21,7 @@ import {
   registerMathBuiltins,
   registerStrBuiltins,
   registerTimeBuiltins,
+  registerTimeframeBuiltins,
   registerColorBuiltins,
   registerPlotBuiltins,
   registerStrategyBuiltins,
@@ -100,6 +101,21 @@ const STRATEGY_CONFIG_BASELINES: BaselineEntry[] = [
   { scriptKey: 'margin_short', engineKey: 'marginShort', baseline: '0' },
 ];
 
+/**
+ * Constructor runtime options — engine-level run state supplied by the caller
+ * (backtest runner / live executor) rather than derived from the script.
+ */
+export interface ExecutionEngineRuntimeOptions {
+  /**
+   * Chart timeframe for the run, as a Pine timeframe string ("1", "5", "60",
+   * "D", "W", "M"). Consumed by the `timeframe.*` builtins. Optional: when
+   * absent, initializeStrategy falls back to the strategy() declaration arg
+   * `timeframe`, and when neither exists every `timeframe.*` member resolves
+   * to NA (non-breaking no-tf behavior).
+   */
+  timeframe?: string;
+}
+
 export class ExecutionEngine {
   /** @internal */ compiledScript: CompiledScript;
   /** @internal */ sourceProgram: ProgramNode;
@@ -131,6 +147,13 @@ export class ExecutionEngine {
     volume: number[];
   } = { open: [], high: [], low: [], close: [], volume: [] };
   /** @internal */ isFormingCandle: boolean = false;
+  /**
+   * Chart timeframe for the run (Pine timeframe string), consumed by the
+   * `timeframe.*` builtins. Set from constructor runtime options, with a
+   * fallback to the strategy() declaration arg in initializeStrategy.
+   * @internal
+   */
+  timeframe: string | undefined;
 
   // Delegated components
   /** @internal */ interpreter: Interpreter;
@@ -140,6 +163,7 @@ export class ExecutionEngine {
   constructor(
     compileResult: CompileResult,
     strategyConfigOverride?: Partial<import('../../strategy/strategy-engine.js').StrategyConfig>,
+    runtimeOptions?: ExecutionEngineRuntimeOptions,
   ) {
     this.compiledScript = compileResult.ir;
     this.sourceProgram = compileResult.source;
@@ -152,6 +176,10 @@ export class ExecutionEngine {
     this.snapshots = [];
     this.executionTimes = [];
     this.maxSnapshots = 10;
+
+    // Runner-provided chart timeframe; a script-declared fallback is applied
+    // inside initializeStrategy (below) when this is absent.
+    this.timeframe = runtimeOptions?.timeframe;
 
     this.metrics = {
       totalBars: 0,
@@ -524,6 +552,7 @@ export class ExecutionEngine {
     registerMathBuiltins(this);
     registerStrBuiltins(this);
     registerTimeBuiltins(this);
+    registerTimeframeBuiltins(this);
     registerColorBuiltins(this);
     registerPlotBuiltins(this);
     registerInputBuiltins(this);
@@ -578,6 +607,13 @@ export class ExecutionEngine {
     }
 
     const config = parseStrategyDeclaration(args);
+
+    // Timeframe fallback: constructor runtime options (runner-provided chart
+    // resolution) win; a strategy-declared timeframe (strategy(timeframe="5"))
+    // is the script-level fallback. Both absent → timeframe.* members return NA.
+    if (this.timeframe === undefined) {
+      this.timeframe = config.timeframe;
+    }
     let strategyConfig = getStrategyConfig(config);
     // Baseline diagnostics (design D4): every getStrategyConfig default applied
     // to a script-undeclared setting is a hidden decision — surface each as a

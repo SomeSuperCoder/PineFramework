@@ -44,6 +44,8 @@ Options:
   --slippage <n>          Slippage value (default: 0)
   --default-qty <n>       Default order quantity (default: 1)
   --pyramiding <n>        Max pyramiding entries (default: 0)
+  --max-bars <n>          Maximum number of bars per symbol (default: 1500).
+                          Raise it for long date ranges — e.g. --max-bars 5000
   --help                  Show this help message
 
 After the results table the CLI prints the EFFECTIVE CONFIG — the resolved date
@@ -134,6 +136,11 @@ function parseArgs(argv: string[]): CliOptions {
     } else if (arg === '--pyramiding') {
       i++;
       options.pyramiding = parseInt(args[i] ?? '', 10);
+    } else if (arg === '--max-bars') {
+      i++;
+      // Raw parseInt — NaN is caught by validateOptions (positive-int guard),
+      // same pattern as the other numeric flags.
+      options.maxBars = parseInt(args[i] ?? '', 10);
     } else if (!arg.startsWith('-')) {
       if (positionalCount === 0) {
         options.scriptPath = arg;
@@ -182,6 +189,15 @@ function validateOptions(options: CliOptions): string | null {
 
   if (options.symbols.length === 0) {
     return 'At least one symbol is required';
+  }
+
+  // --max-bars must be a positive integer when present (NaN from a non-numeric
+  // value fails Number.isInteger too — one guard covers both).
+  if (
+    options.maxBars !== undefined &&
+    (!Number.isInteger(options.maxBars) || options.maxBars <= 0)
+  ) {
+    return `Invalid --max-bars: ${String(options.maxBars)}. Must be a positive integer.`;
   }
 
   // --commission-method is REQUIRED (contract D1): absent → explicit error

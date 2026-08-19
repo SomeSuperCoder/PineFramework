@@ -58,6 +58,12 @@ export interface StrategyConfig {
   risk_free_rate?: number;
   /** How to price market order fills: 'open' (default), 'ohlc4', 'close', 'high', 'low'. */
   market_fill_price?: 'open' | 'ohlc4' | 'close' | 'high' | 'low';
+  /**
+   * Chart timeframe the strategy expects to run on (Pine timeframe string,
+   * e.g. "5", "60", "D"). Consumed by the engine as the fallback for the
+   * `timeframe.*` builtins when the runner supplies no runtime option.
+   */
+  timeframe?: string;
 }
 
 export interface LibraryConfig {
@@ -179,6 +185,7 @@ export function parseStrategyDeclaration(args: Record<string, unknown>): Strateg
   if (args.max_lines_count !== undefined) config.max_lines_count = Number(args.max_lines_count);
   if (args.max_labels_count !== undefined) config.max_labels_count = Number(args.max_labels_count);
   if (args.risk_free_rate !== undefined) config.risk_free_rate = Number(args.risk_free_rate);
+  if (args.timeframe !== undefined) config.timeframe = String(args.timeframe);
 
   return config;
 }

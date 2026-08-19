@@ -23,6 +23,20 @@ export interface BacktestRunnerOptions {
    * here — the pipeline owns engine construction.
    */
   onWarning?: WarningSink;
+  /**
+   * A2 (defect 2): bar-count cap override for this run. Absent → 1500 (legacy
+   * hard literal, now the DEFAULT rather than a constant). The CLI raises it
+   * via `--max-bars`; other producers (API/Telegram) keep the legacy cap.
+   */
+  maxBars?: number;
+  /**
+   * A2 (defect 2): chart timeframe for this run, as a Pine string ("1","60",
+   * "D",…). Forwarded to the engine's runtime options so the `timeframe.*`
+   * builtins reflect the RUNNER-provided chart resolution (CLI --timeframe /
+   * --timeframes, per-cell in multi-timeframe runs). Absent → the engine falls
+   * back to the strategy() declaration, then NA (no-tf behavior).
+   */
+  timeframe?: string;
 }
 
 export interface BacktestRunnerResult {
@@ -46,6 +60,9 @@ export interface BacktestRunnerResult {
  */
 export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRunnerResult {
   const { script, bars } = options;
+  // A2 (defect 2): the legacy hard cap is now the DEFAULT — a run opts into a
+  // higher cap via options.maxBars (CLI --max-bars) instead of editing a literal.
+  const maxBars = options.maxBars ?? 1500;
 
   if (!script || script.trim().length === 0) {
     return { success: false, error: 'No Pine Script source provided' };
@@ -55,10 +72,10 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
     return { success: false, error: 'No bar data available' };
   }
 
-  if (bars.length > 1500) {
+  if (bars.length > maxBars) {
     return {
       success: false,
-      error: `Too many bars (${bars.length}). Maximum is 1500. Use a shorter date range or larger timeframe.`,
+      error: `Too many bars (${bars.length}). Maximum is ${maxBars}. Use a shorter date range or larger timeframe.`,
     };
   }
 
@@ -85,7 +102,15 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
   }
 
   // Create engine
-  const execEngine = new ExecutionEngine(compileResult, options.configOverride);
+  // A2 (defect 2): pass the run's chart timeframe as engine runtime options so
+  // the `timeframe.*` builtins resolve to the runner-provided resolution (the
+  // strategy() declaration stays the fallback). The runtime-options shape is
+  // checked STRUCTURALLY via the exported ExecutionEngine class constructor —
+  // the interface name isn't re-exported from the package barrel, so no type
+  // import is needed at the call site.
+  const execEngine = new ExecutionEngine(compileResult, options.configOverride, {
+    timeframe: options.timeframe,
+  });
   // Design D4: attach the run's diagnostic sink immediately after construction.
   // Buffered warnings (merge-time baselines, commission conflicts) replay here.
   if (options.onWarning) {

@@ -1,5 +1,24 @@
+import { vi } from 'vitest';
 import { aggregateResults } from '../src/cli/result-aggregator.js';
 import type { SymbolResult } from '../src/cli/types.js';
+import { runSymbolBacktest } from '../src/cli/symbol-runner.js';
+import {
+  buildBacktestExport,
+  scriptHash,
+  VERSION,
+  type BacktestExport,
+  type Bar,
+  type StrategyConfig,
+} from 'pine-framework';
+
+// ── A2 CLI flag tests (below) are offline by design: never touch the live
+//    Bybit API / SOL price oracle. Same mock convention as
+//    backend/tests/backtest-export.test.ts. ─────────────────────────────────
+vi.mock('../src/bybit/fetch-bars.js', () => ({ fetchBars: vi.fn() }));
+vi.mock('../src/services/sol-price-fetcher.js', () => ({
+  fetchSolPriceUsd: vi.fn().mockResolvedValue(150),
+}));
+import { fetchBars } from '../src/bybit/fetch-bars.js';
 
 function makeCompletedResult(symbol: string, overrides: Partial<{ netProfitPercent: number; profitFactor: number; maxDrawdownPercent: number; winRate: number; sharpeRatio: number; totalTrades: number; buyHoldReturn: number }> = {}): SymbolResult {
   return {
@@ -148,5 +167,164 @@ describe('result-aggregator', () => {
       const output = aggregateResults('test.pine', '60', [], DATE_RANGE);
       expect(output.timeframes).toHaveLength(1);
     });
+  });
+});
+
+// ===========================================================================
+// A2 CLI --max-bars contract (engine-fix defect 2)
+//
+// NOTE on testable surface: parseArgs/validateOptions are module-private in
+// backtest-cli.ts (a node script with NO exports; main() executes at import),
+// so the flag's parse + guard logic cannot be unit-tested without a production
+// change (exporting them) or spawning the CLI binary. Those are out of the
+// test engineer's lane — the guard (`Number.isInteger && > 0`) is verified by
+// code review. What IS testable — and locked here — is the PUBLIC wiring:
+//   1. runSymbolBacktest extracts maxBars from the cliOptions record and the
+//      pipeline enforces it (cap raised through the CLI wiring; default
+//      preserved when the flag is absent).
+//   2. buildBacktestExport's request layer carries `maxBars` ONLY when the
+//      flag was passed (undefined keys are dropped — default runs emit NO new
+//      key, golden snapshots unaffected; A2 export-compat watch item).
+// ===========================================================================
+
+// ── Strategy verbatim from backtest-export.test.ts (proven trade-generating) ─
+const CLI_STRATEGY = `//@version=5
+strategy("Simple EMA Cross Strategy", overlay=true, initial_capital=10000)
+
+fastLength = input.int(9, title="Fast EMA Length")
+slowLength = input.int(21, title="Slow EMA Length")
+
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+
+longCondition = ta.crossover(fastEMA, slowEMA)
+shortCondition = ta.crossunder(fastEMA, slowEMA)
+
+if longCondition
+    strategy.entry("Long", strategy.long)
+
+if shortCondition
+    strategy.entry("Short", strategy.short)
+`;
+
+function makeBars(count: number): Bar[] {
+  const bars: Bar[] = [];
+  let price = 100;
+  for (let i = 0; i < count; i++) {
+    const open = price;
+    const close = i % 60 < 30 ? open + 2.0 : open - 2.0;
+    const high = Math.max(open, close) + 0.5;
+    const low = Math.min(open, close) - 0.5;
+    bars.push({
+      timestamp: 1700000000000 + i * 3600000,
+      open,
+      high,
+      low,
+      close,
+      volume: 1000,
+    });
+    price = close;
+  }
+  return bars;
+}
+
+/** Minimal export object (shape verbatim from backtest-export.test.ts). */
+function makeExportObj(request: Record<string, unknown>): BacktestExport {
+  return buildBacktestExport({
+    runId: 'run-1',
+    source: 'script',
+    generatedAt: '2026-08-14T12:00:00.000Z',
+    meta: {
+      symbol: 'BTCUSDT',
+      timeframe: '60',
+      barCount: 3,
+      engineVersion: VERSION,
+      scriptHash: scriptHash(CLI_STRATEGY),
+    },
+    params: {
+      request,
+      configOverride: {},
+      effectiveConfig: { initialCapital: 10000 } as unknown as StrategyConfig,
+    },
+    input: { bars: makeBars(3) },
+    output: {
+      series: new Map(),
+      barTimestamps: [1700000000000, 1700003600000, 1700007200000],
+      strategyMarkers: [],
+      equityCurve: [],
+      drawdownCurve: [],
+      equityPoints: [],
+      monthlyReturns: {},
+      buyHoldReturn: 0,
+    },
+    trades: [],
+    orders: [],
+    metrics: {},
+  });
+}
+
+describe('CLI --max-bars wiring (A2)', () => {
+  it('forwards maxBars from cliOptions to the pipeline — 1600 bars pass with --max-bars 2000', async () => {
+    vi.mocked(fetchBars).mockResolvedValue(makeBars(1600));
+    const result = await runSymbolBacktest(
+      CLI_STRATEGY,
+      'BTCUSDT',
+      '60',
+      undefined,
+      undefined,
+      undefined,
+      { symbols: 'BTCUSDT', maxBars: 2000 },
+    );
+    expect(result.status).toBe('completed');
+  });
+
+  it('preserves the DEFAULT 1500 cap when the flag is absent — 1600 bars fail', async () => {
+    vi.mocked(fetchBars).mockResolvedValue(makeBars(1600));
+    const result = await runSymbolBacktest(
+      CLI_STRATEGY,
+      'BTCUSDT',
+      '60',
+      undefined,
+      undefined,
+      undefined,
+      { symbols: 'BTCUSDT' },
+    );
+    expect(result.status).toBe('failed');
+    expect(result.error).toContain('Maximum is 1500');
+  });
+
+  it('forwards the per-cell timeframe to the engine via the cliOptions record', async () => {
+    vi.mocked(fetchBars).mockResolvedValue(makeBars(120));
+    let seen: { timeframe?: unknown; period?: unknown } = {};
+    const result = await runSymbolBacktest(
+      CLI_STRATEGY,
+      'BTCUSDT',
+      'D',
+      undefined,
+      undefined,
+      undefined,
+      // Mirrors the real CLI shape: multi-symbol-runner spreads {...options,
+      // timeframe: tf} into the per-cell record.
+      { symbols: 'BTCUSDT', timeframe: 'D' },
+      (ctx) => {
+        seen = {
+          timeframe: ctx.cliOptions.timeframe,
+          period: ctx.engine.builtins.get('timeframe.period')?.(),
+        };
+      },
+    );
+    expect(result.status).toBe('completed');
+    expect(seen.timeframe).toBe('D');
+    expect(seen.period).toBe('D');
+  });
+});
+
+describe('CLI --max-bars export request layer (A2 watch item)', () => {
+  it('carries maxBars in params.request ONLY when the flag was passed', () => {
+    const withFlag = makeExportObj({ symbols: 'BTCUSDT', maxBars: 50000 });
+    expect(withFlag.params.request.maxBars).toBe(50000);
+
+    const withoutFlag = makeExportObj({ symbols: 'BTCUSDT' });
+    expect((withoutFlag.params.request as Record<string, unknown>).maxBars).toBeUndefined();
   });
 });
