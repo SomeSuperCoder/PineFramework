@@ -181,7 +181,7 @@ export function buildScriptResult(
       return {
         time: Math.floor(ts / 1000),
         value: numValue,
-        color: perBarColors?.[i],
+        color: perBarColors?.[i] ?? plotColor,
       };
     });
     plotData.push({
