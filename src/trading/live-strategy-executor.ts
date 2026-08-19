@@ -492,12 +492,27 @@ export class LiveStrategyExecutor {
     // synchronous. OR semantics (engine contract): an injected source FULLY
     // overrides the default strategy-engine equity — never AND, no
     // double-counted PnL. No wallet configured → skip injection and let the
-    // engine default apply (orders-disabled evaluation) — never throw. RPC
-    // transport failures propagate through the existing error path (a fake
-    // zero here would mis-size live orders).
+    // engine default apply (orders-disabled evaluation) — never throw.
+    // Balance-fetch failure (wallet/RPC) is a SOFT fallback mirroring
+    // resolveChaosSeed: log loudly and keep the PRIOR equity source for this
+    // candle — processCandle must NEVER throw here, or every candle dies
+    // before executeBar and no strategy signal ever executes (proven blocker:
+    // wallet passphrase mismatch threw on EVERY getKeypair, killing the whole
+    // strategy branch). A fake zero is deliberately NOT injected — the
+    // engine's prior/default source stays authoritative.
     if (this.config.walletManager) {
-      const microUsdc = await this.fetchUsdcBalance();
-      state.runtime.setEquitySource(() => Number(microUsdc) / 1e6);
+      try {
+        const microUsdc = await this.fetchUsdcBalance();
+        state.runtime.setEquitySource(() => Number(microUsdc) / 1e6);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          `[LiveStrategyExecutor] ${key}: wallet USDC balance unreachable — ` +
+            `keeping the prior strategy.equity source for this candle; ` +
+            `strategy execution continues (balance-fetch failure must not block bars)`,
+          { error: message },
+        );
+      }
     }
 
     const result = state.runtime.executeBar(context);

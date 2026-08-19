@@ -52,6 +52,14 @@ const KEY_LENGTH = 32; // 256-bit
 const IV_LENGTH = 16; // 128-bit
 const SALT_LENGTH = 32;
 
+/**
+ * Operator-facing remediation for a wallet passphrase mismatch — shared by the
+ * import-time rejection (importWallet) and the decrypt-time diagnostic
+ * (decryptSeedPhrase) so operators see ONE consistent fix everywhere.
+ */
+const WALLET_PASSPHRASE_MISMATCH_HINT =
+  'set WALLET_PASSPHRASE or re-import the wallet with the boot passphrase';
+
 // BIP39 English wordlist is 2048 words. We validate against a minimal set of
 // known valid BIP39 words. For full BIP39 compliance we'd need the full wordlist,
 // but for practical purposes we validate structure: 12 or 24 space-separated words.
@@ -166,9 +174,20 @@ export function decryptSeedPhrase(encrypted: EncryptedWallet, passphrase: string
   const decipher = createDecipheriv('aes-256-gcm', key, iv);
   decipher.setAuthTag(authTag);
 
-  const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-
-  return plaintext.toString('utf-8');
+  try {
+    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    return plaintext.toString('utf-8');
+  } catch {
+    // AES-256-GCM auth-tag failure means the key derived from `passphrase`
+    // does not match the one used at encrypt/import time — NOT corruption
+    // (the repro test proves the same ciphertext decrypts fine with the
+    // matching passphrase). Surface a diagnosable operator message instead of
+    // Node's raw crypto throw ("Unsupported state or unable to authenticate
+    // data") so the fix path is obvious at boot.
+    throw new Error(
+      `wallet passphrase mismatch: the boot passphrase does not match the one used at import — ${WALLET_PASSPHRASE_MISMATCH_HINT}`,
+    );
+  }
 }
 
 // ---- Keypair Derivation (Solana) ----
@@ -348,8 +367,23 @@ export class WalletManager {
     // 3. Derive keypair
     const keypair = deriveKeypairFromSeed(seedPhrase);
 
-    // 4. Encrypt and store
+    // 4. Encrypt and store — passphrase wiring (BUG: strategy never executes).
+    // wallet.enc is encrypted with this passphrase, and every boot-time decrypt
+    // (getKeypair → decryptSeedPhrase) uses configPassphrase — the env
+    // WALLET_PASSPHRASE || 'pine-default-passphrase' the WalletManager was
+    // constructed with (backend/src/index.ts). A custom password that differs
+    // from the boot passphrase creates a wallet that THROWS on EVERY
+    // getKeypair() at boot — the proven real-signal blocker. Reject early and
+    // loud here instead of failing silently on the first candle: the operator
+    // sets WALLET_PASSPHRASE to their chosen password or imports with the boot
+    // passphrase. (A password-less import falls back to configPassphrase and
+    // always passes this guard.)
     const passphrase = password || this.configPassphrase;
+    if (passphrase !== this.configPassphrase) {
+      throw new Error(
+        `Wallet import rejected: the wallet password must match the bot boot passphrase — ${WALLET_PASSPHRASE_MISMATCH_HINT}`,
+      );
+    }
     const encrypted = encryptSeedPhrase(seedPhrase, passphrase, keypair.publicKey);
     await this.storage.save('default', encrypted);
     this.currentWalletKey = 'default';

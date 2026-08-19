@@ -455,10 +455,11 @@ describe('LiveStrategyExecutor', () => {
         expect(signals).toEqual([]);
       });
 
-      it('propagates the RPC failure from fetchUsdcBalance — the bar never runs, never caught-and-zeroed', async () => {
+      it('soft-falls back when fetchUsdcBalance fails — bar still runs, prior equity source kept, error logged', async () => {
         const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
         await executor.initializeStrategy(pair);
-        const { executeBar } = recordingRuntime(executor);
+        const rec = recordingRuntime(executor);
+        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const rpcError = new Error('RPC down: getBalance failed');
         vi.spyOn(
@@ -466,10 +467,50 @@ describe('LiveStrategyExecutor', () => {
           'fetchUsdcBalance',
         ).mockRejectedValue(rpcError);
 
-        // Identity assertion: the SAME error instance surfaces — a fake zero
-        // here would mis-size live orders, so catch-and-zero would be a bug.
-        await expect(executor.processCandle(candle)).rejects.toBe(rpcError);
-        expect(executeBar).not.toHaveBeenCalled();
+        // Soft-fallback contract (bug fix): the balance fetch is best-effort.
+        // processCandle must RESOLVE — a rejection here killed every candle
+        // before executeBar (the proven real-signal blocker). A fake zero is
+        // deliberately NOT injected; the prior/engine source stays
+        // authoritative.
+        const signals = await executor.processCandle(candle);
+
+        expect(rec.executeBar).toHaveBeenCalledTimes(1);
+        expect(rec.setEquitySource).not.toHaveBeenCalled();
+        // Failure is loud, not silent.
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+          expect.stringContaining('wallet USDC balance unreachable'),
+          expect.objectContaining({ error: 'RPC down: getBalance failed' }),
+        );
+        expect(signals).toEqual([]);
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('retains the prior equity source when fetchUsdcBalance rejects on a later candle', async () => {
+        const pair: PairId = { symbol: 'BTCUSDT', timeframe: '60' };
+        await executor.initializeStrategy(pair);
+        const rec = recordingRuntime(executor);
+
+        // Prior candle: balance fetch succeeds, a real equity source injects.
+        const fetchSpy = vi
+          .spyOn(
+            executor as unknown as { fetchUsdcBalance: () => Promise<bigint> },
+            'fetchUsdcBalance',
+          )
+          .mockResolvedValue(42_500_000n); // 42.5 USDC (micro-units)
+        await executor.processCandle(candle);
+        expect(rec.injectedSource).not.toBeNull();
+        expect(rec.injectedSource!()).toBe(42.5);
+
+        // Next candle: balance fetch FAILS — the prior source must survive.
+        fetchSpy.mockRejectedValue(new Error('RPC down: getBalance failed'));
+        const nextCandle = { ...candle, timestamp: candle.timestamp + 60_000 };
+        await expect(executor.processCandle(nextCandle)).resolves.toEqual([]);
+
+        expect(rec.executeBar).toHaveBeenCalledTimes(2);
+        // No NEW source was injected on the failing candle — the prior 42.5
+        // source remains the authoritative strategy.equity.
+        expect(rec.setEquitySource).toHaveBeenCalledTimes(1);
+        expect(rec.injectedSource!()).toBe(42.5);
       });
     });
   });

@@ -267,6 +267,26 @@ describe('WalletManager', () => {
     expect(await manager.hasWallet()).toBe(true);
   });
 
+  it('rejects import with a password that differs from the boot passphrase (passphrase parity guard)', async () => {
+    await expect(
+      manager.importWallet(seedPhrase, 'user-chosen-wallet-password'),
+    ).rejects.toThrow(
+      'Wallet import rejected: the wallet password must match the bot boot passphrase',
+    );
+    // A rejected import must NOT persist a wallet that throws on every boot decrypt.
+    expect(await manager.hasWallet()).toBe(false);
+  });
+
+  it('accepts import with a password equal to the boot passphrase', async () => {
+    const publicKey = await manager.importWallet(seedPhrase, passphrase);
+    expect(publicKey).toBeTruthy();
+    expect(await manager.hasWallet()).toBe(true);
+    // Boot-time decrypt must succeed — no passphrase mismatch.
+    const sd = await manager.getKeypair();
+    expect(sd.value.publicKey).toBeTruthy();
+    sd.dispose();
+  });
+
   it('should get public key after import', async () => {
     await manager.importWallet(seedPhrase);
     const pk = await manager.getPublicKey();
