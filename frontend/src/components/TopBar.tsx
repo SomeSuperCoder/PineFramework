@@ -1,4 +1,5 @@
 import { Separator } from '@/components/ui/separator';
+import logoUrl from '@/assets/logo.svg';
 
 export interface TopBarProps {
   botConnected: boolean;
@@ -19,12 +20,7 @@ export function TopBar({
       {/* Left: Logo + App Name — §16 wordmark in brand yellow */}
       <div className="flex min-w-[180px] items-center">
         <div className="flex items-center gap-2">
-          <svg width="24" height="24" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <rect x="2" y="10" width="3" height="8" rx="1" fill="#eab308" />
-            <rect x="6" y="6" width="3" height="12" rx="1" fill="#eab308" />
-            <rect x="10" y="3" width="3" height="15" rx="1" fill="#eab308" />
-            <rect x="14" y="1" width="3" height="17" rx="1" fill="#eab308" />
-          </svg>
+          <img src={logoUrl} alt="" width={24} height={24} aria-hidden="true" />
           <span className="text-sm font-semibold tracking-tight text-[#eab308]">
             Pine Framework
           </span>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- PineFramework favicon — same pine-of-bars mark, simplified for 16-32px tab rendering:
+       bolder bars, no wick, brand-dark tree on a brand-yellow plate so it reads on light AND dark tabs. -->
+  <rect width="32" height="32" rx="7" fill="#ffd02f"/>
+  <rect x="3.3" y="20" width="3.8" height="6" rx="1.9" fill="#12121f"/>
+  <rect x="8.7" y="16" width="3.8" height="10" rx="1.9" fill="#12121f"/>
+  <rect x="14.1" y="12" width="3.8" height="14" rx="1.9" fill="#12121f"/>
+  <rect x="19.5" y="16" width="3.8" height="10" rx="1.9" fill="#12121f"/>
+  <rect x="24.9" y="20" width="3.8" height="6" rx="1.9" fill="#12121f"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" aria-hidden="true">
+  <!-- PineFramework brand mark — "Pine Bars": a pine tree built from five price bars.
+       Bars #ffd02f (brand yellow) on dark theme; white treetop doubles as a candle wick. -->
+  <rect x="0.9" y="16" width="3.4" height="4" rx="1.7" fill="#ffd02f"/>
+  <rect x="5.6" y="13" width="3.4" height="7" rx="1.7" fill="#ffd02f"/>
+  <rect x="10.3" y="10" width="3.4" height="10" rx="1.7" fill="#ffd02f"/>
+  <rect x="15.0" y="13" width="3.4" height="7" rx="1.7" fill="#ffd02f"/>
+  <rect x="19.7" y="16" width="3.4" height="4" rx="1.7" fill="#ffd02f"/>
+  <rect x="11.35" y="3.5" width="1.3" height="6.5" rx="0.65" fill="#ffffff"/>
+</svg>
