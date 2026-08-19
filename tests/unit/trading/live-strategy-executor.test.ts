@@ -24,7 +24,11 @@ vi.mock('../../../src/strategy/strategy-engine.js', () => ({
       // D4 warning-sink seam (strategy-engine.ts:144) — ExecutionEngine
       // calls setWarningSink non-optionally after construction.
       setWarningSink: vi.fn(),
-      getEquity: vi.fn().mockReturnValue(10_000_000_000),
+      // Engine equity basis is decimal quote units USDC (Director formula —
+      // getEquity() includes floating PnL while open). 10,000 USDC = the chaos
+      // fallback floor. OLD basis was lamports (10_000_000_000) and the chaos
+      // path divided by 1e6; the executor now reads getEquity() directly.
+      getEquity: vi.fn().mockReturnValue(10_000),
       getPosition: vi.fn().mockImplementation(() => pos),
       entry: vi.fn().mockImplementation((name: string, direction: string, quantity: number) => {
         pos = { direction, quantity };
@@ -429,8 +433,8 @@ describe('LiveStrategyExecutor', () => {
         expect(rec.setEquitySource).toHaveBeenCalledWith(expect.any(Function));
         expect(rec.injectedSource).not.toBeNull();
         // OR semantics (engine contract): the injected source is the ONLY value
-        // strategy.equity reads — not 42500000 (raw micro), not 10_000_000_000
-        // (engine default), not a blend. Exactly 42.5.
+        // strategy.equity reads — not 42500000 (raw micro), not the engine
+        // default (10,000 USDC decimal basis), not a blend. Exactly 42.5.
         expect(rec.injectedSource!()).toBe(42.5);
       });
 

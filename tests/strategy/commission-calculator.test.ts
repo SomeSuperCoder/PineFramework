@@ -261,8 +261,10 @@ describe('Commission Calculator', () => {
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000); // entry fills at open=100
 
       // Old per-fill behavior charged 2.5015 at entry (equity 9997.4985). The
-      // current mechanism charges NOTHING at entry — equity is untouched.
-      expect(engine.getEquity()).toBe(10000);
+      // current mechanism charges NOTHING at entry — but the position is OPEN
+      // with floating PnL: entry fills at bar1 open 100, qty 10, close 101 →
+      // CORRECTED equity = 10000 + (101 − 100) × 10 = 10010.
+      expect(engine.getEquity()).toBe(10000 + (101 - 100) * 10);
       expect(engine.getPosition().direction).toBe('long');
       expect(engine.getPosition().commission).toBe(0);
     });
@@ -278,7 +280,9 @@ describe('Commission Calculator', () => {
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000); // entry fills at open=100
 
       // Old per-fill behavior charged 1000 × 0.001 = 1 at entry (equity 9999).
-      expect(engine.getEquity()).toBe(10000);
+      // CORRECTED: the position is OPEN with floating PnL — entry fills at
+      // bar1 open 100, qty 10, close 101 → 10000 + (101 − 100) × 10 = 10010.
+      expect(engine.getEquity()).toBe(10000 + (101 - 100) * 10);
     });
 
     it('models jupiter_manual fees ONCE at close on the entry notional', () => {
@@ -335,7 +339,10 @@ describe('Commission Calculator', () => {
 
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
-      expect(engine.getEquity()).toBeCloseTo(10000 - 1);
+      // CORRECTED equity formula (floating PnL while open): entry fills at
+      // bar1 open 100, qty 10, fixed commission 1, close 101 →
+      // 10000 − 1 + (101 − 100) × 10 = 10009.
+      expect(engine.getEquity()).toBeCloseTo(10000 - 1 + (101 - 100) * 10);
     });
 
     it('should enforce long-only when jupiter_ultra is selected', () => {

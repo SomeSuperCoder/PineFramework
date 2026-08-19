@@ -381,7 +381,10 @@ describe('StrategyEngine', () => {
 
       engine.updateBar(1, 1001, 102, 105, 100, 103, 1000);
 
-      expect(engine.getEquity()).toBe(10000 - 1);
+      // CORRECTED equity formula (floating PnL while open): entry fills at
+      // bar1 open 102, commission 1 deducted at fill, close 103 →
+      // 10000 − 1 + (103 − 102) × 1 = 10000.
+      expect(engine.getEquity()).toBe(10000 - 1 + (103 - 102) * 1);
     });
 
     it('should charge percent commission', () => {
@@ -393,7 +396,12 @@ describe('StrategyEngine', () => {
       engine.updateBar(1, 1001, 100, 105, 98, 101, 1000);
 
       const expectedCommission = 100 * 1 * 0.001;
-      expect(engine.getEquity()).toBeCloseTo(10000 - expectedCommission);
+      // CORRECTED equity formula (floating PnL while open): entry fills at
+      // bar1 open 100, close 101 →
+      // 10000 − commission + (101 − 100) × 1 = 10000.9.
+      expect(engine.getEquity()).toBeCloseTo(
+        10000 - expectedCommission + (101 - 100) * 1,
+      );
     });
   });
 

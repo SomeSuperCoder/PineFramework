@@ -93,13 +93,15 @@ function finiteNumber(value: DecimalStr): number {
 /**
  * Simulated equity floor for chaos mode when the real wallet balance is zero
  * or unreachable (D1). 10,000 USDC in smallest units (lamports) — matching
- * fetchUsdcBalance()/engine initialCapital units (1 USDC = 1e6 lamports) and
+ * fetchUsdcBalance() (1 USDC = 1e6 lamports) and
  * reintroducing the pre-balance-fetch documented floor. The floor keeps the
  * strategy machinery producing markers; DEX execution is NOT live-tested and
- * that caveat is reported loudly with the failure mode.
+ * that caveat is reported loudly with the failure mode. The engine itself is
+ * seeded in whole USDC (see CHAOS_FALLBACK_EQUITY_USDC) — its equity basis is
+ * decimal quote units, the same unit closeOrReducePosition realizes PnL in.
  */
 const CHAOS_FALLBACK_EQUITY = 10_000_000_000;
-/** CHAOS_FALLBACK_EQUITY in whole USDC, for log messages. */
+/** CHAOS_FALLBACK_EQUITY in whole USDC — the engine seed unit and the log unit. */
 const CHAOS_FALLBACK_EQUITY_USDC = CHAOS_FALLBACK_EQUITY / 1e6;
 
 /** SOL decimals on-chain — lamport→SOL conversion needs the exact scale (9). */
@@ -1137,7 +1139,7 @@ export class LiveStrategyExecutor {
         { error: message },
       );
       return {
-        seedEquity: CHAOS_FALLBACK_EQUITY,
+        seedEquity: CHAOS_FALLBACK_EQUITY_USDC,
         mode: { mode: 'simulated', reason: 'rpc-unreachable' },
       };
     }
@@ -1149,7 +1151,7 @@ export class LiveStrategyExecutor {
           `(failure mode: wallet-empty)`,
       );
       return {
-        seedEquity: CHAOS_FALLBACK_EQUITY,
+        seedEquity: CHAOS_FALLBACK_EQUITY_USDC,
         mode: { mode: 'simulated', reason: 'wallet-empty' },
       };
     }
@@ -1158,7 +1160,7 @@ export class LiveStrategyExecutor {
       `[LiveStrategyExecutor] Chaos mode: real USDC balance = ${realBalance} ` +
         `(${Number(realBalance) / 1e6} USDC) — live execution`,
     );
-    return { seedEquity: Number(realBalance), mode: { mode: 'live' } };
+    return { seedEquity: Number(realBalance) / 1e6, mode: { mode: 'live' } };
   }
 
   /**
@@ -1214,8 +1216,11 @@ export class LiveStrategyExecutor {
         candle.volume,
       );
 
-      // Current equity (engine tracks realized PnL); convert lamports → USDC.
-      const equity = engine.getEquity() / 1e6;
+      // Current equity in USDC — the engine's equity basis is decimal quote
+      // units (resolveChaosSeed seeds from the USDC balance), and getEquity()
+      // includes the open position's floating PnL (Director formula). The
+      // generator sizes entries against total equity (spec: fixed 10% sizing).
+      const equity = engine.getEquity();
       const chaosSignal = generator.generate(equity, candle.timestamp);
       const enginePosition = engine.getPosition();
 

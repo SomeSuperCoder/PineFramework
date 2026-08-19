@@ -240,10 +240,20 @@ describe('CONTRACT — strategy.equity · NA fallback without a strategy engine 
   });
 });
 
-describe('CONTRACT — strategy.equity · backtest reflects realized equity (Group 4)', () => {
-  it('bar after a trade reflects equity AFTER the trade; pre-trade bars read initialCapital', () => {
-    // Fixed 10 commission makes the entry-fill equity change observable:
-    // equity drops to 10000 − 10 = 9990 on the bars after the buy fill.
+describe('CONTRACT — strategy.equity · backtest reflects the CORRECTED equity formula (Group 4)', () => {
+  it('open-position bars carry floating PnL; after close, realized folds in (initial + closed + open)', () => {
+    // CORRECTED formula (Director-mandated):
+    //   Strategy Equity = Initial Capital + Closed Net Profit + Open Position Profit
+    // On an OPEN long with a moved current price:
+    //   equity = initialCapital − entry commission + (barClose − avgEntryPrice) × qty
+    //
+    // Deterministic V-shape (makeVBars, 100 bars): price = 100 − 0.6·i (i < 50).
+    //   bar 34 close 79.6 < 80 → entry "Long" qty=1 submitted (market order).
+    //   bar 35 open 79 → fill (marketFillPrice 'open'): avgPrice 79, qty 1,
+    //         equity 10000 − 10 = 9990; close 79 → floating 0 → plot 9990.
+    //   bar 36 close 78.4 → floating = (78.4 − 79) × 1 = −0.6 →
+    //         CORRECTED plot = 9990 − 0.6 = 9989.4.
+    //   RED today: the engine returns realized-only 9990 (floating missing).
     const { result, engine } = executeContractEngine(
       CONTRACT_EQUITY_STRATEGY,
       makeVBars(),
@@ -262,18 +272,25 @@ describe('CONTRACT — strategy.equity · backtest reflects realized equity (Gro
     const values = equitySeries(result);
     expect(values[0]).toBe(10000); // pre-trade bars read initialCapital
 
-    // CONTRACT — implement to make GREEN (Director requirement #1): the value
-    // CHANGES on a bar after the trade — the entry fill charged the fixed
-    // commission, observable as 9990 on post-entry bars.
-    expect(values.some((v) => v === 9990)).toBe(true);
+    // CORRECTED — open-position bar with a moved price carries floating PnL:
+    // 10000 − 10 (entry commission) + (78.4 − 79) × 1 = 9989.4 exactly.
+    expect(values[36]).toBeCloseTo(9989.4, 6);
+
+    // The OLD realized-only value (initialCapital − commission, no floating)
+    // must NOT be returned once the price moved — proves the floating
+    // component is present. RED today: the impl returns exactly 9990 here.
+    expect(values[36]).not.toBe(9990);
 
     // The plotted series equals the strategy engine's live equity...
     const finalPlotted = values[values.length - 1]!;
     expect(finalPlotted).toBeCloseTo(strat!.getEquity(), 6);
 
-    // ...and the engine equity itself equals initialCapital + realized PnL −
-    // commissions (independent arithmetic via getTrades(); the fixed commission
-    // is charged once on the entry fill).
+    // ...and after the close, the floating component vanishes and the closed
+    // trade's realized PnL folds into equity: initialCapital + realized net
+    // PnL − commissions. The close fills at bar 93 open 95.8 →
+    // realized (95.8 − 79) × 1 = 16.8 → final equity 10000 − 10 + 16.8 =
+    // 10006.8 (independent arithmetic via getTrades(); the fixed commission
+    // is charged once on the entry fill — exit commission is 0 for fixed).
     const realizedSum = trades.reduce((sum, t) => sum + t.pnl, 0);
     const expectedEquity = 10000 + realizedSum - 10;
     expect(strat!.getEquity()).toBeCloseTo(expectedEquity, 6);

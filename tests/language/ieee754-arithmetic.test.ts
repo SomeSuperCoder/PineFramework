@@ -28,7 +28,7 @@ import { createSeries } from '../../src/language/runtime/series.js';
 // Helper: execute a one-liner and return the last output value
 // =============================================================================
 
-function singleBarOutput(source: string, name = 'plot'): unknown {
+function singleBarOutput(source: string): unknown {
   const { ast } = parse(source);
   const result = compile(ast);
   const engine = new ExecutionEngine(result);
@@ -43,7 +43,10 @@ function singleBarOutput(source: string, name = 'plot'): unknown {
     volume: createSeries('volume', [1000000]),
   };
   engine.executeBar(bar);
-  return engine.getOutput(name)?.last();
+  // Unnamed plot() calls register under a generated stable key (resolvePlotKey,
+  // e.g. `plot_0`) — not the literal 'plot'. Read the first registered output.
+  const firstOutput = engine.getAllOutputs().values().next().value;
+  return firstOutput?.last();
 }
 
 // =============================================================================

@@ -1194,7 +1194,16 @@ export class StrategyEngine {
   }
 
   getEquity(): number {
-    return this.equity;
+    // Director-mandated equity formula: Initial Capital + Closed Net Profit +
+    // Open Position Profit. `this.equity` is the realized basis
+    // (initialCapital − commissions + closed net PnL); while a position is
+    // open, the current bar's floating/unrealized PnL (maintained by
+    // updatePositionPnL) is added exactly once. When flat, unrealizedPnl is 0
+    // (reset on close), so equity reads realized-only — floating never
+    // double-counts across the closing bar (it folds into realized there).
+    return this.position.direction === 'flat'
+      ? this.equity
+      : this.equity + this.position.unrealizedPnl;
   }
 
   getPeakEquity(): number {
