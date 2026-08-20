@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * Sidebar overlay layout — regression lock for the flex-push → absolute
@@ -83,6 +84,7 @@ async function setupSeedDataInterception(page: Page) {
 /** Launch the dashboard like the chunk-boundary specs: seed data + canvas. */
 async function openDashboard(page: Page) {
   await setupSeedDataInterception(page);
+  await enterAppDirectly(page);
   await page.goto(FRONTEND);
   await page.waitForSelector('canvas', { timeout: 30_000 });
 }

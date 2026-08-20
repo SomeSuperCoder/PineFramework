@@ -17,6 +17,9 @@ export interface ControlPanelProps {
   botState: string;
   /** Number of active errors */
   errorCount: number;
+  /** Opens the landing page (About / logo click). Optional — existing consumers
+   *  compile unchanged (D4). */
+  onShowLanding?: () => void;
   /** Children to render in the content area */
   children: React.ReactNode;
 }
@@ -27,6 +30,7 @@ export function ControlPanel({
   botConnected,
   botState,
   errorCount,
+  onShowLanding,
   children,
 }: ControlPanelProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
@@ -66,7 +70,12 @@ export function ControlPanel({
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-background">
-      <TopBar botConnected={botConnected} botState={botState} errorCount={errorCount} />
+      <TopBar
+        botConnected={botConnected}
+        botState={botState}
+        errorCount={errorCount}
+        onShowLanding={onShowLanding}
+      />
 
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <Sidebar

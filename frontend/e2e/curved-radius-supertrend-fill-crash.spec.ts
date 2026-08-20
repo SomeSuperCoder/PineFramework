@@ -1,4 +1,5 @@
 import { test, expect, type APIResponse, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -165,6 +166,7 @@ async function cleanupIndicator(page: Page) {
 
 async function openDashboard(page: Page) {
   await setupSeedDataInterception(page);
+  await enterAppDirectly(page);
   await page.goto(FRONTEND);
   await page.waitForSelector('canvas', { timeout: 30_000 });
 }

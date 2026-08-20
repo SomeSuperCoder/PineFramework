@@ -1,4 +1,5 @@
 import { test, expect, type APIResponse, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * HHLL indicator uses label.new() with text "HH", "HL", "LL", "LH" for
@@ -274,6 +275,7 @@ test.describe('Chunk boundary invariants', () => {
     });
 
     // ── Navigate and wait for chart ─────────────────────────────────────
+    await enterAppDirectly(page);
     await page.goto(FRONTEND);
     // Wait for the canvas element (chart rendered)
     await page.waitForSelector('canvas', { timeout: 120000 });

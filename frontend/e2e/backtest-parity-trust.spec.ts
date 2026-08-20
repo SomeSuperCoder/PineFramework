@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -302,6 +303,7 @@ async function installApiMocks(
 
 /** Open the Backtest panel (app boot path). */
 async function openBacktestPanel(page: Page) {
+  await enterAppDirectly(page);
   await page.goto(FRONTEND);
   await page.getByRole('button', { name: 'Backtest panel' }).click();
   await expect(page.getByText('Backtest Settings')).toBeVisible();

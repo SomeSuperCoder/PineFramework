@@ -1,4 +1,5 @@
 import { test, expect, type APIResponse, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * Dashboard toolbar (shadcn migration) — user-flow coverage.
@@ -94,6 +95,7 @@ async function setupSeedDataInterception(page: Page) {
 /** Launch the dashboard like the chunk-boundary specs: seed data + canvas. */
 async function openDashboard(page: Page) {
   await setupSeedDataInterception(page);
+  await enterAppDirectly(page);
   await page.goto(FRONTEND);
   await page.waitForSelector('canvas', { timeout: 30_000 });
 }
@@ -188,6 +190,7 @@ test.describe('Dashboard toolbar (shadcn migration)', () => {
       if (url.pathname.endsWith('/seed')) return route.fallback();
       return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'e2e forced failure' }) });
     });
+    await enterAppDirectly(page);
     await page.goto(FRONTEND);
 
     const errorsBtn = toolbarLocator(page).getByRole('button', { name: 'Errors' });

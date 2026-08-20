@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * QA ACCEPTANCE — Shadcn chart swap in the backtest results popup.
@@ -263,6 +264,7 @@ test.describe('Backtest results popup — Shadcn/Recharts chart acceptance', () 
     await installApiMocks(page);
 
     // 1 — Launch path: app boots, user opens the Backtest panel.
+    await enterAppDirectly(page);
     await page.goto(FRONTEND);
     await page.getByRole('button', { name: 'Backtest panel' }).click();
     await expect(page.getByText('Backtest Settings')).toBeVisible();

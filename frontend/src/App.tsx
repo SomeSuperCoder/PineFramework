@@ -9,6 +9,8 @@ import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
 import { ControlPanel, type PanelId } from './components/ControlPanel';
+import { LandingPage } from './components/Landing/LandingPage';
+import { useLandingGate } from './hooks/useLandingGate';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
 import type { BacktestRunRequest } from './hooks/useBacktestPanelState';
@@ -24,6 +26,10 @@ import { wsSend } from './utils/wsSend';
 
 function App() {
   const [editorOpen, setEditorOpen] = useState(false);
+
+  // Landing / app view gate (D1–D3) — the composition root decides which view
+  // renders; the entered flag is persisted in localStorage.
+  const { view, enterApp, showLanding } = useLandingGate();
 
   const [timeframe, setTimeframe] = useState(() => {
     const saved = localStorage.getItem('pine-timeframe');
@@ -175,6 +181,10 @@ function App() {
 
   useEffect(() => {
     const handleSlashKey = (e: KeyboardEvent) => {
+      // F-1: the quick-add listener must never fire on the landing view — the
+      // overlays are always-mounted, so a '/' keystroke there would open the
+      // QuickAdder over the landing.
+      if (view !== 'app') return;
       if (e.key !== '/') return;
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -185,7 +195,21 @@ function App() {
     };
     window.addEventListener('keydown', handleSlashKey);
     return () => window.removeEventListener('keydown', handleSlashKey);
-  }, []);
+  }, [view]);
+
+  // Focus management on view switch (journey §2.5, A14): landing→app moves
+  // focus to the app shell; app→landing moves it to the landing h1. The
+  // initial mount performs no focus move.
+  const prevViewRef = useRef(view);
+  useEffect(() => {
+    if (prevViewRef.current === view) return;
+    prevViewRef.current = view;
+    if (view === 'landing') {
+      document.getElementById('landing-title')?.focus();
+    } else {
+      document.getElementById('app-topbar')?.focus();
+    }
+  }, [view]);
 
   useEffect(() => {
     const hasStrategyMarkers =
@@ -396,6 +420,13 @@ function App() {
     setActivePanel(panel);
   }, []);
 
+  // Landing / app gate at the composition root (D3): the two views are
+  // mutually exclusive — switching unmounts the other. The ControlPanel (and
+  // its overlays) render only in the app view.
+  if (view === 'landing') {
+    return <LandingPage onGetStarted={enterApp} />;
+  }
+
   return (
     <ControlPanel
       activePanel={activePanel}
@@ -403,6 +434,7 @@ function App() {
       botConnected={botConnected}
       botState={botStatus?.state ?? 'Idle'}
       errorCount={errors.length}
+      onShowLanding={showLanding}
     >
       {/* === Dashboard Panel === */}
       {activePanel === 'dashboard' && (

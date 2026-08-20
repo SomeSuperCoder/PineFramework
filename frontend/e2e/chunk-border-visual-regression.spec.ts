@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -150,6 +151,7 @@ test.describe('Chunk border visual regression', () => {
 
   test('No orphaned plot values after 10 chunk loads', async ({ page }) => {
     await setupSeedDataInterception(page);
+    await enterAppDirectly(page);
     await page.goto(FRONTEND);
     await page.waitForSelector('canvas', { timeout: 120000 });
 

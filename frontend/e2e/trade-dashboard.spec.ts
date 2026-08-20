@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * User-behavior E2E for the Trade History + Statistics dashboards
@@ -274,6 +275,7 @@ async function installApiMocks(
 
 /** The dashboard opens via the toolbar TradingBotControlButton toggle. */
 async function openDashboard(page: Page) {
+  await enterAppDirectly(page);
   await page.goto(FRONTEND);
   await page.getByRole('button', { name: 'Bot panel' }).click();
   // LiveDashboard mounts once the (stubbed) bot snapshot sets botStatus.

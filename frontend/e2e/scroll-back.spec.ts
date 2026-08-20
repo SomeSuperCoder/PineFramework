@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * Integration test: scroll-back loads older OHLCV data.
@@ -16,6 +17,7 @@ test.describe('OHLCV scroll-back', () => {
       }
     });
 
+    await enterAppDirectly(page);
     await page.goto('/', { waitUntil: 'networkidle' });
 
     const canvas = page.locator('canvas');
