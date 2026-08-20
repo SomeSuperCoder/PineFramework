@@ -78,3 +78,43 @@ The main panel SHALL retain all existing behavior and functionality; the landing
 #### Scenario: Dashboard still fully functional
 - **WHEN** the user is in the main panel after entering the app
 - **THEN** all existing panels, overlays, and chart interactions remain available and behave as before
+## ADDED Requirements (landing v2 — interactive charts + FeralUI + advanced motion)
+
+### Requirement: Interactive shadcn charts
+The landing page's demo panels SHALL render real shadcn/recharts chart components that react to pointer hover (tooltip/crosshair/highlight), using deterministic demo data (no Math.random at render).
+
+#### Scenario: Hover over the hero chart
+- **WHEN** the user hovers the hero chart
+- **THEN** a chart tooltip/crosshair appears and the hovered point is highlighted
+
+#### Scenario: Hover over the equity curve
+- **WHEN** the user hovers the backtest equity curve
+- **THEN** a chart tooltip/crosshair appears for the hovered point
+
+#### Scenario: Hover over the bot sparkline
+- **WHEN** the user hovers the bot-status bar chart
+- **THEN** the hovered bar is highlighted and its value is shown
+
+### Requirement: FeralUI library integration
+The landing page SHALL use the FeralUI library packages (`pullcord`, `feral-blob`) for pre-built animation components: a PullCord physics toggle that switches the landing between the dark and the light Day Session theme, and a JellyBlobMascot accent near the bot panel. The main panel SHALL remain dark regardless of the landing theme.
+
+#### Scenario: PullCord toggles the landing theme
+- **WHEN** the user operates the PullCord on the landing
+- **THEN** the landing switches between dark and light Day Session themes
+- **AND** the choice persists across page loads
+- **AND** the main panel theme is unchanged
+
+#### Scenario: Blob mascot visible
+- **WHEN** the landing page is rendered
+- **THEN** the JellyBlobMascot is visible near the bot-status panel
+
+### Requirement: Advanced scroll and on-hover animations (framer-motion)
+The landing page SHALL implement advanced scroll and on-hover animations with framer-motion (NOT Remotion), per the DESIGN.md §7 mapping: parallax, scroll-scrub reveals, magnetic Get Started CTA, 3D card tilt, whileHover glass micro-upgrade, and a restrained hand-rolled hologram foil — all derived from the existing motion LAW tokens (no new tokens) and all collapsing to static under prefers-reduced-motion, with pointer:fine gating for magnetic/tilt/foil.
+
+#### Scenario: Advanced effects active
+- **WHEN** a pointer-fine user scrolls/hovers the landing
+- **THEN** parallax, scroll-scrub, magnetic, tilt, glass-hover, and foil effects are active and bounded by the DESIGN.md clamps (±4px magnetic, ≤6° tilt, ≤0.15 foil)
+
+#### Scenario: Reduced motion collapses effects
+- **WHEN** the user has a reduced-motion preference enabled
+- **THEN** all six advanced effects render static (no scroll-linked transforms, no magnetic/tilt/foil)

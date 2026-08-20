@@ -33,7 +33,7 @@
 - **Mode:** Persuade — the visitor's success is deciding to enter the app. The design is the product's front door.
 - **Scene:** a trader at a terminal at night. Dark ground is not a default here — it is the incumbent app's scene (`color-scheme: dark`, background `oklch(0.145 0 0)`) and the physical scene of the user. Dark, then, is forced by evidence.
 - **Authority:** the incumbent panel (`ControlPanel`, `TopBar`, panels) is the visual authority the landing *extends*. The landing is a new surface inside an established visual world: dark oklch palette, brand yellow `#ffd02f`, Inter, motion LAW — the landing must feel like the same instrument, not a different product.
-- **FeralUI is honored as a design language, never a package:** raw/neobrutalist boldness (hard edges, bold type, high contrast, confident color) + restrained liquid-glass (translucent blurred surfaces, hairline borders, layered depth) + scroll motion. No `feral-*` dependencies.
+- **FeralUI is honored as a design language, never a package:** raw/neobrutalist boldness (hard edges, bold type, high contrast, confident color) + restrained liquid-glass (translucent blurred surfaces, hairline borders, layered depth) + scroll motion. No `feral-*` dependencies except the two landing-scoped physics accents explicitly un-banned in §12 — `pullcord` (theme toggle) and `feral-blob` (JellyBlobMascot) — both fun accents, never the main character.
 
 ## 2. Layout & Hierarchy per Section
 
@@ -47,7 +47,7 @@ Fixed at the very top: `fixed inset-x-0 top-0 z-50 h-[2px] origin-left bg-[#ffd0
 ### 2.1 Glass header (sticky)
 `sticky top-0 z-40 border-b border-white/[0.06] bg-background/60 backdrop-blur-xl`. Height `h-14`.
 - **Left:** logo mark (reuse the app's existing logo image, `size-6`, `aria-hidden`) + wordmark **"Pine Framework"** `text-sm font-semibold tracking-tight text-[#ffd02f]` (landing-owned wordmark uses the brand yellow; the TopBar's existing `text-[#eab308]` wordmark stays untouched).
-- **Right:** compact Get Started — `h-10 px-4` version of the CTA (see §7). Same `enterApp` handler as the hero CTA.
+- **Right:** PullCord theme toggle (landing-only light/dark switch, §13) then compact Get Started — `h-10 px-4` version of the CTA (see §7). Same `enterApp` handler as the hero CTA.
 
 ### 2.2 Hero — the thesis (first viewport, `min-h-[calc(100svh-3.5rem)]`)
 Grid: `grid grid-cols-1 items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]`, `py-20 lg:py-28`.
@@ -172,14 +172,23 @@ framer-motion values are **derived from the tokens, never new tokens**:
 | CTA active press | transform + shadow collapse | 150ms | exit | `duration-fast` + `ease-exit` |
 | Glass card hover (border/fill) | color only | 200ms | enter | `duration-base` + `ease-enter` |
 | Scroll hairline width | scaleX | 250ms | enter | `duration-slow` + `ease-enter` |
+| Parallax — demo panels drift against scroll (hero ±24px, sections ±16px) | y translate, scroll-linked (`useScroll` → `useTransform`), spring settle | 250ms | enter | `duration-slow` + `ease-enter` |
+| Scroll-scrub reveal — capability strip, §2.4/§2.5 panels + headings | opacity 0→1, y 16→0, scrubbed to scroll progress | 250ms | enter | `duration-slow` + `ease-enter` |
+| Magnetic CTA — Get Started (hero, header, footer) | translate toward pointer, **clamp ±4px** | 150ms | enter | `duration-fast` + `ease-enter` |
+| 3D tilt — demo panels (hero, backtest, bot, footer) | rotateX/rotateY, **clamp ≤6°**, `transform-style: preserve-3d` | 200ms | enter | `duration-base` + `ease-enter` |
+| whileHover glass micro-upgrade — glass panels/cards | scale ~1.01 + border/fill shift (no lift, no toy physics) | 200ms | enter | `duration-base` + `ease-enter` |
+| Hologram foil — pointer-following sheen on elevated panels | sheen position follows pointer, opacity 0→**≤0.15** | 150ms | enter | `duration-fast` + `ease-enter` |
 
-**One authored moment, not scattered effects:** the hero stagger is the entrance; all scroll reveals share one quiet fade-rise grammar (`y: 16`, `once: true`, `viewport={{ once: true, amount: 0.2 }}`). No parallax, no animated blur, no per-element novelty. Content is visible by default; transforms never hide critical copy while waiting.
+**One authored moment, not scattered effects:** the hero stagger is the entrance; all scroll reveals share one quiet fade-rise grammar (`y: 16`, `once: true`, `viewport={{ once: true, amount: 0.2 }}`). No animated blur, no per-element novelty. The advanced rows above extend this grammar on the landing only — gated to `pointer: fine` + full-motion (§8), clamped by the hard caps in the table, and mapped to the three existing durations and two easings; no new motion tokens anywhere (§7 LAW). Content is visible by default; transforms never hide critical copy while waiting.
 
 ## 8. Reduced-Motion Fallback
 
 - Wrap the landing in `MotionConfig reducedMotion="user"`; framer-motion then auto-collapses transform/opacity animation for `prefers-reduced-motion` users. Reveals render at their final state (no scroll-triggered movement, no stagger).
 - The global CSS guard in `src/main.css` (`@media (prefers-reduced-motion: reduce)`) already zeroes every CSS transition/animation — the CTA's transform/shadow transitions and the scroll hairline's CSS motion collapse to instant.
 - Scroll hairline: under reduced motion render full-width, static, and fade out after entry — no scroll-linked scaleX.
+- Advanced effects (§7): parallax, scroll-scrub, magnetic, 3D tilt, hologram foil, and whileHover glass all collapse to static under `MotionConfig reducedMotion="user"` + the global CSS guard — parallax/tilt/foil render at rest (no transform, no sheen), scroll-scrub reveals render at their final state, the magnetic clamp zeroes.
+- PullCord toggle: rope physics disabled under reduced motion — renders as an instant plain-button switch (the toggle still works; no animation).
+- JellyBlobMascot: static under reduced motion (idle physics off).
 - No new motion tokens are introduced anywhere (spec requirement).
 
 ## 9. Responsive
@@ -194,7 +203,10 @@ framer-motion values are **derived from the tokens, never new tokens**:
 - Contrast: all specified pairs ≥ AA (verified §5); yellow CTA + dark ink exceeds AAA for the large button label.
 - Focus-visible rings on every interactive element (yellow ring on dark).
 - Demo panels and synthetic data are `aria-hidden="true"` decoration (the copy carries the meaning); interactive elements carry `aria-label`s (logo target, icon-only controls).
-- Keyboard-operable: Get Started, About, logo/name target are real buttons; the optional ghost anchor is a real anchor.
+- Keyboard-operable: Get Started, About, logo/name target, and the PullCord toggle (`role="switch"`, `aria-label="Toggle theme"`, `aria-checked` bound to landing theme) are real buttons; the optional ghost anchor is a real anchor.
+- PullCord toggle focus-visible: `focus-visible:ring-2 focus-visible:ring-[#ffd02f]/70 focus-visible:ring-offset-2` (ring offset maps to the active theme's background via the §13 light scope).
+- Demo charts stay `aria-hidden="true"` — recharts hover reactivity (tooltips, active/highlight, crosshair) is pointer-only and never a keyboard/focus target; the copy carries the capability.
+- pointer:fine gating: magnetic CTA, 3D tilt, and hologram foil activate only under `@media (pointer: fine)`; touch devices get static elements (tap = normal CTA press, panels flat).
 - Reduced motion (§8) and 44px touch targets.
 - Semantic landmarks: `header`, `main`, `section`, `footer`; heading order starts at `h1` (hero) and descends.
 
@@ -207,8 +219,54 @@ framer-motion values are **derived from the tokens, never new tokens**:
 
 ## 12. Handoff Notes for the Frontend Engineer
 
-- Implement with Tailwind v4 classes exactly as specced; no new CSS utilities, no glass library, no `feral-*` packages, no new motion tokens.
+- Implement with Tailwind v4 classes exactly as specced; no new CSS utilities, no glass library, no gamey/tool `feral-*` packages beyond the two un-banned below, no new motion tokens.
+- **Un-banned on the landing (packages):** `pullcord` (PullCord Verlet-rope physics toggle — the landing-only light/dark switch, §13), `feral-blob` (JellyBlobMascot — playful accent beside the bot panel, §2.5), and `recharts`/shadcn interactive charts inside the demo panels (hover-reactive tooltips, active/highlight, crosshair).
+- **Stays banned:** `playcaptcha`, `animaps`, `deskfolio`, `feral-fur` (gamey/tool-like — not this surface). No other `feral-*` or animation packages.
+- **Hologram restraint clause:** the foil-card hologram is hand-rolled with framer-motion (the npm hologram demo is not installed and is not wanted) — a restrained pointer-following sheen, opacity ≤0.15, a material whisper never a disco.
+- **Accent physics budget:** the FeralUI physics components are the fun accent, not the main character — exactly one physics toggle + one mascot, both landing-only, both reduced-motion-collapsible (§8), both `aria-hidden` where decorative.
 - framer-motion: import only the `motion` primitives used; `MotionConfig reducedMotion="user"`; viewport `once: true`.
 - The landing is presentational (`LandingPage` receives `onGetStarted`); the glass class recipes live with the Landing components (design-system extraction deferred).
 - Copy in this document is direction; the UX Designer owns final copy. Synthetic demo data must remain labeled.
 - The main panel's visual language is untouched — these rules govern the Landing surface only.
+
+## 13. Day Session — Light Variant (Landing-Only)
+
+The landing gains a day state of the same instrument: same composition, same hierarchy, same single yellow action — surface recipes re-mapped for daylight. Scene: the same trader at the same terminal, ambient daylight. Light is forced by the scene, never picked by category.
+
+**Scope (law):** the light variant applies to the LANDING ONLY. The main panel stays dark (`color-scheme: dark`, `bg-background`) — §1–§12 and the dark Feral Glass contract govern the default and the panel untouched. Implement the light scope as one `.light` class (or `light:` variant) on the landing root that remaps `--background`/`--foreground`; all semantic classes (`text-foreground`, hairlines, chips) then re-map without class soup. The light mode must read as a premium fintech light mode, not a toy.
+
+### 13.1 Light token table
+
+| Token (light) | Value | Dark twin (§3/§5) | Role |
+|---|---|---|---|
+| Page ground | `bg-[#f6f4ee]` — warm paper-stone, **not white-wash** | `bg-background` `oklch(0.145 0 0)` | Landing background (`--background` remap) |
+| Ink (foreground) | `text-[#1c1c1e]` (existing dark-ink token) | `text-foreground` | All text; hierarchy `text-[#1c1c1e]` → `/70` → `/50` (meta raised from `/40` — light ground needs the step for AA) |
+| Standard glass fill | `bg-white/60` | `bg-white/[0.04]` | STANDARD glass (§3 remap) |
+| Elevated glass fill | `bg-white/70` | `bg-white/[0.04]` | ELEVATED glass |
+| Chip/stat/bubble fill | `bg-white/40` | `bg-white/[0.02]` | Non-blur surfaces |
+| Hairlines | `border-black/[0.06]` standard, `border-black/[0.08]` elevated | `border-white/[0.06–0.15]` | Dark hairlines replace white on light |
+| Accent text | `text-[#a16207]` (deepened brand amber) | `text-[#ffd02f]` | Wordmark, emphasis numerals — brand family, AA on light (yellow text fails on light) |
+| Accent surfaces | `#ffd02f` fill + `#1c1c1e` ink (unchanged, 12:1 §5) | same | CTA fill, glow, chip bullets, scroll hairline |
+| Data colors | `#4262ff` strokes, `#22c55e` status (unchanged) | same | Charts, StatusDot |
+
+### 13.2 Light glass remap (exact classes)
+
+**STANDARD glass:** `rounded-2xl border border-black/[0.06] bg-white/60 backdrop-blur-sm`
+
+**Chips / stat tiles / bubbles:** `rounded-lg border border-black/[0.06] bg-white/40`
+
+**ELEVATED glass:** `rounded-2xl border border-black/[0.08] bg-white/70 backdrop-blur-md shadow-[0_24px_64px_-24px_rgba(28,29,30,0.18),0_0_80px_-24px_rgba(255,208,47,0.15)]`
+
+- Blur is lighter than dark (sm/md vs md/xl) — daylight needs less frosted separation; surface count stays 5 (perf budget §3).
+- Inner top highlight (elevated only): `bg-gradient-to-b from-white/70 to-transparent` top 40% (white sheen reads on light glass), `pointer-events-none`.
+- Ambient wash (same structure, chroma raised so it survives daylight): `fixed inset-0 -z-10 bg-[#f6f4ee] bg-[radial-gradient(120%_80%_at_50%_-10%,rgba(255,208,47,0.12),transparent_60%),radial-gradient(90%_60%_at_85%_110%,rgba(66,98,255,0.08),transparent_60%)]`
+- CTA hard shadow softens for daylight: `shadow-[3px_3px_0_rgba(28,29,30,0.35)]` (same brutalist collapse on press; hover/active fills unchanged `#fcb900`/`#d49c00`).
+- Browser surfaces: `selection:bg-[#ffd02f]/40 selection:text-[#1c1c1e]`, caret `accent-color:#a16207`, thin scrollbar with a `black/10` thumb.
+
+### 13.3 PullCord integration point
+
+- **Where:** the glass header (§2.1), between the logo/wordmark cluster and the compact Get Started — the second control from the right. Compact icon button (`size-9 rounded-md`), hover `hover:bg-white/5` in dark / `hover:bg-black/[0.04]` in light.
+- **Component:** `pullcord` PullCord Verlet-rope physics toggle, landing-only; `aria-label="Toggle theme"`, `role="switch"`, `aria-checked` bound to landing theme state; a real button (keyboard-operable, §10).
+- **Reduced motion:** rope physics disabled — renders as an instant plain-button switch (§8).
+- **Persistence:** landing theme persisted in `localStorage` (`pine-landing-theme`) so refresh restores the choice; the main panel always opens dark regardless (scope §13.1).
+- **Accent physics budget:** one physics toggle + one mascot (`feral-blob` JellyBlobMascot beside the bot panel, `size-14`, `aria-hidden`, static under reduced motion) — the fun accent, never the main character; the night-trader instrument stays the product's own voice (§1).

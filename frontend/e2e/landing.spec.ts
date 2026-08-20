@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { enterAppDirectly } from './helpers';
 
 /**
  * User-behavior E2E for the landing page + navigation state machine
@@ -222,5 +223,178 @@ test.describe('Landing page + navigation state machine (user flows)', () => {
     // The QuickAdder popup input never mounts on the landing view.
     await expect(page.getByPlaceholder('Search indicators & strategies...')).toHaveCount(0);
     await expect(appTopbar(page)).toHaveCount(0);
+  });
+});
+
+/* ===================================================================== */
+/* Landing v2 — interactive shadcn charts (DESIGN §2.2/§2.4/§2.5)        */
+/* ===================================================================== */
+
+test.describe('Landing v2 — interactive charts (user flows)', () => {
+  test('hovering the hero area chart reveals the tooltip', async ({ page }) => {
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+
+    const heroChart = page.locator('section[aria-labelledby="landing-title"] .recharts-wrapper');
+    await heroChart.hover({ position: { x: 160, y: 60 } });
+
+    // Recharts renders the tooltip wrapper with visibility:hidden until active.
+    // The hero chart's shadcn formatter REPLACES the row content with the
+    // formatted value (toFixed(1)) — assert the numeric value, not the label.
+    const tooltip = heroChart.locator('.recharts-tooltip-wrapper');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(/\d+\.\d/);
+  });
+
+  test('hovering the equity area chart reveals the tooltip', async ({ page }) => {
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+
+    const equityChart = page.locator('#backtest .recharts-wrapper');
+    await equityChart.scrollIntoViewIfNeeded();
+    await equityChart.hover({ position: { x: 160, y: 60 } });
+
+    const tooltip = equityChart.locator('.recharts-tooltip-wrapper');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText(/\d+\.\d/);
+  });
+
+  test('hovering the bot bar sparkline reveals the tooltip + active-bar highlight', async ({
+    page,
+  }) => {
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+
+    const botChart = page.locator('section[aria-labelledby="bot-heading"] .recharts-wrapper');
+    await botChart.scrollIntoViewIfNeeded();
+    await botChart.hover({ position: { x: 160, y: 40 } });
+
+    const tooltip = botChart.locator('.recharts-tooltip-wrapper');
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText('Trades');
+    // activeBar highlight — the hovered bar is remapped to the brighter blue.
+    await expect(botChart.locator('[fill="#5b7bff"]').first()).toBeVisible();
+  });
+});
+
+/* ===================================================================== */
+/* Landing v2 — PullCord light/dark toggle (DESIGN §13.3)                */
+/* ===================================================================== */
+
+test.describe('Landing v2 — PullCord theme toggle (§13)', () => {
+  function pullCord(page: Page) {
+    return page.getByRole('button', { name: 'Toggle theme' });
+  }
+
+  function landingRoot(page: Page) {
+    return page.locator('[data-landing-theme]');
+  }
+
+  test('default dark; PullCord flips data-landing-theme to light and persists on reload', async ({
+    page,
+  }) => {
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+    await expect(landingRoot(page)).toHaveAttribute('data-landing-theme', 'dark');
+
+    await expect(page.locator('.pullcord-inner--drop')).toHaveCount(0);
+    await pullCord(page).click();
+
+    await expect(landingRoot(page)).toHaveAttribute('data-landing-theme', 'light');
+    expect(await page.evaluate(() => localStorage.getItem('pine-landing-theme'))).toBe('light');
+
+    // Refresh restores the choice.
+    await page.reload();
+    await expect(landingHero(page)).toBeVisible();
+    await expect(landingRoot(page)).toHaveAttribute('data-landing-theme', 'light');
+  });
+
+  test('toggling back restores dark and persists', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('pine-landing-theme', 'light'));
+    await page.goto(FRONTEND);
+    await expect(landingRoot(page)).toHaveAttribute('data-landing-theme', 'light');
+
+    await expect(page.locator('.pullcord-inner--drop')).toHaveCount(0);
+    await pullCord(page).click();
+
+    await expect(landingRoot(page)).toHaveAttribute('data-landing-theme', 'dark');
+    expect(await page.evaluate(() => localStorage.getItem('pine-landing-theme'))).toBe('dark');
+  });
+
+  test('PullCord mirrors the theme state to aria-pressed (WAI-ARIA toggle button)', async ({
+    page,
+  }) => {
+    await page.goto(FRONTEND);
+    await expect(page.locator('.pullcord-inner--drop')).toHaveCount(0);
+    await expect(pullCord(page)).toHaveAttribute('aria-pressed', 'false');
+
+    await pullCord(page).click();
+    await expect(pullCord(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+/* ===================================================================== */
+/* Landing v2 — landing-only theme scope (§13.1)                         */
+/* ===================================================================== */
+
+test.describe('Landing v2 — main panel stays dark (§13.1)', () => {
+  test('the app surface carries NO landing-theme attribute', async ({ page }) => {
+    await installAppMocks(page);
+    await enterAppDirectly(page);
+    await page.goto(FRONTEND);
+
+    await expect(appTopbar(page)).toBeVisible();
+    await expect(landingHero(page)).toHaveCount(0);
+    // The landing theme scope is landing-only: it unmounts with the landing
+    // view, so no [data-landing-theme] (dark OR light) can exist in the app.
+    await expect(page.locator('[data-landing-theme]')).toHaveCount(0);
+  });
+});
+
+/* ===================================================================== */
+/* Landing v2 — reduced-motion collapse (DESIGN §8)                      */
+/* ===================================================================== */
+
+test.describe('Landing v2 — advanced motion collapses under reduced motion (§8)', () => {
+  test('magnetic CTA and parallax/tilt hero panel are static for prefers-reduced-motion', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+
+    // Magnetic CTA: hover the header Get Started — its Magnetic wrapper span
+    // must NOT pull (renders as a plain span under reduced motion). The header
+    // holds exactly one Magnetic wrapper, so scope to it (the hero/footer CTAs
+    // are also wrapped in identical spans).
+    const headerMagnetic = page.locator('header span.inline-flex');
+    const headerCta = page.getByRole('button', { name: 'Get Started' }).first();
+    await headerCta.hover();
+    expect(await headerMagnetic.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+
+    // Parallax/tilt hero demo panel: scroll, then assert no scroll-linked or
+    // pointer-linked transform ever appears.
+    const heroPanel = page.locator('section[aria-labelledby="landing-title"] div.relative.p-5');
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+    expect((await heroPanel.getAttribute('style')) ?? '').not.toContain('transform');
+    expect(await heroPanel.evaluate((el) => getComputedStyle(el).transform)).toBe('none');
+  });
+});
+
+/* ===================================================================== */
+/* Landing v2 — JellyBlobMascot accent (DESIGN §12/§13.3)                */
+/* ===================================================================== */
+
+test.describe('Landing v2 — JellyBlobMascot near the bot panel', () => {
+  test('the mascot is visible beside the bot panel', async ({ page }) => {
+    await page.goto(FRONTEND);
+    await expect(landingHero(page)).toBeVisible();
+
+    const botSection = page.locator('section[aria-labelledby="bot-heading"]');
+    const mascot = botSection.locator('.landing-mascot svg');
+    await mascot.scrollIntoViewIfNeeded();
+    await expect(mascot).toBeVisible();
   });
 });

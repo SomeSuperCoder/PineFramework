@@ -67,6 +67,8 @@ FeralUI is a real project (feralui.dev) but offers physics widgets (claw-captcha
 
 Single commit at the feature boundary (`feat: landing page + navigation flow`). Rollback = revert the commit; the app falls back to the previous always-dashboard behavior (no data risk). No backend/deploy steps.
 
+**Landing v2 increment** (interactive shadcn charts, FeralUI pullcord/feral-blob integration, advanced framer-motion scroll/hover effects, landing-only Day Session light theme) is a second commit on top of the same feature (`feat: landing v2 — interactive charts + FeralUI + advanced motion`). Rollback = revert the v2 commit; v1 landing remains intact. The v2 design delta is recorded in frontend/DESIGN.md §7/§8/§10/§12/§13 and in the landing spec + tasks of this change.
+
 ## Open Questions
 
 None — all decisions above are resolved and consistent with the specs.

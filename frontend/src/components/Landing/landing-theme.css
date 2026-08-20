@@ -1,0 +1,178 @@
+/* Landing theme scope — DESIGN §13 (Day Session light variant, LANDING ONLY).
+ *
+ * Dark defaults live on [data-landing-theme]; the light variant remaps the
+ * SAME CSS variables — no duplicated class strings anywhere. The main panel
+ * stays dark: this scope only ever applies to the landing root subtree.
+ */
+
+[data-landing-theme] {
+  color-scheme: dark;
+
+  /* Semantic remap — Tailwind v4's @theme inline reads these vars at runtime,
+     so text-foreground, bg-background, border-border etc. follow the scope. */
+  --color-background: oklch(0.145 0 0);
+  --color-foreground: oklch(0.985 0 0);
+  --color-border: oklch(0.269 0 0);
+  --color-muted: oklch(0.269 0 0);
+  --color-muted-foreground: oklch(0.708 0 0);
+  --color-ring: oklch(0.439 0 0);
+
+  /* Glass surfaces (DESIGN §3) */
+  --landing-glass-fill: rgb(255 255 255 / 0.04);
+  --landing-glass-border: rgb(255 255 255 / 0.1);
+  --landing-elevated-fill: rgb(255 255 255 / 0.04);
+  --landing-elevated-border: rgb(255 255 255 / 0.1);
+  --landing-chip-fill: rgb(255 255 255 / 0.02);
+  --landing-chip-border: rgb(255 255 255 / 0.06);
+  --landing-chip-strong-fill: rgb(255 255 255 / 0.03);
+  --landing-chip-strong-border: rgb(255 255 255 / 0.15);
+  --landing-hairline: rgb(255 255 255 / 0.06);
+  --landing-hover-surface: rgb(255 255 255 / 0.05);
+
+  /* Blur radii: content = backdrop-blur-md, elevated = backdrop-blur-xl (§3);
+     light drops to sm/md (§13.2). */
+  --landing-blur-content: 12px;
+  --landing-blur-elevated: 24px;
+  --landing-inner-highlight: linear-gradient(to bottom, rgb(255 255 255 / 0.06), transparent);
+  --landing-elevated-shadow:
+    0 24px 64px -24px rgba(0, 0, 0, 0.7), 0 0 80px -24px rgba(255, 208, 47, 0.2);
+
+  /* CTA hard shadow — the neobrutalist press (DESIGN §6) */
+  --landing-cta-shadow: 3px 3px 0 rgba(0, 0, 0, 0.5);
+  --landing-cta-shadow-hover: 4px 4px 0 rgba(0, 0, 0, 0.5);
+  --landing-cta-shadow-active: 1px 1px 0 rgba(0, 0, 0, 0.5);
+
+  /* Text hierarchy + accent text */
+  --landing-meta: color-mix(in oklab, var(--color-foreground) 40%, transparent);
+  --landing-meta-strong: color-mix(in oklab, var(--color-foreground) 80%, transparent);
+  --landing-accent-text: #ffd02f;
+
+  /* Ambient wash (DESIGN §3) + browser surfaces (DESIGN §11) */
+  --landing-wash-bg: var(--color-background);
+  --landing-wash-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 208, 47, 0.08), transparent 60%),
+    radial-gradient(90% 60% at 85% 110%, rgba(66, 98, 255, 0.06), transparent 60%);
+  --landing-selection-bg: rgb(255 208 47 / 0.3);
+  --landing-selection-text: var(--color-foreground);
+
+  /* Chart grid — white/10 in dark (DESIGN §2.2), black hairlines in light (§13.1) */
+  --landing-chart-grid: rgb(255 255 255 / 0.1);
+  --landing-chart-cursor-fill: rgb(255 255 255 / 0.06);
+}
+
+[data-landing-theme='light'] {
+  color-scheme: light;
+
+  /* §13.1 token table remap */
+  --color-background: #f6f4ee;
+  --color-foreground: #1c1c1e;
+  --color-border: oklch(0.87 0.015 90);
+  --color-muted: oklch(0.9 0.01 90);
+  --color-muted-foreground: oklch(0.5 0.02 90);
+  --color-ring: oklch(0.75 0.05 85);
+
+  /* §13.2 light glass remap */
+  --landing-glass-fill: rgb(255 255 255 / 0.6);
+  --landing-glass-border: rgb(0 0 0 / 0.06);
+  --landing-elevated-fill: rgb(255 255 255 / 0.7);
+  --landing-elevated-border: rgb(0 0 0 / 0.08);
+  --landing-chip-fill: rgb(255 255 255 / 0.4);
+  --landing-chip-border: rgb(0 0 0 / 0.06);
+  --landing-chip-strong-fill: rgb(255 255 255 / 0.4);
+  --landing-chip-strong-border: rgb(0 0 0 / 0.08);
+  --landing-hairline: rgb(0 0 0 / 0.06);
+  --landing-hover-surface: rgb(0 0 0 / 0.04);
+
+  --landing-blur-content: 8px;
+  --landing-blur-elevated: 12px;
+  --landing-inner-highlight: linear-gradient(to bottom, rgb(255 255 255 / 0.7), transparent);
+  --landing-elevated-shadow:
+    0 24px 64px -24px rgba(28, 29, 30, 0.18), 0 0 80px -24px rgba(255, 208, 47, 0.15);
+
+  --landing-cta-shadow: 3px 3px 0 rgba(28, 29, 30, 0.35);
+  --landing-cta-shadow-hover: 4px 4px 0 rgba(28, 29, 30, 0.35);
+  --landing-cta-shadow-active: 1px 1px 0 rgba(28, 29, 30, 0.35);
+
+  --landing-meta: color-mix(in oklab, #1c1c1e 50%, transparent);
+  --landing-meta-strong: color-mix(in oklab, #1c1c1e 70%, transparent);
+  --landing-accent-text: #a16207;
+
+  --landing-wash-bg: #f6f4ee;
+  --landing-wash-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 208, 47, 0.12), transparent 60%),
+    radial-gradient(90% 60% at 85% 110%, rgba(66, 98, 255, 0.08), transparent 60%);
+  --landing-selection-bg: rgb(255 208 47 / 0.4);
+  --landing-selection-text: #1c1c1e;
+
+  --landing-chart-grid: rgb(0 0 0 / 0.08);
+  --landing-chart-cursor-fill: rgb(0 0 0 / 0.05);
+}
+
+/* ------------------------------------------------------------------ */
+/* PullCord — hangs from the header's top edge; the knob rests in the  */
+/* header cluster before the compact Get Started (DESIGN §13.3). The    */
+/* fixed wrapper is contained by the header's backdrop-filter, so it    */
+/* rides with the sticky header.                                        */
+/* ------------------------------------------------------------------ */
+
+.landing-pullcord {
+  --pullcord-top: -120px;
+  --pullcord-right: 9rem;
+  --pullcord-z: 45;
+  --pullcord-ink: rgb(255 255 255 / 0.3);
+}
+
+@media (min-width: 1024px) {
+  .landing-pullcord {
+    --pullcord-right: 14rem;
+  }
+}
+
+[data-landing-theme='light'] .landing-pullcord {
+  --pullcord-ink: rgb(28 29 30 / 0.35);
+}
+
+/* Compact icon-button states on the knob (DESIGN §6 glass-card hover, §13.3).
+   The knob is already round; the hover fill uses the scoped hover surface and
+   the focus ring is the landing's yellow ring (DESIGN §10). */
+[data-landing-theme] .pullcord .pullcord-knob {
+  transition: background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-landing-theme] .pullcord .pullcord-knob:hover {
+  background: var(--landing-hover-surface);
+}
+
+[data-landing-theme] .pullcord .pullcord-knob:focus-visible {
+  outline: 2px solid rgb(255 208 47 / 0.7);
+  outline-offset: -9px;
+}
+
+/* ------------------------------------------------------------------ */
+/* JellyBlobMascot re-skin — muted steel/ink palette so the mascot is a */
+/* subtle professional accent, never a toy (DESIGN §12 accent budget).  */
+/* The feral-blob defaults are violet on :root; a nearer ancestor       */
+/* (the .landing-mascot wrapper) overrides them for its subtree only.   */
+/* ------------------------------------------------------------------ */
+
+.landing-mascot {
+  --jelly-body-top: #3f4a5c;
+  --jelly-body-mid: #2e3747;
+  --jelly-body-deep: #232b39;
+  --jelly-body-rim: #4e5a6e;
+  --jelly-outline: #5c6a80;
+  --jelly-outline-light: #6e7d94;
+  --jelly-arm-light: #465064;
+  --jelly-arm-mid: #39424f;
+  --jelly-arm-deep: #2b3240;
+  --jelly-cheek-light: rgb(255 208 47 / 0.5);
+  --jelly-cheek: rgb(255 208 47 / 0.35);
+  --jelly-cheek-deep: #d49c00;
+  --jelly-eye-light: #141a26;
+  --jelly-eye: #0d1119;
+  --jelly-eye-deep: #070a10;
+  --jelly-belly-glow: rgb(66 98 255 / 0.18);
+  --jelly-eye-sparkle: #ffd02f;
+  --jelly-shadow: #4a4a52;
+  --jelly-shadow-light: #6b6b75;
+}

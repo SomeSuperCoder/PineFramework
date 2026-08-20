@@ -64,3 +64,11 @@ export const pressTap: TargetAndTransition = {
   y: 0,
   boxShadow: '0px 0px 0px rgba(0,0,0,0)',
 };
+
+/** whileHover glass micro-upgrade — scale ~1.01, no lift, no toy physics:
+ *  base + enter (DESIGN §7). The border/fill micro-shift rides the
+ *  theme-remapped `--landing-hover-surface` via Tailwind classes (§6, §13). */
+export const glassHover: TargetAndTransition = {
+  scale: 1.01,
+  transition: { duration: DUR_BASE, ease: EASE_ENTER },
+};

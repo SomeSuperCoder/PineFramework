@@ -123,6 +123,9 @@
       "bufferutil",
       "esbuild",
       "utf-8-validate"
-    ]
+    ],
+    "overrides": {
+      "motion": "^13.1.1"
+    }
   }
 }
