@@ -78,6 +78,9 @@ function sanitize(raw: Partial<BacktestSettings>): Partial<BacktestSettings> {
 
   const positiveNumber = (v: unknown): number | undefined =>
     typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+  // daysBack must be integral: fractional days are meaningless for a candle-count slider.
+  const positiveInteger = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : undefined;
   const string = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
   const capital = positiveNumber(raw.initialCapital);
@@ -86,7 +89,7 @@ function sanitize(raw: Partial<BacktestSettings>): Partial<BacktestSettings> {
   if (timeframe !== undefined) out.timeframe = timeframe;
   const symbol = string(raw.symbol);
   if (symbol !== undefined) out.symbol = symbol;
-  const daysBack = positiveNumber(raw.daysBack);
+  const daysBack = positiveInteger(raw.daysBack);
   if (daysBack !== undefined) out.daysBack = daysBack;
   const startDate = string(raw.startDate);
   if (startDate !== undefined) out.startDate = startDate;

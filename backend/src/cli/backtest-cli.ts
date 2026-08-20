@@ -135,12 +135,14 @@ function parseArgs(argv: string[]): CliOptions {
       options.defaultQty = parseFloat(args[i] ?? '');
     } else if (arg === '--pyramiding') {
       i++;
-      options.pyramiding = parseInt(args[i] ?? '', 10);
+      // Raw Number — NaN (non-numeric or trailing-garbage input like "12abc")
+      // is rejected downstream by normalizeExplicitOverride ("must be a finite number").
+      options.pyramiding = Number(args[i] ?? '');
     } else if (arg === '--max-bars') {
       i++;
-      // Raw parseInt — NaN is caught by validateOptions (positive-int guard),
+      // Raw Number — NaN is caught by validateOptions (positive-int guard),
       // same pattern as the other numeric flags.
-      options.maxBars = parseInt(args[i] ?? '', 10);
+      options.maxBars = Number(args[i] ?? '');
     } else if (!arg.startsWith('-')) {
       if (positionalCount === 0) {
         options.scriptPath = arg;

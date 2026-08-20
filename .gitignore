@@ -21,6 +21,7 @@ frontend/e2e/*.png
 frontend/e2e/artifacts/
 frontend/vite.config.ts.timestamp-*
 backend/strategy-state.json
+backend/close-attempts.json
 strategy-state.json
 backend/feed-state.json
 feed-state.json
