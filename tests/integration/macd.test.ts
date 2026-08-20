@@ -64,19 +64,19 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
   }));
 }
 
-function executeMacd(source: string, barCount = 100) {
+async function executeMacd(source: string, barCount = 100) {
   const { ast } = parse(source);
   const compileResult = compile(ast);
   const engine = new ExecutionEngine(compileResult);
   const bars = createBars(barCount);
   const contexts = barsToContext(bars);
-  return { ast, compileResult, engine, result: engine.executeBars(contexts) };
+  return { ast, compileResult, engine, result: await engine.executeBars(contexts) };
 }
 
 describe('Integration: MACD Indicator', () => {
   describe('Execution (real macd.pine)', () => {
-    it('should execute real macd.pine and produce non-null MACD data', () => {
-      const { result } = executeMacd(macdSource);
+    it('should execute real macd.pine and produce non-null MACD data', async () => {
+      const { result } = await executeMacd(macdSource);
       expect(result.success).toBe(true);
       expect(result.error).toBeUndefined();
       expect(result.overlay).toBe(false);
@@ -94,8 +94,8 @@ describe('Integration: MACD Indicator', () => {
       expect(totalNonNull).toBeGreaterThan(0);
     });
 
-    it('should execute simplified macd without switch/simple', () => {
-      const { result } = executeMacd(SIMPLE_MACD);
+    it('should execute simplified macd without switch/simple', async () => {
+      const { result } = await executeMacd(SIMPLE_MACD);
       expect(result.success).toBe(true);
       expect(result.overlay).toBe(false);
 
@@ -110,7 +110,7 @@ describe('Integration: MACD Indicator', () => {
       expect(totalNonNull).toBeGreaterThan(0);
     });
 
-    it('should execute MACD using input.source', () => {
+    it('should execute MACD using input.source', async () => {
       const inputSourceMacd = `//@version=6
 indicator("MACD Test", overlay = false)
 sourceInput = input.source(close, "Source")
@@ -125,7 +125,7 @@ hist = macd - signal
 plot(hist, "Histogram", color.green, style = plot.style_columns)
 plot(macd, "MACD", color.blue)
 plot(signal, "Signal", color.orange)`;
-      const { result } = executeMacd(inputSourceMacd);
+      const { result } = await executeMacd(inputSourceMacd);
       expect(result.success).toBe(true);
       const outputKeys = Array.from(result.outputs.keys());
       let totalNonNull = 0;
@@ -138,7 +138,7 @@ plot(signal, "Signal", color.orange)`;
       expect(totalNonNull).toBeGreaterThan(0);
     });
 
-    it('should execute MACD using switch in function', () => {
+    it('should execute MACD using switch in function', async () => {
       const switchSource = `//@version=6
 indicator("MACD Switch Test", overlay = false)
 fastLen = input.int(12, "Fast length")
@@ -159,7 +159,7 @@ hist = macd - signal
 plot(hist, "Histogram", color.green, style = plot.style_columns)
 plot(macd, "MACD", color.blue)
 plot(signal, "Signal", color.orange)`;
-      const { result } = executeMacd(switchSource);
+      const { result } = await executeMacd(switchSource);
       expect(result.success).toBe(true);
       const outputKeys = Array.from(result.outputs.keys());
       let totalNonNull = 0;
@@ -174,20 +174,20 @@ plot(signal, "Signal", color.orange)`;
   });
 
   describe('Parse and Compile (real macd.pine)', () => {
-    it('should parse test_indicators/macd.pine without errors', () => {
+    it('should parse test_indicators/macd.pine without errors', async () => {
       const { ast } = parse(macdSource);
       expect(ast).toBeDefined();
       expect(ast.scriptKind).toBe('indicator');
       expect(ast.scriptName).toBe('Moving Average Convergence Divergence');
     });
 
-    it('should compile macd.pine with overlay=false', () => {
+    it('should compile macd.pine with overlay=false', async () => {
       const { ast } = parse(macdSource);
       const compileResult = compile(ast);
       expect(compileResult.ir.overlay).toBe(false);
     });
 
-    it('should parse and compile without throwing', () => {
+    it('should parse and compile without throwing', async () => {
       expect(() => {
         const { ast } = parse(macdSource);
         compile(ast);
@@ -196,8 +196,8 @@ plot(signal, "Signal", color.orange)`;
   });
 
   describe('Execution (simplified MACD with ta.ema)', () => {
-    it('should execute with expected output keys', () => {
-      const { result } = executeMacd(SIMPLE_MACD);
+    it('should execute with expected output keys', async () => {
+      const { result } = await executeMacd(SIMPLE_MACD);
 
       expect(result.success).toBe(true);
       expect(result.error).toBeUndefined();
@@ -215,8 +215,8 @@ plot(signal, "Signal", color.orange)`;
       expect(hasSignal).toBe(true);
     });
 
-    it('should produce non-null values after warmup period', () => {
-      const { result } = executeMacd(SIMPLE_MACD);
+    it('should produce non-null values after warmup period', async () => {
+      const { result } = await executeMacd(SIMPLE_MACD);
 
       expect(result.success).toBe(true);
 
@@ -238,8 +238,8 @@ plot(signal, "Signal", color.orange)`;
       }
     });
 
-    it('should have MACD values that oscillate around zero', () => {
-      const { result } = executeMacd(SIMPLE_MACD);
+    it('should have MACD values that oscillate around zero', async () => {
+      const { result } = await executeMacd(SIMPLE_MACD);
 
       const outputKeys = Array.from(result.outputs.keys());
       const macdKey = outputKeys.find((k) => k.includes('MACD'));
@@ -263,18 +263,18 @@ plot(signal, "Signal", color.orange)`;
   });
 
   describe('Overlay Flag', () => {
-    it('should have overlay=false in execution result', () => {
-      const { result } = executeMacd(SIMPLE_MACD);
+    it('should have overlay=false in execution result', async () => {
+      const { result } = await executeMacd(SIMPLE_MACD);
       expect(result.overlay).toBe(false);
     });
 
-    it('should have overlay=false in compiled script', () => {
+    it('should have overlay=false in compiled script', async () => {
       const { ast } = parse(SIMPLE_MACD);
       const compileResult = compile(ast);
       expect(compileResult.ir.overlay).toBe(false);
     });
 
-    it('should have overlay=true for overlay indicator', () => {
+    it('should have overlay=true for overlay indicator', async () => {
       const overlaySource = `//@version=6
 indicator("Overlay Test", overlay = true)
 plot(close, "Close")`;
@@ -284,7 +284,7 @@ plot(close, "Close")`;
       expect(compileResult.ir.overlay).toBe(true);
     });
 
-    it('should default overlay=false for indicators', () => {
+    it('should default overlay=false for indicators', async () => {
       const defaultSource = `//@version=6
 indicator("Default Test")
 plot(close, "Close")`;

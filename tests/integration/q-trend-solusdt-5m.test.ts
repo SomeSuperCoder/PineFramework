@@ -115,13 +115,13 @@ const REFERENCE: Array<{
 ];
 
 describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
-  let result: ReturnType<ExecutionEngine['executeBars']>;
+  let result: Awaited<ReturnType<ExecutionEngine['executeBars']>>;
   let bars: ReturnType<typeof loadBars>;
   let getVar: (name: string) => any[] | null;
   let getShape: (idx: number) => Array<{ text: string; style: string; location: string }>;
   let barIndexByTime: Map<number, number>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     bars = loadBars();
 
     const source = fs.readFileSync('./test_indicators/q-trend.pine', 'utf-8');
@@ -155,7 +155,7 @@ describe('Q-Trend – SOLUSDT 5m (July 17 2026)', () => {
       ),
     }));
 
-    result = engine.executeBars(contexts);
+    result = await engine.executeBars(contexts);
 
     getVar = (name: string): any[] | null => {
       const b = (engine as any).globalScope.variables.get(name);

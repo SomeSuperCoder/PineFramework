@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,7 +67,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   if (!result.success) console.log('executeBars error:', result.error);
   return { engine, bars, result };
 }
@@ -75,18 +75,18 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
 describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
   const source = fs.readFileSync('./test_indicators/zero-lag-signals-for-loop.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -106,9 +106,9 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     expect(result.success).toBe(true);
   });
 
-  it('produces expected plot output keys', () => {
+  it('produces expected plot output keys', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBeGreaterThanOrEqual(1);
@@ -118,9 +118,9 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     console.log('Output keys:', keys);
   });
 
-  it('has non-null values after warmup period', () => {
+  it('has non-null values after warmup period', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     const warmup = 250;
@@ -138,9 +138,9 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     expect(basisSeries.values.length).toBe(500);
   });
 
-  it('values stay within reasonable bounds', () => {
+  it('values stay within reasonable bounds', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const basisKey = Array.from(result.outputs.keys()).find((k) => k.includes('Zero Lag Basis'));
     expect(basisKey).toBeDefined();
@@ -155,9 +155,9 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     }
   });
 
-  it('trend changes over time', () => {
+  it('trend changes over time', async () => {
     const bars = createTrendingBars(500, 80, 99);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     // Check that the zero lag basis line changes over time (not flat)
@@ -171,16 +171,16 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     expect(uniqueRounded.size).toBeGreaterThan(5);
   });
 
-  it('produces shapes for trend signals', () => {
+  it('produces shapes for trend signals', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes).toBeDefined();
   });
 
-  it('produces bar colors when paint_candles is true (default)', () => {
+  it('produces bar colors when paint_candles is true (default)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     const warmup = 250;
@@ -188,16 +188,16 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     expect(coloredBars.length).toBeGreaterThan(0);
   });
 
-  it('has overlay=true in execution result and compiled script', () => {
+  it('has overlay=true in execution result and compiled script', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.overlay).toBe(true);
   });
 
-  it('has zero lag basis with plot colors (trend-based)', () => {
+  it('has zero lag basis with plot colors (trend-based)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.plotColors).toBeDefined();
     const basisColorKey = Array.from(result.plotColors!.keys()).find((k) =>
@@ -216,28 +216,28 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     }
   });
 
-  it('generates fills between basis and price', () => {
+  it('generates fills between basis and price', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.fills).toBeDefined();
     expect(result.fills!.length).toBeGreaterThanOrEqual(1);
     console.log('Fills:', JSON.stringify(result.fills));
   });
 
-  it('bgcolor data is present when show_bg_lines is false (default)', () => {
+  it('bgcolor data is present when show_bg_lines is false (default)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     // bgcolor data should exist (may be empty/null since show_bg_lines defaults to false)
     expect(result.bgcolor).toBeDefined();
   });
 
-  it('handles the preset_config switching correctly', () => {
+  it('handles the preset_config switching correctly', async () => {
     // Test with "Fast Response" preset by modifying the source
     // Since we can't pass inputs easily, check that the default path produces reasonable values
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     // Default preset length=50 should produce reasonable zero lag basis
     const basisKey = Array.from(result.outputs.keys()).find((k) => k.includes('Zero Lag Basis'));
@@ -252,11 +252,11 @@ describe('Zero Lag Signals For Loop [QuantAlgo]', () => {
     }
   });
 
-  it('score oscillates between positive and negative values', () => {
+  it('score oscillates between positive and negative values', async () => {
     // We can't directly verify the internal `score` variable, but we can check
     // that the trend changes by verifying both bullish and bearish bar colors exist
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     // Bar colors should have both uptrend and downtrend colors

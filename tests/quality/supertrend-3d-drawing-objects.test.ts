@@ -35,24 +35,24 @@ function barsToContext(bars: Bar[]) {
 }
 
 describe('Supertrend 3D drawing objects', () => {
-  let result: ReturnType<ExecutionEngine['executeBars']>;
+  let result: Awaited<ReturnType<ExecutionEngine['executeBars']>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const { ast } = parse(SOURCE);
     const cr = compile(ast);
     const engine = new ExecutionEngine(cr);
-    result = engine.executeBars(barsToContext(createBars(120)));
+    result = await engine.executeBars(barsToContext(createBars(120)));
   });
 
-  it('parses and executes without errors', () => {
+  it('parses and executes without errors', async () => {
     expect(result.success).toBe(true);
   });
 
-  it('supertrend-3d overlay is false', () => {
+  it('supertrend-3d overlay is false', async () => {
     expect(result.overlay).toBe(false);
   });
 
-  it('supertrend-3d produces line objects on last bar', () => {
+  it('supertrend-3d produces line objects on last bar', async () => {
     // The script draws lines inside `if barstate.islast`
     // result.lines should be an array of LineEntry objects
     expect(result.lines).toBeDefined();
@@ -76,7 +76,7 @@ describe('Supertrend 3D drawing objects', () => {
     console.log('Sample line:', JSON.stringify(firstLine, null, 2));
   });
 
-  it('supertrend-3d produces linefill objects on last bar', () => {
+  it('supertrend-3d produces linefill objects on last bar', async () => {
     // The script draws linefills inside `if barstate.islast`
     // result.linefills should be an array of LinefillEntry objects
     expect(result.linefills).toBeDefined();
@@ -100,7 +100,7 @@ describe('Supertrend 3D drawing objects', () => {
     console.log('Sample linefill:', JSON.stringify(firstLinefill, null, 2));
   });
 
-  it('supertrend-3d produces label objects on last bar', () => {
+  it('supertrend-3d produces label objects on last bar', async () => {
     // The script draws labels inside `if barstate.islast`
     // result.labels should be an array of LabelEntry objects
     expect(result.labels).toBeDefined();

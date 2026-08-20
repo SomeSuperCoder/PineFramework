@@ -58,7 +58,9 @@ export interface BacktestRunnerResult {
  * Returns the raw execution result plus pre-computed contexts for
  * callers that need them (e.g. CLI).
  */
-export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRunnerResult {
+export async function runBacktestPipeline(
+  options: BacktestRunnerOptions,
+): Promise<BacktestRunnerResult> {
   const { script, bars } = options;
   // A2 (defect 2): the legacy hard cap is now the DEFAULT — a run opts into a
   // higher cap via options.maxBars (CLI --max-bars) instead of editing a literal.
@@ -84,14 +86,20 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
   try {
     parseResult = parse(script);
   } catch (err) {
-    return { success: false, error: `Parse error: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      error: `Parse error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 
   let compileResult;
   try {
     compileResult = compile(parseResult.ast);
   } catch (err) {
-    return { success: false, error: `Compile error: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      success: false,
+      error: `Compile error: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 
   if (compileResult.ir.scriptKind !== 'strategy') {
@@ -130,10 +138,15 @@ export function runBacktestPipeline(options: BacktestRunnerOptions): BacktestRun
     volume: createSeries('volume', [bar.volume]),
   }));
 
-  // Execute
-  const execResult = execEngine.executeBars(contexts);
+  // Execute — B1 made executeBars async (yields to the event loop between
+  // batches); the pipeline MUST await it or the result is a Promise and the
+  // success check below would always see a failed run.
+  const execResult = await execEngine.executeBars(contexts);
   if (!execResult.success) {
-    const msg = execResult.error instanceof Object && execResult.error.message ? execResult.error.message : (execResult.error ?? 'Execution failed');
+    const msg =
+      execResult.error instanceof Object && execResult.error.message
+        ? execResult.error.message
+        : (execResult.error ?? 'Execution failed');
     return { success: false, error: msg as string };
   }
 
@@ -172,9 +185,7 @@ export function computeBacktestMetrics(
   const monthlyReturns = computeMonthlyReturns(equityPoints);
   const monthlyReturnsRaw = computeMonthlyReturnsRaw(equityPoints);
   const buyHoldReturn =
-    bars.length >= 2
-      ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100
-      : 0;
+    bars.length >= 2 ? ((bars[bars.length - 1]!.close - bars[0]!.close) / bars[0]!.close) * 100 : 0;
 
   return {
     trades,
@@ -278,9 +289,7 @@ function computeMonthlyReturnsRaw(
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     if (!monthly[key]) {
       monthly[key] =
-        prevMonthEquity > 0
-          ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100
-          : 0;
+        prevMonthEquity > 0 ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100 : 0;
       prevMonthEquity = point.equity;
     }
   }

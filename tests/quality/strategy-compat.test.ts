@@ -67,11 +67,11 @@ function makeVBars(count = 100): Bar[] {
 describe('strategy member-access error diagnostics (fixed)', () => {
   const engine = createPineScriptEngine();
 
-  it('strategy.<unknown member> reports the member, not the namespace', () => {
+  it('strategy.<unknown member> reports the member, not the namespace', async () => {
     // Probe moved off `equity`: `strategy.equity` becomes a REAL member under the
     // contract suites below, so this diagnostic is locked on a genuinely-unknown
     // member that must keep reporting the member name, never the namespace.
-    const result = engine.execute(
+    const result = await engine.execute(
       '//@version=6\nstrategy("S", overlay = true)\nplot(strategy.not_a_real_member)',
       makeVBars(),
     );
@@ -84,8 +84,8 @@ describe('strategy member-access error diagnostics (fixed)', () => {
     expect(message).not.toContain("Variable 'strategy' is not defined");
   });
 
-  it('a truly-undefined bare variable still reports that variable name', () => {
-    const result = engine.execute(
+  it('a truly-undefined bare variable still reports that variable name', async () => {
+    const result = await engine.execute(
       '//@version=6\nindicator("I")\nplot(name1)',
       makeVBars(),
     );
@@ -101,20 +101,20 @@ describe('strategy member-access error diagnostics (fixed)', () => {
 describe('example-buy-sell-stg.pine compile+execute (CONTRACT — RED until strategy.equity lands)', () => {
   const engine = createPineScriptEngine();
 
-  it('compiles the strategy script to IR', () => {
+  it('compiles the strategy script to IR', async () => {
     // compile() throws CompileError on failure — no errors field on the result.
     const compileResult = engine.compile(STRATEGY_SOURCE);
     expect(compileResult.ir.scriptName).toBe('Example Buy/Sell');
     expect(compileResult.ir.scriptKind).toBe('strategy');
   });
 
-  it('executes the strategy script to completion (CONTRACT — GREEN when strategy.equity is registered)', () => {
+  it('executes the strategy script to completion (CONTRACT — GREEN when strategy.equity is registered)', async () => {
     // RED today: the script evaluates `strategy.equity * 0.10 / close` and
     // `equity` is NOT registered on the strategy namespace, so execution must
     // fail with a message naming `equity`. On RED, the second arg surfaces the
     // full structured error in the failure output — the exact missing-member
     // payload for the implementation. Flips GREEN once the builtin lands.
-    const result = engine.execute(STRATEGY_SOURCE, makeVBars(100));
+    const result = await engine.execute(STRATEGY_SOURCE, makeVBars(100));
 
     expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
   });
@@ -163,12 +163,12 @@ plot(strategy.equity, title = "equity_out")`;
  * precedent) can be exercised. The `setEquitySource` call does NOT exist yet —
  * that is the contract; it fails at runtime today (RED baseline).
  */
-function executeContractEngine(
+async function executeContractEngine(
   source: string,
   bars: Bar[],
   strategyConfig?: Partial<StrategyConfig>,
   equitySource?: () => number,
-): { result: ExecutionResult; engine: ExecutionEngine } {
+): Promise<{ result: ExecutionResult; engine: ExecutionEngine }> {
   const { ast } = parse(source);
   const cr = compile(ast);
   const engine = new ExecutionEngine(cr, strategyConfig);
@@ -177,7 +177,7 @@ function executeContractEngine(
     // ExecutionEngine, OR semantics (injected source fully overrides default).
     engine.setEquitySource(equitySource);
   }
-  const result = engine.executeBars(barsToContexts(bars));
+  const result = await engine.executeBars(barsToContexts(bars));
   return { result, engine };
 }
 
@@ -187,8 +187,8 @@ function equitySeries(result: ExecutionResult): Array<number | null | undefined>
 }
 
 describe('CONTRACT — strategy.equity · EquitySource seam default (Group 1)', () => {
-  it('setEquitySource is callable; default provider reads the strategy engine equity', () => {
-    const { result, engine } = executeContractEngine(CONTRACT_EQUITY_NO_TRADE, makeVBars());
+  it('setEquitySource is callable; default provider reads the strategy engine equity', async () => {
+    const { result, engine } = await executeContractEngine(CONTRACT_EQUITY_NO_TRADE, makeVBars());
 
     expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
     // DEFAULT_STRATEGY_CONFIG.initialCapital; the engine created a StrategyEngine
@@ -204,11 +204,11 @@ describe('CONTRACT — strategy.equity · EquitySource seam default (Group 1)', 
 });
 
 describe('CONTRACT — strategy.equity · injected source wins over engine default (Group 2)', () => {
-  it('setEquitySource(() => 1234.5) returns 1234.5 — injected wins, never ANDs engine PnL', () => {
+  it('setEquitySource(() => 1234.5) returns 1234.5 — injected wins, never ANDs engine PnL', async () => {
     // The script TRADES on the V-shape. If the injected source were AND-ed with
     // the engine default, the series would dip to 9990 after the buy fill
     // (commission). OR semantics: the injected value wins, flat 1234.5.
-    const { result } = executeContractEngine(
+    const { result } = await executeContractEngine(
       CONTRACT_EQUITY_STRATEGY,
       makeVBars(),
       undefined,
@@ -226,8 +226,8 @@ describe('CONTRACT — strategy.equity · injected source wins over engine defau
 });
 
 describe('CONTRACT — strategy.equity · NA fallback without a strategy engine (Group 3)', () => {
-  it('indicator scripts read strategy.equity as NA instead of failing', () => {
-    const { result } = executeContractEngine(CONTRACT_EQUITY_INDICATOR, makeVBars());
+  it('indicator scripts read strategy.equity as NA instead of failing', async () => {
+    const { result } = await executeContractEngine(CONTRACT_EQUITY_INDICATOR, makeVBars());
 
     // CONTRACT — implement to make GREEN: no strategy engine → the builtin
     // returns NA (null/undefined), never an error. RED today: execution fails
@@ -241,7 +241,7 @@ describe('CONTRACT — strategy.equity · NA fallback without a strategy engine 
 });
 
 describe('CONTRACT — strategy.equity · backtest reflects the CORRECTED equity formula (Group 4)', () => {
-  it('open-position bars carry floating PnL; after close, realized folds in (initial + closed + open)', () => {
+  it('open-position bars carry floating PnL; after close, realized folds in (initial + closed + open)', async () => {
     // CORRECTED formula (Director-mandated):
     //   Strategy Equity = Initial Capital + Closed Net Profit + Open Position Profit
     // On an OPEN long with a moved current price:
@@ -254,7 +254,7 @@ describe('CONTRACT — strategy.equity · backtest reflects the CORRECTED equity
     //   bar 36 close 78.4 → floating = (78.4 − 79) × 1 = −0.6 →
     //         CORRECTED plot = 9990 − 0.6 = 9989.4.
     //   RED today: the engine returns realized-only 9990 (floating missing).
-    const { result, engine } = executeContractEngine(
+    const { result, engine } = await executeContractEngine(
       CONTRACT_EQUITY_STRATEGY,
       makeVBars(),
       { commission: 10, commissionType: 'fixed' },

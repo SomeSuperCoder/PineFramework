@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,16 +67,16 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return { engine, bars, result };
 }
 
 describe('Chunk border lookback', () => {
   const source = fs.readFileSync('./test_indicators/zero-lag-signals-for-loop.pine', 'utf-8');
 
-  it('getMaxLookback() reports sufficient lookback for ta.highest', () => {
+  it('getMaxLookback() reports sufficient lookback for ta.highest', async () => {
     const bars = createTrendingBars(500, 80);
-    const { engine, result } = runEngine(source, bars);
+    const { engine, result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const lookback = engine.getMaxLookback();
     console.log('getMaxLookback():', lookback);
@@ -84,17 +84,17 @@ describe('Chunk border lookback', () => {
     expect(lookback).toBeGreaterThanOrEqual(150);
   });
 
-  it('full execution matches partial execution with sufficient context', () => {
+  it('full execution matches partial execution with sufficient context', async () => {
     const allBars = createTrendingBars(400, 80);
 
     // Full execution on all 400 bars
-    const fullResult = runEngine(source, allBars);
+    const fullResult = await runEngine(source, allBars);
     expect(fullResult.result.success).toBe(true);
 
     // Partial execution: 200 new bars + 200 context bars
     const contextBars = allBars.slice(0, 200);
     const newBars = allBars.slice(200);
-    const partialResult = runEngine(source, [...contextBars, ...newBars]);
+    const partialResult = await runEngine(source, [...contextBars, ...newBars]);
     expect(partialResult.result.success).toBe(true);
 
     // Compare outputs for the overlapping region (last 200 bars)
@@ -117,7 +117,7 @@ describe('Chunk border lookback', () => {
     }
   });
 
-  it('runtimeSeriesLookback is tracked for series indexing', () => {
+  it('runtimeSeriesLookback is tracked for series indexing', async () => {
     // Simple script with explicit series indexing
     const script = `
      //@version=5
@@ -128,19 +128,19 @@ describe('Chunk border lookback', () => {
       plot(sum)
     `;
     const bars = createTrendingBars(200, 100);
-    const { engine, result } = runEngine(script, bars);
+    const { engine, result } = await runEngine(script, bars);
     expect(result.success).toBe(true);
     expect(engine.runtimeSeriesLookback).toBeGreaterThanOrEqual(70);
     expect(engine.getMaxLookback()).toBeGreaterThanOrEqual(70);
   });
 
-  it('plotColors boundary region has valid values with sufficient context', () => {
+  it('plotColors boundary region has valid values with sufficient context', async () => {
     const allBars = createTrendingBars(400, 80);
 
     // Execute with full context (200 new + 200 context)
     const contextBars = allBars.slice(0, 200);
     const newBars = allBars.slice(200);
-    const { result } = runEngine(source, [...newBars, ...contextBars]);
+    const { result } = await runEngine(source, [...newBars, ...contextBars]);
     expect(result.success).toBe(true);
 
     // Find the visible basis plot color key

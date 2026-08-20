@@ -122,11 +122,11 @@ plot(close)
 
 describe('Forming Candle Computation', () => {
   describe('computeFormingCandle()', () => {
-    it('should return diff outputs for the forming candle only', () => {
+    it('should return diff outputs for the forming candle only', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -137,11 +137,11 @@ describe('Forming Candle Computation', () => {
       expect(Object.keys(result.diffOutputs).length).toBeGreaterThan(0);
     });
 
-    it('should preserve engine state after forming candle computation', () => {
+    it('should preserve engine state after forming candle computation', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const totalBarsBefore = engine.getMetrics().totalBars;
 
@@ -154,11 +154,11 @@ describe('Forming Candle Computation', () => {
       expect(totalBarsAfter).toBe(totalBarsBefore);
     });
 
-    it('should send post-tick barTimestamps reflecting the tick', () => {
+    it('should send post-tick barTimestamps reflecting the tick', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       const timestampsBefore = result.barTimestamps?.length ?? 0;
 
@@ -175,11 +175,11 @@ describe('Forming Candle Computation', () => {
       expect(result.barTimestamps).toEqual(engine['barTimestamps']);
     });
 
-    it('should return updated output value when OHLCV changes', () => {
+    it('should return updated output value when OHLCV changes', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       // plot() without title defaults to key 'plot'
       const plotKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('plot'));
@@ -196,11 +196,11 @@ describe('Forming Candle Computation', () => {
       }
     });
 
-    it('should re-evaluate indicators correctly with unchanged OHLCV', () => {
+    it('should re-evaluate indicators correctly with unchanged OHLCV', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const sameCtx = makeFormingContext(bars, lastBar.close);
@@ -212,7 +212,7 @@ describe('Forming Candle Computation', () => {
       expect(engine.barTimestamps.length).toBe(bars.length);
     });
 
-    it('should handle forming candle before any historical bars', () => {
+    it('should handle forming candle before any historical bars', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const formingCtx = {
         barIndex: 0,
@@ -230,11 +230,11 @@ describe('Forming Candle Computation', () => {
       expect(result.isDiff).toBe(true);
     });
 
-    it('should handle multiple consecutive forming candle updates', () => {
+    it('should handle multiple consecutive forming candle updates', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       for (let tick = 0; tick < 5; tick++) {
@@ -246,11 +246,11 @@ describe('Forming Candle Computation', () => {
       }
     });
 
-    it('should not corrupt state when followed by a new bar', () => {
+    it('should not corrupt state when followed by a new bar', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -272,11 +272,11 @@ describe('Forming Candle Computation', () => {
       expect(newBarResult.barTimestamps!.length).toBe(bars.length + 1);
     });
 
-    it('should preserve var state across forming candle updates', () => {
+    it('should preserve var state across forming candle updates', async () => {
       const engine = compileScript(VAR_SCRIPT);
       const bars = makeBars(5, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       // plot(counter) without title creates output key 'plot'
       const counterOutput = engine.getOutput('plot');
@@ -293,11 +293,11 @@ describe('Forming Candle Computation', () => {
       expect(counterAfter!.last()).toBe(5);
     });
 
-    it('should return empty diff shapes when no new shapes created', () => {
+    it('should return empty diff shapes when no new shapes created', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -309,11 +309,11 @@ describe('Forming Candle Computation', () => {
       expect(result.diffLabels.length).toBe(0);
     });
 
-    it('should produce correct barIndex in result', () => {
+    it('should produce correct barIndex in result', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -322,11 +322,11 @@ describe('Forming Candle Computation', () => {
       expect(result.barIndex).toBe(bars.length - 1);
     });
 
-    it('should work with multi-plot scripts', () => {
+    it('should work with multi-plot scripts', async () => {
       const engine = compileScript(MULTI_PLOT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -337,11 +337,11 @@ describe('Forming Candle Computation', () => {
       expect(outputKeys.length).toBeGreaterThan(0);
     });
 
-    it('should handle EMA correctly with forming candle', () => {
+    it('should handle EMA correctly with forming candle', async () => {
       const engine = compileScript(EMA_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       // plot() without title defaults to key 'plot'
       const plotKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('plot'));
@@ -354,11 +354,11 @@ describe('Forming Candle Computation', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should include alert triggers during forming candle computation (suppressed at gateway level)', () => {
+    it('should include alert triggers during forming candle computation (suppressed at gateway level)', async () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -369,11 +369,11 @@ describe('Forming Candle Computation', () => {
       expect(result.diffAlertTriggers).toBeDefined();
     });
 
-    it('should set isConfirmed=false on forming candle result when caller sets forming flag', () => {
+    it('should set isConfirmed=false on forming candle result when caller sets forming flag', async () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -383,7 +383,7 @@ describe('Forming Candle Computation', () => {
       expect(result.isConfirmed).toBe(false);
     });
 
-    it('should evaluate barstate.isconfirmed as false during forming candle', () => {
+    it('should evaluate barstate.isconfirmed as false during forming candle', async () => {
       const testSource = `//@version=6
 indicator("BarState Test")
 x = barstate.isconfirmed
@@ -391,7 +391,7 @@ plot(x ? 1 : 0, "confirmed")`;
       const engine = compileScript(testSource);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -403,7 +403,7 @@ plot(x ? 1 : 0, "confirmed")`;
       expect(confirmedOutput).toBe(0);
     });
 
-    it('should evaluate barstate.isconfirmed as true during realtime bar executeRealtimeBar', () => {
+    it('should evaluate barstate.isconfirmed as true during realtime bar executeRealtimeBar', async () => {
       const testSource = `//@version=6
 indicator("BarState Test")
 x = barstate.isconfirmed
@@ -411,7 +411,7 @@ plot(x ? 1 : 0, "confirmed")`;
       const engine = compileScript(testSource);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const newBarCtx = {
@@ -434,11 +434,11 @@ plot(x ? 1 : 0, "confirmed")`;
       expect(series.last()).toBe(1);
     });
 
-    it('should produce alert triggers on bar close (executeRealtimeBar)', () => {
+    it('should produce alert triggers on bar close (executeRealtimeBar)', async () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const newBarCtx = {
@@ -461,7 +461,7 @@ plot(x ? 1 : 0, "confirmed")`;
       expect(triggers!.length).toBeGreaterThan(0);
     });
 
-    it('should include diffBgcolor in forming candle result when script uses bgcolor()', () => {
+    it('should include diffBgcolor in forming candle result when script uses bgcolor()', async () => {
       const bgcolorScript = `//@version=6
 indicator("Bgcolor Test")
 isUp = close > open
@@ -471,7 +471,7 @@ plot(close)
       const engine = compileScript(bgcolorScript);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -484,7 +484,7 @@ plot(close)
       expect(result.diffBgcolor!.length).toBeGreaterThan(0);
     });
 
-    it('should include diffPlotColors in forming candle result when plot uses per-bar colors', () => {
+    it('should include diffPlotColors in forming candle result when plot uses per-bar colors', async () => {
       const colorScript = `//@version=6
 indicator("Plot Color Test")
 isUp = close > open
@@ -493,7 +493,7 @@ plot(close, color=isUp ? color.green : color.red)
       const engine = compileScript(colorScript);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const formingCtx = makeFormingContext(bars, lastBar.close + 5);
@@ -504,11 +504,11 @@ plot(close, color=isUp ? color.green : color.red)
       expect(Object.keys(result.diffPlotColors!).length).toBeGreaterThan(0);
     });
 
-    it('should return correct error on execution failure', () => {
+    it('should return correct error on execution failure', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const bars = makeBars(3, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const formingCtx = {
         barIndex: 2,
@@ -527,11 +527,11 @@ plot(close, color=isUp ? color.green : color.red)
   });
 
   describe('Stale alert suppression (lastConfirmedTimestamp)', () => {
-    it('should treat a confirmed bar with the same timestamp as the last historical bar as stale', () => {
+    it('should treat a confirmed bar with the same timestamp as the last historical bar as stale', async () => {
       const engine = compileScript(ALERT_SCRIPT);
       const bars = makeBars(15, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastBar = bars[bars.length - 1]!;
       const lastTimestamp = lastBar.timestamp;
@@ -556,10 +556,10 @@ plot(close, color=isUp ? color.green : color.red)
       expect(result.success).toBe(true);
     });
 
-    it('FormingCandleManager.confirm() should return isConfirmed=false for stale bar', () => {
+    it('FormingCandleManager.confirm() should return isConfirmed=false for stale bar', async () => {
       const bars: TestBar[] = makeBars(15, 100, 1000000);
       const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
-      const initResult = session.initialize();
+      const initResult = await session.initialize();
       expect(initResult.success).toBe(true);
 
       const lastBar = bars[bars.length - 1]!;
@@ -572,16 +572,16 @@ plot(close, color=isUp ? color.green : color.red)
         volume: lastBar.volume,
       };
 
-      const result = session.appendOrUpdateBar(staleBar, true);
+      const result = await session.appendOrUpdateBar(staleBar, true);
       expect(result.success).toBe(true);
       // Stale bar must NOT be marked as confirmed
       expect(result.isConfirmed).toBe(false);
     });
 
-    it('FormingCandleManager.confirm() should return isConfirmed=true for a genuinely new bar', () => {
+    it('FormingCandleManager.confirm() should return isConfirmed=true for a genuinely new bar', async () => {
       const bars: TestBar[] = makeBars(15, 100, 1000000);
       const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
-      const initResult = session.initialize();
+      const initResult = await session.initialize();
       expect(initResult.success).toBe(true);
 
       const lastBar = bars[bars.length - 1]!;
@@ -594,15 +594,15 @@ plot(close, color=isUp ? color.green : color.red)
         volume: 1200,
       };
 
-      const result = session.appendOrUpdateBar(newBar, true);
+      const result = await session.appendOrUpdateBar(newBar, true);
       expect(result.success).toBe(true);
       expect(result.isConfirmed).toBe(true);
     });
 
-    it('should not produce alert triggers for stale bars that duplicate historical data', () => {
+    it('should not produce alert triggers for stale bars that duplicate historical data', async () => {
       const bars: TestBar[] = makeBars(15, 100, 1000000);
       const session = new ScriptSession(ALERT_SCRIPT, 'BTCUSDT', '60', bars);
-      session.initialize();
+      await session.initialize();
 
       const lastBar = bars[bars.length - 1]!;
       const staleBar: TestBar = {
@@ -614,7 +614,7 @@ plot(close, color=isUp ? color.green : color.red)
         volume: lastBar.volume,
       };
 
-      const result = session.appendOrUpdateBar(staleBar, true);
+      const result = await session.appendOrUpdateBar(staleBar, true);
       expect(result.isConfirmed).toBe(false);
       // The stale path returns forming candle output — no full alert triggers dispatched
       expect(result.formingCandle).toBe(true);

@@ -44,13 +44,14 @@ export function parseAndCompile(source: string) {
   return compileSource(ast);
 }
 
-export function executeScript(
+export async function executeScript(
   source: string,
   bars: import('./language/runtime/execution-engine.js').ExecutionContext[],
-) {
+  token?: import('./language/runtime/execution-engine.js').CancellationToken,
+): Promise<import('./language/runtime/execution-engine.js').ExecutionResult> {
   const result = parseAndCompile(source);
   const engine = new ExecutionEngineImpl(result);
-  return engine.executeBars(bars);
+  return engine.executeBars(bars, token);
 }
 
 export function createDataEngine(

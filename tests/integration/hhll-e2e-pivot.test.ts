@@ -10,7 +10,7 @@ import { createSeries } from '../../src/language/runtime/series.js';
 describe('HHLL End-to-End Pivot Test', () => {
   const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
 
-  it('detects pivots and produces labels with controlled data', () => {
+  it('detects pivots and produces labels with controlled data', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -92,7 +92,7 @@ describe('HHLL End-to-End Pivot Test', () => {
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     expect(result.success).toBe(true);
 
     console.log(`\n=== RESULTS with controlled pivot data ===`);
@@ -113,7 +113,7 @@ describe('HHLL End-to-End Pivot Test', () => {
     expect(result.labels?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it('debugs valuewhen', () => {
+  it('debugs valuewhen', async () => {
     const testSrc = `//@version=6
 indicator("ValueWhenTest")
 pl = ta.pivotlow(2, 2)
@@ -187,7 +187,7 @@ plot(prevPl, "prevPl")`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     expect(result.success).toBe(true);
 
     console.log(`\n=== valuewhen Debug ===`);

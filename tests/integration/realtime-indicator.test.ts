@@ -94,11 +94,11 @@ rsiValue = ta.rsi(close, 14)
 plot(rsiValue, "RSI")
 `;
 
-    it('should compute RSI diff outputs without corrupting engine state', () => {
+    it('should compute RSI diff outputs without corrupting engine state', async () => {
       const engine = compileScript(RSI_SCRIPT);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
         k.toUpperCase().includes('RSI'),
@@ -147,11 +147,11 @@ plot(rsiValue, "RSI")
       expect(engine.getOutput(rsiKey)!.last()).toBe(beforeRsi);
     });
 
-    it('should produce correct RSI across multiple consecutive forming candle updates', () => {
+    it('should produce correct RSI across multiple consecutive forming candle updates', async () => {
       const engine = compileScript(RSI_SCRIPT);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
         k.toUpperCase().includes('RSI'),
@@ -188,11 +188,11 @@ plot(rsiValue, "RSI")
       }
     });
 
-    it('should maintain correct engine state when forming candle is followed by a new committed bar', () => {
+    it('should maintain correct engine state when forming candle is followed by a new committed bar', async () => {
       const engine = compileScript(RSI_SCRIPT);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       const rsiKey = Array.from(fullResult.outputs.keys()).find((k) =>
         k.toUpperCase().includes('RSI'),
@@ -244,11 +244,11 @@ plot(hmaVal, "HMA")
 plot(atrVal, "ATR")
 `;
 
-    it('should compute HMA and ATR correctly across forming candle updates', () => {
+    it('should compute HMA and ATR correctly across forming candle updates', async () => {
       const engine = compileScript(HMA_ATR_SCRIPT);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       const hmaKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('HMA'))!;
       const atrKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('ATR'))!;
@@ -298,11 +298,11 @@ sarVal = ta.sar(0.02, 0.02, 0.2)
 plot(sarVal, "SAR")
 `;
 
-    it('should compute SAR correctly during forming candle updates', () => {
+    it('should compute SAR correctly during forming candle updates', async () => {
       const engine = compileScript(SAR_SCRIPT);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      const fullResult = engine.executeBars(contexts);
+      const fullResult = await engine.executeBars(contexts);
 
       const sarKey = Array.from(fullResult.outputs.keys()).find((k) => k.includes('SAR'))!;
       expect(sarKey).toBeDefined();

@@ -167,9 +167,9 @@ function createCrossoverBars(): Bar[] {
 
 /** Build a deterministic BacktestOutcome + its toApiResult options (engine
  *  post-merge config — the contract extension surface). */
-function buildOutcome() {
+async function buildOutcome() {
   const bars = createCrossoverBars();
-  const pipeline = runBacktestPipeline({ script: STRATEGY, bars });
+  const pipeline = await runBacktestPipeline({ script: STRATEGY, bars });
   if (!pipeline.success || !pipeline.engine) {
     throw new Error('runBacktestPipeline failed to produce an engine');
   }
@@ -189,8 +189,8 @@ function buildOutcome() {
 
 describe('backtest glue parity (task 5.1)', () => {
   describe('API parity', () => {
-    it('toApiResult reproduces the captured API golden fixture + the contract extension', () => {
-      const { outcome, opts } = buildOutcome();
+    it('toApiResult reproduces the captured API golden fixture + the contract extension', async () => {
+      const { outcome, opts } = await buildOutcome();
       const actual = toApiResult(outcome, opts);
       const expected = loadFixture(API_FIXTURE);
       // Pre-extension shape preserved byte-for-byte (subset match ignores the
@@ -204,8 +204,8 @@ describe('backtest glue parity (task 5.1)', () => {
   });
 
   describe('CLI parity', () => {
-    it('toCliSymbolResult deep-equals the captured CLI golden fixture', () => {
-      const { outcome } = buildOutcome();
+    it('toCliSymbolResult deep-equals the captured CLI golden fixture', async () => {
+      const { outcome } = await buildOutcome();
       const actual = toCliSymbolResult(outcome);
       const expected = loadFixture(CLI_FIXTURE);
       expect(actual).toEqual(expected);
@@ -213,8 +213,8 @@ describe('backtest glue parity (task 5.1)', () => {
   });
 
   describe('Auto-select parity', () => {
-    it('toAutoSelectMetrics copies the 8-field subset verbatim from outcome.metrics', () => {
-      const { outcome } = buildOutcome();
+    it('toAutoSelectMetrics copies the 8-field subset verbatim from outcome.metrics', async () => {
+      const { outcome } = await buildOutcome();
       const expected = {
         sharpeRatio: outcome.metrics.sharpeRatio,
         profitFactor: outcome.metrics.profitFactor,

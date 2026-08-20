@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,25 +67,25 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  return { engine, bars, result: engine.executeBars(contexts) };
+  return { engine, bars, result: await engine.executeBars(contexts) };
 }
 
 describe('B-Xtrender @Puppytherapy', () => {
   const source = fs.readFileSync('./test_indicators/bxtrender.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully with overlay=false', () => {
+  it('compiles successfully with overlay=false', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
     expect(compiled.ir.overlay).toBe(false);
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -104,17 +104,17 @@ describe('B-Xtrender @Puppytherapy', () => {
     expect(result.success).toBe(true);
   });
 
-  it('produces 6 output series (6 plot calls)', () => {
+  it('produces 6 output series (6 plot calls)', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBe(6);
   });
 
-  it('has expected output key names', () => {
+  it('has expected output key names', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.some((k) => k.includes('B-Xtrender Osc.'))).toBe(true);
@@ -123,9 +123,9 @@ describe('B-Xtrender @Puppytherapy', () => {
     expect(keys.some((k) => k.includes('B-Xtrender Trend'))).toBe(true);
   });
 
-  it('produces non-null values after warm-up period', () => {
+  it('produces non-null values after warm-up period', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const warmup = 30;
     for (const [, series] of result.outputs) {
@@ -139,9 +139,9 @@ describe('B-Xtrender @Puppytherapy', () => {
     }
   });
 
-  it('short-term histogram oscillates around zero', () => {
+  it('short-term histogram oscillates around zero', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const oscKey = Array.from(result.outputs.keys()).find((k) => k.includes('B-Xtrender Osc.'));
     expect(oscKey).toBeDefined();
@@ -160,9 +160,9 @@ describe('B-Xtrender @Puppytherapy', () => {
     expect(negativeCount).toBeGreaterThan(0);
   });
 
-  it('T3 moving average is smoother than raw shortTermXtrender', () => {
+  it('T3 moving average is smoother than raw shortTermXtrender', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const oscKey = Array.from(result.outputs.keys()).find((k) => k.includes('B-Xtrender Osc.'));
     const colorKey = Array.from(result.outputs.keys()).find((k) => k.includes('B-Xtrender Color'));
@@ -186,9 +186,9 @@ describe('B-Xtrender @Puppytherapy', () => {
     expect(t3Volatility).toBeLessThan(rawVolatility);
   });
 
-  it('produces shapes from plotshape calls', () => {
+  it('produces shapes from plotshape calls', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes).toBeDefined();
     expect(result.shapes.length).toBeGreaterThan(0);
@@ -198,27 +198,27 @@ describe('B-Xtrender @Puppytherapy', () => {
     }
   });
 
-  it('plotshape shapes have circle style', () => {
+  it('plotshape shapes have circle style', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     for (const shape of result.shapes) {
       expect(shape.style).toBe('circle');
     }
   });
 
-  it('plotshape shapes use location.absolute', () => {
+  it('plotshape shapes use location.absolute', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     for (const shape of result.shapes) {
       expect(shape.location).toBe('absolute');
     }
   });
 
-  it('shapes have overlay=false for non-overlay indicator', () => {
+  it('shapes have overlay=false for non-overlay indicator', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes.length).toBeGreaterThan(0);
     for (const shape of result.shapes) {
@@ -226,9 +226,9 @@ describe('B-Xtrender @Puppytherapy', () => {
     }
   });
 
-  it('produces plot colors for colored plots', () => {
+  it('produces plot colors for colored plots', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.plotColors).toBeDefined();
     const plotColorKeys = Array.from(result.plotColors!.keys());

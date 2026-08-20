@@ -54,9 +54,9 @@ describe('WS execution_result overlay classification keys (supertrend-3d pane-va
   // with titles "Up Trend" / "Down Trend" (test_indicators/supertrend-3d.pine:5,213-214).
   const source = fs.readFileSync('./test_indicators/supertrend-3d.pine', 'utf-8');
 
-  it('initialize() — the WS initial execution_result path (gateway.ts:547) — forwards plotOverlayKeys/hiddenPlotKeys via toOutputs', () => {
+  it('initialize() — the WS initial execution_result path (gateway.ts:547) — forwards plotOverlayKeys/hiddenPlotKeys via toOutputs', async () => {
     const session = new ScriptSession(source, 'BTCUSDT', '60', makeBars(60));
-    const out: ScriptOutputs = session.initialize();
+    const out: ScriptOutputs = await session.initialize();
 
     expect(out.success).toBe(true);
     // THE regression assertions: pre-fix code leaves these undefined.
@@ -73,9 +73,9 @@ describe('WS execution_result overlay classification keys (supertrend-3d pane-va
     expect(Array.isArray(out.hiddenPlotKeys)).toBe(true);
   });
 
-  it('appendOrUpdateBar forming-tick — the WS diff path (gateway reexecuteForTopic → appendOrUpdateBar → toFormingCandleOutputs) — forwards plotOverlayKeys', () => {
+  it('appendOrUpdateBar forming-tick — the WS diff path (gateway reexecuteForTopic → appendOrUpdateBar → toFormingCandleOutputs) — forwards plotOverlayKeys', async () => {
     const session = new ScriptSession(source, 'BTCUSDT', '60', makeBars(60));
-    session.initialize();
+    await session.initialize();
 
     const bars = makeBars(60);
     const lastBar = bars[bars.length - 1]!;
@@ -89,7 +89,7 @@ describe('WS execution_result overlay classification keys (supertrend-3d pane-va
       volume: lastBar.volume,
     };
 
-    const out: ScriptOutputs = session.appendOrUpdateBar(formingBar);
+    const out: ScriptOutputs = await session.appendOrUpdateBar(formingBar);
 
     expect(out.success).toBe(true);
     expect(out.formingCandle).toBe(true);

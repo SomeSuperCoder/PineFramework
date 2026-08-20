@@ -50,36 +50,36 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
   }));
 }
 
-function execute(source: string, barCount = 120) {
+async function execute(source: string, barCount = 120) {
   const { ast } = parse(source);
   const compileResult = compile(ast);
   const engine = new ExecutionEngine(compileResult);
   const bars = createBars(barCount);
   const contexts = barsToContext(bars);
-  return { ast, compileResult, engine, result: engine.executeBars(contexts) };
+  return { ast, compileResult, engine, result: await engine.executeBars(contexts) };
 }
 
 describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
-  it('should parse supertrend-3d.pine without errors', () => {
+  it('should parse supertrend-3d.pine without errors', async () => {
     const { ast } = parse(SOURCE);
     expect(ast).toBeDefined();
     expect(ast.scriptKind).toBe('indicator');
     expect(ast.scriptName).toContain('Supertrend');
   });
 
-  it('should compile supertrend-3d.pine', () => {
-    const { compileResult } = execute(SOURCE);
+  it('should compile supertrend-3d.pine', async () => {
+    const { compileResult } = await execute(SOURCE);
     expect(compileResult).toBeDefined();
   });
 
-  it('should execute supertrend-3d.pine and succeed end-to-end', () => {
-    const { result } = execute(SOURCE);
+  it('should execute supertrend-3d.pine and succeed end-to-end', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
   });
 
-  it('should register both main plot outputs (Up Trend / Down Trend)', () => {
-    const { result } = execute(SOURCE);
+  it('should register both main plot outputs (Up Trend / Down Trend)', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
 
@@ -88,8 +88,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     expect(outputKeys.some((k) => k.includes('Down Trend'))).toBe(true);
   });
 
-  it('should produce non-null plot values after supertrend warmup', () => {
-    const { result } = execute(SOURCE, 120);
+  it('should produce non-null plot values after supertrend warmup', async () => {
+    const { result } = await execute(SOURCE, 120);
     expect(result.success).toBe(true);
 
     const upKey = Array.from(result.outputs.keys()).find((k) => k.includes('Up Trend'));
@@ -115,16 +115,16 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     expect(downNonNull).toBeGreaterThan(0);
   });
 
-  it('should report overlay=false despite force_overlay plots', () => {
-    const { result } = execute(SOURCE);
+  it('should report overlay=false despite force_overlay plots', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     // The indicator header declares overlay=false; plot(force_overlay=true)
     // draws in the main chart pane but does not change the indicator overlay flag.
     expect(result.overlay).toBe(false);
   });
 
-  it('should produce a table with 11 columns × 13 rows', () => {
-    const { result } = execute(SOURCE);
+  it('should produce a table with 11 columns × 13 rows', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     expect(result.tables).toBeDefined();
     expect(result.tables!.length).toBeGreaterThan(0);
@@ -133,8 +133,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     expect(table.rows).toBe(13);
   });
 
-  it('should produce table data cells with clean number formatting (no IEEE artifacts)', () => {
-    const { result } = execute(SOURCE);
+  it('should produce table data cells with clean number formatting (no IEEE artifacts)', async () => {
+    const { result } = await execute(SOURCE);
     const table = result.tables![0];
     // Check data cells only (rows 3-12, columns 1-10) — skip title/separator/header rows
     let dataCellCount = 0;
@@ -148,8 +148,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     expect(dataCellCount).toBeGreaterThan(0);
   });
 
-  it('should mark Up Trend and Down Trend plots as overlay via plotOverlayKeys', () => {
-    const { result } = execute(SOURCE);
+  it('should mark Up Trend and Down Trend plots as overlay via plotOverlayKeys', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     const upKey = Array.from(result.outputs.keys()).find((k) => k.includes('Up Trend'));
     const downKey = Array.from(result.outputs.keys()).find((k) => k.includes('Down Trend'));
@@ -161,8 +161,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     expect(result.plotOverlayKeys!).toContain(downKey);
   });
 
-  it('should produce linefills for the 3D surface rendering', () => {
-    const { result } = execute(SOURCE);
+  it('should produce linefills for the 3D surface rendering', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     expect(result.linefills).toBeDefined();
     expect(result.linefills!.length).toBeGreaterThan(0);
@@ -175,8 +175,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     }
   });
 
-  it('should strip metadata from overlay keys to produce clean plot titles', () => {
-    const { result } = execute(SOURCE);
+  it('should strip metadata from overlay keys to produce clean plot titles', async () => {
+    const { result } = await execute(SOURCE);
     expect(result.success).toBe(true);
     expect(result.plotOverlayKeys).toBeDefined();
     // overlay keys should contain raw output keys with metadata suffixes
@@ -186,8 +186,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
     }
   });
 
-  it('should have table title at (0,0) and header at (0,2)', () => {
-    const { result } = execute(SOURCE);
+  it('should have table title at (0,0) and header at (0,2)', async () => {
+    const { result } = await execute(SOURCE);
     const table = result.tables![0];
     const titleCell = table.cells['0,0'];
     expect(titleCell).toBeDefined();

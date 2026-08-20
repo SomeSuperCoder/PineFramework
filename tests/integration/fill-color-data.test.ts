@@ -36,7 +36,7 @@ const engine = createPineScriptEngine();
 // LEVEL 1: fill() builtin produces fillColorData
 // ==================================================================
 describe('Level 1 — fill() builtin produces fillColorData', () => {
-  test('color.new() replaces alpha, does NOT append', () => {
+  test('color.new() replaces alpha, does NOT append', async () => {
     // color.new(color.green, 80) → #00800033 (green, 20% opacity)
     // color.new(#00800033, 20)  → #008000cc (green, 80% opacity) — replaces alpha
     const source = `//@version=5
@@ -47,7 +47,7 @@ plot(c1, "c1")
 plot(c2, "c2")`;
 
     const bars = generateBars(3);
-    const result = engine.execute(source, bars);
+    const result = await engine.execute(source, bars);
     const out = result.outputs;
 
     // c1 values should be valid 6 or 8 hex char colors
@@ -64,7 +64,7 @@ plot(c2, "c2")`;
     expect(base1).toBe(base2); // same RGB
   });
 
-  test('fill() with color.new(trend_col, 20) generates valid per-bar hex colors', () => {
+  test('fill() with color.new(trend_col, 20) generates valid per-bar hex colors', async () => {
     const source = `//@version=5
 indicator("L1_fill", overlay=true)
 bull = color.new(color.green, 80)
@@ -75,7 +75,7 @@ p2 = plot(low, "Low", color.orange, 1)
 fill(p1, p2, color=color.new(col, 20))`;
 
     const bars = generateBars(30);
-    const result = engine.execute(source, bars);
+    const result = await engine.execute(source, bars);
 
     expect(result.fillColorData).toBeDefined();
     const fcd = result.fillColorData!;
@@ -95,7 +95,7 @@ fill(p1, p2, color=color.new(col, 20))`;
     }
   });
 
-  test('fills use raw plot titles with __lw:N metadata', () => {
+  test('fills use raw plot titles with __lw:N metadata', async () => {
     const source = `//@version=5
 indicator("L1_meta", overlay=true)
 p1 = plot(close, "Price", color.white, 2)
@@ -103,14 +103,14 @@ p2 = plot(open, "Open", color.gray, 1)
 fill(p1, p2, color=color.new(color.blue, 50))`;
 
     const bars = generateBars(5);
-    const result = engine.execute(source, bars);
+    const result = await engine.execute(source, bars);
 
     const keys = Array.from(result.fillColorData!.keys());
     expect(keys[0]).toContain('__lw:');
     expect(keys[0]).toBe('Price__lw:2::Open__lw:1');
   });
 
-  test('fill() with na color pushes null to fillColorData', () => {
+  test('fill() with na color pushes null to fillColorData', async () => {
     const source = `//@version=5
 indicator("L1_na", overlay=true)
 p1 = plot(high, "High")
@@ -118,13 +118,13 @@ p2 = plot(low, "Low")
 fill(p1, p2, color=na)`;
 
     const bars = generateBars(10);
-    const result = engine.execute(source, bars);
+    const result = await engine.execute(source, bars);
 
     const colors = result.fillColorData!.get('High::Low')!;
     expect(colors.every((c) => c === null)).toBe(true);
   });
 
-  test('Real ZL indicator produces valid per-bar fill colors', () => {
+  test('Real ZL indicator produces valid per-bar fill colors', async () => {
     const source = `//@version=5
 indicator("ZL", overlay=true)
 length = input.int(50)
@@ -143,7 +143,7 @@ p_price = plot(close, "Price", color.white, 1)
 fill(p_basis, p_price, hl2, basis, na, color.new(trend_col, 20))`;
 
     const bars = generateBars(60);
-    const result = engine.execute(source, bars);
+    const result = await engine.execute(source, bars);
 
     expect(result.fillColorData).toBeDefined();
     const fcd = result.fillColorData!;

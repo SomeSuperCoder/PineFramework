@@ -35,6 +35,7 @@ interface ChartComponentProps {
   indicatorLabels?: IndicatorLabel[];
   indicatorResults?: Map<string, ScriptResult>;
   computingIndicators?: Set<string>;
+  removingIndicators?: Set<string>;
   onRemoveIndicator?: (indicatorId: string) => void;
   onEditIndicator?: (indicatorId: string) => void;
   forceAutoScale?: boolean;
@@ -68,6 +69,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
       indicatorLabels = [],
       indicatorResults = new Map(),
       computingIndicators = new Set(),
+      removingIndicators = new Set(),
       onRemoveIndicator,
       onEditIndicator,
       forceAutoScale = false,
@@ -733,7 +735,18 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                     )}
                   />
                   <span className="max-w-[140px] truncate">{label.name}</span>
-                  {computingIndicators.has(label.id) ? (
+                  {removingIndicators.has(label.id) ? (
+                    <span
+                      title="Removing..."
+                      className="inline-flex shrink-0 items-center justify-center"
+                    >
+                      <Loader2
+                        className="size-3 animate-spin text-[#ef4444] motion-reduce:animate-none"
+                        aria-hidden="true"
+                      />
+                      <span className="sr-only">Removing…</span>
+                    </span>
+                  ) : computingIndicators.has(label.id) ? (
                     <span
                       title="Computing..."
                       className="inline-flex shrink-0 items-center justify-center"
@@ -775,6 +788,7 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => handleRemoveIndicator(label.id)}
+                        disabled={removingIndicators.has(label.id)}
                         aria-label={`Remove ${label.name}`}
                         className="text-[var(--color-muted-foreground)] hover:bg-[rgba(239,68,68,0.12)] hover:text-[#ef4444]"
                       >

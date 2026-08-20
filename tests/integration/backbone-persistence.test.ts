@@ -8,7 +8,7 @@ import { FormingCandleProcessor } from '../../src/language/runtime/forming-candl
 describe('S/R backbone persistence across ticks', () => {
   const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
 
-  it('backbone produces lines during init and continues through ticks', () => {
+  it('backbone produces lines during init and continues through ticks', async () => {
     const ts = 1700000000000;
 
     // Build 80 bars with 5 clear alternating pivots.
@@ -85,7 +85,7 @@ describe('S/R backbone persistence across ticks', () => {
 
     // Initial execution
     const contexts = barsToContext(bars);
-    const initResult = engine.executeBars(contexts);
+    const initResult = await engine.executeBars(contexts);
     expect(initResult.success).toBe(true);
 
     const initLabels = initResult.labels ?? [];

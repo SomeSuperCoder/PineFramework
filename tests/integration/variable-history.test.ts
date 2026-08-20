@@ -7,7 +7,7 @@ import {
 import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Variable history via := operator', () => {
-  it('res[1] should reference previous bar value with :=', () => {
+  it('res[1] should reference previous bar value with :=', async () => {
     const src = `//@version=6
 indicator("test")
 float x = na
@@ -51,7 +51,7 @@ plot(x)`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     console.log('Output x series:');
     const xSeries = engine.outputs.get('x');
     if (xSeries) {
@@ -67,7 +67,7 @@ plot(x)`;
     }
   });
 
-  it('res[1] should give previous value for non-var with :=', () => {
+  it('res[1] should give previous value for non-var with :=', async () => {
     const src = `//@version=6
 indicator("test2")
 float res = na
@@ -114,7 +114,7 @@ plot(prev)`;
       ),
     }));
 
-    engine.executeBars(contexts);
+    await engine.executeBars(contexts);
     console.log('\nres and prev series:');
     const resSeries = engine.outputs.get('res');
     const prevSeries = engine.outputs.get('prev');

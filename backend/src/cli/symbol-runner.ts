@@ -72,7 +72,7 @@ export async function runSymbolBacktest(
     // the typed seam; the record stays untyped by design (export layer).
     const maxBars = typeof cliOptions?.maxBars === 'number' ? cliOptions.maxBars : undefined;
 
-    const pipelineResult = runBacktestPipeline({
+    const pipelineResult = await runBacktestPipeline({
       script,
       bars,
       configOverride: Object.keys(override).length > 0 ? override : undefined,
@@ -114,7 +114,8 @@ export async function runSymbolBacktest(
             // Engine settings allow `null` ("no explicit values"); the contract
             // omits instead — same semantics, so drop null to keep the
             // explicit-shape copy-only-present invariant.
-            ...(configOverride.commissionMethodSettings !== undefined && configOverride.commissionMethodSettings !== null
+            ...(configOverride.commissionMethodSettings !== undefined &&
+            configOverride.commissionMethodSettings !== null
               ? { commissionMethodSettings: configOverride.commissionMethodSettings }
               : {}),
           }

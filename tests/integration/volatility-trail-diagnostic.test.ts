@@ -76,21 +76,21 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
   let engine: ExecutionEngine;
   let bars: Bar[];
   let contexts: ExecutionContext[];
-  let result: ReturnType<ExecutionEngine['executeBars']>;
+  let result: Awaited<ReturnType<ExecutionEngine['executeBars']>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const { ast } = parse(VOLATILITY_TRAIL_SOURCE);
     const compileResult = compile(ast);
     engine = new ExecutionEngine(compileResult);
 
     bars = createTrendBars({ count: BAR_COUNT, seed: SEED, trend: TREND });
     contexts = barsToContexts(bars);
-    result = engine.executeBars(contexts);
+    result = await engine.executeBars(contexts);
   });
 
   // ── Phase 1: Basic Counting ───────────────────────────────────────
 
-  it('should produce labels and alert triggers', () => {
+  it('should produce labels and alert triggers', async () => {
     expect(result.success).toBe(true);
     expect(result.labels).toBeDefined();
     expect(result.labels!.length).toBeGreaterThan(0);
@@ -98,7 +98,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     expect(result.alertTriggers!.length).toBeGreaterThan(0);
   });
 
-  it('should produce matching counts of ▲ labels and "Trail Long" triggers', () => {
+  it('should produce matching counts of ▲ labels and "Trail Long" triggers', async () => {
     const upLabels = (result.labels ?? []).filter((l) => l.text === '▲');
     const idToTitle = buildIdToTitleMap(result.alertConditions ?? []);
     const trailLongTriggers = (result.alertTriggers ?? []).filter(
@@ -110,7 +110,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     expect(upLabels.length).toBe(trailLongTriggers.length);
   });
 
-  it('should produce matching counts of ▼ labels and "Trail Short" triggers', () => {
+  it('should produce matching counts of ▼ labels and "Trail Short" triggers', async () => {
     const dnLabels = (result.labels ?? []).filter((l) => l.text === '▼');
     const idToTitle = buildIdToTitleMap(result.alertConditions ?? []);
     const trailShortTriggers = (result.alertTriggers ?? []).filter(
@@ -124,7 +124,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
 
   // ── Phase 2: Bar-Level Cross-Validation ───────────────────────────
 
-  it('should have every flip label match its alert trigger at the same barIndex', () => {
+  it('should have every flip label match its alert trigger at the same barIndex', async () => {
     const barTimestamps = result.barTimestamps ?? [];
     const labels = result.labels ?? [];
     const triggers = result.alertTriggers ?? [];
@@ -248,7 +248,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
 
   // ── Phase 3: Tick → Confirm Pipeline — No Phantom Triggers ───────
 
-  it('should not leak speculative tick triggers into confirmed bar outputs', () => {
+  it('should not leak speculative tick triggers into confirmed bar outputs', async () => {
     const lookback = 50;
     const startIdx = Math.max(0, bars.length - lookback);
 
@@ -260,7 +260,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
     // Initialize with first (startIdx) bars
     const initBars = bars.slice(0, startIdx);
     const initContexts = barsToContexts(initBars);
-    const initResult = freshEngine.executeBars(initContexts);
+    const initResult = await freshEngine.executeBars(initContexts);
     const initialTriggerCount = freshEngine.alertTriggers.length;
     console.log(`\n  Initial triggers after ${startIdx} bars: ${initialTriggerCount}`);
 
@@ -322,7 +322,7 @@ describe('VOLATILITY TRAIL — Label vs Alert Trigger Cross-Validation', () => {
 
   // ── Phase 4: Alert condition entries should be stable ─────────────
 
-  it('should have exactly VOLATILITY_TRAIL_CONDITION_TITLES.length alert condition entries', () => {
+  it('should have exactly VOLATILITY_TRAIL_CONDITION_TITLES.length alert condition entries', async () => {
     const conditions = (engine as any).alertConditionEntries as Array<{
       id: string;
       title: string;

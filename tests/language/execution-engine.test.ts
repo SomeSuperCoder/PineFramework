@@ -20,7 +20,7 @@ function createBarContext(overrides: Partial<ExecutionContext> = {}): ExecutionC
   };
 }
 
-function executeScript(source: string, bars: ExecutionContext[] = []): ExecutionEngine {
+async function executeScript(source: string, bars: ExecutionContext[] = []): Promise<ExecutionEngine> {
   const { ast } = parse(source);
   const result = compile(ast);
   const engine = new ExecutionEngine(result);
@@ -30,7 +30,7 @@ function executeScript(source: string, bars: ExecutionContext[] = []): Execution
   }
 
   // Use executeBars() to trigger runtime lookback tracking and filtering
-  engine.executeBars(bars);
+  await engine.executeBars(bars);
 
   return engine;
 }
@@ -44,7 +44,7 @@ function expectPlot(engine: ExecutionEngine, name: string, expected: unknown): v
 
 describe('ExecutionEngine', () => {
   describe('Lookback detection', () => {
-    it('should parse max_bars_back from indicator declaration', () => {
+    it('should parse max_bars_back from indicator declaration', async () => {
       const source = `
         //@version=6
         indicator("Test", max_bars_back=50)
@@ -55,7 +55,7 @@ describe('ExecutionEngine', () => {
       expect(result.ir.maxBarsBack).toBe(50);
     });
 
-    it('should default maxBarsBack to 0 when not declared', () => {
+    it('should default maxBarsBack to 0 when not declared', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -79,7 +79,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(50);
       });
 
-      it('should detect lookback from ta.atr(14)', () => {
+      it('should detect lookback from ta.atr(14)', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -139,7 +139,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(15); // 10 + 5
       });
 
-      it('should detect lookback from close[20] indexing', () => {
+      it('should detect lookback from close[20] indexing', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -151,7 +151,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(20);
       });
 
-      it('should detect lookback from open[100] indexing', () => {
+      it('should detect lookback from open[100] indexing', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -163,7 +163,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(100);
       });
 
-      it('should take MAX of multiple lookback sources', () => {
+      it('should take MAX of multiple lookback sources', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -212,7 +212,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(30);
       });
 
-      it('should return 0 when no lookback detected', () => {
+      it('should return 0 when no lookback detected', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -224,7 +224,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(0);
       });
 
-      it('should not override explicit max_bars_back declaration', () => {
+      it('should not override explicit max_bars_back declaration', async () => {
         const source = `
           //@version=6
           indicator("Test", max_bars_back=30)
@@ -236,7 +236,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(30); // declared takes precedence
       });
 
-      it('should skip detection for variable period arguments', () => {
+      it('should skip detection for variable period arguments', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -249,7 +249,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(0); // variable not detected
       });
 
-      it('should not treat for-loop bound as lookback (search depth ≠ warmup)', () => {
+      it('should not treat for-loop bound as lookback (search depth ≠ warmup)', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -263,7 +263,7 @@ describe('ExecutionEngine', () => {
         expect(result.ir.maxBarsBack).toBe(0);
       });
 
-      it('should detect TA calls inside for-loop bodies', () => {
+      it('should detect TA calls inside for-loop bodies', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -278,7 +278,7 @@ describe('ExecutionEngine', () => {
     });
 
     describe('Runtime lookback filtering', () => {
-      it('should filter warmup bars from runtime-detected pivot lookback', () => {
+      it('should filter warmup bars from runtime-detected pivot lookback', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -293,7 +293,7 @@ describe('ExecutionEngine', () => {
             low: createSeries('low', [95 + Math.sin(i * 0.3) * 5]),
           }),
         );
-        const engine = executeScript(source, bars);
+        const engine = await executeScript(source, bars);
         const output = engine.getOutput('ph');
         expect(output).toBeDefined();
         // First 11 bars should be null (warmup from pivot lookback 5+5+1=11)
@@ -302,7 +302,7 @@ describe('ExecutionEngine', () => {
         }
       });
 
-      it('should filter warmup bars from runtime-detected SMA lookback', () => {
+      it('should filter warmup bars from runtime-detected SMA lookback', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -315,7 +315,7 @@ describe('ExecutionEngine', () => {
             close: createSeries('close', [100 + i]),
           }),
         );
-        const engine = executeScript(source, bars);
+        const engine = await executeScript(source, bars);
         const output = engine.getOutput('sma');
         expect(output).toBeDefined();
         // First 20 bars should be null (warmup from SMA lookback)
@@ -324,7 +324,7 @@ describe('ExecutionEngine', () => {
         }
       });
 
-      it('should use declared maxBarsBack when explicit', () => {
+      it('should use declared maxBarsBack when explicit', async () => {
         const source = `
           //@version=6
           indicator("Test", max_bars_back=30)
@@ -337,7 +337,7 @@ describe('ExecutionEngine', () => {
             close: createSeries('close', [100 + i]),
           }),
         );
-        const engine = executeScript(source, bars);
+        const engine = await executeScript(source, bars);
         const output = engine.getOutput('x');
         expect(output).toBeDefined();
         // First 30 bars should be null (declared maxBarsBack)
@@ -346,7 +346,7 @@ describe('ExecutionEngine', () => {
         }
       });
 
-      it('should not filter when no TA functions used', () => {
+      it('should not filter when no TA functions used', async () => {
         const source = `
           //@version=6
           indicator("Test")
@@ -359,7 +359,7 @@ describe('ExecutionEngine', () => {
             close: createSeries('close', [100 + i]),
           }),
         );
-        const engine = executeScript(source, bars);
+        const engine = await executeScript(source, bars);
         const output = engine.getOutput('x');
         expect(output).toBeDefined();
         // No bars should be null (no TA functions, no lookback)
@@ -369,7 +369,7 @@ describe('ExecutionEngine', () => {
       });
     });
 
-    it('should parse max_bars_back from strategy declaration', () => {
+    it('should parse max_bars_back from strategy declaration', async () => {
       const source = `
         //@version=6
         strategy("Test", max_bars_back=100)
@@ -380,7 +380,7 @@ describe('ExecutionEngine', () => {
       expect(result.ir.maxBarsBack).toBe(100);
     });
 
-    it('should return effective maxBarsBack from getEffectiveMaxBarsBack()', () => {
+    it('should return effective maxBarsBack from getEffectiveMaxBarsBack()', async () => {
       const source = `
         //@version=6
         indicator("Test", max_bars_back=50)
@@ -396,7 +396,7 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Lookback gating (output filtering)', () => {
-    it('should filter bar colors from warmup bars when max_bars_back is declared', () => {
+    it('should filter bar colors from warmup bars when max_bars_back is declared', async () => {
       const source = `
         //@version=6
         indicator("Test", max_bars_back=10)
@@ -416,7 +416,7 @@ describe('ExecutionEngine', () => {
         close: createSeries('close', [100 + i]),
         volume: createSeries('volume', [1000000]),
       }));
-      const execResult = engine.executeBars(bars);
+      const execResult = await engine.executeBars(bars);
 
       // Bar colors from warmup bars (0-9) should be removed
       expect(execResult.barColorData).toBeDefined();
@@ -427,7 +427,7 @@ describe('ExecutionEngine', () => {
       expect(execResult.barColorData!.length).toBeGreaterThan(0);
     });
 
-    it('should set output values to null for warmup bars with declared max_bars_back', () => {
+    it('should set output values to null for warmup bars with declared max_bars_back', async () => {
       const source = `
         //@version=6
         indicator("Test", max_bars_back=10)
@@ -447,7 +447,7 @@ describe('ExecutionEngine', () => {
         close: createSeries('close', [100 + i]),
         volume: createSeries('volume', [1000000]),
       }));
-      const execResult = engine.executeBars(bars);
+      const execResult = await engine.executeBars(bars);
 
       const output = execResult.outputs.get('c');
       expect(output).toBeDefined();
@@ -462,7 +462,7 @@ describe('ExecutionEngine', () => {
       }
     });
 
-    it('should preserve all outputs when executed via executeBar (not executeBars)', () => {
+    it('should preserve all outputs when executed via executeBar (not executeBars)', async () => {
       const source = `
         //@version=6
         indicator("Test", max_bars_back=10)
@@ -492,18 +492,18 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Basic execution', () => {
-    it('should execute a simple indicator script and compute values', () => {
+    it('should execute a simple indicator script and compute values', async () => {
       const source = `
         //@version=6
         indicator("Test")
         x = 1
         plot(x, "x")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'x', 1);
     });
 
-    it('should handle variable declarations and arithmetic', () => {
+    it('should handle variable declarations and arithmetic', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -512,76 +512,76 @@ describe('ExecutionEngine', () => {
         z = x + y
         plot(z, "z")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'z', 30);
     });
 
-    it('should handle operator precedence in arithmetic expressions', () => {
+    it('should handle operator precedence in arithmetic expressions', async () => {
       const source = `
         //@version=6
         indicator("Test")
         result = 2 + 3 * 4
         plot(result, "r")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'r', 14);
     });
   });
 
   describe('OHLCV data access', () => {
-    it('should access close price', () => {
+    it('should access close price', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(close, "close")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'close', 102);
     });
 
-    it('should access open price', () => {
+    it('should access open price', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(open, "open")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'open', 100);
     });
 
-    it('should access high price', () => {
+    it('should access high price', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(high, "high")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'high', 105);
     });
 
-    it('should access low price', () => {
+    it('should access low price', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(low, "low")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'low', 95);
     });
 
-    it('should access volume', () => {
+    it('should access volume', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(volume, "volume")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'volume', 1000000);
     });
   });
 
   describe('Series indexing', () => {
-    it('should support close[1] indexing (previous bar)', () => {
+    it('should support close[1] indexing (previous bar)', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -594,19 +594,19 @@ describe('ExecutionEngine', () => {
         closeVals.push(v);
         return createBarContext({ close: createSeries('close', [...closeVals]) });
       });
-      const engine = executeScript(source, bars);
+      const engine = await executeScript(source, bars);
       // On bar 2 (index 1), close[1] is the close of bar 1 = 100
       expectPlot(engine, 'prev', 100);
     });
 
-    it('should return NA for out-of-bounds indexing', () => {
+    it('should return NA for out-of-bounds indexing', async () => {
       const source = `
         //@version=6
         indicator("Test")
         farBack = close[100]
         plot(farBack, "far")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       const output = engine.getOutput('far');
       expect(output).toBeDefined();
       // plot() converts NA to null
@@ -615,7 +615,7 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Control flow', () => {
-    it('should handle if-else statements', () => {
+    it('should handle if-else statements', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -627,11 +627,11 @@ describe('ExecutionEngine', () => {
           y := 0
         plot(y, "y")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'y', 1);
     });
 
-    it('should handle for loops (sum 0..10 = 55)', () => {
+    it('should handle for loops (sum 0..10 = 55)', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -640,11 +640,11 @@ describe('ExecutionEngine', () => {
           sum := sum + i
         plot(sum, "sum")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'sum', 55);
     });
 
-    it('should handle while loops', () => {
+    it('should handle while loops', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -653,48 +653,48 @@ describe('ExecutionEngine', () => {
           i := i + 1
         plot(i, "i")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'i', 10);
     });
   });
 
   describe('Built-in functions', () => {
-    it('should execute math.max(10, 20) = 20', () => {
+    it('should execute math.max(10, 20) = 20', async () => {
       const source = `
         //@version=6
         indicator("Test")
         result = math.max(10, 20)
         plot(result, "r")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'r', 20);
     });
 
-    it('should execute math.min(10, 20) = 10', () => {
+    it('should execute math.min(10, 20) = 10', async () => {
       const source = `
         //@version=6
         indicator("Test")
         result = math.min(10, 20)
         plot(result, "r")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'r', 10);
     });
 
-    it('should execute math.abs(-10) = 10', () => {
+    it('should execute math.abs(-10) = 10', async () => {
       const source = `
         //@version=6
         indicator("Test")
         result = math.abs(-10)
         plot(result, "r")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       expectPlot(engine, 'r', 10);
     });
   });
 
   describe('Bar execution', () => {
-    it('should execute multiple bars and retain the last close value', () => {
+    it('should execute multiple bars and retain the last close value', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -706,21 +706,21 @@ describe('ExecutionEngine', () => {
           close: createSeries('close', [100 + i]),
         }),
       );
-      const engine = executeScript(source, bars);
+      const engine = await executeScript(source, bars);
       // Last bar has close = 100 + 9 = 109
       expectPlot(engine, 'close', 109);
     });
   });
 
   describe('Error handling', () => {
-    it('should handle division by zero returning NA (null in plot output)', () => {
+    it('should handle division by zero returning NA (null in plot output)', async () => {
       const source = `
         //@version=6
         indicator("Test")
         result = 10 / 0
         plot(result, "r")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       const output = engine.getOutput('r');
       expect(output).toBeDefined();
       // plot() converts NA to null
@@ -729,13 +729,13 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Output generation', () => {
-    it('should generate plot output with correct value', () => {
+    it('should generate plot output with correct value', async () => {
       const source = `
         //@version=6
         indicator("Test")
         plot(close, "Close Price")
       `;
-      const engine = executeScript(source);
+      const engine = await executeScript(source);
       const output = engine.getOutput('Close Price');
       expect(output).toBeDefined();
       expect(output!.last()).toBe(102);
@@ -743,7 +743,7 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Snapshot and rollback', () => {
-    it('should create snapshots and track bar count', () => {
+    it('should create snapshots and track bar count', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -760,7 +760,7 @@ describe('ExecutionEngine', () => {
       expect(metrics.totalBars).toBe(1);
     });
 
-    it('should rollback to previous bar', () => {
+    it('should rollback to previous bar', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -770,7 +770,7 @@ describe('ExecutionEngine', () => {
         createBarContext({ close: createSeries('close', [100]) }),
         createBarContext({ close: createSeries('close', [105]) }),
       ];
-      const engine = executeScript(source, bars);
+      const engine = await executeScript(source, bars);
 
       const metrics = engine.getMetrics();
       expect(metrics.totalBars).toBe(2);
@@ -779,7 +779,7 @@ describe('ExecutionEngine', () => {
       expect(rolledBack).toBe(true);
     });
 
-    it('should rollback on execution error', () => {
+    it('should rollback on execution error', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -796,7 +796,7 @@ describe('ExecutionEngine', () => {
       expect(metrics.failedBars).toBe(0);
     });
 
-    it('should handle empty rollback gracefully', () => {
+    it('should handle empty rollback gracefully', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -812,7 +812,7 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Realtime execution', () => {
-    it('should execute realtime bars successfully', () => {
+    it('should execute realtime bars successfully', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -835,7 +835,7 @@ describe('ExecutionEngine', () => {
   });
 
   describe('Performance metrics', () => {
-    it('should track execution metrics across multiple bars', () => {
+    it('should track execution metrics across multiple bars', async () => {
       const source = `
         //@version=6
         indicator("Test")
@@ -847,7 +847,7 @@ describe('ExecutionEngine', () => {
           close: createSeries('close', [100 + i]),
         }),
       );
-      const engine = executeScript(source, bars);
+      const engine = await executeScript(source, bars);
 
       const metrics = engine.getMetrics();
       expect(metrics.totalBars).toBe(5);
@@ -857,7 +857,7 @@ describe('ExecutionEngine', () => {
       expect(metrics.lastExecutionTimeMs).toBeGreaterThanOrEqual(0);
     });
 
-    it('should track failed bars in metrics', () => {
+    it('should track failed bars in metrics', async () => {
       const source = `
         //@version=6
         indicator("Test")

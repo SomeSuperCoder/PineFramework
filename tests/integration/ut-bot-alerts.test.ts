@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,25 +67,25 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  return { engine, bars, result: engine.executeBars(contexts) };
+  return { engine, bars, result: await engine.executeBars(contexts) };
 }
 
 describe('UT Bot Alerts', () => {
   const source = fs.readFileSync('./test_indicators/ut-bot-alerts.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully with overlay=true', () => {
+  it('compiles successfully with overlay=true', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
     expect(compiled.ir.overlay).toBe(true);
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -104,17 +104,17 @@ describe('UT Bot Alerts', () => {
     expect(result.success).toBe(true);
   });
 
-  it('has no plot outputs (no plot() calls in script)', () => {
+  it('has no plot outputs (no plot() calls in script)', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBe(0);
   });
 
-  it('produces shapes from plotshape Buy/Sell signals', () => {
+  it('produces shapes from plotshape Buy/Sell signals', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes).toBeDefined();
     expect(result.shapes.length).toBeGreaterThan(0);
@@ -126,9 +126,9 @@ describe('UT Bot Alerts', () => {
     }
   });
 
-  it('shapes have Buy or Sell text', () => {
+  it('shapes have Buy or Sell text', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes.length).toBeGreaterThan(0);
     const texts = result.shapes.map((s) => s.text);
@@ -136,9 +136,9 @@ describe('UT Bot Alerts', () => {
     expect(texts.some((t) => t === 'Sell')).toBe(true);
   });
 
-  it('Buy shapes are green and below bar', () => {
+  it('Buy shapes are green and below bar', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const buyShapes = result.shapes.filter((s) => s.text === 'Buy');
     expect(buyShapes.length).toBeGreaterThan(0);
@@ -148,9 +148,9 @@ describe('UT Bot Alerts', () => {
     }
   });
 
-  it('Sell shapes are red and above bar', () => {
+  it('Sell shapes are red and above bar', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const sellShapes = result.shapes.filter((s) => s.text === 'Sell');
     expect(sellShapes.length).toBeGreaterThan(0);
@@ -160,17 +160,17 @@ describe('UT Bot Alerts', () => {
     }
   });
 
-  it('produces barColorData from barcolor calls', () => {
+  it('produces barColorData from barcolor calls', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     expect(result.barColorData!.length).toBeGreaterThan(0);
   });
 
-  it('barColorData contains green and red colors', () => {
+  it('barColorData contains green and red colors', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const colors = result.barColorData!.map((e) => (e.bodyColor ?? '').toLowerCase());
     const hasGreen = colors.some((c) => c.includes('4caf50') || c.includes('00ff00'));
@@ -179,17 +179,17 @@ describe('UT Bot Alerts', () => {
     expect(hasRed).toBe(true);
   });
 
-  it('produces alert triggers from alert() calls', () => {
+  it('produces alert triggers from alert() calls', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();
     expect(result.alertTriggers!.length).toBeGreaterThan(0);
   });
 
-  it('alert triggers contain Buy and Sell messages', () => {
+  it('alert triggers contain Buy and Sell messages', async () => {
     const bars = createTrendingBars(300, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const triggerIds = result.alertTriggers!.map((t) => t.alertId);
     expect(triggerIds.some((id) => id.includes('UT Long'))).toBe(true);

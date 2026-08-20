@@ -130,7 +130,7 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
   }));
 }
 
-function execute(source: string, barCount = BAR_COUNT) {
+async function execute(source: string, barCount = BAR_COUNT) {
   const { ast } = parse(source);
   const compileResult = compile(ast);
   const engine = new ExecutionEngine(compileResult);
@@ -141,12 +141,12 @@ function execute(source: string, barCount = BAR_COUNT) {
     compileResult,
     engine,
     bars,
-    result: engine.executeBars(contexts),
+    result: await engine.executeBars(contexts),
   };
 }
 
 /** Find the plot output series for a trap by its key fragment. */
-function trapSeries(result: ReturnType<typeof execute>['result'], trap: string) {
+function trapSeries(result: Awaited<ReturnType<typeof execute>>['result'], trap: string) {
   const key = Array.from(result.outputs.keys()).find((k) => k.includes(trap));
   expect(key).toBeDefined();
   return Array.from(result.outputs.get(key!)!.values);
@@ -158,16 +158,16 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
   // registers every trap key. If a future rename silently breaks the harness,
   // this test fails — the gate can never vacuously pass.
   describe('gate is alive (positive control)', () => {
-    it('parses, compiles and executes end-to-end with no engine error', () => {
-      const { ast, result } = execute(SOURCE);
+    it('parses, compiles and executes end-to-end with no engine error', async () => {
+      const { ast, result } = await execute(SOURCE);
       expect(ast).toBeDefined();
       expect(ast.scriptKind).toBe('indicator');
       expect(result.success).toBe(true);
       expect(result.error).toBeUndefined();
     });
 
-    it('registers every trap output key', () => {
-      const { result } = execute(SOURCE);
+    it('registers every trap output key', async () => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const keys = Array.from(result.outputs.keys());
       for (const trap of TRAP_KEYS) {
@@ -191,24 +191,24 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
       ['trap_div8', '0.125'],
       ['trap_sum3', '1'],
       ['trap_scale', '1'],
-    ] as const)('%s: last bar === exact decimal %s', (trap, expectedDecimal) => {
-      const { result } = execute(SOURCE);
+    ] as const)('%s: last bar === exact decimal %s', async (trap, expectedDecimal) => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, trap);
       const last = values[values.length - 1] as number;
       expect(last).toBe(new Decimal(expectedDecimal).toNumber());
     });
 
-    it('trap_accumulate: last bar === barCount * 0.1 exactly (120 → 12)', () => {
-      const { result } = execute(SOURCE);
+    it('trap_accumulate: last bar === barCount * 0.1 exactly (120 → 12)', async () => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, 'trap_accumulate');
       const last = values[values.length - 1] as number;
       expect(last).toBe(new Decimal(BAR_COUNT).times('0.1').toNumber());
     });
 
-    it('trap_rt: close * 2 - close === close on every post-warmup bar', () => {
-      const { result, bars } = execute(SOURCE);
+    it('trap_rt: close * 2 - close === close on every post-warmup bar', async () => {
+      const { result, bars } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, 'trap_rt');
       expect(values.length).toBe(bars.length);
@@ -225,8 +225,8 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
       expect(compared).toBeGreaterThanOrEqual(bars.length - 10);
     });
 
-    it('trap_rt2: (close / 2) * 2 === close on every post-warmup bar', () => {
-      const { result, bars } = execute(SOURCE);
+    it('trap_rt2: (close / 2) * 2 === close on every post-warmup bar', async () => {
+      const { result, bars } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, 'trap_rt2');
       expect(values.length).toBe(bars.length);
@@ -239,8 +239,8 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
       expect(compared).toBeGreaterThanOrEqual(bars.length - 10);
     });
 
-    it('trap_sma: SMA(0.1, 10) === exactly 0.1 on every bar after warmup', () => {
-      const { result } = execute(SOURCE);
+    it('trap_sma: SMA(0.1, 10) === exactly 0.1 on every bar after warmup', async () => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, 'trap_sma');
       // SMA(10) warms up after 10 bars; assert every post-warmup value.
@@ -249,8 +249,8 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
       }
     });
 
-    it('trap_cmp: (0.1 + 0.2) == 0.3 is TRUE on every bar (last 50)', () => {
-      const { result } = execute(SOURCE);
+    it('trap_cmp: (0.1 + 0.2) == 0.3 is TRUE on every bar (last 50)', async () => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       const values = trapSeries(result, 'trap_cmp');
       const tail = values.slice(Math.max(0, values.length - 50));
@@ -268,8 +268,8 @@ describe('FP Final Gate — floating-point artifact detector (decimal-safe migra
   // values (covered by exact per-bar assertions above) whose long fraction
   // strings are legitimate input data, not artifacts.
   describe('global artifact sweep', () => {
-    it('no decimal-exact output value stringifies to an IEEE artifact', () => {
-      const { result } = execute(SOURCE);
+    it('no decimal-exact output value stringifies to an IEEE artifact', async () => {
+      const { result } = await execute(SOURCE);
       expect(result.success).toBe(true);
       for (const trap of DECIMAL_EXACT_TRAPS) {
         const values = trapSeries(result, trap);

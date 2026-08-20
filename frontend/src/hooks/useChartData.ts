@@ -274,7 +274,7 @@ export function useChartData(
             const execResponse = await fetch('/api/execute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source: ind.source, bars: execBars, offset: 0 }),
+              body: JSON.stringify({ source: ind.source, bars: execBars, offset: 0, indicatorId: indId }),
               // Bound the per-indicator re-execution so a hung request cannot freeze
               // the batch state update below (setCandles + indicatorUpdates). The
               // catch below skips the failed indicator and the batch still applies.
@@ -915,7 +915,7 @@ export function useChartData(
         const response = await fetch('/api/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: code, bars: barsToExecute }),
+          body: JSON.stringify({ source: code, bars: barsToExecute, ...(indicatorId ? { indicatorId } : {}) }),
         });
 
         if (!response.ok) {
@@ -925,6 +925,11 @@ export function useChartData(
 
         const result: ExecuteResponse = await response.json();
         if (isStale()) return;
+
+        // User removed the indicator (or stop_indicator) — backend cancelled the
+        // in-flight run and responded success:false, cancelled:true. That is the
+        // user's intent, not an error: show nothing, update nothing, just stop.
+        if (result.cancelled) return;
 
         if (!result.success || result.error) {
           if (versionRef && version !== undefined && version !== versionRef.current) return;
@@ -955,7 +960,7 @@ export function useChartData(
             const seedResponse = await fetch('/api/execute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source: code, bars: barsToExecute }),
+              body: JSON.stringify({ source: code, bars: barsToExecute, ...(indicatorId ? { indicatorId } : {}) }),
             });
 
             if (seedResponse.ok) {

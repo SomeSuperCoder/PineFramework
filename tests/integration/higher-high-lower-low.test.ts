@@ -34,7 +34,7 @@ function createZigzagBars(count: number): Array<{
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createZigzagBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createZigzagBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -63,7 +63,7 @@ function runEngine(source: string, bars: ReturnType<typeof createZigzagBars>) {
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   if (!result.success) console.log('executeBars error:', result.error);
   return { engine, bars, result };
 }
@@ -71,26 +71,26 @@ function runEngine(source: string, bars: ReturnType<typeof createZigzagBars>) {
 describe('Higher High Lower Low 🦉{Phanchai}', () => {
   const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes without crashing', () => {
+  it('executes without crashing', async () => {
     const bars = createZigzagBars(200);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
   });
 
-  it('produces label output (HH/HL/LH/LL)', () => {
+  it('produces label output (HH/HL/LH/LL)', async () => {
     const bars = createZigzagBars(500);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     console.log(`Labels produced: ${result.labels?.length ?? 0}`);
@@ -115,9 +115,9 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
     console.log(`Label types found: ${[...labelTypes].join(', ')}`);
   });
 
-  it('produces lines for support/resistance', () => {
+  it('produces lines for support/resistance', async () => {
     const bars = createZigzagBars(500);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     console.log(`Lines produced: ${result.lines?.length ?? 0}`);
@@ -147,15 +147,15 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
     }
   });
 
-  it('has correct overlay setting', () => {
+  it('has correct overlay setting', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled.ir.overlay).toBe(true);
   });
 
-  it('produces alert conditions', () => {
+  it('produces alert conditions', async () => {
     const bars = createZigzagBars(500);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     // alertcondition calls register alert conditions on the engine
@@ -169,16 +169,16 @@ describe('Higher High Lower Low 🦉{Phanchai}', () => {
     }
   });
 
-  it('handles large bar count without issues', () => {
+  it('handles large bar count without issues', async () => {
     const bars = createZigzagBars(1000);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     console.log(
       `1000 bars: ${result.labels?.length ?? 0} labels, ${result.lines?.length ?? 0} lines`,
     );
   });
 
-  it('parses the findprevious function correctly', () => {
+  it('parses the findprevious function correctly', async () => {
     // The findprevious() function uses comma-separated declarations
     // which was a parsing challenge. Verify it parses correctly.
     const { ast } = parse(source);

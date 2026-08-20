@@ -28,21 +28,21 @@ function createBars(count: number, startPrice: number = 100): Bar[] {
 
 describe('Pine Script v5 Compatibility', () => {
   describe('extractVersion', () => {
-    it('extracts v5 version from source', () => {
+    it('extracts v5 version from source', async () => {
       expect(extractVersion('//@version=5\nindicator("Test")')).toBe(5);
     });
 
-    it('extracts v6 version from source', () => {
+    it('extracts v6 version from source', async () => {
       expect(extractVersion('//@version=6\nindicator("Test")')).toBe(6);
     });
 
-    it('returns null when version is missing', () => {
+    it('returns null when version is missing', async () => {
       expect(extractVersion('indicator("Test")')).toBeNull();
     });
   });
 
   describe('Parser v5 support', () => {
-    it('parses //@version=5 without throwing', () => {
+    it('parses //@version=5 without throwing', async () => {
       const source = `//@version=5
 indicator("Test Indicator", overlay=true)
 plot(close)
@@ -50,7 +50,7 @@ plot(close)
       expect(() => parse(source)).not.toThrow();
     });
 
-    it('parses //@version=6 without throwing', () => {
+    it('parses //@version=6 without throwing', async () => {
       const source = `//@version=6
 indicator("Test Indicator", overlay=true)
 plot(close)
@@ -58,20 +58,20 @@ plot(close)
       expect(() => parse(source)).not.toThrow();
     });
 
-    it('rejects unsupported versions', () => {
+    it('rejects unsupported versions', async () => {
       const source = `//@version=4
 indicator("Test Indicator")
 `;
       expect(() => parse(source)).toThrow('Unsupported Pine Script version');
     });
 
-    it('rejects missing version', () => {
+    it('rejects missing version', async () => {
       const source = `indicator("Test Indicator")
 `;
       expect(() => parse(source)).toThrow('Missing //@version=N declaration');
     });
 
-    it('stores v5 version in AST', () => {
+    it('stores v5 version in AST', async () => {
       const source = `//@version=5
 indicator("Test")
 `;
@@ -79,7 +79,7 @@ indicator("Test")
       expect(result.ast.version).toBe(5);
     });
 
-    it('stores v6 version in AST', () => {
+    it('stores v6 version in AST', async () => {
       const source = `//@version=6
 indicator("Test")
 `;
@@ -89,12 +89,12 @@ indicator("Test")
   });
 
   describe('study() alias for indicator()', () => {
-    it('tokenizes study as Indicator token type', () => {
+    it('tokenizes study as Indicator token type', async () => {
       const tokens = new Tokenizer('study').tokenize();
       expect(tokens[0]?.type).toBe(TokenType.Indicator);
     });
 
-    it('parses study() declaration as indicator', () => {
+    it('parses study() declaration as indicator', async () => {
       const source = `//@version=5
 study("My Study", overlay=true)
 plot(close)
@@ -104,7 +104,7 @@ plot(close)
       expect(result.ast.scriptName).toBe('My Study');
     });
 
-    it('parses study() with v5-style parameters', () => {
+    it('parses study() with v5-style parameters', async () => {
       const source = `//@version=5
 study("RSI Indicator", overlay=false, precision=2)
 rsi = ta.sma(close, 14)
@@ -118,7 +118,7 @@ plot(rsi)
   });
 
   describe('Compiler v5 support', () => {
-    it('compiles v5 script with correct version', () => {
+    it('compiles v5 script with correct version', async () => {
       const source = `//@version=5
 indicator("Test")
 plot(close)
@@ -128,7 +128,7 @@ plot(close)
       expect(compileResult.ir.version).toBe(5);
     });
 
-    it('compiles v6 script with correct version', () => {
+    it('compiles v6 script with correct version', async () => {
       const source = `//@version=6
 indicator("Test")
 plot(close)
@@ -140,7 +140,7 @@ plot(close)
   });
 
   describe('Execution Engine v5 support', () => {
-    it('includes version in ExecutionResult for v5', () => {
+    it('includes version in ExecutionResult for v5', async () => {
       const source = `//@version=5
 indicator("Test")
 plot(close)
@@ -150,11 +150,11 @@ plot(close)
       const engine = new ExecutionEngine(compileResult);
       const bars = createBars(10);
       const contexts = barsToContext(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.version).toBe(5);
     });
 
-    it('includes version in ExecutionResult for v6', () => {
+    it('includes version in ExecutionResult for v6', async () => {
       const source = `//@version=6
 indicator("Test")
 plot(close)
@@ -164,11 +164,11 @@ plot(close)
       const engine = new ExecutionEngine(compileResult);
       const bars = createBars(10);
       const contexts = barsToContext(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.version).toBe(6);
     });
 
-    it('executes v5 script with study() and plot()', () => {
+    it('executes v5 script with study() and plot()', async () => {
       const source = `//@version=5
 study("SMA Test", overlay=true)
 sma = ta.sma(close, 5)
@@ -179,13 +179,13 @@ plot(sma)
       const engine = new ExecutionEngine(compileResult);
       const bars = createBars(20);
       const contexts = barsToContext(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(true);
       expect(result.version).toBe(5);
       expect(result.outputs.size).toBeGreaterThan(0);
     });
 
-    it('executes v5 script with ta.sma', () => {
+    it('executes v5 script with ta.sma', async () => {
       const source = `//@version=5
 study("TA Test")
 sma = ta.sma(close, 10)
@@ -196,12 +196,12 @@ plot(sma, "SMA")
       const engine = new ExecutionEngine(compileResult);
       const bars = createBars(30);
       const contexts = barsToContext(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(true);
       expect(result.outputs.has('SMA')).toBe(true);
     });
 
-    it('executes v5 script with strategy', () => {
+    it('executes v5 script with strategy', async () => {
       const source = `//@version=5
 strategy("Simple Strategy", overlay=true)
 sma = ta.sma(close, 20)
@@ -215,21 +215,21 @@ if (close < sma)
       const engine = new ExecutionEngine(compileResult);
       const bars = createBars(50);
       const contexts = barsToContext(bars);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(true);
       expect(result.version).toBe(5);
     });
   });
 
   describe('Version default behavior', () => {
-    it('defaults to v6 when no version is declared (parser rejects)', () => {
+    it('defaults to v6 when no version is declared (parser rejects)', async () => {
       const source = `indicator("No Version")
 plot(close)
 `;
       expect(() => parse(source)).toThrow('Missing //@version=N declaration');
     });
 
-    it('handles v5 with various directive formats', () => {
+    it('handles v5 with various directive formats', async () => {
       expect(extractVersion('//@version=5')).toBe(5);
       expect(extractVersion('  //@version=5')).toBe(5);
       expect(extractVersion('// @version = 5')).toBe(5);

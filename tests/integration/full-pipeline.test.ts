@@ -48,7 +48,7 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
 
 describe('Integration: Full Pipeline', () => {
   describe('Parse -> Compile -> Execute', () => {
-    it('should execute a simple indicator', () => {
+    it('should execute a simple indicator', async () => {
       const source = `//@version=6
 indicator("Test")
 plot(close, "Close")`;
@@ -60,13 +60,13 @@ plot(close, "Close")`;
       const bars = createBars(10);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
       expect(result.outputs.size).toBe(1);
     });
 
-    it('should execute a moving average indicator', () => {
+    it('should execute a moving average indicator', async () => {
       const source = `//@version=6
 indicator("SMA")
 smaValue = ta.sma(close, 10)
@@ -79,13 +79,13 @@ plot(smaValue, "SMA")`;
       const bars = createBars(20);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
       expect(result.outputs.size).toBe(1);
     });
 
-    it('should execute indicator with multiple plots', () => {
+    it('should execute indicator with multiple plots', async () => {
       const source = `//@version=6
 indicator("Multi Plot")
 plot(close, "Close")
@@ -99,13 +99,13 @@ plot(high, "High")`;
       const bars = createBars(10);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
       expect(result.outputs.size).toBe(3);
     });
 
-    it('should execute indicator with variables', () => {
+    it('should execute indicator with variables', async () => {
       const source = `//@version=6
 indicator("Variables")
 myClose = close
@@ -120,13 +120,13 @@ plot(diff, "Difference")`;
       const bars = createBars(10);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
       expect(result.outputs.size).toBe(1);
     });
 
-    it('should execute indicator with conditional logic', () => {
+    it('should execute indicator with conditional logic', async () => {
       const source = `//@version=6
 indicator("Conditional")
 isUp = close > open
@@ -139,13 +139,13 @@ plot(isUp ? 1 : 0, "Direction")`;
       const bars = createBars(10);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
       expect(result.outputs.size).toBe(1);
     });
 
-    it('should execute indicator with math functions', () => {
+    it('should execute indicator with math functions', async () => {
       const source = `//@version=6
 indicator("Math")
 absValue = math.abs(close - open)
@@ -160,12 +160,12 @@ plot(absValue, "Abs")`;
       const bars = createBars(10);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result.success).toBe(true);
     });
 
-    it('should handle realtime updates', () => {
+    it('should handle realtime updates', async () => {
       const source = `//@version=6
 indicator("Realtime")
 plot(close, "Close")`;
@@ -177,7 +177,7 @@ plot(close, "Close")`;
       const bars = createBars(5);
       const contexts = barsToContext(bars);
 
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const realtimeBar: ExecutionContext = {
         barIndex: 5,
@@ -194,7 +194,7 @@ plot(close, "Close")`;
       expect(result.success).toBe(true);
     });
 
-    it('should handle rollback on error', () => {
+    it('should handle rollback on error', async () => {
       const source = `//@version=6
 indicator("Rollback")
 var x = 0.0
@@ -208,7 +208,7 @@ plot(x, "X")`;
       const bars = createBars(5);
       const contexts = barsToContext(bars);
 
-      const result1 = engine.executeBars(contexts.slice(0, 3));
+      const result1 = await engine.executeBars(contexts.slice(0, 3));
       expect(result1.success).toBe(true);
 
       const rollbackSuccess = engine.rollbackToPreviousBar();
@@ -217,7 +217,7 @@ plot(x, "X")`;
   });
 
   describe('Error Handling', () => {
-    it('should handle invalid syntax', () => {
+    it('should handle invalid syntax', async () => {
       const source = `//@version=6
 indicator("Invalid")
 plot(close`;
@@ -225,7 +225,7 @@ plot(close`;
       expect(() => parse(source)).toThrow();
     });
 
-    it('should handle undefined variables', () => {
+    it('should handle undefined variables', async () => {
       const source = `//@version=6
 indicator("Undefined")
 plot(undefinedVar)`;
@@ -237,13 +237,13 @@ plot(undefinedVar)`;
       const bars = createBars(5);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(false);
     });
   });
 
   describe('Performance', () => {
-    it('should execute with acceptable performance', () => {
+    it('should execute with acceptable performance', async () => {
       const source = `//@version=6
 indicator("Performance")
 smaValue = ta.sma(close, 20)
@@ -257,14 +257,14 @@ plot(smaValue, "SMA")`;
       const contexts = barsToContext(bars);
 
       const startTime = performance.now();
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       const endTime = performance.now();
 
       expect(result.success).toBe(true);
       expect(endTime - startTime).toBeLessThan(1000);
     });
 
-    it('should handle large datasets', () => {
+    it('should handle large datasets', async () => {
       const source = `//@version=6
 indicator("Large Dataset")
 plot(close, "Close")`;
@@ -276,13 +276,13 @@ plot(close, "Close")`;
       const bars = createBars(10000);
       const contexts = barsToContext(bars);
 
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(true);
     }, 30000);
   });
 
   describe('Metrics', () => {
-    it('should track execution metrics', () => {
+    it('should track execution metrics', async () => {
       const source = `//@version=6
 indicator("Metrics")
 plot(close, "Close")`;
@@ -294,7 +294,7 @@ plot(close, "Close")`;
       const bars = createBars(100);
       const contexts = barsToContext(bars);
 
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const metrics = engine.getMetrics();
       expect(metrics.totalBars).toBe(100);

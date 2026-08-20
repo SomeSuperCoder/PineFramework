@@ -259,6 +259,8 @@ export interface ExecuteResponse extends ExecutionResultPayloadFields {
    * normalize() would strip it from the REST payload.
    */
   maxLookback: number;
+  /** REST-only: set to true when the run was cancelled (indicator removed / stop_indicator). */
+  cancelled?: boolean;
   // NOTE: REST has NO isConfirmed today — B3 adds `isConfirmed: true` to the
   // REST response later. Keeping ExecuteResponse as its own named shape NOW
   // keeps the type correct, and it is structurally compatible with the full

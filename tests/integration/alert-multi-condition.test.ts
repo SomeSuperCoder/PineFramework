@@ -29,7 +29,7 @@ import type {
 
 // ─── Shared helpers ─────────────────────────────────────────────────
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -58,7 +58,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return { engine, bars, result };
 }
 
@@ -102,10 +102,10 @@ function logTriggerDistribution(triggers: AlertTriggerEntry[], totalBars: number
 
 describe('higher-high-lower-low.pine alerts', () => {
   // ── 2.1 + 2.4: barIndex validity + distribution logging ──────────
-  it('produces valid barIndex and timestamps on sine-wave data', () => {
+  it('produces valid barIndex and timestamps on sine-wave data', async () => {
     const N = 1000;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(HHLL_SOURCE, bars);
+    const { result } = await runEngine(HHLL_SOURCE, bars);
 
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();
@@ -114,10 +114,10 @@ describe('higher-high-lower-low.pine alerts', () => {
   });
 
   // ── 2.2: alertConditions metadata ──────────────────────────────
-  it('has 9 alert conditions with non-empty title and message', () => {
+  it('has 9 alert conditions with non-empty title and message', async () => {
     const N = 500;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(HHLL_SOURCE, bars);
+    const { result } = await runEngine(HHLL_SOURCE, bars);
 
     expect(result.alertConditions).toBeDefined();
     expect(result.alertConditions!.length).toBe(HHLL_ALERT_COUNT);
@@ -137,18 +137,18 @@ describe('higher-high-lower-low.pine alerts', () => {
   });
 
   // ── 2.3: prepend scenario ──────────────────────────────────────
-  it('survives prepend with correct barIndex shift', () => {
+  it('survives prepend with correct barIndex shift', async () => {
     const N = 500;
     const PREPEND = 200;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
 
     // Run on initial set to get original triggers
-    const firstResult = runEngine(HHLL_SOURCE, bars).result;
+    const firstResult = (await runEngine(HHLL_SOURCE, bars)).result;
 
     // Prepend bars and re-execute on larger set
     const largerBars = prependBars(bars, PREPEND);
     expect(largerBars.length).toBe(N + PREPEND);
-    const secondResult = runEngine(HHLL_SOURCE, largerBars).result;
+    const secondResult = (await runEngine(HHLL_SOURCE, largerBars)).result;
 
     // All barIndex must be valid for the larger set
     expectValidTriggers(secondResult.alertTriggers!, largerBars, 'HHLL-prepend');
@@ -178,10 +178,10 @@ describe('higher-high-lower-low.pine alerts', () => {
   });
 
   // ── 2.4: distribution logging ──────────────────────────────────
-  it('logs trigger-per-bar distribution', () => {
+  it('logs trigger-per-bar distribution', async () => {
     const N = 1000;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(HHLL_SOURCE, bars);
+    const { result } = await runEngine(HHLL_SOURCE, bars);
 
     logTriggerDistribution(result.alertTriggers!, N, 'HHLL-dist');
   });
@@ -195,9 +195,9 @@ describe('volatility-trail.pine alerts', () => {
   const BAR_COUNT = 500;
 
   // ── 3.1: barIndex + timestamp ──────────────────────────────────
-  it('produces valid barIndex and timestamps on linear-up data', () => {
+  it('produces valid barIndex and timestamps on linear-up data', async () => {
     const bars = createTrendBars({ count: BAR_COUNT, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(VOLATILITY_TRAIL_SOURCE, bars);
+    const { result } = await runEngine(VOLATILITY_TRAIL_SOURCE, bars);
 
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();
@@ -206,9 +206,9 @@ describe('volatility-trail.pine alerts', () => {
   });
 
   // ── 3.2: alertConditions metadata ──────────────────────────────
-  it('has 4 alert conditions with non-empty title and message', () => {
+  it('has 4 alert conditions with non-empty title and message', async () => {
     const bars = createTrendBars({ count: BAR_COUNT, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(VOLATILITY_TRAIL_SOURCE, bars);
+    const { result } = await runEngine(VOLATILITY_TRAIL_SOURCE, bars);
 
     expect(result.alertConditions).toBeDefined();
     expect(result.alertConditions!.length).toBe(VOLATILITY_TRAIL_ALERT_COUNT);
@@ -228,9 +228,9 @@ describe('volatility-trail.pine alerts', () => {
   });
 
   // ── 3.3: cross-validation flip labels ↔ alerts ─────────────────
-  it('flip alerts match ▲/▼ labels on the same bar', () => {
+  it('flip alerts match ▲/▼ labels on the same bar', async () => {
     const bars = createTrendBars({ count: BAR_COUNT, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(VOLATILITY_TRAIL_SOURCE, bars);
+    const { result } = await runEngine(VOLATILITY_TRAIL_SOURCE, bars);
 
     const triggers = result.alertTriggers!;
     const labels = result.labels!;
@@ -278,9 +278,9 @@ describe('volatility-trail.pine alerts', () => {
   });
 
   // ── 3.4: cross-validation retest shapes ↔ alerts ───────────────
-  it('retest alerts match ◆ plotchar shapes on the same bar', () => {
+  it('retest alerts match ◆ plotchar shapes on the same bar', async () => {
     const bars = createTrendBars({ count: BAR_COUNT, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(VOLATILITY_TRAIL_SOURCE, bars);
+    const { result } = await runEngine(VOLATILITY_TRAIL_SOURCE, bars);
 
     const triggers = result.alertTriggers!;
     const shapes = result.shapes!;
@@ -332,17 +332,17 @@ describe('volatility-trail.pine alerts', () => {
   });
 
   // ── 3.5: prepend scenario ──────────────────────────────────────
-  it('survives prepend with correct barIndex shift', () => {
+  it('survives prepend with correct barIndex shift', async () => {
     const N = 500;
     const PREPEND = 200;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'linear-up' });
 
-    const firstResult = runEngine(VOLATILITY_TRAIL_SOURCE, bars).result;
+    const firstResult = (await runEngine(VOLATILITY_TRAIL_SOURCE, bars)).result;
     expect(firstResult.alertTriggers!.length).toBeGreaterThan(0);
 
     const largerBars = prependBars(bars, PREPEND);
     expect(largerBars.length).toBe(N + PREPEND);
-    const secondResult = runEngine(VOLATILITY_TRAIL_SOURCE, largerBars).result;
+    const secondResult = (await runEngine(VOLATILITY_TRAIL_SOURCE, largerBars)).result;
 
     expectValidTriggers(secondResult.alertTriggers!, largerBars, 'vol-trail-prepend');
 
@@ -374,10 +374,10 @@ describe('volatility-trail.pine alerts', () => {
   // merge by constructing ScriptResult-like objects and calling the
   // merge logic directly. Since mergeDiffIntoResult is a React hook
   // (useCallback) we reimplement the relevant logic inline.
-  it('forming-candle diff merge appends without duplication', () => {
+  it('forming-candle diff merge appends without duplication', async () => {
     // Create initial result from a known indicator
     const bars = createTrendBars({ count: 100, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(VOLATILITY_TRAIL_SOURCE, bars);
+    const { result } = await runEngine(VOLATILITY_TRAIL_SOURCE, bars);
     const prevTriggers: AlertTriggerEntry[] = result.alertTriggers || [];
 
     // Simulate a diff message with new triggers for a forming candle at barIndex 100

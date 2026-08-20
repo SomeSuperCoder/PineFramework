@@ -77,12 +77,12 @@ function sma5Key(engine: ExecutionEngine): string | undefined {
 }
 
 describe('M5a.1 forming-candle realtime smoke — DecimalRingBuffer rebuild (fp-final-gate lock)', () => {
-  it('no throw across multiple forming-candle ticks; sma values are exact decimals', () => {
+  it('no throw across multiple forming-candle ticks; sma values are exact decimals', async () => {
     const { ast } = parse(SOURCE);
     const engine = new ExecutionEngine(compile(ast));
 
     // Confirmed bars — constant close 0.1 → sma5 = 0.1 exactly after warmup.
-    const confirmed = engine.executeBars(buildContexts(BAR_COUNT));
+    const confirmed = await engine.executeBars(buildContexts(BAR_COUNT));
     expect(confirmed.success).toBe(true);
     const key = sma5Key(engine);
     expect(key).toBeDefined();
@@ -117,10 +117,10 @@ describe('M5a.1 forming-candle realtime smoke — DecimalRingBuffer rebuild (fp-
     }
   });
 
-  it('post-tick smaBuffers are rebuilt as DecimalRingBuffer and keep working (sum intact)', () => {
+  it('post-tick smaBuffers are rebuilt as DecimalRingBuffer and keep working (sum intact)', async () => {
     const { ast } = parse(SOURCE);
     const engine = new ExecutionEngine(compile(ast));
-    engine.executeBars(buildContexts(BAR_COUNT));
+    await engine.executeBars(buildContexts(BAR_COUNT));
 
     engine.setFormingCandle(true);
     const r1 = engine.computeFormingCandle(makeTickContext(0.2));

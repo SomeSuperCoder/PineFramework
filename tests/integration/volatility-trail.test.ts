@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,7 +67,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   if (!result.success) console.log('executeBars error:', result.error);
   return { engine, bars, result };
 }
@@ -75,18 +75,18 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
 describe('Volatility Trail [BOSWaves]', () => {
   const source = fs.readFileSync('./test_indicators/volatility-trail.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -106,9 +106,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(result.success).toBe(true);
   });
 
-  it('produces expected plot output keys', () => {
+  it('produces expected plot output keys', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBeGreaterThanOrEqual(1);
@@ -116,9 +116,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(hasTrail).toBe(true);
   });
 
-  it('has non-null values after warmup period', () => {
+  it('has non-null values after warmup period', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     const warmup = 250;
@@ -136,9 +136,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(trailSeries.values.length).toBe(500);
   });
 
-  it('trail values stay within reasonable bounds', () => {
+  it('trail values stay within reasonable bounds', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const trailKey = Array.from(result.outputs.keys()).find((k) => k.includes('Trail'));
     expect(trailKey).toBeDefined();
@@ -153,9 +153,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     }
   });
 
-  it('trail flips between trending up and trending down', () => {
+  it('trail flips between trending up and trending down', async () => {
     const bars = createTrendingBars(500, 80, 99);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const trailKey = Array.from(result.outputs.keys()).find((k) => k.includes('Trail'));
     const trailSeries = result.outputs.get(trailKey!)!;
@@ -174,9 +174,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(flatOrDecreasing).toBeGreaterThan(0);
   });
 
-  it('produces bar colors when showCandle is true (default)', () => {
+  it('produces bar colors when showCandle is true (default)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     const warmup = 250;
@@ -184,23 +184,23 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(coloredBars.length).toBeGreaterThan(0);
   });
 
-  it('produces shapes for retest diamonds', () => {
+  it('produces shapes for retest diamonds', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes).toBeDefined();
     expect(result.shapes.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('produces labels for buy/sell signals', () => {
+  it('produces labels for buy/sell signals', async () => {
     const bars = createTrendingBars(500, 80, 123);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
   });
 
-  it('handles var persistence across bars', () => {
+  it('handles var persistence across bars', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const trailKey = Array.from(result.outputs.keys()).find((k) => k.includes('Trail'));
     const trailSeries = result.outputs.get(trailKey!)!;
@@ -210,9 +210,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(uniqueValues.size).toBeGreaterThan(10);
   });
 
-  it('trail respects trend direction changes', () => {
+  it('trail respects trend direction changes', async () => {
     const bars = createTrendingBars(500, 80, 99);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const trailKey = Array.from(result.outputs.keys()).find((k) => k.includes('Trail'));
     const trailSeries = result.outputs.get(trailKey!)!;
@@ -233,9 +233,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(aboveCount).toBeGreaterThan(10);
   });
 
-  it('trail plot has per-bar colors (green/red based on trend)', () => {
+  it('trail plot has per-bar colors (green/red based on trend)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.plotColors).toBeDefined();
     const trailKey = Array.from(result.plotColors!.keys()).find((k) => k.includes('Trail'));
@@ -250,9 +250,9 @@ describe('Volatility Trail [BOSWaves]', () => {
     expect(hasRed).toBe(true);
   });
 
-  it('trail follows upperBand downward in bearish mode (not flat)', () => {
+  it('trail follows upperBand downward in bearish mode (not flat)', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
 
     const trailKey = Array.from(result.outputs.keys()).find((k) => k.includes('Trail'));

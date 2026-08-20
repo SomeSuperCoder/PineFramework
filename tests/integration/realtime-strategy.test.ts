@@ -99,11 +99,11 @@ plot(sma10, "SMA10")
 `;
 
   describe('strategy forming candle does not mutate strategy engine state', () => {
-    it('should not enter a position during a forming candle update', () => {
+    it('should not enter a position during a forming candle update', async () => {
       const engine = compileScript(SMA_CROSSOVER_STRATEGY);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       // Get strategy markers before forming candle
       // (executeBars only returns the last result; markers accumulate on the engine)
@@ -130,11 +130,11 @@ plot(sma10, "SMA10")
       expect(result.diffOutputs).toBeDefined();
     });
 
-    it('should preserve strategy state across multiple forming candle updates', () => {
+    it('should preserve strategy state across multiple forming candle updates', async () => {
       const engine = compileScript(SMA_CROSSOVER_STRATEGY);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const resultAny = engine as unknown as { strategyEngine?: { getMarkers: () => unknown[] } };
       const markersBefore = resultAny.strategyEngine?.getMarkers()?.length ?? 0;
@@ -158,11 +158,11 @@ plot(sma10, "SMA10")
   });
 
   describe('strategy forming candle followed by committed bar', () => {
-    it('should correctly enter a position when a new committed bar triggers signals', () => {
+    it('should correctly enter a position when a new committed bar triggers signals', async () => {
       const engine = compileScript(SMA_CROSSOVER_STRATEGY);
       const bars = makeBars(30, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const resultAny = engine as unknown as { strategyEngine?: { getMarkers: () => unknown[] } };
       const markersBefore = resultAny.strategyEngine?.getMarkers()?.length ?? 0;
@@ -218,12 +218,12 @@ plot(sma20, "SMA20")
 plot(sma50, "SMA50")
 `;
 
-    it('should not corrupt crossover/crossunder state during forming candle', () => {
+    it('should not corrupt crossover/crossunder state during forming candle', async () => {
       const engine = compileScript(ENTRY_EXIT_STRATEGY);
       // Need enough bars for SMA50 to initialize
       const bars = makeBars(80, 100, 1000000);
       const contexts = barsToContexts(bars);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const totalBarsBefore = engine.getMetrics().totalBars;
       const lastBar = bars[bars.length - 1]!;

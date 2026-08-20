@@ -84,11 +84,11 @@ describe('WS Real-Time Merge Correctness', () => {
   // We need at LEAST 200 bars for Q-Trend's period, so take the last 300.
   const testBars = fullBars.slice(-300);
 
-  it('shapes and labels are identical when engine runs on the same data plus one extra bar', () => {
+  it('shapes and labels are identical when engine runs on the same data plus one extra bar', async () => {
     // === STEP 1: Initial execution (simulating HTTP load) ===
     const engine1 = new ExecutionEngine(compiled);
     const contexts1 = buildContexts(testBars);
-    const result1 = engine1.executeBars(contexts1);
+    const result1 = await engine1.executeBars(contexts1);
 
     // Get shapes from initial execution
     const initialShapes = (result1.shapes || []).map((s: any) => ({
@@ -120,7 +120,7 @@ describe('WS Real-Time Merge Correctness', () => {
     // then process the new confirmed bar.
     const engine2 = new ExecutionEngine(compiled);
     const contexts2 = buildContexts(extendedBars);
-    const result2 = engine2.executeBars(contexts2);
+    const result2 = await engine2.executeBars(contexts2);
 
     const wsShapes = (result2.shapes || []).map((s: any) => ({
       time: s.time,

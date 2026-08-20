@@ -59,11 +59,11 @@ function compileScript(source: string): ExecutionEngine {
 
 describe('Real-Time Execution Pipeline', () => {
   describe('executeRealtimeBar()', () => {
-    it('should execute a single new bar preserving prior state', () => {
+    it('should execute a single new bar preserving prior state', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const initialContexts = makeContexts(10, 100, 1000000);
 
-      engine.executeBars(initialContexts);
+      await engine.executeBars(initialContexts);
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
@@ -77,11 +77,11 @@ describe('Real-Time Execution Pipeline', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should return outputs from realtime bar execution', () => {
+    it('should return outputs from realtime bar execution', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const initialContexts = makeContexts(15, 100, 1000000);
 
-      engine.executeBars(initialContexts);
+      await engine.executeBars(initialContexts);
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
@@ -96,11 +96,11 @@ describe('Real-Time Execution Pipeline', () => {
       expect(result.outputs.size).toBeGreaterThan(0);
     });
 
-    it('should return shapes, fills, and strategyMarkers from realtime bar', () => {
+    it('should return shapes, fills, and strategyMarkers from realtime bar', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const initialContexts = makeContexts(10, 100, 1000000);
 
-      engine.executeBars(initialContexts);
+      await engine.executeBars(initialContexts);
 
       const lastCtx = initialContexts[initialContexts.length - 1]!;
       const newContext = makeContext(
@@ -118,10 +118,10 @@ describe('Real-Time Execution Pipeline', () => {
   });
 
   describe('Snapshot and rollback', () => {
-    it('should create snapshots during realtime bar execution', () => {
+    it('should create snapshots during realtime bar execution', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const contexts = makeContexts(5, 100, 1000000);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const lastCtx = contexts[contexts.length - 1]!;
       const newContext = makeContext(
@@ -140,7 +140,7 @@ describe('Real-Time Execution Pipeline', () => {
   });
 
   describe('Var persistence across realtime bars', () => {
-    it('should preserve var state across incremental realtime bar executions', () => {
+    it('should preserve var state across incremental realtime bar executions', async () => {
       const VAR_SCRIPT = `//@version=6
 indicator("Var Test")
 var counter = 0.0
@@ -150,7 +150,7 @@ plot(counter)
 
       const engine = compileScript(VAR_SCRIPT);
       const contexts = makeContexts(5, 100, 1000000);
-      engine.executeBars(contexts);
+      await engine.executeBars(contexts);
 
       const counterOutput = engine.getOutput('plot');
       expect(counterOutput).toBeDefined();
@@ -174,10 +174,10 @@ plot(counter)
   });
 
   describe('execution_result message format', () => {
-    it('should produce valid execution result with all required fields', () => {
+    it('should produce valid execution result with all required fields', async () => {
       const engine = compileScript(SMA_SCRIPT);
       const contexts = makeContexts(10, 100, 1000000);
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
 
       expect(result).toHaveProperty('success');
       expect(result).toHaveProperty('outputs');

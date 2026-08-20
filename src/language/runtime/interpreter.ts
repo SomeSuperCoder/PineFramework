@@ -30,6 +30,7 @@ import {
   type ExecutionResult,
   type EngineError,
   type StrategyMarkerEntry,
+  type CancellationToken,
 } from './execution-types.js';
 import type { ExecutionEngine } from './execution-engine.js';
 import type { RuntimeScope } from './scope.js';
@@ -91,6 +92,31 @@ import {
   BreakSignal,
   ContinueSignal,
 } from './statement-executor.js';
+
+/**
+ * How many bars execute before the batch loop hands control back to the event
+ * loop. Constant by design (not configurable): 50 keeps long runs responsive
+ * (WS/DELETE handlers can run) without paying per-bar promise overhead —
+ * decimal.js at DP=20 already makes each bar expensive.
+ */
+const YIELD_EVERY_N_BARS = 50;
+
+/**
+ * Yield to the event loop so pending I/O (WS messages, DELETE requests) can
+ * run between bar batches. setImmediate is the Node-native "run after current
+ * I/O callbacks" primitive; browsers lack it, so fall back to setTimeout(0) —
+ * same cooperative effect, universally available (the framework's executeScript
+ * is callable from browser bundles).
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof setImmediate === 'function') {
+      setImmediate(resolve);
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
 
 export class Interpreter {
   private eng: ExecutionEngine;
@@ -256,7 +282,20 @@ export class Interpreter {
     }
   }
 
-  executeBars(bars: ExecutionContext[]): ExecutionResult {
+  /**
+   * Execute a batch of bars. ASYNC by design: the loop yields to the event
+   * loop every YIELD_EVERY_N_BARS bars so a long-computing indicator cannot
+   * block the process (WS/DELETE handlers stay responsive — the original
+   * infinite-load bug). `executeBar` itself stays SYNC — realtime callers
+   * (FormingCandleManager, live-strategy-executor per-candle path) depend on
+   * sync single-bar semantics.
+   *
+   * `token` is an optional cooperative CancellationToken (registry injected by
+   * the caller — never constructed here). It is checked ONLY at yield points;
+   * a flagged token stops the loop early and returns the partial run marked
+   * `cancelled: true` so the caller can distinguish cancel from success/failure.
+   */
+  async executeBars(bars: ExecutionContext[], token?: CancellationToken): Promise<ExecutionResult> {
     const allMarkers: StrategyMarkerEntry[] = [];
     let lastResult: ExecutionResult = {
       success: true,
@@ -290,7 +329,10 @@ export class Interpreter {
       hlines: [...this.eng.hlines],
     };
 
-    for (const bar of bars) {
+    // Cooperative scheduling: iterate the caller's array BY REFERENCE (never
+    // clone — host memory is tight), yielding to the event loop every N bars.
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i];
       lastResult = this.executeBar(bar);
       if (!lastResult.success) {
         this.sanitizeOutputs();
@@ -306,6 +348,51 @@ export class Interpreter {
         this.eng.runtimeMaxBarsBack,
         this.eng.getMaxLookback(),
       );
+
+      if ((i + 1) % YIELD_EVERY_N_BARS === 0) {
+        await yieldToEventLoop();
+        if (token?.isCancelled) {
+          // Partial run: bars executed so far are valid, but the caller asked
+          // to stop. Mirrors the failure exit (sanitize only — lookback
+          // filtering belongs to a completed run). `cancelled: true` is the
+          // distinguisher B2's cancel-check reads.
+          this.sanitizeOutputs();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const partialLines = [...this.eng.lines.values()].map((l: any) => ({ ...l }));
+          const partialLinefills = [...this.eng.linefills.values()].map((lf) => ({
+            line1: { ...this.eng.lines.get(lf.line1Id)! },
+            line2: { ...this.eng.lines.get(lf.line2Id)! },
+            color: lf.color,
+            fillgaps: lf.fillgaps,
+          }));
+          return {
+            success: true,
+            cancelled: true,
+            version: this.eng.sourceProgram.version,
+            overlay: this.eng.compiledScript.overlay,
+            outputs: this.eng.outputs,
+            shapes: [...this.eng.shapes],
+            fills: this.eng.fills,
+            strategyMarkers: allMarkers,
+            bgcolor: [...this.eng.bgcolorData],
+            plotColors: this.eng.plotColors,
+            fillColorData: this.eng.fillColorData,
+            hiddenPlotKeys: [...this.eng.hiddenPlotKeys],
+            lines: partialLines,
+            linefills: partialLinefills,
+            labels: [...this.eng.labels],
+            boxes: [...this.eng.boxes.values()],
+            tables: [...this.eng.tables.values()],
+            barTimestamps: [...this.eng.barTimestamps],
+            alertConditions: this.eng.alertConditionEntries,
+            alertTriggers: [...this.eng.alertTriggers],
+            barColorData: [...this.eng.barColorData],
+            maxLookback: this.eng.getMaxLookback(),
+            plotOverlayKeys: [...this.eng.plotOverlayKeys],
+            hlines: [...this.eng.hlines],
+          };
+        }
+      }
     }
 
     // Final pass: convert any remaining NaN/Infinity across all outputs to NA

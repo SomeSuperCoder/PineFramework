@@ -89,11 +89,11 @@ function writeGolden(filePath: string, obj: unknown): void {
 }
 
 describe('backtest golden fixture capture', () => {
-  it('captures the current API + CLI output shapes into golden JSON', () => {
+  it('captures the current API + CLI output shapes into golden JSON', async () => {
     const bars = createCrossoverBars();
     expect(bars.length).toBe(120);
 
-    const pipeline = runBacktestPipeline({ script: STRATEGY, bars });
+    const pipeline = await runBacktestPipeline({ script: STRATEGY, bars });
     expect(pipeline.success).toBe(true);
     expect(pipeline.engine).toBeDefined();
 

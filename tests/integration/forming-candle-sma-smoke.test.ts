@@ -97,16 +97,16 @@ function sma5Diff(result: { diffOutputs: Record<string, unknown> }): number | nu
   return typeof v === 'number' ? v : null;
 }
 
-function runConfirmed(engine: ExecutionEngine): void {
-  const result = engine.executeBars(buildContexts(BAR_COUNT));
+async function runConfirmed(engine: ExecutionEngine): Promise<void> {
+  const result = await engine.executeBars(buildContexts(BAR_COUNT));
   expect(result.success).toBe(true);
 }
 
 describe('M5a.1 forming-candle realtime smoke — DecimalRingBuffer rebuild (fp-final-gate lock)', () => {
-  it('no throw on forming-candle ticks + exact decimal sma values (0.12, 0.14, 0.16)', () => {
+  it('no throw on forming-candle ticks + exact decimal sma values (0.12, 0.14, 0.16)', async () => {
     const { ast } = parse(SOURCE);
     const engine = new ExecutionEngine(compile(ast));
-    runConfirmed(engine);
+    await runConfirmed(engine);
 
     // Sanity: confirmed-bar path produces sma5 = 0.1 EXACTLY (post-warmup).
     // (This is the "same values as the confirmed-bar path" anchor.)
@@ -144,10 +144,10 @@ describe('M5a.1 forming-candle realtime smoke — DecimalRingBuffer rebuild (fp-
     }
   });
 
-  it('post-tick smaBuffers are rebuilt as DecimalRingBuffer and keep the exact running sum', () => {
+  it('post-tick smaBuffers are rebuilt as DecimalRingBuffer and keep the exact running sum', async () => {
     const { ast } = parse(SOURCE);
     const engine = new ExecutionEngine(compile(ast));
-    runConfirmed(engine);
+    await runConfirmed(engine);
 
     const tickCtx = makeTickContext(1700000000000 + BAR_COUNT * 3600000, 0.2);
     engine.setFormingCandle(true);

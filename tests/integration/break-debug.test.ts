@@ -37,7 +37,7 @@ function createZigzagBars(count: number): Array<{
 }
 
 describe('Break and Pivot Tests', () => {
-  it('break exits a for loop', () => {
+  it('break exits a for loop', async () => {
     const src = `//@version=6
 indicator("BreakTest")
 result = 0
@@ -86,12 +86,12 @@ plot(result)`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     const output = result.outputs.get('plot');
     expect(output?.values[output.values.length - 1]).toBe(5);
   });
 
-  it('pivot detection works with zigzag data', () => {
+  it('pivot detection works with zigzag data', async () => {
     const src = `//@version=6
 indicator("PivotTest")
 ph = ta.pivothigh(5, 5)
@@ -130,7 +130,7 @@ plot(pl, "pl")`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     expect(result.success).toBe(true);
 
     const phSeries = result.outputs.get('ph');
@@ -145,7 +145,7 @@ plot(pl, "pl")`;
     expect(phCount + plCount).toBeGreaterThan(10);
   });
 
-  it('debug HHLL S/R full pipeline including res/sup/trend/line drawing', () => {
+  it('debug HHLL S/R full pipeline including res/sup/trend/line drawing', async () => {
     const src = `//@version=6
 indicator("HHLLDebug", overlay=true)
 lb = 5
@@ -272,7 +272,7 @@ plot(sup, "sup", display=display.none)`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     expect(result.success).toBe(true);
 
     const reS = result.outputs.get('re')!;
@@ -311,7 +311,7 @@ plot(sup, "sup", display=display.none)`;
     }
   });
 
-  it('multiple sequential break calls in findprevious', () => {
+  it('multiple sequential break calls in findprevious', async () => {
     // Simulate the EXACT findprevious pattern from the HHLL script
     const src = `//@version=6
 indicator("FindPrevSeqTest")
@@ -425,7 +425,7 @@ plot(e, "e")`;
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     expect(result.success).toBe(true);
 
     const aSeries = result.outputs.get('a');

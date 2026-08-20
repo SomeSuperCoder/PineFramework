@@ -40,18 +40,18 @@ function createBars(count: number, startPrice: number = 100) {
 describe('TrendCraft ICT SwiftEdge Indicator', () => {
   const source = fs.readFileSync('./test_indicators/trendcraft-ict-swiftedge.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('resolves syminfo.tickerid at runtime', () => {
+  it('resolves syminfo.tickerid at runtime', async () => {
     const testSource = `//@version=6
 indicator("SymInfo Test")
 x = syminfo.tickerid
@@ -81,7 +81,7 @@ plot(x, "ticker")`;
     expect(result.success).toBe(true);
   });
 
-  it('executes the full indicator on one bar without crashing', () => {
+  it('executes the full indicator on one bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -110,7 +110,7 @@ plot(x, "ticker")`;
     expect(result.success).toBe(true);
   });
 
-  function runEngine() {
+  async function runEngine() {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -140,11 +140,11 @@ plot(x, "ticker")`;
         bars.slice(0, i + 1).map((b) => b.volume),
       ),
     }));
-    return { engine, bars, result: engine.executeBars(contexts) };
+    return { engine, bars, result: await engine.executeBars(contexts) };
   }
 
-  it('executes the full indicator on multiple bars without crashing', () => {
-    const { result } = runEngine();
+  it('executes the full indicator on multiple bars without crashing', async () => {
+    const { result } = await runEngine();
     expect(result.success).toBe(true);
     expect(result.outputs.size).toBe(2);
     expect(result.fills.length).toBeGreaterThan(0);
@@ -155,8 +155,8 @@ plot(x, "ticker")`;
     }
   });
 
-  it('verifies all visual data the indicator produces', () => {
-    const { result } = runEngine();
+  it('verifies all visual data the indicator produces', async () => {
+    const { result } = await runEngine();
 
     // === 1) TWO SMA plot outputs with correct metadata ===
     const plotKeys = [...result.outputs.keys()];
@@ -350,7 +350,7 @@ plot(close, "c")`;
           ltBars.slice(0, i + 1).map((b) => b.volume),
         ),
       }));
-      const ltResult = ltEngine.executeBars(ltContexts);
+      const ltResult = await ltEngine.executeBars(ltContexts);
       expect(ltResult.success).toBe(true);
       expect(ltResult.lines).toBeDefined();
       expect(ltResult.lines!.length).toBe(5); // one line per bar since it's outside conditional
@@ -441,7 +441,7 @@ if not na(lvl) and close > lvl
         e2eBars.slice(0, i + 1).map((b) => b.volume),
       ),
     }));
-    const e2eResult = e2eEngine.executeBars(e2eContexts);
+    const e2eResult = await e2eEngine.executeBars(e2eContexts);
     expect(e2eResult.success).toBe(true);
     for (const [key, series] of e2eResult.outputs) {
       console.log(
@@ -537,7 +537,7 @@ plot(ta.pivotlow(2, 2), "pl")`,
           bars.slice(0, i + 1).map((b) => b.volume),
         ),
       }));
-      const result = engine.executeBars(contexts);
+      const result = await engine.executeBars(contexts);
       expect(result.success).toBe(true);
       const phKey = [...result.outputs.keys()].find((k) => k.includes('ph'));
       const plKey = [...result.outputs.keys()].find((k) => k.includes('pl'));
@@ -638,7 +638,7 @@ plot(ta.pivotlow(2, 2), "pl")`,
         pivotTestBars.slice(0, i + 1).map((b) => b.volume),
       ),
     }));
-    const pivotResult = pivotEngine.executeBars(pivotContexts);
+    const pivotResult = await pivotEngine.executeBars(pivotContexts);
     expect(pivotResult.success).toBe(true);
     console.log(
       `  with known pivot data: lines=${pivotResult.lines?.length ?? 0}, labels=${pivotResult.labels?.length ?? 0}`,

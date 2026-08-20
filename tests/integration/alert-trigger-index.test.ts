@@ -9,7 +9,7 @@ import { EVERY_BAR_ALERT_SOURCE } from '../fixtures/every-bar-alert.js';
 /**
  * Helper: run indicator source over bars, return engine + result.
  */
-function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -38,7 +38,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return { engine, bars, result };
 }
 
@@ -46,10 +46,10 @@ describe('AlertTrigger index alignment', () => {
   // ---------------------------------------------------------------------------
   // 2.1 — Every bar produces triggers within bounds and matching timestamps.
   // ---------------------------------------------------------------------------
-  it('every alert trigger barIndex is within bounds and matches bar timestamps', () => {
+  it('every alert trigger barIndex is within bounds and matches bar timestamps', async () => {
     const N = 500;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(EVERY_BAR_ALERT_SOURCE, bars);
+    const { result } = await runEngine(EVERY_BAR_ALERT_SOURCE, bars);
 
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();
@@ -68,10 +68,10 @@ describe('AlertTrigger index alignment', () => {
   // ---------------------------------------------------------------------------
   // 2.2 — barIndex zero-indexes from the first bar.
   // ---------------------------------------------------------------------------
-  it('barIndex zero-indexes from the first bar', () => {
+  it('barIndex zero-indexes from the first bar', async () => {
     const N = 500;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(EVERY_BAR_ALERT_SOURCE, bars);
+    const { result } = await runEngine(EVERY_BAR_ALERT_SOURCE, bars);
 
     expect(result.success).toBe(true);
 
@@ -93,13 +93,13 @@ describe('AlertTrigger index alignment', () => {
   // ---------------------------------------------------------------------------
   // 2.3 — Prepend re-execute: triggers stay valid when more bars are prepended.
   // ---------------------------------------------------------------------------
-  it('survives prepend + re-execute with valid barIndex values', () => {
+  it('survives prepend + re-execute with valid barIndex values', async () => {
     const N = 500;
     const PREPEND = 200;
 
     // 1. Execute on initial 500 bars
     const initialBars = createTrendBars({ count: N, seed: 42, trend: 'sine-wave' });
-    const { result: initialResult } = runEngine(EVERY_BAR_ALERT_SOURCE, initialBars);
+    const { result: initialResult } = await runEngine(EVERY_BAR_ALERT_SOURCE, initialBars);
     expect(initialResult.success).toBe(true);
     expect(initialResult.alertTriggers!.length).toBe(N);
 
@@ -108,7 +108,7 @@ describe('AlertTrigger index alignment', () => {
     expect(largerBars.length).toBe(N + PREPEND);
 
     // 3. Re-execute on the larger set
-    const { result: reResult } = runEngine(EVERY_BAR_ALERT_SOURCE, largerBars);
+    const { result: reResult } = await runEngine(EVERY_BAR_ALERT_SOURCE, largerBars);
     expect(reResult.success).toBe(true);
     expect(reResult.alertTriggers!.length).toBe(N + PREPEND);
 

@@ -130,7 +130,7 @@ describe('root cause: callJupiterApi weighted average divides by 100 twice', () 
     expect(fixed).toBe(25); // ← the intended value
   });
 
-  it('multi-step route also 100x too small (0.16 vs 16 for 25/40% + 10/60%)', () => {
+  it('multi-step route also 100x too small (0.16 vs 16 for 25/40% + 10/60%)', async () => {
     const twoStep = [
       { percent: 40, swapInfo: { label: 'Raydium' } }, // 25 bps
       { percent: 60, swapInfo: { label: 'Meteora DLMM' } }, // 10 bps

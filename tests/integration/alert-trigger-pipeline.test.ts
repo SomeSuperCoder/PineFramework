@@ -11,7 +11,7 @@ import type { CandlestickData } from '../../frontend/src/chart/types.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -40,7 +40,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendBars>) {
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return { engine, bars, result };
 }
 
@@ -61,11 +61,11 @@ describe('Alert trigger end-to-end pipeline', () => {
   // -----------------------------------------------------------------------
   // 5.1 — Full pipeline: known price cross → triggers match expected bars
   // -----------------------------------------------------------------------
-  it('produces triggers only for bars where close > threshold', () => {
+  it('produces triggers only for bars where close > threshold', async () => {
     const THRESHOLD = 105;
     const N = 500;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'linear-up' });
-    const { result } = runEngine(thresholdAlertSource(THRESHOLD), bars);
+    const { result } = await runEngine(thresholdAlertSource(THRESHOLD), bars);
 
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();
@@ -95,11 +95,11 @@ describe('Alert trigger end-to-end pipeline', () => {
   // -----------------------------------------------------------------------
   // 5.1 (cont.) — Simulate frontend state: Viewport + CandlestickData
   // -----------------------------------------------------------------------
-  it('trigger barIndex maps to valid pixel positions in a realistic viewport', () => {
+  it('trigger barIndex maps to valid pixel positions in a realistic viewport', async () => {
     const N = 500;
     const bars = createTrendBars({ count: N, seed: 42, trend: 'linear-up' });
     const candles = barsToCandles(bars);
-    const { result } = runEngine(thresholdAlertSource(105), bars);
+    const { result } = await runEngine(thresholdAlertSource(105), bars);
 
     expect(result.success).toBe(true);
 
@@ -133,21 +133,21 @@ describe('Alert trigger end-to-end pipeline', () => {
   // -----------------------------------------------------------------------
   // 5.2 — Prepend scenario: triggers still valid after re-execute on larger set
   // -----------------------------------------------------------------------
-  it('handles prepend + re-execute with valid viewport mapping', () => {
+  it('handles prepend + re-execute with valid viewport mapping', async () => {
     const N = 500;
     const PREPEND = 200;
 
     // Use EVERY_BAR_ALERT (triggers on every bar) so we can reliably find
     // the trigger for a specific bar by timestamp.
     const initialBars = createTrendBars({ count: N, seed: 42, trend: 'linear-up' });
-    const { result: firstResult } = runEngine(EVERY_BAR_ALERT_SOURCE, initialBars);
+    const { result: firstResult } = await runEngine(EVERY_BAR_ALERT_SOURCE, initialBars);
     const firstTriggerCount = firstResult.alertTriggers!.length;
     expect(firstTriggerCount).toBe(N);
 
     // Prepend 200 bars and re-execute
     const largerBars = prependBars(initialBars, PREPEND);
     expect(largerBars.length).toBe(N + PREPEND);
-    const { result: secondResult } = runEngine(EVERY_BAR_ALERT_SOURCE, largerBars);
+    const { result: secondResult } = await runEngine(EVERY_BAR_ALERT_SOURCE, largerBars);
 
     // All barIndex values must be valid for the larger set
     for (const trigger of secondResult.alertTriggers!) {
@@ -183,10 +183,10 @@ describe('Alert trigger end-to-end pipeline', () => {
   // -----------------------------------------------------------------------
   // 5.3 — real higher-high-lower-low.pine script on 1000 bars
   // -----------------------------------------------------------------------
-  it('higher-high-lower-low.pine produces valid triggers on 1000 bars', () => {
+  it('higher-high-lower-low.pine produces valid triggers on 1000 bars', async () => {
     const source = HHLL_SOURCE;
     const bars = createTrendBars({ count: 1000, seed: 42, trend: 'sine-wave' });
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
 
     expect(result.success).toBe(true);
     expect(result.alertTriggers).toBeDefined();

@@ -43,7 +43,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -72,24 +72,24 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  return { engine, bars, result: engine.executeBars(contexts) };
+  return { engine, bars, result: await engine.executeBars(contexts) };
 }
 
 describe('Two-Pole Trend Filter [BigBeluga]', () => {
   const source = fs.readFileSync('./test_indicators/two-pole-trend-filter.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -108,18 +108,18 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(result.success).toBe(true);
   });
 
-  it('produces correct plot output key with linewidth 3', () => {
+  it('produces correct plot output key with linewidth 3', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys).toHaveLength(1);
     expect(keys[0]).toBe('Two-Pole Filter__lw:3');
   });
 
-  it('produces 100% non-null values after warm-up', () => {
+  it('produces 100% non-null values after warm-up', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     for (const [, series] of result.outputs) {
       // Only check values after the warmup period (ta.atr(200) lookback)
@@ -134,9 +134,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     }
   });
 
-  it('filter values converge toward close price', () => {
+  it('filter values converge toward close price', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     const tail = 30;
@@ -152,9 +152,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(series.values.length).toBe(BAR_COUNT);
   });
 
-  it('filter is monotonically increasing during steady uptrend', () => {
+  it('filter is monotonically increasing during steady uptrend', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80, 123);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     // Post-warmup, bars 210-299 are in an uptrend phase (last 30% of 300 bars)
@@ -170,9 +170,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(values[values.length - 1]!).toBeGreaterThan(values[0]!);
   });
 
-  it('produces per-bar gradient colors (green, red, yellow)', () => {
+  it('produces per-bar gradient colors (green, red, yellow)', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.plotColors).toBeDefined();
     const plotColorMap = result.plotColors!;
@@ -212,9 +212,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(hasRed).toBe(true);
   });
 
-  it('color gradient transitions follow trend direction', () => {
+  it('color gradient transitions follow trend direction', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const allColors = result.plotColors!.get('Two-Pole Filter__lw:3')!;
     // Only consider post-warmup colors (bars WARMUP_BARS and beyond)
@@ -245,9 +245,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(greenCountLate + redCountEarly).toBeGreaterThan(0);
   });
 
-  it('method var persistence: rising/falling counters increment across bars', () => {
+  it('method var persistence: rising/falling counters increment across bars', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const allColors = result.plotColors!.get('Two-Pole Filter__lw:3')!;
     const postWarmupColors = allColors
@@ -261,25 +261,25 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     expect(hasYellow || hasGreen).toBe(true);
   });
 
-  it('produces no shapes when signals input is false (default)', () => {
+  it('produces no shapes when signals input is false (default)', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.shapes).toBeDefined();
     expect(result.shapes.length).toBe(0);
   });
 
-  it('produces no bar colors when bar_col input is false (default)', () => {
+  it('produces no bar colors when bar_col input is false (default)', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     expect(result.barColorData!.length).toBe(0);
   });
 
-  it('handles var variables inside method (f1/f2 filter state)', () => {
+  it('handles var variables inside method (f1/f2 filter state)', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     // Check post-warmup values are changing (not all identical)
@@ -292,9 +292,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     }
   });
 
-  it('history operator tp_f[2] returns previous values', () => {
+  it('history operator tp_f[2] returns previous values', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     const vals = (series.values as (number | null)[])
@@ -306,9 +306,9 @@ describe('Two-Pole Trend Filter [BigBeluga]', () => {
     }
   });
 
-  it('nz() returns 0 for na values inside method', () => {
+  it('nz() returns 0 for na values inside method', async () => {
     const bars = createTrendingBars(BAR_COUNT, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const series = Array.from(result.outputs.values())[0]!;
     // Pick the first non-null value after warmup (it should be > 0 since prices are positive)

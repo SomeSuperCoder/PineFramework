@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,30 +67,30 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  return { engine, bars, result: engine.executeBars(contexts) };
+  return { engine, bars, result: await engine.executeBars(contexts) };
 }
 
 describe('Q-Trend', () => {
   const source = fs.readFileSync('./test_indicators/q-trend.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes on 500 bars without crashing', () => {
+  it('executes on 500 bars without crashing', async () => {
     const bars = createTrendingBars(500, 100);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
   });
 
-  it('has overlay=true', () => {
+  it('has overlay=true', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled.ir.overlay).toBe(true);

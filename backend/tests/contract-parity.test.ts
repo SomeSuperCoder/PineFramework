@@ -4,7 +4,9 @@ import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { ScriptSession, type ScriptOutputs } from '../src/session/ScriptSession.js';
-import { executeRouter } from '../src/routes/execute.js';
+import { createExecuteRouter } from '../src/routes/execute.js';
+import { InMemoryCancellationRegistry } from '../src/cancellation-registry.js';
+import { createPineScriptEngine } from 'pine-framework';
 import {
   normalizeExecutionResultMessage,
   type ExecutionResultMessageInput,
@@ -106,7 +108,7 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
   beforeAll(async () => {
     const app = express();
     app.use(express.json());
-    app.use('/api', executeRouter);
+    app.use('/api', createExecuteRouter(createPineScriptEngine(), new InMemoryCancellationRegistry()));
     server = app.listen(0);
     await new Promise<void>((r) => server.once('listening', r));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
@@ -129,14 +131,14 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
     return (await res.json()) as Record<string, unknown>;
   }
 
-  function wsFull(): ScriptOutputs {
+  async function wsFull(): Promise<ScriptOutputs> {
     const session = new ScriptSession(source, 'BTCUSDT', '60', bars);
     return session.initialize();
   }
 
-  function wsDiff(): ScriptOutputs {
+  async function wsDiff(): Promise<ScriptOutputs> {
     const session = new ScriptSession(source, 'BTCUSDT', '60', bars);
-    session.initialize();
+    await session.initialize();
     const lastBar = bars[bars.length - 1]!;
     // Forming tick on the same timestamp as the last bar (tick → toFormingCandleOutputs).
     const formingBar = {
@@ -160,8 +162,8 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
     expect((payload.plotOverlayKeys as string[]).length).toBeGreaterThan(0);
   });
 
-  it('WS full (ScriptSession.initialize → toOutputs) — SAME required key set as REST, isConfirmed true, overlay keys survive', () => {
-    const out = wsFull();
+  it('WS full (ScriptSession.initialize → toOutputs) — SAME required key set as REST, isConfirmed true, overlay keys survive', async () => {
+    const out = await wsFull();
     assertContractShape(out as unknown as Record<string, unknown>, 'WS full');
     expect(out.isConfirmed, 'WS full must be isConfirmed: true').toBe(true);
     expect(Object.keys(out.outputs as object).length).toBeGreaterThan(0);
@@ -171,8 +173,8 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
     expect(Array.isArray(out.hiddenPlotKeys)).toBe(true);
   });
 
-  it('WS diff (forming tick → toFormingCandleOutputs) — SAME required key set, isConfirmed false, every collection present EVEN IF EMPTY', () => {
-    const out = wsDiff();
+  it('WS diff (forming tick → toFormingCandleOutputs) — SAME required key set, isConfirmed false, every collection present EVEN IF EMPTY', async () => {
+    const out = await wsDiff();
     assertContractShape(out as unknown as Record<string, unknown>, 'WS diff');
     expect(out.isConfirmed, 'WS diff must be isConfirmed: false').toBe(false);
     expect(out.formingCandle).toBe(true);
@@ -189,8 +191,8 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
 
   it('IDENTICAL REQUIRED key set across REST + WS full + WS diff — a REQUIRED key missing on one path = FAIL', async () => {
     const rest = await restExecute();
-    const full = wsFull() as unknown as Record<string, unknown>;
-    const diff = wsDiff() as unknown as Record<string, unknown>;
+    const full = (await wsFull()) as unknown as Record<string, unknown>;
+    const diff = (await wsDiff()) as unknown as Record<string, unknown>;
     const restKeys = REQUIRED_KEY_SET.filter((k) => k in rest).sort();
     const fullKeys = REQUIRED_KEY_SET.filter((k) => k in full).sort();
     const diffKeys = REQUIRED_KEY_SET.filter((k) => k in diff).sort();

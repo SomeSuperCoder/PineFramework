@@ -38,7 +38,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -67,7 +67,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   if (!result.success) console.log('executeBars error:', result.error);
   return { engine, bars, result };
 }
@@ -75,18 +75,18 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
 describe('Kalman Trend Levels [BigBeluga]', () => {
   const source = fs.readFileSync('./test_indicators/kalman-trend-levels.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully', () => {
+  it('compiles successfully', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -106,9 +106,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(result.success).toBe(true);
   });
 
-  it('produces expected plot output keys', () => {
+  it('produces expected plot output keys', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBeGreaterThanOrEqual(2);
@@ -118,9 +118,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(hasLongKalman).toBe(true);
   });
 
-  it('has non-null values after warmup period', () => {
+  it('has non-null values after warmup period', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     const warmup = 250;
@@ -142,9 +142,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(longSeries.values.length).toBe(500);
   });
 
-  it('kalman values stay within reasonable bounds', () => {
+  it('kalman values stay within reasonable bounds', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const longKey = Array.from(result.outputs.keys()).find((k) => k.includes('Long Kalman'));
@@ -165,9 +165,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     }
   });
 
-  it('short kalman is more responsive than long kalman', () => {
+  it('short kalman is more responsive than long kalman', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const longKey = Array.from(result.outputs.keys()).find((k) => k.includes('Long Kalman'));
@@ -187,9 +187,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(shortChanges).toBeGreaterThan(longChanges);
   });
 
-  it('short kalman crosses long kalman (trend changes)', () => {
+  it('short kalman crosses long kalman (trend changes)', async () => {
     const bars = createTrendingBars(500, 80, 99);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const longKey = Array.from(result.outputs.keys()).find((k) => k.includes('Long Kalman'));
@@ -209,9 +209,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(crosses).toBeGreaterThan(0);
   });
 
-  it('produces bar colors based on trend', () => {
+  it('produces bar colors based on trend', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     const warmup = 250;
@@ -219,25 +219,25 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(coloredBars.length).toBeGreaterThan(0);
   });
 
-  it('produces labels for trend change signals', () => {
+  it('produces labels for trend change signals', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.labels).toBeDefined();
     expect(result.labels!.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('produces boxes for support/resistance zones', () => {
+  it('produces boxes for support/resistance zones', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.boxes).toBeDefined();
     expect(result.boxes!.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('handles var persistence across bars', () => {
+  it('handles var persistence across bars', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const shortValues = result.outputs.get(shortKey!)!.values as number[];
@@ -246,9 +246,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(uniqueValues.size).toBeGreaterThan(10);
   });
 
-  it('kalman filter converges over time', () => {
+  it('kalman filter converges over time', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const longKey = Array.from(result.outputs.keys()).find((k) => k.includes('Long Kalman'));
@@ -262,9 +262,9 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(lateDiff).toBeGreaterThanOrEqual(0);
   });
 
-  it('plotcandle produces bar color data', () => {
+  it('plotcandle produces bar color data', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.barColorData).toBeDefined();
     const warmup = 250;
@@ -273,17 +273,17 @@ describe('Kalman Trend Levels [BigBeluga]', () => {
     expect(nonNull.length).toBeGreaterThan(0);
   });
 
-  it('fill between kalman plots exists', () => {
+  it('fill between kalman plots exists', async () => {
     const bars = createTrendingBars(500, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     expect(result.fills).toBeDefined();
     expect(result.fills!.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('trend_up state changes over time with trending data', () => {
+  it('trend_up state changes over time with trending data', async () => {
     const bars = createTrendingBars(500, 80, 99);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const shortKey = Array.from(result.outputs.keys()).find((k) => k.includes('Short Kalman'));
     const longKey = Array.from(result.outputs.keys()).find((k) => k.includes('Long Kalman'));

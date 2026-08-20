@@ -179,8 +179,27 @@ export interface HLineEntry {
   width: number;
 }
 
+/**
+ * Cooperative cancellation contract for long-running batch execution.
+ * A cancel registry (backend wiring, B2) implements this and injects it down
+ * the execution chain; the interpreter checks it ONLY at yield points, so a
+ * cancelled run stops cleanly between bar batches. Consumers never construct
+ * a token — they receive one (Dependency Inversion).
+ */
+export interface CancellationToken {
+  readonly isCancelled: boolean;
+}
+
 export interface ExecutionResult {
   success: boolean;
+  /**
+   * True when a batch run stopped early because its CancellationToken was
+   * flagged at a yield point. Absent (undefined) on normal runs, so
+   * non-cancelled output is byte-identical to before — JSON.stringify drops
+   * the undefined field on the wire. B2's cancel-check reads this to
+   * distinguish a cancelled run from success/failure.
+   */
+  cancelled?: boolean;
   error?: EngineError;
   version?: number;
   overlay: boolean;

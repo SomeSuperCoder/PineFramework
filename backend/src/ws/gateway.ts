@@ -9,6 +9,7 @@ import { validateBybitUrl } from '../utils/security.js';
 import { setBroadcastIndicatorRemoved } from './broadcast.js';
 import { formatCandleString, getBybitCategory, getBybitSymbol } from 'pine-framework';
 import { createBackendLogger } from '../utils/logger.js';
+import type { CancellationRegistry } from '../cancellation-registry.js';
 
 const logger = createBackendLogger('backend', 'ws');
 
@@ -75,6 +76,7 @@ export function createWSGateway(
   server: Server,
   cache: OHLCVCache,
   telegramService?: TelegramService,
+  registry?: CancellationRegistry,
 ): void {
   // Use noServer mode to avoid conflicts with the bot /ws/bot gateway
   const wss = new WebSocketServer({ noServer: true });
@@ -87,7 +89,10 @@ export function createWSGateway(
    *  Bybit reports the BYBIT instrument symbol (e.g. 'kline.60.XAUTUSDT'),
    *  but clients subscribe/broadcast under the pair topic
    *  ('kline.60.GOLDUSDC'). Legacy pairs map identity — zero behavior change. */
-  const bybitTopicToOriginal = new Map<string, { originalTopic: string; category: 'linear' | 'spot' }>();
+  const bybitTopicToOriginal = new Map<
+    string,
+    { originalTopic: string; category: 'linear' | 'spot' }
+  >();
   const topicCallbacks = new Map<string, Set<WebSocket>>();
 
   // Handle upgrade requests for /ws path (but NOT /ws/bot)
@@ -104,7 +109,9 @@ export function createWSGateway(
   /** Translate a frontend topic ('kline.60.GOLDUSDC') into the Bybit topic +
    *  category ('kline.60.XAUTUSDT', 'spot'). Null for unparseable topics —
    *  callers fall back to forwarding the raw topic (legacy behavior). */
-  function translateFrontendTopic(topic: string): { bybitTopic: string; category: 'linear' | 'spot' } | null {
+  function translateFrontendTopic(
+    topic: string,
+  ): { bybitTopic: string; category: 'linear' | 'spot' } | null {
     const parts = topic.split('.');
     if (parts.length < 3 || !parts[1] || !parts[2]) return null;
     return {
@@ -130,6 +137,13 @@ export function createWSGateway(
       logger.info('Connected to Bybit WebSocket', { category });
       resubscribeAll(category);
     });
+
+    // B2: serialize live re-execution per Bybit socket. executeBars is now
+    // async and yields, so a bare fire-and-forget would let two bars
+    // interleave on the same session (out-of-order strategy state). Chaining
+    // preserves the sync-handler ordering guarantee while staying
+    // non-blocking between runs (the engine yields to the event loop).
+    let reexecuteChain: Promise<void> = Promise.resolve();
 
     socket.on('message', (data: Buffer) => {
       if (bybitSockets.get(category) !== socket) return;
@@ -189,7 +203,17 @@ export function createWSGateway(
             const prevBar = lastConfirmedBarByTopic.get(topicKey);
             const rejectReason = rejectIfUnreasonable(bar, prevBar);
             if (rejectReason) {
-              logger.warn('Rejected kline tick', { symbol, interval, reason: rejectReason, open, high, low, close, volume, timestamp });
+              logger.warn('Rejected kline tick', {
+                symbol,
+                interval,
+                reason: rejectReason,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                timestamp,
+              });
               return;
             }
             if (confirmed) {
@@ -202,8 +226,14 @@ export function createWSGateway(
             const topicKey = `${symbol}:${interval}`;
             const prevBar = lastConfirmedBarByTopic.get(topicKey);
             if (prevBar && prevBar.timestamp !== bar.timestamp) {
-              const delta = ((bar.close - prevBar.close) / prevBar.close * 100).toFixed(2);
-              logger.debug('kline close', { symbol, interval, delta, prevClose: prevBar.close, currentClose: bar.close });
+              const delta = (((bar.close - prevBar.close) / prevBar.close) * 100).toFixed(2);
+              logger.debug('kline close', {
+                symbol,
+                interval,
+                delta,
+                prevClose: prevBar.close,
+                currentClose: bar.close,
+              });
             }
           }
 
@@ -211,7 +241,7 @@ export function createWSGateway(
           if (symbol && interval) {
             const existing = cache.get(symbol, interval);
             if (existing && existing.length > 0) {
-              const idx = existing.findIndex(b => b.timestamp === bar.timestamp);
+              const idx = existing.findIndex((b) => b.timestamp === bar.timestamp);
               if (idx >= 0) {
                 existing[idx] = bar;
               } else {
@@ -224,17 +254,35 @@ export function createWSGateway(
           }
 
           // Diagnostic: log raw Bybit WS data and computed bar
-          const rawBybit = { start: d.start, dtimestamp: d.timestamp, interval: d.interval,
-            rawOpen: d.open, rawHigh: d.high, rawLow: d.low, rawClose: d.close,
-            confirm: d.confirm };
-          logger.info('Bybit WS raw → broadcast', { topic: msg.topic, rawBybit, parsed: bar, confirmed });
+          const rawBybit = {
+            start: d.start,
+            dtimestamp: d.timestamp,
+            interval: d.interval,
+            rawOpen: d.open,
+            rawHigh: d.high,
+            rawLow: d.low,
+            rawClose: d.close,
+            confirm: d.confirm,
+          };
+          logger.info('Bybit WS raw → broadcast', {
+            topic: msg.topic,
+            rawBybit,
+            parsed: bar,
+            confirmed,
+          });
 
           broadcast(broadcastTopic, {
             type: 'kline',
             data: { symbol, interval, ...bar, confirmed },
           });
 
-          reexecuteForTopic(broadcastTopic, bar, confirmed);
+          reexecuteChain = reexecuteChain
+            .then(() => reexecuteForTopic(broadcastTopic, bar, confirmed))
+            .catch((err) => {
+              logger.error('reexecuteForTopic failed', {
+                message: err instanceof Error ? err.message : String(err),
+              });
+            });
         }
       } catch {
         // ignore parse errors
@@ -294,7 +342,11 @@ export function createWSGateway(
     return false;
   }
 
-  function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): void {
+  // B2: reexecuteForTopic is ASYNC — ScriptSession.appendOrUpdateBar is async
+  // now (its cold-start fallback awaits the batch initialize), and the live
+  // tick path stays serialized per socket via the reexecute chain at the
+  // Bybit message handler.
+  async function reexecuteForTopic(topic: string, bar: Bar, confirmed?: boolean): Promise<void> {
     const subscribers = topicCallbacks.get(topic);
     if (!subscribers) {
       logger.info('reexecuteForTopic: no subscribers', { topic });
@@ -324,7 +376,7 @@ export function createWSGateway(
 
       for (const [indicatorId, session] of sub.sessions) {
         try {
-          const outputs = session.appendOrUpdateBar(bar, confirmed);
+          const outputs = await session.appendOrUpdateBar(bar, confirmed);
 
           // WIRE EGRESS BACKSTOP (B2 — the third normalize call site):
           // the serializers normalize internally, but this is where the
@@ -363,7 +415,12 @@ export function createWSGateway(
                 logger.info('reexecuteForTopic: duplicate alert suppressed', { dedupKey });
                 continue;
               }
-              logger.info('reexecuteForTopic: sending Telegram alert', { alertId: trigger.alertId, title, symbol, interval });
+              logger.info('reexecuteForTopic: sending Telegram alert', {
+                alertId: trigger.alertId,
+                title,
+                symbol,
+                interval,
+              });
               const formattedMessage = formatCandleString(message, {
                 ticker: symbol || undefined,
                 interval: interval || undefined,
@@ -376,7 +433,7 @@ export function createWSGateway(
               );
             }
           } else if (!tgActive) {
-          logger.info('reexecuteForTopic: Telegram service is NOT active, skipping alert send');
+            logger.info('reexecuteForTopic: Telegram service is NOT active, skipping alert send');
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Script re-execution failed';
@@ -475,7 +532,7 @@ export function createWSGateway(
       }),
     );
 
-    ws.on('message', (data: Buffer) => {
+    ws.on('message', async (data: Buffer) => {
       try {
         const msg = JSON.parse(data.toString()) as {
           type: string;
@@ -520,7 +577,9 @@ export function createWSGateway(
           } else if (bybitSockets.get('linear')?.readyState === WebSocket.OPEN) {
             // Defensive fallback for unparseable topics: forward verbatim on
             // the linear socket (legacy behavior).
-            bybitSockets.get('linear')!.send(JSON.stringify({ op: 'subscribe', args: [msg.topic] }));
+            bybitSockets
+              .get('linear')!
+              .send(JSON.stringify({ op: 'subscribe', args: [msg.topic] }));
           }
         } else if (msg.type === 'unsubscribe' && msg.topic) {
           sub.topics.delete(msg.topic);
@@ -535,6 +594,12 @@ export function createWSGateway(
 
           const sessionIndicatorId = indicatorId || 'default';
 
+          // B2: a fresh token supersedes any in-flight run for this id (a
+          // stale session's initialize stops at its next yield instead of
+          // racing the new run). Registered for the batch initialize only —
+          // the entry is removed once the session is live (per-bar ticks are
+          // synchronous and need no batch cancellation).
+          const token = registry?.create(sessionIndicatorId);
           try {
             // Delete old session first to prevent reexecuteForTopic from
             // using a stale session during initialization.
@@ -551,7 +616,15 @@ export function createWSGateway(
             // chunk-boundary.spec.ts).  The WS path is the LIVE path used by
             // auto-loaded indicators, so this initial result is required to
             // match warm-start behavior.
-            const initialOutputs = session.initialize();
+            // B2: ASYNC — the engine yields between bar batches, so this no
+            // longer blocks the gateway; the token makes a long
+            // initialization cancellable via stop_indicator / DELETE.
+            const initialOutputs = await session.initialize(token);
+            // B2: drop the stale result — if this run was cancelled while
+            // initializing (stop_indicator, DELETE, or a newer run for the
+            // same id), do NOT register the session or announce session_ready;
+            // the cancelling caller owns the id now.
+            if (token?.isCancelled) return;
             sub.sessions.set(sessionIndicatorId, session);
             ws.send(JSON.stringify({ type: 'session_ready', indicatorId: sessionIndicatorId }));
             // Broadcast the full initial outputs for auto-loaded indicators
@@ -572,14 +645,23 @@ export function createWSGateway(
           } catch (err) {
             const message =
               err instanceof Error ? err.message : 'Script compilation or execution failed';
-              logger.error('Script execution error', { message });
+            logger.error('Script execution error', { message });
             ws.send(
               JSON.stringify({ type: 'error', indicatorId: sessionIndicatorId, data: { message } }),
             );
+          } finally {
+            // B2: no leaks — the token lives exactly as long as the batch
+            // initialize. Live per-bar ticks need no batch cancellation.
+            registry?.remove(sessionIndicatorId);
           }
         } else if (msg.type === 'stop_indicator') {
           const indicatorId = msg.indicatorId || msg.data?.indicatorId;
           if (indicatorId) {
+            // B2: cancel any in-flight computation keyed by this indicator —
+            // the WS live-tick initialize AND an in-flight REST /execute
+            // (Wise Old Man decision: stop_indicator cancels REST compute).
+            // Idempotent when nothing is computing.
+            registry?.cancel(indicatorId);
             sub.sessions.delete(indicatorId);
             ws.send(JSON.stringify({ type: 'indicator_stopped', indicatorId }));
           }
@@ -597,10 +679,7 @@ export function createWSGateway(
             meta?: Record<string, unknown>;
           };
           const frontendLogger = getOrCreateFrontendLogger(data.subcategory);
-          frontendLogger[data.level as keyof typeof frontendLogger]?.(
-            data.message,
-            data.meta,
-          );
+          frontendLogger[data.level as keyof typeof frontendLogger]?.(data.message, data.meta);
         }
       } catch {
         ws.send(JSON.stringify({ type: 'error', data: { message: 'Invalid message format' } }));

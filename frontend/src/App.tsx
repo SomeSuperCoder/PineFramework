@@ -41,6 +41,7 @@ function App() {
   const [quickAdderOpen, setQuickAdderOpen] = useState(false);
   const [indicatorResults, setIndicatorResults] = useState<Map<string, ScriptResult>>(new Map());
   const [computingIndicators, setComputingIndicators] = useState<Set<string>>(new Set());
+  const [removingIndicators, setRemovingIndicators] = useState<Set<string>>(new Set());
   const computingRef = useRef<Set<string>>(new Set());
   computingRef.current = computingIndicators;
   const lastIndicatorsRef = useRef<Set<string>>(new Set());
@@ -88,6 +89,12 @@ function App() {
   const indicatorManager = useIndicatorManager();
 
   const onIndicatorResult = useCallback((indicatorId: string, result: ScriptResult) => {
+    // STALE-RESULT DROP: a compute result for an id that is no longer active
+    // (removed) must never be delivered. useChartData's generation bump in
+    // removeIndicatorData already drops in-flight REST results, but this
+    // App-level guard closes the seam for ANY result reaching the callback
+    // after removal — including WS execution results for a removed id.
+    if (!lastIndicatorsRef.current.has(indicatorId)) return;
     setIndicatorResults((prev) => {
       const next = new Map(prev);
       next.set(indicatorId, result);
@@ -131,6 +138,11 @@ function App() {
         for (const id of indicatorIds) next.delete(id);
         return next;
       });
+      // Keep the active-ids set in sync so the onIndicatorResult stale-drop
+      // also fires for server-initiated removals.
+      const active = new Set(lastIndicatorsRef.current);
+      for (const id of indicatorIds) active.delete(id);
+      lastIndicatorsRef.current = active;
     });
   }, [registerOnIndicatorRemoved, indicatorManager.handleIndicatorRemoved]);
 
@@ -309,6 +321,10 @@ function App() {
     //    cannot throw an uncaught page error.
     wsSend(wsRef.current, { type: 'stop_indicator', indicatorId });
 
+    // 1b. Mark REMOVING synchronously — while the DELETE is in flight the label
+    //     must render the removing state, never fall through to the green Check.
+    setRemovingIndicators((prev) => new Set(prev).add(indicatorId));
+
     // 2. Synchronous cleanup FIRST — purge refs and state before any await
     //    This closes the race window where HTTP results could arrive after removal.
     removeIndicatorData(indicatorId);
@@ -325,8 +341,23 @@ function App() {
     });
     setDataVersion((v) => v + 1);
 
-    // 3. Server-side cleanup (HTTP DELETE) — async, safe to await after state cleanup
-    await indicatorManager.removeIndicator(indicatorId);
+    // 3. Server-side cleanup (HTTP DELETE) — bounded by AbortSignal.timeout(15000)
+    //    and deduped by the in-flight guard in useIndicatorManager. Clear REMOVING
+    //    on resolve (success OR failure) so the label can never hang in removing.
+    //    On success the list filter drops the label (useIndicatorManager); on
+    //    failure the label stays listed and returns to its normal state.
+    const removed = await indicatorManager.removeIndicator(indicatorId);
+    setRemovingIndicators((prev) => {
+      const next = new Set(prev);
+      next.delete(indicatorId);
+      return next;
+    });
+    if (!removed) {
+      // DELETE failed/timed out — the indicator is still active server-side and
+      // stays listed. Re-add it to the active set so a late compute result is
+      // not dropped by the onIndicatorResult stale-guard.
+      lastIndicatorsRef.current = new Set(lastIndicatorsRef.current).add(indicatorId);
+    }
   };
 
   const indicatorLabels = indicatorManager.indicators.map((i) => ({
@@ -413,6 +444,7 @@ function App() {
               indicatorLabels={indicatorLabels}
               indicatorResults={indicatorResults}
               computingIndicators={computingIndicators}
+              removingIndicators={removingIndicators}
               onRemoveIndicator={handleRemoveIndicator}
               onEditIndicator={handleEditIndicator}
               forceAutoScale={autoScale}

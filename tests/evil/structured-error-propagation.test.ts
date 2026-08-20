@@ -46,7 +46,7 @@ describe('Structured error propagation', () => {
   // EngineError structure
   // ===========================================================================
 
-  it('runtime error on undefined variable produces EngineError with message', () => {
+  it('runtime error on undefined variable produces EngineError with message', async () => {
     const { ast } = parse('//@version=6\nindicator("")\nplot(unknownVar)');
     const result = compile(ast);
     const engine = new ExecutionEngine(result);
@@ -62,7 +62,7 @@ describe('Structured error propagation', () => {
     }
   });
 
-  it('EngineError contains barIndex when available', () => {
+  it('EngineError contains barIndex when available', async () => {
     const { ast } = parse('//@version=6\nindicator("")\nplot(undefinedVar)');
     const result = compile(ast);
     const engine = new ExecutionEngine(result);
@@ -75,7 +75,7 @@ describe('Structured error propagation', () => {
     }
   });
 
-  it('error persists in ExecutionResult across bars', () => {
+  it('error persists in ExecutionResult across bars', async () => {
     const { ast } = parse('//@version=6\nindicator("")\nplot(unknownVar)');
     const result = compile(ast);
     const engine = new ExecutionEngine(result);
@@ -92,8 +92,8 @@ describe('Structured error propagation', () => {
   // API layer integration
   // ===========================================================================
 
-  it('executePineScript returns structured error on runtime failure', () => {
-    const apiResult = executePineScript('//@version=6\nindicator("")\nplot(badVar)', [makeBar()]);
+  it('executePineScript returns structured error on runtime failure', async () => {
+    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(badVar)', [makeBar()]);
 
     expect(apiResult.error).toBeDefined();
     if (apiResult.error) {
@@ -105,8 +105,8 @@ describe('Structured error propagation', () => {
     }
   });
 
-  it('executePineScript returns no error on successful execution', () => {
-    const apiResult = executePineScript('//@version=6\nindicator("")\nplot(close)', [makeBar()]);
+  it('executePineScript returns no error on successful execution', async () => {
+    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(close)', [makeBar()]);
 
     expect(apiResult.error).toBeUndefined();
     expect(apiResult.outputs).toBeDefined();
@@ -116,7 +116,7 @@ describe('Structured error propagation', () => {
   // Backward compatibility
   // ===========================================================================
 
-  it('consumer can extract message from either string or EngineError', () => {
+  it('consumer can extract message from either string or EngineError', async () => {
     const extractMessage = (err: string | EngineError): string => {
       if (typeof err === 'string') return err;
       return err.message ?? 'Unknown error';
@@ -133,7 +133,7 @@ describe('Structured error propagation', () => {
   // Success path — no error
   // ===========================================================================
 
-  it('successful bar execution has no error', () => {
+  it('successful bar execution has no error', async () => {
     const { ast } = parse('//@version=6\nindicator("")\nplot(close)');
     const result = compile(ast);
     const engine = new ExecutionEngine(result);
@@ -143,7 +143,7 @@ describe('Structured error propagation', () => {
     expect(execResult.error).toBeUndefined();
   });
 
-  it('multiple successful bars produce no errors', () => {
+  it('multiple successful bars produce no errors', async () => {
     const { ast } = parse('//@version=6\nindicator("")\nplot(close)');
     const result = compile(ast);
     const engine = new ExecutionEngine(result);

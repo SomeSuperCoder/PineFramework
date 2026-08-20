@@ -1,7 +1,11 @@
 import { Router } from 'express';
 import type { RunningIndicatorsStore } from '../store/RunningIndicatorsStore.js';
+import type { CancellationRegistry } from '../cancellation-registry.js';
 
-export function createIndicatorsRouter(store: RunningIndicatorsStore): Router {
+export function createIndicatorsRouter(
+  store: RunningIndicatorsStore,
+  registry: CancellationRegistry,
+): Router {
   const router = Router();
 
   router.get('/indicators', (_req, res) => {
@@ -9,7 +13,9 @@ export function createIndicatorsRouter(store: RunningIndicatorsStore): Router {
       const indicators = store.getAll();
       res.json({ indicators });
     } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to list indicators' });
+      res
+        .status(500)
+        .json({ error: err instanceof Error ? err.message : 'Failed to list indicators' });
     }
   });
 
@@ -36,12 +42,19 @@ export function createIndicatorsRouter(store: RunningIndicatorsStore): Router {
       const indicator = store.add(scriptId, name, overlay ?? true, source);
       res.status(201).json({ indicator });
     } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to add indicator' });
+      res
+        .status(500)
+        .json({ error: err instanceof Error ? err.message : 'Failed to add indicator' });
     }
   });
 
   router.delete('/indicators/:id', (req, res) => {
     try {
+      // B2: cancel any in-flight computation for this indicator BEFORE removing
+      // metadata. The engine checks the token at its next yield (every 50
+      // bars) and stops promptly — removal takes effect without waiting for
+      // the long run to finish. Idempotent when nothing is computing.
+      registry.cancel(req.params.id);
       const removed = store.remove(req.params.id);
       if (!removed) {
         res.status(404).json({ error: 'Indicator not found' });
@@ -49,7 +62,9 @@ export function createIndicatorsRouter(store: RunningIndicatorsStore): Router {
       }
       res.json({ success: true });
     } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to remove indicator' });
+      res
+        .status(500)
+        .json({ error: err instanceof Error ? err.message : 'Failed to remove indicator' });
     }
   });
 

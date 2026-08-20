@@ -162,7 +162,10 @@ export async function runTelegramBacktest(
   // ScriptEntry.scriptType is 'strategy' | 'indicator'; a manifest 'library'
   // entry is cast to one of them, so ANY non-strategy fails here.
   if (entry.scriptType !== 'strategy') {
-    return failure('NOT_A_STRATEGY', `Script '${entry.name}' is not a strategy — only strategy() scripts can be backtested.`);
+    return failure(
+      'NOT_A_STRATEGY',
+      `Script '${entry.name}' is not a strategy — only strategy() scripts can be backtested.`,
+    );
   }
 
   // ── 2. Date resolution — shared UTC-midnight resolver (contract D6) ──────
@@ -176,11 +179,15 @@ export async function runTelegramBacktest(
   // exactly like CLI/HTTP: method required, official ids only, per-method
   // settings keys, unknown keys rejected.
   const rawOverride: Record<string, unknown> = { commissionMethod: params.commissionMethod };
-  if (params.commissionMethodSettings !== undefined) rawOverride.commissionMethodSettings = params.commissionMethodSettings;
+  if (params.commissionMethodSettings !== undefined)
+    rawOverride.commissionMethodSettings = params.commissionMethodSettings;
   if (params.initialCapital !== undefined) rawOverride.initialCapital = params.initialCapital;
   const normalized = normalizeExplicitOverride(rawOverride);
   if (!normalized.ok) {
-    return failure('INVALID_SETTINGS', normalized.errors[0]?.message ?? 'Invalid backtest settings.');
+    return failure(
+      'INVALID_SETTINGS',
+      normalized.errors[0]?.message ?? 'Invalid backtest settings.',
+    );
   }
   const explicit = normalized.value;
 
@@ -227,21 +234,27 @@ export async function runTelegramBacktest(
   }
 
   // ── 6. Engine — the shared SYNC pipeline ─────────────────────────────────
-  const pipelineResult = runBacktestPipeline({
+  const pipelineResult = await runBacktestPipeline({
     script: entry.source,
     bars,
     configOverride: Object.keys(override).length > 0 ? override : undefined,
     onWarning: collector.onWarning,
   });
   if (!pipelineResult.success) {
-    return failure('ENGINE_FAILED', sanitizeUserMessage(pipelineResult.error ?? 'Execution failed.'));
+    return failure(
+      'ENGINE_FAILED',
+      sanitizeUserMessage(pipelineResult.error ?? 'Execution failed.'),
+    );
   }
 
   const engine = pipelineResult.engine!;
   const strategyEngine = engine.getStrategyEngine();
   const outcome = toOutcome(bars, engine);
   if (!outcome || !strategyEngine) {
-    return failure('ENGINE_FAILED', 'Backtest completed but metrics could not be computed (missing strategy engine).');
+    return failure(
+      'ENGINE_FAILED',
+      'Backtest completed but metrics could not be computed (missing strategy engine).',
+    );
   }
 
   // ── 7. Effective config + decision diagnostics + canonical result ────────

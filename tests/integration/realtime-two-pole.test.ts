@@ -39,11 +39,11 @@ function getLastValue(result: ScriptOutputs, key: string): number | null {
 describe('Real-Time Two-Pole Trend Filter Cycle', () => {
   const source = fs.readFileSync('./test_indicators/two-pole-trend-filter.pine', 'utf-8');
 
-  it('should maintain correct indicator values across forming tick → confirm → new bar → forming tick cycles', () => {
+  it('should maintain correct indicator values across forming tick → confirm → new bar → forming tick cycles', async () => {
     // Phase 1: Initialize with 60 historical bars
     const histBars = createTrendingBars(60, 100);
     const session = new ScriptSession(source, 'BTCUSDT', '60', histBars);
-    const initResult = session.initialize();
+    const initResult = await session.initialize();
     expect(initResult.success).toBe(true);
 
     const outputKey = getOutputKey(initResult);
@@ -67,7 +67,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
         volume: lastHistBar.volume,
       };
 
-      const result = session.appendOrUpdateBar(formingBar);
+      const result = await session.appendOrUpdateBar(formingBar);
       expect(result.success).toBe(true);
       expect(result.formingCandle).toBe(true); // still forming
 
@@ -93,7 +93,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       volume: 1200,
     };
 
-    const newBarResult = session.appendOrUpdateBar(newBar);
+    const newBarResult = await session.appendOrUpdateBar(newBar);
     expect(newBarResult.success).toBe(true);
     expect(newBarResult.formingCandle).toBe(true);
 
@@ -107,7 +107,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       volume: newBar.volume,
     };
 
-    const confirmResult = session.appendOrUpdateBar(confirmBar, true);
+    const confirmResult = await session.appendOrUpdateBar(confirmBar, true);
     expect(confirmResult.success).toBe(true);
     expect(confirmResult.formingCandle).toBe(false);
 
@@ -126,7 +126,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       volume: 1300,
     };
 
-    const nextBarResult = session.appendOrUpdateBar(nextBar);
+    const nextBarResult = await session.appendOrUpdateBar(nextBar);
     expect(nextBarResult.success).toBe(true);
     expect(nextBarResult.formingCandle).toBe(true);
 
@@ -143,7 +143,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       volume: 1500,
     };
 
-    const tickResult = session.appendOrUpdateBar(nextBarTick);
+    const tickResult = await session.appendOrUpdateBar(nextBarTick);
     expect(tickResult.success).toBe(true);
     expect(tickResult.formingCandle).toBe(true);
 
@@ -154,10 +154,10 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
     }
   });
 
-  it('should preserve engine state across multiple full cycles', () => {
+  it('should preserve engine state across multiple full cycles', async () => {
     const histBars = createTrendingBars(60, 100);
     const session = new ScriptSession(source, 'BTCUSDT', '60', histBars);
-    const initResult = session.initialize();
+    const initResult = await session.initialize();
     expect(initResult.success).toBe(true);
 
     // Start the first real-time bar AFTER the historical data so that
@@ -177,7 +177,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
           close: lastClose + tick * 2,
           volume: 1000,
         };
-        const result = session.appendOrUpdateBar(formingBar);
+        const result = await session.appendOrUpdateBar(formingBar);
         expect(result.success).toBe(true);
         expect(result.formingCandle).toBe(true);
       }
@@ -192,7 +192,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
         close: confirmClose,
         volume: 1000,
       };
-      const confirmResult = session.appendOrUpdateBar(confirmBar, true);
+      const confirmResult = await session.appendOrUpdateBar(confirmBar, true);
       expect(confirmResult.success).toBe(true);
       expect(confirmResult.formingCandle).toBe(false);
 
@@ -208,14 +208,14 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
         close: lastClose + 2,
         volume: 1000,
       };
-      const newBarResult = session.appendOrUpdateBar(newBar);
+      const newBarResult = await session.appendOrUpdateBar(newBar);
       expect(newBarResult.success).toBe(true);
       expect(newBarResult.formingCandle).toBe(true);
     }
 
     // After 3 cycles, the output should have grown by at least 3 entries
     // (one per cycle from the confirmed bar) — cycles also add new bars
-    session.initialize(); // re-init to get final state (result intentionally unused)
+    await session.initialize(); // re-init to get final state (result intentionally unused)
     // Actually just check appendOrUpdateBar still works
     const finalBar: Bar = {
       timestamp: currentTimestamp,
@@ -225,7 +225,7 @@ describe('Real-Time Two-Pole Trend Filter Cycle', () => {
       close: lastClose + 1,
       volume: 1000,
     };
-    const finalResult2 = session.appendOrUpdateBar(finalBar);
+    const finalResult2 = await session.appendOrUpdateBar(finalBar);
     expect(finalResult2.success).toBe(true);
     expect(Object.keys(finalResult2.outputs).length).toBeGreaterThan(0);
   });

@@ -406,11 +406,11 @@ describe('Q-Trend real-time plot/shape correctness', () => {
   const fullBars = loadBars();
   const testBars = fullBars.slice(-300);
 
-  it('trend line values survive forming candle ticks and confirmed bar WS', () => {
+  it('trend line values survive forming candle ticks and confirmed bar WS', async () => {
     // --- Phase 1: Initial HTTP execution (fresh engine = new session) ---
     const engine = new ExecutionEngine(compiled);
     const contexts = buildContexts(testBars);
-    const httpResult = engine.executeBars(contexts);
+    const httpResult = await engine.executeBars(contexts);
 
     // Convert to ScriptResult via buildScriptResult
     const outputs: Record<string, any[]> = {};

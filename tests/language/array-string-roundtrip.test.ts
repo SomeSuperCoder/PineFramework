@@ -29,16 +29,16 @@ function createBarContext(overrides: Partial<ExecutionContext> = {}): ExecutionC
   };
 }
 
-function executeScript(source: string): ExecutionEngine {
+async function executeScript(source: string): Promise<ExecutionEngine> {
   const { ast } = parse(source);
   const result = compile(ast);
   const engine = new ExecutionEngine(result);
-  engine.executeBars([createBarContext()]);
+  await engine.executeBars([createBarContext()]);
   return engine;
 }
 
 describe('Array string roundtrip', () => {
-  it('array.from() with strings → get() returns the original string', () => {
+  it('array.from() with strings → get() returns the original string', async () => {
     const src = `
       //@version=6
       indicator("test", overlay=false)
@@ -48,13 +48,13 @@ describe('Array string roundtrip', () => {
           result += blocks.get(i)
       label.new(bar_index, result, result)
     `;
-    const engine = executeScript(src);
+    const engine = await executeScript(src);
     // "a" + "b" + "c" = "abc"
     expect(engine.labels.length).toBeGreaterThan(0);
     expect(engine.labels[engine.labels.length - 1].text).toBe('abc');
   });
 
-  it('array.from() with unicode block characters roundtrips correctly', () => {
+  it('array.from() with unicode block characters roundtrips correctly', async () => {
     const src = `
       //@version=6
       indicator("test", overlay=false)
@@ -64,12 +64,12 @@ describe('Array string roundtrip', () => {
           result += blocks.get(i)
       label.new(bar_index, result, result)
     `;
-    const engine = executeScript(src);
+    const engine = await executeScript(src);
     expect(engine.labels.length).toBeGreaterThan(0);
     expect(engine.labels[engine.labels.length - 1].text).toBe(' ▂▃▄▅▆▇█');
   });
 
-  it('array.get() on string array returns string, not number', () => {
+  it('array.get() on string array returns string, not number', async () => {
     const src = `
       //@version=6
       indicator("test", overlay=false)
@@ -79,12 +79,12 @@ describe('Array string roundtrip', () => {
       string combined = first + second
       label.new(bar_index, combined, combined)
     `;
-    const engine = executeScript(src);
+    const engine = await executeScript(src);
     expect(engine.labels.length).toBeGreaterThan(0);
     expect(engine.labels[engine.labels.length - 1].text).toBe('helloworld');
   });
 
-  it('array.push() with string preserves type', () => {
+  it('array.push() with string preserves type', async () => {
     const src = `
       //@version=6
       indicator("test", overlay=false)
@@ -97,12 +97,12 @@ describe('Array string roundtrip', () => {
           result += items.get(i)
       label.new(bar_index, result, result)
     `;
-    const engine = executeScript(src);
+    const engine = await executeScript(src);
     expect(engine.labels.length).toBeGreaterThan(0);
     expect(engine.labels[engine.labels.length - 1].text).toBe('xyz');
   });
 
-  it('+= with string left and string right concatenates, not adds', () => {
+  it('+= with string left and string right concatenates, not adds', async () => {
     const src = `
       //@version=6
       indicator("test", overlay=false)
@@ -110,7 +110,7 @@ describe('Array string roundtrip', () => {
       result += "bar"
       label.new(bar_index, result, result)
     `;
-    const engine = executeScript(src);
+    const engine = await executeScript(src);
     expect(engine.labels.length).toBeGreaterThan(0);
     expect(engine.labels[engine.labels.length - 1].text).toBe('foobar');
   });

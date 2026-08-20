@@ -2,7 +2,13 @@ import { Router } from 'express';
 import { fetchDexFeeBps, type FeeFetchResult } from 'pine-framework/strategy/jupiter-fee-fetcher';
 import { randomUUID } from 'crypto';
 import { resolve } from 'node:path';
-import { VERSION, buildBacktestExport, scriptHash, type BacktestExport, WarningCollector } from 'pine-framework';
+import {
+  VERSION,
+  buildBacktestExport,
+  scriptHash,
+  type BacktestExport,
+  WarningCollector,
+} from 'pine-framework';
 import { writeExportFile, sanitizeExportErrorMessage } from '../backtest-export.js';
 import { fetchBars } from '../bybit/fetch-bars.js';
 import type { DiskOHLCVCache } from '../cache/DiskOHLCVCache.js';
@@ -11,7 +17,11 @@ import { buildBacktestConfigOverride, applyDexFee } from '../backtest-config.js'
 import { normalizeExplicitOverride } from '../normalize-explicit-config.js';
 import { resolveDateRange, toUtcDateString, type ResolvedDateRange } from '../backtest-dates.js';
 import { toOutcome, toApiResult, buildDecisionWarnings } from '../backtest-result.js';
-import type { BacktestApiResult, EffectiveBacktestConfig, ExplicitBacktestOverride } from '../backtest-contract.js';
+import type {
+  BacktestApiResult,
+  EffectiveBacktestConfig,
+  ExplicitBacktestOverride,
+} from '../backtest-contract.js';
 import { logger } from '../utils/logger.js';
 import { fetchSolPriceUsd } from '../services/sol-price-fetcher.js';
 import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
@@ -111,8 +121,14 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
     try {
       job.status = 'running';
       setPhase(job.jobId, 'Fetching market data');
-      logger.info('Starting backtest', { jobId: job.jobId, symbol: job.symbol, scriptLen: (job.config.script as string)?.length || 0 });
-      const bars = await fetchBars(job.symbol, job.timeframe,
+      logger.info('Starting backtest', {
+        jobId: job.jobId,
+        symbol: job.symbol,
+        scriptLen: (job.config.script as string)?.length || 0,
+      });
+      const bars = await fetchBars(
+        job.symbol,
+        job.timeframe,
         job.dateRange?.startDate,
         job.dateRange?.endDate,
         (p) => updateProgress(job.jobId, p),
@@ -157,7 +173,7 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       const override = await applyDexFee(job.symbol, baseOverride, collector.onWarning);
 
       setPhase(job.jobId, 'Executing bars');
-      const pipelineResult = runBacktestPipeline({
+      const pipelineResult = await runBacktestPipeline({
         script,
         bars,
         configOverride: Object.keys(override).length > 0 ? override : undefined,
@@ -170,7 +186,11 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       }
 
       const execEngine = pipelineResult.engine!;
-      logger.info('Backtest execution complete', { jobId: job.jobId, success: true, markers: pipelineResult.execResult?.strategyMarkers?.length || 0 });
+      logger.info('Backtest execution complete', {
+        jobId: job.jobId,
+        success: true,
+        markers: pipelineResult.execResult?.strategyMarkers?.length || 0,
+      });
 
       updateProgress(job.jobId, 80);
       setPhase(job.jobId, 'Computing metrics');
@@ -183,7 +203,13 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       updateProgress(job.jobId, 90);
       setPhase(job.jobId, 'Building results');
 
-      logger.info('Backtest metrics computed', { jobId: job.jobId, totalTrades: outcome.metrics.totalTrades, totalPnl: outcome.metrics.totalPnl, winRate: outcome.metrics.winRate, profitFactor: outcome.metrics.profitFactor });
+      logger.info('Backtest metrics computed', {
+        jobId: job.jobId,
+        totalTrades: outcome.metrics.totalTrades,
+        totalPnl: outcome.metrics.totalPnl,
+        winRate: outcome.metrics.winRate,
+        profitFactor: outcome.metrics.profitFactor,
+      });
 
       // ── Effective config (contract BacktestResultExtension) ──
       // The engine's post-merge config echoed back to the user — what actually
@@ -220,7 +246,9 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
           meta: {
             symbol: job.symbol,
             timeframe: job.timeframe,
-            ...(job.dateRange?.startDate !== undefined ? { startDate: job.dateRange.startDate } : {}),
+            ...(job.dateRange?.startDate !== undefined
+              ? { startDate: job.dateRange.startDate }
+              : {}),
             ...(job.dateRange?.endDate !== undefined ? { endDate: job.dateRange.endDate } : {}),
             barCount: bars.length,
             engineVersion: VERSION,
@@ -296,7 +324,8 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       logger.error('Backtest failed', { jobId: job.jobId, error: rawMessage });
       // Strip anything that looks like a URL or hostname from the user-facing error
-      job.error = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
+      job.error = rawMessage
+        .replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
         .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
       job.completedAt = Date.now();
     }
@@ -304,8 +333,15 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
 
   router.post('/backtest', async (req, res) => {
     try {
-      const { symbol, timeframe, script, startDate, endDate, days_back, ...config } = req.body as Record<string, unknown>;
-      console.log('[backtest] POST received: symbol=%s, timeframe=%s, script length=%d, days_back=%s', symbol, timeframe, typeof script === 'string' ? script.length : 0, days_back);
+      const { symbol, timeframe, script, startDate, endDate, days_back, ...config } =
+        req.body as Record<string, unknown>;
+      console.log(
+        '[backtest] POST received: symbol=%s, timeframe=%s, script length=%d, days_back=%s',
+        symbol,
+        timeframe,
+        typeof script === 'string' ? script.length : 0,
+        days_back,
+      );
 
       if (!symbol || typeof symbol !== 'string') {
         res.status(400).json({ error: 'Missing or invalid "symbol" field' });
@@ -346,7 +382,11 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       const startDateStr = startDate as string | undefined;
       const endDateStr = endDate as string | undefined;
       const daysBack = typeof days_back === 'number' && days_back > 0 ? days_back : undefined;
-      const dateRange = resolveDateRange({ startDate: startDateStr, endDate: endDateStr, daysBack });
+      const dateRange = resolveDateRange({
+        startDate: startDateStr,
+        endDate: endDateStr,
+        daysBack,
+      });
       if (!dateRange.ok) {
         res.status(400).json({
           error: 'Invalid backtest date range',
@@ -356,9 +396,13 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
         return;
       }
       const effectiveStartDate =
-        dateRange.value.startDate !== undefined ? toUtcDateString(dateRange.value.startDate) : startDateStr;
+        dateRange.value.startDate !== undefined
+          ? toUtcDateString(dateRange.value.startDate)
+          : startDateStr;
       const effectiveEndDate =
-        dateRange.value.endDate !== undefined ? toUtcDateString(dateRange.value.endDate) : endDateStr;
+        dateRange.value.endDate !== undefined
+          ? toUtcDateString(dateRange.value.endDate)
+          : endDateStr;
 
       const jobId = randomUUID();
       const job: BacktestJob = {
@@ -411,7 +455,10 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
         const rawSymbol = req.query.symbol;
         // Non-string (e.g. repeated ?symbol=a&symbol=b) or empty-after-trim → validation error.
         if (typeof rawSymbol !== 'string' || rawSymbol.trim() === '') {
-          res.status(400).json({ error: 'Missing or invalid "symbol" query parameter', code: 'VALIDATION_ERROR' });
+          res.status(400).json({
+            error: 'Missing or invalid "symbol" query parameter',
+            code: 'VALIDATION_ERROR',
+          });
           return;
         }
         const symbol = rawSymbol.trim().toUpperCase();
@@ -424,10 +471,16 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
           // Classify by the fetcher's own error message, never by matching input
           // (contract §4: identify via its error type/message).
           if (message.includes('not mapped to Solana mints')) {
-            res.status(400).json({ error: `Symbol ${symbol} is not mapped to a Jupiter mint`, code: 'UNSUPPORTED_SYMBOL' });
+            res.status(400).json({
+              error: `Symbol ${symbol} is not mapped to a Jupiter mint`,
+              code: 'UNSUPPORTED_SYMBOL',
+            });
           } else {
             logger.warn('DEX fee upstream unavailable', { symbol, err });
-            res.status(503).json({ error: 'DEX fee data temporarily unavailable, try again later', code: 'UPSTREAM_UNAVAILABLE' });
+            res.status(503).json({
+              error: 'DEX fee data temporarily unavailable, try again later',
+              code: 'UPSTREAM_UNAVAILABLE',
+            });
           }
           return;
         }
@@ -466,7 +519,9 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       const body = req.body as Record<string, unknown> | undefined;
       const rawJobId = body?.job_id;
       if (typeof rawJobId !== 'string' || rawJobId.trim() === '') {
-        res.status(400).json({ error: 'Missing or invalid "job_id" field', code: 'VALIDATION_ERROR' });
+        res
+          .status(400)
+          .json({ error: 'Missing or invalid "job_id" field', code: 'VALIDATION_ERROR' });
         return;
       }
       const jobId = rawJobId.trim();
@@ -497,7 +552,8 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
     } catch (err) {
       // Never leak internals: sanitize anything logged, return a fixed message.
       const rawMessage = err instanceof Error ? err.message : String(err);
-      const sanitized = rawMessage.replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
+      const sanitized = rawMessage
+        .replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
         .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
       logger.error('Backtest export failed', { error: sanitized });
       res.status(500).json({ error: 'Export failed' });
@@ -536,12 +592,21 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       return;
     }
 
-    console.log('[backtest] Result requested for jobId=%s, hasResult=%o, metrics=%o', jobId, !!job.result, job.result?.metrics ? Object.fromEntries(Object.entries(job.result.metrics).map(([k, v]) => [k, typeof v === 'number' ? Math.round(v * 100) / 100 : v])) : null);
+    console.log(
+      '[backtest] Result requested for jobId=%s, hasResult=%o, metrics=%o',
+      jobId,
+      !!job.result,
+      job.result?.metrics
+        ? Object.fromEntries(
+            Object.entries(job.result.metrics).map(([k, v]) => [
+              k,
+              typeof v === 'number' ? Math.round(v * 100) / 100 : v,
+            ]),
+          )
+        : null,
+    );
     res.json(job.result);
   });
 
   return router;
 }
-
-
-

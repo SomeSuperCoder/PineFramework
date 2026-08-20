@@ -24,12 +24,12 @@ function barsToContext(bars: Bar[]): ExecutionContext[] {
   }));
 }
 
-function runPineScript(source: string, bars: Bar[]): StrategyMarkerEntry[] {
+async function runPineScript(source: string, bars: Bar[]): Promise<StrategyMarkerEntry[]> {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
   const contexts = barsToContext(bars);
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return result.strategyMarkers;
 }
 
@@ -44,8 +44,8 @@ describe('Strategy Marker Contract', () => {
   // I. ONE MARKER PER CANDLE
   // =========================================================================
 
-  describe('I. One marker per candle', () => {
-    it('never produces more than one entry marker on any single bar', () => {
+  describe('I. One marker per candle', async () => {
+    it('never produces more than one entry marker on any single bar', async () => {
       const engine = new StrategyEngine();
       const entriesPerBar = new Map<number, number>();
 
@@ -66,7 +66,7 @@ describe('Strategy Marker Contract', () => {
       }
     });
 
-    it('never produces more than one close/exit marker on any single bar', () => {
+    it('never produces more than one close/exit marker on any single bar', async () => {
       const engine = new StrategyEngine();
 
       // Open long, then close it
@@ -92,7 +92,7 @@ describe('Strategy Marker Contract', () => {
       expect(closeMarkers).toHaveLength(1);
     });
 
-    it('reversal produces exactly one close + one entry on the same bar', () => {
+    it('reversal produces exactly one close + one entry on the same bar', async () => {
       const engine = new StrategyEngine();
 
       // Open long on bar 0
@@ -119,7 +119,7 @@ describe('Strategy Marker Contract', () => {
   // =========================================================================
 
   describe('II. Clear naming', () => {
-    it('entry marker name matches the entry name argument exactly', () => {
+    it('entry marker name matches the entry name argument exactly', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -130,7 +130,7 @@ describe('Strategy Marker Contract', () => {
       expect(markers[0].name).toBe('MyStrategy');
     });
 
-    it('entry marker name defaults to "Long"/"Short" when no comment given', () => {
+    it('entry marker name defaults to "Long"/"Short" when no comment given', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -146,7 +146,7 @@ describe('Strategy Marker Contract', () => {
       expect(shortMarker!.name).toBe('Short');
     });
 
-    it('close marker name is "Exit <entryName>"', () => {
+    it('close marker name is "Exit <entryName>"', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -161,7 +161,7 @@ describe('Strategy Marker Contract', () => {
       expect(closeMarkers[0].name).toBe('Exit Long');
     });
 
-    it('exit marker name is "Exit <entryName>"', () => {
+    it('exit marker name is "Exit <entryName>"', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -176,7 +176,7 @@ describe('Strategy Marker Contract', () => {
       expect(exitMarkers[0].name).toBe('Exit Long');
     });
 
-    it('reversal close marker has comment "reverse"', () => {
+    it('reversal close marker has comment "reverse"', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -193,7 +193,7 @@ describe('Strategy Marker Contract', () => {
       expect(close!.comment).toBe('reverse');
     });
 
-    it('close marker direction matches the closed position direction', () => {
+    it('close marker direction matches the closed position direction', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -217,7 +217,7 @@ describe('Strategy Marker Contract', () => {
   // =========================================================================
 
   describe('III. Six label types', () => {
-    it('1. Simple Long entry: entry from flat', () => {
+    it('1. Simple Long entry: entry from flat', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -235,7 +235,7 @@ describe('Strategy Marker Contract', () => {
       expect(markers[0].price).toBeGreaterThan(0);
     });
 
-    it('2. Simple Short entry: entry from flat', () => {
+    it('2. Simple Short entry: entry from flat', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -253,7 +253,7 @@ describe('Strategy Marker Contract', () => {
       expect(markers[0].price).toBeGreaterThan(0);
     });
 
-    it('3. Long close: explicit close of long position', () => {
+    it('3. Long close: explicit close of long position', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -278,7 +278,7 @@ describe('Strategy Marker Contract', () => {
       expect(engine.getPosition().direction).toBe('flat');
     });
 
-    it('4. Short close: explicit close of short position', () => {
+    it('4. Short close: explicit close of short position', async () => {
       const engine = new StrategyEngine();
 
       engine.updateBar(0, 1000, 100, 105, 95, 100, 1000);
@@ -303,7 +303,7 @@ describe('Strategy Marker Contract', () => {
       expect(engine.getPosition().direction).toBe('flat');
     });
 
-    it('5. Long close → Short reentry: reversal from long to short', () => {
+    it('5. Long close → Short reentry: reversal from long to short', async () => {
       const engine = new StrategyEngine();
 
       // Open long
@@ -340,7 +340,7 @@ describe('Strategy Marker Contract', () => {
       expect(engine.getPosition().direction).toBe('short');
     });
 
-    it('6. Short close → Long reentry: reversal from short to long', () => {
+    it('6. Short close → Long reentry: reversal from short to long', async () => {
       const engine = new StrategyEngine();
 
       // Open short
@@ -448,9 +448,9 @@ if bar_index == 50 and strategy.position_size < 0
     return bars;
   }
 
-  it('produces all 6 label types and no duplicates', () => {
+  it('produces all 6 label types and no duplicates', async () => {
     const bars = createControlledBars();
-    const markers = runPineScript(strategySource, bars);
+    const markers = await runPineScript(strategySource, bars);
 
     // --- One-marker-per-candle enforcement ---
     const byBar = new Map<number, StrategyMarkerEntry[]>();

@@ -548,7 +548,10 @@ export class LiveStrategyExecutor {
 
     if (bars.length > 0) {
       const contexts = bars.map((bar, i) => createExecutionContextFromBar(bar, i));
-      const result = state.runtime.executeBars(contexts);
+      // Await the batch run: executeBars is now async (cooperative yield between
+      // bar batches). warmUp is already async, so this adds no contract change
+      // for callers — it only lets the event loop breathe during seeding.
+      const result = await state.runtime.executeBars(contexts);
       if (!result.success) {
         const message = result.error?.message ?? 'warm-up execution failed';
         throw new Error(`[LiveStrategyExecutor] Warm-up failed for ${key}: ${message}`);

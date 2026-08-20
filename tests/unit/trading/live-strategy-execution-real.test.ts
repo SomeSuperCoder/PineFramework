@@ -166,7 +166,7 @@ describe('LiveStrategyExecutor — real Pine strategy execution (5.x)', () => {
     const parseResult = parse(CROSS_SOURCE);
     const compileResult = compile(parseResult.ast);
     const engine = new ExecutionEngine(compileResult);
-    const batchResult = engine.executeBars(bars.map((b, i) => createExecutionContextFromBar(b, i)));
+    const batchResult = await engine.executeBars(bars.map((b, i) => createExecutionContextFromBar(b, i)));
     const markers = batchResult.strategyMarkers ?? [];
     const entryLong = markers.filter((m) => m.type === 'entry' && m.direction === 'long');
     const closes = markers.filter(

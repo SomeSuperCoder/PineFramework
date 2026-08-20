@@ -8,7 +8,7 @@ import {
 import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Line Builtin Test', () => {
-  it('draws a line with line.new and modifies it', () => {
+  it('draws a line with line.new and modifies it', async () => {
     const src = `//@version=6
 indicator("LineTest")
 var line myLine = na
@@ -57,7 +57,7 @@ if bar_index == 15
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     console.log('Lines count:', result.lines?.length ?? 0);
     for (const l of result.lines ?? []) {
       console.log('  Line:', JSON.stringify(l));
@@ -74,7 +74,7 @@ if bar_index == 15
     }
   });
 
-  it('produces lines with HHLL script', () => {
+  it('produces lines with HHLL script', async () => {
     const source = fs.readFileSync('./test_indicators/higher-high-lower-low.pine', 'utf-8');
     const { ast } = parse(source);
     const compiled = compile(ast);
@@ -135,7 +135,7 @@ if bar_index == 15
       ),
     }));
 
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
     console.log('\nHHLL 500 bars:');
     console.log('Labels:', result.labels?.length ?? 0);
     console.log('Lines:', result.lines?.length ?? 0);

@@ -51,6 +51,7 @@ import type {
   AlertTriggerEntry,
   SarStateValue,
   HLineEntry,
+  CancellationToken,
 } from './execution-types.js';
 
 export {
@@ -66,6 +67,7 @@ export {
   type BoxEntry,
   type AlertConditionEntry,
   type AlertTriggerEntry,
+  type CancellationToken,
 };
 
 /**
@@ -438,9 +440,14 @@ export class ExecutionEngine {
     return this.interpreter.executeBar(context);
   }
 
-  /** Delegate to interpreter */
-  executeBars(bars: ExecutionContext[]): ExecutionResult {
-    return this.interpreter.executeBars(bars);
+  /**
+   * Delegate to interpreter. Async so the bar loop can yield to the event
+   * loop between batches (cooperative scheduling — see interpreter.executeBars).
+   * Optional CancellationToken is forwarded unchanged; the engine never
+   * constructs or owns one (Dependency Inversion — B2 injects the registry).
+   */
+  async executeBars(bars: ExecutionContext[], token?: CancellationToken): Promise<ExecutionResult> {
+    return this.interpreter.executeBars(bars, token);
   }
 
   /** Delegate to interpreter */

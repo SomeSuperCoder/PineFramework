@@ -56,12 +56,12 @@ describe('OHLCVCache', () => {
 });
 
 describe('Pine Script Execution via engine', () => {
-  it('executes a simple script without throwing', () => {
+  it('executes a simple script without throwing', async () => {
     const engine = createPineScriptEngine();
     const bars = Array.from({ length: 50 }, (_, i) =>
       makeBar({ timestamp: Date.now() + i * 60000, close: 100 + Math.sin(i) * 10 })
     );
-    const result = engine.execute(
+    const result = await engine.execute(
       `//@version=6
 indicator("Test")
 plot(close)`,
@@ -70,11 +70,11 @@ plot(close)`,
     expect(result.success).toBe(true);
   });
 
-  it('throws on invalid scripts', () => {
+  it('throws on invalid scripts', async () => {
     const engine = createPineScriptEngine();
     const bars = [makeBar()];
-    expect(() => {
-      engine.execute('this is not valid pine code', bars);
-    }).toThrow();
+    await expect(
+      engine.execute('this is not valid pine code', bars),
+    ).rejects.toThrow();
   });
 });

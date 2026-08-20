@@ -5,7 +5,7 @@ import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Property-Based Tests', () => {
   describe('Mathematical Properties', () => {
-    it('addition is commutative', () => {
+    it('addition is commutative', async () => {
       for (let i = 0; i < 100; i++) {
         const a = Math.random() * 1000 - 500;
         const b = Math.random() * 1000 - 500;
@@ -13,7 +13,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('addition is associative', () => {
+    it('addition is associative', async () => {
       for (let i = 0; i < 100; i++) {
         const a = Math.random() * 100 - 50;
         const b = Math.random() * 100 - 50;
@@ -22,7 +22,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('multiplication is commutative', () => {
+    it('multiplication is commutative', async () => {
       for (let i = 0; i < 100; i++) {
         const a = Math.random() * 100 - 50;
         const b = Math.random() * 100 - 50;
@@ -30,7 +30,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('multiplication distributes over addition', () => {
+    it('multiplication distributes over addition', async () => {
       for (let i = 0; i < 100; i++) {
         const a = Math.random() * 100 - 50;
         const b = Math.random() * 100 - 50;
@@ -39,21 +39,21 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('abs is always non-negative', () => {
+    it('abs is always non-negative', async () => {
       for (let i = 0; i < 100; i++) {
         const x = Math.random() * 2000 - 1000;
         expect(Math.abs(x)).toBeGreaterThanOrEqual(0);
       }
     });
 
-    it('abs(x) >= 0', () => {
+    it('abs(x) >= 0', async () => {
       for (let i = 0; i < 100; i++) {
         const x = Math.random() * 2000 - 1000;
         expect(Math.abs(x)).toBeGreaterThanOrEqual(0);
       }
     });
 
-    it('sqrt(x^2) == abs(x)', () => {
+    it('sqrt(x^2) == abs(x)', async () => {
       for (let i = 0; i < 100; i++) {
         const x = Math.random() * 1000 - 500;
         expect(Math.sqrt(x * x)).toBeCloseTo(Math.abs(x), 5);
@@ -78,14 +78,14 @@ describe('Property-Based Tests', () => {
   });
 
   describe('Series Properties', () => {
-    it('series length is always non-negative', () => {
+    it('series length is always non-negative', async () => {
       for (let i = 0; i < 100; i++) {
         const length = Math.floor(Math.random() * 100);
         expect(length).toBeGreaterThanOrEqual(0);
       }
     });
 
-    it('series index is within bounds', () => {
+    it('series index is within bounds', async () => {
       for (let i = 0; i < 100; i++) {
         const size = Math.floor(Math.random() * 100) + 1;
         const index = Math.floor(Math.random() * size);
@@ -96,7 +96,7 @@ describe('Property-Based Tests', () => {
   });
 
   describe('Color Properties', () => {
-    it('RGB values are within 0-255', () => {
+    it('RGB values are within 0-255', async () => {
       for (let i = 0; i < 100; i++) {
         const r = Math.floor(Math.random() * 512) - 128;
         const g = Math.floor(Math.random() * 512) - 128;
@@ -115,7 +115,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('alpha value is within 0-255', () => {
+    it('alpha value is within 0-255', async () => {
       for (let i = 0; i < 100; i++) {
         const a = Math.floor(Math.random() * 512) - 128;
         const clampedA = Math.max(0, Math.min(255, a));
@@ -126,7 +126,7 @@ describe('Property-Based Tests', () => {
   });
 
   describe('Strategy Properties', () => {
-    it('win rate is between 0 and 100', () => {
+    it('win rate is between 0 and 100', async () => {
       for (let i = 0; i < 100; i++) {
         const total = Math.floor(Math.random() * 100) + 1;
         const wins = Math.floor(Math.random() * total);
@@ -136,7 +136,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('profit factor is non-negative', () => {
+    it('profit factor is non-negative', async () => {
       for (let i = 0; i < 100; i++) {
         const grossProfit = Math.random() * 1000;
         const grossLoss = Math.random() * 1000;
@@ -146,7 +146,7 @@ describe('Property-Based Tests', () => {
       }
     });
 
-    it('drawdown is non-negative', () => {
+    it('drawdown is non-negative', async () => {
       for (let i = 0; i < 100; i++) {
         const equity = Math.random() * 10000;
         const peakEquity = equity + Math.random() * 5000;
@@ -161,8 +161,8 @@ describe('Property-Based Tests', () => {
 indicator("Round Trip")
 plot(close, "Close")`;
 
-    it('parse -> compile -> execute produces consistent results', () => {
-      const runPipeline = () => {
+    it('parse -> compile -> execute produces consistent results', async () => {
+      const runPipeline = async () => {
         const { ast } = parseSource(source);
         const compileResult = compileSource(ast);
         const engine = new ExecutionEngine(compileResult);
@@ -178,11 +178,11 @@ plot(close, "Close")`;
           volume: createSeries('volume', [5000]),
         }));
 
-        return engine.executeBars(bars);
+        return await engine.executeBars(bars);
       };
 
-      const result1 = runPipeline();
-      const result2 = runPipeline();
+      const result1 = await runPipeline();
+      const result2 = await runPipeline();
 
       expect(result1.success).toBe(result2.success);
       expect(result1.outputs.size).toBe(result2.outputs.size);

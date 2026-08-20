@@ -4,6 +4,7 @@ import {
   ExecutionEngine,
   type ExecutionContext,
   type ExecutionResult,
+  type CancellationToken,
 } from './language/runtime/execution-engine.js';
 import { createSeries } from './language/runtime/series.js';
 import { DataEngine, type DataEngineOptions } from './data/data-engine.js';
@@ -20,7 +21,13 @@ import type { Bar } from './data/bar.js';
 export interface PineScriptEngine {
   parse(source: string): ParseResult;
   compile(source: string): CompileResult;
-  execute(source: string, bars: Bar[]): ExecutionResult;
+  /**
+   * Execute a script over bars. ASYNC: the engine's bar loop yields to the
+   * event loop between batches, so callers must await. `token` is an optional
+   * cooperative CancellationToken — a flagged token stops the run early and
+   * yields a result with `cancelled: true`.
+   */
+  execute(source: string, bars: Bar[], token?: CancellationToken): Promise<ExecutionResult>;
   createDataEngine(options?: DataEngineOptions): DataEngine;
   createRequestSystem(dataEngine: DataEngine): RequestSystem;
   createStrategyEngine(config?: Partial<StrategyConfig>): StrategyEngine;
@@ -43,12 +50,16 @@ export function createPineScriptEngine(): PineScriptEngine {
       return compile(result.ast);
     },
 
-    execute(source: string, bars: Bar[]): ExecutionResult {
+    async execute(
+      source: string,
+      bars: Bar[],
+      token?: CancellationToken,
+    ): Promise<ExecutionResult> {
       const result = parse(source);
       const compileResult = compile(result.ast);
       const engine = new ExecutionEngine(compileResult);
       const contexts = barsToContexts(bars);
-      return engine.executeBars(contexts);
+      return engine.executeBars(contexts, token);
     },
 
     createDataEngine(options?: DataEngineOptions): DataEngine {
@@ -154,10 +165,11 @@ export function createBars(
   return bars;
 }
 
-export function executePineScript(
+export async function executePineScript(
   source: string,
   bars: Bar[],
-): {
+  token?: CancellationToken,
+): Promise<{
   success: boolean;
   error?: string | import('./language/runtime/execution-types.js').EngineError;
   outputs: Map<string, import('./language/runtime/series.js').Series>;
@@ -168,12 +180,12 @@ export function executePineScript(
   plotColors?: Record<string, (string | null)[]>;
   fillColorData?: Record<string, (string | null)[]>;
   maxLookback?: number;
-} {
+}> {
   const result = parse(source);
   const compileResult = compile(result.ast);
   const engine = new ExecutionEngine(compileResult);
   const contexts = barsToContexts(bars);
-  const execResult = engine.executeBars(contexts);
+  const execResult = await engine.executeBars(contexts, token);
 
   return {
     success: execResult.success,
@@ -185,9 +197,7 @@ export function executePineScript(
     metrics: engine.getMetrics(),
     // Convert Maps to plain objects — JSON.stringify(Map) produces '{}',
     // breaking downstream serialization (wire transport, REST responses, etc.).
-    plotColors: execResult.plotColors
-      ? Object.fromEntries(execResult.plotColors)
-      : undefined,
+    plotColors: execResult.plotColors ? Object.fromEntries(execResult.plotColors) : undefined,
     fillColorData: execResult.fillColorData
       ? Object.fromEntries(execResult.fillColorData)
       : undefined,

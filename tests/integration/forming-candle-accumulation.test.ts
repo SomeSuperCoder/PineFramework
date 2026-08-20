@@ -108,10 +108,10 @@ describe('Forming Candle Accumulation', () => {
   // Use enough bars for lookback-based indicators
   const testBars = fullBars.slice(-300);
 
-  it('restores variable series lengths after each forming candle tick', () => {
+  it('restores variable series lengths after each forming candle tick', async () => {
     const engine = new ExecutionEngine(compiled);
     const contexts = buildContexts(testBars);
-    engine.executeBars(contexts);
+    await engine.executeBars(contexts);
 
     // Pick a few key variables to track
     const varNames = ['src', 'trend', 'atr', 'len', 'h', 'l', 'm', 'flag'];
@@ -189,7 +189,7 @@ describe('Forming Candle Accumulation', () => {
     // Run a fresh engine on the same extended bar set for comparison
     const freshEngine = new ExecutionEngine(compiled);
     const freshCtx = buildContexts(extendedBars);
-    const freshResult = freshEngine.executeBars(freshCtx);
+    const freshResult = await freshEngine.executeBars(freshCtx);
     const freshShapes = (freshResult.shapes || []).map((s: any) => ({
       time: s.time,
       text: s.text,

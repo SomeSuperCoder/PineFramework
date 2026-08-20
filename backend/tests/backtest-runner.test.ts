@@ -75,17 +75,17 @@ function createBars(count: number): Bar[] {
 }
 
 describe('runBacktestPipeline — maxBars cap', () => {
-  it('preserves the DEFAULT 1500-bar cap when maxBars absent', () => {
-    const over = runBacktestPipeline({ script: STRATEGY, bars: createBars(1501) });
+  it('preserves the DEFAULT 1500-bar cap when maxBars absent', async () => {
+    const over = await runBacktestPipeline({ script: STRATEGY, bars: createBars(1501) });
     expect(over.success).toBe(false);
     expect(over.error).toContain('Maximum is 1500');
 
-    const atCap = runBacktestPipeline({ script: STRATEGY, bars: createBars(1500) });
+    const atCap = await runBacktestPipeline({ script: STRATEGY, bars: createBars(1500) });
     expect(atCap.success).toBe(true);
   });
 
-  it('raises the cap when options.maxBars is provided', () => {
-    const result = runBacktestPipeline({
+  it('raises the cap when options.maxBars is provided', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY,
       bars: createBars(1800),
       maxBars: 2000,
@@ -94,8 +94,8 @@ describe('runBacktestPipeline — maxBars cap', () => {
     expect(result.engine).toBeDefined();
   });
 
-  it('enforces the provided cap (maxBars is honored, not ignored)', () => {
-    const result = runBacktestPipeline({
+  it('enforces the provided cap (maxBars is honored, not ignored)', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY,
       bars: createBars(101),
       maxBars: 100,
@@ -105,8 +105,8 @@ describe('runBacktestPipeline — maxBars cap', () => {
     expect(result.error).toContain('101');
   });
 
-  it('rejects maxBars below the bar count even for large runs', () => {
-    const result = runBacktestPipeline({
+  it('rejects maxBars below the bar count even for large runs', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY,
       bars: createBars(5000),
       maxBars: 4000,
@@ -117,8 +117,8 @@ describe('runBacktestPipeline — maxBars cap', () => {
 });
 
 describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
-  it('engine receives the runner-provided timeframe as a runtime option', () => {
-    const result = runBacktestPipeline({
+  it('engine receives the runner-provided timeframe as a runtime option', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY,
       bars: createBars(120),
       timeframe: 'D',
@@ -131,8 +131,8 @@ describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
     expect(inSeconds).toBe(86400);
   });
 
-  it('strategy() declaration is the fallback when the runner passes no timeframe', () => {
-    const result = runBacktestPipeline({
+  it('strategy() declaration is the fallback when the runner passes no timeframe', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY_WITH_TF,
       bars: createBars(120),
     });
@@ -142,8 +142,8 @@ describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
     expect(engine.builtins.get('timeframe.isweekly')!()).toBe(true);
   });
 
-  it('runner-provided timeframe WINS over the strategy() declaration', () => {
-    const result = runBacktestPipeline({
+  it('runner-provided timeframe WINS over the strategy() declaration', async () => {
+    const result = await runBacktestPipeline({
       script: STRATEGY_WITH_TF, // declares timeframe="W"
       bars: createBars(120),
       timeframe: '60',
@@ -154,8 +154,8 @@ describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
     expect(engine.builtins.get('timeframe.isweekly')!()).toBe(false);
   });
 
-  it('both absent → timeframe.* resolves to NA (non-breaking no-tf)', () => {
-    const result = runBacktestPipeline({ script: STRATEGY, bars: createBars(120) });
+  it('both absent → timeframe.* resolves to NA (non-breaking no-tf)', async () => {
+    const result = await runBacktestPipeline({ script: STRATEGY, bars: createBars(120) });
     expect(result.success).toBe(true);
     const engine = result.engine!;
     expect(engine.builtins.get('timeframe.period')!()).toBe(Symbol.for('pine.na'));

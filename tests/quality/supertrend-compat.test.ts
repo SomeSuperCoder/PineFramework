@@ -35,19 +35,19 @@ function barsToContext(bars: Bar[]) {
 }
 
 describe('Official Supertrend compatibility', () => {
-  it('parses and executes without errors', () => {
+  it('parses and executes without errors', async () => {
     const { ast } = parse(SOURCE);
     const cr = compile(ast);
     const engine = new ExecutionEngine(cr);
-    const result = engine.executeBars(barsToContext(createBars(120)));
+    const result = await engine.executeBars(barsToContext(createBars(120)));
     expect(result.success).toBe(true);
   });
 
-  it('direction alternates between uptrend and downtrend', () => {
+  it('direction alternates between uptrend and downtrend', async () => {
     const { ast } = parse(SOURCE);
     const cr = compile(ast);
     const engine = new ExecutionEngine(cr);
-    const result = engine.executeBars(barsToContext(createBars(120)));
+    const result = await engine.executeBars(barsToContext(createBars(120)));
 
     const upKey = Array.from(result.outputs.keys()).find(k => k.includes('Up Trend'));
     const downKey = Array.from(result.outputs.keys()).find(k => k.includes('Down Trend'));

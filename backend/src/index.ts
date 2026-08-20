@@ -8,7 +8,7 @@ import { OHLCVCache } from './cache/ohlcv-cache.js';
 import { DiskOHLCVCache } from './cache/DiskOHLCVCache.js';
 import { createOHLCVRouter } from './routes/ohlcv.js';
 import { createBarsRouter } from './routes/bars.js';
-import { executeRouter } from './routes/execute.js';
+import { createExecuteRouter } from './routes/execute.js';
 import { symbolsRouter } from './routes/symbols.js';
 import { createStatusRouter } from './routes/status.js';
 import { createBacktestRouter } from './routes/backtest.js';
@@ -31,6 +31,8 @@ import {
 import { createBotWSGateway } from './ws/bot-gateway.js';
 import { buildSnapshotPayload } from './ws/snapshot-payload.js';
 import { createWSGateway } from './ws/gateway.js';
+import { createPineScriptEngine } from 'pine-framework';
+import { InMemoryCancellationRegistry } from './cancellation-registry.js';
 import { TelegramConfigStore, type NotificationType } from './store/TelegramConfigStore.js';
 import { ScriptFileManager } from './store/ScriptFileManager.js';
 import { RunningIndicatorsStore } from './store/RunningIndicatorsStore.js';
@@ -92,6 +94,14 @@ const indicatorsStore = new RunningIndicatorsStore(INDICATORS_JSON_PATH);
 const manifestStore = new ScriptsManifestStore(SCRIPTS_MANIFEST_PATH);
 const scriptFileManager = new ScriptFileManager(SCRIPTS_DIR, manifestStore);
 
+// ── B2: cooperative-cancellation composition root ────────────────────────────
+// ONE registry + ONE engine, constructed here and injected into the REST
+// execute/indicators routers and the WS gateway (DI — consumers never
+// construct either). The registry lets DELETE /api/indicators/:id and WS
+// stop_indicator flag an in-flight engine run, which stops at its next yield.
+const cancellationRegistry = new InMemoryCancellationRegistry();
+const pineScriptEngine = createPineScriptEngine();
+
 // D4 (trade-history dashboard): the store is constructed OUTSIDE the
 // ENABLE_TRADING_BOT gate so history/stats stay readable when the bot flag is
 // off — it is file-pointed at module init and reads even when no engine is
@@ -138,7 +148,7 @@ app.use(express.json({ limit: '5mb' }));
 
 app.use('/api', createOHLCVRouter(cache, diskCache));
 app.use('/api', createBarsRouter(cache, diskCache));
-app.use('/api', executeRouter);
+app.use('/api', createExecuteRouter(pineScriptEngine, cancellationRegistry));
 app.use('/api', symbolsRouter);
 app.use('/api', createStatusRouter(diskCache));
 app.use('/api', createBacktestRouter(diskCache));
@@ -220,8 +230,7 @@ app.use(
     setAlertPreference: (chatId: number, alertId: string, enabled: boolean) =>
       telegramConfig.setAlertPreference(chatId, alertId, enabled),
     getAdmin: () => telegramConfig.getAdmin(),
-    setAdmin: (userId: number, username: string) =>
-      telegramConfig.setAdmin(userId, username),
+    setAdmin: (userId: number, username: string) => telegramConfig.setAdmin(userId, username),
     getControllers: () => telegramConfig.getControllers(),
     addController: (userId: number, username: string, grantedBy: number) =>
       telegramConfig.addController(userId, username, grantedBy),
@@ -229,8 +238,7 @@ app.use(
     getRequests: () => telegramConfig.getRequests(),
     removeRequest: (userId: number) => telegramConfig.removeRequest(userId),
     getChats: () => telegramConfig.getChats(),
-    setChatLanguage: (chatId: number, language) =>
-      telegramConfig.setChatLanguage(chatId, language),
+    setChatLanguage: (chatId: number, language) => telegramConfig.setChatLanguage(chatId, language),
     // The store exposes union/removal primitives; a "set to exactly these
     // types" PUT is a diff: remove what dropped out, add what appeared.
     setMemberSubscriptions: (chatId: number, memberId: number, types) => {
@@ -240,8 +248,7 @@ app.use(
       if (toAdd.length > 0) telegramConfig.memberSubscribe(chatId, memberId, toAdd);
       if (toRemove.length > 0) telegramConfig.memberUnsubscribe(chatId, memberId, toRemove);
     },
-    linkChat: (chatId: number, byUserId: number) =>
-      telegramConfig.linkChat(chatId, byUserId),
+    linkChat: (chatId: number, byUserId: number) => telegramConfig.linkChat(chatId, byUserId),
     unlinkChat: (chatId: number) => telegramConfig.unlinkChat(chatId),
     getProxy: () => telegramConfig.getProxy(),
     setProxy: (proxy) => {
@@ -255,7 +262,7 @@ app.use(
 
 app.use('/api', createBuiltInScriptsRouter(TEST_INDICATORS_DIR));
 app.use('/api', createScriptsRouter(scriptFileManager, indicatorsStore));
-app.use('/api', createIndicatorsRouter(indicatorsStore));
+app.use('/api', createIndicatorsRouter(indicatorsStore, cancellationRegistry));
 app.use('/api', createExportRouter());
 
 // D4: trade history/stats are readable regardless of the bot flag — the store
@@ -263,10 +270,7 @@ app.use('/api', createExportRouter());
 // ENABLE_TRADING_BOT=false and no engine is ever constructed. One shared
 // StatsService wraps the store so the REST routes and the upcoming Telegram
 // /report command consume the same in-process aggregation.
-app.use(
-  '/api',
-  createTradeHistoryRouter({ statsService }),
-);
+app.use('/api', createTradeHistoryRouter({ statsService }));
 
 // ── Log Query Endpoint ──
 // AI agents and the frontend can query structured log files
@@ -277,10 +281,7 @@ app.use(
 // so the string query param matches directly — no numeric conversion needed.
 
 app.get('/api/logs', async (req, res) => {
-  const { category, subcategory, level, limit } = req.query as Record<
-    string,
-    string | undefined
-  >;
+  const { category, subcategory, level, limit } = req.query as Record<string, string | undefined>;
 
   const maxLimit = 1000;
   const parsedLimit = limit ? Math.min(parseInt(limit, 10) || 100, maxLimit) : 100;
@@ -298,9 +299,7 @@ app.get('/api/logs', async (req, res) => {
   let files: string[] = [];
   try {
     const entries = await readdir(categoryDir);
-    files = entries
-      .filter((f) => f.endsWith('.log'))
-      .map((f) => path.join(categoryDir, f));
+    files = entries.filter((f) => f.endsWith('.log')).map((f) => path.join(categoryDir, f));
   } catch {
     // Directory does not exist yet — return empty array
     res.json([]);
@@ -341,10 +340,7 @@ app.get('/api/logs', async (req, res) => {
   }
 
   // Return most recent entries first
-  entries.sort(
-    (a, b) =>
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
+  entries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   res.json(entries.slice(0, parsedLimit));
 });
@@ -357,8 +353,13 @@ app.get('/api/logs', async (req, res) => {
 let botEngine: BotEngine | null = null;
 
 if (ENABLE_TRADING_BOT) {
-  const { BotEngine, RiskManager, AutoMarketSelector, generateDefaultCandidates, WarningCollector } =
-    await import('pine-framework');
+  const {
+    BotEngine,
+    RiskManager,
+    AutoMarketSelector,
+    generateDefaultCandidates,
+    WarningCollector,
+  } = await import('pine-framework');
   const { WalletManager, EncryptedFileStorage } = await import('pine-framework/trading/wallet');
   const { BybitBarFetcher, LiveBacktestRunner } = await import('./trading/auto-select-runner.js');
 
@@ -651,7 +652,7 @@ if (ENABLE_TRADING_BOT) {
   logger.info('Trading bot API enabled (ENABLE_TRADING_BOT=true)');
 }
 
-createWSGateway(server, cache, telegramService);
+createWSGateway(server, cache, telegramService, cancellationRegistry);
 
 // H2: bind to localhost only so the unauthenticated control-plane is not
 // reachable from other network interfaces (the frontend proxies through Vite

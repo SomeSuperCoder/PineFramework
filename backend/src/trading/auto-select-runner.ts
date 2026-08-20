@@ -96,7 +96,7 @@ export class LiveBacktestRunner implements BacktestRunner {
       const override = await applyDexFee(options.symbol, baseOverride, this.onWarning);
 
       // Run the backtest pipeline
-      const result = runBacktestPipeline({
+      const result = await runBacktestPipeline({
         script: options.script,
         bars: options.bars,
         configOverride: override,

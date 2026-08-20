@@ -39,7 +39,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function executeScript(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function executeScript(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -68,12 +68,12 @@ function executeScript(source: string, bars: ReturnType<typeof createTrendingBar
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   return { engine, bars, result };
 }
 
 function toScriptResult(
-  result: ReturnType<ExecutionEngine['executeBars']>,
+  result: Awaited<ReturnType<ExecutionEngine['executeBars']>>,
   execBars: ReturnType<typeof createTrendingBars>,
 ): ScriptResult {
   const outputs = result.outputs;
@@ -121,12 +121,12 @@ sma14 = ta.sma(close, 14)
 plot(sma14)
   `;
 
-  it('should preserve prev values when context is insufficient (warmup nulls in overlap)', () => {
+  it('should preserve prev values when context is insufficient (warmup nulls in overlap)', async () => {
     // Simulate initial load: 300 bars loaded, indicator runs, lookback ~14
     const allBars = createTrendingBars(300, 100);
 
     // Step 1: Initial execution on first 300 bars (simulates initial chart load)
-    const { engine: engine1, result: result1, bars: bars1 } = executeScript(script, allBars);
+    const { engine: engine1, result: result1, bars: bars1 } = await executeScript(script, allBars);
     const prevResult = toScriptResult(result1, bars1);
     expect(prevResult.plots.length).toBeGreaterThan(0);
 
@@ -144,7 +144,7 @@ plot(sma14)
     const actualContextSize = contextBars.length;
     const execBars = [...newBars, ...contextBars];
 
-    const { result: result2 } = executeScript(script, execBars);
+    const { result: result2 } = await executeScript(script, execBars);
     const newResult = toScriptResult(result2, execBars);
 
     // Step 3: Merge via prependIndicatorResult (same flow as frontend)
@@ -203,7 +203,7 @@ plot(sma14)
     }
   });
 
-  it('should heal warmup holes when context accumulates with subsequent prepends', () => {
+  it('should heal warmup holes when context accumulates with subsequent prepends', async () => {
     // Simulate scroll-back direction: prepends add OLDER bars to the LEFT.
     // Initial: bars 100-399 (300 bars, "newest" on the right)
     // Step 1: Simulate initial load on bars 100-399
@@ -216,9 +216,9 @@ plot(sma14)
 
     // Step 1: Initial 300 bars (bars 100-399)
     const initialBars = allBars.slice(100, 400);
-    const { engine: eng1, bars: _b1 } = executeScript(script, initialBars);
+    const { engine: eng1, bars: _b1 } = await executeScript(script, initialBars);
     // Re-execute to get result (executeScript creates fresh engine each call)
-    const { result: res1b, bars: bars1b } = executeScript(script, initialBars);
+    const { result: res1b, bars: bars1b } = await executeScript(script, initialBars);
     const resultInitial = toScriptResult(res1b, bars1b);
     const lookback = eng1.getMaxLookback();
 
@@ -230,7 +230,7 @@ plot(sma14)
     const actualCtx = context.slice(0, ctxSize); // first ctxSize (e.g., 100) bars of context
     const execBars = [...chunk, ...actualCtx]; // 100 + 100 = 200 bars
 
-    const { result: res2 } = executeScript(script, execBars);
+    const { result: res2 } = await executeScript(script, execBars);
     const newResult = toScriptResult(res2, execBars);
 
     // Merge

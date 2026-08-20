@@ -79,9 +79,9 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
   let incrementalMarkers: StrategyMarkerEntry[];
   let batchMarkers: StrategyMarkerEntry[];
   let allResults: ReturnType<ExecutionEngine['executeBar']>[];
-  let batchResult: ReturnType<ExecutionEngine['executeBars']>;
+  let batchResult: Awaited<ReturnType<ExecutionEngine['executeBars']>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     const bars = createCrossoverBars();
     const { ast } = parse(strategySource);
     const compiled = compile(ast);
@@ -98,19 +98,19 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     // --- Batch execution via executeBars() ---
     const engine2 = new ExecutionEngine(compiled);
     const contexts2 = barsToContext(bars);
-    batchResult = engine2.executeBars(contexts2);
+    batchResult = await engine2.executeBars(contexts2);
     batchMarkers = batchResult.strategyMarkers;
   });
 
   // --- Basic sanity --------------------------------------------------------
 
-  it('compiles and executes all 90 bars without errors', () => {
+  it('compiles and executes all 90 bars without errors', async () => {
     const failures = allResults.filter((r) => !r.success);
     expect(failures).toEqual([]);
     expect(allResults).toHaveLength(120);
   });
 
-  it('batch executeBars returns all markers', () => {
+  it('batch executeBars returns all markers', async () => {
     expect(batchResult.success).toBe(true);
     // At minimum we expect: Short entry, Exit Short, Long entry, Exit Long, Short entry
     expect(batchMarkers.length).toBeGreaterThanOrEqual(5);
@@ -123,7 +123,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     expect(incrementalMarkers.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('batch and incremental markers match', () => {
+  it('batch and incremental markers match', async () => {
     expect(batchMarkers).toHaveLength(incrementalMarkers.length);
     for (let i = 0; i < batchMarkers.length; i++) {
       expect(batchMarkers[i].type).toBe(incrementalMarkers[i].type);
@@ -135,7 +135,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Entry marker correctness -------------------------------------------
 
-  it('Long entry markers have correct name and direction', () => {
+  it('Long entry markers have correct name and direction', async () => {
     const entries = incrementalMarkers.filter((m) => m.type === 'entry' && m.direction === 'long');
     expect(entries.length).toBeGreaterThanOrEqual(1);
     for (const e of entries) {
@@ -149,7 +149,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     }
   });
 
-  it('Short entry markers have correct name and direction', () => {
+  it('Short entry markers have correct name and direction', async () => {
     const entries = incrementalMarkers.filter((m) => m.type === 'entry' && m.direction === 'short');
     expect(entries.length).toBeGreaterThanOrEqual(1);
     for (const e of entries) {
@@ -163,7 +163,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Close marker correctness (reversal closes) -------------------------
 
-  it('close markers use entry name and have reverse comment', () => {
+  it('close markers use entry name and have reverse comment', async () => {
     const closes = incrementalMarkers.filter((m) => m.type === 'close');
     expect(closes.length).toBeGreaterThanOrEqual(2);
     for (const c of closes) {
@@ -188,7 +188,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     expect(entries[2].direction).toBe('short');
   });
 
-  it('each reversal entry is preceded by a close', () => {
+  it('each reversal entry is preceded by a close', async () => {
     const entries = incrementalMarkers.filter((m) => m.type === 'entry');
     const closes = incrementalMarkers.filter((m) => m.type === 'close');
 
@@ -201,7 +201,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- No spurious markers ------------------------------------------------
 
-  it('no liquidation markers (margin rate is 0 by default)', () => {
+  it('no liquidation markers (margin rate is 0 by default)', async () => {
     const liquidations = incrementalMarkers.filter((m) => m.comment === 'Margin liquidation');
     expect(liquidations).toHaveLength(0);
   });
@@ -221,7 +221,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Label-to-entry alignment (from merged ema-cross-strategy-alignment) ---
 
-  it('strategy entry markers should align with label bars (same condition)', () => {
+  it('strategy entry markers should align with label bars (same condition)', async () => {
     // Both labels and entries are created by the same condition:
     // longCondition → label "Long Cross" + strategy.entry("Long")
     // shortCondition → label "Short Cross" + strategy.entry("Short")
@@ -230,7 +230,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
     const contexts = barsToContext(bars);
-    const result = engine.executeBars(contexts);
+    const result = await engine.executeBars(contexts);
 
     const entryMarkers = result.strategyMarkers.filter((m) => m.type === 'entry');
 
@@ -267,7 +267,7 @@ describe('Simple EMA Cross Strategy – marker analysis', () => {
 
   // --- Full marker dump for manual inspection -----------------------------
 
-  it('logs all markers for inspection', () => {
+  it('logs all markers for inspection', async () => {
     console.log('--- Strategy Marker Summary (incremental) ---');
     console.log(`Total markers: ${incrementalMarkers.length}`);
     for (const m of incrementalMarkers) {

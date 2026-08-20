@@ -12,6 +12,8 @@ export interface RunningIndicator {
 export function useIndicatorManager() {
   const [indicators, setIndicators] = useState<RunningIndicator[]>([]);
   const onIndicatorRemovedCallbacksRef = useRef<Set<(indicatorIds: string[]) => void>>(new Set());
+  /** Ids with a DELETE in flight — guards against duplicate remove clicks. */
+  const removingRef = useRef<Set<string>>(new Set());
 
   const fetchIndicators = useCallback(async (): Promise<RunningIndicator[]> => {
     try {
@@ -63,17 +65,30 @@ export function useIndicatorManager() {
   }, [indicators]);
 
   const removeIndicator = useCallback(async (indicatorId: string): Promise<boolean> => {
+    // In-flight guard: a second remove for the same id while a DELETE is pending
+    // must not spawn another request (each could otherwise stack on a hung server).
+    if (removingRef.current.has(indicatorId)) return false;
+    removingRef.current.add(indicatorId);
     try {
-      const res = await fetch(`/api/indicators/${indicatorId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/indicators/${indicatorId}`, {
+        method: 'DELETE',
+        // Bound the request so a hung server cannot leave the label in REMOVING
+        // forever (matches useChartData's 15s execute timeout pattern).
+        signal: AbortSignal.timeout(15000),
+      });
       const data = await res.json();
       if (data.success) {
         setIndicators((prev) => prev.filter((i) => i.id !== indicatorId));
         return true;
       }
+      return false;
     } catch {
-      // ignore
+      // Failure/timeout — NOT silent: return false so the caller restores the
+      // label state (removes the REMOVING marker, keeps the label listed).
+      return false;
+    } finally {
+      removingRef.current.delete(indicatorId);
     }
-    return false;
   }, []);
 
   const handleIndicatorRemoved = useCallback((indicatorIds: string[]) => {

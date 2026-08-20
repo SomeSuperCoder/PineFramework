@@ -221,7 +221,7 @@ describe('S/R backbone — rightmost labels have lines', () => {
     return bars;
   }
 
-  it('rightmost labels with backbone lines across forming-candle ticks', () => {
+  it('rightmost labels with backbone lines across forming-candle ticks', async () => {
     const bars = buildBars();
     console.log(`Built ${bars.length} bars`);
 
@@ -231,7 +231,7 @@ describe('S/R backbone — rightmost labels have lines', () => {
 
     // Initial execution
     const contexts = barsToContext(bars);
-    const initResult = engine.executeBars(contexts);
+    const initResult = await engine.executeBars(contexts);
     expect(initResult.success).toBe(true);
 
     const initLabels = initResult.labels ?? [];

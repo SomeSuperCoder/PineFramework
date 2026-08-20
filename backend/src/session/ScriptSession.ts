@@ -1,5 +1,6 @@
 import { parseAndCompile, barsToContext, ExecutionEngine, type Bar } from 'pine-framework';
 import type { ExecutionResultMessage } from 'pine-framework/contracts';
+import type { CancellationToken } from '../cancellation-registry.js';
 import { FormingCandleManager } from './FormingCandleManager.js';
 
 /**
@@ -34,17 +35,27 @@ export class ScriptSession {
     this.bars = bars;
   }
 
-  initialize(): ScriptOutputs {
+  /**
+   * Run the full historical batch. ASYNC (B1): the engine's bar loop yields to
+   * the event loop between batches, so the WS gateway stays responsive and can
+   * cancel a long initialization via the optional token (B2).
+   */
+  async initialize(token?: CancellationToken): Promise<ScriptOutputs> {
     const compileResult = parseAndCompile(this.source);
     this.version = compileResult.ir.version ?? null;
     this.engine = new ExecutionEngine(compileResult);
     this.contexts = barsToContext(this.bars);
-    const result = this.engine.executeBars(this.contexts);
-    this.formingCandleManager = new FormingCandleManager(this.bars, this.contexts, this.engine, this.version);
+    const result = await this.engine.executeBars(this.contexts, token);
+    this.formingCandleManager = new FormingCandleManager(
+      this.bars,
+      this.contexts,
+      this.engine,
+      this.version,
+    );
     return this.formingCandleManager.toOutputs(result);
   }
 
-  appendOrUpdateBar(bar: Bar, confirmed?: boolean): ScriptOutputs {
+  async appendOrUpdateBar(bar: Bar, confirmed?: boolean): Promise<ScriptOutputs> {
     if (!this.engine || !this.formingCandleManager) {
       this.bars = [bar];
       this.contexts = barsToContext(this.bars);

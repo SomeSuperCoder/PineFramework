@@ -45,7 +45,7 @@ function createTrendingBars(count: number, startPrice: number, seed: number = 42
   return bars;
 }
 
-function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
+async function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) {
   const { ast } = parse(source);
   const compiled = compile(ast);
   const engine = new ExecutionEngine(compiled);
@@ -74,7 +74,7 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
       bars.slice(0, i + 1).map((b) => b.volume),
     ),
   }));
-  const result = engine.executeBars(contexts);
+  const result = await engine.executeBars(contexts);
   if (!result.success) console.log('executeBars error:', result.error);
   return { engine, bars, result };
 }
@@ -82,19 +82,19 @@ function runEngine(source: string, bars: ReturnType<typeof createTrendingBars>) 
 describe('SuperTrend AI (Clustering) [LuxAlgo]', () => {
   const source = fs.readFileSync('./test_indicators/supertrend-ai-clustering.pine', 'utf-8');
 
-  it('parses successfully', () => {
+  it('parses successfully', async () => {
     const result = parse(source);
     expect(result.ast).toBeDefined();
   });
 
-  it('compiles successfully with overlay=true', () => {
+  it('compiles successfully with overlay=true', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     expect(compiled).toBeDefined();
     expect(compiled.ir.overlay).toBe(true);
   });
 
-  it('executes on a single bar without crashing', () => {
+  it('executes on a single bar without crashing', async () => {
     const { ast } = parse(source);
     const compiled = compile(ast);
     const engine = new ExecutionEngine(compiled);
@@ -114,15 +114,15 @@ describe('SuperTrend AI (Clustering) [LuxAlgo]', () => {
     expect(result.success).toBe(true);
   });
 
-  it('executes on multiple bars without runtime errors', () => {
+  it('executes on multiple bars without runtime errors', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
   });
 
-  it('produces expected plot output keys', () => {
+  it('produces expected plot output keys', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     expect(keys.length).toBeGreaterThanOrEqual(2);
@@ -132,9 +132,9 @@ describe('SuperTrend AI (Clustering) [LuxAlgo]', () => {
     expect(hasTrailingStopAMA).toBe(true);
   });
 
-  it('has non-null values after warmup period', () => {
+  it('has non-null values after warmup period', async () => {
     const bars = createTrendingBars(100, 80);
-    const { result } = runEngine(source, bars);
+    const { result } = await runEngine(source, bars);
     expect(result.success).toBe(true);
     const keys = Array.from(result.outputs.keys());
     const warmup = 50;
