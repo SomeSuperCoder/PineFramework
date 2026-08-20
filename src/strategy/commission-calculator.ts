@@ -167,7 +167,8 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         key: 'solPriceUsd',
         label: 'SOL Price (USD)',
         type: 'number',
-        defaultValue: 150,
+        // SSOT — UI default must match the engine default (config.ts DEFAULT_SOL_USD_PRICE).
+        defaultValue: DEFAULT_SOL_USD_PRICE,
         min: 0,
         step: 0.01,
         tooltip:
@@ -201,7 +202,8 @@ const METHOD_DESCRIPTORS: CommissionMethodDescriptor[] = [
         key: 'solPriceUsd',
         label: 'SOL Price (USD)',
         type: 'number',
-        defaultValue: 150,
+        // SSOT — UI default must match the engine default (config.ts DEFAULT_SOL_USD_PRICE).
+        defaultValue: DEFAULT_SOL_USD_PRICE,
         min: 0,
         step: 0.01,
         tooltip:

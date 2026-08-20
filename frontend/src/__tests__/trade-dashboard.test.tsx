@@ -173,10 +173,12 @@ const SUMMARY: TradeStats = {
   losingTrades: 5,
   winRate: 7 / 12, // 0.5833… → "58.3%"
   totalPnl: 123.45,
+  totalGrossPnl: 123.45, // alias of totalPnl (backend SSOT identity)
   totalFees: 4.2,
   averageWin: 25,
   averageLoss: -10,
   netPnl: 119.25,
+  feesUnknownTrades: 0,
   profitFactor: 1.85,
   avgTrade: 9.94,
   bestTrade: 40,
@@ -195,10 +197,12 @@ const ZERO_SUMMARY: TradeStats = {
   losingTrades: 0,
   winRate: 0,
   totalPnl: 0,
+  totalGrossPnl: 0, // alias of totalPnl (backend SSOT identity)
   totalFees: 0,
   averageWin: 0,
   averageLoss: 0,
   netPnl: 0,
+  feesUnknownTrades: 0,
   profitFactor: 0,
   avgTrade: 0,
   bestTrade: 0,

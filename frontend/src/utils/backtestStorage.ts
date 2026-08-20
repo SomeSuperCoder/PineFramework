@@ -34,7 +34,11 @@ export const DEFAULT_BACKTEST_SETTINGS: BacktestSettings = {
   startDate: '',
   endDate: '',
   commissionMethod: 'jupiter_manual',
-  commissionMethodSettings: { dexFeeBps: 25, solPriceUsd: 150 },
+  // solPriceUsd mirrors the backend SSOT DEFAULT_SOL_USD_PRICE (73 — ≈ $72.6
+  // rounded for stability) in src/strategy/commission-methods/config.ts. The
+  // frontend cannot import the backend module, so this linkage is documented
+  // and kept in lockstep manually. Do NOT hardcode a different price here.
+  commissionMethodSettings: { dexFeeBps: 25, solPriceUsd: 73 },
 };
 
 /**
