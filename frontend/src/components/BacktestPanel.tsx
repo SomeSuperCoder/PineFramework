@@ -57,11 +57,25 @@ function StepDot({
   const idx = STEPS.indexOf(s) + 1;
   const active = step === s;
   const done = STEPS.indexOf(s) < STEPS.indexOf(step);
+  const activate = () => setStep(s);
   return (
     <span
-      onClick={done ? () => setStep(s) : undefined}
+      role="button"
+      tabIndex={done ? 0 : -1}
+      aria-disabled={!done}
+      onClick={done ? activate : undefined}
+      onKeyDown={
+        done
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                activate();
+              }
+            }
+          : undefined
+      }
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px]',
+        'inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
         active
           ? 'font-semibold text-[var(--color-foreground)]'
           : done

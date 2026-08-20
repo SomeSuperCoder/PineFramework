@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { FocusEvent, ReactNode } from 'react';
 import {
   LayoutGrid,
   Bot,
@@ -51,6 +51,14 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }: SidebarProps) {
+  // Keyboard mirror of the hover expansion: keep the sidebar expanded while
+  // focus is anywhere inside it, collapse when focus leaves the nav entirely.
+  const handleFocus = () => onHoverChange(true);
+  const handleBlur = (e: FocusEvent<HTMLElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      onHoverChange(false);
+    }
+  };
   return (
     <nav
       style={{
@@ -60,6 +68,8 @@ export function Sidebar({ activePanel, onPanelChange, expanded, onHoverChange }:
       className="absolute inset-y-0 left-0 z-40 flex flex-col overflow-hidden border-r border-border bg-card shadow-lg"
       onMouseEnter={() => onHoverChange(true)}
       onMouseLeave={() => onHoverChange(false)}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
       role="navigation"
       aria-label="Main navigation"
       aria-expanded={expanded}

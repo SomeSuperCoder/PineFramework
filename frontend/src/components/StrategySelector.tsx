@@ -50,6 +50,7 @@ interface StrategySelectorProps {
 export function StrategySelector({ value, onChange, label, placeholder = 'Search strategies...' }: StrategySelectorProps) {
   const inputId = useId();
   const listId = useId();
+  const rawPasteId = useId();
   const [strategies, setStrategies] = useState<MergedStrategy[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -127,9 +128,9 @@ export function StrategySelector({ value, onChange, label, placeholder = 'Search
     return (
       <div>
         <div className="flex justify-between items-center mb-1.5">
-          <span className="text-[11px] text-muted-foreground">
+          <label htmlFor={rawPasteId} className="text-[11px] text-muted-foreground">
             Paste Pine Script Strategy Source:
-          </span>
+          </label>
           <Button
             type="button"
             variant="outline"
@@ -144,6 +145,7 @@ export function StrategySelector({ value, onChange, label, placeholder = 'Search
           </Button>
         </div>
         <textarea
+          id={rawPasteId}
           value={rawSource}
           onChange={(e) => { setRawSource(e.target.value); onChange(e.target.value, '', ''); }}
           placeholder="//@version=5&#10;strategy('My Strategy')&#10;if close > open&#10;  strategy.entry('long', strategy.long)"

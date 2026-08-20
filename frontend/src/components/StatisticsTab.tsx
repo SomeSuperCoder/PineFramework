@@ -10,7 +10,7 @@ import {
   Bar,
   Cell,
 } from 'recharts';
-import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import type {
   TradeGroupBy,
   TradeHistoryMode,
@@ -83,7 +83,7 @@ function EquityCurveChart({ points }: { points: Array<{ time: number; equity: nu
             tickFormatter={(v: number) => `$${v}`}
           />
           <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 4" />
-          <ChartTooltipContent />
+          <ChartTooltip content={<ChartTooltipContent />} />
           <Area
             type="monotone"
             dataKey="equity"
@@ -131,7 +131,7 @@ function GroupedPnlChart({ groups }: { groups: TradeStatsGroup[] }) {
             width={150}
           />
           <ReferenceLine x={0} stroke="var(--color-border)" />
-          <ChartTooltipContent />
+          <ChartTooltip content={<ChartTooltipContent />} />
           <Bar dataKey="pnl" radius={[0, 4, 4, 0]}>
             {data.map((entry, index) => (
               <Cell key={`cell-${index}`} fill={entry.pnl >= 0 ? '#22c55e' : '#ef4444'} />
