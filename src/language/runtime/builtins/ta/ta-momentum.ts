@@ -162,6 +162,27 @@ export function registerTaMomentum(engine: ExecutionEngine): void {
   // which leaked raw NaN into PineValue space. Deliberate; do not restore.
   eng.builtins.set('ta.change', (source: PineValue): PineValue => {
     if (isNa(source)) return NA;
+    // Pine v5 OVERLOAD: a BOOL source returns a series bool — true when the
+    // value changed from the previous bar, false otherwise; the first bar (no
+    // previous value) is na. Regression: kalman-trend-levels.pine calls
+    // ta.change(trend_up) where trend_up is a bool series — the old
+    // numeric-only path threw NUMERIC_NON_NUMERIC_INPUT via pineValueToDecimal.
+    // The prev bool rides the SAME per-call-site map as the numeric path
+    // (`change_${eng.currentCallSiteId}`) so two ta.change calls in one script
+    // never share state — and forming-candle snapshot/rollback (which clones
+    // changePrevValues) covers the bool state for free. A call site's source
+    // type is fixed at compile time, so a key never holds both a Decimal and a
+    // boolean.
+    if (typeof source === 'boolean') {
+      const key = `change_${eng.currentCallSiteId}`;
+      const prev = eng.changePrevValues.get(key);
+      if (prev === undefined) {
+        eng.changePrevValues.set(key, source);
+        return NA;
+      }
+      eng.changePrevValues.set(key, source);
+      return prev !== source;
+    }
     const src = pineValueToDecimal(source);
     const key = `change_${eng.currentCallSiteId}`;
     const prev = eng.changePrevValues.get(key);

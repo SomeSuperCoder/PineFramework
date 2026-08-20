@@ -22,6 +22,13 @@ import {
 import { TAEngine } from '../../src/analysis/ta-engine.js';
 import { NA } from '../../src/language/types/na.js';
 import { TARegistry } from '../../src/analysis/ta-registry.js';
+import { parse } from '../../src/language/parser/parser.js';
+import { compile } from '../../src/language/compiler/compiler.js';
+import {
+  ExecutionEngine,
+  type ExecutionContext,
+} from '../../src/language/runtime/execution-engine.js';
+import { createSeries } from '../../src/language/runtime/series.js';
 
 describe('Moving Averages', () => {
   const source = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -439,5 +446,68 @@ describe('TARegistry', () => {
       const ns1Functions = registry.getFunctionsByNamespace('ns1');
       expect(ns1Functions).toHaveLength(2);
     });
+  });
+});
+
+describe('ta.change bool overload (engine builtin)', () => {
+  // Pine v5: ta.change on a BOOL source returns a series bool — true when the
+  // value changed from the previous bar; the FIRST bar (no previous value) is
+  // na. Regression: test_indicators/kalman-trend-levels.pine calls
+  // ta.change(trend_up) where trend_up is a bool series; the engine's
+  // numeric-only path threw NUMERIC_NON_NUMERIC_INPUT via pineValueToDecimal.
+  // plot() pushes the raw PineValue (null for NA), so the output series must
+  // be exactly [null, false, true, false, true] for flag [true, true, false,
+  // false, true].
+  const source = `//@version=5
+indicator("Bool Change")
+bool flag = close > open
+plot(ta.change(flag), "changed")`;
+
+  const bars = [
+    { timestamp: 1, open: 100, high: 101, low: 99, close: 101, volume: 1000 }, // flag: true
+    { timestamp: 2, open: 101, high: 102, low: 100, close: 102, volume: 1000 }, // flag: true
+    { timestamp: 3, open: 102, high: 102, low: 100, close: 100, volume: 1000 }, // flag: false
+    { timestamp: 4, open: 100, high: 101, low: 99, close: 99, volume: 1000 }, // flag: false
+    { timestamp: 5, open: 99, high: 101, low: 99, close: 101, volume: 1000 }, // flag: true
+  ];
+
+  async function runEngine() {
+    const { ast } = parse(source);
+    const compiled = compile(ast);
+    const engine = new ExecutionEngine(compiled);
+    const contexts: ExecutionContext[] = bars.map((bar, i) => ({
+      barIndex: i,
+      barCount: bars.length,
+      timestamp: bar.timestamp,
+      open: createSeries(
+        'open',
+        bars.slice(0, i + 1).map((b) => b.open),
+      ),
+      high: createSeries(
+        'high',
+        bars.slice(0, i + 1).map((b) => b.high),
+      ),
+      low: createSeries(
+        'low',
+        bars.slice(0, i + 1).map((b) => b.low),
+      ),
+      close: createSeries(
+        'close',
+        bars.slice(0, i + 1).map((b) => b.close),
+      ),
+      volume: createSeries(
+        'volume',
+        bars.slice(0, i + 1).map((b) => b.volume),
+      ),
+    }));
+    return engine.executeBars(contexts);
+  }
+
+  it('returns na on the first bar, then true when the bool flips', async () => {
+    const result = await runEngine();
+    expect(result.success).toBe(true);
+    const series = result.outputs.get('changed');
+    expect(series).toBeDefined();
+    expect(series!.values).toEqual([null, false, true, false, true]);
   });
 });
