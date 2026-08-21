@@ -455,10 +455,13 @@ export class TelegramBotFeature {
   }
 
   /**
-   * Catch-all for text that matched no known command. Public API surface for
-   * transports that want a text fallback; the button-only `install` surface
-   * registers no text seam, so production routes everything through inline
-   * buttons and this handler is only exercised directly.
+   * Catch-all for text that matched no known command.
+   *
+   * ⚠️ INTENTIONALLY UNWIRED — this bot is button-only by directive. The
+   * production `install` surface registers no text handler, so nothing routes
+   * here. Do NOT re-introduce a text seam (bot.on('text') /
+   * registerBotText) to wire this without revisiting the button-only
+   * directive first.
    */
   async handleUnknown(ctx: FeatureCommandContext): Promise<void> {
     await ctx.reply(this.t(ctx, 'unknownCommand'));
