@@ -180,6 +180,14 @@ export class BacktestWizard {
   async start(ctx: FeatureCommandContext): Promise<void> {
     const chatId = ctx.chat?.id ?? 0;
     const lang = this.lang(chatId);
+    const existing = this.sessions.get(chatId);
+    if (existing?.running) {
+      // In-flight run guard (parity with the run-step guard): never replace a
+      // session whose run is still executing — its completion edits the message
+      // to "done" and deletes the session, destroying the fresh wizard.
+      await ctx.reply(t(lang, 'backtestAlreadyRunning'));
+      return;
+    }
     const strategies = await this.loadStrategies();
     if (strategies.length === 0) {
       await ctx.reply(t(lang, 'backtestEmptyLibrary'));
@@ -203,13 +211,13 @@ export class BacktestWizard {
 
     switch (action) {
       case 'restart':
-        await ctx.answerCallback();
         await this.restart(ctx, chatId);
         return;
       case 'start':
         // Dashboard "Backtest" button (bt:start) — same fresh-start path as
         // restart: reload strategies and edit the dashboard message in place.
-        await ctx.answerCallback();
+        // restart() owns the callback acknowledgement (it must reject with the
+        // in-flight toast before acking, so the ack is not pre-consumed here).
         await this.restart(ctx, chatId);
         return;
       case 'cancel':
@@ -478,9 +486,22 @@ export class BacktestWizard {
     await this.showStep(ctx, chatId, session.step);
   }
 
-  /** Restart from a callback: fresh session at the strategy step (edit in place). */
+  /**
+   * Restart from a callback: fresh session at the strategy step (edit in place).
+   * Owns the callback acknowledgement (handleCallback does NOT pre-ack) so the
+   * in-flight run guard below can reject with the same toast as the run step.
+   */
   private async restart(ctx: CallbackContext, chatId: number): Promise<void> {
     const lang = this.lang(chatId);
+    const existing = this.sessions.get(chatId);
+    if (existing?.running) {
+      // In-flight run guard (parity with the run-step guard): never replace a
+      // session whose run is still executing — its completion edits the message
+      // to "done" and deletes the session, destroying the fresh wizard.
+      await ctx.answerCallback(t(lang, 'backtestAlreadyRunning'));
+      return;
+    }
+    await ctx.answerCallback();
     const strategies = await this.loadStrategies();
     if (strategies.length === 0) {
       await ctx.editMessage(t(lang, 'backtestEmptyLibrary'));
@@ -584,8 +605,9 @@ export class BacktestWizard {
         timeframe: timeframeDisplay(session.timeframe ?? ''),
         range: `${session.daysBack ?? 0}d`,
         method: methodLabel(lang, session.commissionMethod ?? 'jupiter_manual'),
-        // The renderer prefers effectiveConfig.initialCapital when present;
-        // the wizard's chosen capital (engine default when unset) is the fallback.
+        // Informational only: the renderer ignores settingsValues.capital and
+        // always renders formatAmount(effectiveConfig.initialCapital), which is
+        // always present via DEFAULT_STRATEGY_CONFIG.
         capital: formatAmount(session.initialCapital ?? 10000),
       },
       performance: t(lang, 'backtestCardPerformance'),

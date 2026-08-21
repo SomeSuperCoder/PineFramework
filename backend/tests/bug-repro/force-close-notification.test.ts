@@ -99,10 +99,19 @@ describe('BUG 7 — force-close (stop button) must notify position_close like a 
 
     // Fire-and-forget by design: wait for the never-awaited notification.
     await vi.waitFor(() => expect(notifyPositionClosed).toHaveBeenCalledTimes(1));
-    const trade = notifyPositionClosed.mock.calls[0]![0] as { symbol: string; realizedPnl: number };
+    const trade = notifyPositionClosed.mock.calls[0]![0] as {
+      symbol: string;
+      grossPnl: number;
+      feesUnknown: boolean;
+    };
     expect(trade.symbol).toBe('SOLUSDT');
-    // (exit 101 − entry 100) × qty 0.1 — a truthful PnL, never a guess.
-    expect(trade.realizedPnl).toBe(0.1);
+    // (exit 101 − entry 100) × qty 0.1 — truthful GROSS PnL; fees unobservable
+    // here → feesUnknown flag, never a claimed net.
+    expect(trade.grossPnl).toBe(0.1);
+    expect(trade.feesUnknown).toBe(true);
+    // Never-guess fail-safe: realizedPnl/fees are ABSENT on close notifications.
+    expect('realizedPnl' in trade).toBe(false);
+    expect('fees' in trade).toBe(false);
   });
 
   it('a FORCE close (confirmed on-chain via stop/emergency) must also notify via notifyPositionClosed', async () => {
@@ -133,10 +142,16 @@ describe('BUG 7 — force-close (stop button) must notify position_close like a 
         symbol: 'SOLUSDT',
         entryPrice: 100,
         exitPrice: 101,
-        // (exit 101 − entry 100) × qty 0.1 — a truthful PnL, never a guess.
-        realizedPnl: 0.1,
+        // (exit 101 − entry 100) × qty 0.1 — truthful GROSS PnL; fees
+        // unobservable here → feesUnknown flag, never a claimed net.
+        grossPnl: 0.1,
+        feesUnknown: true,
         transactionSignature: 'sig-force',
       }),
     );
+    const forceTrade = notifyPositionClosed.mock.calls[0]![0] as Record<string, unknown>;
+    // Never-guess fail-safe: realizedPnl/fees are ABSENT on close notifications.
+    expect('realizedPnl' in forceTrade).toBe(false);
+    expect('fees' in forceTrade).toBe(false);
   });
 });

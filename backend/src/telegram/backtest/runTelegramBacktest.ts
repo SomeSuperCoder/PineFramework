@@ -37,12 +37,13 @@ import type {
 import { resolveDateRange } from '../../backtest-dates.js';
 import { normalizeExplicitOverride } from '../../normalize-explicit-config.js';
 import { applyDexFee, buildBacktestConfigOverride } from '../../backtest-config.js';
-import { runBacktestPipeline } from '../../backtest-runner.js';
+import { MAX_BARS, runBacktestPipeline } from '../../backtest-runner.js';
 import { buildDecisionWarnings, toApiResult, toOutcome } from '../../backtest-result.js';
 import { fetchBars } from '../../bybit/fetch-bars.js';
 import type { ScriptFileManager } from '../../store/ScriptFileManager.js';
 import { getBuiltInScript } from '../../store/builtInScripts.js';
 import type { DiskOHLCVCache } from '../../cache/DiskOHLCVCache.js';
+import { sanitizeUserMessage } from '../../utils/sanitize.js';
 
 /** Wizard input — the four settings the /backtest wizard collects, nothing more. */
 export interface TelegramBacktestParams {
@@ -96,30 +97,9 @@ export type TelegramBacktestResult =
   | { ok: true; result: BacktestApiResult }
   | { ok: false; error: TelegramBacktestError };
 
-/**
- * Mirrors the engine's hard cap (backtest-runner.ts:58, literal there). Kept as
- * a local constant so the seam can fail fast BEFORE the live-fee fetch and the
- * engine; the engine re-checks as defense-in-depth. ⚠️ SSOT drift risk — the
- * engine's literal is the authority; flagged to Tech Lead.
- */
-const MAX_BARS = 1500;
-
 /** One place to build failure results — keeps the discriminated union honest. */
 function failure(code: TelegramBacktestErrorCode, message: string): TelegramBacktestResult {
   return { ok: false, error: { code, message } };
-}
-
-/**
- * User-facing error sanitizer — mirrors routes/backtest.ts:299-300 (URL and
- * hostname redaction) so thrown infrastructure messages never leak internal
- * hosts/paths to the bot's user. An exported copy would be SSOT-cleaner, but
- * touching the route is out of this lane — flagged to Tech Lead.
- */
-function sanitizeUserMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  return raw
-    .replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
-    .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
 }
 
 /**

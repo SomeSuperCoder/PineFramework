@@ -24,6 +24,7 @@ import { StateMachine, createBotStateMachine } from './state-machine.js';
 import type { StateChangeHandler } from './state-machine.js';
 import type { RiskManager } from './risk/risk-manager.js';
 import type { TradingTelegramBot, PositionNotificationTrade } from './telegram-bot.js';
+import { aggregateRealizedPnl } from '../pnl/index.js';
 import {
   BybitWebSocketService,
   BybitTick,
@@ -112,6 +113,12 @@ const consoleLogger: PineLogger = {
   error: (event, meta) => console.error(`[BOT] ✗ ${event}`, meta ?? ''),
   debug: (event, meta) => console.debug(`[BOT] ${event}`, meta ?? ''),
 };
+
+/** Number() at the notification edge, guarded against non-finite (Security F2c). */
+function finiteNumber(value: string): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
 
 /** Events emitted by BotEngine. */
 export interface BotEventMap {
@@ -1467,9 +1474,12 @@ export class BotEngine {
     try {
       const trade = this.buildPositionNotificationTrade(signal, result);
       if (!trade) return;
+      // The open branch guarantees realizedPnl/fees are numeric (TradeRecord
+      // contract, set in the builder) — the cast is the boundary between the
+      // notification union and notifyPositionOpened's full-record parameter.
       const notification =
         signal.action === 'buy'
-          ? this.telegramBot.notifyPositionOpened(trade)
+          ? this.telegramBot.notifyPositionOpened(trade as TradeRecord)
           : this.telegramBot.notifyPositionClosed(trade);
       // Fire-and-forget: never await a Telegram round-trip inside the
       // order-result loop, and a rejection must not surface into submitOrders
@@ -1496,15 +1506,26 @@ export class BotEngine {
    * longs, so side is always 'buy' (the closed position's open direction —
    * same convention as the executor's persistClosedTradeRecord).
    *
+   * PnL honesty (M9 fix): this layer has NO mint→quote price map (the
+   * executor's buildCloseFeePrices/solPriceFor are private to
+   * live-strategy-executor), so the swapResult's fee components cannot be
+   * converted to quote units here. A CLOSE therefore reports the SSOT-module
+   * GROSS + feesUnknown and NEVER claims a net `realizedPnl` or `fees: 0` —
+   * presenting gross as net would contradict the persisted TradeRecord (which
+   * writes net, persistClosedTradeRecord). The renderers omit the PnL/Fees
+   * lines when the fields are absent (the never-guess fail-safe). An OPEN
+   * position has nothing realized: realizedPnl 0 / fees 0 are the TradeRecord
+   * contract and are never rendered by notifyPositionOpened.
+   *
    * A confirmed close whose entry is unknown is skipped (returns undefined):
-   * without the B1 entry snapshot there is no truthful PnL, and a $0.00 readout
-   * would mislead the subscriber — mirrors persistClosedTradeRecord's
-   * "never guess a PnL" fail-safe. PnL for a long close = (exit − entry) × qty.
+   * without the B1 entry snapshot there is no truthful PnL, and a $0.00
+   * readout would mislead the subscriber — mirrors persistClosedTradeRecord's
+   * "never guess a PnL" fail-safe.
    */
   private buildPositionNotificationTrade(
     signal: SchedulerTradeSignal,
     result: ExecutionResult,
-  ): TradeRecord | undefined {
+  ): PositionNotificationTrade | undefined {
     const isOpen = signal.action === 'buy';
     if (!isOpen && signal.positionEntryPrice === undefined) return undefined;
 
@@ -1518,7 +1539,7 @@ export class BotEngine {
     // a fallback so a notification never carries an undefined dex.
     const dex = (this.dex?.name ?? this._config?.dex ?? 'jupiter-swap') as DexKind;
 
-    return {
+    const base: PositionNotificationTrade = {
       id: `${botId}-${closedAt}-${signal.pair.symbol}`,
       botId,
       symbol: signal.pair.symbol,
@@ -1526,10 +1547,6 @@ export class BotEngine {
       entryPrice: isOpen ? signal.price : (signal.positionEntryPrice as number),
       exitPrice: signal.price,
       size: signal.quantity,
-      fees: 0,
-      realizedPnl: isOpen
-        ? 0
-        : (signal.price - (signal.positionEntryPrice as number)) * signal.quantity,
       dex,
       ...(txSignature ? { transactionSignature: txSignature } : {}),
       openedAt: signal.timestamp,
@@ -1537,6 +1554,69 @@ export class BotEngine {
       ...(signal.pair.timeframe ? { timeframe: signal.pair.timeframe } : {}),
       status: 'confirmed',
     };
+
+    if (isOpen) {
+      // Open notice: nothing realized yet. TradeRecord requires the numeric
+      // fields; 0 is truthful here and never rendered by notifyPositionOpened.
+      return { ...base, fees: 0, realizedPnl: 0 };
+    }
+
+    // Close: honest gross via the SSOT pnl module. Fees cannot be converted
+    // to quote in this layer (no price map) → net is unknown → do NOT claim
+    // `realizedPnl` or `fees`. Renderers show the close without a PnL/Fees
+    // line (never-guess fail-safe) rather than a misleading net.
+    const grossPnl = this.resolveCloseGrossPnl({
+      entryPrice: signal.positionEntryPrice as number,
+      exitPrice: signal.price,
+      quantity: signal.quantity,
+      ts: signal.timestamp,
+    });
+    return {
+      ...base,
+      ...(grossPnl !== undefined ? { grossPnl, feesUnknown: true } : {}),
+    };
+  }
+
+  /**
+   * GROSS realized PnL for a LONG close notification, computed by the SSOT
+   * pnl module — never inline (exit − entry) × qty arithmetic. Fees are NOT
+   * included: this layer has no mint→quote price map, so `feesSource: 'none'`
+   * is passed (the module flags feesUnknown and performs no price lookup —
+   * cannot throw). Returns undefined only if the module unexpectedly throws;
+   * the notification then ships PnL-less rather than crashing the caller.
+   */
+  private resolveCloseGrossPnl(args: {
+    entryPrice: number;
+    exitPrice: number;
+    quantity: number;
+    ts: number;
+  }): number | undefined {
+    try {
+      const pnl = aggregateRealizedPnl({
+        side: 'LONG',
+        entryFill: {
+          side: 'BUY',
+          qty: String(args.quantity),
+          fillPrice: String(args.entryPrice),
+          ts: String(args.ts),
+        },
+        exitFill: {
+          side: 'SELL',
+          qty: String(args.quantity),
+          fillPrice: String(args.exitPrice),
+          ts: String(args.ts),
+        },
+        feesSource: 'none',
+        prices: {},
+        anchor: 'fills',
+      });
+      return finiteNumber(pnl.gross);
+    } catch (err) {
+      this.logger.warn('Notification gross PnL computation failed — PnL omitted', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return undefined;
+    }
   }
 
   /**
@@ -1546,11 +1626,17 @@ export class BotEngine {
    *
    * The spot DEX only opens longs, so side is always 'buy' (the closed
    * position's open direction — same convention as buildPositionNotificationTrade
-   * and the executor's persistClosedTradeRecord). PnL for a long close =
-   * (exit − entry) × qty.
+   * and the executor's persistClosedTradeRecord).
    *
-   * Never-guess PnL: exitPrice (and therefore realizedPnl) is omitted when the
-   * close could not derive a truthful exit price (CloseResult.closed.exitPrice
+   * PnL honesty (M9 fix): CloseResult carries NO fee data (only txSignature +
+   * exitPrice), so a net realizedPnl cannot be derived here. The notice
+   * reports the SSOT-module GROSS + feesUnknown and never claims `realizedPnl`
+   * or `fees: 0` — the renderers omit the PnL/Fees lines (never-guess
+   * fail-safe) instead of presenting gross as net.
+   *
+   * Never-guess PnL: exitPrice (and therefore any PnL field) is omitted when
+   * the close could not derive a truthful exit price
+   * (CloseResult.closed.exitPrice
    * undefined — e.g. an ambiguous-confirm close with no swap output amount).
    * The renderer then omits the PnL line instead of inventing $0.00. Callers
    * MUST NOT invoke this for a position with an unknown entry price
@@ -1566,6 +1652,16 @@ export class BotEngine {
     // a fallback so a notification never carries an undefined dex.
     const dex = (this.dex?.name ?? this._config?.dex ?? 'jupiter-swap') as DexKind;
 
+    const grossPnl =
+      opts.exitPrice !== undefined
+        ? this.resolveCloseGrossPnl({
+            entryPrice: position.entryPrice,
+            exitPrice: opts.exitPrice,
+            quantity: position.quantity,
+            ts: position.entryTime,
+          })
+        : undefined;
+
     return {
       id: `${botId}-${closedAt}-${position.symbol}`,
       botId,
@@ -1573,19 +1669,14 @@ export class BotEngine {
       side: 'buy',
       entryPrice: position.entryPrice,
       size: position.quantity,
-      fees: 0,
       dex,
       ...(opts.txSignature ? { transactionSignature: opts.txSignature } : {}),
       openedAt: position.entryTime,
       closedAt,
       ...(position.timeframe ? { timeframe: position.timeframe } : {}),
       status: 'confirmed',
-      ...(opts.exitPrice !== undefined
-        ? {
-            exitPrice: opts.exitPrice,
-            realizedPnl: (opts.exitPrice - position.entryPrice) * position.quantity,
-          }
-        : {}),
+      ...(opts.exitPrice !== undefined ? { exitPrice: opts.exitPrice } : {}),
+      ...(grossPnl !== undefined ? { grossPnl, feesUnknown: true } : {}),
       ...(opts.closeReason ? { closeReason: opts.closeReason } : {}),
     };
   }

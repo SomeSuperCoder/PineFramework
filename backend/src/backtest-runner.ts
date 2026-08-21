@@ -12,6 +12,13 @@ import {
   type WarningSink,
 } from 'pine-framework';
 
+/**
+ * Legacy hard bar-count cap — the DEFAULT for every run unless a producer opts
+ * into a higher cap via options.maxBars (CLI --max-bars). Exported (SSOT): the
+ * Telegram seam pre-validates against the SAME value (was a duplicated literal).
+ */
+export const MAX_BARS = 1500;
+
 export interface BacktestRunnerOptions {
   script: string;
   bars: Bar[];
@@ -24,9 +31,9 @@ export interface BacktestRunnerOptions {
    */
   onWarning?: WarningSink;
   /**
-   * A2 (defect 2): bar-count cap override for this run. Absent → 1500 (legacy
-   * hard literal, now the DEFAULT rather than a constant). The CLI raises it
-   * via `--max-bars`; other producers (API/Telegram) keep the legacy cap.
+   * A2 (defect 2): bar-count cap override for this run. Absent → the SSOT
+   * MAX_BARS default (1500). The CLI raises it via `--max-bars`; other
+   * producers (API/Telegram) keep the legacy cap.
    */
   maxBars?: number;
   /**
@@ -64,7 +71,7 @@ export async function runBacktestPipeline(
   const { script, bars } = options;
   // A2 (defect 2): the legacy hard cap is now the DEFAULT — a run opts into a
   // higher cap via options.maxBars (CLI --max-bars) instead of editing a literal.
-  const maxBars = options.maxBars ?? 1500;
+  const maxBars = options.maxBars ?? MAX_BARS;
 
   if (!script || script.trim().length === 0) {
     return { success: false, error: 'No Pine Script source provided' };

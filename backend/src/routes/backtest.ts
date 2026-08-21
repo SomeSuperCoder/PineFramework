@@ -25,6 +25,7 @@ import type {
 import { logger } from '../utils/logger.js';
 import { fetchSolPriceUsd } from '../services/sol-price-fetcher.js';
 import { ipRateLimiter } from '../utils/ip-rate-limiter.js';
+import { sanitizeUserMessage } from '../utils/sanitize.js';
 
 /** Completed/failed backtest jobs older than this (ms) are eligible for garbage collection. */
 const JOB_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -323,10 +324,9 @@ export function createBacktestRouter(diskCache?: DiskOHLCVCache) {
       // or environment configuration in API responses.
       const rawMessage = err instanceof Error ? err.message : String(err);
       logger.error('Backtest failed', { jobId: job.jobId, error: rawMessage });
-      // Strip anything that looks like a URL or hostname from the user-facing error
-      job.error = rawMessage
-        .replace(/https?:\/\/[^\s]+/g, '[redacted-url]')
-        .replace(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?::\d+)?/g, '[redacted-host]');
+      // User-facing error via the shared sanitizer (utils/sanitize.ts — SSOT with
+      // the Telegram seam). The raw message stays in the server log above.
+      job.error = sanitizeUserMessage(rawMessage);
       job.completedAt = Date.now();
     }
   }

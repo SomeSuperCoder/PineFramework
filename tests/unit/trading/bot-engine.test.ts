@@ -1044,7 +1044,8 @@ describe('BotEngine force-close notification (BUG 7)', () => {
       side: string;
       entryPrice: number;
       exitPrice: number;
-      realizedPnl: number;
+      grossPnl: number;
+      feesUnknown: boolean;
       transactionSignature: string;
       status: string;
     };
@@ -1052,8 +1053,13 @@ describe('BotEngine force-close notification (BUG 7)', () => {
     expect(trade.side).toBe('buy');
     expect(trade.entryPrice).toBe(100);
     expect(trade.exitPrice).toBe(101);
-    // (exit 101 − entry 100) × qty 0.1 — a truthful PnL, never a guess.
-    expect(trade.realizedPnl).toBe(0.1);
+    // (exit 101 − entry 100) × qty 0.1 — truthful GROSS PnL; fees are
+    // unobservable at this layer → feesUnknown flag, never a claimed net.
+    expect(trade.grossPnl).toBe(0.1);
+    expect(trade.feesUnknown).toBe(true);
+    // Never-guess fail-safe: realizedPnl/fees are OMITTED from close payloads.
+    expect('realizedPnl' in trade).toBe(false);
+    expect('fees' in trade).toBe(false);
     expect(trade.transactionSignature).toBe('sig-stop');
     expect(trade.status).toBe('confirmed');
   });
@@ -1144,12 +1150,18 @@ describe('BotEngine force-close notification (BUG 7)', () => {
     const trade = notifyPositionClosed.mock.calls[0]![0] as {
       symbol: string;
       closeReason?: string;
-      realizedPnl: number;
+      grossPnl: number;
+      feesUnknown: boolean;
     };
     expect(trade.symbol).toBe('SOLUSDT');
     expect(trade.closeReason).toBe('emergency_stop');
-    // (exit 99 − entry 100) × qty 0.1 — a truthful negative PnL, never $0.00.
-    expect(trade.realizedPnl).toBe(-0.1);
+    // (exit 99 − entry 100) × qty 0.1 — truthful GROSS PnL; fees unobservable
+    // at this layer → feesUnknown flag, never a claimed net.
+    expect(trade.grossPnl).toBe(-0.1);
+    expect(trade.feesUnknown).toBe(true);
+    // Never-guess fail-safe: realizedPnl/fees are OMITTED from close payloads.
+    expect('realizedPnl' in trade).toBe(false);
+    expect('fees' in trade).toBe(false);
   });
 });
 

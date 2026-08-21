@@ -209,10 +209,12 @@ const BACKTEST_CARD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="800" h
  * the semantic signal.
  *
  * `settingsValues` are the settings the API payload does NOT carry (timeframe,
- * lookback, commission-method label — they live on the run job) plus fallbacks
- * for symbol/capital. Where the payload DOES carry a value (effectiveConfig),
- * the renderer prefers it: symbol <- effectiveConfig.symbol, capital <-
- * formatAmount(effectiveConfig.initialCapital).
+ * lookback, commission-method label — they live on the run job) plus a symbol
+ * fallback. Where the payload DOES carry a value (effectiveConfig), the
+ * renderer prefers it: symbol <- effectiveConfig.symbol. `capital` is
+ * informational only — the renderer ignores settingsValues.capital and always
+ * renders formatAmount(effectiveConfig.initialCapital), which is always
+ * present via DEFAULT_STRATEGY_CONFIG.
  */
 export interface BacktestCardLabels {
   /** Header brand eyebrow, e.g. "PINE FRAMEWORK". */
