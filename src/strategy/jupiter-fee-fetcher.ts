@@ -50,6 +50,21 @@ function getCachePath(): string {
 /** Stale threshold for cache entries (30 days). */
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Entry schema version. Bump when the cache entry shape or semantics change;
+ * entries written by older versions are treated as cache misses (self-healing
+ * migration — no manual clearing needed).
+ */
+const CACHE_ENTRY_VERSION = 2;
+
+/**
+ * Sanity floor for cached dexFeeBps. Real DEX pool fees are in the tens-to-
+ * hundreds of bps range (Jupiter tiers: 0–50 bps for platform fees, pool fees
+ * typically 2–300 bps). A sub-1 value indicates a corruption artifact such as
+ * the historical 100x-undercharge bug (25 bps stored as 0.25) — reject it.
+ */
+const MIN_SANE_DEX_FEE_BPS = 1;
+
 // ---------------------------------------------------------------------------
 // SDK client (lazy-initialised)
 // ---------------------------------------------------------------------------
@@ -116,6 +131,8 @@ export interface FeeFetchResult {
 }
 
 interface CacheEntry {
+  /** Schema version — entries without this (or with a stale version) are misses. */
+  version: number;
   dexFeeBps: number;
   timestamp: number;
   dexLabel?: string;
@@ -164,13 +181,19 @@ function getCacheEntry(symbol: string): CacheEntry | undefined {
   const cache = readCacheFile();
   const entry = cache.entries[symbol.toUpperCase()];
   if (!entry) return undefined;
+  // Integrity guard 1 — version: legacy entries (no version field) and
+  // entries from older schemas are treated as misses → refetched naturally.
+  if (entry.version !== CACHE_ENTRY_VERSION) return undefined;
+  // Integrity guard 2 — sanity bounds: sub-1 bps is a corruption artifact
+  // (e.g. the historical 100x-undercharge bug), never a real pool fee.
+  if (!(entry.dexFeeBps >= MIN_SANE_DEX_FEE_BPS)) return undefined;
   if (Date.now() - entry.timestamp > CACHE_MAX_AGE_MS) return undefined;
   return entry;
 }
 
 function setCacheEntry(symbol: string, entry: CacheEntry): void {
   const cache = readCacheFile();
-  cache.entries[symbol.toUpperCase()] = entry;
+  cache.entries[symbol.toUpperCase()] = { ...entry, version: CACHE_ENTRY_VERSION };
   writeCacheFile(cache);
 }
 
