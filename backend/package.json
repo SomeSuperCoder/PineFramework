@@ -12,7 +12,8 @@
     "cli:build": "tsc -p tsconfig.build.json",
     "backtest": "node dist/cli/backtest-cli.js",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "cors": "^2.8.5",

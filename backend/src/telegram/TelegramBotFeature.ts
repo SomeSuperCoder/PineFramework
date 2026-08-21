@@ -220,11 +220,13 @@ const EMITTED_CALLBACK_PREFIXES: readonly string[] = [
 
 /**
  * Max caption length (chars) for the report text when attached to the PnL
- * card photo. Telegram's hard caption limit is 1024; staying under ~1000
- * leaves headroom so long reports fall back to a text message + short-caption
- * photo instead of a truncated caption.
+ * card photo. Telegram's hard caption limit is 1024, but sendPhoto escapes
+ * the caption to MarkdownV2 (adding backslashes), so we guard against the
+ * RAW text at 900: 1024 hard cap minus escape-growth headroom. Long reports
+ * fall back to a text message + short-caption photo instead of a truncated
+ * caption.
  */
-const REPORT_CAPTION_MAX_LENGTH = 1000;
+const REPORT_CAPTION_MAX_LENGTH = 900;
 
 /**
  * Inline keyboards re-attached on every in-place message edit. Each edit call

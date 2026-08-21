@@ -445,9 +445,11 @@ export class Interpreter {
    * stacking on the oldest candle" bug.
    *
    * CONSUMER-ROLE CONTRACT:
-   * - This filter consumes ONLY the DECLARED `max_bars_back` from the script's
-   *   indicator()/strategy() declaration. Runtime-computed lookback
-   *   (getEffectiveMaxBarsBack) is deliberately NOT consulted — it can include
+   * - This filter consumes ONLY the DECLARED-OR-COMPILED `max_bars_back` —
+   *   i.e. the value from the script's indicator()/strategy() declaration,
+   *   or, when not declared, the value the compiler fills via
+   *   detectLookbackFromAST (compiledScript.maxBarsBack). Runtime-computed
+   *   lookback (getEffectiveMaxBarsBack) is deliberately NOT consulted — it can include
    *   inflated values from internal state requirements (e.g., the pivot
    *   1000-bar minimum) that don't correspond to actual visual warmup needs.
    * - The runtime lookback value serves a DIFFERENT consumer: provisioning and
@@ -463,8 +465,9 @@ export class Interpreter {
    * outputs from bar 0 (they have no declared warmup period).
    */
   private applyLookbackFilter(): void {
-    // Per the contract documented above: ONLY the DECLARED `max_bars_back`
-    // drives the warmup filter. Runtime-computed lookback (getEffectiveMaxBarsBack)
+    // Per the contract documented above: ONLY the DECLARED-OR-COMPILED
+    // `max_bars_back` drives the warmup filter. Runtime-computed lookback
+    // (getEffectiveMaxBarsBack)
     // is deliberately NOT consulted — it can include inflated values from
     // internal requirements (e.g. the pivot 1000-bar minimum) that must not
     // null out real outputs. Realtime history gating still uses the runtime
