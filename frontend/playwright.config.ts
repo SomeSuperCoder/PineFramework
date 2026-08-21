@@ -4,6 +4,10 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   retries: 1,
+  // Specs mutate SHARED backend state (indicator store) through one dev
+  // server — parallel workers interleave POST/DELETE mid-flight and race
+  // each other's fixtures. One worker = deterministic user-flow proofs.
+  workers: 1,
   use: {
     baseURL: 'http://localhost:3000',
     headless: true,

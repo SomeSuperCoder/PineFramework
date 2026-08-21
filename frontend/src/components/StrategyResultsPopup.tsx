@@ -1,8 +1,8 @@
 // recharts-heavy; lazy so the chart library stays out of the initial bundle.
+import { lazy, Suspense } from 'react';
 const BacktestResults = lazy(() =>
   import('./BacktestResults').then((m) => ({ default: m.BacktestResults })),
 );
-import { lazy, Suspense } from 'react';
 import { ProgressBar } from './ProgressBar';
 import type { BacktestStatusResponse, BacktestResultResponse } from '../types';
 import {

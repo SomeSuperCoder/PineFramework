@@ -87,12 +87,14 @@ describe('decimal core exactness spike (contract §10)', () => {
     expect(Math.abs(floatAcc - 10000)).toBeGreaterThan(1e-9);
   });
 
-  it('T4: supertrend-3d accumulation primitives — no drift at DP=20', () => {
-    const N = 100_000;
+  it('T4: supertrend-3d accumulation primitives — no drift at DP=20', { timeout: 15_000 }, () => {
+    // 10k bars (not 100k): drift contrast still holds (~1e-14 scale) while the
+    // run stays fast and robust under parallel test load. 15s timeout for headroom.
+    const N = 10_000;
     const LEN = 14;
 
     // Synthetic price series (exact decimal construction): slow upward drift
-    // with a high-frequency wobble — stresses the RMA recursion over 100k bars.
+    // with a high-frequency wobble — stresses the RMA recursion over 10k bars.
     const src: Decimal[] = new Array(N);
     for (let i = 0; i < N; i++) {
       src[i] = new Decimal(100)

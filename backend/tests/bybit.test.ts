@@ -32,20 +32,39 @@ describe('BybitDataSource', () => {
     const ds = new BybitDataSource();
     const now = Date.now();
     const oneHourAgo = now - 3600_000;
-    try {
-      const bars = await ds.fetchBars('BTCUSDT', '1', oneHourAgo, now);
-      expect(Array.isArray(bars)).toBe(true);
-      if (bars.length > 0) {
-        expect(bars[0]).toHaveProperty('timestamp');
-        expect(bars[0]).toHaveProperty('open');
-        expect(bars[0]).toHaveProperty('high');
-        expect(bars[0]).toHaveProperty('low');
-        expect(bars[0]).toHaveProperty('close');
-        expect(bars[0]).toHaveProperty('volume');
+
+    // Network-independent: mock the kline endpoint (raw rows are newest-first,
+    // as Bybit returns them). Same response shape as the pagination mocks below.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
+      if (!url.toString().includes('/v5/market/kline')) {
+        return new Response('Not Found', { status: 404 });
       }
-    } catch {
-      // Bybit may be unreachable in test environment
-    }
+      return new Response(
+        JSON.stringify({
+          retCode: 0,
+          retMsg: 'OK',
+          result: {
+            list: [
+              [String(now), '100', '110', '90', '105', '1000'],
+              [String(oneHourAgo), '95', '108', '92', '99', '800'],
+            ],
+          },
+        }),
+        { status: 200 },
+      );
+    });
+
+    const bars = await ds.fetchBars('BTCUSDT', '1', oneHourAgo, now);
+    expect(Array.isArray(bars)).toBe(true);
+    expect(bars.length).toBeGreaterThan(0);
+    expect(bars[0]).toHaveProperty('timestamp');
+    expect(bars[0]).toHaveProperty('open');
+    expect(bars[0]).toHaveProperty('high');
+    expect(bars[0]).toHaveProperty('low');
+    expect(bars[0]).toHaveProperty('close');
+    expect(bars[0]).toHaveProperty('volume');
+    // Parsed from raw strings to numbers.
+    expect(typeof bars[0]!.close).toBe('number');
   });
 });
 

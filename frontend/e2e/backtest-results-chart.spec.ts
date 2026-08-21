@@ -29,7 +29,8 @@ function makeEquityPoints(count = 20, startMs = Date.UTC(2026, 6, 1)) {
     points.push({
       time: startMs + i * 86_400_000,
       equity: Math.round(equity * 100) / 100,
-      drawdown: i > 4 ? -Math.round((i - 4) * 25 * 100) / 100 : 0,
+      // Backend contract: buildDrawdownCurve = peak − eq ≥ 0 (non-negative).
+      drawdown: i > 4 ? Math.round((i - 4) * 25 * 100) / 100 : 0,
       balance: Math.round(equity * 100) / 100,
     });
   }
@@ -57,7 +58,7 @@ const RESULT = {
     commission: 4.2,
   },
   equityCurve: [10000, 10120, 10080, 10160, 10240, 10360],
-  drawdownCurve: [0, 0, 0, 0, 0, -25],
+  drawdownCurve: [0, 0, 0, 0, 0, 25],
   trades: [
     {
       id: 't-qa-1',
@@ -291,6 +292,14 @@ test.describe('Backtest results popup — Shadcn/Recharts chart acceptance', () 
     // Legend present with both series labels.
     await expect(chart.getByText('Equity')).toBeVisible();
     await expect(chart.getByText('Drawdown')).toBeVisible();
+
+    // Drawdown curve is actually painted and visible (non-degenerate path with
+    // real width — proves the dd series renders inside the [0, dataMax+10] domain,
+    // not clipped to nothing).
+    const ddCurve = chart.locator('.recharts-line-curve').nth(1);
+    await expect(ddCurve).toBeVisible();
+    const ddBox = (await ddCurve.boundingBox())!;
+    expect(ddBox.width).toBeGreaterThan(0);
 
     // X-axis ticks render dates (not blank). SVG <text> is the label element;
     // the parent .recharts-cartesian-axis-tick <g> carries no innerText.
