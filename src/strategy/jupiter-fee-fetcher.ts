@@ -191,7 +191,10 @@ function getCacheEntry(symbol: string): CacheEntry | undefined {
   return entry;
 }
 
-function setCacheEntry(symbol: string, entry: CacheEntry): void {
+// Version is stamped here (SSOT) — callers must not supply it, so all write
+// sites are forced through the stamp (B15: fixes the :413 call site that
+// predated the B13 version field).
+function setCacheEntry(symbol: string, entry: Omit<CacheEntry, 'version'>): void {
   const cache = readCacheFile();
   cache.entries[symbol.toUpperCase()] = { ...entry, version: CACHE_ENTRY_VERSION };
   writeCacheFile(cache);

@@ -34,6 +34,7 @@ import {
   ExecutionEngine,
   type ExecutionResult,
 } from '../../src/language/runtime/execution-engine.js';
+import type { PineValue } from '../../src/language/types/na.js';
 import type { StrategyConfig } from '../../src/strategy/strategy-engine.js';
 
 const STRATEGY_SOURCE = fs.readFileSync('./test_indicators/example-buy-sell-stg.pine', 'utf-8');
@@ -116,7 +117,7 @@ describe('example-buy-sell-stg.pine compile+execute (CONTRACT — RED until stra
     // payload for the implementation. Flips GREEN once the builtin lands.
     const result = await engine.execute(STRATEGY_SOURCE, makeVBars(100));
 
-    expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
+    expect(result.success).toBe(true);
   });
 });
 
@@ -182,7 +183,7 @@ async function executeContractEngine(
 }
 
 /** Plotted `strategy.equity` values from the contract scripts' `equity_out` output. */
-function equitySeries(result: ExecutionResult): Array<number | null | undefined> {
+function equitySeries(result: ExecutionResult): PineValue[] {
   return result.outputs.get('equity_out')?.values ?? [];
 }
 
@@ -190,7 +191,7 @@ describe('CONTRACT — strategy.equity · EquitySource seam default (Group 1)', 
   it('setEquitySource is callable; default provider reads the strategy engine equity', async () => {
     const { result, engine } = await executeContractEngine(CONTRACT_EQUITY_NO_TRADE, makeVBars());
 
-    expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
+    expect(result.success).toBe(true);
     // DEFAULT_STRATEGY_CONFIG.initialCapital; the engine created a StrategyEngine
     // for the strategy script and its equity is the default source.
     expect(engine.getStrategyEngine()?.getEquity()).toBe(10000);
@@ -215,7 +216,7 @@ describe('CONTRACT — strategy.equity · injected source wins over engine defau
       () => 1234.5,
     );
 
-    expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
+    expect(result.success).toBe(true);
 
     const values = equitySeries(result);
     expect(values.length).toBeGreaterThan(0);
@@ -232,7 +233,7 @@ describe('CONTRACT — strategy.equity · NA fallback without a strategy engine 
     // CONTRACT — implement to make GREEN: no strategy engine → the builtin
     // returns NA (null/undefined), never an error. RED today: execution fails
     // on the unregistered member/namespace.
-    expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
+    expect(result.success).toBe(true);
 
     const values = equitySeries(result);
     expect(values.length).toBeGreaterThan(0);
@@ -260,7 +261,7 @@ describe('CONTRACT — strategy.equity · backtest reflects the CORRECTED equity
       { commission: 10, commissionType: 'fixed' },
     );
 
-    expect(result.success, `execute failed: ${JSON.stringify(result.error)}`).toBe(true);
+    expect(result.success).toBe(true);
 
     const strat = engine.getStrategyEngine();
     expect(strat).not.toBeNull();

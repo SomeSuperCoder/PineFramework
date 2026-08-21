@@ -510,11 +510,16 @@ export class Interpreter {
     // set — those lines previously survived warmup by accident. Compare the
     // start anchor against warmupCount instead, matching how shapes/labels
     // anchored in warmup are removed above.
+    // BUT a line anchored in warmup that EXTENDS past it (x2 >= warmupCount)
+    // is still partially user-visible (e.g. trendlines drawn from early
+    // pivots) — only drop lines entirely contained in the warmup region.
     for (const [id, line] of this.eng.lines) {
       const anchoredInWarmup =
         line.xloc === 'bar_time'
           ? warmupTimestamps.has(line.x1)
-          : typeof line.x1 === 'number' && line.x1 < warmupCount;
+          : typeof line.x1 === 'number' &&
+            line.x1 < warmupCount &&
+            !(typeof line.x2 === 'number' && line.x2 >= warmupCount);
       if (anchoredInWarmup) {
         this.eng.lines.delete(id);
       }

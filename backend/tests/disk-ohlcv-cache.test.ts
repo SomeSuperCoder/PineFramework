@@ -72,8 +72,8 @@ describe('DiskOHLCVCache', () => {
     const bars = makeBars(5, 1000, 60_000);
     await cache.set('BTCUSDT', '60', bars);
 
-    const ndjsonFile = path.join(cacheDir, 'BTCUSDT_60.ndjson');
-    const metaFile = path.join(cacheDir, 'BTCUSDT_60.meta.json');
+    const ndjsonFile = path.join(cacheDir, `v2_BTCUSDT_60.ndjson`);
+    const metaFile = path.join(cacheDir, `v2_BTCUSDT_60.meta.json`);
 
     expect(fs.existsSync(ndjsonFile)).toBe(true);
     expect(fs.existsSync(metaFile)).toBe(true);
@@ -151,7 +151,7 @@ describe('DiskOHLCVCache', () => {
     await cache.set('BTCUSDT', '60', bars);
 
     // Simulate a crash by writing a partial .tmp file
-    const ndjsonFile = path.join(cacheDir, 'BTCUSDT_60.ndjson');
+    const ndjsonFile = path.join(cacheDir, `v2_BTCUSDT_60.ndjson`);
     const tmpFile = ndjsonFile + '.tmp';
     fs.writeFileSync(tmpFile, '{"timestamp":9999,"this_is_broken\n', 'utf-8');
 

@@ -22,7 +22,7 @@ import {
  * mapper (routes/execute.ts, real express route) and the WS serializers
  * (FormingCandleManager.toOutputs / toFormingCandleOutputs via ScriptSession)
  * and assert:
- *   1. The REQUIRED key set (17 collections + isConfirmed) is IDENTICAL across
+ *   1. The REQUIRED key set (18 collections + isConfirmed) is IDENTICAL across
  *      REST + WS full + WS diff — collections present and never undefined (the
  *      "even if empty" guarantee).
  *   2. No unknown keys on any wire (everything present is a contract key).
@@ -41,6 +41,7 @@ const CONTRACT_COLLECTION_KEYS = [
   'outputs', 'plotColors', 'fillColorData', 'hiddenPlotKeys', 'plotOverlayKeys',
   'shapes', 'fills', 'linefills', 'bgcolor', 'barColors', 'strategyMarkers',
   'lines', 'labels', 'boxes', 'tables', 'alertConditions', 'alertTriggers',
+  'hlines',
 ];
 const MAP_COLLECTION_KEYS = ['outputs', 'plotColors', 'fillColorData'];
 const ARRAY_COLLECTION_KEYS = CONTRACT_COLLECTION_KEYS.filter((k) => !MAP_COLLECTION_KEYS.includes(k));
@@ -49,7 +50,7 @@ const CONTRACT_PAYLOAD_KEYS = [
   ...CONTRACT_COLLECTION_KEYS,
   'barTimestamps', 'barIndex', 'formingCandle', 'maxLookback', 'isConfirmed',
 ];
-// The REQUIRED data surface — the 17 collections + the discriminant. Optional
+// The REQUIRED data surface — the 18 collections + the discriminant. Optional
 // scalars (error/indicatorId/barIndex/formingCandle/barTimestamps/maxLookback)
 // may be absent on a JSON wire when undefined, by construction of JSON.
 const REQUIRED_KEY_SET = [...CONTRACT_COLLECTION_KEYS, 'isConfirmed'];
@@ -152,7 +153,7 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
     return session.appendOrUpdateBar(formingBar);
   }
 
-  it('REST /execute — FULL variant: all 17 collections present, isConfirmed true, no unknown keys, real data rides', async () => {
+  it('REST /execute — FULL variant: all 18 collections present, isConfirmed true, no unknown keys, real data rides', async () => {
     const payload = await restExecute();
     assertContractShape(payload, 'REST');
     expect(payload.isConfirmed, 'REST must be isConfirmed: true').toBe(true);
@@ -205,7 +206,7 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
 });
 
 describe('normalizeExecutionResultMessage — the "even if empty" guarantee at the contract level', () => {
-  it('an EMPTY input normalizes to the full contract key set: 17 collections filled with [] / {}, isConfirmed defaults to false (diff)', () => {
+  it('an EMPTY input normalizes to the full contract key set: 18 collections filled with [] / {}, isConfirmed defaults to false (diff)', () => {
     const out = normalizeExecutionResultMessage({}) as Record<string, unknown>;
     expect(Object.keys(out).sort()).toEqual(CONTRACT_PAYLOAD_KEYS.slice().sort());
     expect(out.isConfirmed).toBe(false);

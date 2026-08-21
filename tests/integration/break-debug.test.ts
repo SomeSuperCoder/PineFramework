@@ -87,8 +87,11 @@ plot(result)`;
     }));
 
     const result = await engine.executeBars(contexts);
-    const output = result.outputs.get('plot');
-    expect(output?.values[output.values.length - 1]).toBe(5);
+    // Plot keys are stable plot_N since commit 8aafb6c — look up by prefix.
+    const plotKey = [...result.outputs.keys()].find((k) => k.startsWith('plot'));
+    expect(plotKey).toBeTruthy();
+    const output = result.outputs.get(plotKey!)!;
+    expect(output.values[output.values.length - 1]).toBe(5);
   });
 
   it('pivot detection works with zigzag data', async () => {

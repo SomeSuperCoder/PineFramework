@@ -17,7 +17,10 @@
  * fetchBars involved.
  */
 import { describe, expect, it } from 'vitest';
-import { runBacktestPipeline } from '../src/backtest-runner.js';
+import {
+  computeMonthlyReturnsRaw,
+  runBacktestPipeline,
+} from '../src/backtest-runner.js';
 import type { Bar } from 'pine-framework';
 
 // ── Fixed strategy (verbatim from backtest-golden-capture.test.ts) ──────────
@@ -159,5 +162,35 @@ describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
     expect(result.success).toBe(true);
     const engine = result.engine!;
     expect(engine.builtins.get('timeframe.period')!()).toBe(Symbol.for('pine.na'));
+  });
+});
+// ── computeMonthlyReturnsRaw — first-write-wins per month (B15 fix) ─────────
+// Regression: `!monthly[key]` treated a computed 0% as "absent", letting a
+// LATER same-month point overwrite the month's opening return. `key in`
+// lookup fixes it — a month opening at exactly 0% must be preserved.
+describe('computeMonthlyReturnsRaw — first-write-wins per month', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  // 2023-11-01T00:00:00Z, 2023-11-15, 2023-11-30 (same month), 2023-12-01
+  const t = (iso: string) => new Date(iso).getTime();
+
+  it('a month opening at exactly 0% is preserved (not overwritten by later point)', () => {
+    const monthly = computeMonthlyReturnsRaw([
+      { time: t('2023-10-01T00:00:00Z'), equity: 10000 },
+      { time: t('2023-11-01T00:00:00Z'), equity: 10000 }, // Nov opens at 0%
+      { time: t('2023-11-15T00:00:00Z'), equity: 12000 }, // later same-month point
+      { time: t('2023-12-01T00:00:00Z'), equity: 13000 }, // Dec vs Nov FIRST point
+    ]);
+    expect(monthly['2023-11']).toBe(0); // would have become 20 under the old bug
+    expect(monthly['2023-12']).toBeCloseTo(((13000 - 10000) / 10000) * 100, 10);
+  });
+
+  it('normal case unchanged: month return uses the FIRST equity point of that month', () => {
+    const monthly = computeMonthlyReturnsRaw([
+      { time: t('2023-10-01T00:00:00Z'), equity: 10000 },
+      { time: t('2023-11-01T00:00:00Z'), equity: 11000 },
+      { time: t('2023-12-01T00:00:00Z'), equity: 9900 },
+    ]);
+    expect(monthly['2023-11']).toBeCloseTo(10, 10);
+    expect(monthly['2023-12']).toBeCloseTo(-10, 10);
   });
 });

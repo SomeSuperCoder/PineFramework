@@ -15,12 +15,8 @@
  *   • avg exact                (was float drift)
  *   • round exact half-up      (was stableRound IEEE epsilon hack, now deleted)
  *
- * FLAGGED DISCREPANCY (for QA audit M4-5): the M4 spawn spec expected
- * `math.asin(2) → NA`. The shipped builtin CLAMPS to [-1, 1] (documented in
- * math-builtins.ts) → asin(2) = asin(1) = π/2, acos(2) = acos(1) = 0. Legacy
- * was `Math.asin(2)` unguarded → NaN leak (R2 violation). This suite asserts
- * the SHIPPED, code-documented contract; the spec-vs-code mismatch is flagged,
- * not silently re-baselined.
+ * TV parity: `math.asin(2)` / `math.acos(2)` → NA (|x| > 1 is out of domain —
+ * decimal.js NaNs, NaN collapses to NA at the boundary; no clamp).
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/language/parser/parser.js';
@@ -219,15 +215,12 @@ describe('M4 math builtins — exactness (decimal core delegation)', () => {
       expect(math('atan2')(0, 0)).toBe(0);
     });
 
-    it('FLAGGED (QA M4-5): asin(2) === asin(1) ≈ π/2 — shipped clamp, NOT NA (spec drift)', () => {
-      // M4 spawn spec expected asin(2) → NA. Shipped code clamps to [-1,1]
-      // (documented intentional, math-builtins.ts). Legacy was Math.asin(2)
-      // unguarded → NaN leak (R2). Assert shipped contract; QA audits.
-      expect(math('asin')(2)).toBeCloseTo(Math.PI / 2, TRIG_TOL_DIGITS);
+    it('TV parity: asin(2) → NA — |x| > 1 is out of domain (clamp removed)', () => {
+      expect(math('asin')(2)).toBe(NA);
     });
 
-    it('FLAGGED (QA M4-5): acos(2) === acos(1) === 0 — shipped clamp, NOT NA (spec drift)', () => {
-      expect(math('acos')(2)).toBeCloseTo(0, TRIG_TOL_DIGITS);
+    it('TV parity: acos(2) → NA — |x| > 1 is out of domain (clamp removed)', () => {
+      expect(math('acos')(2)).toBe(NA);
     });
   });
 

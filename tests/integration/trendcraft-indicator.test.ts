@@ -387,7 +387,7 @@ if not na(ph)
     lvl := ph
 plot(lvl, "lvl")
 if not na(lvl) and close > lvl
-    line.new(0, lvl, 1, lvl, color=color.blue, style=line.style_dotted, width=2)`;
+    line.new(0, lvl, 10, lvl, color=color.blue, style=line.style_dotted, width=2)`;
     const { ast: e2eAst } = parse(e2eSrc);
     const e2eCompiled = compile(e2eAst);
     const e2eEngine = new ExecutionEngine(e2eCompiled);

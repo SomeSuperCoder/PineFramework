@@ -285,7 +285,7 @@ function buildEquityPoints(
   return points;
 }
 
-function computeMonthlyReturnsRaw(
+export function computeMonthlyReturnsRaw(
   points: Array<{ time: number; equity: number }>,
 ): Record<string, number> {
   const monthly: Record<string, number> = {};
@@ -294,7 +294,9 @@ function computeMonthlyReturnsRaw(
   for (const point of points) {
     const date = new Date(point.time);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    if (!monthly[key]) {
+    // First-write-wins per month: month return = previous month-end equity → FIRST point of the month.
+    // Later points in the same month never overwrite (`!monthly[key]` would treat a computed 0 as absent).
+    if (!(key in monthly)) {
       monthly[key] =
         prevMonthEquity > 0 ? ((point.equity - prevMonthEquity) / prevMonthEquity) * 100 : 0;
       prevMonthEquity = point.equity;

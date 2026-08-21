@@ -494,11 +494,16 @@ describe('Telegram position notifications at confirmed order results (BUG 4b)', 
     expect(telegramBot.notifyPositionOpened).not.toHaveBeenCalled();
     const trade = telegramBot.notifyPositionClosed.mock.calls[0]![0] as {
       symbol: string;
-      realizedPnl: number;
+      grossPnl?: number;
+      realizedPnl?: number;
     };
     expect(trade.symbol).toBe('BTCUSDT');
-    // (exit 51_000 − entry 50_000) × qty 0.1
-    expect(trade.realizedPnl).toBe(100);
+    // Honest-PnL contract: confirmed closes carry GROSS PnL only — net
+    // `realizedPnl` is intentionally OMITTED (fees can't be priced in this
+    // layer; a fabricated $0.00 net would mislead). (exit 51_000 − entry
+    // 50_000) × qty 0.1 = 100 gross.
+    expect(trade.grossPnl).toBe(100);
+    expect(trade.realizedPnl).toBeUndefined();
   });
 
   it('does NOT fire a position notification when the order FAILS (no phantom open/close)', async () => {

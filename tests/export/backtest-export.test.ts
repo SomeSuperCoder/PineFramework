@@ -14,7 +14,11 @@
 
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import type { Bar, Series } from 'pine-framework';
+import type { Bar } from 'pine-framework';
+// Series must come from src (not the pine-framework dist build) — the export
+// module's Map<string, Series> is typed against src; dist types are nominal
+// via the NA unique symbol and never assignable across builds.
+import type { Series } from '../../src/language/runtime/series.js';
 import {
   BACKTEST_EXPORT_SCHEMA_VERSION,
   buildBacktestExport,

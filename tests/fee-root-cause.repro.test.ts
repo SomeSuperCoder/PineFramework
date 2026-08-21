@@ -111,12 +111,6 @@ function weightedAverageFixed(
 // Jupiter's `percent` is a percentage 0-100; a single-step route is percent=100.
 
 const SINGLE_QUANTUM_STEP = [{ percent: 100, swapInfo: { label: 'Quantum' } }]; // cached SOLUSDT route
-const MULTI_BTC_STEPS = [
-  { percent: 25, swapInfo: { label: 'Manifest' } },
-  { percent: 25, swapInfo: { label: 'Whirlpool' } },
-  { percent: 25, swapInfo: { label: 'Meteora DLMM' } },
-  { percent: 25, swapInfo: { label: 'GoonFi V2' } },
-];
 
 describe('root cause: callJupiterApi weighted average divides by 100 twice', () => {
   it('SOLUSDT-equivalent: single Quantum step (→ DEFAULT 25 bps) yields 0.25, not 25', () => {

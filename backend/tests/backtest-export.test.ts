@@ -87,14 +87,21 @@ function createCrossoverBars(): Bar[] {
   for (let i = 0; i < 120; i++) {
     const open = price;
     let close: number;
-    if (i < 30) close = open + 2.0;
-    else if (i < 60) close = open - 2.0;
-    else if (i < 90) close = open + 2.0;
-    else close = open - 2.0;
+    // Non-round steps (+1.7/−1.3): the UNROUNDED-monthlyReturns contract test
+    // requires at least one month whose raw return isn't a clean 2dp number;
+    // ±2.0 steps produced exactly-rounded equity and failed that premise.
+    if (i < 30) close = open + 1.7;
+    else if (i < 60) close = open - 1.3;
+    else if (i < 90) close = open + 1.7;
+    else close = open - 1.3;
     const high = Math.max(open, close) + 0.5;
     const low = Math.min(open, close) - 0.5;
     bars.push({
-      timestamp: 1700000000000 + i * 3600000,
+      // Start late October so the 120 hourly bars (~5 days) SPAN a month
+    // boundary (Oct→Nov): a single-month fixture yields exactly one monthly
+    // return of 0 (first point vs itself), which can never satisfy the
+    // "at least one UNROUNDED month" premise below.
+    timestamp: 1698451200000 + i * 3600000, // 2023-10-28T00:00Z
       open,
       high,
       low,

@@ -136,18 +136,15 @@ export function registerMathBuiltins(engine: ExecutionEngine): void {
 
   eng.builtins.set('math.asin', (value: PineValue): PineValue => {
     if (isNa(value)) return NA;
-    // Clamp to [-1, 1] on the raw number BEFORE conversion to handle values
-    // slightly outside due to IEEE 754 (decimal.js asin natively NaNs |a| > 1;
-    // the clamp preserves the legacy graceful behavior).
-    const v = Math.max(-1, Math.min(1, value as number));
-    return decimalToPineValue(numericOps.asin(toDecimal(v)));
+    // No clamp: TV semantics — |x| > 1 is out of domain → na. decimal.js asin
+    // natively NaNs |a| > 1; NaN collapses to NA at the boundary.
+    return decimalToPineValue(numericOps.asin(toDecimal(value)));
   });
 
   eng.builtins.set('math.acos', (value: PineValue): PineValue => {
     if (isNa(value)) return NA;
-    // Clamp to [-1, 1] on the raw number BEFORE conversion (see math.asin).
-    const v = Math.max(-1, Math.min(1, value as number));
-    return decimalToPineValue(numericOps.acos(toDecimal(v)));
+    // No clamp (see math.asin): out-of-domain |x| > 1 → NaN → na.
+    return decimalToPineValue(numericOps.acos(toDecimal(value)));
   });
 
   eng.builtins.set('math.atan', (value: PineValue): PineValue => {
