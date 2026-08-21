@@ -113,7 +113,10 @@ function parseArgs(argv: string[]): CliOptions {
       }
     } else if (arg === '--initial-capital') {
       i++;
-      options.initialCapital = parseFloat(args[i] ?? '');
+      // Raw Number — NaN (trailing-garbage input like "12abc") is rejected by
+      // validateOptions (finite + positive guard). Same strict pattern as
+      // --pyramiding/--max-bars; parseFloat would silently prefix-parse.
+      options.initialCapital = Number(args[i] ?? '');
     } else if (arg === '--commission-method') {
       i++;
       // Raw value kept; alias resolution + the accepted-values error happen in
@@ -129,10 +132,12 @@ function parseArgs(argv: string[]): CliOptions {
       }
     } else if (arg === '--slippage') {
       i++;
-      options.slippage = parseFloat(args[i] ?? '');
+      // Raw Number — NaN caught by validateOptions (see --initial-capital).
+      options.slippage = Number(args[i] ?? '');
     } else if (arg === '--default-qty') {
       i++;
-      options.defaultQty = parseFloat(args[i] ?? '');
+      // Raw Number — NaN caught by validateOptions (see --initial-capital).
+      options.defaultQty = Number(args[i] ?? '');
     } else if (arg === '--pyramiding') {
       i++;
       // Raw Number — NaN (non-numeric or trailing-garbage input like "12abc")
@@ -200,6 +205,29 @@ function validateOptions(options: CliOptions): string | null {
     (!Number.isInteger(options.maxBars) || options.maxBars <= 0)
   ) {
     return `Invalid --max-bars: ${String(options.maxBars)}. Must be a positive integer.`;
+  }
+
+  // Float flags must be strictly numeric when present: Number() yields NaN for
+  // trailing-garbage input ("12abc"), which fails Number.isFinite too — one
+  // guard covers both. Range rules mirror normalize-explicit-config.ts
+  // (SSOT): initialCapital > 0, slippage >= 0, defaultQty > 0.
+  if (
+    options.initialCapital !== undefined &&
+    (!Number.isFinite(options.initialCapital) || options.initialCapital <= 0)
+  ) {
+    return `Invalid --initial-capital: ${String(options.initialCapital)}. Must be a positive number.`;
+  }
+  if (
+    options.slippage !== undefined &&
+    (!Number.isFinite(options.slippage) || options.slippage < 0)
+  ) {
+    return `Invalid --slippage: ${String(options.slippage)}. Must be a non-negative number.`;
+  }
+  if (
+    options.defaultQty !== undefined &&
+    (!Number.isFinite(options.defaultQty) || options.defaultQty <= 0)
+  ) {
+    return `Invalid --default-qty: ${String(options.defaultQty)}. Must be a positive number.`;
   }
 
   // --commission-method is REQUIRED (contract D1): absent → explicit error

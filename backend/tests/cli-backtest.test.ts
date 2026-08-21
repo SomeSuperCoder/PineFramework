@@ -1,4 +1,9 @@
 import { vi } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { aggregateResults } from '../src/cli/result-aggregator.js';
 import type { SymbolResult } from '../src/cli/types.js';
 import { runSymbolBacktest } from '../src/cli/symbol-runner.js';
@@ -326,5 +331,45 @@ describe('CLI --max-bars export request layer (A2 watch item)', () => {
 
     const withoutFlag = makeExportObj({ symbols: 'BTCUSDT' });
     expect((withoutFlag.params.request as Record<string, unknown>).maxBars).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// Strict numeric flag parsing (float flags)
+//
+// Regression: --initial-capital / --slippage / --default-qty used parseFloat,
+// which prefix-parses garbage like "12abc" into 12. They now use raw Number()
+// + validateOptions guards (finite + range, mirroring normalize-explicit-
+// config.ts). parseArgs/validateOptions are module-private, so these tests
+// spawn the CLI binary via tsx — rejection happens before any network access
+// (exit 2 from the validation gate), keeping the tests offline.
+// ===========================================================================
+describe('CLI strict float flag parsing', () => {
+  const cliPath = resolve(fileURLToPath(new URL('../src/cli/backtest-cli.ts', import.meta.url)));
+
+  function runCli(extraArgs: string[]): { status: number | null; stderr: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'cli-float-'));
+    const script = join(dir, 'strategy.pine');
+    writeFileSync(script, '// dummy\n');
+    try {
+      const res = spawnSync('pnpm', ['exec', 'tsx', cliPath, script, ...extraArgs], {
+        encoding: 'utf8',
+        timeout: 60_000,
+      });
+      return { status: res.status, stderr: res.stderr ?? '' };
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it.each([
+    ['--initial-capital', 'Must be a positive number'],
+    ['--slippage', 'Must be a non-negative number'],
+    ['--default-qty', 'Must be a positive number'],
+  ])('rejects trailing-garbage %s 12abc with exit code 2', (flag, expectedMsg) => {
+    const { status, stderr } = runCli([flag, '12abc']);
+    expect(status).toBe(2);
+    expect(stderr).toContain(`Invalid ${flag}`);
+    expect(stderr).toContain(expectedMsg);
   });
 });
