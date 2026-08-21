@@ -300,7 +300,7 @@ export class ExecutionEngine {
     new Map();
   /** Wilder's RMA state, keyed `rma_<len>_<callSiteId>` (ta.rma). Same seed-then-smooth
    *  shape as atrState — RMA is the core of ATR, so the state layouts mirror each other. */
-  /** @internal */ rmaState: Map<string, { prev: number; count: number }> = new Map();
+  /** @internal */ rmaState: Map<string, { prev: Decimal; count: number }> = new Map();
   // M7b: Supertrend state holds Decimal — the internal ATR RMA and the previous
   // final bands accumulate/compare exactly at DP=20 (see ta-volatility.ts).
   // forming-candle.ts snapshot/restore copies map entries only; Decimals are

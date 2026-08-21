@@ -79,8 +79,13 @@ export class FormingCandleProcessor {
       this.eng.emaState.size > 0
         ? new Map([...this.eng.emaState].map(([k, v]) => [k, { ...v }]))
         : undefined;
+    // Deep-copy crossPrevValues entries: the { src, cmp } wrappers are mutated in
+    // place by ta.cross builtins (prev.src = src), so a shallow Map copy would
+    // share them with live state and a rollback would restore mutated values.
     const preCrossPrevValues =
-      this.eng.crossPrevValues.size > 0 ? new Map(this.eng.crossPrevValues) : undefined;
+      this.eng.crossPrevValues.size > 0
+        ? new Map([...this.eng.crossPrevValues].map(([k, v]) => [k, { ...v }]))
+        : undefined;
     const preChangePrevValues =
       this.eng.changePrevValues.size > 0 ? new Map(this.eng.changePrevValues) : undefined;
     const preHighestBuffers =
