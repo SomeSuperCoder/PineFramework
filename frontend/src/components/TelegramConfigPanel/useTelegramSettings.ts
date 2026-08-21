@@ -9,6 +9,7 @@ export interface TelegramStatus {
   saveToken: SaveStatus;
   test: TestStatus;
   proxy: SaveStatus;
+  admin: SaveStatus;
 }
 
 export interface ProxyDraft {
@@ -89,10 +90,11 @@ export function useTelegramSettings(alertConditions: AlertConditionData[]): Tele
     saveToken: 'idle',
     test: 'idle',
     proxy: 'idle',
+    admin: 'idle',
   });
   const statusTimers = useRef<number[]>([]);
 
-  const scheduleStatusReset = useCallback((key: 'saveToken' | 'proxy') => {
+  const scheduleStatusReset = useCallback((key: 'saveToken' | 'proxy' | 'admin') => {
     const timer = window.setTimeout(() => {
       setStatus((prev) => ({ ...prev, [key]: 'idle' }));
     }, STATUS_RESET_MS);
@@ -265,8 +267,19 @@ export function useTelegramSettings(alertConditions: AlertConditionData[]): Tele
   const setAdmin = useCallback(async () => {
     const userId = Number.parseInt(admin.userId, 10);
     if (Number.isNaN(userId) || userId <= 0) return;
-    await runAction('admin', () => api.setAdmin(userId, admin.username.trim() || undefined));
-  }, [admin, runAction]);
+    setBusy((prev) => ({ ...prev, admin: true }));
+    setStatus((prev) => ({ ...prev, admin: 'idle' }));
+    try {
+      await api.setAdmin(userId, admin.username.trim() || undefined);
+      await refreshConfig();
+      setStatus((prev) => ({ ...prev, admin: 'saved' }));
+      scheduleStatusReset('admin');
+    } catch {
+      setStatus((prev) => ({ ...prev, admin: 'error' }));
+    } finally {
+      setBusy((prev) => ({ ...prev, admin: false }));
+    }
+  }, [admin, refreshConfig, scheduleStatusReset]);
 
   const approveRequest = useCallback(
     (userId: number) => runAction(`approve:${userId}`, () => api.approveControlRequest(userId)),

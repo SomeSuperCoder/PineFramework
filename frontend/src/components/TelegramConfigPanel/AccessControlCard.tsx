@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Check, Loader2, Shield, Trash2, Users, X } from 'lucide-react';
 import {
   AlertDialog,
@@ -13,13 +12,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -27,13 +20,15 @@ import type { TelegramAdmin, TelegramControlRequest, TelegramController } from '
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingRow } from '@/components/ui/setting-row';
 import { StatusCallout } from '@/components/ui/status-callout';
-import type { AdminDraft } from './useTelegramSettings';
+import type { AdminDraft, SaveStatus } from './useTelegramSettings';
 
 interface AccessControlCardProps {
   currentAdmin: TelegramAdmin | null;
   requests: TelegramControlRequest[];
   controllers: TelegramController[];
   admin: AdminDraft;
+  /** Real save status from the hook — 'saved' | 'error' reflect the API result. */
+  adminStatus: SaveStatus;
   onAdminFieldChange: (field: keyof AdminDraft, value: string) => void;
   busy: Record<string, boolean>;
   onSetAdmin: () => void;
@@ -42,14 +37,13 @@ interface AccessControlCardProps {
   onRemoveController: (userId: number) => void;
 }
 
-const ADMIN_SAVED_RESET_MS = 2000;
-
 /** Admin + controller requests + active controllers. */
 export function AccessControlCard({
   currentAdmin,
   requests,
   controllers,
   admin,
+  adminStatus,
   onAdminFieldChange,
   busy,
   onSetAdmin,
@@ -57,24 +51,12 @@ export function AccessControlCard({
   onDenyRequest,
   onRemoveController,
 }: AccessControlCardProps) {
-  const [adminSaved, setAdminSaved] = useState(false);
-
   const adminUserId = Number.parseInt(admin.userId, 10);
   const adminDirty =
     !Number.isNaN(adminUserId) &&
     adminUserId > 0 &&
     (admin.userId !== (currentAdmin ? String(currentAdmin.userId) : '') ||
       admin.username !== (currentAdmin?.username ?? ''));
-
-  const handleAdminFieldChange = (field: keyof AdminDraft, value: string) => {
-    onAdminFieldChange(field, value);
-    setAdminSaved(false);
-  };
-
-  const handleSetAdmin = () => {
-    onSetAdmin();
-    setAdminSaved(true);
-  };
 
   return (
     <Card className="rounded-md border border-border bg-card">
@@ -109,7 +91,7 @@ export function AccessControlCard({
                 type="text"
                 inputMode="numeric"
                 value={admin.userId}
-                onChange={(e) => handleAdminFieldChange('userId', e.target.value)}
+                onChange={(e) => onAdminFieldChange('userId', e.target.value)}
                 placeholder="Telegram user ID"
                 autoComplete="off"
                 className="h-10"
@@ -123,7 +105,7 @@ export function AccessControlCard({
                 id="tg-admin-username"
                 type="text"
                 value={admin.username}
-                onChange={(e) => handleAdminFieldChange('username', e.target.value)}
+                onChange={(e) => onAdminFieldChange('username', e.target.value)}
                 placeholder="@username (optional)"
                 autoComplete="off"
                 className="h-10"
@@ -133,7 +115,7 @@ export function AccessControlCard({
           <div className="mt-3 flex justify-end">
             <Button
               type="button"
-              onClick={handleSetAdmin}
+              onClick={onSetAdmin}
               disabled={!!busy.admin || !adminDirty}
               aria-busy={!!busy.admin}
               className="h-10"
@@ -142,9 +124,14 @@ export function AccessControlCard({
               Set as Admin
             </Button>
           </div>
-          {adminSaved ? (
-            <StatusCallout tone="success" autoDismissMs={ADMIN_SAVED_RESET_MS} className="mt-3">
+          {adminStatus === 'saved' ? (
+            <StatusCallout tone="success" className="mt-3">
               Admin saved
+            </StatusCallout>
+          ) : null}
+          {adminStatus === 'error' ? (
+            <StatusCallout tone="error" className="mt-3">
+              Failed to save
             </StatusCallout>
           ) : null}
         </section>
@@ -267,7 +254,11 @@ function ControllerRow({ controller, busy, onRemove }: ControllerRowProps) {
             aria-busy={removeBusy}
             className="h-10"
           >
-            {removeBusy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            {removeBusy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Trash2 className="size-4" />
+            )}
             Remove
           </Button>
         </AlertDialogTrigger>

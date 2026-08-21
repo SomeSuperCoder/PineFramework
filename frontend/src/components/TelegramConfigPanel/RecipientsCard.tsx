@@ -19,18 +19,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
@@ -148,6 +138,7 @@ interface ChatCollapsibleProps {
 function ChatCollapsible({ chat, busy, onUpdateChatLanguage, onUnlinkChat }: ChatCollapsibleProps) {
   const langBusy = !!busy[`lang:${chat.chatId}`];
   const unlinkBusy = !!busy[`unlink:${chat.chatId}`];
+  // Read-only until the backend ships a member-subscription mutation endpoint; then wire interactive Switches here.
   const members = Object.entries(chat.memberSubscriptions);
   const title = chatTitle(chat);
 
@@ -255,7 +246,9 @@ function AlertCollapsible({ alert, chats, getAlertPref, onToggleAlert }: AlertCo
     <Collapsible>
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-md py-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&[data-state=open]>svg]:rotate-180">
         <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-0 truncate text-sm font-medium text-foreground">{alert.title}</span>
+          <span className="min-w-0 truncate text-sm font-medium text-foreground">
+            {alert.title}
+          </span>
           <Badge variant="secondary">
             {enabledCount}/{chats.length}
           </Badge>

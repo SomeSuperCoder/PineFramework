@@ -88,6 +88,7 @@ export function TelegramConfigPanel({ alertConditions, onClose }: TelegramConfig
               requests={tg.data?.requests ?? []}
               controllers={tg.data?.controllers ?? []}
               admin={tg.admin}
+              adminStatus={tg.status.admin}
               onAdminFieldChange={tg.setAdminField}
               busy={tg.busy}
               onSetAdmin={() => void tg.actions.setAdmin()}

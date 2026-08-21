@@ -561,6 +561,10 @@ export class BotEngine {
     // Cancel in-flight candle processing immediately
     this._abortController?.abort();
 
+    // Snapshot the session window before the pipeline runs — shutdown() may
+    // clear lifecycle fields by the time the notification fires.
+    const startedAt = this._startedAt;
+
     try {
       await this.stateMachine.transition(BotState.Stopping, 'User requested stop');
 
@@ -579,6 +583,9 @@ export class BotEngine {
       await this.shutdown();
       await this.stateMachine.transition(BotState.Stopped, 'Shutdown complete');
       this.logger.info('Bot stopped');
+      // Best-effort subscriber notice — a failed notification must never
+      // turn an already-successful stop into STOP_FAILED.
+      await this.notifyStoppedSafely(startedAt);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.recordError('STOP_FAILED', message, ErrorSeverity.Error);
@@ -615,6 +622,10 @@ export class BotEngine {
     // Cancel in-flight candle processing immediately
     this._abortController?.abort();
 
+    // Snapshot the session window before the pipeline runs (null when
+    // emergency-stopping straight from Error without a prior successful start).
+    const startedAt = this._startedAt;
+
     try {
       // Force to Stopping if currently Running
       if (this.state === BotState.Running) {
@@ -631,6 +642,9 @@ export class BotEngine {
       // Phase 2: cancel orders, close positions, persist state
       await this.shutdown();
       await this.stateMachine.transition(BotState.Stopped, 'Emergency stop complete');
+      // Best-effort subscriber notice — never fails the halt (R1 ordering:
+      // stop first, notify best-effort, log failures).
+      await this.notifyStoppedSafely(startedAt);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.recordError('EMERGENCY_STOP_FAILED', message, ErrorSeverity.Fatal);
@@ -756,6 +770,32 @@ export class BotEngine {
           error: err instanceof Error ? err.message : String(err),
         });
       }
+    }
+  }
+
+  /**
+   * Best-effort "bot stopped" Telegram notice shared by stop() and
+   * emergencyStop(). Never throws: the halt has already happened, so a broken
+   * notification channel must not fail it (same R1 ordering as the
+   * loss-breach handlers — stop first, notify best-effort, log failures).
+   *
+   * Session stats are derived truthfully from the trade history store: trades
+   * CLOSED since start define both the count and the summed realized PnL.
+   * Without a session window (never started) they stay 0 — never guessed.
+   */
+  private async notifyStoppedSafely(startedAt: number | null): Promise<void> {
+    if (!this.telegramBot) return;
+    try {
+      const runtimeMs = startedAt !== null ? Date.now() - startedAt : 0;
+      const sessionTrades =
+        startedAt !== null ? (this.tradeHistoryStore?.getTrades({ since: startedAt }) ?? []) : [];
+      const tradeCount = sessionTrades.length;
+      const pnl = sessionTrades.reduce((sum, trade) => sum + (trade.realizedPnl ?? 0), 0);
+      await this.telegramBot.notifyBotStopped(runtimeMs, tradeCount, pnl);
+    } catch (err) {
+      this.logger.warn('Telegram bot_stopped notification failed', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -1001,7 +1041,15 @@ export class BotEngine {
       // All optional — absent history degrades to pre-history execution.
       botId: this.botId,
       tradeHistoryStore: this.tradeHistoryStore,
-      onTradeClosed: this.onTradeClosed,
+      // Composed observer: the caller's wire (dashboard broadcast) first —
+      // existing behavior unchanged — then the engine-owned Telegram close
+      // notice for LIVE-mode closes. Chaos closes already notify at the
+      // order-result point (notifyPositionResult) and force-closes via
+      // handlePositionClosed; guarding on mode here prevents double notices.
+      onTradeClosed: (trade: TradeRecord) => {
+        this.onTradeClosed?.(trade);
+        this.notifyLiveTradeClosed(trade);
+      },
     });
     this.logger.info('Strategy executor created', { chaosMode: isChaosMode });
 
@@ -1495,6 +1543,55 @@ export class BotEngine {
       this.logger.warn('Telegram position notification failed', {
         action: signal.action,
         symbol: signal.pair.symbol,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * Telegram "position closed" notice for LIVE-mode natural closes, fired from
+   * the executor's persistClosedTradeRecord observer seam (the chaos path
+   * notifies earlier, at the order-result point in notifyPositionResult).
+   * Best-effort by the same contract as notifyPositionResult: a Telegram
+   * failure must never break trade persistence or the caller's observer wire.
+   *
+   * Honest-PnL (B4): confirmed records carry real net PnL / subtracted fees /
+   * grossPnl and pass through untouched. Unknown-outcome records carry
+   * PLACEHOLDER 0s (never measured) — those fields are stripped so the notice
+   * omits the PnL/Fees lines instead of rendering a fabricated $0.00.
+   */
+  private notifyLiveTradeClosed(trade: TradeRecord): void {
+    if (!this.telegramBot) return;
+    // Chaos closes are already notified by notifyPositionResult; this seam is
+    // live-mode only (force-closes never reach persistClosedTradeRecord —
+    // they notify via handlePositionClosed).
+    if (trade.mode === 'chaos') return;
+    try {
+      let notificationTrade: PositionNotificationTrade = trade;
+      if (trade.status === 'unknown') {
+        // Explicit undefined (not destructure-strip): renderers guard with
+        // `!== undefined`, so the PnL/Fees lines are omitted exactly as if
+        // the fields were absent.
+        notificationTrade = {
+          ...trade,
+          realizedPnl: undefined,
+          fees: undefined,
+          feesUnknown: true,
+        };
+      }
+      // Fire-and-forget: never await a Telegram round-trip inside the
+      // persistence path; a rejection must not surface into onTradeClosed.
+      void this.telegramBot.notifyPositionClosed(notificationTrade).catch((err) => {
+        this.logger.warn('Telegram position notification failed', {
+          action: 'close',
+          symbol: trade.symbol,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    } catch (err) {
+      this.logger.warn('Telegram position notification failed', {
+        action: 'close',
+        symbol: trade.symbol,
         error: err instanceof Error ? err.message : String(err),
       });
     }

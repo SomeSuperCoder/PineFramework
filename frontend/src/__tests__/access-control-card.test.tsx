@@ -35,6 +35,7 @@ function makeProps(overrides: Partial<CardProps> = {}): CardProps {
     requests: [],
     controllers: [],
     admin: { userId: '', username: '' },
+    adminStatus: 'idle',
     onAdminFieldChange: vi.fn(),
     busy: {},
     onSetAdmin: vi.fn(),
@@ -87,7 +88,9 @@ describe('AccessControlCard', () => {
       expect(screen.getByRole('button', { name: 'Set as Admin' })).toBeDisabled();
     });
 
-    it('enables Set as Admin when the draft differs, fires onSetAdmin and shows a saved status', async () => {
+    // The card is purely presentational: clicking fires onSetAdmin, and the
+    // saved/error callout is driven entirely by the adminStatus prop.
+    it('enables Set as Admin when the draft differs and fires onSetAdmin', async () => {
       const props = renderCard({
         currentAdmin: ADMIN,
         admin: { userId: '42', username: 'alice2' },
@@ -97,9 +100,21 @@ describe('AccessControlCard', () => {
 
       await userEvent.click(setButton);
       expect(props.onSetAdmin).toHaveBeenCalledTimes(1);
-      // Success callout uses role="status"; the card has no error path.
+      // No callout while idle — status only appears via the adminStatus prop.
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('shows the success callout when adminStatus is "saved"', () => {
+      renderCard({ adminStatus: 'saved' });
       expect(screen.getByRole('status')).toHaveTextContent('Admin saved');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('shows the error callout when adminStatus is "error"', () => {
+      renderCard({ adminStatus: 'error' });
+      expect(screen.getByRole('alert')).toHaveTextContent('Failed to save');
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
     });
 
     it('disables Set as Admin + shows the spinner while busy.admin is set', () => {
