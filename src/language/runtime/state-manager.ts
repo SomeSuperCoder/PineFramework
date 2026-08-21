@@ -1,6 +1,11 @@
 import type { ExecutionEngine } from './execution-engine.js';
 import { createSeries, type Series } from './series.js';
-import { cloneRuntimeScope } from './scope.js';
+import {
+  checkpointScope,
+  checkpointSeriesMap,
+  restoreScopeCheckpoint,
+  restoreSeriesMapCheckpoint,
+} from './scope.js';
 import type { ExecutionSnapshot } from './execution-types.js';
 
 export class StateManager {
@@ -10,10 +15,17 @@ export class StateManager {
     this.eng = engine;
   }
 
+  /**
+   * F3 perf fix: O(variables) length-based checkpoint instead of a deep scope
+   * clone. The old cloneRuntimeScope copied every variable's full series
+   * history EVERY bar — O(bars²) over a run and the dominant cost on long
+   * workloads (~44% CPU + GC pressure). Series only grow between snapshots,
+   * so rollback is expressible as truncation; see scope.ts.
+   */
   createSnapshot(): void {
     const snapshot: ExecutionSnapshot = {
-      scope: cloneRuntimeScope(this.eng.globalScope),
-      outputs: this.cloneOutputs(),
+      scopeCheckpoint: checkpointScope(this.eng.globalScope),
+      outputCheckpoint: checkpointSeriesMap(this.eng.outputs),
       shapes: [...this.eng.shapes],
       fills: [...this.eng.fills],
       lines: new Map(this.eng.lines),
@@ -62,8 +74,13 @@ export class StateManager {
       return false;
     }
     const snapshot = this.eng.snapshots[snapshotIndex]!;
-    this.eng.globalScope = snapshot.scope;
-    this.eng.outputs = snapshot.outputs;
+    // Restore into the checkpoint's own scope/output objects, then reassign —
+    // mirrors the old clone-and-reassign rollback semantics exactly (including
+    // forming-candle's post-checkpoint globalScope replacement).
+    restoreScopeCheckpoint(snapshot.scopeCheckpoint);
+    restoreSeriesMapCheckpoint(snapshot.outputCheckpoint);
+    this.eng.globalScope = snapshot.scopeCheckpoint.scope;
+    this.eng.outputs = snapshot.outputCheckpoint.map;
     this.eng.shapes = snapshot.shapes;
     this.eng.fills = snapshot.fills;
     this.eng.lines = new Map(snapshot.lines);

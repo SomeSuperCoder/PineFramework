@@ -1,7 +1,7 @@
 import type { Decimal } from 'decimal.js';
 import type { PineValue } from '../types/na.js';
 import type { Series } from './series.js';
-import type { RuntimeScope } from './scope.js';
+import type { ScopeCheckpoint, SeriesMapCheckpoint } from './scope.js';
 import type { SourceSpan } from '../../common/source-location.js';
 
 /**
@@ -282,8 +282,8 @@ export interface SarStateValue {
 }
 
 export interface ExecutionSnapshot {
-  scope: RuntimeScope;
-  outputs: Map<string, Series>;
+  scopeCheckpoint: ScopeCheckpoint;
+  outputCheckpoint: SeriesMapCheckpoint;
   shapes: ShapeEntry[];
   fills: Array<{ from: string; to: string; color: string }>;
   lines: Map<number, LineEntry>;
