@@ -304,6 +304,7 @@ export function useChartData(
               { ticker: ind.symbol, interval: ind.interval },
               execResult.linefills,
               execResult.plotOverlayKeys,
+              execResult.hlines,
             );
 
             const prev = indicatorResultsRef.current.get(indId);
@@ -542,6 +543,7 @@ export function useChartData(
               : undefined,
             msg.linefills,
             msg.plotOverlayKeys,
+            msg.hlines,
           );
           indicatorResultsRef.current.set(msg.indicatorId, result);
           onIndicatorResult(msg.indicatorId, result);
@@ -623,6 +625,7 @@ export function useChartData(
           formatCtx,
           msg.linefills,
           msg.plotOverlayKeys,
+          msg.hlines,
         );
         setScriptResult(result);
       }
@@ -993,6 +996,7 @@ export function useChartData(
                   { ticker: symbol, interval },
                   seedResult.linefills,
                   seedResult.plotOverlayKeys,
+                  seedResult.hlines,
                 );
 
                 // Trim seed bar data from plot results
@@ -1137,6 +1141,7 @@ export function useChartData(
           { ticker: symbol, interval },
           result.linefills,
           result.plotOverlayKeys,
+          result.hlines,
         );
 
         if (versionRef && version !== undefined && version !== versionRef.current) return;

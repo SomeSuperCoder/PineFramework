@@ -626,7 +626,10 @@ export const ChartComponent = forwardRef<ChartComponentHandle, ChartComponentPro
         chart.setTables(allTables);
         chart.setMarkers(allShapeMarkers);
         chart.setBgColors(allBgColorsMap);
-        chart.setHLines([]);
+        // hline() records are constant per script — collect across all results
+        // (main + indicators) and feed the renderer's dotted/dashed paths.
+        const allHLines = allResults.flatMap(({ result }) => result.hlines || []);
+        chart.setHLines(allHLines);
         // Convert ScriptResult.barColors (time-keyed array with body/wick/border/offset) to
         // Map<number, CandleColorData> keyed by bar index for the chart renderer.
         const barColorsMap = new Map<number, { body?: string; wick?: string; border?: string }>();

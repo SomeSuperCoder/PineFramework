@@ -113,6 +113,8 @@ export function useBotMiniChartData(
           execResult.barColors,
           undefined, // formatContext
           execResult.linefills,
+          execResult.plotOverlayKeys,
+          execResult.hlines,
         );
         return result;
       } catch (e) {

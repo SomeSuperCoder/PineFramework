@@ -115,12 +115,19 @@ export class PlotSeriesManager {
 
   getNonOverlayPaneCount(): number {
     const paneIndices = new Set<number>();
+    let maxPaneIndex = -1;
     for (const [, handle] of this.plotSeries) {
       if (handle.paneIndex !== undefined) {
         paneIndices.add(handle.paneIndex);
+        if (handle.paneIndex > maxPaneIndex) maxPaneIndex = handle.paneIndex;
       }
     }
-    return Math.max(paneIndices.size, this.manualNonOverlayCount);
+    // The highest assigned pane index bounds the pane count from below:
+    // an all-overlay indicator added BEFORE a normal one claims the manual
+    // count (manual=1) while the normal indicator lands on paneIndex 1 —
+    // paneIndices.size (1) and manual (1) both under-count. Deriving from
+    // maxPaneIndex+1 guarantees every assigned pane is allocated.
+    return Math.max(paneIndices.size, this.manualNonOverlayCount, maxPaneIndex + 1);
   }
 
   private checkLayoutChange(): void {

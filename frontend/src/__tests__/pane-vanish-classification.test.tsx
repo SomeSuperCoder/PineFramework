@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { ChartComponent } from '../components/ChartComponent';
+import { PlotSeriesManager } from '../chart/plot-series-manager';
 import type { ScriptResult } from '../types';
 
 /**
@@ -52,8 +53,20 @@ function supertrendResult(overlayPlotTitles?: string[]): ScriptResult {
   return {
     overlay: false,
     plots: [
-      { title: 'Up Trend', data: [{ time: 1, value: 1 }], color: '#089981', lineWidth: 1, type: 'line' },
-      { title: 'Down Trend', data: [{ time: 1, value: 1 }], color: '#f23645', lineWidth: 1, type: 'line' },
+      {
+        title: 'Up Trend',
+        data: [{ time: 1, value: 1 }],
+        color: '#089981',
+        lineWidth: 1,
+        type: 'line',
+      },
+      {
+        title: 'Down Trend',
+        data: [{ time: 1, value: 1 }],
+        color: '#f23645',
+        lineWidth: 1,
+        type: 'line',
+      },
     ],
     shapes: [],
     lines: [],
@@ -121,12 +134,52 @@ describe('supertrend-3d pane survival across WS execution_result (pane-vanish re
       />,
     );
     // Pre-fix, the WS serializer omitted the keys → overlayPlotTitles undefined.
-    rerender(
-      <ChartComponent
-        {...baseProps}
-        indicatorResults={wsReplacedResult(undefined)}
-      />,
-    );
+    rerender(<ChartComponent {...baseProps} indicatorResults={wsReplacedResult(undefined)} />);
     expect(manualCountMock).toHaveBeenLastCalledWith(0);
+  });
+});
+
+describe('pane allocation ordering — all-overlay added BEFORE a normal indicator', () => {
+  /**
+   * Regression: [all-overlay, normal] under-allocates panes.
+   * The all-overlay indicator (supertrend-3d) claims the manual count
+   * (manual=1); the normal indicator is assigned paneIndex 1. Pre-fix,
+   * getNonOverlayPaneCount returned max(paneIndices.size=1, manual=1)=1 —
+   * only pane 0 allocated, so the normal indicator's series at paneIndex 1
+   * never rendered. The count must also derive from the highest pane index
+   * actually assigned.
+   *
+   * NOTE: this exercises PlotSeriesManager directly — the component-level
+   * tests above mock `../chart`, so they never reach the manager where the
+   * allocation decision lives.
+   */
+  it('[all-overlay, normal] → pane count = 2 (maxPaneIndex+1 floor)', () => {
+    const manager = new PlotSeriesManager();
+    // supertrend-3d first: force-overlay plots, no paneIndex, manual count 1
+    manager.addPlotSeries('Up Trend', {}, true, undefined);
+    manager.addPlotSeries('Down Trend', {}, true, undefined);
+    manager.setManualNonOverlayCount(1);
+    // normal indicator second: lands on paneIndex 1
+    manager.addPlotSeries('RSI', {}, false, 1);
+
+    expect(manager.getNonOverlayPaneCount()).toBe(2);
+  });
+
+  it('[normal, all-overlay] → 1 pane is correct (normal rides the main pane)', () => {
+    const manager = new PlotSeriesManager();
+    manager.addPlotSeries('RSI', {}, false, 0);
+    manager.addPlotSeries('Up Trend', {}, true, undefined);
+    manager.addPlotSeries('Down Trend', {}, true, undefined);
+    manager.setManualNonOverlayCount(1);
+
+    expect(manager.getNonOverlayPaneCount()).toBe(1);
+  });
+
+  it('overlays only → count stays at manual (no phantom pane)', () => {
+    const manager = new PlotSeriesManager();
+    manager.addPlotSeries('Up Trend', {}, true, undefined);
+    manager.setManualNonOverlayCount(0);
+
+    expect(manager.getNonOverlayPaneCount()).toBe(0);
   });
 });

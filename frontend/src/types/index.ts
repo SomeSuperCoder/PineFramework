@@ -127,6 +127,15 @@ export interface LinefillData {
   paneIndex?: number;
 }
 
+/** hline() record — constant horizontal line (mirrors contracts HLineData). */
+export interface HLineData {
+  title?: string;
+  price: number;
+  color: string;
+  style?: 'solid' | 'dotted' | 'dashed';
+  width?: number;
+}
+
 export interface ScriptResult {
   overlay: boolean;
   plots: PlotData[];
@@ -135,6 +144,8 @@ export interface ScriptResult {
   boxes: BoxData[];
   labels: LabelData[];
   tables: TableData[];
+  /** hline() records — constant horizontal lines (empty unless the script calls hline). */
+  hlines?: HLineData[];
   bgcolor?: { time: number; color: string }[];
   barcolor?: { time: number; color: string }[];
   fills?: FillData[];

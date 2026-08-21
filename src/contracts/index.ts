@@ -186,6 +186,16 @@ export interface AlertTriggerData {
   timestamp: number;
 }
 
+/** hline() record — constant horizontal line. Mirrors engine HLineEntry structurally (RULE 4: no imports). */
+export interface HLineData {
+  /** Pine hline title (default "hline_N"). Not emitted by current mappers — kept for forward-compat. */
+  title?: string;
+  price: number;
+  color: string;
+  style?: 'solid' | 'dotted' | 'dashed';
+  width?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Shared payload fields — the WIRE surface common to WS messages and REST
 // ---------------------------------------------------------------------------
@@ -242,6 +252,8 @@ export interface ExecutionResultPayloadFields {
   tables: TableData[];
   alertConditions: AlertConditionData[];
   alertTriggers: AlertTriggerData[];
+  /** hline() records — constant per script run; identical on every message, so the diff merge skips them (static). */
+  hlines: HLineData[];
 
   // ── Frontend Lead carve-out — optional on BOTH union members (only the
   //    collection fields above are required). Six existing frontend callers
@@ -321,6 +333,7 @@ export interface ExecutionResultMessageInput {
   tables?: TableData[];
   alertConditions?: AlertConditionData[];
   alertTriggers?: AlertTriggerData[];
+  hlines?: HLineData[];
   barTimestamps?: number[];
   barIndex?: number;
   formingCandle?: boolean;
@@ -373,6 +386,7 @@ export interface FieldSemanticsMap {
   boxes: FieldSemantics;
   tables: FieldSemantics;
   alertTriggers: FieldSemantics;
+  hlines: FieldSemantics;
 }
 
 /**
@@ -410,6 +424,9 @@ export const FIELD_SEMANTICS: FieldSemanticsMap = {
   barColors: { kind: 'diff', merge: 'tail-merge' },
   outputs: { kind: 'diff', merge: 'outputs-append-update' },
   tables: { kind: 'full', merge: 'replace' },
+  // hlines are constant per script run — static like hiddenPlotKeys: the diff
+  // merge intentionally skips them (no registered strategy needed).
+  hlines: { kind: 'static', merge: 'replace' },
 };
 
 // ---------------------------------------------------------------------------
@@ -478,6 +495,7 @@ export function normalizeExecutionResultMessage(
     tables: copyArray(msg.tables),
     alertConditions: copyArray(msg.alertConditions),
     alertTriggers: copyArray(msg.alertTriggers),
+    hlines: copyArray(msg.hlines),
     barTimestamps: copyOptionalArray(msg.barTimestamps),
     barIndex: msg.barIndex,
     formingCandle: msg.formingCandle,

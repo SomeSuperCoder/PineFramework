@@ -171,6 +171,7 @@ export function buildScriptResult(
   formatContext?: { ticker?: string; interval?: string },
   linefills?: ExecutionResultMessage['linefills'],
   plotOverlayKeys?: string[],
+  hlines?: ExecutionResultMessage['hlines'],
 ): ScriptResult {
   const getTimestamp = (i: number): number | undefined => {
     if (barTimestamps && i < barTimestamps.length) return barTimestamps[i]!;
@@ -268,6 +269,7 @@ export function buildScriptResult(
     labels: mapLabels(labels),
     fills: mapFills(fills),
     linefills: linefills || [],
+    hlines: hlines || [],
     fillColorData: transformedFillColorData,
     plotColors: plotColors || {},
     strategyMarkers: mapStrategyMarkers(strategyMarkers),
