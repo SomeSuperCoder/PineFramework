@@ -1,4 +1,8 @@
-import { BacktestResults } from './BacktestResults';
+// recharts-heavy; lazy so the chart library stays out of the initial bundle.
+const BacktestResults = lazy(() =>
+  import('./BacktestResults').then((m) => ({ default: m.BacktestResults })),
+);
+import { lazy, Suspense } from 'react';
 import { ProgressBar } from './ProgressBar';
 import type { BacktestStatusResponse, BacktestResultResponse } from '../types';
 import {
@@ -69,7 +73,9 @@ export function StrategyResultsPopup({ isOpen, onClose, status, progress, phase,
             </div>
           )}
           {status === 'completed' && result && (
-            <BacktestResults result={result} jobId={jobId} />
+            <Suspense fallback={null}>
+              <BacktestResults result={result} jobId={jobId} />
+            </Suspense>
           )}
         </div>
       </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { ChartComponent, type ChartComponentHandle } from './components/ChartComponent';
 import { DashboardToolbar } from './components/DashboardToolbar';
 import { CodeEditor } from './components/CodeEditor';
@@ -9,7 +9,12 @@ import { TelegramConfigPanel } from './components/TelegramConfigPanel';
 import { QuickAdderPopup } from './components/QuickAdderPopup';
 import { StrategyConflictDialog } from './components/StrategyConflictDialog';
 import { ControlPanel, type PanelId } from './components/ControlPanel';
-import { LandingPage } from './components/Landing/LandingPage';
+// Landing is code-split: pullcord, feral-blob, recharts-based landing charts and
+// all landing-only code load on demand. App users never download the landing;
+// new users get it as an async chunk behind a Suspense boundary.
+const LandingPage = lazy(() =>
+  import('./components/Landing/LandingPage').then((m) => ({ default: m.LandingPage })),
+);
 import { useLandingGate } from './hooks/useLandingGate';
 import { useChartData } from './hooks/useChartData';
 import { useBacktest } from './hooks/useBacktest';
@@ -424,7 +429,11 @@ function App() {
   // mutually exclusive — switching unmounts the other. The ControlPanel (and
   // its overlays) render only in the app view.
   if (view === 'landing') {
-    return <LandingPage onGetStarted={enterApp} />;
+    return (
+      <Suspense fallback={null}>
+        <LandingPage onGetStarted={enterApp} />
+      </Suspense>
+    );
   }
 
   return (

@@ -426,7 +426,7 @@ describe('Backtest Flow Integration', () => {
       expect(screen.getByText(/Backtest failed/)).toBeInTheDocument();
     });
 
-    it('shows results when status is completed', () => {
+    it('shows results when status is completed', async () => {
       render(
         <StrategyResultsPopup
           isOpen={true}
@@ -438,7 +438,8 @@ describe('Backtest Flow Integration', () => {
           error={null}
         />
       );
-      expect(screen.getByText('Net Profit')).toBeInTheDocument();
+      // BacktestResults is lazy (bundle split) — await the async chunk load.
+      expect(await screen.findByText('Net Profit')).toBeInTheDocument();
     });
 
     it('calls onClose when close button is clicked', async () => {

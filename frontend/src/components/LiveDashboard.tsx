@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import type { BotStatusSnapshot, WalletInfo, LogEntry } from '../types/bot';
 import { ChaosModeWarning } from './ChaosModeWarning';
 import { TradeHistoryTab } from './TradeHistoryTab';
-import { StatisticsTab } from './StatisticsTab';
+// recharts-heavy; lazy so the chart library stays out of the initial bundle.
+const StatisticsTab = lazy(() =>
+  import('./StatisticsTab').then((m) => ({ default: m.StatisticsTab })),
+);
 import type { TradeRecord } from '../types/trade';
 import type {
   ChaosSignalRecord,
@@ -514,11 +517,13 @@ export function LiveDashboard({
 
         {activeTab === 'stats' && (
           <FadeIn key="stats" className="flex-1 overflow-auto p-4">
-            <StatisticsTab
-              backendUrl={backendUrl}
-              liveTrades={liveTrades}
-              reconnectEpoch={connectionEpoch}
-            />
+            <Suspense fallback={null}>
+              <StatisticsTab
+                backendUrl={backendUrl}
+                liveTrades={liveTrades}
+                reconnectEpoch={connectionEpoch}
+              />
+            </Suspense>
           </FadeIn>
         )}
       </div>
@@ -729,11 +734,13 @@ export function LiveDashboard({
 
       {activeTab === 'stats' && (
         <FadeIn key="stats" style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-          <StatisticsTab
-            backendUrl={backendUrl}
-            liveTrades={liveTrades}
-            reconnectEpoch={connectionEpoch}
-          />
+          <Suspense fallback={null}>
+            <StatisticsTab
+              backendUrl={backendUrl}
+              liveTrades={liveTrades}
+              reconnectEpoch={connectionEpoch}
+            />
+          </Suspense>
         </FadeIn>
       )}
 

@@ -477,4 +477,4 @@ The project is OpenSpec-managed — see `openspec/` for the change workflow and 
 
 ## License
 
-**MIT (declared in `package.json`)** — the actual **`LICENSE` file is pending**. This is a known gap; the license declaration should not be treated as legally binding until the file ships. If you need licensing certainty before using or redistributing the project, ask the maintainers.
+**MIT** — shipped as the [`LICENSE`](LICENSE) file at the repo root (© 2026 SomeSuperCoder).
