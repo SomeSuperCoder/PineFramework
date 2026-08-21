@@ -278,8 +278,8 @@ export function createExecuteRouter(
           // engine's ExecutionResult.error is an EngineError OBJECT
           // (message/span/barIndex/stack) that the REST mapper serializes as-is;
           // the contract types error?: string. Wire-format invariance wins — the
-          // object stays. Same for version: REST emits `version ?? null` while WS
-          // emits `version ?? undefined` — a deliberate, preserved divergence.
+          // object stays. Version follows the unified wire convention: both
+          // transports emit `version ?? null` when version is missing.
           error: result.error as unknown as string | undefined,
           version: result.version ?? null,
           overlay: result.overlay,

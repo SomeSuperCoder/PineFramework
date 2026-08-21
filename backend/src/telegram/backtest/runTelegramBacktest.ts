@@ -58,6 +58,8 @@ export interface TelegramBacktestParams {
   commissionMethodSettings?: BacktestCommissionMethodSettings;
   /** Optional initial capital (CLI default is 10000 when omitted). */
   initialCapital?: number;
+  /** Optional bar-cap override (CLI --max-bars parity); omitted → pipeline MAX_BARS default. */
+  maxBars?: number;
 }
 
 /** Injected infrastructure (architecture law D: inject, don't instantiate). */
@@ -189,11 +191,13 @@ export async function runTelegramBacktest(
     return failure('DATA_FETCH_FAILED', 'No bar data available for the requested range.');
   }
   // Pre-validate BEFORE the live-fee fetch and the engine: a too-large range is
-  // a user fix, not a run failure — the wizard displays it directly.
-  if (bars.length > MAX_BARS) {
+  // a user fix, not a run failure — the wizard displays it directly. The cap is
+  // the caller's optional override, else the pipeline default (CLI --max-bars parity).
+  const effectiveMaxBars = params.maxBars ?? MAX_BARS;
+  if (bars.length > effectiveMaxBars) {
     return failure(
       'TOO_MANY_BARS',
-      `Too many bars (${bars.length}). Maximum is ${MAX_BARS}. Use a shorter date range or a larger timeframe.`,
+      `Too many bars (${bars.length}). Maximum is ${effectiveMaxBars}. Use a shorter date range or a larger timeframe.`,
     );
   }
 
@@ -217,6 +221,10 @@ export async function runTelegramBacktest(
   const pipelineResult = await runBacktestPipeline({
     script: entry.source,
     bars,
+    // CLI parity: forward the wizard's timeframe so `timeframe.*` builtins
+    // resolve identically, plus the optional bar-cap override.
+    timeframe: params.timeframe,
+    maxBars: params.maxBars,
     configOverride: Object.keys(override).length > 0 ? override : undefined,
     onWarning: collector.onWarning,
   });

@@ -309,9 +309,10 @@ export class FormingCandleManager {
     const payload: ExecutionResultMessageInput = {
       success: result.success,
       error: toErrorMessage(result.error),
-      // DRIFT (documented, not normalized this wave — Backend Lead):
-      // WS emits `version ?? result.version` while REST emits
-      // `version ?? null`. Deliberate preserved divergence.
+      // Wire convention (unified): both transports emit null when version
+      // is missing — the old WS `?? undefined` vs REST `?? null` split is
+      // gone. This site prefers the live session version first, then the
+      // engine result (data layering, not a convention drift).
       version: this.version ?? result.version,
       overlay: result.overlay,
       outputs,
@@ -416,10 +417,9 @@ export class FormingCandleManager {
     const payload: ExecutionResultMessageInput = {
       success: result.success,
       error: toErrorMessage(result.error),
-      // DRIFT (documented, not normalized this wave — Backend Lead):
-      // WS diff emits `version ?? undefined` while REST emits
-      // `version ?? null`. Deliberate preserved divergence.
-      version: this.version ?? undefined,
+      // Wire convention (unified): WS and REST both emit null when version
+      // is missing — the old `?? undefined` divergence is gone.
+      version: this.version ?? null,
       overlay: result.overlay,
       outputs,
       plotColors: result.diffPlotColors ?? {},

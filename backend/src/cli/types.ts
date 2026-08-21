@@ -1,4 +1,5 @@
 import type { ResolvedDateRange } from '../backtest-dates.js';
+import { getTradablePairs } from 'pine-framework';
 import type { StrategyConfig, BacktestWarning } from 'pine-framework';
 
 export type CliCommissionMethod = 'jupiter_ultra' | 'jupiter_manual';
@@ -98,7 +99,13 @@ export interface BacktestOutput {
 
 export const VALID_TIMEFRAMES = ['1', '3', '5', '15', '30', '60', '120', '240', 'D', 'W', 'M'];
 
-export const DEFAULT_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT'];
+// WHY derived, not hardcoded: token-registry.ts is the SSOT for tradable pairs
+// ("No other file should hardcode ... symbol lists"). Deriving keeps the CLI
+// default in lockstep with the registry — new registry entries (e.g. the
+// USDC/xStock pairs) join the default set automatically instead of drifting
+// stale behind a duplicated literal. Spread copies the registry's readonly
+// array so this alias stays a safe mutable `string[]`-compatible value.
+export const DEFAULT_SYMBOLS = [...getTradablePairs()];
 
 const DAYS_BACK_BY_TIMEFRAME: Record<string, number> = {
   '1': 3,
