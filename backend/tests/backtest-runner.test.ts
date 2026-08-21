@@ -169,7 +169,7 @@ describe('runBacktestPipeline — timeframe forwarding into the engine', () => {
 // LATER same-month point overwrite the month's opening return. `key in`
 // lookup fixes it — a month opening at exactly 0% must be preserved.
 describe('computeMonthlyReturnsRaw — first-write-wins per month', () => {
-  const DAY = 24 * 60 * 60 * 1000;
+
   // 2023-11-01T00:00:00Z, 2023-11-15, 2023-11-30 (same month), 2023-12-01
   const t = (iso: string) => new Date(iso).getTime();
 

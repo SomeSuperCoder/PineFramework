@@ -81,8 +81,10 @@ function makeHarness(opts: {
   const feature = new TelegramBotFeature({
     store,
     stats:
+      // Harness stores a partial stub; TelegramBotFeature's contract wants the
+      // full service, so the stored stub is asserted here.
       opts.stats !== undefined
-        ? opts.stats
+        ? (opts.stats as StatsService)
         : ({
             getSessionSummary: vi.fn(() => ({
               totalTrades: 0,

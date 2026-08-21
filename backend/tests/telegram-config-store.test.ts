@@ -18,7 +18,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   TelegramConfigStore,
   NOTIFICATION_TYPES,
-  type TelegramData,
 } from '../src/store/TelegramConfigStore.js';
 
 function tmpFile(): string {

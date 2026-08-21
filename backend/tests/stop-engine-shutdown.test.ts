@@ -158,7 +158,7 @@ describe('stopEngineOnShutdown (Group-9 signal handler, exported seam)', () => {
     const { engine, stop } = makeEngine('Running');
     stop.mockResolvedValue(undefined);
 
-    await stopEngineOnShutdown(engine as EngineArg);
+    await stopEngineOnShutdown(engine as unknown as EngineArg);
 
     expect(stop).toHaveBeenCalledTimes(1);
   });
@@ -172,7 +172,7 @@ describe('stopEngineOnShutdown (Group-9 signal handler, exported seam)', () => {
     async (state) => {
       const { engine, stop } = makeEngine(state);
 
-      await stopEngineOnShutdown(engine as EngineArg);
+      await stopEngineOnShutdown(engine as unknown as EngineArg);
 
       expect(stop).not.toHaveBeenCalled();
     },
@@ -183,7 +183,7 @@ describe('stopEngineOnShutdown (Group-9 signal handler, exported seam)', () => {
     stop.mockRejectedValue(new Error('close positions failed'));
 
     // The whole body is try/catch — the process-exit path proceeds.
-    await expect(stopEngineOnShutdown(engine as EngineArg)).resolves.toBeUndefined();
+    await expect(stopEngineOnShutdown(engine as unknown as EngineArg)).resolves.toBeUndefined();
     expect(stop).toHaveBeenCalledTimes(1);
   });
 });

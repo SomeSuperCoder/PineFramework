@@ -66,9 +66,10 @@ import type { ExecutionResult, PositionInfo } from '../../../src/trading/live-st
 import type { CloseResult } from '../../../src/trading/close-manager.js';
 import type { TradeSignal as SchedulerTradeSignal } from '../../../src/trading/scheduler.js';
 
-/** Engine with the private seams the repro drives (same cast convention as the
- *  F3 close-attempt suite in tests/unit/trading/bot-engine.test.ts). */
-type EngineWithSeams = BotEngine & {
+/** Structural seam view — NOT an intersection with BotEngine: the engine
+ *  declares these members private, so `BotEngine & {...}` collapses to never.
+ *  A plain structural type keeps the same cast convention as the F3 suite. */
+type EngineWithSeams = {
   notifyPositionResult: (signal: SchedulerTradeSignal, result: ExecutionResult) => void;
   handlePositionClosed: (position: PositionInfo, result: CloseResult) => void;
 };

@@ -237,7 +237,7 @@ describe('MarkdownV2 escaping in TelegramService', () => {
     let lastMessage = '';
     const subscribers: Array<{ chatId: number; called: boolean }> = [];
 
-    const origSendMessage = service.sendMessage.bind(service);
+
     service.sendMessage = async (chatId: number, message: string) => {
       subscribers.push({ chatId, called: true });
       lastMessage = message;

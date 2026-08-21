@@ -67,6 +67,7 @@ function makeCtx(data: string, reply = vi.fn(), editMessage = vi.fn()) {
     reply,
     editMessage,
     answerCallback: vi.fn(),
+    callbackQueryId: 'cq-test',
   };
   return { cb, reply, editMessage };
 }
@@ -184,7 +185,9 @@ describe('BacktestWizard — session lifecycle', () => {
     vi.mocked(runTelegramBacktest).mockResolvedValue({
       ok: true,
       result: {
-        metrics: { totalTrades: 3 },
+        // Stub narrowed to the field the card renderer consumes; full
+        // BacktestApiMetrics shape is covered by backtest API tests.
+        metrics: { totalTrades: 3 } as never,
         equityCurve: [], drawdownCurve: [], trades: [], orders: [], equityPoints: [], monthlyReturns: {},
         buyHoldReturn: 5, barCount: 720, effectiveConfig: {} as never, warnings: [],
       },
@@ -236,7 +239,7 @@ describe('BacktestWizard — session lifecycle', () => {
       expect.any(Buffer),
       expect.stringContaining('EMA Cross'),
     );
-    expect(onPhoto.mock.calls[0][2]).toContain('BTCUSDT 60m');
+    expect((onPhoto.mock.calls[0] as unknown[])[2]).toContain('BTCUSDT 60m');
 
     // Done message replaces the running edit; session is cleaned → replay ignored.
     await vi.waitFor(() =>
@@ -458,7 +461,9 @@ describe('BacktestWizard — run outcomes', () => {
     vi.mocked(runTelegramBacktest).mockResolvedValue({
       ok: true,
       result: {
-        metrics: { totalTrades: 3 },
+        // Stub narrowed to the field the card renderer consumes; full
+        // BacktestApiMetrics shape is covered by backtest API tests.
+        metrics: { totalTrades: 3 } as never,
         equityCurve: [], drawdownCurve: [], trades: [], orders: [], equityPoints: [], monthlyReturns: {},
         buyHoldReturn: 5, barCount: 720, effectiveConfig: {} as never, warnings: [],
       },

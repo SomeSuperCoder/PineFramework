@@ -112,7 +112,7 @@ const FIXTURE_DIR = path.join(__dirname, 'fixtures');
 const API_FIXTURE = path.join(FIXTURE_DIR, 'backtest-api-result.golden.json');
 const CLI_FIXTURE = path.join(FIXTURE_DIR, 'backtest-cli-metrics.golden.json');
 
-function loadFixture(filePath: string): unknown {
+function loadFixture(filePath: string): object | any[] {
   return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 }
 
@@ -264,7 +264,7 @@ describe('backtest-config glue unit tests (task 5.1)', () => {
     });
 
     it('jupiter method with successful fetch sets dexFeeBps + solPriceUsd on commissionMethodSettings', async () => {
-      vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 42 });
+      vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 42, source: 'api' });
       const override = { commissionMethod: 'jupiter_ultra' } as Partial<StrategyConfig>;
       const res = await applyDexFee('BTCUSDT', override);
       const cms = res.commissionMethodSettings as unknown as Record<string, unknown>;
@@ -516,7 +516,7 @@ describe('producer parity — A: date-range semantics (days-back)', () => {
     const script = writeScriptFile();
     tmpDir = script.tmpDir;
     scriptFile = script.scriptFile;
-    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5 });
+    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5, source: 'api' });
 
     const srv = await startApiServer();
     server = srv.server;
@@ -603,7 +603,7 @@ describe('producer parity — B: producer payload parity (real flows)', () => {
     const script = writeScriptFile();
     tmpDir = script.tmpDir;
     scriptFile = script.scriptFile;
-    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5 });
+    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5, source: 'api' });
 
     const srv = await startApiServer();
     server = srv.server;
@@ -688,7 +688,7 @@ describe('producer parity — symmetric explicit config (regression lock)', () =
   beforeAll(async () => {
     const script = writeScriptFile();
     tmpDir = script.tmpDir;
-    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5 });
+    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5, source: 'api' });
 
     const srv = await startApiServer();
     server = srv.server;
@@ -766,7 +766,7 @@ describe('producer parity — D: warnings-set parity (M5/F3a/F3b review gaps)', 
   beforeAll(async () => {
     const script = writeScriptFile();
     tmpDir = script.tmpDir;
-    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5 });
+    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5, source: 'api' });
 
     // Warm the fee cache for WARN_SYMBOL through the caller-side path (a direct
     // applyDexFee with a successful mocked live fetch). Both producers then
@@ -856,7 +856,7 @@ describe('CLI partial-failure exit code (reviewer F5)', () => {
     tmpDir = script.tmpDir;
     scriptFile = script.scriptFile;
     // BTCUSDT is cache-warm from earlier suites; keep the fetch mock sane.
-    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5 });
+    vi.mocked(fetchDexFeeBps).mockResolvedValue({ dexFeeBps: 5, source: 'api' });
   });
 
   afterAll(() => {

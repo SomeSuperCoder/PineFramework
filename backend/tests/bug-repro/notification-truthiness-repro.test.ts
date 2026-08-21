@@ -131,7 +131,7 @@ function cleanHarness(h: Harness): void {
   try { fs.unlinkSync(h.filePath); } catch { /* ignore */ }
 }
 
-const toggles = NOTIFICATION_TYPES.filter((t) => t !== 'all' && t !== 'none');
+const toggles = NOTIFICATION_TYPES.filter((t) => (t as string) !== 'all' && (t as string) !== 'none');
 
 describe.skipIf(!runKnownBugs)('REPRO — fresh PRIVATE chat: bot menu must agree with raw store state', () => {
   let h: Harness;

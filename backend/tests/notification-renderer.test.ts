@@ -8,10 +8,11 @@
 import { describe, it, expect } from 'vitest';
 import { renderNotification } from '../src/telegram/notification-renderer.js';
 import type { TradingNotificationData } from 'pine-framework/trading/telegram-bot';
+import { BotState } from 'pine-framework';
 
 const CONFIG = {
   strategySource: '//@version=5',
-  dex: 'jupiter-swap',
+  dex: 'jupiter-swap' as const,
   pairs: [{ symbol: 'SOL/USDC', timeframe: '1m' }],
   risk: { maxDailyLoss: 100, dailyLossTimezone: 'UTC', closeOnLoss: false },
 };
@@ -26,7 +27,7 @@ const TRADE = {
   size: 10,
   fees: 0.1,
   realizedPnl: 10.5,
-  dex: 'jupiter-swap',
+  dex: 'jupiter-swap' as const,
   openedAt: 1000,
   closedAt: 2000,
 };
@@ -40,7 +41,7 @@ const CASES: Array<{ kind: Parameters<typeof renderNotification>[0]; data: Tradi
   { kind: 'daily_loss', data: { kind: 'daily_loss', loss: 100, maxLoss: 50 }, probe: 'Loss' },
   { kind: 'error', data: { kind: 'error', code: 'ERR', message: 'Something broke [x]' }, probe: 'ERR' },
   { kind: 'warning', data: { kind: 'warning', message: 'Low balance' }, probe: 'Low' },
-  { kind: 'state_change', data: { kind: 'state_change', from: 'Running', to: 'Error', reason: 'volatility' }, probe: 'Error' },
+  { kind: 'state_change', data: { kind: 'state_change', from: BotState.Running, to: BotState.Error, reason: 'volatility' }, probe: 'Error' },
 ];
 
 describe('renderNotification', () => {

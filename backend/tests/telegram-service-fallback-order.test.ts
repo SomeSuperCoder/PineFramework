@@ -145,7 +145,7 @@ describe('TelegramService callback fallback ordering — late-registered prefixe
 
   it('routes a late-registered prefix to its handler (fallback calls next())', async () => {
     configStore.setBotToken('dummy:test-token');
-    const lateHandler = vi.fn(async () => {});
+    const lateHandler = vi.fn(async (_ctx: unknown) => {});
     await service.start();
     // The fix's core scenario: a callback registered AFTER start() is attached
     // AFTER the fallback in the middleware chain.

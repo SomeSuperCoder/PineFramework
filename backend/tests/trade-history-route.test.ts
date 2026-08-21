@@ -22,8 +22,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createTradeHistoryRouter } from '../src/routes/trade-history.js';
-import { TradeHistoryStore } from '../../src/trading/trade-history-store.js';
+import { TradeHistoryStore as TradeHistoryStoreImpl } from '../../src/trading/trade-history-store.js';
 import type { TradeStats } from '../../src/trading/trade-history-store.js';
+// Router's factory types against the pine-framework (dist) class; type-only import avoids
+// src/dist private-field identity mismatch.
+import type { TradeHistoryStore } from 'pine-framework/trading/trade-history-store';
 import type { TradeRecord } from '../../src/trading/types.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -112,7 +115,7 @@ describe('GET /api/bot/history — happy path', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 
@@ -174,7 +177,7 @@ describe('GET /api/bot/history — filters', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 
@@ -299,7 +302,7 @@ describe('GET /api/bot/history — pagination', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 
@@ -380,7 +383,7 @@ describe('GET /api/bot/history — errors', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 
@@ -395,7 +398,7 @@ describe('GET /api/bot/history — errors', () => {
     ['abc', 'abc'],
     ['999', '999'],
     ['', 'empty-string'],
-  ])('rejects invalid limit %s → 400', async (limit, label) => {
+  ])('rejects invalid limit %s → 400', async (limit) => {
     const res = await fetch(`${baseUrl}/bot/history?limit=${limit}`);
     expect(res.status).toBe(400);
     const body = await res.json();
@@ -458,7 +461,7 @@ describe('GET /api/bot/stats — global summary', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     seedStatsStore(store);
     ({ server, baseUrl } = await startServer(() => store));
   });
@@ -508,7 +511,7 @@ describe('GET /api/bot/stats — new-style gross/fee fields (M7)', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 
@@ -549,7 +552,7 @@ describe('GET /api/bot/stats — grouped', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     seedStatsStore(store);
     ({ server, baseUrl } = await startServer(() => store));
   });
@@ -611,7 +614,7 @@ describe('GET /api/bot/stats — mode/status semantics', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     seedStatsStore(store);
     ({ server, baseUrl } = await startServer(() => store));
   });
@@ -678,7 +681,7 @@ describe('GET /api/bot/stats — errors', () => {
 
   beforeEach(async () => {
     tmpDir = mkdtempSync(join(tmpdir(), 'route-test-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: uniqueBotId() });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: uniqueBotId() }) as unknown as TradeHistoryStore;
     ({ server, baseUrl } = await startServer(() => store));
   });
 

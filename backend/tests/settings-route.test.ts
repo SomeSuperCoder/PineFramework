@@ -13,7 +13,15 @@ import express from 'express';
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { createSettingsRouter } from '../src/routes/settings.js';
+import type {
+  TelegramAdmin,
+  TelegramChat,
+  TelegramControlRequest,
+  TelegramController,
+} from '../src/store/TelegramConfigStore.js';
 
+// Mocks are typed against the REAL SettingsDeps signatures so the inferred
+// return types (undefined / never[]) don't fight mockReturnValue(...) below.
 function makeDepsDef() {
   return {
     getBotToken: vi.fn(() => ''),
@@ -22,14 +30,14 @@ function makeDepsDef() {
     setAlertPreference: vi.fn(),
     getProxy: vi.fn(() => undefined),
     setProxy: vi.fn(),
-    getAdmin: vi.fn(() => undefined),
+    getAdmin: vi.fn((): TelegramAdmin | undefined => undefined),
     setAdmin: vi.fn(),
-    getControllers: vi.fn(() => []),
+    getControllers: vi.fn((): TelegramController[] => []),
     addController: vi.fn(() => true),
     removeController: vi.fn(() => true),
-    getRequests: vi.fn(() => []),
+    getRequests: vi.fn((): TelegramControlRequest[] => []),
     removeRequest: vi.fn(() => true),
-    getChats: vi.fn(() => []),
+    getChats: vi.fn((): TelegramChat[] => []),
     setChatLanguage: vi.fn(),
     setMemberSubscriptions: vi.fn(),
     linkChat: vi.fn(() => true),
@@ -61,7 +69,7 @@ describe('GET /settings/telegram', () => {
 
   it('returns the full telegram snapshot', async () => {
     deps.getBotToken.mockReturnValue('tok');
-    deps.getAdmin.mockReturnValue({ userId: 7, username: 'admin' });
+    deps.getAdmin.mockReturnValue({ userId: 7, username: 'admin', configuredAt: 0 });
     deps.getControllers.mockReturnValue([{ userId: 8, username: 'op', grantedAt: 1, grantedBy: 7 }]);
     deps.getRequests.mockReturnValue([{ userId: 9, username: 'req', firstName: 'R', requestedAt: 2 }]);
     deps.getChats.mockReturnValue([{ chatId: 5, type: 'private', linked: true, language: 'en', memberSubscriptions: {} }]);
@@ -178,7 +186,7 @@ describe('controllers & requests endpoints', () => {
   });
 
   it('POST approve moves a request to a controller, reusing the username', async () => {
-    deps.getAdmin.mockReturnValue({ userId: 7, username: 'admin' });
+    deps.getAdmin.mockReturnValue({ userId: 7, username: 'admin', configuredAt: 0 });
     const res = await fetch(`${baseUrl}/settings/telegram/requests/9/approve`, { method: 'POST' });
     expect(res.status).toBe(200);
     expect(deps.removeRequest).toHaveBeenCalledWith(9);

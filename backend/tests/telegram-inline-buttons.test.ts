@@ -16,7 +16,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { TelegramConfigStore, NOTIFICATION_TYPES } from '../src/store/TelegramConfigStore.js';
 import { TelegramBotFeature, type CallbackContext } from '../src/telegram/TelegramBotFeature.js';
 
@@ -800,7 +800,7 @@ describe('handleStart', () => {
     const markup = extra as { reply_markup: { inline_keyboard: unknown[][] } };
     expect(markup.reply_markup.inline_keyboard).toBeDefined();
     const allCallbackData = markup.reply_markup.inline_keyboard.flat().map(
-      (b: { callback_data: string }) => b.callback_data,
+      (b) => (b as { callback_data: string }).callback_data,
     );
     // Post-fix dashboard: ONE "Manage notifications" button (notif:menu)
     // replaces the old separate Sub/Unsub buttons; Stop emits stop:ask and a

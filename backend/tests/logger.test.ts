@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 
 // vi.mock factories are hoisted ABOVE top-level declarations, so anything they
 // close over must live in vi.hoisted (initialized before the mocks run).
@@ -61,7 +61,7 @@ vi.mock('pino', () => {
   );
   // The real level transform maps numeric pino levels via pino.levels.labels —
   // the mock must expose them or createLevelTransform throws at write time.
-  pinoMock.levels = {
+  (pinoMock as Mock & { levels: unknown }).levels = {
     labels: { 10: 'trace', 20: 'debug', 30: 'info', 40: 'warn', 50: 'error', 60: 'fatal' },
   };
   return { __esModule: true, default: pinoMock };
@@ -80,9 +80,15 @@ vi.mock('pino/file', () => ({
 import pino from 'pino';
 import { logger, createBackendLogger } from '../src/utils/logger.js';
 
+// The imported `pino` is the real module's type, but vi.mock replaced it with
+// our vi.fn — surface the mock API through one typed alias (SSOT for casts).
+const pinoFn = pino as unknown as Mock & {
+  mock: Mock['mock'];
+};
+
 describe('backend logger', () => {
   // Capture the pino instance created during module load
-  const pinoInstance = pino.mock.results[0].value;
+  const pinoInstance = pinoFn.mock.results[0]!.value;
 
   describe('logger instance', () => {
     it('has info, warn, error, debug methods (PineLogger-compatible)', () => {
@@ -123,7 +129,7 @@ describe('backend logger', () => {
 
   describe('redaction config', () => {
     it('configures pino redact for sensitive fields', () => {
-      const pinoConfig = pino.mock.calls[0][0];
+      const pinoConfig = pinoFn.mock.calls[0]![0];
       expect(pinoConfig.redact).toBeDefined();
       expect(pinoConfig.redact.paths).toContain('req.headers.authorization');
       expect(pinoConfig.redact.paths).toContain('req.headers.cookie');
@@ -156,7 +162,7 @@ describe('backend logger', () => {
     });
 
     it('uses messageKey "message" and ISO-8601 timestamps (not epoch ms)', () => {
-      const pinoOptions = pino.mock.calls[0][0] as {
+      const pinoOptions = pinoFn.mock.calls[0]![0] as {
         messageKey?: string;
         timestamp?: () => string;
       };
@@ -167,13 +173,13 @@ describe('backend logger', () => {
     });
 
     it('creates the file transport ALWAYS and the pretty stdout transport only in dev', () => {
-      const fileCall = pino.mock.calls[0]!;
+      const fileCall = pinoFn.mock.calls[0]!;
       // The file logger always gets a destination stream (the level transform).
       expect(fileCall[1]).toBeDefined();
       expect(typeof (fileCall[1] as { write?: unknown }).write).toBe('function');
 
-      const prettyCalls = pino.mock.calls.filter(
-        (c) => (c[0] as { transport?: unknown } | undefined)?.transport,
+      const prettyCalls = pinoFn.mock.calls.filter(
+        (c: unknown[]) => (c[0] as { transport?: unknown } | undefined)?.transport,
       );
       if (process.env.NODE_ENV === 'production') {
         // Production is file-only for aggregator ingestion.

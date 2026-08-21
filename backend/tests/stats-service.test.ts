@@ -13,7 +13,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { StatsService, type StatsGroupBy } from '../src/services/StatsService.js';
-import { TradeHistoryStore } from '../../src/trading/trade-history-store.js';
+import { TradeHistoryStore as TradeHistoryStoreImpl } from '../../src/trading/trade-history-store.js';
+// Type comes from pine-framework (dist) because StatsService's public API types against it;
+// the src/dist classes differ only by private-field declaration identity.
+import type { TradeHistoryStore } from 'pine-framework/trading/trade-history-store';
 import type { TradeRecord } from '../../src/trading/types.js';
 
 function makeTrade(overrides: Partial<TradeRecord> & { id: string; closedAt: number }): TradeRecord {
@@ -41,7 +44,7 @@ describe('StatsService', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'stats-svc-'));
-    store = new TradeHistoryStore({ baseDir: tmpDir, botId: 'stats-test' });
+    store = new TradeHistoryStoreImpl({ baseDir: tmpDir, botId: 'stats-test' }) as unknown as TradeHistoryStore;
     stats = new StatsService(store);
   });
 

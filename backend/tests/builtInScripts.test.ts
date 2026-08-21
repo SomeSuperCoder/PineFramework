@@ -43,7 +43,7 @@ describe('createBuiltInScriptsRouter', () => {
   it('returns empty array when no .pine files exist', () => {
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._status).toBe(200);
     expect(res._json.scripts).toEqual([]);
   });
@@ -54,7 +54,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._status).toBe(200);
     expect(res._json.scripts).toHaveLength(2);
   });
@@ -64,7 +64,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts[0].id).toBe('builtin_macd');
   });
 
@@ -73,7 +73,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts[0].name).toBe('My Indicator');
   });
 
@@ -82,7 +82,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts[0].type).toBe('indicator');
   });
 
@@ -91,7 +91,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts[0].type).toBe('strategy');
   });
 
@@ -101,7 +101,7 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts[0].source).toBe(source);
   });
 
@@ -111,14 +111,14 @@ describe('createBuiltInScriptsRouter', () => {
 
     const router = createBuiltInScriptsRouter(dir);
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._json.scripts).toHaveLength(1);
   });
 
   it('returns 500 when directory does not exist', () => {
     const router = createBuiltInScriptsRouter('/nonexistent/path');
     const res = mockRes();
-    router.handle(mockReq('GET', '/scripts/built-in'), res);
+    router(mockReq('GET', '/scripts/built-in') as never, res as never, () => {});
     expect(res._status).toBe(500);
     expect(res._json.error).toBeDefined();
   });

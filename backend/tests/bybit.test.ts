@@ -93,14 +93,14 @@ function assertGloballyAscending(bars: Array<{ timestamp: number }>): void {
  * returns them). The `end` cursor selects which page is served: the page whose
  * OLDEST bar (last raw row) matches the cursor.
  */
-function mockBybitKlinePages(pages: number[][][]): void {
+function mockBybitKlinePages(pages: string[][][]): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: RequestInfo | URL) => {
     const urlStr = url.toString();
     if (!urlStr.includes('/v5/market/kline')) {
       return new Response('Not Found', { status: 404 });
     }
     const endMatch = urlStr.match(/[?&]end=(\d+)/);
-    let page: number[][] | undefined;
+    let page: string[][] | undefined;
     if (!endMatch) {
       page = pages[0];
     } else {

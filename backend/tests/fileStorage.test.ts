@@ -101,7 +101,7 @@ describe('ScriptsManifestStore', () => {
 
   it('adds and retrieves entries', () => {
     const store = new ScriptsManifestStore(manifestPath);
-    const entry = store.add({
+    store.add({
       id: 'test-id',
       filename: 'test.pine',
       name: 'Test',

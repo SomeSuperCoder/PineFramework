@@ -38,7 +38,7 @@ describe('i18n dictionary parity', () => {
     ];
     for (const group of groups) {
       for (const key of group) {
-        expect(enKeys.has(key), `en must define "${key}"`).toBe(true);
+        expect(enKeys.has(key)).toBe(true);
       }
     }
     // Same sets exist in es and ru (parallel dictionaries).

@@ -129,7 +129,7 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
       body: JSON.stringify({ source, bars }),
     });
     expect(res.status, 'REST /execute must return 200').toBe(200);
-    return (await res.json()) as Record<string, unknown>;
+    return (await res.json()) as unknown as Record<string, unknown>;
   }
 
   async function wsFull(): Promise<ScriptOutputs> {
@@ -192,8 +192,8 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
 
   it('IDENTICAL REQUIRED key set across REST + WS full + WS diff — a REQUIRED key missing on one path = FAIL', async () => {
     const rest = await restExecute();
-    const full = (await wsFull()) as unknown as Record<string, unknown>;
-    const diff = (await wsDiff()) as unknown as Record<string, unknown>;
+    const full = (await wsFull()) as unknown as unknown as Record<string, unknown>;
+    const diff = (await wsDiff()) as unknown as unknown as Record<string, unknown>;
     const restKeys = REQUIRED_KEY_SET.filter((k) => k in rest).sort();
     const fullKeys = REQUIRED_KEY_SET.filter((k) => k in full).sort();
     const diffKeys = REQUIRED_KEY_SET.filter((k) => k in diff).sort();
@@ -207,7 +207,7 @@ describe('contract parity — REST vs WS full vs WS diff (shared execution-resul
 
 describe('normalizeExecutionResultMessage — the "even if empty" guarantee at the contract level', () => {
   it('an EMPTY input normalizes to the full contract key set: 18 collections filled with [] / {}, isConfirmed defaults to false (diff)', () => {
-    const out = normalizeExecutionResultMessage({}) as Record<string, unknown>;
+    const out = normalizeExecutionResultMessage({}) as unknown as Record<string, unknown>;
     expect(Object.keys(out).sort()).toEqual(CONTRACT_PAYLOAD_KEYS.slice().sort());
     expect(out.isConfirmed).toBe(false);
     for (const k of ARRAY_COLLECTION_KEYS) {
@@ -226,7 +226,7 @@ describe('normalizeExecutionResultMessage — the "even if empty" guarantee at t
       bogus: 'x',
       outputs: { p: [1, 2] },
     } as ExecutionResultMessageInput;
-    const out = normalizeExecutionResultMessage(input) as Record<string, unknown>;
+    const out = normalizeExecutionResultMessage(input) as unknown as Record<string, unknown>;
     expect('bogus' in out).toBe(false);
     expect(out.outputs).toEqual({ p: [1, 2] });
   });
