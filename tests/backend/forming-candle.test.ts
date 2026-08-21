@@ -278,8 +278,9 @@ describe('Forming Candle Computation', () => {
       const contexts = barsToContexts(bars);
       await engine.executeBars(contexts);
 
-      // plot(counter) without title creates output key 'plot'
-      const counterOutput = engine.getOutput('plot');
+      // plot(counter) without title gets a stable per-engine key 'plot_0'
+      // (resolvePlotKey — commit 8aafb6c4 replaced per-bar keys with plot_${id})
+      const counterOutput = engine.getOutput('plot_0');
       expect(counterOutput).toBeDefined();
       expect(counterOutput!.last()).toBe(5);
 
@@ -288,7 +289,7 @@ describe('Forming Candle Computation', () => {
       const result = engine.computeFormingCandle(formingCtx);
       expect(result.success).toBe(true);
 
-      const counterAfter = engine.getOutput('plot');
+      const counterAfter = engine.getOutput('plot_0');
       expect(counterAfter).toBeDefined();
       expect(counterAfter!.last()).toBe(5);
     });

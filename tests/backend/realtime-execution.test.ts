@@ -152,7 +152,7 @@ plot(counter)
       const contexts = makeContexts(5, 100, 1000000);
       await engine.executeBars(contexts);
 
-      const counterOutput = engine.getOutput('plot');
+      const counterOutput = engine.getOutput('plot_0');
       expect(counterOutput).toBeDefined();
       expect(counterOutput!.values[counterOutput!.values.length - 1]).toBe(5);
 
@@ -167,7 +167,7 @@ plot(counter)
         engine.executeRealtimeBar(newCtx);
       }
 
-      const finalOutput = engine.getOutput('plot');
+      const finalOutput = engine.getOutput('plot_0');
       expect(finalOutput).toBeDefined();
       expect(finalOutput!.values[finalOutput!.values.length - 1]).toBe(8);
     });
