@@ -654,10 +654,12 @@ if (ENABLE_TRADING_BOT) {
 
 createWSGateway(server, cache, telegramService, cancellationRegistry);
 
-// H2: bind to localhost only so the unauthenticated control-plane is not
-// reachable from other network interfaces (the frontend proxies through Vite
-// on localhost, so this is transparent to it).
-server.listen(PORT, '127.0.0.1', async () => {
+// H2: default bind to localhost so the unauthenticated control-plane is not
+// reachable from other network interfaces in local dev (the frontend proxies
+// through Vite on localhost, so this is transparent to it). Containers opt in
+// via HOST=0.0.0.0 (compose.yml) so nginx can proxy /api and /ws cross-container.
+const HOST = process.env.HOST ?? '127.0.0.1';
+server.listen(PORT, HOST, async () => {
   logger.info(`Backend server running on http://localhost:${PORT}`);
   logger.info(`WebSocket endpoint: ws://localhost:${PORT}/ws`);
   logger.info(`Data directory: ${DATA_DIR}`);

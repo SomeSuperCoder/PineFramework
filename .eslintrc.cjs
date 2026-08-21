@@ -26,6 +26,31 @@ module.exports = {
   },
   overrides: [
     {
+      // Frontend has its own tsconfig project (bundler resolution, JSX) —
+      // lint it with that project so parserOptions.project resolves types.
+      files: ['frontend/src/**/*.ts', 'frontend/src/**/*.tsx', 'frontend/e2e/**/*.ts'],
+      extends: ['plugin:@typescript-eslint/recommended'],
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+        project: './frontend/tsconfig.json',
+        tsconfigRootDir: __dirname,
+      },
+      env: {
+        browser: true,
+      },
+    },
+    {
+      // Playwright e2e specs are not part of any tsconfig "project" —
+      // lint them untyped (no type-aware rules).
+      files: ['frontend/e2e/**/*.ts'],
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+        project: false,
+      },
+    },
+    {
       files: ['tests/**/*.ts', '**/*.test.ts', '**/*.test.tsx', '**/__tests__/**'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',

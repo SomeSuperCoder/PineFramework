@@ -364,7 +364,7 @@ test.describe('backtest parity trust — user-facing acceptance', () => {
     const pageErrors: string[] = [];
     page.on('pageerror', (err) => pageErrors.push(String(err)));
 
-    await installApiMocks(page, (postBody) => ({
+    await installApiMocks(page, () => ({
       ...BASE_RESULT,
       effectiveConfig: effectiveConfigFor('jupiter_manual'),
       warnings: SUPPRESSION_AND_FEE_WARNINGS,
@@ -403,7 +403,9 @@ test.describe('backtest parity trust — user-facing acceptance', () => {
     await expect(warnings).toContainText('used the method default (25 bps)');
     // Live-fee-cache (info) renders inside the amber strip alongside the others.
     await expect(warnings).toContainText('Live fee cache');
-    await expect(warnings).toContainText('Live fee fetch returned a stale cache — using the cached rate.');
+    await expect(warnings).toContainText(
+      'Live fee fetch returned a stale cache — using the cached rate.',
+    );
 
     // Stat grid + chart + trade table still render under the strips.
     await expect(dialog.getByText('Net Profit')).toBeVisible();
@@ -515,7 +517,7 @@ test.describe('backtest parity trust — user-facing acceptance', () => {
   });
 
   test('Jupiter Ultra: commission label reads "Jupiter Ultra" in the strip', async ({ page }) => {
-    await installApiMocks(page, (postBody) => ({
+    await installApiMocks(page, () => ({
       ...BASE_RESULT,
       effectiveConfig: effectiveConfigFor('jupiter_ultra'),
       warnings: SUPPRESSION_AND_FEE_WARNINGS,
@@ -721,6 +723,8 @@ test.describe('backtest parity trust — user-facing acceptance', () => {
 
     // Evidence screenshot.
     mkdirSync(ARTIFACTS_DIR, { recursive: true });
-    await dialog.screenshot({ path: path.join(ARTIFACTS_DIR, 'parity-trust-allwin-null-metrics.png') });
+    await dialog.screenshot({
+      path: path.join(ARTIFACTS_DIR, 'parity-trust-allwin-null-metrics.png'),
+    });
   });
 });

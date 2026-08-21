@@ -35,8 +35,9 @@ describe('M2 — kindToType routes lifecycle kinds to bot_lifecycle', () => {
 });
 
 describe('H2 — backend binds to localhost only', () => {
-  it('binds server.listen to 127.0.0.1', () => {
-    expect(src).toMatch(/server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/);
+  it('binds server.listen to HOST env with 127.0.0.1 default', () => {
+    expect(src).toMatch(/const HOST = process\.env\.HOST \?\? '127\.0\.0\.1'/);
+    expect(src).toMatch(/server\.listen\(\s*PORT\s*,\s*HOST/);
   });
 });
 
