@@ -388,18 +388,25 @@ describe('WalletManager', () => {
     await expect(manager.unlock('wrong-password')).rejects.toThrow();
   }, 15000); // PBKDF2 is slow
 
-  it('should change password successfully', async () => {
+  it('should change password successfully (same as boot passphrase)', async () => {
     await manager.importWallet(seedPhrase);
     const originalPk = await manager.getPublicKey();
 
-    await manager.changePassword(passphrase, 'new-password-123');
+    await manager.changePassword(passphrase, passphrase);
     expect(await manager.getPublicKey()).toBe(originalPk);
 
     // Should work with new password
     manager.lock();
-    const pk = await manager.unlock('new-password-123');
+    const pk = await manager.unlock(passphrase);
     expect(pk).toBeTruthy();
   }, 15000); // PBKDF2 is slow
+
+  it('rejects password change to a value differing from the boot passphrase (passphrase parity guard)', async () => {
+    await manager.importWallet(seedPhrase);
+    await expect(manager.changePassword(passphrase, 'new-password-123')).rejects.toThrow(
+      'Password change rejected: the wallet password must match the bot boot passphrase'
+    );
+  });
 
   it('should fail to change password with wrong current password', async () => {
     await manager.importWallet(seedPhrase);

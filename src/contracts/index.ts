@@ -190,9 +190,32 @@ export interface AlertTriggerData {
 // Shared payload fields — the WIRE surface common to WS messages and REST
 // ---------------------------------------------------------------------------
 
+/**
+ * Wire shape of a structured execution error. The backend emits this OBJECT
+ * raw over both REST (execute.ts) and WS despite the historical string-typed
+ * API — mirrors src/language/runtime/execution-types.ts `EngineError`
+ * structurally (contracts stay import-free per RULE 4, so span is inlined).
+ */
+export interface EngineError {
+  /** Human-readable description of the error. */
+  message: string;
+  /** Source location in the original Pine Script (if available). */
+  span?: { start: { line: number; column: number; offset: number }; end: { line: number; column: number; offset: number } };
+  /** Bar index at which the error occurred (if available). */
+  barIndex?: number;
+  /** Stack trace (if available from caught Error). */
+  stack?: string;
+}
+
 export interface ExecutionResultPayloadFields {
   success: boolean;
-  error?: string;
+  /**
+   * HONEST CONTRACT: the wire carries either a legacy plain string OR the
+   * structured EngineError object (backend/src/routes/execute.ts emits the
+   * object raw). Consumers MUST pass this through normalizeEngineError()
+   * before rendering.
+   */
+  error?: string | EngineError;
   /** REST emits `version ?? null`; WS emits `version ?? undefined`. */
   version?: number | null;
   overlay: boolean;
@@ -276,7 +299,8 @@ export interface ExecuteResponse extends ExecutionResultPayloadFields {
 
 export interface ExecutionResultMessageInput {
   success?: boolean;
-  error?: string;
+  /** Legacy string OR structured EngineError object — see EngineError above. */
+  error?: string | EngineError;
   version?: number | null;
   overlay?: boolean;
   indicatorId?: string;

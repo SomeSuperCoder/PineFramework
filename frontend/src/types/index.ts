@@ -1,8 +1,4 @@
-import type {
-  JupiterManualSettings,
-  JupiterUltraSettings,
-  StrategyConfig,
-} from 'pine-framework';
+import type { JupiterManualSettings, JupiterUltraSettings, StrategyConfig } from 'pine-framework';
 
 export interface CandlestickData {
   time: number;
@@ -18,6 +14,8 @@ export interface PineScriptError {
   message: string;
   line?: number;
   column?: number;
+  /** 0-based bar index the engine reported (from EngineError), when available. */
+  barIndex?: number;
 }
 
 export interface PlotData {
@@ -29,7 +27,16 @@ export interface PlotData {
 }
 
 export interface ShapeData {
-  type: 'arrowup' | 'arrowdown' | 'circle' | 'square' | 'diamond' | 'triangleup' | 'triangledown' | 'labelup' | 'labeldown';
+  type:
+    | 'arrowup'
+    | 'arrowdown'
+    | 'circle'
+    | 'square'
+    | 'diamond'
+    | 'triangleup'
+    | 'triangledown'
+    | 'labelup'
+    | 'labeldown';
   time: number;
   price: number;
   color?: string;

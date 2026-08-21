@@ -483,6 +483,16 @@ export class WalletManager {
     // Decrypt with current password
     const seedPhrase = decryptSeedPhrase(encrypted, currentPassword);
 
+    // Same guard as importWallet: wallet.enc is decrypted at every boot with
+    // configPassphrase (WALLET_PASSPHRASE || default). Re-encrypting with a
+    // different passphrase silently recreates "Unsupported state or unable to
+    // authenticate data" on the next restart — reject early and loud.
+    if (newPassword !== this.configPassphrase) {
+      throw new Error(
+        `Password change rejected: the wallet password must match the bot boot passphrase — ${WALLET_PASSPHRASE_MISMATCH_HINT}`,
+      );
+    }
+
     // Re-encrypt with new password, passing the EXISTING public key so the
     // stored identity survives re-encryption. Without the override,
     // encryptSeedPhrase falls back to a sha256-derived hash — silently

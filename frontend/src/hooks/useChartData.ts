@@ -1,24 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { CandlestickData, ScriptResult, PineScriptError } from '../types';
 import type { ExecuteResponse, ExecutionResultMessage } from './chart-data-transform';
-import { buildScriptResult } from './chart-data-transform';
+import { buildScriptResult, normalizeEngineError } from './chart-data-transform';
 import { prependIndicatorResult, mergeDiffIntoResult } from './indicator-merge';
 import { wsSend } from '../utils/wsSend';
-
-/**
- * Normalizes a raw execute error into a render-safe string.
- * The REST route sends the EngineError OBJECT {message, barIndex, span, stack}
- * (backend/src/routes/execute.ts:178) despite the string-typed API — mirror the
- * backend's toErrorMessage (src/rendering/FormingCandleManager.ts:390-392) at the
- * storage boundary so ErrorConsole never renders a plain object as a React child.
- */
-function toErrorMessage(err: unknown): string {
-  return typeof err === 'string'
-    ? err
-    : err && typeof err === 'object' && 'message' in err && typeof err.message === 'string'
-      ? err.message
-      : 'Execution failed';
-}
 
 export interface ChunkBorder {
   /** Bar index (0-based) where this chunk boundary falls in the current dataset. */
@@ -274,7 +259,12 @@ export function useChartData(
             const execResponse = await fetch('/api/execute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source: ind.source, bars: execBars, offset: 0, indicatorId: indId }),
+              body: JSON.stringify({
+                source: ind.source,
+                bars: execBars,
+                offset: 0,
+                indicatorId: indId,
+              }),
               // Bound the per-indicator re-execution so a hung request cannot freeze
               // the batch state update below (setCandles + indicatorUpdates). The
               // catch below skips the failed indicator and the batch still applies.
@@ -566,11 +556,13 @@ export function useChartData(
           }
         }
         if (msg.error) {
+          const normalized = normalizeEngineError(msg.error);
           setErrors((prev) => [
             ...prev,
             {
               type: 'error',
-              message: toErrorMessage(msg.error),
+              message: normalized.message,
+              ...(normalized.barIndex !== undefined ? { barIndex: normalized.barIndex } : {}),
             },
           ]);
         }
@@ -635,11 +627,13 @@ export function useChartData(
         setScriptResult(result);
       }
       if (msg.error) {
+        const normalized = normalizeEngineError(msg.error);
         setErrors((prev) => [
           ...prev,
           {
             type: 'error',
-            message: toErrorMessage(msg.error),
+            message: normalized.message,
+            ...(normalized.barIndex !== undefined ? { barIndex: normalized.barIndex } : {}),
           },
         ]);
       }
@@ -915,7 +909,11 @@ export function useChartData(
         const response = await fetch('/api/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: code, bars: barsToExecute, ...(indicatorId ? { indicatorId } : {}) }),
+          body: JSON.stringify({
+            source: code,
+            bars: barsToExecute,
+            ...(indicatorId ? { indicatorId } : {}),
+          }),
         });
 
         if (!response.ok) {
@@ -933,10 +931,12 @@ export function useChartData(
 
         if (!result.success || result.error) {
           if (versionRef && version !== undefined && version !== versionRef.current) return;
+          const normalized = normalizeEngineError(result.error);
           setErrors([
             {
               type: 'error',
-              message: toErrorMessage(result.error),
+              message: normalized.message,
+              ...(normalized.barIndex !== undefined ? { barIndex: normalized.barIndex } : {}),
             },
           ]);
           return;
@@ -960,7 +960,11 @@ export function useChartData(
             const seedResponse = await fetch('/api/execute', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source: code, bars: barsToExecute, ...(indicatorId ? { indicatorId } : {}) }),
+              body: JSON.stringify({
+                source: code,
+                bars: barsToExecute,
+                ...(indicatorId ? { indicatorId } : {}),
+              }),
             });
 
             if (seedResponse.ok) {

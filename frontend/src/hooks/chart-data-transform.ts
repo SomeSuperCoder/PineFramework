@@ -25,11 +25,13 @@ import {
 import type {
   ExecutionResultMessage,
   ExecuteResponse,
+  EngineError,
 } from 'pine-framework/contracts';
 
 export type {
   ExecutionResultMessage,
   ExecuteResponse,
+  EngineError,
 } from 'pine-framework/contracts';
 
 // Local aliases so buildScriptResult can use them
@@ -73,6 +75,35 @@ export const COLORS = [
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/** A render-safe normalized execute error: display string + optional metadata. */
+export interface NormalizedEngineError {
+  /** User-visible message (never a raw object). */
+  message: string;
+  /** 0-based bar index the error occurred at, when the wire carried one. */
+  barIndex?: number;
+}
+
+/**
+ * SINGLE SOURCE OF TRUTH for normalizing `ExecuteResponse.error` /
+ * `ExecutionResultMessage.error` into a render-safe value. The backend sends
+ * either a legacy string or the structured EngineError OBJECT
+ * {message, barIndex, span?, stack?} raw over the wire
+ * (backend/src/routes/execute.ts) — this mirrors the backend's own
+ * toErrorMessage so user-visible strings stay identical:
+ * string → itself; object with string message → that message; else 'Execution failed'.
+ */
+export function normalizeEngineError(
+  err: string | EngineError | undefined | null,
+): NormalizedEngineError {
+  if (typeof err === 'string') return { message: err };
+  if (err && typeof err === 'object' && typeof err.message === 'string') {
+    return typeof err.barIndex === 'number'
+      ? { message: err.message, barIndex: err.barIndex }
+      : { message: err.message };
+  }
+  return { message: 'Execution failed' };
+}
 
 /** Strip line-width and style metadata suffixes from a plot title. */
 export function stripMeta(s: string): string {
@@ -154,11 +185,12 @@ export function buildScriptResult(
     const lwMatch = key.match(/__lw:(\d+)/);
     const styleMatch = key.match(/__style:([^_]+)/);
     if (lwMatch) lineWidth = parseInt(lwMatch[1], 10);
-    const plotStyle = (styleMatch ? styleMatch[1] : 'line') as import('../types/index.js').PlotData['type'];
+    const plotStyle = (
+      styleMatch ? styleMatch[1] : 'line'
+    ) as import('../types/index.js').PlotData['type'];
     const title = key.replace(/__lw:\d+/g, '').replace(/__style:[^_]+/g, '');
     const perBarColors = plotColors?.[key];
-    const hasExplicitColor =
-      perBarColors?.some((c) => c !== null && c !== undefined) ?? false;
+    const hasExplicitColor = perBarColors?.some((c) => c !== null && c !== undefined) ?? false;
     if (!hasExplicitColor) {
       plotColor = COLORS[colorIndex % COLORS.length];
       colorIndex++;
