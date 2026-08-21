@@ -120,7 +120,7 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     const lb = Math.trunc(leftBars);
     const rb = Math.trunc(rightBars);
     if (lb > 0 && rb > 0) {
-      const needed = lb + rb + 1;
+      const needed = lb + rb + 2;
       if (needed > eng.pivotLookback) eng.pivotLookback = needed;
     }
     const highArr = eng.ohlcHistory.high;
@@ -167,15 +167,17 @@ export function registerTaStatistics(engine: ExecutionEngine): void {
     const lb = Math.trunc(leftBars);
     const rb = Math.trunc(rightBars);
     if (lb > 0 && rb > 0) {
-      const needed = lb + rb + 1;
+      const needed = lb + rb + 2;
       if (needed > eng.pivotLookback) eng.pivotLookback = needed;
     }
     const lowArr = eng.ohlcHistory.low;
     const len = lowArr.length;
     // Emission gate (real Pine confirmation semantics) — see ta.pivothigh above.
     // A pivot at p is only KNOWN once the full window [p-lb, p+rb] is fully
-    // inside executed history (window spans lb+1+rb bars; the pivot bar is the
-    // +1). The first lb+rb+1 output values are null.
+    // inside executed history. Exact math: the window spans lb+1+rb bars (the
+    // pivot bar itself is the +1), so the FIRST KNOWN output lands at history
+    // index lb+rb+1 — hence the `len < lb+rb+2` gate below, and provisioning
+    // (`needed` above) must also be lb+rb+2 or the boundary bar emits NA.
     if (len < lb + rb + 2) return NA;
     const candidateIdx = len - 1 - rb;
     const candidateValue = lowArr[candidateIdx];

@@ -298,7 +298,7 @@ describe('M8 ta.pivothigh — Decimal exactness (fp-final-gate lock)', () => {
     expect(fn(1, 1)).toBe(NA);
   });
 
-  it('emission gate: first lb+rb+1 bars → NA (insufficient history)', () => {
+  it('emission gate: first lb+rb+2 bars → NA (insufficient history)', () => {
     const engine = new ExecutionEngine(compiled);
     // lb=2, rb=2 → need lb+rb+2=6 bars. With 5 bars: candidate gate → NA.
     const highs = [5, 8, 3, 9, 4];

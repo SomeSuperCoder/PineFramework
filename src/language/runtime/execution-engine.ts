@@ -676,8 +676,11 @@ export class ExecutionEngine {
     if (strategyConfig) {
       this.strategyEngine = new StrategyEngine(strategyConfig);
       // Forward the run's sink so strategy-level diagnostics (commission
-      // conflicts, long-only suppressions) reach the same collector.
-      this.strategyEngine.setWarningSink(this.onWarning);
+      // conflicts, long-only suppressions) reach the same collector. Optional
+      // chain mirrors setWarningSink()'s own forward above — keeps this path
+      // resilient when strategyEngine is absent under partial/stale mocks
+      // (green-gates-v1 root cause: bare call threw TypeError).
+      this.strategyEngine?.setWarningSink(this.onWarning);
     }
     this.registerStrategyBuiltins();
   }

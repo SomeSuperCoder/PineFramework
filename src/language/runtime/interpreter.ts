@@ -501,9 +501,18 @@ export class Interpreter {
     this.eng.shapes = this.eng.shapes.filter((s) => !warmupTimestamps.has(s.time));
     // Filter labels
     this.eng.labels = this.eng.labels.filter((l) => !warmupTimestamps.has(l.time));
-    // Filter lines (x1 is timestamp for bar_time based lines)
+    // Filter lines, type-aware: for xloc='bar_time', x1 holds a ms timestamp
+    // (membership in the warmup timestamp set). For xloc='bar_index' (the
+    // DEFAULT), x1 holds a bar index which can NEVER appear in the ms-timestamp
+    // set — those lines previously survived warmup by accident. Compare the
+    // start anchor against warmupCount instead, matching how shapes/labels
+    // anchored in warmup are removed above.
     for (const [id, line] of this.eng.lines) {
-      if (warmupTimestamps.has(line.x1)) {
+      const anchoredInWarmup =
+        line.xloc === 'bar_time'
+          ? warmupTimestamps.has(line.x1)
+          : typeof line.x1 === 'number' && line.x1 < warmupCount;
+      if (anchoredInWarmup) {
         this.eng.lines.delete(id);
       }
     }
