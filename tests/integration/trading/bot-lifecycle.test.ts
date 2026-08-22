@@ -304,6 +304,7 @@ describe('10.4 — Auto-selection', () => {
     ];
 
     const result = await selector.select(candidates);
+    if ('blocked' in result) throw new Error('auto-select returned blocked result in happy-path test');
 
     expect(result.best.pair.symbol).toBe('BTCUSDT');
     expect(result.best.metrics.profitFactor).toBe(1.8);

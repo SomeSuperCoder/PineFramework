@@ -22,7 +22,15 @@ import { createTradeHistoryRouter } from './routes/trade-history.js';
 import { StatsService } from './services/StatsService.js';
 import { BotConfigStore } from 'pine-framework/trading/config-store';
 import { TradeHistoryStore } from 'pine-framework/trading/trade-history-store';
-import type { BotConfig, BotEngine, RiskManager, RiskManagerConfig } from 'pine-framework';
+import type {
+  BotConfig,
+  BotEngine,
+  RiskManager,
+  RiskManagerConfig,
+  WorldConfig,
+  AutoSelectBlockedResult,
+} from 'pine-framework';
+import { LEGACY_STRATEGY_ID } from 'pine-framework';
 import {
   TradingTelegramBot,
   type TradingNotificationKind,
@@ -521,19 +529,50 @@ if (ENABLE_TRADING_BOT) {
           data: progress,
         });
       });
+
+      // B4: the selection result may be BLOCKED (no qualifying pair met the
+      // criteria). Surface it and bail — there is nothing to run.
+      if ((result as AutoSelectBlockedResult).blocked) {
+        const blocked = result as AutoSelectBlockedResult;
+        botWS.broadcast({
+          channel: 'bot:autoSelect',
+          type: 'complete',
+          data: {
+            blocked: true,
+            reason: blocked.reason,
+            evaluatedCount: blocked.evaluatedCount,
+            failedCount: blocked.failedCount,
+            warnings: collector.toArray(),
+          },
+        });
+        throw new Error(`Auto-selection blocked: ${blocked.reason}`);
+      }
+
+      const selected = result as Exclude<typeof result, { blocked: true }>;
+      // B4: persist the FULL ranking as worlds (so the live bot runs every
+      // qualifying world concurrently) and flatten into pairs for legacy
+      // consumers. Mutating the engine's config here is intentional — start()
+      // will use `worlds` (preferred) to derive its world list.
+      const worlds: WorldConfig[] = selected.ranking.map((r) => ({
+        symbol: r.pair.symbol,
+        timeframe: r.pair.timeframe,
+        strategy: LEGACY_STRATEGY_ID,
+      }));
+      config.worlds = worlds;
       botWS.broadcast({
         channel: 'bot:autoSelect',
         type: 'complete',
         data: {
-          best: result.best,
-          ranking: result.ranking,
-          metric: result.metric,
-          evaluatedCount: result.evaluatedCount,
-          failedCount: result.failedCount,
+          best: selected.best,
+          ranking: selected.ranking,
+          worlds,
+          metric: selected.metric,
+          evaluatedCount: selected.evaluatedCount,
+          failedCount: selected.failedCount,
           warnings: collector.toArray(),
         },
       });
-      return [result.best.pair];
+      return worlds.map((w) => ({ symbol: w.symbol, timeframe: w.timeframe }));
     },
   });
 

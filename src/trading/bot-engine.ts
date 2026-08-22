@@ -7,7 +7,7 @@
  * @module trading
  */
 
-import { BotState, ErrorSeverity } from './types.js';
+import { BotState, ErrorSeverity, LEGACY_STRATEGY_ID } from './types.js';
 import type {
   BotConfig,
   BotError,
@@ -15,6 +15,7 @@ import type {
   BotStatusSnapshot,
   PositionSummary,
   PairConfig,
+  WorldConfig,
   ChaosHeartbeat,
   DexKind,
   TradeRecord,
@@ -512,8 +513,12 @@ export class BotEngine {
         throw new Error('auto-selection returned no pairs');
       }
     }
-    if (!this._config.pairs?.length) {
-      throw new Error('No trading pairs configured. Set pairs or enable auto-select.');
+    // B4: a bot may be started with explicit multi-world selection (`worlds`)
+    // OR the legacy single-pair list — either is a valid trading surface.
+    const hasWorlds = (this._config.worlds?.length ?? 0) > 0;
+    const hasPairs = (this._config.pairs?.length ?? 0) > 0;
+    if (!hasWorlds && !hasPairs && !this._config.autoSelect) {
+      throw new Error('No trading pairs or worlds configured. Set pairs/worlds or enable auto-select.');
     }
     // Require strategy source only when chaos mode is not active
     if (!isChaosMode && !this._config.strategySource) {
@@ -1016,11 +1021,33 @@ export class BotEngine {
     }
 
     // 3. Create strategy executor
+    // B4 (multi-world): derive the world list. Explicit `config.worlds` (v2)
+    // takes precedence; otherwise we synthesize one world per legacy `pairs`
+    // entry keyed by LEGACY_STRATEGY_ID. The effective pairs the executor
+    // schedules on are either the configured pairs or, when only worlds were
+    // given, the worlds flattened — so both shapes share one scheduling path.
+    const worldList: WorldConfig[] =
+      this._config.worlds && this._config.worlds.length > 0
+        ? this._config.worlds
+        : (this._config.pairs ?? []).map((p) => ({
+            symbol: p.symbol,
+            timeframe: p.timeframe,
+            strategy: LEGACY_STRATEGY_ID,
+          }));
+    const effectivePairs: PairId[] =
+      this._config.pairs && this._config.pairs.length > 0
+        ? this._config.pairs.map((p) => ({ symbol: p.symbol, timeframe: p.timeframe }))
+        : worldList.map((w) => ({ symbol: w.symbol, timeframe: w.timeframe }));
+    // Keep _config.pairs coherent for downstream consumers (dashboard, etc.).
+    this._config.pairs = effectivePairs;
+    this.logger.info('Derived world list', { worlds: worldList.length, pairs: effectivePairs.length });
+
     this.strategyExecutor = new LiveStrategyExecutor({
       strategySource: this._config.strategySource ?? '',
       dex: this.dex,
       walletManager: this.walletManager ?? (null as unknown as WalletManager),
-      pairs: (this._config.pairs ?? []).map((p) => ({ symbol: p.symbol, timeframe: p.timeframe })),
+      pairs: effectivePairs,
+      worlds: worldList,
       initialCapital: BigInt(this._config.initialCapital ?? DEFAULT_INITIAL_CAPITAL_LAMPORTS),
       positionSizePercent: this._config.positionSizePercent ?? 100,
       maxDailyLoss: this._config.risk?.maxDailyLoss ?? 100,
@@ -1089,13 +1116,16 @@ export class BotEngine {
       );
     }
 
-    // 3.5 Initialize a compiled strategy engine for every configured pair.
+    // 3.5 Initialize a compiled strategy engine for every world (B4).
     //     Parse/compile failures throw here so start() fails with a descriptive
     //     error instead of silently running a strategy that cannot signal.
-    for (const pair of this._config.pairs ?? []) {
-      const pairId: PairId = { symbol: pair.symbol, timeframe: pair.timeframe };
-      await this.strategyExecutor.initializeStrategy(pairId);
-      this.logger.info('Strategy initialized', { symbol: pair.symbol, timeframe: pair.timeframe });
+    for (const world of worldList) {
+      await this.strategyExecutor.initializeWorld(world);
+      this.logger.info('Strategy initialized', {
+        symbol: world.symbol,
+        timeframe: world.timeframe,
+        strategy: world.strategy,
+      });
     }
 
     // 3. Create bar feed (Bybit WebSocket)

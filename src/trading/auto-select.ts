@@ -10,6 +10,7 @@
  * @module trading
  */
 
+import pLimit from 'p-limit';
 import type { Bar } from '../data/bar.js';
 import type { PairConfig, DexKind } from './types.js';
 import { TRADABLE_PAIRS, type TradablePair } from './token-registry.js';
@@ -44,9 +45,24 @@ export interface AutoSelectionResult {
   best: CandidateEvaluation;
   /** Metric used for ranking. */
   metric: RankingMetric;
-  /** Number of pairs evaluated. */
+  /** Number of pairs evaluated (post PnL filter). */
   evaluatedCount: number;
-  /** Number of pairs that failed evaluation. */
+  /** Number of pairs that failed evaluation (fetch or backtest error). */
+  failedCount: number;
+}
+
+/**
+ * Result returned when auto-selection cannot proceed because no candidate
+ * earned a positive net PnL. This is a typed, non-throwing signal so the
+ * caller (bot.ts, task B4) can offer the user a "go back and pick another
+ * strategy" flow instead of crashing.
+ */
+export interface AutoSelectBlockedResult {
+  blocked: true;
+  reason: 'no-positive-pnl';
+  /** Number of candidates that were successfully evaluated. */
+  evaluatedCount: number;
+  /** Number of pairs that failed evaluation (fetch or backtest error). */
   failedCount: number;
 }
 
@@ -77,6 +93,14 @@ const MAX_BACKTEST_BARS = 1500;
 
 /** Default lookback period in days. */
 const DEFAULT_DAYS_BACK = 90;
+
+/**
+ * Bounded concurrency for parallel backtests (task B2). Backtests hit the
+ * network + the strategy engine, so we cap simultaneous runs to keep latency
+ * down without overwhelming upstreams. The cap is deliberately modest — enough
+ * parallelism to matter, small enough to avoid rate limits / resource spikes.
+ */
+const MAX_CONCURRENT_BACKTESTS = 4;
 
 /**
  * Compute the number of candles to fetch for a given timeframe.
@@ -165,19 +189,34 @@ export class AutoMarketSelector {
   }
 
   /**
-   * Evaluate and rank all candidate pairs sequentially.
+   * Evaluate and rank all candidate pairs.
    *
    * For each pair:
    * 1. Fetch bar data (with candle progress)
    * 2. Run backtest
    * 3. Collect metrics
    *
-   * Finally: Rank results by configured metric.
+   * Backtests run in bounded parallel (task B2) to cut wall-clock time while
+   * avoiding too many concurrent runs. Completion order is non-deterministic,
+   * so ranking is applied POST-collection to stay identical to the prior
+   * sequential logic.
+   *
+   * Hard gate (task B1): a pair with non-positive net PnL is NEVER selected,
+   * even if N is not satisfied. If no candidate earned a positive net PnL the
+   * method returns a typed `{ blocked: true }` result (it does NOT throw) so
+   * the caller can offer the user an alternative strategy.
+   *
+   * @param candidates Pairs to evaluate.
+   * @param onProgress Optional progress callback.
+   * @param options.topN If set, return at most this many best pairs (no
+   *   padding when fewer qualify). Omit for the previous "all qualifying"
+   *   behavior.
    */
   async select(
     candidates: PairConfig[] = DEFAULT_CANDIDATES,
     onProgress?: SelectionProgressCallback,
-  ): Promise<AutoSelectionResult> {
+    options?: { topN?: number },
+  ): Promise<AutoSelectionResult | AutoSelectBlockedResult> {
     const total = candidates.length;
     let completedCount = 0;
     let failedCount = 0;
@@ -205,123 +244,176 @@ export class AutoMarketSelector {
       });
     };
 
-    // Sequential evaluation: one pair at a time
+    // All successful evaluations, in arbitrary completion order.
     const evaluations: CandidateEvaluation[] = [];
 
-    for (let i = 0; i < candidates.length; i++) {
-      const pair = candidates[i]!;
-      const key = `${pair.symbol} (${pair.timeframe})`;
-      const targetCandles = computeCandleCount(pair.timeframe);
-
-      // ── Fetch phase ──
-      console.log(`[auto-select] Fetching bars for ${key}...`);
-      statuses[key] = { phase: 'fetching', status: 'active' };
-      emitProgress(pair, 'fetching', { fetched: 0, total: targetCandles });
-
-      let bars: Bar[];
-      try {
-        const endDate = Date.now();
-        const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
-        bars = await this.barFetcher.fetchBars(
-          pair.symbol,
-          pair.timeframe,
-          startDate,
-          endDate,
-          targetCandles,
-        );
-
-        console.log(`[auto-select] Fetched ${bars.length} bars for ${key}`);
-        // Update with actual fetched count
-        emitProgress(pair, 'fetching', { fetched: bars.length, total: targetCandles });
-
-        if (bars.length < 50) {
-          const error = `Insufficient data: ${bars.length} bars (need 50+)`;
-          console.log(`[auto-select] Failed: ${key} — ${error}`);
-          statuses[key] = { phase: 'fetching', status: 'failed', error };
-          completedCount++;
+    // Bounded-concurrency scheduler (task B2): each candidate's fetch+backtest
+    // runs inside a limiter slot. Order of resolution is undefined; we collect
+    // by pushing into `evaluations` and rank afterwards.
+    const limit = pLimit(MAX_CONCURRENT_BACKTESTS);
+    const tasks = candidates.map((pair) =>
+      limit(async () => {
+        const evaluation = await this.evaluateCandidate(pair, statuses, emitProgress);
+        // Counters are mutated synchronously (no await between read+write),
+        // so parallel continuations cannot interleave the increment.
+        if (evaluation) {
+          evaluations.push(evaluation);
+        } else {
           failedCount++;
-          emitProgress(pair, 'fetching');
-          continue;
         }
-
-        if (bars.length > MAX_BACKTEST_BARS) {
-          const error = `Too many bars: ${bars.length} (max ${MAX_BACKTEST_BARS})`;
-          console.log(`[auto-select] Failed: ${key} — ${error}`);
-          statuses[key] = { phase: 'fetching', status: 'failed', error };
-          completedCount++;
-          failedCount++;
-          emitProgress(pair, 'fetching');
-          continue;
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.log(`[auto-select] Failed: ${key} — ${msg}`);
-        statuses[key] = { phase: 'fetching', status: 'failed', error: `Bar fetch failed: ${msg}` };
         completedCount++;
-        failedCount++;
-        emitProgress(pair, 'fetching');
-        continue;
-      }
+        emitProgress(pair, 'backtesting');
+        return evaluation;
+      }),
+    );
 
-      // ── Backtest phase ──
-      console.log(`[auto-select] Running backtest for ${key}...`);
-      statuses[key] = { phase: 'backtesting', status: 'active' };
-      emitProgress(pair, 'backtesting');
+    await Promise.all(tasks);
 
-      const result = await this.backtestRunner.runBacktest({
-        script: this.script,
-        symbol: pair.symbol,
-        bars,
-        dex: this.dex,
-      });
+    // ── POST-collection ranking (deterministic regardless of completion order) ──
+    // Hard PnL filter (task B1): never select a pair that did not make money.
+    const qualifying = evaluations.filter((e) => e.metrics.netProfit > 0);
+    // B4: rank by PnL (netProfit) DESCENDING — the spec requires worlds to be
+    // sorted by PnL and the top-N picked from that order. A stable tiebreaker
+    // (the previous metric comparator) keeps the result deterministic when two
+    // worlds share a PnL, so the bounded-parallel backtest order cannot affect
+    // the final ranking.
+    qualifying.sort((a, b) => {
+      const diff = b.metrics.netProfit - a.metrics.netProfit;
+      if (diff !== 0) return diff;
+      return this.compareByMetric(b, a);
+    });
 
-      if (!result.success || !result.metrics) {
-        const error = result.error ?? 'Backtest execution failed';
-        console.log(`[auto-select] Failed: ${key} — ${error}`);
-        statuses[key] = { phase: 'backtesting', status: 'failed', error };
-        failedCount++;
-      } else {
-        console.log(
-          `[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnlPercent.toFixed(2)}%`,
-        );
-        statuses[key] = { phase: 'backtesting', status: 'done' };
-        const m = result.metrics;
-        evaluations.push({
-          pair,
-          metrics: {
-            sharpeRatio: m.sharpeRatio,
-            profitFactor: m.profitFactor,
-            netProfit: m.totalPnl,
-            totalPnlPercent: m.totalPnlPercent,
-            winRate: m.winRate,
-            totalTrades: m.totalTrades,
-            maxDrawdown: m.maxDrawdown,
-          },
-          label: `${pair.symbol} (${pair.timeframe})`,
-        });
-      }
-
-      completedCount++;
-      emitProgress(pair, 'backtesting');
-    }
-
-    // Rank by configured metric
-    evaluations.sort((a, b) => this.compareByMetric(b, a));
-
-    const best = evaluations[0];
-    if (!best) {
+    // Nothing evaluated at all (all fetch/backtest failed) — no data to rank.
+    if (evaluations.length === 0) {
       throw new Error(
         'Auto-selection failed: no candidate pairs could be evaluated. ' +
           'Check that the strategy compiles and historical data is available.',
       );
     }
 
+    // Some evaluated, but NONE profitable → block (do NOT throw).
+    if (qualifying.length === 0) {
+      return {
+        blocked: true,
+        reason: 'no-positive-pnl',
+        evaluatedCount: evaluations.length,
+        failedCount,
+      };
+    }
+
+    // Top-N selection (no padding when fewer than N qualify).
+    const topN = options?.topN;
+    const ranking = topN != null ? qualifying.slice(0, Math.max(0, topN)) : qualifying;
+
+    const best = ranking[0]!;
     return {
-      ranking: evaluations,
+      ranking,
       best,
       metric: this.metric,
-      evaluatedCount: evaluations.length,
+      evaluatedCount: ranking.length,
       failedCount,
+    };
+  }
+
+  /**
+   * Fetch bars + run a single backtest for one candidate. Extracted from the
+   * old per-iteration loop so it can run inside a concurrency limiter (task B2)
+   * without duplicating the fetch/backtest/status logic.
+   *
+   * @returns the evaluation on success, or null when the candidate is dropped
+   *   (insufficient/too-many bars, fetch error, or backtest failure).
+   */
+  private async evaluateCandidate(
+    pair: PairConfig,
+    statuses: Record<string, CandidateStatus>,
+    emitProgress: (
+      pair: PairConfig,
+      phase: CandidateStatus['phase'],
+      candleProgress?: { fetched: number; total: number },
+    ) => void,
+  ): Promise<CandidateEvaluation | null> {
+    const key = `${pair.symbol} (${pair.timeframe})`;
+    const targetCandles = computeCandleCount(pair.timeframe);
+
+    // ── Fetch phase ──
+    console.log(`[auto-select] Fetching bars for ${key}...`);
+    statuses[key] = { phase: 'fetching', status: 'active' };
+    emitProgress(pair, 'fetching', { fetched: 0, total: targetCandles });
+
+    let bars: Bar[];
+    try {
+      const endDate = Date.now();
+      const startDate = endDate - DEFAULT_DAYS_BACK * 24 * 60 * 60 * 1000;
+      bars = await this.barFetcher.fetchBars(
+        pair.symbol,
+        pair.timeframe,
+        startDate,
+        endDate,
+        targetCandles,
+      );
+
+      console.log(`[auto-select] Fetched ${bars.length} bars for ${key}`);
+      emitProgress(pair, 'fetching', { fetched: bars.length, total: targetCandles });
+
+      if (bars.length < 50) {
+        const error = `Insufficient data: ${bars.length} bars (need 50+)`;
+        console.log(`[auto-select] Failed: ${key} — ${error}`);
+        statuses[key] = { phase: 'fetching', status: 'failed', error };
+        emitProgress(pair, 'fetching');
+        return null;
+      }
+
+      if (bars.length > MAX_BACKTEST_BARS) {
+        const error = `Too many bars: ${bars.length} (max ${MAX_BACKTEST_BARS})`;
+        console.log(`[auto-select] Failed: ${key} — ${error}`);
+        statuses[key] = { phase: 'fetching', status: 'failed', error };
+        emitProgress(pair, 'fetching');
+        return null;
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`[auto-select] Failed: ${key} — ${msg}`);
+      statuses[key] = { phase: 'fetching', status: 'failed', error: `Bar fetch failed: ${msg}` };
+      emitProgress(pair, 'fetching');
+      return null;
+    }
+
+    // ── Backtest phase ──
+    console.log(`[auto-select] Running backtest for ${key}...`);
+    statuses[key] = { phase: 'backtesting', status: 'active' };
+    emitProgress(pair, 'backtesting');
+
+    const result = await this.backtestRunner.runBacktest({
+      script: this.script,
+      symbol: pair.symbol,
+      bars,
+      dex: this.dex,
+    });
+
+    if (!result.success || !result.metrics) {
+      const error = result.error ?? 'Backtest execution failed';
+      console.log(`[auto-select] Failed: ${key} — ${error}`);
+      statuses[key] = { phase: 'backtesting', status: 'failed', error };
+      return null;
+    }
+
+    console.log(
+      `[auto-select] Complete: ${key} — PF ${result.metrics.profitFactor.toFixed(2)}, PnL ${result.metrics.totalPnlPercent.toFixed(2)}%`,
+    );
+    statuses[key] = { phase: 'backtesting', status: 'done' };
+    const m = result.metrics;
+    return {
+      pair,
+      metrics: {
+        sharpeRatio: m.sharpeRatio,
+        profitFactor: m.profitFactor,
+        netProfit: m.totalPnl,
+        totalPnlPercent: m.totalPnlPercent,
+        winRate: m.winRate,
+        totalTrades: m.totalTrades,
+        maxDrawdown: m.maxDrawdown,
+      },
+      label: `${pair.symbol} (${pair.timeframe})`,
     };
   }
 

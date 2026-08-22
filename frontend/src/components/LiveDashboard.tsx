@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import type { BotStatusSnapshot, WalletInfo, LogEntry } from '../types/bot';
+import type { AutoSelectProgressV2, AutoSelectResultV2 } from '../types/multiWorld';
 import { ChaosModeWarning } from './ChaosModeWarning';
 import { TradeHistoryTab } from './TradeHistoryTab';
 // recharts-heavy; lazy so the chart library stays out of the initial bundle.
@@ -201,29 +202,8 @@ export function LiveDashboard({
   status: BotStatusSnapshot;
   logs: LogEntry[];
   onClose: () => void;
-  autoSelectProgress?: {
-    current: number;
-    total: number;
-    pair: { symbol: string; timeframe: string };
-    phase: string;
-    statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>;
-    candleProgress?: { fetched: number; total: number };
-    ranking?: Array<{ label: string; metrics: Record<string, number> }>;
-  } | null;
-  autoSelectResult?: {
-    best: {
-      pair: { symbol: string; timeframe: string };
-      label: string;
-      metrics: Record<string, number>;
-    };
-    ranking: Array<{
-      pair: { symbol: string; timeframe: string };
-      label: string;
-      metrics: Record<string, number>;
-    }>;
-    evaluatedCount: number;
-    failedCount: number;
-  } | null;
+  autoSelectProgress?: AutoSelectProgressV2 | null;
+  autoSelectResult?: AutoSelectResultV2 | null;
   chaosMode?: boolean;
   engineChaosMode?: ChaosModeSnapshot | null;
   /** Non-null when the last chaos toggle failed — the operator must be warned and Start blocked. */

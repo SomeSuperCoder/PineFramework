@@ -9,7 +9,8 @@
 
 import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import type { BotConfig } from './types.js';
+import type { BotConfig, WorldConfig } from './types.js';
+import { LEGACY_STRATEGY_ID } from './types.js';
 
 export class BotConfigStore {
   private readonly filePath: string;
@@ -40,10 +41,13 @@ export class BotConfigStore {
       }
       const data = readFileSync(this.filePath, 'utf-8');
       const config = JSON.parse(data) as BotConfig;
-      if (!this.isValid(config)) {
+      // D4: migrate legacy (pre-v2) configs — `pairs` → a single `worlds`
+      // entry — so the rest of the system only ever sees the v2 shape.
+      const migrated = migrateLegacyBotConfig(config);
+      if (!this.isValid(migrated)) {
         return null;
       }
-      return config;
+      return migrated;
     } catch {
       return null;
     }
@@ -91,4 +95,30 @@ export class BotConfigStore {
     }
     return true;
   }
+}
+
+/**
+ * Migrate a (possibly legacy) bot config into the v2 shape (D4).
+ *
+ * - Already-v2 configs (have a non-empty `worlds`) are returned as-is with
+ *   `version` normalized to 2.
+ * - Legacy v1 configs derive a single world from `pairs[0]` (only `pairs[0]`
+ *   was ever active pre-v2 — the wizard used it as the single "world"). Only
+ *   the first pair is carried; additional legacy pairs were never traded.
+ *
+ * Pure and side-effect-free so it can be unit-tested directly.
+ */
+export function migrateLegacyBotConfig(config: BotConfig): BotConfig {
+  if (Array.isArray(config.worlds) && config.worlds.length > 0) {
+    return { ...config, version: config.version ?? 2 };
+  }
+  if (Array.isArray(config.pairs) && config.pairs.length > 0) {
+    const p = config.pairs[0]!;
+    const worlds: WorldConfig[] = [
+      { timeframe: p.timeframe, symbol: p.symbol, strategy: LEGACY_STRATEGY_ID },
+    ];
+    return { ...config, version: 2, worlds };
+  }
+  // No worlds and no pairs — leave untouched; isValid() decides acceptance.
+  return config;
 }

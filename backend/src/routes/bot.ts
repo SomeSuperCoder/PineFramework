@@ -16,8 +16,8 @@
  */
 
 import { Router } from 'express';
-import { USDC_MINT } from 'pine-framework';
-import type { BotEngine, BotConfig } from 'pine-framework';
+import { USDC_MINT, LEGACY_STRATEGY_ID } from 'pine-framework';
+import type { BotEngine, BotConfig, WorldConfig, AutoSelectBlockedResult } from 'pine-framework';
 import type { WalletManager } from 'pine-framework/trading/wallet';
 import type { BotConfigStore } from 'pine-framework/trading/config-store';
 
@@ -478,30 +478,64 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         });
       });
 
+      // B4: the selector result may be a BLOCKED outcome (no qualifying pair
+      // met the criteria) rather than a ranked selection. Surface it to the UI
+      // and bail — do NOT persist a config (there's nothing to run).
+      const blocked = (result as AutoSelectBlockedResult).blocked === true;
+      if (blocked) {
+        deps.broadcast({
+          channel: 'bot:autoSelect',
+          type: 'complete',
+          data: {
+            blocked: true,
+            reason: (result as AutoSelectBlockedResult).reason,
+            evaluatedCount: (result as AutoSelectBlockedResult).evaluatedCount,
+            failedCount: (result as AutoSelectBlockedResult).failedCount,
+          },
+        });
+        return;
+      }
+
+      // Store result in engine config for later use by start().
+      // Disable autoSelect so engine.start() won't re-run the full backtest.
+      // B4: persist the FULL ranking as `worlds` (so the live bot runs every
+      // qualifying world concurrently) and flatten it into `pairs` for
+      // downstream consumers that still expect the legacy field.
+      const worlds: WorldConfig[] = result.ranking.map((r: any) => ({
+        symbol: r.pair.symbol,
+        timeframe: r.pair.timeframe,
+        strategy: LEGACY_STRATEGY_ID,
+      }));
+      const pairs = worlds.map((w) => ({ symbol: w.symbol, timeframe: w.timeframe }));
+      const finalConfig: BotConfig = {
+        ...config,
+        autoSelect: false,
+        worlds,
+        pairs,
+      };
+      engine.configure(finalConfig);
+
+      // Persist the final config to disk so the resolved worlds/pairs and
+      // autoSelect=false survive server restarts. Without this, bot-config.json
+      // retains autoSelect:true and engine.start() blocks on an inline
+      // re-selection after restart.
+      const store = getConfigStore();
+      if (store) {
+        store.save(finalConfig);
+      }
+
       deps.broadcast({
         channel: 'bot:autoSelect',
         type: 'complete',
         data: {
           best: result.best,
           ranking: result.ranking,
+          worlds,
           metric: result.metric,
           evaluatedCount: result.evaluatedCount,
           failedCount: result.failedCount,
         },
       });
-
-      // Store result in engine config for later use by start().
-      // Disable autoSelect so engine.start() won't re-run the full backtest.
-      const finalConfig = { ...config, autoSelect: false, pairs: [result.best.pair] };
-      engine.configure(finalConfig);
-
-      // Persist the final config to disk so the resolved pairs and autoSelect=false
-      // survive server restarts. Without this, bot-config.json retains autoSelect:true
-      // and engine.start() blocks on an inline re-selection after restart.
-      const store = getConfigStore();
-      if (store) {
-        store.save(finalConfig);
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Broadcast error if possible

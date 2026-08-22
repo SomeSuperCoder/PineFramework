@@ -1,5 +1,6 @@
 import type { BotStatusSnapshot } from '../../types/bot';
 import type { ChaosSignalRecord, ChaosHeartbeatRecord } from '../../types';
+import type { AutoSelectResultV2 } from '../../types/multiWorld';
 import { MiniChart } from '../MiniChart';
 import { useBotMiniChartData } from '../../hooks/useMiniChartData';
 import { Card } from '@/components/ui/card';
@@ -77,12 +78,7 @@ export function BotMetrics({
   chaosMode: boolean;
   chaosSignals: ChaosSignalRecord[];
   chaosHeartbeats: ChaosHeartbeatRecord[];
-  autoSelectResult?: {
-    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
-    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
-    evaluatedCount: number;
-    failedCount: number;
-  } | null;
+  autoSelectResult?: AutoSelectResultV2 | null;
   now: number;
 }) {
   return (
@@ -216,10 +212,10 @@ export function BotMetrics({
           />
           <div className="mt-1.5 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
             <span className="text-[11px] font-semibold text-[#22c55e]">
-              ★ Best: {autoSelectResult.best.label}
+              ★ Best: {autoSelectResult.best?.label ?? '—'}
             </span>
             <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
-              PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
+              PF: {autoSelectResult.best?.metrics.profitFactor?.toFixed(2)}
             </span>
           </div>
         </div>

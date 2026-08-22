@@ -272,7 +272,7 @@ describe('BotEngine', () => {
     expect(engine.state).toBe(BotState.Running);
   });
 
-  it('should refuse to start when autoSelect is false and no pairs configured', async () => {
+  it('should refuse to start when autoSelect is false and no pairs or worlds configured', async () => {
     const configNoPairs: BotConfig = {
       ...defaultConfig,
       pairs: undefined,
@@ -280,7 +280,9 @@ describe('BotEngine', () => {
     };
     engine.configure(configNoPairs);
 
-    await expect(engine.start()).rejects.toThrow('No trading pairs configured');
+    await expect(engine.start()).rejects.toThrow(
+      'No trading pairs or worlds configured. Set pairs/worlds or enable auto-select.',
+    );
     expect(engine.state).toBe(BotState.Idle);
   });
 

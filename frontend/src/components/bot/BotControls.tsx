@@ -1,11 +1,22 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { Play, X } from 'lucide-react';
-import { StrategySelector } from '../StrategySelector';
 import { ProgressBar } from '../ProgressBar';
-import type { ConfigValues, WalletInfo } from '../../types/bot';
+import type { WalletInfo, ConfigValues } from '../../types/bot';
 import { TRADABLE_PAIRS, getTokenInfo } from 'pine-framework';
-import { extractScriptName } from 'pine-framework/utils/script-name';
 import { AutoSelectGrid } from './AutoSelectGrid';
+import { StrategyMultiSelect } from './StrategyMultiSelect';
+import { WorldRankingPanel } from './WorldRankingPanel';
+import { CapitalAllocationPanel } from './CapitalAllocationPanel';
+import { computeAllocation } from '../../utils/portfolio';
+import type {
+  WizardStep,
+  SelectedStrategy,
+  WorldRankingEntry,
+  AllocationEntry,
+  AutoSelectProgressV2,
+  AutoSelectResultV2,
+} from '../../types/multiWorld';
+import { pnlOf } from '../../types/multiWorld';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -334,42 +345,6 @@ function WalletImportPanel({ backendUrl, wallet, onWalletChange }: {
   );
 }
 
-/** Check strategy source for patterns that are incompatible with live spot trading. */
-function checkStrategyCompatibility(source: string): string[] {
-  const warnings: string[] = [];
-
-  // Remove comments and strings to avoid false positives
-  let cleaned = source
-    // Remove single-line comments
-    .replace(/\/\/.*$/gm, '')
-    // Remove multi-line comments
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    // Remove template literals
-    .replace(/`[^`]*`/g, '')
-    // Remove single-quoted strings
-    .replace(/'[^']*'/g, '')
-    // Remove double-quoted strings
-    .replace(/"[^"]*"/g, '');
-
-  if (/strategy\.short\b/.test(cleaned)) {
-    warnings.push('This strategy uses short positions (strategy.short). Spot trading only supports long positions.');
-  }
-
-  if (/strategy\.entry\s*\([^)]*\blimit\s*=/.test(cleaned)) {
-    warnings.push('Limit orders (limit=) are not supported by DEX swaps. Market orders will be used.');
-  }
-
-  if (/strategy\.exit\s*\([^)]*\bshort\b/.test(cleaned)) {
-    warnings.push('This strategy uses short exits (strategy.exit with short). Spot trading does not support short positions.');
-  }
-
-  if (/\bstrategy\.openprofit\b/.test(cleaned)) {
-    warnings.push('strategy.openprofit may report different values in live trading vs backtesting.');
-  }
-
-  return warnings;
-}
-
 /** Calculate max daily loss: min($1, 10% × USDC balance) */
 function calcMaxDailyLoss(usdcBalance: number): number {
   return Math.min(1, usdcBalance * 0.10);
@@ -381,7 +356,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
   onConfigValues?: (values: ConfigValues) => void;
   usdcBalance: number | null;
 }) {
-  const [strategySource, setStrategySource] = useState('');
   const [dex, setDex] = useState<'jupiter-swap' | 'jupiter-ultra'>('jupiter-swap');
   const [timezone, setTimezone] = useState(() => {
     const stored = localStorage.getItem('botTimezone');
@@ -402,16 +376,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
   const calculatedMaxDailyLoss = calcMaxDailyLoss(usdcBalance ?? 0);
   const maxDailyLoss = manualOverride ? Number(manualMaxDailyLoss) : calculatedMaxDailyLoss;
 
-  const compatibilityWarnings = useMemo(
-    () => checkStrategyCompatibility(strategySource),
-    [strategySource]
-  );
-
   const handleConfigure = async () => {
-    if (!strategySource.trim()) {
-      setError('Select a strategy or paste your Pine Script strategy source code');
-      return;
-    }
     setConfiguring(true);
     setError('');
     try {
@@ -419,7 +384,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          strategySource: strategySource.trim(),
           dex,
           risk: { maxDailyLoss },
           autoSelect: true,
@@ -430,7 +394,7 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
         setError(data.error || 'Configuration failed');
       } else {
         onConfigValues?.({
-          strategySource: strategySource.trim(),
+          strategySource: '',
           dex,
           maxDailyLoss,
           timezone,
@@ -450,10 +414,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
         Configuration
       </div>
       <div className="flex flex-col gap-2">
-        <StrategySelector
-          value={strategySource}
-          onChange={(src, _name, _id) => { setStrategySource(src); }}
-        />
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <label className="text-[11px] text-[var(--color-muted-foreground)]">
             DEX:{' '}
@@ -547,16 +507,6 @@ function BotConfigPanel({ backendUrl, onConfigured, onConfigValues, usdcBalance 
           </label>
         </div>
         {error && <div className="text-[10px] text-[var(--color-destructive)]">{error}</div>}
-        {compatibilityWarnings.length > 0 && (
-          <div className="mt-1 rounded border border-[#eab308] bg-[rgba(234,179,8,0.12)] px-2.5 py-1.5">
-            <div className="mb-0.5 text-[10px] font-semibold text-[#eab308]">
-              ⚠ Live Trading Compatibility Notes
-            </div>
-            {compatibilityWarnings.map((w, i) => (
-              <div key={i} className="text-[10px] text-[#eab308]">{w}</div>
-            ))}
-          </div>
-        )}
         <Button
           type="button"
           variant="outline"
@@ -597,27 +547,22 @@ export function SetupWizard({
   } | null;
   onStart: () => Promise<void>;
   onClose: () => void;
-  autoSelectProgress?: { current: number; total: number; pair: { symbol: string; timeframe: string }; phase: string; statuses: Record<string, { phase: string; status: 'pending' | 'active' | 'done' | 'failed' }>; candleProgress?: { fetched: number; total: number }; ranking?: Array<{ label: string; metrics: Record<string, number> }> } | null;
-  autoSelectResult?: {
-    best: { pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> };
-    ranking: Array<{ pair: { symbol: string; timeframe: string }; label: string; metrics: Record<string, number> }>;
-    evaluatedCount: number;
-    failedCount: number;
-  } | null;
+  autoSelectProgress?: AutoSelectProgressV2 | null;
+  autoSelectResult?: AutoSelectResultV2 | null;
   onConfigReset?: () => void;
   onBacktestStarted?: () => void;
   /** Non-null when the last chaos toggle failed — Start is blocked and the error is shown. */
   chaosError?: string | null;
 }) {
   // Determine initial step: if config exists AND wallet exists, go to review
-  const getInitialStep = (): 'wallet' | 'config' | 'backtest-choice' | 'backtest' | 'review' => {
+  const getInitialStep = (): WizardStep => {
     if (persistedConfig && initialWallet.hasWallet) {
       return 'review';
     }
     return initialWallet.hasWallet ? 'config' : 'wallet';
   };
 
-  const [step, setStep] = useState<'wallet' | 'config' | 'backtest-choice' | 'backtest' | 'review'>(getInitialStep);
+  const [step, setStep] = useState<WizardStep>(getInitialStep);
   const [wallet, setWallet] = useState<WalletInfo>(initialWallet);
   const [configValues, setConfigValues] = useState<ConfigValues | null>(() => {
     // Initialize configValues from persisted config if available
@@ -637,6 +582,14 @@ export function SetupWizard({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState('');
   const [configureError, setConfigureError] = useState('');
+
+  // F2 — strategies replace the single strategySource
+  const [selectedStrategies, setSelectedStrategies] = useState<SelectedStrategy[]>(() =>
+    persistedConfig?.strategySource
+      ? [{ id: 'legacy', name: 'Imported strategy', source: persistedConfig.strategySource, isBuiltIn: false }]
+      : [],
+  );
+
   const [selectedTimeframes, setSelectedTimeframes] = useState<string[]>(() => {
     const saved = localStorage.getItem('autoSelectTimeframes');
     return saved ? JSON.parse(saved) : ['5', '15', '60', '240'];
@@ -647,6 +600,26 @@ export function SetupWizard({
   const [backtestMode, setBacktestMode] = useState<'auto' | 'manual'>('auto');
   const [manualPair, setManualPair] = useState<{ symbol: string; timeframe: string } | null>(null);
 
+  // F2 — backtest result → ranking / allocation / block gate
+  const [blocked, setBlocked] = useState(false);
+  const [ranking, setRanking] = useState<WorldRankingEntry[]>([]);
+  const [topN, setTopN] = useState(0);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [totalCapital, setTotalCapital] = useState<number>(() => {
+    const b = wallet.usdcBalance ?? 0;
+    return b > 0 ? Math.round(b * 100) / 100 : 1000;
+  });
+
+  // PnL-weighted split across the explicitly-selected worlds (D5)
+  const allocation = useMemo<AllocationEntry[]>(() => {
+    if (!autoSelectResult) return [];
+    const selected = autoSelectResult.ranking.filter((w) => selectedKeys.has(w.worldKey));
+    return computeAllocation(selected, totalCapital);
+  }, [autoSelectResult, selectedKeys, totalCapital]);
+
+  const tfLabel = (tf: string) =>
+    tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : tf === '240' ? '4h' : tf;
+
   // When persisted config/wallet data loads after mount (e.g. after bot stops, when
   // LiveDashboard re-fetches wallet status + config), advance to review.
   //   - 'config' → 'review': persisted config arrived after mount
@@ -654,11 +627,11 @@ export function SetupWizard({
   //     still shows "no wallet" (stale import-wallet step). A user deliberately
   //     viewing an already-imported wallet is left alone.
   useEffect(() => {
-    if (!persistedConfig || !initialWallet.hasWallet || step === 'review') return;
+    if (!persistedConfig || !initialWallet.hasWallet || step === 'review' || blocked) return;
     if (step === 'config' || (step === 'wallet' && !wallet.hasWallet)) {
       setStep('review');
     }
-  }, [persistedConfig, initialWallet.hasWallet, wallet.hasWallet, step]);
+  }, [persistedConfig, initialWallet.hasWallet, wallet.hasWallet, step, blocked]);
 
   // Balance from wallet info or fetched from backend
   const [usdcBalance, setUsdcBalance] = useState<number | null>(wallet.usdcBalance ?? null);
@@ -677,18 +650,79 @@ export function SetupWizard({
     localStorage.setItem('autoSelectTimeframes', JSON.stringify(selectedTimeframes));
   }, [selectedTimeframes]);
 
-  // Auto-advance from Backtest to Review when auto-select completes
+  // Route on backtest completion: block on zero positive-PnL, else → ranking.
   useEffect(() => {
-    if (step === 'backtest' && autoSelectResult) {
-      setStep('review');
+    if (step !== 'backtest' || !autoSelectResult) return;
+    if (autoSelectResult.blocked || autoSelectResult.positiveWorlds.length === 0) {
+      setBlocked(true);
+      return;
     }
+    const rk: WorldRankingEntry[] = autoSelectResult.ranking.map((w) => ({
+      ...w,
+      pnlPercent: pnlOf(w.metrics),
+      profitFactor: w.metrics.profitFactor,
+      sharpeRatio: w.metrics.sharpeRatio,
+      selected: false,
+    }));
+    const positiveKeys = rk.filter((w) => w.pnlPercent > 0).map((w) => w.worldKey);
+    const top = autoSelectResult.positiveCount;
+    setRanking(rk);
+    setTopN(top);
+    setSelectedKeys(new Set(positiveKeys.slice(0, top)));
+    setBlocked(false);
+    setStep('ranking');
   }, [step, autoSelectResult]);
+
+  const buildWorldsPayload = (): Array<Record<string, unknown>> => {
+    if (backtestMode === 'manual' && manualPair) {
+      const st = selectedStrategies[0];
+      return [
+        {
+          worldKey: `${manualPair.symbol}:${manualPair.timeframe}:${st?.id ?? ''}`,
+          strategyId: st?.id ?? '',
+          symbol: manualPair.symbol,
+          timeframe: manualPair.timeframe,
+          source: st?.source,
+          isBuiltIn: st?.isBuiltIn,
+          allocatedUsdc: totalCapital,
+          weight: 1,
+        },
+      ];
+    }
+    return allocation.map((a) => ({
+      worldKey: a.worldKey,
+      strategyId: a.strategyId,
+      symbol: a.symbol,
+      timeframe: a.timeframe,
+      source: a.source,
+      isBuiltIn: a.isBuiltIn,
+      allocatedUsdc: a.allocatedUsdc,
+      weight: a.weight,
+    }));
+  };
 
   const handleStart = async () => {
     if (chaosError) {
       // The engine's chaos state is unknown/inconsistent — never start on a lie.
       setStartError('Start blocked: chaos mode could not be updated. Resolve the chaos mode error before starting.');
       return;
+    }
+    // v2: push the multi-world selection (strategy per world + capital split) so the
+    // engine launches the chosen portfolio rather than a single legacy pair.
+    try {
+      await fetch(`${backendUrl}/api/bot/configure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dex: configValues?.dex ?? persistedConfig?.dex ?? 'jupiter-swap',
+          risk: { maxDailyLoss: configValues?.maxDailyLoss ?? persistedConfig?.risk?.maxDailyLoss ?? 1 },
+          timezone: configValues?.timezone ?? detectTimezone(),
+          autoSelect: backtestMode === 'auto',
+          worlds: buildWorldsPayload(),
+        }),
+      });
+    } catch {
+      // Non-fatal: engine may already hold a compatible config from the config step.
     }
     setStarting(true);
     setStartError('');
@@ -737,14 +771,23 @@ export function SetupWizard({
   };
 
   const handleRerunBacktest = async () => {
-    setStep('backtest-choice');
+    setStep('backtest');
   };
 
-  const StepDot = ({ s, label }: { s: typeof step; label: string }) => {
-    const steps = ['wallet', 'config', 'backtest-choice', 'backtest', 'review'];
-    const idx = steps.indexOf(s) + 1;
+  const STEP_ORDER: WizardStep[] = ['wallet', 'config', 'strategies', 'backtest', 'ranking', 'allocation', 'review'];
+  const STEP_LABELS: Array<[WizardStep, string]> = [
+    ['wallet', 'Wallet'],
+    ['config', 'Config'],
+    ['strategies', 'Strategies'],
+    ['backtest', 'Backtest'],
+    ['ranking', 'Ranking'],
+    ['allocation', 'Allocate'],
+    ['review', 'Review'],
+  ];
+  const StepDot = ({ s, label }: { s: WizardStep; label: string }) => {
+    const idx = STEP_ORDER.indexOf(s) + 1;
     const active = step === s;
-    const done = steps.indexOf(s) < steps.indexOf(step);
+    const done = STEP_ORDER.indexOf(s) < STEP_ORDER.indexOf(step);
     return (
       <span
         onClick={done ? () => setStep(s) : undefined}
@@ -774,35 +817,38 @@ export function SetupWizard({
     );
   };
 
-  const handleBacktestChoice = async (mode: 'auto' | 'manual') => {
-    setBacktestMode(mode);
-    if (mode === 'auto') {
-      try {
-        await fetch(`${backendUrl}/api/bot/backtest`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timeframes: selectedTimeframes }),
-        });
-        setBacktestRunThisSession(true);
-        onBacktestStarted?.();
-      } catch (err) {
-        console.error('Backtest trigger failed:', err);
-      }
+  const runBacktest = async () => {
+    setBlocked(false);
+    setRanking([]);
+    setSelectedKeys(new Set());
+    setBacktestRunThisSession(true);
+    try {
+      await fetch(`${backendUrl}/api/bot/backtest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timeframes: selectedTimeframes,
+          strategyIds: selectedStrategies.map((s) => s.id),
+        }),
+      });
+      onBacktestStarted?.();
+    } catch (err) {
+      console.error('Backtest trigger failed:', err);
     }
-    setStep('backtest');
   };
 
   return (
     <div className="flex flex-col gap-3">
       {/* Step indicator */}
       <div className="flex items-center border-b border-[var(--color-card)] pb-2">
-        <StepDot s="wallet" label="Wallet" />
-        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
-        <StepDot s="config" label="Config" />
-        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
-        <StepDot s="backtest-choice" label="Backtest" />
-        <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
-        <StepDot s="review" label="Review" />
+        {STEP_LABELS.map(([s, label], i) => (
+          <Fragment key={s}>
+            <StepDot s={s} label={label} />
+            {i < STEP_LABELS.length - 1 && (
+              <span className="mx-0.5 text-[var(--color-muted-foreground)]">→</span>
+            )}
+          </Fragment>
+        ))}
         <div className="flex-1" />
         <Button
           type="button"
@@ -839,7 +885,7 @@ export function SetupWizard({
         <div>
           <BotConfigPanel
             backendUrl={backendUrl}
-            onConfigured={() => { setStep('backtest-choice'); }}
+            onConfigured={() => { setStep('strategies'); }}
             onConfigValues={(v) => setConfigValues(v)}
             usdcBalance={usdcBalance}
           />
@@ -856,40 +902,14 @@ export function SetupWizard({
         </div>
       )}
 
-      {/* Step 3: Backtest Choice */}
-      {step === 'backtest-choice' && (
+      {/* Step 3: Strategies */}
+      {step === 'strategies' && (
         <div>
           <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
-            Backtest Selection
+            Strategies
           </div>
-          <div className="mb-3 text-[11px] text-[var(--color-muted-foreground)]">
-            How would you like to select your trading pair?
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleBacktestChoice('auto')}
-              className="h-auto flex-col items-start gap-1 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-4 py-3 text-left text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
-            >
-              <span>🚀 Run Auto-Select Backtest</span>
-              <span className="text-[10px] font-normal text-[var(--color-muted-foreground)]">
-                Automatically evaluate multiple pairs and timeframes to find the best performer
-              </span>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleBacktestChoice('manual')}
-              className="h-auto flex-col items-start gap-1 border-[#eab308]/60 bg-[rgba(234,179,8,0.12)] px-4 py-3 text-left text-xs font-semibold text-[#eab308] hover:bg-[rgba(234,179,8,0.12)]"
-            >
-              <span>✋ Manually Select Pair & Timeframe</span>
-              <span className="text-[10px] font-normal text-[var(--color-muted-foreground)]">
-                Choose your own pair and timeframe — you take full responsibility for the selection
-              </span>
-            </Button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 12 }}>
+          <StrategyMultiSelect selected={selectedStrategies} onChange={setSelectedStrategies} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
             <Button
               type="button"
               variant="outline"
@@ -898,6 +918,15 @@ export function SetupWizard({
             >
               ← Back
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setStep('backtest')}
+              disabled={selectedStrategies.length === 0}
+              className="h-11 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-6 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
+            >
+              Next →
+            </Button>
           </div>
         </div>
       )}
@@ -905,6 +934,57 @@ export function SetupWizard({
       {/* Step 4: Backtest */}
       {step === 'backtest' && (
         <div>
+          {/* §2 Block gate — zero positive-PnL worlds blocks progression */}
+          {blocked && autoSelectResult && (
+            <div role="alert" className="mb-3 rounded-md border border-[var(--color-destructive)]/50 bg-[rgba(239,68,68,0.12)] p-3">
+              <div className="text-[12px] font-semibold text-[var(--color-destructive)]">⚠ No profitable worlds found</div>
+              <p className="mt-1 text-[11px] text-[var(--color-muted-foreground)]">
+                Every backtested combination finished with non-positive PnL. The bot won't trade a portfolio with no positive expectation.
+              </p>
+              <Button
+                type="button"
+                autoFocus
+                onClick={() => setStep('strategies')}
+                className="mt-2 h-10 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-4 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
+              >
+                ← Back — pick another strategy
+              </Button>
+              <p className="mt-1.5 text-[10px] text-[var(--color-muted-foreground)]">
+                Adjust your strategy selection or timeframes, then run the backtest again.
+              </p>
+              <div className="mt-2 opacity-60">
+                <AutoSelectGrid
+                  statuses={Object.fromEntries(
+                    autoSelectResult.ranking.map((r) => [r.worldKey, { phase: 'done', status: 'done' as const }]),
+                  )}
+                  ranking={autoSelectResult.ranking}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Mode toggle (pre-run only) */}
+          {!autoSelectProgress && (
+            <div className="mb-3 flex gap-2">
+              <Button
+                type="button"
+                variant={backtestMode === 'auto' ? 'default' : 'outline'}
+                onClick={() => setBacktestMode('auto')}
+                className="h-10 px-3.5 text-[11px]"
+              >
+                Auto (backtest-all)
+              </Button>
+              <Button
+                type="button"
+                variant={backtestMode === 'manual' ? 'default' : 'outline'}
+                onClick={() => setBacktestMode('manual')}
+                className="h-10 px-3.5 text-[11px]"
+              >
+                Manual (single world)
+              </Button>
+            </div>
+          )}
+
           {/* Manual Selection Mode */}
           {backtestMode === 'manual' && (
             <div className="mb-3 rounded-md border border-[#eab308] bg-[rgba(234,179,8,0.12)] p-3">
@@ -1016,6 +1096,17 @@ export function SetupWizard({
                 </div>
               )}
 
+              {!autoSelectProgress && (
+                <Button
+                  type="button"
+                  onClick={runBacktest}
+                  disabled={selectedStrategies.length === 0}
+                  className="mt-2 h-11 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-6 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
+                >
+                  Run Backtest
+                </Button>
+              )}
+
               {/* Auto-Select Progress */}
               {autoSelectProgress && (
             <div className="rounded-md border border-[#eab308] bg-[var(--color-secondary)]/60 p-3">
@@ -1030,7 +1121,8 @@ export function SetupWizard({
                   statuses={autoSelectProgress.statuses}
                   ranking={autoSelectProgress.ranking}
                   candleProgress={autoSelectProgress.candleProgress}
-                  currentPair={`${autoSelectProgress.pair.symbol} (${autoSelectProgress.pair.timeframe})`}
+                  concurrency={autoSelectProgress.concurrency}
+                  activeWorlds={autoSelectProgress.activeWorlds}
                 />
               </div>
             </div>
@@ -1055,11 +1147,11 @@ export function SetupWizard({
               />
               <div className="mt-2 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
                 <span className="text-[11px] font-semibold text-[#22c55e]">
-                  ★ Best: {autoSelectResult.best.label}
+                  ★ Best: {autoSelectResult.best?.label ?? '—'}
                 </span>
                 <span className="ml-2 text-[10px] text-[var(--color-muted-foreground)]">
-                  PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
-                  {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
+                  PF: {autoSelectResult.best?.metrics.profitFactor?.toFixed(2)}
+                  {' '}Sharpe: {autoSelectResult.best?.metrics.sharpeRatio?.toFixed(2)}
                 </span>
               </div>
             </div>
@@ -1076,7 +1168,7 @@ export function SetupWizard({
             <Button
               type="button"
               variant="outline"
-              onClick={() => backtestMode === 'manual' ? setStep('backtest-choice') : setStep('config')}
+              onClick={() => setStep('config')}
               disabled={!!autoSelectProgress}
               className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >
@@ -1086,8 +1178,8 @@ export function SetupWizard({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setStep('review')}
-                disabled={!autoSelectResult}
+                onClick={() => setStep('ranking')}
+                disabled={!autoSelectResult || blocked || !!autoSelectProgress}
                 className="h-11 border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-6 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]"
               >
                 Next →
@@ -1137,7 +1229,57 @@ export function SetupWizard({
         </div>
       )}
 
-      {/* Step 4: Review & Start */}
+      {/* Step 5: World Ranking */}
+      {step === 'ranking' && (
+        <div>
+          <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">World Ranking</div>
+          <WorldRankingPanel
+            ranking={ranking}
+            positiveCount={ranking.filter((w) => w.pnlPercent > 0).length}
+            topN={topN}
+            onTopNChange={(n) => {
+              setTopN(n);
+              const posKeys = ranking.filter((w) => w.pnlPercent > 0).map((w) => w.worldKey);
+              setSelectedKeys(new Set(posKeys.slice(0, n)));
+            }}
+            selectedKeys={selectedKeys}
+            onToggleWorld={(k) =>
+              setSelectedKeys((prev) => {
+                const nw = new Set(prev);
+                if (nw.has(k)) nw.delete(k);
+                else nw.add(k);
+                return nw;
+              })
+            }
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <Button type="button" variant="outline" onClick={() => setStep('backtest')} className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]">
+              ← Back
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setStep('allocation')} disabled={selectedKeys.size === 0} className="h-11 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-6 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]">
+              Next →
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 6: Capital Allocation */}
+      {step === 'allocation' && (
+        <div>
+          <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">Capital Allocation</div>
+          <CapitalAllocationPanel allocation={allocation} totalCapital={totalCapital} onTotalCapitalChange={setTotalCapital} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <Button type="button" variant="outline" onClick={() => setStep('ranking')} className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]">
+              ← Back
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setStep('review')} disabled={allocation.length === 0 || !(totalCapital > 0)} className="h-11 border-[#22c55e]/50 bg-[rgba(34,197,94,0.12)] px-6 text-xs font-semibold text-[#22c55e] hover:bg-[rgba(34,197,94,0.12)]">
+              Next →
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Step 7: Review & Start */}
       {step === 'review' && (
         <div>
           <div className="mb-2 text-xs font-semibold text-[var(--color-muted-foreground)]">
@@ -1153,9 +1295,9 @@ export function SetupWizard({
             {configValues && (
               <>
                 <div>
-                  <span className="text-[var(--color-muted-foreground)]">Strategy: </span>
+                  <span className="text-[var(--color-muted-foreground)]">Strategies: </span>
                   <span className="text-[var(--color-foreground)]">
-                    {extractScriptName(configValues.strategySource) ?? '(unnamed strategy)'}
+                    {selectedStrategies.length > 0 ? selectedStrategies.map((s) => s.name).join(', ') : '(none)'}
                   </span>
                 </div>
                 <div>
@@ -1163,31 +1305,34 @@ export function SetupWizard({
                   <span className="text-[var(--color-foreground)]">{configValues.dex}</span>
                 </div>
                 <div>
-                  <span className="text-[var(--color-muted-foreground)]">Selected Pair: </span>
-                  <span className="font-semibold text-[#22c55e]">
-                    {backtestMode === 'manual' && manualPair
-                      ? `${manualPair.symbol} (${manualPair.timeframe === '5' ? '5m' : manualPair.timeframe === '15' ? '15m' : manualPair.timeframe === '60' ? '1h' : '4h'})`
-                      : autoSelectResult?.best?.label ?? (persistedConfig?.pairs?.[0] ? `${persistedConfig.pairs[0].symbol} (${persistedConfig.pairs[0].timeframe})` : 'Pending...')}
-                  </span>
-                </div>
-                {backtestMode === 'manual' && (
-                  <div className="ml-[60px] text-[10px] text-[#eab308]">
-                    Manual selection — no auto-select evaluation performed
-                  </div>
-                )}
-                {autoSelectResult && backtestMode === 'auto' && (
-                  <div className="ml-[60px] text-[10px] text-[var(--color-muted-foreground)]">
-                    PF: {autoSelectResult.best.metrics.profitFactor?.toFixed(2)}
-                    {' '}Sharpe: {autoSelectResult.best.metrics.sharpeRatio?.toFixed(2)}
-                  </div>
-                )}
-                <div>
                   <span className="text-[var(--color-muted-foreground)]">Max Daily Loss: </span>
                   <span className="text-[var(--color-foreground)]">${configValues.maxDailyLoss}</span>
                 </div>
                 <div>
                   <span className="text-[var(--color-muted-foreground)]">Timezone: </span>
                   <span className="text-[var(--color-foreground)]">{getTimezoneLabel(configValues.timezone)}</span>
+                </div>
+                <div className="mt-1">
+                  <span className="text-[var(--color-muted-foreground)]">Selected Worlds: </span>
+                  <ul className="ml-4 list-disc">
+                    {backtestMode === 'manual' && manualPair && selectedStrategies[0] ? (
+                      <li key="manual">
+                        {manualPair.symbol} · {tfLabel(manualPair.timeframe)} · {selectedStrategies[0].name} — ${totalCapital.toFixed(2)}
+                      </li>
+                    ) : allocation.length > 0 ? (
+                      allocation.map((a) => (
+                        <li key={a.worldKey}>
+                          {a.symbol} · {tfLabel(a.timeframe)} · {a.strategyName ?? a.strategyId} · PnL {a.pnlPercent.toFixed(2)}% · ${a.allocatedUsdc.toFixed(2)}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-[var(--color-muted-foreground)]">Pending…</li>
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  <span className="text-[var(--color-muted-foreground)]">Total Capital: </span>
+                  <span className="text-[var(--color-foreground)]">${totalCapital.toFixed(2)}</span>
                 </div>
               </>
             )}
@@ -1249,7 +1394,7 @@ export function SetupWizard({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setStep('config')}
+              onClick={() => setStep(backtestMode === 'manual' ? 'config' : 'allocation')}
               disabled={!!autoSelectProgress}
               className="h-10 px-3.5 text-[11px] text-[var(--color-muted-foreground)]"
             >

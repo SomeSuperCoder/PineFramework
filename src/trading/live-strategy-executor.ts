@@ -14,7 +14,7 @@ import { compile } from '../language/compiler/index.js';
 import { createExecutionContextFromBar } from '../api.js';
 import { extractScriptName } from '../utils/script-name.js';
 import { DexAdapter, type SwapResult } from './dex/dex-adapter.js';
-import { ClosedCandle, PairId } from './scheduler.js';
+import { ClosedCandle, PairId, Mutex } from './scheduler.js';
 import type { WalletManager } from './wallet/wallet-manager.js';
 import { USDC_MINT } from './solana-wallet.js';
 import { getTokenInfo, isValidPairSymbol, TOKEN_MINTS } from './token-registry.js';
@@ -30,7 +30,9 @@ import type {
   ChaosHeartbeat,
   DexKind,
   TradeRecord,
+  WorldConfig,
 } from './types.js';
+import { LEGACY_STRATEGY_ID } from './types.js';
 import {
   aggregateRealizedPnl,
   SOL_MINT_CODE,
@@ -133,6 +135,27 @@ function toStrategyMarker(
 
 // ---- Types ----
 
+/**
+ * B5 SEAM (typed placeholder). Resolves the capital allocated to a SINGLE
+ * world. The live executor calls this (when injected) to size each world's
+ * orders independently; until the CapitalAllocator (task B5) is implemented and
+ * injected, the executor falls back to the wallet's available balance so
+ * behavior is unchanged. This is intentionally a thin hook — B4 does NOT
+ * implement allocation logic, it only wires the call site.
+ */
+export interface CapitalAllocatorInput {
+  /** Canonical in-memory world key (`symbol:timeframe:strategyId`). */
+  worldKey: string;
+  symbol: string;
+  timeframe: string;
+  strategyId: string;
+}
+
+export interface CapitalAllocator {
+  /** Return the capital (USDC smallest units) allocated to one world. */
+  allocateForWorld(input: CapitalAllocatorInput): bigint | Promise<bigint>;
+}
+
 export interface LiveStrategyConfig {
   /** Strategy source code (Pine Script). */
   strategySource: string;
@@ -193,6 +216,21 @@ export interface LiveStrategyConfig {
    * and logged, never propagated to trading.
    */
   onTradeClosed?: (trade: TradeRecord) => void;
+  /**
+   * B5 SEAM: optional per-world capital allocator. When present, the executor
+   * sizes each world's orders against its allocated capital; when absent it
+   * falls back to the wallet's available balance (no behavior change). B4 only
+   * wires the call site — the allocator itself is implemented in task B5.
+   */
+  capitalAllocator?: CapitalAllocator;
+  /**
+   * Multi-world selection (v2, B4). When provided, the executor keys every
+   * strategy state by the 3-part world key `${symbol}:${timeframe}:${strategyId}`
+   * and each world gets its own order mutex. When absent, the legacy `pairs`
+   * list is used and states fall back to the 2-part `${symbol}:${timeframe}` key
+   * so single-pair configs keep working unchanged.
+   */
+  worlds?: WorldConfig[];
 }
 
 export interface StrategyState {
@@ -217,6 +255,80 @@ export interface StrategyState {
   barIndex: number;
   /** Timestamp of the last bar fed to the engine (dedupe guard). */
   lastBarTimestamp: number;
+}
+
+/**
+ * The persistable slice of a single world's strategy state. The runtime engine
+ * and programmatic engine cannot be serialized and are rebuilt at load time,
+ * so they are intentionally excluded.
+ */
+export interface WorldStrategyState {
+  position: StrategyState['position'];
+  variables: Record<string, unknown>;
+}
+
+/**
+ * v2 strategy-state file (D4). World-keyed by `${symbol}:${timeframe}:${strategyId}`.
+ * The `legacy` bucket preserves entries that could NOT be remapped during a
+ * legacy migration so live positions are never silently dropped.
+ */
+export interface StrategyStateFileV2 {
+  schemaVersion: 2;
+  states: Record<string, WorldStrategyState>;
+  /**
+   * Entries from a legacy flat file that could not be mapped to a world key
+   * (malformed key, or no resolvable strategy id) are preserved here. They are
+   * re-persisted on the next save so nothing is lost.
+   */
+  legacy?: Record<string, WorldStrategyState>;
+}
+
+/** Fallback strategy id used when migrating a legacy single-strategy file. */
+export const LEGACY_STRATEGY_STATE_KEY = '__legacy__';
+
+/**
+ * Migrate a legacy (v1) flat strategy-state map into the v2 world-keyed shape.
+ *
+ * Legacy flat keys are `${symbol}:${timeframe}`. Each is remapped to a world
+ * key `${symbol}:${timeframe}:${strategyId}` via `resolveStrategyId`. If a key
+ * cannot be split into symbol:timeframe, or `resolveStrategyId` returns null,
+ * the entry is preserved under `legacy` — positions are NEVER silently dropped.
+ *
+ * Pure and side-effect-free so it can be unit-tested directly.
+ */
+export function migrateLegacyStrategyState(
+  legacy: Record<string, WorldStrategyState>,
+  resolveStrategyId: (symbol: string, timeframe: string) => string | null = () =>
+    LEGACY_STRATEGY_STATE_KEY,
+): StrategyStateFileV2 {
+  const states: Record<string, WorldStrategyState> = {};
+  const legacyBucket: Record<string, WorldStrategyState> = {};
+
+  for (const [key, value] of Object.entries(legacy)) {
+    const sep = key.lastIndexOf(':');
+    if (sep <= 0 || sep >= key.length - 1) {
+      legacyBucket[key] = value; // malformed key → preserve, never drop
+      continue;
+    }
+    const symbol = key.slice(0, sep);
+    const timeframe = key.slice(sep + 1);
+    if (!symbol || !timeframe) {
+      legacyBucket[key] = value;
+      continue;
+    }
+    const strategyId = resolveStrategyId(symbol, timeframe);
+    if (!strategyId) {
+      legacyBucket[key] = value; // unmappable → preserve
+      continue;
+    }
+    states[`${symbol}:${timeframe}:${strategyId}`] = value;
+  }
+
+  const result: StrategyStateFileV2 = { schemaVersion: 2, states };
+  if (Object.keys(legacyBucket).length > 0) {
+    result.legacy = legacyBucket;
+  }
+  return result;
 }
 
 export interface TradeSignal {
@@ -302,7 +414,16 @@ export interface PositionInfo {
 export class LiveStrategyExecutor {
   private config: LiveStrategyConfig;
   private strategyStates = new Map<string, StrategyState>();
+  /**
+   * B4: per-world order mutexes. Each world (3-part key) gets its OWN mutex so
+   * two worlds never serialize order submission against the shared wallet, while
+   * a single world's positions stay isolated. The scheduler's global mutex now
+   * only guards signal collection; isolation lives here.
+   */
+  private worldOrderMutexes = new Map<string, Mutex>();
   private stateFilePath: string;
+  /** Legacy (unmappable) entries preserved across save/load so positions are not dropped (D4). */
+  private legacyStates?: Record<string, WorldStrategyState>;
   /**
    * Chaos execution mode: 'live' when the chaos engine is seeded with real
    * wallet funds, 'simulated' with the failure reason when the equity floor is
@@ -687,6 +808,12 @@ export class LiveStrategyExecutor {
    * Execute a trade signal on the DEX.
    */
   async executeSignal(signal: TradeSignal): Promise<ExecutionResult> {
+    // B4: per-world order mutex. Each world (canonical key) gets its own mutex
+    // so two worlds never serialize order submission against the shared wallet,
+    // while a single world's positions stay isolated. The scheduler's global
+    // mutex now only guards signal collection; isolation lives here.
+    const lockKey = this.resolveWorldKeyForSignal(signal);
+    return this.getWorldMutex(lockKey).runExclusive(async () => {
     try {
       // Risk gate (R-gate): enforce before ANY buy proceeds — before balance
       // fetch or quote construction. Every signal (chaos + strategy) flows
@@ -719,6 +846,20 @@ export class LiveStrategyExecutor {
         const availableBalance = BigInt(balance.amount);
         const availableBalanceUsdc = Number(availableBalance) / 1e6;
 
+        // B5 SEAM: per-world capital basis. When a CapitalAllocator is injected
+        // (task B5), size this world's orders against its allocated capital;
+        // otherwise fall back to the wallet's available balance (no change).
+        const worldParts = lockKey.split(':');
+        const strategyId = worldParts.length === 3 ? worldParts[2]! : LEGACY_STRATEGY_ID;
+        const allocatedUsdc = await this.resolveWorldCapital(
+          lockKey,
+          signal.symbol,
+          signal.timeframe ?? '',
+          strategyId,
+        );
+        const spendableUsdc =
+          allocatedUsdc != null ? Math.min(availableBalanceUsdc, allocatedUsdc) : availableBalanceUsdc;
+
         // Buy input = position fraction of the available balance in WHOLE USDC.
         // Deliberately NO price division — the DEX contract takes the input
         // amount in the input token's smallest units (micro-USDC), and the old
@@ -731,7 +872,7 @@ export class LiveStrategyExecutor {
         // blocker). Strategy signals omit sizeFraction and fall back to the
         // configured positionSizePercent.
         const positionFraction = signal.sizeFraction ?? this.config.positionSizePercent / 100;
-        const usdcAmount = signal.action === 'buy' ? availableBalanceUsdc * positionFraction : 0;
+        const usdcAmount = signal.action === 'buy' ? spendableUsdc * positionFraction : 0;
 
         // Dust guard: skip trades below 1% of maxDailyLoss (SSOT from config).
         // Compares whole-USDC usdcAmount against the whole-USDC threshold —
@@ -848,6 +989,7 @@ export class LiveStrategyExecutor {
       }
       return { success: false, signal, error: message };
     }
+    });
   }
 
   /**
@@ -900,16 +1042,23 @@ export class LiveStrategyExecutor {
    */
   getPositions(): PositionInfo[] {
     const positions: PositionInfo[] = [];
-    for (const [key, state] of this.strategyStates) {
-      if (state.position.direction === 'flat') continue;
-      // Confirmed-fill gate (task 1.4): only a successful swap marks the pair
+    for (const world of this.activeWorlds()) {
+      // A confirmed fill is keyed by resolveWorldKeyForSignal at fill time, which
+      // can yield either the legacy 2-part `${symbol}:${timeframe}` key (when the
+      // signal carried a timeframe) or the canonical 3-part
+      // `${symbol}:${timeframe}:${strategyId}` key (when it fell back to the
+      // activeWorlds() symbol match). Check BOTH forms so neither legacy nor
+      // multi-world positions are silently dropped.
+      const key3 = this.worldKeyFor(world.symbol, world.timeframe, world.strategy);
+      const key2 = `${world.symbol}:${world.timeframe}`;
+      const state = this.strategyStates.get(key3) ?? this.strategyStates.get(key2);
+      if (!state || state.position.direction === 'flat') continue;
+      // Confirmed-fill gate (task 1.4): only a successful swap marks the world
       // confirmed; staged-but-unconfirmed positions are invisible here.
-      if (!this.confirmedPositions.has(key)) continue;
-      // Key format is `${symbol}:${timeframe}` (getPairKey) — split once.
-      const separator = key.lastIndexOf(':');
+      if (!this.confirmedPositions.has(key3) && !this.confirmedPositions.has(key2)) continue;
       positions.push({
-        symbol: key.slice(0, separator),
-        timeframe: key.slice(separator + 1),
+        symbol: world.symbol,
+        timeframe: world.timeframe,
         direction: state.position.direction,
         quantity: state.position.quantity,
         entryPrice: state.position.entryPrice,
@@ -924,24 +1073,39 @@ export class LiveStrategyExecutor {
    * engine truth for the dashboard, preferred over disk config `pairs[0]`.
    */
   getRunningPairs(): PairId[] {
-    return this.config.pairs.map((pair) => ({ symbol: pair.symbol, timeframe: pair.timeframe }));
+    return this.activeWorlds().map((w) => ({ symbol: w.symbol, timeframe: w.timeframe }));
   }
 
   /**
-   * Save strategy state to disk.
+   * Save strategy state to disk (v2 envelope, D4).
+   *
+   * Writes `{ schemaVersion: 2, states, legacy? }`. World keys are derived
+   * from the in-memory map keys (B4 owns the key format); a 2-part legacy key
+   * `${symbol}:${timeframe}` is promoted to a world key by appending the
+   * legacy strategy id so the file is always in the v2 world-keyed shape. Any
+   * `legacy` bucket preserved from a prior load is carried forward so those
+   * positions survive re-save.
    */
   async saveState(): Promise<void> {
     const stateData = this.getState();
 
-    // Convert Map to serializable object
-    const serializableState: Record<string, Pick<StrategyState, 'position' | 'variables'>> = {};
+    // Convert Map to serializable object, promoting legacy 2-part keys to
+    // world keys so the on-disk format is consistently v2.
+    const serializableState: Record<string, WorldStrategyState> = {};
     for (const [key, value] of Object.entries(stateData)) {
-      serializableState[key] = {
+      const worldKey = key.split(':').length === 3 ? key : `${key}:${LEGACY_STRATEGY_STATE_KEY}`;
+      serializableState[worldKey] = {
         position: value.position,
         variables: value.variables,
-        // Note: StrategyEngine instance cannot be serialized
-        // In production, you'd need to serialize/deserialize the engine state
       };
+    }
+
+    const file: StrategyStateFileV2 = {
+      schemaVersion: 2,
+      states: serializableState,
+    };
+    if (this.legacyStates && Object.keys(this.legacyStates).length > 0) {
+      file.legacy = this.legacyStates;
     }
 
     // Ensure directory exists
@@ -951,11 +1115,17 @@ export class LiveStrategyExecutor {
     }
 
     // Write state to file
-    await writeFile(this.stateFilePath, JSON.stringify(serializableState, null, 2));
+    await writeFile(this.stateFilePath, JSON.stringify(file, null, 2));
   }
 
   /**
-   * Load strategy state from disk.
+   * Load strategy state from disk (v2-aware, D4).
+   *
+   * - v2 file (`schemaVersion: 2`): restores `states` (and keeps any `legacy`
+   *   bucket for re-persistence) directly into the in-memory map.
+   * - legacy flat file: migrated via `migrateLegacyStrategyState` into world
+   *   keys; unmappable entries are preserved under `legacyStates` so positions
+   *   are never silently dropped.
    */
   async loadState(): Promise<boolean> {
     try {
@@ -964,10 +1134,21 @@ export class LiveStrategyExecutor {
       }
 
       const data = await readFile(this.stateFilePath, 'utf-8');
-      const stateData = JSON.parse(data) as Record<string, StrategyState>;
+      const parsed = JSON.parse(data) as StrategyStateFileV2 | Record<string, StrategyState>;
 
-      // Restore state
-      this.setState(stateData);
+      // v2 envelope
+      if (parsed && (parsed as StrategyStateFileV2).schemaVersion === 2) {
+        const v2 = parsed as StrategyStateFileV2;
+        this.legacyStates = v2.legacy;
+        this.setState(v2.states as Record<string, StrategyState>);
+        return true;
+      }
+
+      // Legacy flat file: keyed `${symbol}:${timeframe}`.
+      const legacy = parsed as Record<string, WorldStrategyState>;
+      const migrated = migrateLegacyStrategyState(legacy);
+      this.legacyStates = migrated.legacy;
+      this.setState(migrated.states as Record<string, StrategyState>);
       return true;
     } catch (err) {
       console.error('Failed to load strategy state:', err);
@@ -1007,10 +1188,10 @@ export class LiveStrategyExecutor {
 
     // Resolve the seed equity once for all pairs (avoids N sequential RPC
     // calls) — real balance or the floor with a loud failure mode.
-    const { seedEquity, mode } = await this.resolveChaosSeed();
+      const { seedEquity, mode } = await this.resolveChaosSeed();
     this.chaosExecutionMode = mode;
 
-    for (const pair of this.config.pairs) {
+    for (const pair of this.activeWorlds()) {
       const key = this.getPairKey(pair);
       const state = this.strategyStates.get(key);
       if (state) {
@@ -1046,7 +1227,7 @@ export class LiveStrategyExecutor {
       // null runtime is already an explicit no-op in processCandle.
       const source = this.config.strategySource;
       const hasStrategySource = !!source && source.trim() !== '';
-      for (const pair of this.config.pairs) {
+      for (const pair of this.activeWorlds()) {
         const key = this.getPairKey(pair);
         if (!this.strategyStates.has(key)) continue;
         // Non-chaos branch of initializeStrategy: fresh state — chaos
@@ -1369,8 +1550,146 @@ export class LiveStrategyExecutor {
     }
   }
 
+  // ── Multi-world keying (B4) ──────────────────────────────────────────────
+
+  /** True when this executor was configured with explicit multi-world selection. */
+  private get hasWorlds(): boolean {
+    return Array.isArray(this.config.worlds) && this.config.worlds.length > 0;
+  }
+
+  /**
+   * The worlds this executor operates on: the explicit `config.worlds` when
+   * present, otherwise a single-world-per-pair view of the legacy `pairs` list
+   * (keyed by `LEGACY_STRATEGY_ID`). Used for iteration (chaos hot-swap,
+   * getPositions, getRunningPairs) so both shapes share one code path.
+   */
+  private activeWorlds(): Array<{ symbol: string; timeframe: string; strategy: string }> {
+    if (this.hasWorlds) return this.config.worlds!;
+    return this.config.pairs.map((p) => ({
+      symbol: p.symbol,
+      timeframe: p.timeframe,
+      strategy: LEGACY_STRATEGY_ID,
+    }));
+  }
+
+  /** Canonical in-memory key for a world (3-part). */
+  private worldKeyFor(symbol: string, timeframe: string, strategy: string): string {
+    return `${symbol}:${timeframe}:${strategy}`;
+  }
+
+  /**
+   * Resolve the canonical world key for a (symbol, timeframe) pair. When the
+   * executor was configured with explicit worlds, returns the matching world's
+   * 3-part key; otherwise falls back to the legacy 2-part `${symbol}:${timeframe}`
+   * key so single-pair configs keep working unchanged (backward compatible).
+   */
+  private resolveWorldKey(symbol: string, timeframe: string): string {
+    if (this.hasWorlds) {
+      const world = this.config.worlds!.find(
+        (w) => w.symbol === symbol && w.timeframe === timeframe,
+      );
+      if (world) return this.worldKeyFor(world.symbol, world.timeframe, world.strategy);
+    }
+    return `${symbol}:${timeframe}`;
+  }
+
+  /** Parse a world key back into its components (handles 2- and 3-part keys). */
+  private worldFromKey(key: string): { symbol: string; timeframe: string; strategy: string } | undefined {
+    if (this.hasWorlds) {
+      const world = this.config.worlds!.find(
+        (w) => this.worldKeyFor(w.symbol, w.timeframe, w.strategy) === key,
+      );
+      if (world) return world;
+    }
+    const sep = key.lastIndexOf(':');
+    if (sep <= 0) return undefined;
+    return {
+      symbol: key.slice(0, sep),
+      timeframe: key.slice(sep + 1),
+      strategy: LEGACY_STRATEGY_ID,
+    };
+  }
+
+  /** Lazily create (and cache) the per-world order mutex. */
+  private getWorldMutex(key: string): Mutex {
+    let mutex = this.worldOrderMutexes.get(key);
+    if (!mutex) {
+      mutex = new Mutex();
+      this.worldOrderMutexes.set(key, mutex);
+    }
+    return mutex;
+  }
+
+  /**
+   * Resolve the world key a trade signal belongs to (B4). Prefers the exact
+   * world key when the signal carries a timeframe; otherwise falls back to any
+   * non-flat state tracking this symbol (the scheduler's signal mapping can drop
+   * `timeframe` on some hops). Returns the canonical key used for both state
+   * lookup and per-world mutex isolation.
+   */
+  private resolveWorldKeyForSignal(signal: TradeSignal): string {
+    if (signal.timeframe) {
+      const exact = this.resolveWorldKey(signal.symbol, signal.timeframe);
+      if (this.strategyStates.has(exact)) return exact;
+    }
+    for (const world of this.activeWorlds()) {
+      // Resolve the state key the SAME way initializeStrategy stores it
+      // (getPairKey → resolveWorldKey). In legacy mode that is the 2-part
+      // `${symbol}:${timeframe}` key; in multi-world mode it is the canonical
+      // 3-part key. Using worldKeyFor() here would look up a 3-part key the
+      // state was never stored under, so a signal without `timeframe` could
+      // never match its own state (regression vs the 2026-08-06 incident fix).
+      const key = this.resolveWorldKey(world.symbol, world.timeframe);
+      const state = this.strategyStates.get(key);
+      if (state && state.position.symbol === signal.symbol && state.position.direction !== 'flat') {
+        return key;
+      }
+    }
+    // Absolute fallback: best-effort key so a signal still locks *something*.
+    return this.resolveWorldKey(signal.symbol, signal.timeframe ?? '');
+  }
+
+  /**
+   * B5 SEAM: resolve the per-world capital basis (USDC whole units) for sizing.
+   * Returns null when no allocator is injected (fall back to wallet balance).
+   * A failing allocator degrades gracefully to null rather than breaking trades.
+   */
+  private async resolveWorldCapital(
+    worldKey: string,
+    symbol: string,
+    timeframe: string,
+    strategyId: string,
+  ): Promise<number | null> {
+    const allocator = this.config.capitalAllocator;
+    if (!allocator) return null;
+    try {
+      const cap = await allocator.allocateForWorld({ worldKey, symbol, timeframe, strategyId });
+      return Number(cap) / 1e6;
+    } catch (err) {
+      console.error('[LiveStrategyExecutor] CapitalAllocator failed — falling back to wallet balance', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
+  /** Public: the canonical world keys this executor currently holds state for. */
+  getWorldKeys(): string[] {
+    return Array.from(this.strategyStates.keys());
+  }
+
+  /**
+   * Initialize strategy state for one world (B4). Same as {@link initializeStrategy}
+   * but named for the multi-world entry point; derives the world identity from
+   * the world's symbol+timeframe. Backward compatible: bot-engine may also call
+   * `initializeStrategy(pair)` directly.
+   */
+  async initializeWorld(world: WorldConfig): Promise<void> {
+    await this.initializeStrategy({ symbol: world.symbol, timeframe: world.timeframe });
+  }
+
   private getPairKey(pair: PairId): string {
-    return `${pair.symbol}:${pair.timeframe}`;
+    return this.resolveWorldKey(pair.symbol, pair.timeframe);
   }
 
   /**
@@ -1435,6 +1754,14 @@ export class LiveStrategyExecutor {
     const state = this.strategyStates.get(key);
 
     if (!state) {
+      // Loud guard (incident 2026-08-06): a confirmed swap whose key resolves
+      // but matches no strategy state must surface, never silently vanish.
+      console.error(
+        `[LiveStrategyExecutor] Cannot track confirmed fill: no strategy state ` +
+          `for ${signal.symbol}${signal.timeframe ? `:${signal.timeframe}` : ' (no timeframe)'} ` +
+          `(action=${signal.action}, confirmed=${swapResult?.success === true}) — a real on-chain ` +
+          `position stays invisible to getPositions()/close-on-stop`,
+      );
       return;
     }
 
@@ -1453,10 +1780,11 @@ export class LiveStrategyExecutor {
         };
         this.confirmedPositions.set(key, {
           ...state.position,
-          // Timeframe comes from the resolved canonical key (never undefined —
-          // the symbol fallback in getStateKeyForSignal may have supplied it),
-          // parsed the same way getPositions() reads it back.
-          timeframe: key.slice(key.lastIndexOf(':') + 1),
+          // Timeframe comes from the resolved canonical world key (B4: a 3-part
+          // `${symbol}:${timeframe}:${strategyId}` key must NOT be split on its
+          // last ':' — that would yield the strategyId, not the timeframe). Use
+          // worldFromKey so getPositions() reads back the same timeframe.
+          timeframe: this.worldFromKey(key)?.timeframe ?? state.position.symbol,
         });
       } else {
         // Buy failed or was blocked before the swap: the optimistic staged long
@@ -1848,31 +2176,13 @@ export class LiveStrategyExecutor {
    * dropping a confirmed swap.
    */
   private getStateKeyForSignal(signal: TradeSignal): string | undefined {
-    if (signal.timeframe) {
-      const exact = `${signal.symbol}:${signal.timeframe}`;
-      if (this.strategyStates.has(exact)) {
-        return exact;
-      }
-      // Timeframe present but no state under it — fall through to the symbol
-      // fallback so a tracked state under any key isn't skipped.
-    }
-    for (const [key, state] of this.strategyStates) {
-      if (state.position.symbol === signal.symbol && state.position.direction !== 'flat') {
-        return key;
-      }
-    }
-    return undefined;
+    // B4: resolve via the canonical world key so 3-part (multi-world) keys are
+    // matched, with a symbol fallback for signals whose timeframe was dropped.
+    return this.resolveWorldKeyForSignal(signal);
   }
 
   private getStateForSignal(signal: TradeSignal): StrategyState | undefined {
-    if (signal.timeframe) {
-      return this.strategyStates.get(`${signal.symbol}:${signal.timeframe}`);
-    }
-    for (const state of this.strategyStates.values()) {
-      if (state.position.symbol === signal.symbol && state.position.direction !== 'flat') {
-        return state;
-      }
-    }
-    return undefined;
+    const key = this.getStateKeyForSignal(signal);
+    return key ? this.strategyStates.get(key) : undefined;
   }
 }

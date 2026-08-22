@@ -88,6 +88,39 @@ export interface PairConfig {
   timeframe: string;
 }
 
+/**
+ * A single "world": one timeframe + symbol + strategy combination.
+ *
+ * The multi-world portfolio (D3/D4) lets the live bot trade across N of these
+ * at once — e.g. `tf1+sym1+stg1`, `tf1+sym2+stg2`, ... The user selects the
+ * set; the backtest ranks every world by PnL and we keep the N best.
+ */
+export interface WorldConfig {
+  /** Candle timeframe for this world (e.g. '1m', '5m'). */
+  timeframe: string;
+  /** Market symbol for this world (e.g. 'SOLUSDC'). */
+  symbol: string;
+  /** Strategy identifier resolved by the executor / strategy registry. */
+  strategy: string;
+}
+
+/**
+ * Sentinel strategy id stamped onto worlds migrated from a legacy (pre-v2)
+ * single-strategy config, where no explicit strategy id existed. The legacy
+ * config had exactly one `strategySource`, so a single `__legacy__` world is
+ * the faithful migration of `pairs[0]`.
+ */
+export const LEGACY_STRATEGY_ID = '__legacy__';
+
+/**
+ * Discriminated v2 bot config: multi-world selection. Extends BotConfig and
+ * narrows `version` to 2 and `worlds` to a required, non-empty array.
+ */
+export interface BotConfigV2 extends Omit<BotConfig, 'version' | 'worlds'> {
+  version: 2;
+  worlds: WorldConfig[];
+}
+
 /** Risk management settings. */
 export interface RiskConfig {
   /** Maximum daily realized loss in quote currency. 0 = unlimited. */
@@ -178,6 +211,17 @@ export interface BotConfig {
   initialCapital?: number;
   /** Position size as a percentage of the configured capital (0-100). */
   positionSizePercent?: number;
+  /**
+   * Config schema version. Omitted in legacy (pre-v2) files, which are treated
+   * as v1 and migrated on read (D4). v2 introduces `worlds`.
+   */
+  version?: number;
+  /**
+   * Multi-world selection (v2). Each world is one tf+sym+strategy combination
+   * the live bot trades across. Absent in legacy configs — `pairs` is then
+   * authoritative and migrates to a single world on load.
+   */
+  worlds?: WorldConfig[];
 }
 
 /** Snapshot of bot state for dashboard / WebSocket broadcast. */

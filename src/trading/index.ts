@@ -7,7 +7,7 @@
  * @module trading
  */
 
-export { BotState, ErrorSeverity, BOT_STATE_TRANSITIONS } from './types.js';
+export { BotState, ErrorSeverity, BOT_STATE_TRANSITIONS, LEGACY_STRATEGY_ID } from './types.js';
 export type {
   StateTransition,
   StateChangeEvent,
@@ -17,6 +17,8 @@ export type {
   PairConfig,
   RiskConfig,
   BotConfig,
+  BotConfigV2,
+  WorldConfig,
   BotStatusSnapshot,
   PositionSummary,
   TradeRecord,
@@ -27,6 +29,9 @@ export type { StateMachineConfig, StateChangeHandler, TransitionGuard } from './
 
 export { BotEngine } from './bot-engine.js';
 export type { BotLogger, BotEventMap } from './bot-engine.js';
+
+export { LiveStrategyExecutor } from './live-strategy-executor.js';
+export type { CapitalAllocator, CapitalAllocatorInput, StrategyState, PositionInfo } from './live-strategy-executor.js';
 
 export * from './wallet/index.js';
 export * from './dex/index.js';
@@ -62,6 +67,7 @@ export type {
   RankingMetric,
   CandidateEvaluation,
   AutoSelectionResult,
+  AutoSelectBlockedResult,
   SelectionProgressCallback,
   BarFetcher,
   BacktestRunner,
