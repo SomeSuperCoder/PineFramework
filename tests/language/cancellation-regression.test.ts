@@ -25,7 +25,14 @@ import type { ExecutionResult } from '../../src/language/runtime/execution-engin
 
 /** Deterministic OHLC bar factory (RAM-light: 1 series value per field). */
 function makeBars(count: number) {
-  const bars: Array<{ timestamp: number; open: number; high: number; low: number; close: number; volume: number }> = [];
+  const bars: Array<{
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }> = [];
   const startTime = Date.UTC(2024, 0, 1);
   for (let i = 0; i < count; i++) {
     const close = 100 + Math.sin(i / 7) * 5;

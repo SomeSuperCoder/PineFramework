@@ -29,9 +29,6 @@ export const TUNNEL_TIMELINE = {
   p7Ms: 250,
 } as const;
 
-/** Total choreography length (DESIGN §14.2): 1750ms. */
-export const TUNNEL_TOTAL_MS = 1750;
-
 /** Max chromatic-aberration offset in CSS px — 1.5–2px band, never >3 (§14.1). */
 export const TUNNEL_CA_MAX_PX = 1.6;
 

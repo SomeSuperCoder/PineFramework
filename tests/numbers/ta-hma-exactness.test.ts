@@ -46,7 +46,9 @@ configureDecimal();
 // Engine + builtin access — the ONLY plumbing in this suite
 // ---------------------------------------------------------------------------
 
-const { ast } = parse('//@version=6\nindicator("M5c HMA Exactness", overlay=true)\nplot(close, "c")');
+const { ast } = parse(
+  '//@version=6\nindicator("M5c HMA Exactness", overlay=true)\nplot(close, "c")',
+);
 const engine = new ExecutionEngine(compile(ast));
 
 type BuiltinFn = (...args: unknown[]) => PineValue;

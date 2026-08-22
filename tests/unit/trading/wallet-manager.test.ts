@@ -268,9 +268,7 @@ describe('WalletManager', () => {
   });
 
   it('rejects import with a password that differs from the boot passphrase (passphrase parity guard)', async () => {
-    await expect(
-      manager.importWallet(seedPhrase, 'user-chosen-wallet-password'),
-    ).rejects.toThrow(
+    await expect(manager.importWallet(seedPhrase, 'user-chosen-wallet-password')).rejects.toThrow(
       'Wallet import rejected: the wallet password must match the bot boot passphrase',
     );
     // A rejected import must NOT persist a wallet that throws on every boot decrypt.
@@ -404,7 +402,7 @@ describe('WalletManager', () => {
   it('rejects password change to a value differing from the boot passphrase (passphrase parity guard)', async () => {
     await manager.importWallet(seedPhrase);
     await expect(manager.changePassword(passphrase, 'new-password-123')).rejects.toThrow(
-      'Password change rejected: the wallet password must match the bot boot passphrase'
+      'Password change rejected: the wallet password must match the bot boot passphrase',
     );
   });
 

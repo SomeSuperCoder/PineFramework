@@ -297,7 +297,11 @@ export function executeForStatement(
   const start = executeExpr(stmt.start!, scope, context) as number;
   const end = executeExpr(stmt.end!, scope, context) as number;
   // PineScript: when step is omitted, auto-infer direction from start vs end.
-  const step = stmt.step ? (executeExpr(stmt.step, scope, context) as number) : (start > end ? -1 : 1);
+  const step = stmt.step
+    ? (executeExpr(stmt.step, scope, context) as number)
+    : start > end
+      ? -1
+      : 1;
   // Clamp to at least ±1 to prevent zero/infinite loops, but preserve direction.
   const safeStep = step === 0 ? 1 : step;
   const maxIterations = 1000000;
@@ -305,7 +309,8 @@ export function executeForStatement(
   declareVariable(loopScope, stmt.variable, INT_TYPE);
   const startInt = Math.floor(start);
   const endInt = Math.floor(end);
-  const stepInt = safeStep >= 0 ? Math.max(1, Math.floor(safeStep)) : Math.min(-1, Math.floor(safeStep));
+  const stepInt =
+    safeStep >= 0 ? Math.max(1, Math.floor(safeStep)) : Math.min(-1, Math.floor(safeStep));
   const expectedIterations = Math.max(0, Math.floor((endInt - startInt) / stepInt) + 1);
   const iterations = Math.min(expectedIterations, maxIterations);
 

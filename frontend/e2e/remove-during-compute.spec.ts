@@ -180,7 +180,11 @@ test.describe('remove-during-compute (B2 user flow)', () => {
     await cleanupIndicator(request as unknown as Page);
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ request, page }) => {
+    // Teardown race guard: a route.fetch() passthrough still in flight when
+    // the test ends would reject into Playwright's handler accounting.
+    // ignoreErrors lets those callbacks settle without failing the spec.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await cleanupIndicator(request as unknown as Page);
   });
 
@@ -194,7 +198,15 @@ test.describe('remove-during-compute (B2 user flow)', () => {
     // of behavior, nothing runs longer than reality.
     let executeProbe: { success?: boolean; cancelled?: boolean } | null = null;
     await page.route('**/api/execute', async (route) => {
-      const response = await route.fetch();
+      let response;
+      try {
+        response = await route.fetch();
+      } catch {
+        // Engine speedups can cancel/abort the request while our passthrough
+        // is still fetching — a dead route must not reject into Playwright's
+        // handler accounting. Nothing to probe; the app already saw the abort.
+        return;
+      }
       try {
         const body = route.request().postDataJSON() as { indicatorId?: string };
         if (body?.indicatorId) {

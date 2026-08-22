@@ -234,7 +234,11 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
   // ── Linefill builtins ────────────────────────────────────────────────────
   eng.builtins.set(
     'linefill.new',
-    (line1Id: PineValue, line2Id: PineValue, arg3?: PineValue | Record<string, PineValue>): PineValue => {
+    (
+      line1Id: PineValue,
+      line2Id: PineValue,
+      arg3?: PineValue | Record<string, PineValue>,
+    ): PineValue => {
       if (
         typeof line1Id !== 'number' ||
         typeof line2Id !== 'number' ||
@@ -246,7 +250,12 @@ export function registerDrawingBuiltins(engine: ExecutionEngine): void {
       let colorStr = '#2196f380';
       let fillgaps = false;
       // Handle both positional (color) and named ({color, fillgaps}) third argument
-      if (typeof arg3 === 'object' && arg3 !== null && !Array.isArray(arg3) && !(arg3 instanceof Map)) {
+      if (
+        typeof arg3 === 'object' &&
+        arg3 !== null &&
+        !Array.isArray(arg3) &&
+        !(arg3 instanceof Map)
+      ) {
         // Named args: linefill.new(l1, l2, color=color, fillgaps=true)
         const opts = arg3 as Record<string, PineValue>;
         if (typeof opts.color === 'string') colorStr = opts.color;

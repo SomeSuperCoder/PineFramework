@@ -22,10 +22,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => TMP_HOME };
 });
 
-import {
-  getCachedDexFeeBps,
-  getCacheFilePath,
-} from '../src/strategy/jupiter-fee-fetcher.js';
+import { getCachedDexFeeBps, getCacheFilePath } from '../src/strategy/jupiter-fee-fetcher.js';
 
 const CACHE_FILE = () => getCacheFilePath();
 

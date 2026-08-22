@@ -33,9 +33,7 @@ async function setupEngine(): Promise<ExecutionEngine> {
   `;
   const { ast } = parse(source);
   const engine = new ExecutionEngine(compile(ast));
-  await engine.executeBars(
-    Array.from({ length: TOTAL_BARS }, (_, i) => createBarContext(i)),
-  );
+  await engine.executeBars(Array.from({ length: TOTAL_BARS }, (_, i) => createBarContext(i)));
   return engine;
 }
 

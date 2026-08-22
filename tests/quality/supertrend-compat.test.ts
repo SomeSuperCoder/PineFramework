@@ -11,7 +11,10 @@ function createBars(count: number): Bar[] {
   const bars: Bar[] = [];
   let price = 66000;
   let s = 42;
-  const rand = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  const rand = () => {
+    s = (s * 16807) % 2147483647;
+    return s / 2147483647;
+  };
   for (let i = 0; i < count; i++) {
     const open = price;
     const close = open + (rand() - 0.5) * 500;
@@ -25,7 +28,9 @@ function createBars(count: number): Bar[] {
 
 function barsToContext(bars: Bar[]) {
   return bars.map((bar, index) => ({
-    barIndex: index, barCount: bars.length, timestamp: bar.timestamp,
+    barIndex: index,
+    barCount: bars.length,
+    timestamp: bar.timestamp,
     open: createSeries('open', [bar.open]),
     high: createSeries('high', [bar.high]),
     low: createSeries('low', [bar.low]),
@@ -49,13 +54,17 @@ describe('Official Supertrend compatibility', () => {
     const engine = new ExecutionEngine(cr);
     const result = await engine.executeBars(barsToContext(createBars(120)));
 
-    const upKey = Array.from(result.outputs.keys()).find(k => k.includes('Up Trend'));
-    const downKey = Array.from(result.outputs.keys()).find(k => k.includes('Down Trend'));
+    const upKey = Array.from(result.outputs.keys()).find((k) => k.includes('Up Trend'));
+    const downKey = Array.from(result.outputs.keys()).find((k) => k.includes('Down Trend'));
     expect(upKey).toBeDefined();
     expect(downKey).toBeDefined();
 
-    const upCount = result.outputs.get(upKey!)!.values.filter(v => v !== null && v !== undefined).length;
-    const downCount = result.outputs.get(downKey!)!.values.filter(v => v !== null && v !== undefined).length;
+    const upCount = result.outputs
+      .get(upKey!)!
+      .values.filter((v) => v !== null && v !== undefined).length;
+    const downCount = result.outputs
+      .get(downKey!)!
+      .values.filter((v) => v !== null && v !== undefined).length;
     console.log(`Up Trend: ${upCount}, Down Trend: ${downCount}`);
 
     expect(upCount).toBeGreaterThan(0);

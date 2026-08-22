@@ -249,7 +249,8 @@ export function registerPlotBuiltins(engine: ExecutionEngine): void {
       if (typeof a === 'string') {
         if (i === 2)
           styleStr = a; // style
-        else if (i === 3) locationStr = a; // location
+        else if (i === 3)
+          locationStr = a; // location
         else if (i === 4) colorStr = a; // color
       }
     }

@@ -210,7 +210,10 @@ export interface EngineError {
   /** Human-readable description of the error. */
   message: string;
   /** Source location in the original Pine Script (if available). */
-  span?: { start: { line: number; column: number; offset: number }; end: { line: number; column: number; offset: number } };
+  span?: {
+    start: { line: number; column: number; offset: number };
+    end: { line: number; column: number; offset: number };
+  };
   /** Bar index at which the error occurred (if available). */
   barIndex?: number;
   /** Stack trace (if available from caught Error). */
@@ -279,9 +282,7 @@ export interface ExecutionResultDiffMessage extends ExecutionResultPayloadFields
 }
 
 /** WS execution-result payload, discriminated on the existing isConfirmed field. */
-export type ExecutionResultMessage =
-  | ExecutionResultFullMessage
-  | ExecutionResultDiffMessage;
+export type ExecutionResultMessage = ExecutionResultFullMessage | ExecutionResultDiffMessage;
 
 // ---------------------------------------------------------------------------
 // The REST response shape (separate named shape — do NOT fold into the union)
@@ -501,7 +502,5 @@ export function normalizeExecutionResultMessage(
     formingCandle: msg.formingCandle,
     maxLookback: msg.maxLookback,
   };
-  return isConfirmed
-    ? { ...shared, isConfirmed: true }
-    : { ...shared, isConfirmed: false };
+  return isConfirmed ? { ...shared, isConfirmed: true } : { ...shared, isConfirmed: false };
 }

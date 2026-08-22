@@ -59,30 +59,6 @@ export function safeDiv(a: number, b: number): PineValue {
   return decimalToPineValue(numericOps.div(toDecimal(a), toDecimal(b)));
 }
 
-export function safeMod(a: number, b: number): PineValue {
-  if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  if (b === 0 || !Number.isFinite(b)) return NA;
-  return decimalToPineValue(numericOps.mod(toDecimal(a), toDecimal(b)));
-}
-
-export function safePow(a: number, b: number): PineValue {
-  if (typeof a !== 'number' || typeof b !== 'number') return NA;
-  return decimalToPineValue(numericOps.pow(toDecimal(a), toDecimal(b)));
-}
-
-export function safeUnaryMinus(a: number): PineValue {
-  if (typeof a !== 'number') return NA;
-  return decimalToPineValue(numericOps.neg(toDecimal(a)));
-}
-
-export function safeUnaryPlus(a: number): PineValue {
-  if (typeof a !== 'number') return NA;
-  // toDecimal round-trip — +a's -0 → +0 normalization is preserved by
-  // decimalToPineValue with no spurious precision rounding (add(a, 0) would
-  // re-round to 20 significant digits).
-  return decimalToPineValue(toDecimal(a));
-}
-
 /**
  * Type guard: true only for finite numbers.
  * Rejects NaN, Infinity, -Infinity, and non-number types.

@@ -3,32 +3,26 @@
   "workspaces": {
     ".": {
       "entry": [
-        "src/index.ts",
-        "src/frontend-safe.ts",
-        "src/trading/wallet/wallet-manager.ts",
-        "src/trading/config-store.ts",
-        "src/trading/trade-history-store.ts",
-        "src/trading/telegram-bot.ts",
-        "src/strategy/jupiter-fee-fetcher.ts",
-        "src/utils/time.ts",
-        "src/utils/logger/types.ts",
-        "src/utils/script-name.ts",
-        "src/util/candle-string-format.ts"
+        "src/frontend-safe.ts"
       ],
-      "project": ["src/**/*.ts", "tests/**/*.ts"]
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
     },
     "frontend": {
-      "entry": ["src/main.tsx", "src/components/ui/*.tsx"],
-      "project": ["src/**/*.{ts,tsx}"],
-      "ignoreDependencies": [
-        "shadcn",
-        "tailwindcss",
-        "tw-animate-css"
+      "entry": [
+        "src/components/ui/*.tsx"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,css}"
       ]
     },
     "backend": {
-      "entry": ["src/index.ts", "src/cli/backtest-cli.ts"],
-      "project": ["src/**/*.ts", "tests/**/*.ts"]
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
+      ]
     }
   },
   "ignoreExportsUsedInFile": true

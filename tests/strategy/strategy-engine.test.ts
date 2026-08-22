@@ -399,9 +399,7 @@ describe('StrategyEngine', () => {
       // CORRECTED equity formula (floating PnL while open): entry fills at
       // bar1 open 100, close 101 →
       // 10000 − commission + (101 − 100) × 1 = 10000.9.
-      expect(engine.getEquity()).toBeCloseTo(
-        10000 - expectedCommission + (101 - 100) * 1,
-      );
+      expect(engine.getEquity()).toBeCloseTo(10000 - expectedCommission + (101 - 100) * 1);
     });
   });
 

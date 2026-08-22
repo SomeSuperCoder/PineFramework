@@ -47,7 +47,9 @@ configureDecimal();
 // Engine + builtin access — the ONLY plumbing in this suite
 // ---------------------------------------------------------------------------
 
-const { ast } = parse('//@version=6\nindicator("M6 RSI Exactness", overlay=true)\nplot(close, "c")');
+const { ast } = parse(
+  '//@version=6\nindicator("M6 RSI Exactness", overlay=true)\nplot(close, "c")',
+);
 const engine = new ExecutionEngine(compile(ast));
 
 type BuiltinFn = (...args: unknown[]) => PineValue;
@@ -212,7 +214,9 @@ describe('M6 ta.change — Decimal diff exactness', () => {
 describe('M6 ta.crossover / ta.crossunder / ta.cross — Decimal cross exactness', () => {
   // cross state is keyed `cross_<callSiteId>` and SHARED by all three
   // builtins — use a FRESH engine so every function's first call truly seeds.
-  const crossAst = parse('//@version=6\nindicator("M6 Cross Exactness", overlay=true)\nplot(close, "c")');
+  const crossAst = parse(
+    '//@version=6\nindicator("M6 Cross Exactness", overlay=true)\nplot(close, "c")',
+  );
   const crossEngine = new ExecutionEngine(compile(crossAst.ast));
 
   function builtin(name: string): BuiltinFn {

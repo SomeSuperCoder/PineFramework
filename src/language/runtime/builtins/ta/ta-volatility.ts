@@ -321,10 +321,7 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
       prevCloseD = isFinite(prevCloseNum) ? new Decimal(prevCloseNum) : closeD;
     } else {
       const rel1 = ctx.close.getRelative(1);
-      prevCloseD =
-        !isNa(rel1) && isFinite(Number(rel1))
-          ? new Decimal(Number(rel1))
-          : closeD;
+      prevCloseD = !isNa(rel1) && isFinite(Number(rel1)) ? new Decimal(Number(rel1)) : closeD;
     }
     const tr = Decimal.max(
       highD.minus(lowD),
@@ -339,7 +336,7 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
         atrPrev: new Decimal(0),
         prevUpper: null,
         prevLower: null,
-        prevDirection: 1,  // PineScript: initial direction is downtrend (1)
+        prevDirection: 1, // PineScript: initial direction is downtrend (1)
       });
     }
     const state = eng.supertrendState.get(key)!;
@@ -376,19 +373,21 @@ export function registerTaVolatility(engine: ExecutionEngine): void {
     const lower = hl2.minus(mult.times(atr));
     // Upper band: ratchet down only if close[1] was below previous upper;
     // otherwise reset to current upper (PineScript conditional band-following).
-    const finalUpper = state.prevUpper === null
-      ? upper
-      : prevCloseD.lt(state.prevUpper)
-        ? Decimal.min(upper, state.prevUpper)
-        : upper;
+    const finalUpper =
+      state.prevUpper === null
+        ? upper
+        : prevCloseD.lt(state.prevUpper)
+          ? Decimal.min(upper, state.prevUpper)
+          : upper;
 
     // Lower band: ratchet up only if close[1] was above previous lower;
     // otherwise reset to current lower (PineScript conditional band-following).
-    const finalLower = state.prevLower === null
-      ? lower
-      : prevCloseD.gt(state.prevLower)
-        ? Decimal.max(lower, state.prevLower)
-        : lower;
+    const finalLower =
+      state.prevLower === null
+        ? lower
+        : prevCloseD.gt(state.prevLower)
+          ? Decimal.max(lower, state.prevLower)
+          : lower;
 
     state.prevUpper = finalUpper;
     state.prevLower = finalLower;

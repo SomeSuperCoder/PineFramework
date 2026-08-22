@@ -4,6 +4,7 @@ import { legacyMergeDiffIntoResult } from './fixtures/legacy-merge';
 import {
   FIELD_SEMANTICS,
   normalizeExecutionResultMessage,
+  type ExecutionResultDiffMessage,
   type ExecutionResultMessage,
   type ExecutionResultMessageInput,
   type TableCellData,
@@ -91,7 +92,9 @@ function buildPrev(): ScriptResult {
  * the mergeOutputs else-if "extend last value" branch inert by default so the
  * per-strategy tests stay focused.
  */
-function makeDiff(overrides: Partial<ExecutionResultMessage> = {}): ExecutionResultMessage {
+function makeDiff(
+  overrides: Partial<Omit<ExecutionResultDiffMessage, 'isConfirmed'>> = {},
+): ExecutionResultDiffMessage {
   return {
     isConfirmed: false,
     success: true,
@@ -113,6 +116,7 @@ function makeDiff(overrides: Partial<ExecutionResultMessage> = {}): ExecutionRes
     tables: [],
     alertConditions: [],
     alertTriggers: [],
+    hlines: [],
     barTimestamps: [],
     barIndex: 0,
     formingCandle: true,

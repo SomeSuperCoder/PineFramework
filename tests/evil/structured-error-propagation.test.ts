@@ -93,7 +93,9 @@ describe('Structured error propagation', () => {
   // ===========================================================================
 
   it('executePineScript returns structured error on runtime failure', async () => {
-    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(badVar)', [makeBar()]);
+    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(badVar)', [
+      makeBar(),
+    ]);
 
     expect(apiResult.error).toBeDefined();
     if (apiResult.error) {
@@ -106,7 +108,9 @@ describe('Structured error propagation', () => {
   });
 
   it('executePineScript returns no error on successful execution', async () => {
-    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(close)', [makeBar()]);
+    const apiResult = await executePineScript('//@version=6\nindicator("")\nplot(close)', [
+      makeBar(),
+    ]);
 
     expect(apiResult.error).toBeUndefined();
     expect(apiResult.outputs).toBeDefined();

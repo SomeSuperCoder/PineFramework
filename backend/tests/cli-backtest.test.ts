@@ -1,5 +1,6 @@
 import { vi } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -347,12 +348,19 @@ describe('CLI --max-bars export request layer (A2 watch item)', () => {
 describe('CLI strict float flag parsing', () => {
   const cliPath = resolve(fileURLToPath(new URL('../src/cli/backtest-cli.ts', import.meta.url)));
 
+  // Resolve the tsx CLI directly from THIS file's location (backend/node_modules)
+  // instead of `pnpm exec tsx`: under the root vitest.config.ts the worker's
+  // cwd/package context may not resolve tsx and pnpm exits 254 ("Command tsx
+  // not found"). Spawning node + the resolved CLI path is cwd-independent.
+  const require = createRequire(import.meta.url);
+  const tsxCliPath = require.resolve('tsx/cli');
+
   function runCli(extraArgs: string[]): { status: number | null; stderr: string } {
     const dir = mkdtempSync(join(tmpdir(), 'cli-float-'));
     const script = join(dir, 'strategy.pine');
     writeFileSync(script, '// dummy\n');
     try {
-      const res = spawnSync('pnpm', ['exec', 'tsx', cliPath, script, ...extraArgs], {
+      const res = spawnSync(process.execPath, [tsxCliPath, cliPath, script, ...extraArgs], {
         encoding: 'utf8',
         timeout: 60_000,
       });

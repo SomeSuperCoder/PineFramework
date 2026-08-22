@@ -47,12 +47,6 @@ export function heroItem(delay: number): Variants {
   };
 }
 
-/** Quiet fade-rise grammar shared by scroll reveals: fade + rise 16px, slow + enter (DESIGN §7). */
-export const fadeRise: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: DUR_SLOW, ease: EASE_ENTER } },
-};
-
 /** Footer CTA entrance — scale up, not rise: slow + enter (DESIGN §7). */
 export const ctaEntrance: Variants = {
   hidden: { opacity: 0, scale: 0.98 },

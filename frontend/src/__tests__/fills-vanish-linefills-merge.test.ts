@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mergeDiffIntoResult } from '../hooks/indicator-merge';
 import type { ScriptResult, LineData, LinefillData } from '../types';
-import type { ExecutionResultMessage } from '../hooks/chart-data-transform';
+import type { ExecutionResultDiffMessage } from 'pine-framework/contracts';
 
 /**
  * REGRESSION — supertrend-3d LINEFILL-vanish bug (vector: supertrend-3d-fills-vanish-v1).
@@ -93,7 +93,9 @@ function makePrevState(): ScriptResult {
  * `linefills` is ALWAYS a defined array — `[]` when the tick created no new fills
  * (FCM.ts:357-362,399), `formingCandle: true` (FCM.ts:403).
  */
-function makeTickMsg(overrides: Partial<ExecutionResultMessage> = {}): ExecutionResultMessage {
+function makeTickMsg(
+  overrides: Partial<Omit<ExecutionResultDiffMessage, 'isConfirmed'>> = {},
+): ExecutionResultDiffMessage {
   return {
     isConfirmed: false,
     success: true,
@@ -113,6 +115,7 @@ function makeTickMsg(overrides: Partial<ExecutionResultMessage> = {}): Execution
     tables: [],
     alertConditions: [],
     alertTriggers: [],
+    hlines: [],
     lines: [
       {
         points: [

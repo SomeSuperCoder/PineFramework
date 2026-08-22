@@ -364,7 +364,10 @@ export class Interpreter {
         this.eng.getMaxLookback(),
       );
 
-      if ((i + 1) % YIELD_EVERY_N_BARS === 0 || performance.now() - sliceStart >= SYNC_SLICE_BUDGET_MS) {
+      if (
+        (i + 1) % YIELD_EVERY_N_BARS === 0 ||
+        performance.now() - sliceStart >= SYNC_SLICE_BUDGET_MS
+      ) {
         await yieldToEventLoop();
         sliceStart = performance.now();
         if (token?.isCancelled) {

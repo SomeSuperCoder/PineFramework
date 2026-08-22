@@ -51,8 +51,7 @@ function makeVBars(count = 100): Bar[] {
   const startTime = Date.UTC(2024, 0, 1);
   const half = Math.floor(count / 2);
   for (let i = 0; i < count; i++) {
-    const price =
-      i < half ? 100 - (i * 30) / half : 70 + ((i - half) * 30) / (count - half);
+    const price = i < half ? 100 - (i * 30) / half : 70 + ((i - half) * 30) / (count - half);
     bars.push({
       timestamp: startTime + i * 86_400_000,
       open: price,
@@ -86,10 +85,7 @@ describe('strategy member-access error diagnostics (fixed)', () => {
   });
 
   it('a truly-undefined bare variable still reports that variable name', async () => {
-    const result = await engine.execute(
-      '//@version=6\nindicator("I")\nplot(name1)',
-      makeVBars(),
-    );
+    const result = await engine.execute('//@version=6\nindicator("I")\nplot(name1)', makeVBars());
 
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
@@ -255,11 +251,10 @@ describe('CONTRACT — strategy.equity · backtest reflects the CORRECTED equity
     //   bar 36 close 78.4 → floating = (78.4 − 79) × 1 = −0.6 →
     //         CORRECTED plot = 9990 − 0.6 = 9989.4.
     //   RED today: the engine returns realized-only 9990 (floating missing).
-    const { result, engine } = await executeContractEngine(
-      CONTRACT_EQUITY_STRATEGY,
-      makeVBars(),
-      { commission: 10, commissionType: 'fixed' },
-    );
+    const { result, engine } = await executeContractEngine(CONTRACT_EQUITY_STRATEGY, makeVBars(), {
+      commission: 10,
+      commissionType: 'fixed',
+    });
 
     expect(result.success).toBe(true);
 

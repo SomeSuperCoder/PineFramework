@@ -20,7 +20,10 @@ function createBarContext(overrides: Partial<ExecutionContext> = {}): ExecutionC
   };
 }
 
-async function executeScript(source: string, bars: ExecutionContext[] = []): Promise<ExecutionEngine> {
+async function executeScript(
+  source: string,
+  bars: ExecutionContext[] = [],
+): Promise<ExecutionEngine> {
   const { ast } = parse(source);
   const result = compile(ast);
   const engine = new ExecutionEngine(result);

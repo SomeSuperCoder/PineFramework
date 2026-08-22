@@ -493,10 +493,7 @@ export class Compiler {
       }
       this.inferExpressionType(stmt.target);
       this.builder.emit(IROpCode.StoreVar, stmt.span, 'indexed', stmt.operator);
-    } else if (
-      stmt.target.kind === 'MemberExpression' ||
-      stmt.target.kind === 'IndexExpression'
-    ) {
+    } else if (stmt.target.kind === 'MemberExpression' || stmt.target.kind === 'IndexExpression') {
       // Validate the target is a structurally assignable expression.
       this.inferExpressionType(stmt.target);
       this.builder.emit(IROpCode.StoreVar, stmt.span, 'indexed', stmt.operator);

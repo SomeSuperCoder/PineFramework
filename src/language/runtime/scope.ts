@@ -123,7 +123,12 @@ export interface ScopeCheckpoint {
 export function checkpointScope(scope: RuntimeScope): ScopeCheckpoint {
   const entries: ScopeCheckpointEntry[] = [];
   for (const [name, binding] of scope.variables) {
-    entries.push({ map: scope.variables, name, series: binding.series, length: binding.series.values.length });
+    entries.push({
+      map: scope.variables,
+      name,
+      series: binding.series,
+      length: binding.series.values.length,
+    });
   }
   return {
     scope,

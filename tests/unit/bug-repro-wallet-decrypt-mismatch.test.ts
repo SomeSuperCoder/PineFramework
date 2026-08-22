@@ -15,10 +15,7 @@
  * 'pine-default-passphrase' (index.ts:372).
  */
 import { describe, expect, it } from 'vitest';
-import {
-  encryptSeedPhrase,
-  decryptSeedPhrase,
-} from '../../src/trading/wallet/wallet-manager.js';
+import { encryptSeedPhrase, decryptSeedPhrase } from '../../src/trading/wallet/wallet-manager.js';
 
 const SEED =
   'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';

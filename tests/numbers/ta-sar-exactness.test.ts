@@ -63,11 +63,26 @@ function contextAt(bars: TestBar[], i: number): ExecutionContext {
     barIndex: i,
     barCount: bars.length,
     timestamp: 1700000000000 + i * 3600000,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.close)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map(() => 1000)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map(() => 1000),
+    ),
   };
 }
 

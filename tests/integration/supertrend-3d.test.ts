@@ -170,7 +170,8 @@ describe('Integration: Supertrend Parameter Sensitivity 3D [LuxAlgo]', () => {
       expect(lf.line1).toBeDefined();
       expect(lf.line2).toBeDefined();
       expect(lf.color).toMatch(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/);
-      const hasCoords = lf.line1.x1 !== 0 || lf.line1.y1 !== 0 || lf.line2.x1 !== 0 || lf.line2.y1 !== 0;
+      const hasCoords =
+        lf.line1.x1 !== 0 || lf.line1.y1 !== 0 || lf.line2.x1 !== 0 || lf.line2.y1 !== 0;
       expect(hasCoords).toBe(true);
     }
   });

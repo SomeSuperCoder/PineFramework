@@ -98,11 +98,26 @@ function contextAt(bars: TestBar[], i: number): ExecutionContext {
     barIndex: i,
     barCount: bars.length,
     timestamp: 1700000000000 + i * 3600000,
-    open: createSeries('open', bars.slice(0, i + 1).map((b) => b.close)),
-    high: createSeries('high', bars.slice(0, i + 1).map((b) => b.high)),
-    low: createSeries('low', bars.slice(0, i + 1).map((b) => b.low)),
-    close: createSeries('close', bars.slice(0, i + 1).map((b) => b.close)),
-    volume: createSeries('volume', bars.slice(0, i + 1).map(() => 1000)),
+    open: createSeries(
+      'open',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    high: createSeries(
+      'high',
+      bars.slice(0, i + 1).map((b) => b.high),
+    ),
+    low: createSeries(
+      'low',
+      bars.slice(0, i + 1).map((b) => b.low),
+    ),
+    close: createSeries(
+      'close',
+      bars.slice(0, i + 1).map((b) => b.close),
+    ),
+    volume: createSeries(
+      'volume',
+      bars.slice(0, i + 1).map(() => 1000),
+    ),
   };
 }
 
@@ -141,16 +156,10 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     // bar7: atr converges to 1.9 exactly (constant series → TR constant).
     // PineScript convention: direction = -1 (uptrend), close >= st → -1.
     // close 9.3 < 14.85 → direction = 1 (downtrend).
-    expect(stAt(engine, bars, 7, 3, 7)).toEqual([
-      new Decimal('14.85').toNumber(),
-      1,
-    ]);
+    expect(stAt(engine, bars, 7, 3, 7)).toEqual([new Decimal('14.85').toNumber(), 1]);
     // recursion keeps atr = 1.9 forever → [14.85, 1] stable, no drift
     for (let i = 8; i < bars.length; i++) {
-      expect(stAt(engine, bars, i, 3, 7)).toEqual([
-        new Decimal('14.85').toNumber(),
-        1,
-      ]);
+      expect(stAt(engine, bars, i, 3, 7)).toEqual([new Decimal('14.85').toNumber(), 1]);
     }
   });
 
@@ -282,10 +291,7 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     for (let i = 0; i < 7; i++) {
       expect(stAt(engineFactorNA, bars, i, NA, 7)).toEqual([NA, NA]);
     }
-    expect(stAt(engineFactorNA, bars, 7, NA, 7)).toEqual([
-      new Decimal('14.85').toNumber(),
-      1,
-    ]);
+    expect(stAt(engineFactorNA, bars, 7, NA, 7)).toEqual([new Decimal('14.85').toNumber(), 1]);
     const engineFactorNaN = newEngine();
     for (let i = 0; i < 7; i++) {
       expect(stAt(engineFactorNaN, bars, i, Number.NaN, 7)).toEqual([NA, NA]);
@@ -309,10 +315,7 @@ describe('M7b ta.supertrend — Decimal band exactness (fp-final-gate lock)', ()
     for (let i = 0; i < 10; i++) {
       expect(stAt(enginePeriodNA, bars, i, 3, NA)).toEqual([NA, NA]);
     }
-    expect(stAt(enginePeriodNA, bars, 10, 3, NA)).toEqual([
-      new Decimal('14.85').toNumber(),
-      1,
-    ]);
+    expect(stAt(enginePeriodNA, bars, 10, 3, NA)).toEqual([new Decimal('14.85').toNumber(), 1]);
 
     // atrPeriod ≤ 0 → [NA,NA] on a finite bar, every bar.
     const enginePeriodZero = newEngine();

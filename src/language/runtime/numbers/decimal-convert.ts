@@ -111,8 +111,3 @@ export function decimalToString(d: Decimal, dp?: number): string {
 export function toNumber(d: Decimal): number {
   return d.toNumber();
 }
-
-/** Internal invalid marker (R2): a Decimal NaN. */
-export function isNaDecimal(d: Decimal): boolean {
-  return d.isNaN();
-}
