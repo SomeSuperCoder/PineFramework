@@ -102,6 +102,18 @@ import {
 const YIELD_EVERY_N_BARS = 50;
 
 /**
+ * F4 fairness budget: maximum WALL-CLOCK time one synchronous batch slice may
+ * consume before the loop yields, regardless of bar count. The fixed
+ * YIELD_EVERY_N_BARS=50 is time-blind: a script whose per-bar cost is high
+ * (heavy loops, decimal.js math) blocks the event loop for
+ * 50 x perBarCost ms per slice — measured ~2s/slice on the B16 churn
+ * scenario (>6s HTTP GET p100). Checking elapsed time per bar costs ~50ns
+ * against a per-bar cost that is typically >>1µs; the bar-count cap remains
+ * as the CHEAP-path bound so light scripts never pay extra yields.
+ */
+const SYNC_SLICE_BUDGET_MS = 8;
+
+/**
  * Yield to the event loop so pending I/O (WS messages, DELETE requests) can
  * run between bar batches. setImmediate is the Node-native "run after current
  * I/O callbacks" primitive; browsers lack it, so fall back to setTimeout(0) —
@@ -330,7 +342,10 @@ export class Interpreter {
     };
 
     // Cooperative scheduling: iterate the caller's array BY REFERENCE (never
-    // clone — host memory is tight), yielding to the event loop every N bars.
+    // clone — host memory is tight), yielding to the event loop every N bars
+    // OR when the current synchronous slice has consumed its time budget,
+    // whichever comes first (F4 — the bar count alone is time-blind).
+    let sliceStart = performance.now();
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
       lastResult = this.executeBar(bar);
@@ -349,8 +364,9 @@ export class Interpreter {
         this.eng.getMaxLookback(),
       );
 
-      if ((i + 1) % YIELD_EVERY_N_BARS === 0) {
+      if ((i + 1) % YIELD_EVERY_N_BARS === 0 || performance.now() - sliceStart >= SYNC_SLICE_BUDGET_MS) {
         await yieldToEventLoop();
+        sliceStart = performance.now();
         if (token?.isCancelled) {
           // Partial run: bars executed so far are valid, but the caller asked
           // to stop. Mirrors the failure exit (sanitize only — lookback
