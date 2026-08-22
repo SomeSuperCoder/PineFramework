@@ -380,3 +380,66 @@ describe('POST /bot/configure + /bot/chaos-mode persistence ordering (D7)', () =
     expect(lastSaved.dex).toBe(BASE.dex);
   });
 });
+
+describe('POST /api/bot/configure strategySource requirement (multi-world wizard)', () => {
+  let server: Server;
+  let baseUrl: string;
+  let engine: ReturnType<typeof makeEngine>;
+  let store: ReturnType<typeof makeStore>;
+
+  beforeEach(async () => {
+    // Non-chaos base config (no strategySource) — mirrors a fresh wizard that
+    // has not yet selected a strategy at the Config step.
+    engine = makeEngine({
+      strategySource: '',
+      dex: 'jupiter-swap',
+      pairs: [],
+      risk: { maxDailyLoss: 0 },
+    });
+    store = makeStore();
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api',
+      createBotRouter({
+        getEngine: () => engine as unknown as BotEngine,
+        getConfigStore: () => store as unknown as BotConfigStore,
+      }),
+    );
+    server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api`;
+  });
+
+  afterEach(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
+  });
+
+  it('Config-step request (autoSelect:true, no strategySource) succeeds', async () => {
+    const res = await fetch(`${baseUrl}/bot/configure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dex: 'jupiter-swap', risk: { maxDailyLoss: 1 }, autoSelect: true }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).success).toBe(true);
+  });
+
+  it('legacy manual config (autoSelect:false, no strategySource, no worlds) still 400s', async () => {
+    const res = await fetch(`${baseUrl}/bot/configure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dex: 'jupiter-swap',
+        risk: { maxDailyLoss: 1 },
+        autoSelect: false,
+        pairs: [{ symbol: 'BTCUSDT', timeframe: '60' }],
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('strategySource');
+  });
+});

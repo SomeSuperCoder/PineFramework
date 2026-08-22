@@ -304,9 +304,19 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         chaosMode,
       } = req.body as Record<string, unknown>;
 
-      // Validate required fields — strategySource is only required when chaos mode is disabled
+      // Validate required fields. strategySource is only required for a LEGACY
+      // single-strategy config. In the new wizard the strategy is chosen in a
+      // later step (or supplied per-world via `worlds`), so a Config-step
+      // request (autoSelect:true) or a worlds-based request legitimately omits
+      // it — the selected strategy's source is POSTed to /configure from the
+      // Strategies step / Start before any backtest or live compile.
       const isChaosMode = (chaosMode as Record<string, unknown> | undefined)?.enabled === true;
-      if (!isChaosMode && (!strategySource || typeof strategySource !== 'string')) {
+      const reqWorlds = Array.isArray((req.body as Record<string, unknown>)?.worlds)
+        ? ((req.body as Record<string, unknown>).worlds as unknown[])
+        : [];
+      const strategyProvided = typeof strategySource === 'string' && strategySource.length > 0;
+      const strategyDeferred = autoSelect === true || reqWorlds.length > 0;
+      if (!isChaosMode && !strategyDeferred && !strategyProvided) {
         res
           .status(400)
           .json({ success: false, error: 'Missing or invalid "strategySource" (string required)' });

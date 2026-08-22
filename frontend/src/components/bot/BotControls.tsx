@@ -718,6 +718,7 @@ export function SetupWizard({
           risk: { maxDailyLoss: configValues?.maxDailyLoss ?? persistedConfig?.risk?.maxDailyLoss ?? 1 },
           timezone: configValues?.timezone ?? detectTimezone(),
           autoSelect: backtestMode === 'auto',
+          strategySource: selectedStrategies[0]?.source ?? configValues?.strategySource ?? persistedConfig?.strategySource ?? '',
           worlds: buildWorldsPayload(),
         }),
       });
@@ -921,7 +922,33 @@ export function SetupWizard({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setStep('backtest')}
+              onClick={async () => {
+                // Persist the selected strategy's source so the engine can compile
+                // it for the backtest + live run (the new wizard configures the
+                // strategy here, not at the Config step).
+                try {
+                  const res = await fetch(`${backendUrl}/api/bot/configure`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      strategySource: selectedStrategies[0]?.source ?? '',
+                      dex: configValues?.dex ?? persistedConfig?.dex ?? 'jupiter-swap',
+                      risk: { maxDailyLoss: configValues?.maxDailyLoss ?? persistedConfig?.risk?.maxDailyLoss ?? 1 },
+                      timezone: configValues?.timezone ?? detectTimezone(),
+                      autoSelect: true,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    setConfigureError(data.error || `Failed to save strategy (HTTP ${res.status})`);
+                    return;
+                  }
+                } catch {
+                  setConfigureError('Failed to save strategy — check backend connection');
+                  return;
+                }
+                setStep('backtest');
+              }}
               disabled={selectedStrategies.length === 0}
               className="h-11 border-[var(--color-primary)]/50 bg-[rgba(var(--color-primary),0.12)] px-6 text-xs font-semibold text-[var(--color-primary)] hover:bg-[rgba(var(--color-primary),0.12)]"
             >
@@ -1199,7 +1226,7 @@ export function SetupWizard({
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
-                        strategySource: configValues?.strategySource ?? persistedConfig?.strategySource ?? '',
+                        strategySource: selectedStrategies[0]?.source ?? configValues?.strategySource ?? persistedConfig?.strategySource ?? '',
                         dex: configValues?.dex ?? persistedConfig?.dex ?? 'jupiter-swap',
                         risk: { maxDailyLoss: configValues?.maxDailyLoss ?? persistedConfig?.risk?.maxDailyLoss ?? 1 },
                         autoSelect: false,
