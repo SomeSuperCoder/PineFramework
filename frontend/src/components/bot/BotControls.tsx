@@ -610,12 +610,27 @@ export function SetupWizard({
     return b > 0 ? Math.round(b * 100) / 100 : 1000;
   });
 
+  // Tag every ranking world with a strategy name for display. Prefer the
+  // backend-derived script name (sent on the auto-select complete broadcast),
+  // then the locally-selected strategy's friendly name — this guarantees the
+  // tag is visible even before a backend restart ships the broadcast
+  // enrichment — and finally the strategy id. Auto-select tests a single
+  // strategy (selectedStrategies[0]), so a uniform tag is correct.
+  const selectedStrategyName = selectedStrategies[0]?.name ?? '';
+  const displayRanking = useMemo(() => {
+    if (!autoSelectResult) return [];
+    return autoSelectResult.ranking.map((w) => ({
+      ...w,
+      strategyName: w.strategyName || selectedStrategyName || w.strategyId || '',
+    }));
+  }, [autoSelectResult, selectedStrategyName]);
+
   // PnL-weighted split across the explicitly-selected worlds (D5)
   const allocation = useMemo<AllocationEntry[]>(() => {
     if (!autoSelectResult) return [];
-    const selected = autoSelectResult.ranking.filter((w) => selectedKeys.has(w.worldKey));
+    const selected = displayRanking.filter((w) => selectedKeys.has(w.worldKey));
     return computeAllocation(selected, totalCapital);
-  }, [autoSelectResult, selectedKeys, totalCapital]);
+  }, [displayRanking, selectedKeys, totalCapital]);
 
   const tfLabel = (tf: string) =>
     tf === '5' ? '5m' : tf === '15' ? '15m' : tf === '60' ? '1h' : tf === '240' ? '4h' : tf;
@@ -657,7 +672,7 @@ export function SetupWizard({
       setBlocked(true);
       return;
     }
-    const rk: WorldRankingEntry[] = autoSelectResult.ranking.map((w) => ({
+    const rk: WorldRankingEntry[] = displayRanking.map((w) => ({
       ...w,
       pnlPercent: pnlOf(w.metrics),
       profitFactor: w.metrics.profitFactor,
@@ -984,7 +999,7 @@ export function SetupWizard({
                   statuses={Object.fromEntries(
                     autoSelectResult.ranking.map((r) => [r.worldKey, { phase: 'done', status: 'done' as const }]),
                   )}
-                  ranking={autoSelectResult.ranking}
+                  ranking={displayRanking}
                 />
               </div>
             </div>
@@ -1170,7 +1185,7 @@ export function SetupWizard({
                 statuses={Object.fromEntries(
                   autoSelectResult.ranking.map(r => [r.label, { phase: 'done', status: 'done' as const }])
                 )}
-                ranking={autoSelectResult.ranking}
+                ranking={displayRanking}
               />
               <div className="mt-2 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
                 <span className="text-[11px] font-semibold text-[#22c55e]">
