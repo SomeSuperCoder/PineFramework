@@ -21,6 +21,17 @@ import type { BotEngine, BotConfig, WorldConfig, AutoSelectBlockedResult } from 
 import type { WalletManager } from 'pine-framework/trading/wallet';
 import type { BotConfigStore } from 'pine-framework/trading/config-store';
 
+// Derive a human-readable strategy name from its Pine Script declaration.
+// Mirrors src/utils/script-name.ts (not re-exported from pine-framework) so the
+// auto-select broadcast can tag every ranking/world entry with the strategy name.
+function extractStrategyName(source: string): string | null {
+  if (!source) return null;
+  const positional = source.match(/\b(?:strategy|indicator|study)\s*\(\s*["']([^"']+)["']/);
+  if (positional) return positional[1];
+  const titled = source.match(/\b(?:strategy|indicator|study)\s*\(\s*title\s*=\s*["']([^"']+)["']/);
+  return titled ? titled[1] : null;
+}
+
 export interface BotRouterOptions {
   getEngine: () => BotEngine | null;
   getWalletManager?: () => WalletManager | null;
@@ -449,6 +460,18 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         return;
       }
 
+      // Resolve the strategy the auto-select backtest is actually testing so the
+      // ranking/world entries can be tagged with its id + name for the UI.
+      const reqStrategyIds = Array.isArray((req.body as Record<string, unknown>)?.strategyIds)
+        ? ((req.body as Record<string, unknown>).strategyIds as unknown[])
+        : [];
+      const testedStrategyId =
+        typeof reqStrategyIds[0] === 'string' && reqStrategyIds[0]
+          ? (reqStrategyIds[0] as string)
+          : LEGACY_STRATEGY_ID;
+      const testedStrategyName = extractStrategyName(config.strategySource) ?? testedStrategyId;
+      const strategyMeta = { strategyId: testedStrategyId, strategyName: testedStrategyName };
+
       if (!config.autoSelect) {
         res
           .status(400)
@@ -538,9 +561,11 @@ export function createBotRouter(param: (() => BotEngine | null) | BotRouterOptio
         channel: 'bot:autoSelect',
         type: 'complete',
         data: {
-          best: result.best,
-          ranking: result.ranking,
-          worlds,
+          best: result.best ? { ...result.best, ...strategyMeta } : result.best,
+          ranking: (result.ranking as unknown[]).map((r) => ({ ...r, ...strategyMeta })),
+          // Engine config keeps `strategy: LEGACY_STRATEGY_ID`; the broadcast copy
+          // gets the real strategy id + name so the UI can tag each world entry.
+          worlds: (worlds as unknown[]).map((w) => ({ ...w, ...strategyMeta })),
           metric: result.metric,
           evaluatedCount: result.evaluatedCount,
           failedCount: result.failedCount,

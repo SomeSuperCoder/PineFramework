@@ -198,7 +198,13 @@ export function AutoSelectGrid({
   activeWorlds,
 }: {
   statuses: Record<string, CandidateStatus>;
-  ranking?: Array<{ label: string; metrics: Record<string, number> }>;
+  ranking?: Array<{
+    label: string;
+    metrics: Record<string, number>;
+    strategyName?: string;
+    symbol?: string;
+    timeframe?: string;
+  }>;
   candleProgress?: { fetched: number; total: number };
   currentPair?: string;
   /** Bounded concurrency — when present, shows the badge. */
@@ -256,10 +262,15 @@ export function AutoSelectGrid({
           <div className="font-semibold text-[var(--color-muted-foreground)]">Status</div>
           <div className="font-semibold text-[var(--color-muted-foreground)]">PnL</div>
           {entries.map(([key, st]) => {
-            const rankEntry = ranking?.find((r) => r.label === key);
+            const rankEntry = ranking?.find(
+              (r) => r.label === key || (r.symbol && `${r.symbol} (${r.timeframe})` === key),
+            );
             const pnl =
               rankEntry?.metrics.totalPnlPercent ?? rankEntry?.metrics.pnlPercent;
-            const displayLabel = st.label ? formatPairLabel(st.label) : formatPairLabel(key);
+            const baseLabel = st.label ? formatPairLabel(st.label) : formatPairLabel(key);
+            const displayLabel = rankEntry?.strategyName
+              ? `${baseLabel} · ${rankEntry.strategyName}`
+              : baseLabel;
             const showCandle =
               candleTargetKey === key && st.status === 'active' && st.phase === 'fetching' && !!candleProgress;
             return (
