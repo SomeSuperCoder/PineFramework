@@ -94,6 +94,7 @@ export interface CandidateRowProps {
   candleFetched?: number;
   candleTotal?: number;
   isActive?: boolean;
+  strategyName?: string;
   registerRef?: (key: string, el: HTMLDivElement | null) => void;
 }
 
@@ -110,6 +111,7 @@ export function CandidateRow({
   candleFetched,
   candleTotal,
   isActive,
+  strategyName,
   registerRef,
 }: CandidateRowProps) {
   const displayPhase = status === 'done' ? 'done' : phase;
@@ -125,6 +127,9 @@ export function CandidateRow({
         {slot != null && isActive && (
           <span className="ml-1 text-[9px] text-[var(--color-primary)]">·slot {slot}</span>
         )}
+      </div>
+      <div className="truncate text-[11px] text-[var(--color-muted-foreground)]" title={strategyName ?? ''}>
+        {strategyName || '—'}
       </div>
       <div className="text-[11px] text-[var(--color-muted-foreground)]">{displayPhase}</div>
       <div title={error}>
@@ -196,6 +201,9 @@ export function AutoSelectGrid({
   // F4 new optional props
   concurrency,
   activeWorlds,
+  // Strategy tag for the dedicated Strategy column (auto-select tests one
+  // strategy, so the same value applies to every row).
+  strategyName,
 }: {
   statuses: Record<string, CandidateStatus>;
   ranking?: Array<{
@@ -211,6 +219,8 @@ export function AutoSelectGrid({
   concurrency?: number;
   /** World keys currently active. Enables auto-scroll to the active symbol. */
   activeWorlds?: string[];
+  /** Strategy name shown in the dedicated Strategy column (falls back to —). */
+  strategyName?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -255,9 +265,10 @@ export function AutoSelectGrid({
       <ScrollableGrid ref={containerRef}>
         <div
           className="grid items-center gap-x-2 gap-y-0.5 text-[10px]"
-          style={{ gridTemplateColumns: '1fr 80px 60px 60px' }}
+          style={{ gridTemplateColumns: '1fr 120px 80px 60px 60px' }}
         >
           <div className="font-semibold text-[var(--color-muted-foreground)]">Pair</div>
+          <div className="font-semibold text-[var(--color-muted-foreground)]">Strategy</div>
           <div className="font-semibold text-[var(--color-muted-foreground)]">Phase</div>
           <div className="font-semibold text-[var(--color-muted-foreground)]">Status</div>
           <div className="font-semibold text-[var(--color-muted-foreground)]">PnL</div>
@@ -268,22 +279,20 @@ export function AutoSelectGrid({
             const pnl =
               rankEntry?.metrics.totalPnlPercent ?? rankEntry?.metrics.pnlPercent;
             const baseLabel = st.label ? formatPairLabel(st.label) : formatPairLabel(key);
-            const displayLabel = rankEntry?.strategyName
-              ? `${baseLabel} · ${rankEntry.strategyName}`
-              : baseLabel;
             const showCandle =
               candleTargetKey === key && st.status === 'active' && st.phase === 'fetching' && !!candleProgress;
             return (
               <CandidateRow
                 key={key}
                 worldKey={key}
-                label={displayLabel}
+                label={baseLabel}
                 phase={st.phase}
                 status={st.status}
                 slot={st.slot}
                 error={st.error}
                 pnlPercent={pnl != null ? pnl : st.pnlPercent}
                 isActive={st.status === 'active'}
+                strategyName={strategyName ?? rankEntry?.strategyName}
                 showCandleProgress={showCandle}
                 candleFetched={candleProgress?.fetched}
                 candleTotal={candleProgress?.total}

@@ -1000,6 +1000,7 @@ export function SetupWizard({
                     autoSelectResult.ranking.map((r) => [r.worldKey, { phase: 'done', status: 'done' as const }]),
                   )}
                   ranking={displayRanking}
+                  strategyName={selectedStrategyName || displayRanking[0]?.strategyName}
                 />
               </div>
             </div>
@@ -1165,6 +1166,7 @@ export function SetupWizard({
                   candleProgress={autoSelectProgress.candleProgress}
                   concurrency={autoSelectProgress.concurrency}
                   activeWorlds={autoSelectProgress.activeWorlds}
+                  strategyName={selectedStrategyName || displayRanking[0]?.strategyName}
                 />
               </div>
             </div>
@@ -1186,6 +1188,7 @@ export function SetupWizard({
                   autoSelectResult.ranking.map(r => [r.label, { phase: 'done', status: 'done' as const }])
                 )}
                 ranking={displayRanking}
+                strategyName={selectedStrategyName || displayRanking[0]?.strategyName}
               />
               <div className="mt-2 rounded bg-[rgba(34,197,94,0.12)] px-2 py-1.5">
                 <span className="text-[11px] font-semibold text-[#22c55e]">
