@@ -1017,9 +1017,58 @@ export class LiveStrategyExecutor {
 
   /**
    * Restore strategy state from persistence.
+   *
+   * Merge (not blind replace) so a live engine initialized this run keeps its
+   * runtime/engine instances while the persisted position + variables are
+   * restored over the fresh flat default. This lets persisted open positions
+   * survive a restart without tearing down the running strategy engine.
    */
   setState(state: Record<string, StrategyState>): void {
-    this.strategyStates = new Map(Object.entries(state));
+    const incoming = Object.entries(state);
+    const merged = new Map<string, StrategyState>();
+    for (const [key, inc] of incoming) {
+      const existing = this.strategyStates.get(key);
+      if (existing && (existing.runtime || existing.engine)) {
+        merged.set(key, { ...inc, runtime: existing.runtime, engine: existing.engine });
+      } else {
+        merged.set(key, inc);
+      }
+    }
+    // Carry over in-memory-only worlds not present in the persisted payload
+    // (e.g. worlds initialized this run but not yet saved to disk).
+    for (const [key, existing] of this.strategyStates) {
+      if (!merged.has(key)) merged.set(key, existing);
+    }
+    this.strategyStates = merged;
+    // F7: rehydrate confirmedPositions so getPositions()/close-on-stop see
+    // persisted open positions after a restart (they were in-memory only).
+    this.seedConfirmedPositions();
+  }
+
+  /**
+   * F7 — seed the in-memory confirmedPositions map from the current non-flat
+   * strategy states. Called after every setState (loadState / restore) so a
+   * restart that reloads an open position makes it visible to getPositions()
+   * and therefore liquidatable by the graceful stop path. Mirrors the exact key
+   * derivation getPositions() uses (both 3-part and 2-part forms).
+   */
+  private seedConfirmedPositions(): void {
+    for (const world of this.activeWorlds()) {
+      const key3 = this.worldKeyFor(world.symbol, world.timeframe, world.strategy);
+      const key2 = `${world.symbol}:${world.timeframe}`;
+      const state = this.strategyStates.get(key3) ?? this.strategyStates.get(key2);
+      if (!state || state.position.direction === 'flat') continue;
+      const entry: PositionInfo = {
+        symbol: world.symbol,
+        timeframe: world.timeframe,
+        direction: state.position.direction,
+        quantity: state.position.quantity,
+        entryPrice: state.position.entryPrice,
+        entryTime: state.position.entryTime,
+      };
+      this.confirmedPositions.set(key3, entry);
+      this.confirmedPositions.set(key2, entry);
+    }
   }
 
   /**

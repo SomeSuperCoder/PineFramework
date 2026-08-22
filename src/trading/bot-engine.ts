@@ -1128,6 +1128,13 @@ export class BotEngine {
       });
     }
 
+    // 3.6 F7 — restore persisted open positions from disk AFTER the per-world
+    //     engines are initialized, so reloaded positions survive the restart
+    //     (loadState merges, preserving the live engine) and become visible to
+    //     getPositions()/close-on-stop via confirmedPositions seeding.
+    const restored = await this.strategyExecutor.loadState();
+    this.logger.info('Strategy state restore', { restored });
+
     // 3. Create bar feed (Bybit WebSocket)
     // Pass the engine's logger so the feed's lifecycle/tick observability
     // (liveness suite) lands in the same structured log stream.
